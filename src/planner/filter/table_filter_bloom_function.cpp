@@ -30,8 +30,7 @@ static constexpr idx_t N_BITS = 4;                      // the number of bits to
 void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 	BufferManager &buffer_manager = BufferManager::GetBufferManager(context_p);
 
-	const idx_t min_bits = MaxValue(MIN_NUM_BITS, number_of_rows * MIN_NUM_BITS_PER_KEY);
-	num_sectors = MinValue(NextPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
+	num_sectors = GetNumberOfSectors(number_of_rows);
 	bitmask = num_sectors - 1;
 
 	buf_ = buffer_manager.GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint64_t));
@@ -58,6 +57,11 @@ void BloomFilter::Reset() {
 	bitmask = 0;
 	initialized = false;
 	bf = nullptr;
+}
+
+idx_t BloomFilter::GetNumberOfSectors(idx_t number_of_rows) {
+	const idx_t min_bits = MaxValue(MIN_NUM_BITS, number_of_rows * MIN_NUM_BITS_PER_KEY);
+	return MinValue(NextPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
 }
 
 inline uint64_t GetMask(const hash_t hash) {

@@ -5,6 +5,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -36,6 +37,12 @@ constexpr data_t STRING_DELIMITER = 0;
 constexpr data_t LIST_DELIMITER = 0;
 constexpr data_t BLOB_ESCAPE_CHARACTER = 1;
 
+//! BIT/BITSTRING sort-key bytes (mirrors CreateBitStringSortKey in the core_functions bitstring code):
+//! each bit is expanded to one byte, kept above the STRING_DELIMITER (0) so a shorter bitstring (a
+//! prefix) sorts first, while preserving 0 < 1
+constexpr data_t BIT_SORT_KEY_ZERO = 2;
+constexpr data_t BIT_SORT_KEY_ONE = 3;
+
 //! nanoseconds-per-unit scale factors used to fold the DATE / TIME / TIMESTAMP precisions into a
 //! common unit (nanoseconds) so that values of different precision compare by their actual instant
 constexpr int64_t NANOS_PER_MICRO = 1000;
@@ -43,10 +50,12 @@ constexpr int64_t NANOS_PER_MILLI = 1000000;
 constexpr int64_t NANOS_PER_SEC = 1000000000;
 constexpr int64_t NANOS_PER_DAY = 86400LL * NANOS_PER_SEC;
 
-//! The sort-key rank of a variant value - determines the cross-type ordering (type-first)
+//! The sort-key rank of a variant value - determines the cross-type ordering (type-first).
+//! Ranks start at 1 so that every rank is strictly greater than the LIST/STRING delimiter (0); this
+//! guarantees a shorter list/object sorts before a longer one (the delimiter is smaller than any
+//! following element's rank byte) and that an element can never be confused with an end-of-list marker.
 enum class VariantSortRank : data_t {
-	NULL_VALUE = 0,
-	BOOLEAN,
+	BOOLEAN = 1,
 	NUMBER,
 	REAL,
 	VARCHAR,
@@ -60,7 +69,12 @@ enum class VariantSortRank : data_t {
 	GEOMETRY,
 	BITSTRING,
 	ARRAY,
-	OBJECT
+	OBJECT,
+	//! VARIANT_NULL ranks last so a nested NULL element orders after all non-null values, matching the
+	//! native "NULLS LAST" ordering of nested NULLs under ASC. For DESC the ORDER BY operator reverses
+	//! the (always-ascending) comparator key, which then places nested NULLs first - exactly as native
+	//! nested ordering does (where the null position within nested types follows ASC/DESC).
+	NULL_VALUE
 };
 
 data_t GetVariantTypeRank(VariantLogicalType type_id) {
@@ -427,9 +441,20 @@ void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
 		break;
 	case VariantLogicalType::BLOB:
 	case VariantLogicalType::GEOMETRY:
-	case VariantLogicalType::BITSTRING:
 		VariantEncodeString(sink, it.GetString(), false);
 		break;
+	case VariantLogicalType::BITSTRING: {
+		// BIT is ordered by its logical bit sequence, not by its raw bytes - expand each bit to a sort
+		// key byte (matching the bitstring_byte_comparable collation), terminated so a shorter bitstring
+		// (a prefix) sorts before a longer one
+		auto bitstring = it.GetString();
+		auto bit_length = Bit::BitLength(bitstring);
+		for (idx_t bit_idx = 0; bit_idx < bit_length; bit_idx++) {
+			sink.Write(Bit::GetBit(bitstring, bit_idx) ? BIT_SORT_KEY_ONE : BIT_SORT_KEY_ZERO);
+		}
+		sink.Write(STRING_DELIMITER);
+		break;
+	}
 	case VariantLogicalType::ARRAY: {
 		for (auto child : it.GetArrayChildren()) {
 			EncodeVariantValue(child, sink);
@@ -440,7 +465,7 @@ void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
 	case VariantLogicalType::OBJECT: {
 		// process the children in string-sorted key order so that objects that only differ in key order
 		// compare equal
-		for (auto &entry : it.GetOrderedObject(VariantIterationOrder::LEXICOGRAPHIC)) {
+		for (auto &entry : it.GetObjectChildren(VariantIterationOrder::LEXICOGRAPHIC)) {
 			VariantEncodeString(sink, entry.key, true);
 			EncodeVariantValue(entry.value, sink);
 		}

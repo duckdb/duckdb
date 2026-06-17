@@ -1,8 +1,7 @@
 # grammar_types.yml
 #
 # Maps grammar rules to their expected C++ return types, grouped by type category.
-# Used by scripts/parser/generate_transformer.py to generate stubs with the
-# correct return type instead of the placeholder unique_ptr<SQLStatement>.
+# Used by scripts/parser/generate_transformer.py to generate typed transformer wrappers.
 #
 # Structure:
 #   <CategoryName>:
@@ -17,8 +16,7 @@
 #     overrides:
 #       RuleName: "<C++ return type>"
 #
-# Rules handled by RegisterEnum() are NOT listed here (they are auto-detected
-# by generate_transformer.py from peg_transformer_factory.cpp).
+# Rules handled by RegisterEnum() are NOT listed here.
 #
 # excluded_rules: rules intentionally skipped during auto-generation of Internal
 # wrappers. When encountered as children in auto-generated sequence rules they
@@ -36,14 +34,6 @@
 # transformer generator should treat only `identifier` and `reserved_identifier`
 # entries as direct IdentifierParseResult-producing rules.
 #
-# optional_value_grammars: grammar stems whose generated wrappers represent
-# Optional(...) semantic children as optional<T> and syntax-only Optional(...)
-# children as bool presence flags. Grammars not listed here keep the legacy
-# default-initializer representation while their typed bodies are migrated.
-
-optional_value_grammars:
-  - select
-
 # ---------------------------------------------------------------------------
 # unique_ptr<T> categories
 # ---------------------------------------------------------------------------
@@ -238,6 +228,15 @@ CreateTypeInfo:
     - EnumSelectType
     - EnumStringLiteralList
 
+ConnectInfo:
+  type: "unique_ptr<ConnectInfo>"
+  by_value: true
+  rules:
+    - SessionTarget
+    - LocalSessionTarget
+    - StringSessionTarget
+    - CatalogSessionTarget
+
 MacroFunction:
   type: "unique_ptr<MacroFunction>"
   by_value: true
@@ -304,6 +303,7 @@ WindowExpression:
     - WindowFrameDefinition
     - WindowFrameContentsParens
     - WindowFrameNameContentsParens
+    - WindowFrameNameContents
     - WindowFrameContents
 
 SetScope:
@@ -351,19 +351,29 @@ Expression:
     - BaseExpression
     - LambdaArrowExpression
     - LogicalOrExpression
+    - LogicalOrExpressionTail
+    - ColDefOrExpr
+    - ColDefOrExpressionTail
     - LogicalAndExpression
+    - LogicalAndExpressionTail
+    - ColDefAndExpr
+    - ColDefAndExpressionTail
     - LogicalNotExpression
     - IsExpression
     - IsTest
     - IsLiteral
     - NotNull
+    - NotNullKeyword
+    - NotNullOperator
     - IsNull
+    - IsNullOperator
     - IsDistinctFromExpression
     - ComparisonExpression
     - BetweenInLikeExpression
-    - BetweenInLikeOp
+    - BetweenInLikeOpExpression
     - InClause
     - InExpression
+    - InContainsExpression
     - InExpressionList
     - InSelectStatement
     - BetweenClause
@@ -376,7 +386,9 @@ Expression:
     - ExponentiationExpression
     - PostfixOperator
     - CollateExpression
+    - CollateExpressionTail
     - AtTimeZoneExpression
+    - AtTimeZoneExpressionTail
     - PrefixExpression
     - ConstantLiteral
     - ColumnReference
@@ -392,16 +404,21 @@ Expression:
     - ArrayBoundedListExpression
     - ArrayParensSelect
     - StructExpression
-    - StructField
     - FunctionExpression
     - FilterClause
+    - FilterClauseExpression
+    - FilterClauseContents
     - ParenthesisExpression
     - Indirection
     - CastOperator
     - DotOperator
     - MethodExpression
+    - DotMethodOperator
+    - DotColumnOperator
     - SliceExpression
     - EndSliceBound
+    - EndSliceValue
+    - EndSliceMinus
     - StepSliceBound
     - SingleArrowPair
     - StarExpression
@@ -412,6 +429,9 @@ Expression:
     - ColumnsExpression
     - ExtractExpression
     - ExtractArgument
+    - ExtractDatePartArgument
+    - ExtractIdentifierArgument
+    - ExtractStringArgument
     - LambdaExpression
     - NullIfExpression
     - RowExpression
@@ -420,6 +440,8 @@ Expression:
     - TrimSource
     - OverlayExpression
     - PositionExpression
+    - FromExpression
+    - ForExpression
     - CastExpression
     - CaseExpression
     - CaseElse
@@ -427,6 +449,7 @@ Expression:
     - DefaultExpression
     - IntervalLiteral
     - IntervalParameter
+    - IntervalStringParameter
     - SubqueryExpression
     - MapExpression
     - ListComprehensionExpression
@@ -553,6 +576,7 @@ ExpressionList:
   by_value: true
   rules:
     - TypeModifiers
+    - IndirectionList
     - BoundedListExpression
     - SliceBound
     - TargetList
@@ -563,13 +587,17 @@ ExpressionList:
     - ValuesExpressions
     - MapStructExpression
     - MapStructField
+    - ExtractArguments
+    - NullIfArguments
+    - PositionArguments
     - SubstringParameters
+    - SubstringFromFor
+    - SubstringFromOptionalFor
+    - SubstringFor
     - SubstringArguments
     - SubstringExpressionList
     - OverlayArguments
     - OverlayParameters
-    - FromExpression
-    - ForExpression
     - OverlayExpressionList
     - PartitionOptions
     - SortedOptions
@@ -583,7 +611,9 @@ FunctionArgumentList:
   type: "vector<FunctionArgument>"
   by_value: true
   rules:
+    - FunctionArgumentList
     - TableFunctionArguments
+    - MethodFunctionArguments
 
 FunctionArgument:
   type: "FunctionArgument"
@@ -592,6 +622,7 @@ FunctionArgument:
     - FunctionArgument
     - NamedFunctionArgument
     - PositionalFunctionArgument
+    - StructField
 
 GroupByExpressionInfo:
   type: "GroupByExpressionInfo"
@@ -644,6 +675,7 @@ StringList:
     - ColumnAliases
     - TriggerColumnList
     - StarSymbolColumnList
+    - StarQualifierList
     - PivotGroupByList
     - UnpivotHeader
     - UnpivotHeaderSingle
@@ -662,7 +694,7 @@ GenericCopyOptionList:
 
 WindowBoundaryExpressionList:
   type: "vector<WindowBoundaryExpression>"
-  by_value: false
+  by_value: true
   rules:
     - FrameExtent
     - BetweenFrameExtent
@@ -777,13 +809,24 @@ JoinQualifier:
 
 WindowFrame:
   type: "WindowFrame"
-  by_value: false
+  by_value: true
   rules:
     - FrameClause
 
+WindowExcludeMode:
+  type: "WindowExcludeMode"
+  by_value: false
+  rules:
+    - WindowExcludeClause
+    - WindowExcludeElement
+    - ExcludeCurrentRow
+    - ExcludeGroup
+    - ExcludeTies
+    - ExcludeNoOthers
+
 WindowBoundaryExpression:
   type: "WindowBoundaryExpression"
-  by_value: false
+  by_value: true
   rules:
     - FrameBound
     - FrameUnbounded
@@ -934,8 +977,16 @@ String:
     - ReservedKeyword
     - VersionNumber
     - LikeVariations
-    - OtherOperator
+    - LikeToken
+    - ILikeToken
+    - GlobToken
+    - SimilarToToken
+    - NotILikeOp
+    - NotLikeOp
+    - NotSimilarToOp
     - QualifiedOperator
+    - QualifiedOperatorContents
+    - ColIdDot
     - AnyOp
     - StringOperator
     - JsonOperator
@@ -946,11 +997,20 @@ String:
     - Factor
     - ExponentOperator
     - PrefixOperator
+    - MinusPrefixOperator
+    - PlusPrefixOperator
+    - TildePrefixOperator
     - Framing
+    - RowsFraming
+    - RangeFraming
+    - GroupsFraming
     - AtUnit
     - VersionAtUnit
     - TimestampAtUnit
     - TrimDirection
+    - TrimBoth
+    - TrimLeading
+    - TrimTrailing
     - CubeOrRollup
     - CubeKeyword
     - RollupKeyword
@@ -974,7 +1034,6 @@ String:
     - SetNullability
     - MinValue
     - MaxValue
-    - CharacterType
     - IntType
     - IntegerType
     - SmallintType
@@ -992,6 +1051,13 @@ Bool:
     - WithOrWithout
     - FromOrTo
     - CastOrTryCast
+    - CastKeyword
+    - TryCastKeyword
+    - GroupingOrGroupingId
+    - GroupingKeyword
+    - GroupingIdKeyword
+    - SubqueryNot
+    - SubqueryExists
     - WithData
     - WithDataOnly
     - WithNoData
@@ -1007,6 +1073,7 @@ Bool:
     - DistinctOrAll
     - DistinctKeyword
     - AllKeyword
+    - NotKeyword
     - Lateral
     - WithOrdinality
     - Asof
@@ -1016,7 +1083,13 @@ Bool:
     - CascadeDropBehavior
     - RestrictDropBehavior
     - AnyOrAll
+    - SubqueryAny
+    - SubqueryAll
     - IgnoreOrRespectNulls
+    - IgnoreNulls
+    - RespectNulls
+    - PrecedingFrame
+    - FollowingFrame
     - IncludeNulls
     - ExcludeNulls
     - PrecedingOrFollowing
@@ -1038,6 +1111,8 @@ Bool:
     - WithOrWithoutOids
     - WithOids
     - WithoutOids
+    - SamplePercentage
+    - SampleRows
     - UniqueIndex
     - CopyFrom
     - CopyTo
@@ -1141,6 +1216,7 @@ Value:
     - UnknownLiteral
     - TrueLiteral
     - FalseLiteral
+    - IsLiteralValue
 
 TriggerTiming:
   type: "TriggerTiming"
@@ -1183,6 +1259,7 @@ DatePartSpecifier:
     - DecadeKeyword
     - CenturyKeyword
     - MillenniumKeyword
+    - ExtractDatePart
     - YearToMonth
     - DayToHour
     - DayToMinute
@@ -1221,13 +1298,51 @@ ShowType:
     - DescribeLongRule
     - DescRule
 
+SetOperationType:
+  type: "SetOperationType"
+  by_value: false
+  rules:
+    - SetopType
+    - SetopUnion
+    - SetopExcept
+
+JoinTypeValue:
+  type: "JoinType"
+  by_value: false
+  rules:
+    - FullJoin
+    - LeftJoin
+    - RightJoin
+    - SemiJoin
+    - AntiJoin
+    - InnerJoin
+
+OrderTypeValue:
+  type: "OrderType"
+  by_value: false
+  rules:
+    - DescendingOrder
+    - AscendingOrder
+
+OrderByNullTypeValue:
+  type: "OrderByNullType"
+  by_value: false
+  rules:
+    - NullsFirst
+    - NullsLast
+
 ExpressionType:
   type: "ExpressionType"
   by_value: false
   rules:
     - ComparisonOperator
     - IsDistinctFromOp
-    - LambdaOperator
+    - OperatorEqual
+    - OperatorNotEqual
+    - OperatorLessThan
+    - OperatorGreaterThan
+    - OperatorLessThanEquals
+    - OperatorGreaterThanEquals
 
 SecretPersistType:
   type: "SecretPersistType"
@@ -1284,6 +1399,7 @@ QualifiedColumnSet:
   by_value: false
   rules:
     - ExcludeList
+    - ExcludeNames
     - ExcludeNameList
     - ExcludeNameSingle
 
@@ -1292,8 +1408,17 @@ QualifiedColumnMap:
   by_value: false
   rules:
     - RenameList
+    - RenameEntries
     - RenameEntryList
     - SingleRenameEntry
+
+QualifiedColumnName:
+  type: "QualifiedColumnName"
+  by_value: false
+  rules:
+    - ExcludeName
+    - ExcludeDottedName
+    - ExcludeColumnName
 
 # ---------------------------------------------------------------------------
 # Structs / pairs passed by value (contain move-only members like unique_ptr<T>)
@@ -1337,6 +1462,13 @@ SequenceOptionEntry:
     - SeqStartWith
     - SeqOwnedBy
 
+SetOperationTail:
+  type: "pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>"
+  by_value: true
+  rules:
+    - SelectSetOpChainTail
+    - IntersectChainTail
+
 RelOptionMap:
   type: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   by_value: true
@@ -1357,6 +1489,23 @@ MergeMatchClause:
     - MergeMatch
     - MatchedClause
     - NotMatchedClause
+
+MethodArguments:
+  type: "MethodArguments"
+  by_value: true
+  rules:
+    - FunctionExpressionArguments
+    - FunctionExpressionArgumentList
+    - MethodExpressionArguments
+    - MethodExpressionArgumentList
+
+BinaryExpressionTail:
+  type: "BinaryExpressionTail"
+  by_value: true
+  rules:
+    - BitwiseExpressionTail
+    - MultiplicativeExpressionTail
+    - ExponentiationExpressionTail
 
 # ---------------------------------------------------------------------------
 # Overrides: rules with unique or complex return types that don't share a
@@ -1381,46 +1530,56 @@ overrides:
     type: "ColumnList"
     by_value: true
   # expression.gram
+  NotExpression:
+    type: "vector<bool>"
+    by_value: true
+  IsDistinctFromTail:
+    type: "IsDistinctFromTail"
+    by_value: true
+  ComparisonExpressionTail:
+    type: "ComparisonExpressionTail"
+    by_value: true
+  BetweenInLikeOp:
+    type: "BetweenInLikeOperator"
+    by_value: true
+  OtherOperator:
+    type: "ParsedOperator"
+    by_value: true
+  OtherOperatorTail:
+    type: "OtherOperatorTail"
+    by_value: true
+  AdditiveExpressionTail:
+    type: "BinaryExpressionTail"
+    by_value: true
+    pass_location: true
   AnyAllOperator: "pair<string, bool>"
-  CaseWhenThen: "CaseCheck"
-  ExcludeName: "QualifiedColumnName"
-  ReplaceEntry: "pair<string, unique_ptr<ParsedExpression>>"
+  CaseWhenThen:
+    type: "CaseCheck"
+    by_value: true
+  ReplaceEntry:
+    type: "pair<string, unique_ptr<ParsedExpression>>"
+    by_value: true
   RenameEntry: "pair<QualifiedColumnName, string>"
+  CastArguments:
+    type: "CastArguments"
+    by_value: true
+  TrimArguments:
+    type: "TrimArguments"
+    by_value: true
   # select.gram
-  SetopType: "SetOperationType"
-  SetopUnion: "SetOperationType"
-  SetopExcept: "SetOperationType"
-  SelectSetOpChainTail:
-    type: "pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>"
-    by_value: true
-  IntersectChainTail:
-    type: "pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>"
-    by_value: true
   WithStatement: "pair<Identifier, unique_ptr<CommonTableExpressionInfo>>"
   JoinType:
     type: "JoinType"
     default_initializer: "INNER"
-  FullJoin: "JoinType"
-  LeftJoin: "JoinType"
-  RightJoin: "JoinType"
-  SemiJoin: "JoinType"
-  AntiJoin: "JoinType"
-  InnerJoin: "JoinType"
   SampleProperties: "pair<SampleMethod, optional_idx>"
   SampleFunction: "SampleMethod"
-  SamplePercentage: "bool"
-  SampleRows: "bool"
   # select.gram (ordering)
   DescOrAsc:
     type: "OrderType"
     default_initializer: "ORDER_DEFAULT"
-  DescendingOrder: "OrderType"
-  AscendingOrder: "OrderType"
   NullsFirstOrLast:
     type: "OrderByNullType"
     default_initializer: "ORDER_DEFAULT"
-  NullsFirst: "OrderByNullType"
-  NullsLast: "OrderByNullType"
   # update.gram
   UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
 
@@ -1554,12 +1713,12 @@ excluded_rules:
   - VariableAssign
   - ColLabel
   - ColLabelOrString
-  - GroupingOrGroupingId
   - RowOrRows
   - Recursive
   - StarSymbol
   - PlainIdentifier
   - QuotedIdentifier
+  - CharacterType
   - IntervalNumber
   - AtTimeZoneOperator
   - Generated
@@ -1582,4 +1741,8 @@ excluded_rules:
   - TableRef
   - WithClause
   - WindowDefinition
-  - SingleArrowPair
+  - ExcludeOrExcept
+  # expression.gram rules kept manual during incremental transformer generation migration
+  - Expression
+  - OverClause
+  - PrefixExpression

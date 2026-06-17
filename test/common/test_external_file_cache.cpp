@@ -68,7 +68,7 @@ void EvictObjectCache(ObjectCache &object_cache) {
 } // namespace
 
 TEST_CASE("Lazy reindex splits large blocks on next read", "[external_file_cache]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 
@@ -102,7 +102,7 @@ TEST_CASE("Lazy reindex splits large blocks on next read", "[external_file_cache
 }
 
 TEST_CASE("Lazy reindex merges small blocks on next read", "[external_file_cache]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 
@@ -137,7 +137,7 @@ TEST_CASE("Lazy reindex merges small blocks on next read", "[external_file_cache
 }
 
 TEST_CASE("Lazy reindex is a no-op for same block size", "[external_file_cache]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 
@@ -162,7 +162,7 @@ TEST_CASE("Lazy reindex is a no-op for same block size", "[external_file_cache]"
 }
 
 TEST_CASE("Lazy reindex with holes in cached content", "[external_file_cache]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 
@@ -201,7 +201,7 @@ TEST_CASE("Lazy reindex with holes in cached content", "[external_file_cache]") 
 }
 
 TEST_CASE("Lazy reindex: only touched file is reindexed", "[external_file_cache]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 
@@ -249,7 +249,7 @@ TEST_CASE("Lazy reindex: only touched file is reindexed", "[external_file_cache]
 }
 
 TEST_CASE("Disabled external file cache does not insert into ObjectCache", "[external_file_cache]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto &cache = db_instance.GetExternalFileCache();
 
@@ -285,7 +285,7 @@ TEST_CASE("Disabled external file cache does not insert into ObjectCache", "[ext
 }
 
 TEST_CASE("Re-enabled external file cache refreshes live handle metadata", "[external_file_cache]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto &cache = db_instance.GetExternalFileCache();
 
@@ -310,7 +310,7 @@ TEST_CASE("Re-enabled external file cache refreshes live handle metadata", "[ext
 }
 
 TEST_CASE("Concurrent SET and Read do not corrupt data or cache state", "[external_file_cache]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 
 	constexpr idx_t FILE_SIZE = 64 * 1024 + 137; // odd tail to stress boundaries
@@ -389,7 +389,7 @@ TEST_CASE("Concurrent SET and Read do not corrupt data or cache state", "[extern
 }
 
 TEST_CASE("Disabling external file cache clears ObjectCache sentinels", "[external_file_cache]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 	CachingFileSystem cfs(*tracking_fs, db_instance);
@@ -421,7 +421,7 @@ TEST_CASE("Disabling external file cache clears ObjectCache sentinels", "[extern
 }
 
 TEST_CASE("Failed CachingFileHandle construction leaves evictable cached file entries", "[external_file_cache]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 	CachingFileSystem cfs(*tracking_fs, db_instance);

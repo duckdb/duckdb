@@ -351,7 +351,7 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 	FlushStates(gsink);
 
 	//	Finalise the result aggregates and write to the result
-	AggregateInputData aggr_input_data(aggr, allocator);
+	AggregateFinalizeInputData aggr_input_data(aggr, allocator);
 	aggr.function.GetStateFinalizeCallback()(statef, aggr_input_data, result, count, 0);
 
 	//	Destruct the result aggregates

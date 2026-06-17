@@ -8,13 +8,13 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformLoadStatement(PEGTransformer &transformer,
                                                                        const Identifier &col_id_or_string,
-                                                                       const Identifier &extension_alias) {
+                                                                       const optional<Identifier> &extension_alias) {
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
 	info->repo_is_alias = false;
 	info->filename = col_id_or_string.GetIdentifierName();
-	if (!extension_alias.empty()) {
-		info->alias = extension_alias;
+	if (extension_alias) {
+		info->alias = *extension_alias;
 		info->load_type = LoadType::LOAD_AS;
 	} else {
 		info->load_type = LoadType::LOAD;
@@ -28,19 +28,19 @@ Identifier PEGTransformerFactory::TransformExtensionAlias(PEGTransformer &transf
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformInstallStatement(
-    PEGTransformer &transformer, const QualifiedName &identifier_or_string_literal,
-    const ExtensionRepositoryInfo &from_source, const string &version_number) {
+    PEGTransformer &transformer, const bool &has_result, const QualifiedName &identifier_or_string_literal,
+    const optional<ExtensionRepositoryInfo> &from_source, const optional<string> &version_number) {
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
 	info->load_type = LoadType::INSTALL;
 	info->filename = identifier_or_string_literal.name.GetIdentifierName();
 	info->repo_is_alias = false;
-	if (!from_source.name.empty()) {
-		info->repository = from_source.name.GetIdentifierName();
-		info->repo_is_alias = from_source.repository_is_alias;
+	if (from_source) {
+		info->repository = from_source->name.GetIdentifierName();
+		info->repo_is_alias = from_source->repository_is_alias;
 	}
-	if (!version_number.empty()) {
-		info->version = version_number;
+	if (version_number) {
+		info->version = *version_number;
 	}
 	result->info = std::move(info);
 	return std::move(result);
@@ -64,10 +64,12 @@ ExtensionRepositoryInfo PEGTransformerFactory::TransformFromSourceString(PEGTran
 
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformUpdateExtensionsStatement(PEGTransformer &transformer,
-                                                          const vector<Identifier> &identifier) {
+                                                          const optional<vector<Identifier>> &identifier) {
 	auto result = make_uniq<UpdateExtensionsStatement>();
 	auto info = make_uniq<UpdateExtensionsInfo>();
-	info->extensions_to_update = identifier;
+	if (identifier) {
+		info->extensions_to_update = *identifier;
+	}
 	result->info = std::move(info);
 	return std::move(result);
 }

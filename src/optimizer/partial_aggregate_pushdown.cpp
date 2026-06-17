@@ -62,10 +62,19 @@ static bool IsSupportedAggregate(const BoundAggregateExpression &expr) {
 	if (expr.IsDistinct() || expr.GetFilter() || expr.GetOrderBys()) {
 		return false;
 	}
+	if (expr.StateExportMode() != AggregateStateExportMode::NONE) {
+		// the aggregate already exports its state - we cannot push it down again (and finalizing the
+		// re-exported state would not round-trip back to the original return type)
+		return false;
+	}
 	if (expr.GetChildren().size() != 1) {
 		return false;
 	}
 	if (!expr.Function().HasGetStateTypeCallback()) {
+		return false;
+	}
+	if (expr.Function().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
+		// pushing down a partial aggregate changes the order in which values are combined
 		return false;
 	}
 	return true;

@@ -1,0 +1,17 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index ff33ba9..57fe9c5 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -153,6 +153,12 @@ ExternalProject_Add(
+   # header in ./src/include/delta_kernel_ffi.hpp should be also bumped, applying
+   # the fix
+   GIT_TAG v0.19.0
++  # Pin brotli-decompressor to a version that uses the same alloc-no-stdlib
++  # (2.0.4) as brotli 8.0.3. brotli-decompressor 5.0.2 bumped to alloc-no-stdlib
++  # 3.0.0, which conflicts with brotli 8.0.3 and breaks the build with
++  # `StandardAlloc: alloc::Allocator<u8> is not satisfied`.
++  PATCH_COMMAND ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS} ${RUST_ENV_VARS}
++                cargo update -p brotli-decompressor --precise 5.0.0
+   # Prints the env variables passed to the cargo build to the terminal, useful
+   # in debugging because passing them through CMake is an error-prone mess
+   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS}

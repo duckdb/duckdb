@@ -21,7 +21,7 @@ class Vector;
 struct UnifiedVectorFormat;
 
 //! The order in which the children of an OBJECT are iterated
-enum class VariantIterationOrder : uint8_t {
+enum class VariantIterationOrder {
 	//! The order in which the children are physically stored (no sorting)
 	INTERNAL,
 	//! Sorted by object key
@@ -57,7 +57,7 @@ class UnshreddedVariantIterator {
 	                     VectorListType<VectorStructType<uint8_t, uint32_t>>, string_t>;
 
 public:
-	DUCKDB_API explicit UnshreddedVariantIterator(const Vector &unshredded);
+	explicit UnshreddedVariantIterator(const Vector &unshredded);
 
 public:
 	//! Whether the top-level row is valid (non-NULL)
@@ -84,7 +84,7 @@ private:
 struct ShreddedVariantIterator {
 public:
 	//! Recursively populates this node (and its children) from a shredded variant Vector
-	DUCKDB_API void Build(const Vector &vec);
+	void Build(const Vector &vec);
 
 public:
 	//! The unified format of this layer
@@ -101,13 +101,13 @@ class VariantIterator;
 //! vectors that the individual VariantIterator cursors point into - so it must outlive any cursor.
 class VariantIteratorState {
 public:
-	DUCKDB_API explicit VariantIteratorState(const Vector &variant);
+	explicit VariantIteratorState(const Vector &variant);
 
 public:
 	//! Whether the row is a (SQL) NULL variant
-	DUCKDB_API bool RowIsValid(idx_t row) const;
+	bool RowIsValid(idx_t row) const;
 	//! Returns a cursor pointing at the root value of the given row
-	DUCKDB_API VariantIterator Root(idx_t row) const;
+	VariantIterator Root(idx_t row) const;
 
 private:
 	//! The "core": the unshredded component reader (plain vector iterators)
@@ -149,7 +149,7 @@ public:
 	}
 
 	//! The logical type of the value the cursor points at
-	DUCKDB_API VariantLogicalType GetTypeId() const;
+	VariantLogicalType GetTypeId() const;
 
 	//! Returns the fixed-width primitive payload loaded as T (e.g. GetData<int32_t>())
 	template <class T>
@@ -157,17 +157,17 @@ public:
 		return Load<T>(GetDataPointer());
 	}
 	//! Returns a pointer to the raw payload of a fixed-width primitive value
-	DUCKDB_API const_data_ptr_t GetDataPointer() const;
+	const_data_ptr_t GetDataPointer() const;
 	//! Returns the (variable-length) string payload of a VARCHAR/BLOB/BIGNUM/GEOMETRY/BITSTRING value
-	DUCKDB_API string_t GetString() const;
+	string_t GetString() const;
 	//! Returns the decimal payload of a DECIMAL value
-	DUCKDB_API VariantDecimalData GetDecimal() const;
+	VariantDecimalData GetDecimal() const;
 
 	//! Iterates the (key, value) children of an OBJECT value (merging shredded + unshredded) in the
 	//! requested order. LEXICOGRAPHIC sorts by key (currently materialized + sorted up-front).
-	DUCKDB_API VariantObjectIterator GetOrderedObject(VariantIterationOrder order) const;
+	VariantObjectIterator GetObjectChildren(VariantIterationOrder order = VariantIterationOrder::INTERNAL) const;
 	//! Lazily iterates the element values of an ARRAY value
-	DUCKDB_API VariantArrayIterator GetArrayChildren() const;
+	VariantArrayIterator GetArrayChildren() const;
 
 private:
 	//! Resolve the shredded node (a "STRUCT(typed_value, [untyped_value_index])" wrapper, or a
@@ -208,13 +208,13 @@ private:
 //! materialized until it is dereferenced.
 class VariantArrayIterator {
 public:
-	DUCKDB_API explicit VariantArrayIterator(const VariantIterator &array);
+	explicit VariantArrayIterator(const VariantIterator &array);
 
 public:
 	idx_t size() const {
 		return length;
 	}
-	DUCKDB_API VariantIterator operator[](idx_t i) const;
+	VariantIterator operator[](idx_t i) const;
 
 	class Iterator {
 	public:
@@ -265,7 +265,7 @@ struct VariantObjectEntry {
 //!   - LEXICOGRAPHIC order: iterates the materialized + sorted 'ordered_entries'
 class VariantObjectIterator {
 public:
-	DUCKDB_API VariantObjectIterator(const VariantIterator &object, VariantIterationOrder order);
+	VariantObjectIterator(const VariantIterator &object, VariantIterationOrder order);
 
 public:
 	//! Forward iterator over the object entries. All modes are position-based, so the only difference is
