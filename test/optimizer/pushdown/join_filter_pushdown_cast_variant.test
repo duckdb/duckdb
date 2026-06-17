@@ -4,22 +4,22 @@
 
 load {TEST_DIR}/join_filter_pushdown_cast.db readwrite v1.5.0
 
-# Integral probe cast to VARIANT
 statement ok
-CREATE TABLE probe_int_variant AS SELECT range::INT AS a FROM range(100);
+SET variant_minimum_shredding_size = 0;
+
+# Direct fully shredded VARIANT joins are lowered to native integral casts by compressed materialization
+statement ok
+CREATE TABLE probe_direct_variant AS SELECT range::INT::VARIANT AS a FROM range(100);
 
 statement ok
-CREATE TABLE build_variant_for_int AS SELECT b::VARIANT AS b FROM (VALUES (10), (20), (30), (50)) t(b);
+CREATE TABLE build_direct_variant AS SELECT b::VARIANT AS b FROM (VALUES (10), (20), (30), (50)) t(b);
 
-query II
-EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::VARIANT AS a FROM probe_int_variant) t JOIN build_variant_for_int ON t.a = build_variant_for_int.b;
-----
-analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+# Fully shredded VARIANT joins with different integral shredded types use a shared max logical type
+statement ok
+CREATE TABLE probe_variant_smallint AS SELECT range::SMALLINT::VARIANT AS a FROM range(100);
 
-query I
-SELECT COUNT(*) FROM (SELECT a::VARIANT AS a FROM probe_int_variant) t JOIN build_variant_for_int ON t.a = build_variant_for_int.b;
-----
-4
+statement ok
+CREATE TABLE build_variant_bigint AS SELECT b::BIGINT::VARIANT AS b FROM (VALUES (10), (20), (30), (50)) t(b);
 
 # VARIANT probe cast to integral
 statement ok
@@ -27,6 +27,43 @@ CREATE TABLE probe_variant_int AS SELECT range::INT::VARIANT AS a FROM range(100
 
 statement ok
 CREATE TABLE build_int_for_variant AS SELECT b::INT AS b FROM (VALUES (10), (20), (30), (50)) t(b);
+
+# Mixed direct VARIANT joins are not fully shredded and should not be lowered
+statement ok
+CREATE TABLE probe_mixed_variant AS
+SELECT CASE WHEN range % 10 = 9 THEN 'str'::VARCHAR::VARIANT ELSE range::INT::VARIANT END AS a
+FROM range(100);
+
+statement ok
+CREATE TABLE build_mixed_variant AS SELECT b::VARIANT AS b FROM (VALUES (10), (20), (30), (50)) t(b);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_direct_variant JOIN build_direct_variant ON probe_direct_variant.a = build_direct_variant.b;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+
+query I
+SELECT COUNT(*) FROM probe_direct_variant JOIN build_direct_variant ON probe_direct_variant.a = build_direct_variant.b;
+----
+4
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_variant_smallint JOIN build_variant_bigint ON probe_variant_smallint.a = build_variant_bigint.b;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+
+query I
+SELECT COUNT(*) FROM probe_variant_smallint JOIN build_variant_bigint ON probe_variant_smallint.a = build_variant_bigint.b;
+----
+4
 
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::INT AS a FROM probe_variant_int) t JOIN build_int_for_variant ON t.a = build_int_for_variant.b;
@@ -38,19 +75,12 @@ SELECT COUNT(*) FROM (SELECT a::INT AS a FROM probe_variant_int) t JOIN build_in
 ----
 4
 
-# Direct VARIANT joins still do not push plain VARIANT scan filters
-statement ok
-CREATE TABLE probe_direct_variant AS SELECT range::INT::VARIANT AS a FROM range(100);
-
-statement ok
-CREATE TABLE build_direct_variant AS SELECT b::VARIANT AS b FROM (VALUES (10), (20), (30), (50)) t(b);
-
 query II
-EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_direct_variant JOIN build_direct_variant ON probe_direct_variant.a = build_direct_variant.b;
+EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_mixed_variant JOIN build_mixed_variant ON probe_mixed_variant.a = build_mixed_variant.b;
 ----
 analyzed_plan	<!REGEX>:.*Dynamic Filters:.*
 
 query I
-SELECT COUNT(*) FROM probe_direct_variant JOIN build_direct_variant ON probe_direct_variant.a = build_direct_variant.b;
+SELECT COUNT(*) FROM probe_mixed_variant JOIN build_mixed_variant ON probe_mixed_variant.a = build_mixed_variant.b;
 ----
 4

@@ -5,6 +5,7 @@
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/operators.hpp"
+#include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
@@ -96,6 +97,7 @@ struct CMHelper {
 	                                                                   unique_ptr<BaseStatistics> compress_stats);
 	static bool GetVariantCompressInfo(const BaseStatistics &stats, LogicalType &shredded_type,
 	                                   unique_ptr<BaseStatistics> &typed_stats);
+	static bool IsVariantWrapperFunction(const BoundFunctionExpression &expr);
 };
 
 //===--------------------------------------------------------------------===//
@@ -579,6 +581,13 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(
 	if (type.IsAggregateState()) {
 		return nullptr;
 	}
+	if (stats.GetType().id() == LogicalTypeId::VARIANT &&
+	    input->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &function_expr = input->Cast<BoundFunctionExpression>();
+		if (CMHelper::IsVariantWrapperFunction(function_expr) && function_expr.GetChildren().size() == 1) {
+			return GetVariantCompress(std::move(function_expr.GetChildrenMutable()[0]), stats);
+		}
+	}
 	if (type != stats.GetType()) { // LCOV_EXCL_START
 		return nullptr;
 	} // LCOV_EXCL_STOP
@@ -771,6 +780,11 @@ bool CMHelper::GetVariantCompressInfo(const BaseStatistics &stats, LogicalType &
 	return true;
 }
 
+bool CMHelper::IsVariantWrapperFunction(const BoundFunctionExpression &expr) {
+	const auto &function_name = expr.Function().GetName();
+	return function_name == "variant_comparator" || function_name == "variant_normalize";
+}
+
 unique_ptr<CompressExpression> CompressedMaterialization::GetVariantCompress(unique_ptr<Expression> input,
                                                                              const BaseStatistics &stats) {
 	LogicalType shredded_type;
@@ -779,16 +793,11 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetVariantCompress(uni
 		return nullptr;
 	}
 
-	// VARIANT columns can only be sorted/grouped/compared after being wrapped in "variant_normalize" by the binder.
-	// The normalized binary representation does not order the same as the shredded type, but it does preserve
-	// equality, so we can only compress VARIANT in positions where order does not matter. Plain column references
-	// (handled generically) are always payload columns, as key columns are wrapped in "variant_normalize".
-	// Since "variant_normalize" does not change any values, we can strip it and compress the input directly.
-	// FIXME: this is a current limitation that should be fixed in the future
-	// variant should have the same sort order as the types it contains
+	// VARIANT comparison keys are wrapped by the binder. For fully shredded primitive variants, comparing the
+	// shredded value gives the same equality/order semantics without materializing comparator blobs.
 	if (input->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &function_expr = input->Cast<BoundFunctionExpression>();
-		if (function_expr.Function().GetName() == "variant_normalize") {
+		if (CMHelper::IsVariantWrapperFunction(function_expr) && function_expr.GetChildren().size() == 1) {
 			input = std::move(function_expr.GetChildrenMutable()[0]);
 		}
 	}
@@ -829,6 +838,15 @@ unique_ptr<Expression> CompressedMaterialization::GetDecompressExpression(unique
 	const auto &type = result_type;
 	if (type.id() == LogicalTypeId::VARIANT) {
 		return GetVariantDecompress(std::move(input), result_type, stats);
+	}
+	if (type.id() == LogicalTypeId::BLOB && stats.GetType().id() == LogicalTypeId::VARIANT) {
+		auto variant = GetVariantDecompress(std::move(input), LogicalType::VARIANT(), stats);
+		auto comparator_function = VariantComparatorFun::GetFunction();
+		BoundScalarFunction bound_function(comparator_function);
+		bound_function.SetReturnType(LogicalType::BLOB);
+		vector<unique_ptr<Expression>> arguments;
+		arguments.push_back(std::move(variant));
+		return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
 	}
 	if (TypeIsIntegral(type.InternalType())) {
 		return GetIntegralDecompress(std::move(input), result_type, stats);

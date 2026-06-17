@@ -1,9 +1,33 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 
 namespace duckdb {
+
+static optional_ptr<BaseStatistics> GetVariantWrapperStats(const Expression &expr, statistics_map_t &statistics_map) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return nullptr;
+	}
+	auto &function_expr = expr.Cast<BoundFunctionExpression>();
+	const auto &function_name = function_expr.Function().GetName();
+	if ((function_name != "variant_comparator" && function_name != "variant_normalize") ||
+	    function_expr.GetChildren().size() != 1) {
+		return nullptr;
+	}
+	auto &child = *function_expr.GetChildren()[0];
+	if (child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
+	    child.GetReturnType().id() != LogicalTypeId::VARIANT) {
+		return nullptr;
+	}
+	auto &colref = child.Cast<BoundColumnRefExpression>();
+	auto stats_it = statistics_map.find(colref.Binding());
+	if (stats_it == statistics_map.end()) {
+		return nullptr;
+	}
+	return stats_it->second.get();
+}
 
 void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &op) {
 	auto &aggregate = op->Cast<LogicalAggregate>();
@@ -47,15 +71,19 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 		GetReferencedBindings(group_expr, referenced_bindings);
 
 		// The non-colref expression won't be compressed generically, so try to compress it here
-		if (!group_stats[group_idx]) {
+		optional_ptr<BaseStatistics> stats = group_stats[group_idx].get();
+		if (!stats) {
+			stats = GetVariantWrapperStats(group_expr, statistics_map);
+		}
+		if (!stats) {
 			continue; // Can't compress without stats
 		}
 
 		// Try to compress, if successful, replace the expression
-		auto compress_expr = GetCompressExpression(group_expr.Copy(), *group_stats[group_idx]);
+		auto compress_expr = GetCompressExpression(group_expr.Copy(), *stats);
 		if (compress_expr) {
 			materialization_types[group_idx] = compress_expr->materialization_type;
-			stored_group_stats[group_idx] = std::move(group_stats[group_idx]);
+			stored_group_stats[group_idx] = stats->ToUnique();
 			groups[group_idx] = std::move(compress_expr->expression);
 			group_stats[group_idx] = std::move(compress_expr->stats);
 		}

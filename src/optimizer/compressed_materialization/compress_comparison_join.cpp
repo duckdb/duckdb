@@ -1,6 +1,10 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/storage/statistics/variant_stats.hpp"
 
 namespace duckdb {
 
@@ -29,6 +33,100 @@ static bool HasVariantType(LogicalOperator &op) {
 	return false;
 }
 #endif
+
+struct VariantJoinKeyInfo {
+	optional_ptr<const Expression> child;
+	LogicalType shredded_type;
+	unique_ptr<BaseStatistics> typed_stats;
+};
+
+static bool IsVariantWrapperFunction(const BoundFunctionExpression &expr) {
+	const auto &function_name = expr.Function().GetName();
+	return function_name == "variant_comparator" || function_name == "variant_normalize";
+}
+
+static bool TryGetVariantJoinKeyInfo(const Expression &expr, const statistics_map_t &statistics_map,
+                                     VariantJoinKeyInfo &result) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &function_expr = expr.Cast<BoundFunctionExpression>();
+	if (!IsVariantWrapperFunction(function_expr) || function_expr.GetChildren().size() != 1) {
+		return false;
+	}
+
+	auto &child = *function_expr.GetChildren()[0];
+	if (child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
+	    child.GetReturnType().id() != LogicalTypeId::VARIANT) {
+		return false;
+	}
+	auto &colref = child.Cast<BoundColumnRefExpression>();
+	auto stats_it = statistics_map.find(colref.Binding());
+	if (stats_it == statistics_map.end() || !stats_it->second) {
+		return false;
+	}
+
+	auto &variant_stats = *stats_it->second;
+	if (variant_stats.GetType().id() != LogicalTypeId::VARIANT || !VariantStats::IsShredded(variant_stats)) {
+		return false;
+	}
+	auto &shredded_stats = VariantStats::GetShreddedStats(variant_stats);
+	if (!VariantShreddedStats::IsFullyShredded(shredded_stats)) {
+		return false;
+	}
+
+	auto shredded_type = VariantStats::GetShreddedStructuredType(variant_stats);
+	if (!shredded_type.IsIntegral()) {
+		return false;
+	}
+	auto &typed_stats = VariantStats::GetTypedStats(shredded_stats);
+	if (typed_stats.GetType() != shredded_type) { // LCOV_EXCL_START
+		return false;
+	} // LCOV_EXCL_STOP
+
+	result.child = &child;
+	result.shredded_type = std::move(shredded_type);
+	result.typed_stats = typed_stats.ToUnique();
+	if (variant_stats.CanHaveNull()) {
+		result.typed_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	}
+	return true;
+}
+
+static unique_ptr<BaseStatistics> CastJoinKeyStats(const VariantJoinKeyInfo &key_info, const LogicalType &target_type) {
+	if (key_info.shredded_type == target_type) {
+		return key_info.typed_stats->ToUnique();
+	}
+	return StatisticsPropagator::TryPropagateCast(*key_info.typed_stats, key_info.shredded_type, target_type);
+}
+
+static bool TryCompressVariantComparisonJoinKey(ClientContext &context, JoinCondition &condition,
+                                                const statistics_map_t &statistics_map) {
+	VariantJoinKeyInfo left;
+	VariantJoinKeyInfo right;
+	if (!TryGetVariantJoinKeyInfo(condition.GetLHS(), statistics_map, left) ||
+	    !TryGetVariantJoinKeyInfo(condition.GetRHS(), statistics_map, right)) {
+		return false;
+	}
+
+	LogicalType target_type;
+	if (!LogicalType::TryGetMaxLogicalType(context, left.shredded_type, right.shredded_type, target_type) ||
+	    !target_type.IsIntegral()) {
+		return false;
+	}
+
+	auto left_stats = CastJoinKeyStats(left, target_type);
+	auto right_stats = CastJoinKeyStats(right, target_type);
+	if (!left_stats || !right_stats) {
+		return false;
+	}
+
+	condition.LeftReference() = BoundCastExpression::AddCastToType(context, left.child->Copy(), target_type);
+	condition.RightReference() = BoundCastExpression::AddCastToType(context, right.child->Copy(), target_type);
+	condition.SetLeftStats(std::move(left_stats));
+	condition.SetRightStats(std::move(right_stats));
+	return true;
+}
 
 void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperator> &op) {
 	auto &join = op->Cast<LogicalComparisonJoin>();
@@ -79,13 +177,18 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 		}
 	}
 
-	for (const auto &condition : join.conditions) {
+	for (auto &condition : join.conditions) {
 		if (join.conditions.size() == 1 && join.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-			// We only try to compress the join condition cols if there's one join condition
-			// Else it gets messy with the stats if one column shows up in multiple conditions
-			if (condition.IsComparison() &&
-			    condition.GetLHS().GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
-			    condition.GetRHS().GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+			const bool compressed_variant_key =
+			    condition.IsComparison() && TryCompressVariantComparisonJoinKey(context, condition, statistics_map);
+			if (compressed_variant_key) {
+				// The comparator wrapper has been lowered to casts over the VARIANT columns.
+				// The referenced bindings are marked below, so no child projection compression is needed.
+			} else if (condition.IsComparison() &&
+			           condition.GetLHS().GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
+			           condition.GetRHS().GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+				// We only try to compress the join condition cols if there's one join condition.
+				// Else it gets messy with the stats if one column shows up in multiple conditions.
 				// check if either side is referenced in residual predicate
 				auto &lhs_colref = condition.GetLHS().Cast<BoundColumnRefExpression>();
 				auto &rhs_colref = condition.GetRHS().Cast<BoundColumnRefExpression>();
