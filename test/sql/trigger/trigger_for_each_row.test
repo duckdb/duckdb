@@ -478,7 +478,7 @@ statement error
 CREATE TRIGGER trg_casc3_b AFTER INSERT ON casc3_b FOR EACH ROW
     INSERT INTO casc3_c VALUES (NEW.id);
 ----
-writes to a table that has its own FOR EACH ROW trigger (cascading row triggers are not yet supported)
+set on a table which a FOR EACH ROW trigger writes into (cascading row triggers are not yet supported)
 
 mode unskip
 
