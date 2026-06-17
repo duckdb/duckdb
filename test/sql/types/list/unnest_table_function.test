@@ -141,11 +141,12 @@ SELECT list_sort(array(
 	SELECT list_contains(b, ax)
 	FROM UNNEST(a) ta(ax)
 )) ab_intersect
-FROM tbl;
+FROM tbl
+ORDER BY ALL;
 ----
+[false, false]
 [false, true, true]
 [true, true]
-[false, false]
 
 query IIII
 SELECT k, a, b,
