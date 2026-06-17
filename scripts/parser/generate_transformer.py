@@ -217,6 +217,7 @@ OPTIONAL_VALUE_GRAMMARS = {
     'create_secret',
     'create_sequence',
     'create_trigger',
+    'create_table',
     'create_type',
     'create_view',
     'deallocate',
