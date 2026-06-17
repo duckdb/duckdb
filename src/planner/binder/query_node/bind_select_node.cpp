@@ -1,3 +1,4 @@
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
@@ -18,6 +19,7 @@
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_expanded_expression.hpp"
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
@@ -200,36 +202,38 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 					}
 				}
 			}
-#if 0
-			// When this verification is enabled, replace ORDER BY x, y with ORDER BY create_sort_key(x, y)
-			// note that we don't enable this during actual verification since it doesn't always work
-			// e.g. it breaks EXPLAIN output on queries
-			bool can_replace = true;
-			for (auto &order_node : order.orders) {
-				if (order_node.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-					// we cannot replace the sort key when we order by literals (e.g. ORDER BY 1, 2`
-					can_replace = false;
-					break;
-				}
-			}
-			if (!order_binder.HasExtraList()) {
-				// we can only do the replacement when we can order by elements that are not in the selection list
-				can_replace = false;
-			}
-			if (can_replace) {
-				vector<unique_ptr<ParsedExpression>> sort_key_parameters;
+			if (config.options.debug_order_verification == DebugOrderVerification::CREATE_SORT_KEY) {
+				// When this verification is enabled, replace ORDER BY x, y with ORDER BY create_sort_key(x, y)
+				// note that we don't enable this during actual verification since it doesn't always work
+				// e.g. it breaks EXPLAIN output on queries
+				bool can_replace = true;
 				for (auto &order_node : order.orders) {
-					sort_key_parameters.push_back(std::move(order_node.expression));
-					auto type = config.ResolveOrder(context, order_node.type);
-					auto null_order = config.ResolveNullOrder(context, type, order_node.null_order);
-					string sort_param = EnumUtil::ToString(type) + " " + EnumUtil::ToString(null_order);
-					sort_key_parameters.push_back(make_uniq<ConstantExpression>(Value(sort_param)));
+					if (order_node.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+						// we cannot replace the sort key when we order by literals (e.g. ORDER BY 1, 2`
+						can_replace = false;
+						break;
+					}
 				}
-				order.orders.clear();
-				auto create_sort_key = make_uniq<FunctionExpression>("create_sort_key", std::move(sort_key_parameters));
-				order.orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(create_sort_key));
+				if (!order_binder.HasExtraList()) {
+					// we can only do the replacement when we can order by elements that are not in the selection list
+					can_replace = false;
+				}
+				if (can_replace) {
+					vector<unique_ptr<ParsedExpression>> sort_key_parameters;
+					for (auto &order_node : order.orders) {
+						sort_key_parameters.push_back(std::move(order_node.expression));
+						auto type = config.ResolveOrder(context, order_node.type);
+						auto null_order = config.ResolveNullOrder(context, type, order_node.null_order);
+						string sort_param = EnumUtil::ToString(type) + " " + EnumUtil::ToString(null_order);
+						sort_key_parameters.push_back(make_uniq<ConstantExpression>(Value(sort_param)));
+					}
+					order.orders.clear();
+					auto create_sort_key =
+					    make_uniq<FunctionExpression>("create_sort_key", std::move(sort_key_parameters));
+					order.orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST,
+					                          std::move(create_sort_key));
+				}
 			}
-#endif
 			for (auto &order_node : order.orders) {
 				vector<unique_ptr<ParsedExpression>> order_list;
 				order_binders[0].get().ExpandStarExpression(std::move(order_node.expression), order_list);
@@ -378,9 +382,19 @@ void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const
 					order.orders.emplace_back(order_type, null_order, std::move(expr));
 				}
 			}
+			auto &config = DBConfig::GetConfig(context);
 			for (auto &order_node : order.orders) {
 				auto &expr = order_node.expression;
-				ExpressionBinder::PushCollation(context, order_node.expression, expr->GetReturnType());
+				if (config.options.debug_order_verification == DebugOrderVerification::VARIANT &&
+				    expr->GetReturnType().id() != LogicalTypeId::VARIANT) {
+					// when this verification is enabled, cast every ORDER BY expression to VARIANT (the
+					// PushCollation below then routes ordering through the VARIANT comparator) to verify it
+					// produces the same ordering as the regular comparison. We do this on the *bound*
+					// expression so alias / positional / GROUP BY ALL resolution is unaffected.
+					order_node.expression = BoundCastExpression::AddCastToType(
+					    context, std::move(order_node.expression), LogicalType::VARIANT());
+				}
+				ExpressionBinder::PushCollation(context, order_node.expression, order_node.expression->GetReturnType());
 			}
 			break;
 		}

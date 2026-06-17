@@ -1,7 +1,7 @@
 # name: test/sql/storage/types/variant/variant_shredded_extract_non_object.test
 # group: [variant]
 
-load __TEST_DIR__/variant_struct_checkpoint.db readwrite v2.0.0
+load {TEST_DIR}/variant_struct_checkpoint.db readwrite v2.0.0
 
 statement ok
 set variant_minimum_shredding_size = 0;

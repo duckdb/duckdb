@@ -563,6 +563,17 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugOrderVerificationSetting {
+	using RETURN_TYPE = DebugOrderVerification;
+	static constexpr const char *Name = "debug_order_verification";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct DebugPhysicalTableScanExecutionStrategySetting {
 	using RETURN_TYPE = PhysicalTableScanExecutionStrategy;
 	static constexpr const char *Name = "debug_physical_table_scan_execution_strategy";

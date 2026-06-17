@@ -161,20 +161,6 @@ SetOperationType PEGTransformerFactory::TransformSetopExcept(PEGTransformer &tra
 	return SetOperationType::EXCEPT;
 }
 
-bool PEGTransformerFactory::TransformDistinctOrAll(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	return transformer.Transform<bool>(choice_pr.GetResult());
-}
-
-bool PEGTransformerFactory::TransformDistinctKeyword(PEGTransformer &transformer, ParseResult &parse_result) {
-	return true;
-}
-
-bool PEGTransformerFactory::TransformAllKeyword(PEGTransformer &transformer, ParseResult &parse_result) {
-	return false;
-}
-
 bool PEGTransformerFactory::TransformLateral(PEGTransformer &transformer) {
 	return true;
 }

@@ -29,6 +29,7 @@
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
+#include "duckdb/common/enums/debug_order_verification.hpp"
 #include "duckdb/common/enums/debug_statement_verification.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
 #include "duckdb/common/enums/debug_verification_mode.hpp"
@@ -1591,6 +1592,25 @@ const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value) {
 template<>
 DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value) {
 	return static_cast<DebugInitialize>(StringUtil::StringToEnum(GetDebugInitializeValues(), 3, "DebugInitialize", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDebugOrderVerificationValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DebugOrderVerification::NONE), "NONE" },
+		{ static_cast<uint32_t>(DebugOrderVerification::CREATE_SORT_KEY), "CREATE_SORT_KEY" },
+		{ static_cast<uint32_t>(DebugOrderVerification::VARIANT), "VARIANT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DebugOrderVerification>(DebugOrderVerification value) {
+	return StringUtil::EnumToString(GetDebugOrderVerificationValues(), 3, "DebugOrderVerification", static_cast<uint32_t>(value));
+}
+
+template<>
+DebugOrderVerification EnumUtil::FromString<DebugOrderVerification>(const char *value) {
+	return static_cast<DebugOrderVerification>(StringUtil::StringToEnum(GetDebugOrderVerificationValues(), 3, "DebugOrderVerification", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDebugStatementVerificationValues() {

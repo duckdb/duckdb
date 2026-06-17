@@ -57,6 +57,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"disabled_compression_methods", {"RLE"}},
 	    {"disabled_optimizers", {"extension"}},
 	    {"debug_force_external", {Value(true)}},
+	    {"debug_order_verification", {"create_sort_key"}},
 	    {"old_implicit_casting", {Value(true)}},
 	    {"prefer_range_joins", {Value(true)}},
 	    {"variant_minimum_shredding_size", {Value::INTEGER(-1)}},
