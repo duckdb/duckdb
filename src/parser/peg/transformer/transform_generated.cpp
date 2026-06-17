@@ -1348,10 +1348,53 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformWithoutRuleInte
 	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformConnectStatementInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	optional<unique_ptr<ConnectInfo>> session_target {};
+	auto &session_target_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (session_target_opt.HasResult()) {
+		auto session_target_value = transformer.Transform<unique_ptr<ConnectInfo>>(session_target_opt.GetResult());
+		session_target = std::move(session_target_value);
+	}
+	auto result = TransformConnectStatement(transformer, std::move(session_target));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformDisconnectStatementInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto result = TransformDisconnectStatement(transformer);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSessionTargetInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<ConnectInfo>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<ConnectInfo>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformLocalSessionTargetInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto result = TransformLocalSessionTarget(transformer);
+	return make_uniq<TypedTransformResult<unique_ptr<ConnectInfo>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformStringSessionTargetInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(0));
+	auto result = TransformStringSessionTarget(transformer, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<ConnectInfo>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformCatalogSessionTargetInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto catalog_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
+	auto result = TransformCatalogSessionTarget(transformer, catalog_name);
+	return make_uniq<TypedTransformResult<unique_ptr<ConnectInfo>>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCopyStatementInternal(PEGTransformer &transformer,
@@ -10066,7 +10109,12 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"WithOrWithout", &PEGTransformerFactory::TransformWithOrWithoutInternal},
 	    {"WithRule", &PEGTransformerFactory::TransformWithRuleInternal},
 	    {"WithoutRule", &PEGTransformerFactory::TransformWithoutRuleInternal},
+	    {"ConnectStatement", &PEGTransformerFactory::TransformConnectStatementInternal},
 	    {"DisconnectStatement", &PEGTransformerFactory::TransformDisconnectStatementInternal},
+	    {"SessionTarget", &PEGTransformerFactory::TransformSessionTargetInternal},
+	    {"LocalSessionTarget", &PEGTransformerFactory::TransformLocalSessionTargetInternal},
+	    {"StringSessionTarget", &PEGTransformerFactory::TransformStringSessionTargetInternal},
+	    {"CatalogSessionTarget", &PEGTransformerFactory::TransformCatalogSessionTargetInternal},
 	    {"CopyStatement", &PEGTransformerFactory::TransformCopyStatementInternal},
 	    {"CopyVariations", &PEGTransformerFactory::TransformCopyVariationsInternal},
 	    {"CopyTable", &PEGTransformerFactory::TransformCopyTableInternal},

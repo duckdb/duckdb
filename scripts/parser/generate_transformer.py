@@ -211,6 +211,7 @@ OPTIONAL_VALUE_GRAMMARS = {
     'checkpoint',
     'comment',
     'common',
+    'connect',
     'copy',
     'create_schema',
     'create_index',

@@ -44,6 +44,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/parser/parsed_data/connect_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
@@ -373,9 +374,6 @@ private:
 
 	static unique_ptr<SQLStatement> TransformStatement(PEGTransformer &, ParseResult &list);
 
-	// connect.gram — both rules have optional sub-clauses, so the generator skips them and we
-	// hand-write the (PEGTransformer&, ParseResult&) entry points.
-	static unique_ptr<SQLStatement> TransformConnectStatement(PEGTransformer &transformer, ParseResult &parse_result);
 	// comment.gram
 	static Value TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result);
 
@@ -898,9 +896,26 @@ private:
 	static unique_ptr<TransformResultValue> TransformWithoutRuleInternal(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
 	static bool TransformWithoutRule(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformConnectStatementInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformConnectStatement(PEGTransformer &transformer,
+	                                                          optional<unique_ptr<ConnectInfo>> session_target);
 	static unique_ptr<TransformResultValue> TransformDisconnectStatementInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDisconnectStatement(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSessionTargetInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformLocalSessionTargetInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<ConnectInfo> TransformLocalSessionTarget(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformStringSessionTargetInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<ConnectInfo> TransformStringSessionTarget(PEGTransformer &transformer,
+	                                                            const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformCatalogSessionTargetInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<ConnectInfo> TransformCatalogSessionTarget(PEGTransformer &transformer,
+	                                                             const Identifier &catalog_name);
 	static unique_ptr<TransformResultValue> TransformCopyStatementInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformCopyStatement(PEGTransformer &transformer,

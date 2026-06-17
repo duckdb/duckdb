@@ -228,6 +228,15 @@ CreateTypeInfo:
     - EnumSelectType
     - EnumStringLiteralList
 
+ConnectInfo:
+  type: "unique_ptr<ConnectInfo>"
+  by_value: true
+  rules:
+    - SessionTarget
+    - LocalSessionTarget
+    - StringSessionTarget
+    - CatalogSessionTarget
+
 MacroFunction:
   type: "unique_ptr<MacroFunction>"
   by_value: true
@@ -1102,6 +1111,8 @@ Bool:
     - WithOrWithoutOids
     - WithOids
     - WithoutOids
+    - SamplePercentage
+    - SampleRows
     - UniqueIndex
     - CopyFrom
     - CopyTo
@@ -1287,6 +1298,39 @@ ShowType:
     - DescribeLongRule
     - DescRule
 
+SetOperationType:
+  type: "SetOperationType"
+  by_value: false
+  rules:
+    - SetopType
+    - SetopUnion
+    - SetopExcept
+
+JoinTypeValue:
+  type: "JoinType"
+  by_value: false
+  rules:
+    - FullJoin
+    - LeftJoin
+    - RightJoin
+    - SemiJoin
+    - AntiJoin
+    - InnerJoin
+
+OrderTypeValue:
+  type: "OrderType"
+  by_value: false
+  rules:
+    - DescendingOrder
+    - AscendingOrder
+
+OrderByNullTypeValue:
+  type: "OrderByNullType"
+  by_value: false
+  rules:
+    - NullsFirst
+    - NullsLast
+
 ExpressionType:
   type: "ExpressionType"
   by_value: false
@@ -1368,6 +1412,14 @@ QualifiedColumnMap:
     - RenameEntryList
     - SingleRenameEntry
 
+QualifiedColumnName:
+  type: "QualifiedColumnName"
+  by_value: false
+  rules:
+    - ExcludeName
+    - ExcludeDottedName
+    - ExcludeColumnName
+
 # ---------------------------------------------------------------------------
 # Structs / pairs passed by value (contain move-only members like unique_ptr<T>)
 # ---------------------------------------------------------------------------
@@ -1410,6 +1462,13 @@ SequenceOptionEntry:
     - SeqStartWith
     - SeqOwnedBy
 
+SetOperationTail:
+  type: "pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>"
+  by_value: true
+  rules:
+    - SelectSetOpChainTail
+    - IntersectChainTail
+
 RelOptionMap:
   type: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   by_value: true
@@ -1430,6 +1489,23 @@ MergeMatchClause:
     - MergeMatch
     - MatchedClause
     - NotMatchedClause
+
+MethodArguments:
+  type: "MethodArguments"
+  by_value: true
+  rules:
+    - FunctionExpressionArguments
+    - FunctionExpressionArgumentList
+    - MethodExpressionArguments
+    - MethodExpressionArgumentList
+
+BinaryExpressionTail:
+  type: "BinaryExpressionTail"
+  by_value: true
+  rules:
+    - BitwiseExpressionTail
+    - MultiplicativeExpressionTail
+    - ExponentiationExpressionTail
 
 # ---------------------------------------------------------------------------
 # Overrides: rules with unique or complex return types that don't share a
@@ -1454,12 +1530,6 @@ overrides:
     type: "ColumnList"
     by_value: true
   # expression.gram
-  FunctionExpressionArguments:
-    type: "MethodArguments"
-    by_value: true
-  FunctionExpressionArgumentList:
-    type: "MethodArguments"
-    by_value: true
   NotExpression:
     type: "vector<bool>"
     by_value: true
@@ -1478,36 +1548,18 @@ overrides:
   OtherOperatorTail:
     type: "OtherOperatorTail"
     by_value: true
-  BitwiseExpressionTail:
-    type: "BinaryExpressionTail"
-    by_value: true
   AdditiveExpressionTail:
     type: "BinaryExpressionTail"
     by_value: true
     pass_location: true
-  MultiplicativeExpressionTail:
-    type: "BinaryExpressionTail"
-    by_value: true
-  ExponentiationExpressionTail:
-    type: "BinaryExpressionTail"
-    by_value: true
   AnyAllOperator: "pair<string, bool>"
   CaseWhenThen:
     type: "CaseCheck"
     by_value: true
-  ExcludeName: "QualifiedColumnName"
-  ExcludeDottedName: "QualifiedColumnName"
-  ExcludeColumnName: "QualifiedColumnName"
   ReplaceEntry:
     type: "pair<string, unique_ptr<ParsedExpression>>"
     by_value: true
   RenameEntry: "pair<QualifiedColumnName, string>"
-  MethodExpressionArguments:
-    type: "MethodArguments"
-    by_value: true
-  MethodExpressionArgumentList:
-    type: "MethodArguments"
-    by_value: true
   CastArguments:
     type: "CastArguments"
     by_value: true
@@ -1515,40 +1567,19 @@ overrides:
     type: "TrimArguments"
     by_value: true
   # select.gram
-  SetopType: "SetOperationType"
-  SetopUnion: "SetOperationType"
-  SetopExcept: "SetOperationType"
-  SelectSetOpChainTail:
-    type: "pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>"
-    by_value: true
-  IntersectChainTail:
-    type: "pair<unique_ptr<SetOperationNode>, unique_ptr<SelectStatement>>"
-    by_value: true
   WithStatement: "pair<Identifier, unique_ptr<CommonTableExpressionInfo>>"
   JoinType:
     type: "JoinType"
     default_initializer: "INNER"
-  FullJoin: "JoinType"
-  LeftJoin: "JoinType"
-  RightJoin: "JoinType"
-  SemiJoin: "JoinType"
-  AntiJoin: "JoinType"
-  InnerJoin: "JoinType"
   SampleProperties: "pair<SampleMethod, optional_idx>"
   SampleFunction: "SampleMethod"
-  SamplePercentage: "bool"
-  SampleRows: "bool"
   # select.gram (ordering)
   DescOrAsc:
     type: "OrderType"
     default_initializer: "ORDER_DEFAULT"
-  DescendingOrder: "OrderType"
-  AscendingOrder: "OrderType"
   NullsFirstOrLast:
     type: "OrderByNullType"
     default_initializer: "ORDER_DEFAULT"
-  NullsFirst: "OrderByNullType"
-  NullsLast: "OrderByNullType"
   # update.gram
   UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
 
