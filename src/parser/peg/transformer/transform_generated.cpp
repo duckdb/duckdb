@@ -1362,7 +1362,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCopyTableIntern
                                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto base_table_name = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.GetChild(0));
-	vector<string> insert_column_list {};
+	optional<vector<string>> insert_column_list {};
 	auto &insert_column_list_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (insert_column_list_opt.HasResult()) {
 		auto insert_column_list_value = transformer.Transform<vector<string>>(insert_column_list_opt.GetResult());
@@ -1370,7 +1370,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCopyTableIntern
 	}
 	auto from_or_to = transformer.Transform<bool>(list_pr.GetChild(2));
 	auto copy_file_name = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(3));
-	vector<GenericCopyOption> copy_options {};
+	optional<vector<GenericCopyOption>> copy_options {};
 	auto &copy_options_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
 	if (copy_options_opt.HasResult()) {
 		auto copy_options_value = transformer.Transform<vector<GenericCopyOption>>(copy_options_opt.GetResult());
@@ -1407,7 +1407,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCopySelectInter
 	auto select_statement_internal =
 	    transformer.Transform<unique_ptr<SelectStatement>>(ExtractResultFromParens(list_pr.GetChild(0)));
 	auto copy_file_name = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2));
-	vector<GenericCopyOption> copy_options {};
+	optional<vector<GenericCopyOption>> copy_options {};
 	auto &copy_options_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (copy_options_opt.HasResult()) {
 		auto copy_options_value = transformer.Transform<vector<GenericCopyOption>>(copy_options_opt.GetResult());
@@ -1472,8 +1472,11 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIdentifierColId
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCopyOptionsInternal(PEGTransformer &transformer,
                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
 	auto copy_option_list = transformer.Transform<vector<GenericCopyOption>>(list_pr.GetChild(1));
-	auto result = TransformCopyOptions(transformer, copy_option_list);
+	auto result = TransformCopyOptions(transformer, has_result, copy_option_list);
 	return make_uniq<TypedTransformResult<vector<GenericCopyOption>>>(result);
 }
 
@@ -1488,7 +1491,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCopyOptionListI
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformSpecializedOptionListInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<GenericCopyOption> specialized_option {};
+	optional<vector<GenericCopyOption>> specialized_option {};
 	auto &specialized_option_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
 	if (specialized_option_opt.HasResult()) {
 		vector<GenericCopyOption> specialized_option_value;
@@ -1553,32 +1556,44 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformHeaderOptionInt
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNullAsOptionInternal(PEGTransformer &transformer,
                                                                                       ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
 	auto string_literal = transformer.Transform<string>(list_pr.GetChild(2));
-	auto result = TransformNullAsOption(transformer, string_literal);
+	auto result = TransformNullAsOption(transformer, has_result, string_literal);
 	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDelimiterAsOptionInternal(PEGTransformer &transformer,
                                                                                            ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
 	auto string_literal = transformer.Transform<string>(list_pr.GetChild(2));
-	auto result = TransformDelimiterAsOption(transformer, string_literal);
+	auto result = TransformDelimiterAsOption(transformer, has_result, string_literal);
 	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformQuoteAsOptionInternal(PEGTransformer &transformer,
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
 	auto string_literal = transformer.Transform<string>(list_pr.GetChild(2));
-	auto result = TransformQuoteAsOption(transformer, string_literal);
+	auto result = TransformQuoteAsOption(transformer, has_result, string_literal);
 	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformEscapeAsOptionInternal(PEGTransformer &transformer,
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
 	auto string_literal = transformer.Transform<string>(list_pr.GetChild(2));
-	auto result = TransformEscapeAsOption(transformer, string_literal);
+	auto result = TransformEscapeAsOption(transformer, has_result, string_literal);
 	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
 }
 
@@ -1593,7 +1608,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformEncodingOptionI
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformForceQuoteOptionInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	bool force_quote {};
+	optional<bool> force_quote {};
 	auto &force_quote_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
 	if (force_quote_opt.HasResult()) {
 		auto force_quote_value = transformer.Transform<bool>(force_quote_opt.GetResult());
@@ -1633,7 +1648,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPartitionByOpti
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformForceNullOptionInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	bool force_not_null {};
+	optional<bool> force_not_null {};
 	auto &force_not_null_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (force_not_null_opt.HasResult()) {
 		auto force_not_null_value = transformer.Transform<bool>(force_not_null_opt.GetResult());
@@ -1667,7 +1682,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformGenericCopyOpti
                                                                                            ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto copy_option_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
-	GenericCopyOptionValue generic_copy_option_value {};
+	optional<GenericCopyOptionValue> generic_copy_option_value {};
 	auto &generic_copy_option_value_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (generic_copy_option_value_opt.HasResult()) {
 		auto generic_copy_option_value_value =
@@ -1777,38 +1792,38 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCopyDataInterna
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateIndexStmtInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	bool unique_index {};
+	optional<bool> unique_index {};
 	auto &unique_index_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
 	if (unique_index_opt.HasResult()) {
 		auto unique_index_value = transformer.Transform<bool>(unique_index_opt.GetResult());
 		unique_index = unique_index_value;
 	}
-	bool if_not_exists {};
+	optional<bool> if_not_exists {};
 	auto &if_not_exists_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (if_not_exists_opt.HasResult()) {
 		auto if_not_exists_value = transformer.Transform<bool>(if_not_exists_opt.GetResult());
 		if_not_exists = if_not_exists_value;
 	}
-	Identifier index_name {};
+	optional<Identifier> index_name {};
 	auto &index_name_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (index_name_opt.HasResult()) {
 		auto index_name_value = index_name_opt.GetResult().Cast<IdentifierParseResult>().identifier;
 		index_name = index_name_value;
 	}
 	auto base_table_name = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.GetChild(5));
-	vector<string> insert_column_list {};
+	optional<vector<string>> insert_column_list {};
 	auto &insert_column_list_opt = list_pr.GetChild(6).Cast<OptionalParseResult>();
 	if (insert_column_list_opt.HasResult()) {
 		auto insert_column_list_value = transformer.Transform<vector<string>>(insert_column_list_opt.GetResult());
 		insert_column_list = insert_column_list_value;
 	}
-	Identifier index_type {};
+	optional<Identifier> index_type {};
 	auto &index_type_opt = list_pr.GetChild(7).Cast<OptionalParseResult>();
 	if (index_type_opt.HasResult()) {
 		auto index_type_value = transformer.Transform<Identifier>(index_type_opt.GetResult());
 		index_type = index_type_value;
 	}
-	vector<unique_ptr<ParsedExpression>> index_element {};
+	optional<vector<unique_ptr<ParsedExpression>>> index_element {};
 	auto &index_element_opt = list_pr.GetChild(8).Cast<OptionalParseResult>();
 	if (index_element_opt.HasResult()) {
 		vector<unique_ptr<ParsedExpression>> index_element_value;
@@ -1821,14 +1836,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateIndexStmt
 		}
 		index_element = std::move(index_element_value);
 	}
-	case_insensitive_map_t<unique_ptr<ParsedExpression>> with_list {};
+	optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list {};
 	auto &with_list_opt = list_pr.GetChild(9).Cast<OptionalParseResult>();
 	if (with_list_opt.HasResult()) {
 		auto with_list_value =
 		    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(with_list_opt.GetResult());
 		with_list = std::move(with_list_value);
 	}
-	unique_ptr<ParsedExpression> where_clause {};
+	optional<unique_ptr<ParsedExpression>> where_clause {};
 	auto &where_clause_opt = list_pr.GetChild(10).Cast<OptionalParseResult>();
 	if (where_clause_opt.HasResult()) {
 		auto where_clause_value = transformer.Transform<unique_ptr<ParsedExpression>>(where_clause_opt.GetResult());
@@ -1903,13 +1918,13 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIndexElementInt
                                                                                       ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
-	OrderType desc_or_asc {};
+	optional<OrderType> desc_or_asc {};
 	auto &desc_or_asc_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (desc_or_asc_opt.HasResult()) {
 		auto desc_or_asc_value = transformer.Transform<OrderType>(desc_or_asc_opt.GetResult());
 		desc_or_asc = desc_or_asc_value;
 	}
-	OrderByNullType nulls_first_or_last {};
+	optional<OrderByNullType> nulls_first_or_last {};
 	auto &nulls_first_or_last_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (nulls_first_or_last_opt.HasResult()) {
 		auto nulls_first_or_last_value = transformer.Transform<OrderByNullType>(nulls_first_or_last_opt.GetResult());
@@ -1937,7 +1952,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRelOptionIntern
                                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto rel_option_name = transformer.Transform<Identifier>(list_pr.GetChild(0));
-	unique_ptr<ParsedExpression> rel_option_argument_opt {};
+	optional<unique_ptr<ParsedExpression>> rel_option_argument_opt {};
 	auto &rel_option_argument_opt_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (rel_option_argument_opt_opt.HasResult()) {
 		auto rel_option_argument_opt_value =
