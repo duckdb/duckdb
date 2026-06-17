@@ -80,12 +80,6 @@ public:
 	DUCKDB_API void VerifyExistenceOfDependency(transaction_t commit_id, CatalogEntry &entry);
 	//! Verify we can still drop the entry while committing
 	DUCKDB_API void CommitDrop(transaction_t commit_id, transaction_t start_time, CatalogEntry &entry);
-	//! Returns true if the given entry is the current committed (non-deleted) entry for its name in this set.
-	//! Used at commit time to detect, by object identity, that the schema an entry was created in is no longer the
-	//! live committed schema (e.g. it was dropped - or dropped and re-created - by another transaction), which would
-	//! otherwise orphan the entry inside the now-dropped schema version. Name-based dependency tracking cannot
-	//! detect this because a same-named schema may still exist.
-	bool IsCommittedCurrentEntry(CatalogEntry &entry);
 
 	DUCKDB_API DuckCatalog &GetCatalog();
 

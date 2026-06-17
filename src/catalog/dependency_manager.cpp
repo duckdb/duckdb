@@ -220,6 +220,13 @@ void DependencyManager::CreateDependent(CatalogTransaction transaction, const De
 }
 
 void DependencyManager::CreateDependency(CatalogTransaction transaction, DependencyInfo &info) {
+	// Record the current oid of the subject. At the dependent's commit (VerifyExistence) this lets us tell whether
+	// the subject was dropped and re-created (different oid) versus merely altered (oid preserved). The subject must
+	// already exist - you cannot depend on a non-existent entry - but if it cannot be resolved we leave the oid
+	// invalid and fall back to the name-based existence check.
+	auto subject_entry = LookupEntry(transaction, info.subject.entry);
+	info.subject.oid = subject_entry ? subject_entry->oid : DConstants::INVALID_INDEX;
+
 	DependencyCatalogSet subjects(Subjects(), info.dependent.entry);
 	DependencyCatalogSet dependents(Dependents(), info.subject.entry);
 
@@ -315,12 +322,8 @@ CatalogEntryInfo DependencyManager::GetLookupProperties(const CatalogEntry &entr
 	}
 }
 
-optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency) {
-	if (dependency.type != CatalogType::DEPENDENCY_ENTRY) {
-		return &dependency;
-	}
-	auto info = GetLookupProperties(dependency);
-
+optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction,
+                                                          const CatalogEntryInfo &info) {
 	auto &type = info.type;
 	auto &schema = info.schema;
 	auto &name = info.name;
@@ -331,8 +334,14 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 		// This is a schema entry, perform the callback only providing the schema
 		return reinterpret_cast<CatalogEntry *>(schema_entry.get());
 	}
-	auto entry = schema_entry->GetEntry(transaction, type, name);
-	return entry;
+	return schema_entry->GetEntry(transaction, type, name);
+}
+
+optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency) {
+	if (dependency.type != CatalogType::DEPENDENCY_ENTRY) {
+		return &dependency;
+	}
+	return LookupEntry(transaction, GetLookupProperties(dependency));
 }
 
 void DependencyManager::CleanupDependencies(CatalogTransaction transaction, CatalogEntry &object) {
@@ -467,6 +476,16 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 	if (lookup_result.reason == CatalogSet::EntryLookup::FailureReason::DELETED) {
 		throw DependencyException("Could not commit creation of dependency, subject \"%s\" has been deleted",
 		                          object.SourceInfo().name);
+	}
+	// The subject still exists by name - but if it is a different object than the one we recorded the dependency
+	// against, the subject was dropped and re-created by another transaction after we started (a same-named entry
+	// with a fresh oid; an alter would have preserved the oid). The entry we were created against is gone and may be
+	// getting cleaned up, so committing would leave us orphaned inside it.
+	if (!subject.flags.IsOwnership() && subject.oid != DConstants::INVALID_INDEX && lookup_result.result &&
+	    lookup_result.result->oid != subject.oid) {
+		throw DependencyException(
+		    "Could not commit creation of dependency, subject \"%s\" was dropped and re-created by another transaction",
+		    object.EntryInfo().name);
 	}
 }
 

@@ -87,10 +87,6 @@ public:
 	virtual const Catalog &ParentCatalog() const;
 	virtual SchemaCatalogEntry &ParentSchema();
 	virtual const SchemaCatalogEntry &ParentSchema() const;
-	//! Whether this entry is a StandardEntry (i.e. a member of a schema, such as a table or macro)
-	virtual bool IsStandardEntry() const {
-		return false;
-	}
 
 	virtual void Verify(Catalog &catalog);
 
