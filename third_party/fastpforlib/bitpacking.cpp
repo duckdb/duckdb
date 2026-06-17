@@ -269,10 +269,13 @@ void __fastunpack3(const uint8_t *__restrict in, uint8_t *__restrict out) {
 }
 
 void __fastunpack4(const uint8_t *__restrict in, uint8_t *__restrict out) {
-	for (uint8_t outer = 0; outer < 4; ++outer) {
-		for (uint8_t inwordpointer = 0; inwordpointer < 8; inwordpointer += 4)
-			*(out++) = ((*in) >> inwordpointer) % (1U << 4);
-		++in;
+#if defined(__clang__)
+#pragma clang loop vectorize_width(16) interleave_count(1)
+#endif
+	for (uint8_t i = 0; i < 4; ++i) {
+		uint8_t b = in[i];
+		out[2 * i + 0] = b & 0x0F;
+		out[2 * i + 1] = b >> 4;
 	}
 }
 
@@ -348,7 +351,18 @@ void __fastunpack11(const uint16_t *__restrict in, uint16_t *__restrict out) {
 }
 
 void __fastunpack12(const uint16_t *__restrict in, uint16_t *__restrict out) {
-	Unroller16<12>::Unpack(in, out);
+#if defined(__clang__)
+#pragma clang loop vectorize_width(8) interleave_count(1)
+#endif
+	for (uint16_t g = 0; g < 4; ++g) {
+		uint16_t u0 = in[3 * g + 0];
+		uint16_t u1 = in[3 * g + 1];
+		uint16_t u2 = in[3 * g + 2];
+		out[4 * g + 0] = u0 & 0x0FFF;
+		out[4 * g + 1] = (u0 >> 12) | ((u1 & 0x00FF) << 4);
+		out[4 * g + 2] = (u1 >> 8) | ((u2 & 0x000F) << 8);
+		out[4 * g + 3] = u2 >> 4;
+	}
 }
 
 void __fastunpack13(const uint16_t *__restrict in, uint16_t *__restrict out) {
@@ -474,7 +488,18 @@ void __fastunpack23(const uint32_t *__restrict in, uint32_t *__restrict out) {
 }
 
 void __fastunpack24(const uint32_t *__restrict in, uint32_t *__restrict out) {
-	Unroller<24>::Unpack(in, out);
+#if defined(__clang__)
+#pragma clang loop vectorize_width(4) interleave_count(1)
+#endif
+	for (uint32_t g = 0; g < 8; ++g) {
+		uint32_t u0 = in[3 * g + 0];
+		uint32_t u1 = in[3 * g + 1];
+		uint32_t u2 = in[3 * g + 2];
+		out[4 * g + 0] = u0 & 0x00FFFFFFu;
+		out[4 * g + 1] = (u0 >> 24) | ((u1 & 0x0000FFFFu) << 8);
+		out[4 * g + 2] = (u1 >> 16) | ((u2 & 0x000000FFu) << 16);
+		out[4 * g + 3] = u2 >> 8;
+	}
 }
 
 void __fastunpack25(const uint32_t *__restrict in, uint32_t *__restrict out) {

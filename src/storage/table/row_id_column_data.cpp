@@ -61,21 +61,27 @@ idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 }
 
 void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             SelectionVector &sel, idx_t &count, const TableFilter &filter,
-                             TableFilterState &filter_state) {
+                             ScanFilterResult &acc, const TableFilter &filter, TableFilterState &filter_state) {
 	auto row_start = GetRowStart(state);
 	auto current_row = row_start + state.offset_in_column;
 	auto max_count = GetVectorCount(vector_index);
 	state.offset_in_column += max_count;
+	D_ASSERT(acc.row_span == max_count);
 	// We do another quick statistics scan for row ids here
 	const auto rowid_start = current_row;
 	const auto rowid_end = current_row + max_count;
 	const auto prune_result = RowGroup::CheckRowIdFilter(filter, rowid_start, rowid_end);
 	if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-		// We can just break out of the loop here.
-		count = 0;
+		acc.InitAllPass(max_count);
+		const idx_t nw = (max_count + 63) / 64;
+		for (idx_t w = 0; w < nw; w++) {
+			acc.bitmap[w] = 0;
+		}
 		return;
 	}
+
+	SelectionVector sel;
+	idx_t count = MaterializeScanFilterResult(acc, sel);
 
 	// Generate row ids
 	// Create sequence for row ids
@@ -98,6 +104,9 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 	UnifiedVectorFormat vdata;
 	result.ToUnifiedFormat(vdata);
 	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, count, count);
+	acc.rep = ScanFilterResult::Rep::SELVEC;
+	acc.sel.Initialize(sel);
+	acc.sel_count = count;
 }
 
 void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
