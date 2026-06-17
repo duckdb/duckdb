@@ -354,7 +354,7 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
     elseif(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
         # Use the pre-cloned source from extension/external/<name> (populated by
         # scripts/sync_out_of_tree_extensions.py via `make sync_out_of_tree_extensions`).
-        set("${NAME}_extension_fc_SOURCE_DIR" "${CMAKE_SOURCE_DIR}/extension/external/${NAME}")
+        set("${NAME}_extension_fc_SOURCE_DIR" "${DUCKDB_MODULE_BASE_DIR}/extension/external/${NAME}")
         if(NOT EXISTS "${${NAME}_extension_fc_SOURCE_DIR}/.git")
             message(FATAL_ERROR
                 "DUCKDB_NEW_EXTENSION_BUILD is set but extension '${NAME}' was not found at "
@@ -363,7 +363,7 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
     else()
         unset(PATCH_COMMAND)
         if (${APPLY_PATCHES})
-            set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+            set(PATCH_COMMAND ${Python3_EXECUTABLE} ${DUCKDB_MODULE_BASE_DIR}/scripts/apply_extension_patches.py ${DUCKDB_MODULE_BASE_DIR}/.github/patches/extensions/${NAME}/)
         endif()
         FETCHCONTENT_DECLARE(
                 ${NAME}_extension_fc
