@@ -1,5 +1,5 @@
 # name: benchmark/micro/variant/variant_unshred_integer.benchmark
-# description: Unshred a VARIANT column fully shredded on an INTEGER value for every row. The v::VARCHAR cast falls back to RecursiveToUnifiedFormat, which flattens the SHREDDED_VECTOR via VariantUtils::UnshredVariantData - stressing the unshredding path on a primitive (leaf) value.
+# description: Unshred a VARIANT column fully shredded on an INTEGER value for every row. Materializing the scanned column flattens the SHREDDED_VECTOR via VariantUtils::UnshredVariantData, isolating the unshredding path on a primitive (leaf) value without any text-encoding overhead.
 # group: [variant]
 
 name variant_unshred_integer
@@ -14,4 +14,4 @@ CREATE TABLE tbl AS SELECT i::INTEGER::VARIANT v FROM range(10000000) t(i);
 CHECKPOINT;
 
 run
-SELECT max(v::VARCHAR) FROM tbl;
+SELECT v FROM tbl;
