@@ -357,7 +357,22 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		// Gather all scans of this CTE in the query and mark them as expected readers of this CTE
 		GatherCTEScans(cte.table_index, *cte.children[1], cte_map_entry.expected_readers);
 		cte_map_entry.everything_referenced = false;
-		RemoveUnusedColumns rhs_child_optimizer(*this, true);
+		auto output_bindings = cte.GetColumnBindings();
+		bool has_output_references = false;
+		for (auto &binding : output_bindings) {
+			if (column_references.find(binding) != column_references.end()) {
+				has_output_references = true;
+				break;
+			}
+		}
+
+		// A materialized CTE returns the RHS/continuation columns. If a parent already registered explicit references
+		// to those columns, use them to prune the continuation instead of forcing all RHS columns to stay live.
+		RemoveUnusedColumns rhs_child_optimizer(*this, everything_referenced && !has_output_references);
+		rhs_child_optimizer.column_references.reserve(column_references.size());
+		for (auto &entry : column_references) {
+			rhs_child_optimizer.column_references.emplace(entry.first, entry.second);
+		}
 		rhs_child_optimizer.VisitOperator(cte.children[1]);
 
 		unordered_set<ProjectionIndex> referenced_columns_in_rhs;
