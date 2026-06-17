@@ -76,6 +76,7 @@ struct JSONCopyFormatOptions {
 	optional_ptr<StrfTimeFormat> timestamp_format;
 	optional_ptr<ClientContext> context;
 	optional_ptr<const Expression> timestamptz_format_expression;
+	optional_ptr<const Expression> timestamptz_ns_format_expression;
 };
 
 struct JSONCopyToJSONFunctionData : public FunctionData {
@@ -83,19 +84,22 @@ public:
 	JSONCopyToJSONFunctionData(StructNames const_struct_names_p, bool has_date_format_p, string date_format_string_p,
 	                           StrfTimeFormat date_format_p, bool has_timestamp_format_p,
 	                           string timestamp_format_string_p, StrfTimeFormat timestamp_format_p,
-	                           unique_ptr<Expression> timestamptz_format_expression_p)
+	                           unique_ptr<Expression> timestamptz_format_expression_p,
+	                           unique_ptr<Expression> timestamptz_ns_format_expression_p)
 	    : const_struct_names(std::move(const_struct_names_p)), has_date_format(has_date_format_p),
 	      date_format_string(std::move(date_format_string_p)), date_format(std::move(date_format_p)),
 	      has_timestamp_format(has_timestamp_format_p), timestamp_format_string(std::move(timestamp_format_string_p)),
 	      timestamp_format(std::move(timestamp_format_p)),
-	      timestamptz_format_expression(std::move(timestamptz_format_expression_p)) {
+	      timestamptz_format_expression(std::move(timestamptz_format_expression_p)),
+	      timestamptz_ns_format_expression(std::move(timestamptz_ns_format_expression_p)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
 		return make_uniq<JSONCopyToJSONFunctionData>(
 		    const_struct_names.Copy(), has_date_format, date_format_string, date_format, has_timestamp_format,
 		    timestamp_format_string, timestamp_format,
-		    timestamptz_format_expression ? timestamptz_format_expression->Copy() : nullptr);
+		    timestamptz_format_expression ? timestamptz_format_expression->Copy() : nullptr,
+		    timestamptz_ns_format_expression ? timestamptz_ns_format_expression->Copy() : nullptr);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -113,6 +117,9 @@ public:
 		result.context = context;
 		result.timestamptz_format_expression =
 		    timestamptz_format_expression ? optional_ptr<const Expression>(timestamptz_format_expression.get()) : nullptr;
+		result.timestamptz_ns_format_expression = timestamptz_ns_format_expression
+		                                               ? optional_ptr<const Expression>(timestamptz_ns_format_expression.get())
+		                                               : nullptr;
 		return result;
 	}
 
@@ -125,6 +132,7 @@ public:
 	string timestamp_format_string;
 	StrfTimeFormat timestamp_format;
 	unique_ptr<Expression> timestamptz_format_expression;
+	unique_ptr<Expression> timestamptz_ns_format_expression;
 };
 
 static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalType &type) {
@@ -304,9 +312,10 @@ static bool BindJSONCopyFormat(ClientContext &context, Expression &argument, con
 	return true;
 }
 
-static unique_ptr<Expression> BindJSONCopyTimestampTZFormatter(ClientContext &context, const string &format_string) {
+static unique_ptr<Expression> BindJSONCopyTimestampTZFormatter(ClientContext &context, const string &format_string,
+                                                               const LogicalType &type) {
 	vector<unique_ptr<Expression>> children;
-	children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::TIMESTAMP_TZ, 0));
+	children.push_back(make_uniq<BoundReferenceExpression>(type, 0));
 	children.push_back(make_uniq<BoundConstantExpression>(Value(format_string)));
 
 	FunctionBinder function_binder(context);
@@ -347,14 +356,18 @@ static unique_ptr<FunctionData> JSONCopyToJSONBind(BindScalarFunctionInput &inpu
 	    BindJSONCopyFormat(context, *arguments[2], "timestamp", timestamp_format_string, timestamp_format);
 
 	unique_ptr<Expression> timestamptz_format_expression;
+	unique_ptr<Expression> timestamptz_ns_format_expression;
 	if (has_timestamp_format) {
-		timestamptz_format_expression = BindJSONCopyTimestampTZFormatter(context, timestamp_format_string);
+		timestamptz_format_expression =
+		    BindJSONCopyTimestampTZFormatter(context, timestamp_format_string, LogicalType::TIMESTAMP_TZ);
+		timestamptz_ns_format_expression =
+		    BindJSONCopyTimestampTZFormatter(context, timestamp_format_string, LogicalType::TIMESTAMP_TZ_NS);
 	}
 
 	return make_uniq<JSONCopyToJSONFunctionData>(
 	    std::move(const_struct_names), has_date_format, std::move(date_format_string), std::move(date_format),
 	    has_timestamp_format, std::move(timestamp_format_string), std::move(timestamp_format),
-	    std::move(timestamptz_format_expression));
+	    std::move(timestamptz_format_expression), std::move(timestamptz_ns_format_expression));
 }
 
 template <class INPUT_TYPE, class RESULT_TYPE>
@@ -731,7 +744,10 @@ static void CreateValuesTimestampTZ(yyjson_mut_doc *doc, yyjson_mut_val *vals[],
 		CreateValuesFromDefaultCast(doc, vals, value_v, count);
 		return;
 	}
-	if (!options.context || !options.timestamptz_format_expression) {
+	auto format_expression = value_v.GetType().id() == LogicalTypeId::TIMESTAMP_TZ_NS
+	                             ? options.timestamptz_ns_format_expression
+	                             : options.timestamptz_format_expression;
+	if (!options.context || !format_expression) {
 		throw InternalException("Missing bound TIMESTAMPTZ formatter for JSON COPY");
 	}
 
@@ -741,7 +757,7 @@ static void CreateValuesTimestampTZ(yyjson_mut_doc *doc, yyjson_mut_val *vals[],
 	input.CheckCardinality(count);
 
 	Vector string_vector(LogicalType::VARCHAR, count);
-	ExpressionExecutor executor(*options.context.get_mutable(), *options.timestamptz_format_expression);
+	ExpressionExecutor executor(*options.context.get_mutable(), *format_expression);
 	executor.ExecuteExpression(input, string_vector);
 	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
 }
@@ -822,6 +838,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		CreateValuesTimestampNS(doc, vals, value_v, count, options);
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		CreateValuesTimestampTZ(doc, vals, value_v, count, options);
 		break;
 	case LogicalTypeId::BIT:
@@ -832,7 +849,6 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::GEOMETRY: {
 		CreateValuesFromDefaultCast(doc, vals, value_v, count);
