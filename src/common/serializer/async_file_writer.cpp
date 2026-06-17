@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include <cstring>
@@ -266,6 +267,9 @@ bool AsyncFileWriter::SupportsPositionalWrites() {
 }
 
 bool AsyncFileWriter::IsLocalFile() {
+	if (Settings::Get<DebugLocalFileSystemDelayMsSetting>(client_context) > 0) {
+		return false;
+	}
 	auto local_file = fs.IsLocalFileSystem();
 	if (!local_file && handle) {
 		try {
