@@ -2,6 +2,12 @@
 # description: Test EXPORT_STATE for approx_top_k - the state is explicitly (de)serialized
 # group: [aggregate_state_export]
 
+# approx_top_k's parallel combine is approximate (it overestimates counts for values not present in
+# both partial states), so results are only deterministic with a single state - force single-threaded
+# execution so the exact-value comparisons below are stable across vector sizes
+statement ok
+SET threads=1;
+
 # empty input exports a NULL state
 query I
 SELECT approx_top_k(x, 3) EXPORT_STATE FROM (SELECT 'a' AS x WHERE false) t;

@@ -34,7 +34,6 @@ endif
 UNITTEST_BINARY ?= test/unittest$(EXE_SUFFIX)
 SMOKE_UNITTEST ?= build/relassert/$(UNITTEST_BINARY)
 SMOKE_RUNNER ?= build/relassert/test/run
-SMOKE_BATCH_TIMEOUT ?= 120
 UNITTEST_SLOW_FLAGS ?= --track-runtime=100
 UNITTEST_HUGE_FLAGS ?= --workers=50% $(UNITTEST_SLOW_FLAGS)
 
@@ -570,7 +569,7 @@ unittest_relassert:
 	build/relassert/test/run $(UNITTEST_SLOW_FLAGS) $(T)
 
 smoke:
-	$(SMOKE_RUNNER) --batch-timeout $(SMOKE_BATCH_TIMEOUT) --test-list test/smoke_tests.list $(T)
+	$(SMOKE_RUNNER) --batch-timeout 120 --test-list test/smoke_tests.list $(T)
 
 unittestarrow:
 	build/debug/test/run "[arrow]"
@@ -651,7 +650,7 @@ APT_TIMEOUT_OPTS=-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
 .PHONY: toolsci
 
 toolsci:
-	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz clang++-20 clangd-20 gdb,ninja-build mold ccache pkg-config pigz clang++-20 clangd-20 gdb)
+	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz clang++-20 clangd-20,ninja-build mold ccache pkg-config pigz clang++-20 clangd-20)
 	$(call ensure_apt_packages,python3-requests libcurl4-openssl-dev llvm-20-dev libclang-rt-20-dev)
 	ls -lh /usr/bin/gcc* /usr/bin/g++* /usr/bin/clang++*
 	gcc --version
