@@ -8841,6 +8841,12 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAntiJoinInterna
 	return make_uniq<TypedTransformResult<JoinType>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMarkJoinInternal(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	auto result = TransformMarkJoin(transformer);
+	return make_uniq<TypedTransformResult<JoinType>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInnerJoinInternal(PEGTransformer &transformer,
                                                                                    ParseResult &parse_result) {
 	auto result = TransformInnerJoin(transformer);
@@ -10810,6 +10816,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"RightJoin", &PEGTransformerFactory::TransformRightJoinInternal},
 	    {"SemiJoin", &PEGTransformerFactory::TransformSemiJoinInternal},
 	    {"AntiJoin", &PEGTransformerFactory::TransformAntiJoinInternal},
+	    {"MarkJoin", &PEGTransformerFactory::TransformMarkJoinInternal},
 	    {"InnerJoin", &PEGTransformerFactory::TransformInnerJoinInternal},
 	    {"FromClause", &PEGTransformerFactory::TransformFromClauseInternal},
 	    {"WhereClause", &PEGTransformerFactory::TransformWhereClauseInternal},

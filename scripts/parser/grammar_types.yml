@@ -1315,6 +1315,7 @@ JoinTypeValue:
     - RightJoin
     - SemiJoin
     - AntiJoin
+    - MarkJoin
     - InnerJoin
 
 OrderTypeValue:

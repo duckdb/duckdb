@@ -547,6 +547,10 @@ JoinType PEGTransformerFactory::TransformAntiJoin(PEGTransformer &transformer) {
 	return JoinType::ANTI;
 }
 
+JoinType PEGTransformerFactory::TransformMarkJoin(PEGTransformer &transformer) {
+	return JoinType::MARK;
+}
+
 JoinType PEGTransformerFactory::TransformInnerJoin(PEGTransformer &transformer) {
 	return JoinType::INNER;
 }

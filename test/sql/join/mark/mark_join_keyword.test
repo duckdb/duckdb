@@ -1,0 +1,56 @@
+# name: test/sql/join/mark/mark_join_keyword.test
+# description: Test the MARK JOIN keyword
+# group: [mark]
+
+statement ok
+CREATE TABLE t1(a INTEGER);
+
+statement ok
+INSERT INTO t1 VALUES (1), (2), (3);
+
+statement ok
+CREATE TABLE t2(b INTEGER);
+
+statement ok
+INSERT INTO t2 VALUES (2), (3), (4);
+
+# a MARK join projects the left hand side plus a boolean marker column
+query II
+SELECT a, m FROM (SELECT * FROM t1 MARK JOIN t2 ON (a = b)) tbl(a, m) ORDER BY a;
+----
+1	false
+2	true
+3	true
+
+# the marker column can be used in a WHERE clause (equivalent to a SEMI join)
+query I
+SELECT a FROM (SELECT * FROM t1 MARK JOIN t2 ON (a = b)) tbl(a, m) WHERE m ORDER BY a;
+----
+2
+3
+
+# negating the marker is equivalent to an ANTI join
+query I
+SELECT a FROM (SELECT * FROM t1 MARK JOIN t2 ON (a = b)) tbl(a, m) WHERE NOT m ORDER BY a;
+----
+1
+
+# MARK join with no matching rows on the right marks everything false
+query II
+SELECT a, m FROM (SELECT * FROM t1 MARK JOIN t2 ON (a = b + 100)) tbl(a, m) ORDER BY a;
+----
+1	false
+2	false
+3	false
+
+# like SEMI/ANTI, MARK is still usable as a quoted identifier
+statement ok
+CREATE TABLE "mark"("mark" INTEGER);
+
+statement ok
+INSERT INTO "mark" VALUES (1);
+
+query I
+SELECT "mark" FROM "mark";
+----
+1

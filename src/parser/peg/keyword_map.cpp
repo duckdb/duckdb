@@ -498,6 +498,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	typefunc_keyword_map.insert("left");
 	typefunc_keyword_map.insert("like");
 	typefunc_keyword_map.insert("map");
+	typefunc_keyword_map.insert("mark");
 	typefunc_keyword_map.insert("natural");
 	typefunc_keyword_map.insert("notnull");
 	typefunc_keyword_map.insert("outer");
@@ -533,6 +534,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	typename_keyword_map.insert("join");
 	typename_keyword_map.insert("left");
 	typename_keyword_map.insert("like");
+	typename_keyword_map.insert("mark");
 	typename_keyword_map.insert("natural");
 	typename_keyword_map.insert("notnull");
 	typename_keyword_map.insert("outer");

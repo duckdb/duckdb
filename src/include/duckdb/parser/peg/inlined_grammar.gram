@@ -710,7 +710,8 @@ TypeNameKeyword <- 'ASOF' /
 'TRY_CAST' /
 'VERBOSE' /
 'SEMI' /
-'ANTI'
+'ANTI' /
+'MARK'
 PivotStatement <- PivotKeyword TableRef PivotOn? PivotUsing? PivotGroupByList?
 
 PivotOn <- 'ON' PivotColumnList
@@ -1479,7 +1480,7 @@ JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON' Expression
 UsingClause <- 'USING' Parens(List(ColumnName))
 
-JoinType <- FullJoin / LeftJoin / RightJoin / SemiJoin / AntiJoin / InnerJoin
+JoinType <- FullJoin / LeftJoin / RightJoin / SemiJoin / AntiJoin / MarkJoin / InnerJoin
 JoinPrefix <- CrossJoinPrefix / NaturalJoinPrefix / PositionalJoinPrefix
 CrossJoinPrefix <- 'CROSS'
 NaturalJoinPrefix <- 'NATURAL' JoinType?
@@ -1489,6 +1490,7 @@ LeftJoin <- 'LEFT' 'OUTER'?
 RightJoin <- 'RIGHT' 'OUTER'?
 SemiJoin <- 'SEMI'
 AntiJoin <- 'ANTI'
+MarkJoin <- 'MARK'
 InnerJoin <- 'INNER'
 
 FromClause <- 'FROM' List(TableRef)
