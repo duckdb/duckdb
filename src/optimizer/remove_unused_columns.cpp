@@ -366,12 +366,16 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			}
 		}
 
-		// A materialized CTE returns the RHS/continuation columns. If a parent already registered explicit references
-		// to those columns, use them to prune the continuation instead of forcing all RHS columns to stay live.
-		RemoveUnusedColumns rhs_child_optimizer(*this, everything_referenced && !has_output_references);
-		rhs_child_optimizer.column_references.reserve(column_references.size());
-		for (auto &entry : column_references) {
-			rhs_child_optimizer.column_references.emplace(entry.first, entry.second);
+		// A materialized CTE returns the RHS/continuation columns. If this pass is allowed to prune outputs and a
+		// parent registered explicit references to those columns, use them to prune the continuation. Respect
+		// everything_referenced barriers, e.g. DML operators that rely on a fixed child schema.
+		auto prune_rhs_outputs = !everything_referenced && has_output_references;
+		RemoveUnusedColumns rhs_child_optimizer(*this, !prune_rhs_outputs);
+		if (prune_rhs_outputs) {
+			rhs_child_optimizer.column_references.reserve(column_references.size());
+			for (auto &entry : column_references) {
+				rhs_child_optimizer.column_references.emplace(entry.first, entry.second);
+			}
 		}
 		rhs_child_optimizer.VisitOperator(cte.children[1]);
 
