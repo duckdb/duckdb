@@ -210,6 +210,7 @@ OPTIONAL_VALUE_GRAMMARS = {
     'call',
     'checkpoint',
     'comment',
+    'common',
     'copy',
     'create_schema',
     'create_index',

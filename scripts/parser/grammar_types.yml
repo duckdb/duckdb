@@ -1025,7 +1025,6 @@ String:
     - SetNullability
     - MinValue
     - MaxValue
-    - CharacterType
     - IntType
     - IntegerType
     - SmallintType
@@ -1688,6 +1687,7 @@ excluded_rules:
   - StarSymbol
   - PlainIdentifier
   - QuotedIdentifier
+  - CharacterType
   - IntervalNumber
   - AtTimeZoneOperator
   - Generated

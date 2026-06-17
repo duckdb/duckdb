@@ -694,7 +694,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeInternal(PE
                                                                               ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto type_variations = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
-	vector<int64_t> array_bounds {};
+	optional<vector<int64_t>> array_bounds {};
 	auto &array_bounds_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (array_bounds_opt.HasResult()) {
 		vector<int64_t> array_bounds_value;
@@ -728,15 +728,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSimpleTypeInter
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformCharacterSimpleTypeInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto character_type = transformer.Transform<string>(list_pr.GetChild(0));
-	vector<unique_ptr<ParsedExpression>> type_modifiers {};
+	optional<vector<unique_ptr<ParsedExpression>>> type_modifiers {};
 	auto &type_modifiers_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (type_modifiers_opt.HasResult()) {
 		auto type_modifiers_value =
 		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(type_modifiers_opt.GetResult());
 		type_modifiers = std::move(type_modifiers_value);
 	}
-	auto result = TransformCharacterSimpleType(transformer, character_type, std::move(type_modifiers));
+	auto result = TransformCharacterSimpleType(transformer, std::move(type_modifiers));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
@@ -744,7 +743,7 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformQualifiedSimpleTypeInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto qualified_type_name = transformer.Transform<QualifiedName>(list_pr.GetChild(0));
-	vector<unique_ptr<ParsedExpression>> type_modifiers {};
+	optional<vector<unique_ptr<ParsedExpression>>> type_modifiers {};
 	auto &type_modifiers_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (type_modifiers_opt.HasResult()) {
 		auto type_modifiers_value =
@@ -753,12 +752,6 @@ PEGTransformerFactory::TransformQualifiedSimpleTypeInternal(PEGTransformer &tran
 	}
 	auto result = TransformQualifiedSimpleType(transformer, qualified_type_name, std::move(type_modifiers));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
-}
-
-unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCharacterTypeInternal(PEGTransformer &transformer,
-                                                                                       ParseResult &parse_result) {
-	auto result = TransformCharacterType(transformer);
-	return make_uniq<TypedTransformResult<string>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIntervalTypeInternal(PEGTransformer &transformer,
@@ -970,7 +963,10 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMinuteToSecondI
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBitTypeInternal(PEGTransformer &transformer,
                                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<unique_ptr<ParsedExpression>> expression {};
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	optional<vector<unique_ptr<ParsedExpression>>> expression {};
 	auto &expression_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (expression_opt.HasResult()) {
 		vector<unique_ptr<ParsedExpression>> expression_value;
@@ -983,14 +979,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformBitTypeInternal
 		}
 		expression = std::move(expression_value);
 	}
-	auto result = TransformBitType(transformer, std::move(expression));
+	auto result = TransformBitType(transformer, has_result, std::move(expression));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformGeometryTypeInternal(PEGTransformer &transformer,
                                                                                       ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	unique_ptr<ParsedExpression> expression {};
+	optional<unique_ptr<ParsedExpression>> expression {};
 	auto &expression_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (expression_opt.HasResult()) {
 		auto expression_value =
@@ -1087,7 +1083,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDoubleTypeInter
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFloatTypeInternal(PEGTransformer &transformer,
                                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	unique_ptr<ParsedExpression> number_literal {};
+	optional<unique_ptr<ParsedExpression>> number_literal {};
 	auto &number_literal_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (number_literal_opt.HasResult()) {
 		auto number_literal_value = transformer.Transform<unique_ptr<ParsedExpression>>(
@@ -1101,7 +1097,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFloatTypeIntern
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDecimalTypeInternal(PEGTransformer &transformer,
                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<unique_ptr<ParsedExpression>> type_modifiers {};
+	optional<vector<unique_ptr<ParsedExpression>>> type_modifiers {};
 	auto &type_modifiers_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (type_modifiers_opt.HasResult()) {
 		auto type_modifiers_value =
@@ -1115,7 +1111,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDecimalTypeInte
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDecTypeInternal(PEGTransformer &transformer,
                                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<unique_ptr<ParsedExpression>> type_modifiers {};
+	optional<vector<unique_ptr<ParsedExpression>>> type_modifiers {};
 	auto &type_modifiers_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (type_modifiers_opt.HasResult()) {
 		auto type_modifiers_value =
@@ -1129,7 +1125,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDecTypeInternal
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNumericModTypeInternal(PEGTransformer &transformer,
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<unique_ptr<ParsedExpression>> type_modifiers {};
+	optional<vector<unique_ptr<ParsedExpression>>> type_modifiers {};
 	auto &type_modifiers_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (type_modifiers_opt.HasResult()) {
 		auto type_modifiers_value =
@@ -1181,7 +1177,7 @@ PEGTransformerFactory::TransformSchemaReservedTypeNameInternal(PEGTransformer &t
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeModifiersInternal(PEGTransformer &transformer,
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<unique_ptr<ParsedExpression>> expression {};
+	optional<vector<unique_ptr<ParsedExpression>>> expression {};
 	auto &expression_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
 	if (expression_opt.HasResult()) {
 		vector<unique_ptr<ParsedExpression>> expression_value;
@@ -1273,7 +1269,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformArrayKeywordInt
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformSquareBracketsArrayInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	unique_ptr<ParsedExpression> expression {};
+	optional<unique_ptr<ParsedExpression>> expression {};
 	auto &expression_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (expression_opt.HasResult()) {
 		auto expression_value = transformer.Transform<unique_ptr<ParsedExpression>>(expression_opt.GetResult());
@@ -1287,14 +1283,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTimeTypeInterna
                                                                                   ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto time_or_timestamp = transformer.Transform<LogicalTypeId>(list_pr.GetChild(0));
-	vector<unique_ptr<ParsedExpression>> type_modifiers {};
+	optional<vector<unique_ptr<ParsedExpression>>> type_modifiers {};
 	auto &type_modifiers_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (type_modifiers_opt.HasResult()) {
 		auto type_modifiers_value =
 		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(type_modifiers_opt.GetResult());
 		type_modifiers = std::move(type_modifiers_value);
 	}
-	bool time_zone {};
+	optional<bool> time_zone {};
 	auto &time_zone_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (time_zone_opt.HasResult()) {
 		auto time_zone_value = transformer.Transform<bool>(time_zone_opt.GetResult());
@@ -10003,7 +9999,6 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"SimpleType", &PEGTransformerFactory::TransformSimpleTypeInternal},
 	    {"CharacterSimpleType", &PEGTransformerFactory::TransformCharacterSimpleTypeInternal},
 	    {"QualifiedSimpleType", &PEGTransformerFactory::TransformQualifiedSimpleTypeInternal},
-	    {"CharacterType", &PEGTransformerFactory::TransformCharacterTypeInternal},
 	    {"IntervalType", &PEGTransformerFactory::TransformIntervalTypeInternal},
 	    {"IntervalInterval", &PEGTransformerFactory::TransformIntervalIntervalInternal},
 	    {"IntervalWithSpecifier", &PEGTransformerFactory::TransformIntervalWithSpecifierInternal},
