@@ -24,13 +24,13 @@ Invalid string encoding found
 # compressed_page_size zeroed to 0 with zero def/rep levels: no compressed bytes
 # are copied but the value region is non-empty, so the decoder reads uninitialized memory
 statement error
-SELECT b FROM parquet_scan('data/parquet-testing/broken/issue22325_datapage_v2_zero_compressed_size.parquet');
+SELECT b FROM parquet_scan('{DATA_DIR}/parquet-testing/broken/issue22325_datapage_v2_zero_compressed_size.parquet');
 ----
 compressed_page_size is too small for the declared value region
 
 # compressed_page_size zeroed to 0 with non-zero definition_levels_byte_length=9:
 # compressed_page_size < uncompressed level bytes, triggering the underflow guard
 statement error
-SELECT * FROM parquet_scan('data/parquet-testing/broken/issue22325_datapage_v2_neg_compressed_bytes.parquet');
+SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/broken/issue22325_datapage_v2_neg_compressed_bytes.parquet');
 ----
 compressed_page_size is smaller than repetition_levels_byte_length + definition_levels_byte_length

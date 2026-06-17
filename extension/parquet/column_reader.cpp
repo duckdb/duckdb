@@ -343,8 +343,10 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	}
 
 	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
-	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
-	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
+	// widen to uint64_t so the sum cannot overflow, and so a negative (malformed) i32 field
+	// becomes a large value rejected by the uncompressed_page_size guard below
+	uint64_t uncompressed_bytes = static_cast<uint64_t>(page_hdr.data_page_header_v2.repetition_levels_byte_length) +
+	                              page_hdr.data_page_header_v2.definition_levels_byte_length;
 	if (uncompressed_bytes > page_hdr.uncompressed_page_size) {
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, uncompressed_page_size needs to be larger than "
