@@ -693,7 +693,7 @@ static void CreateValuesDate(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector
 		return;
 	}
 	Vector string_vector(LogicalType::VARCHAR, count);
-	options.date_format->ConvertDateVector(value_v, string_vector);
+	options.date_format.get_mutable()->ConvertDateVector(value_v, string_vector);
 	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
 }
 
@@ -704,7 +704,7 @@ static void CreateValuesTimestamp(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 		return;
 	}
 	Vector string_vector(LogicalType::VARCHAR, count);
-	options.timestamp_format->ConvertTimestampVector(value_v, string_vector);
+	options.timestamp_format.get_mutable()->ConvertTimestampVector(value_v, string_vector);
 	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
 }
 
@@ -724,7 +724,7 @@ static void CreateValuesTimestampTZ(yyjson_mut_doc *doc, yyjson_mut_val *vals[],
 	input.CheckCardinality(count);
 
 	Vector string_vector(LogicalType::VARCHAR, count);
-	ExpressionExecutor executor(*options.context, *options.timestamptz_format_expression);
+	ExpressionExecutor executor(*options.context.get_mutable(), *options.timestamptz_format_expression);
 	executor.ExecuteExpression(input, string_vector);
 	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
 }
