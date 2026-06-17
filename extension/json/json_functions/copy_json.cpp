@@ -61,21 +61,33 @@ static bool GetJSONCopyBoolean(Binder &binder, const string &loption, const vect
 	return values.back().CastAs(binder.context, LogicalType::BOOLEAN).GetValue<bool>();
 }
 
-static unique_ptr<SubqueryRef> PushJSONFormatProjection(unique_ptr<SubqueryRef> source_ref,
-                                                        const Identifier &function_name, const string &format) {
-	auto format_node = make_uniq<SelectNode>();
-	format_node->from_table = std::move(source_ref);
-
-	auto columns_star = make_uniq<StarExpression>();
-	columns_star->IsColumnsMutable() = true;
+static unique_ptr<ParsedExpression> JSONCopyFormatExpression(unique_ptr<ParsedExpression> expr,
+                                                             const Identifier &function_name, const string &format) {
 	vector<unique_ptr<ParsedExpression>> args;
-	args.push_back(std::move(columns_star));
+	args.push_back(std::move(expr));
 	args.push_back(make_uniq<ConstantExpression>(Value(format)));
-	format_node->select_list.push_back(make_uniq<FunctionExpression>(function_name, std::move(args)));
+	return make_uniq<FunctionExpression>(function_name, std::move(args));
+}
 
-	auto format_stmt = make_uniq<SelectStatement>();
-	format_stmt->node = std::move(format_node);
-	return make_uniq<SubqueryRef>(std::move(format_stmt));
+static unique_ptr<ParsedExpression> JSONCopyPartitionColumnExpression(const string &partition_column,
+                                                                      const string &date_format,
+                                                                      const string &timestamp_format) {
+	unique_ptr<ParsedExpression> result = make_uniq<ColumnRefExpression>(Identifier(partition_column));
+	if (!date_format.empty()) {
+		result = JSONCopyFormatExpression(std::move(result), "json_copy_strftime_if_date", date_format);
+	}
+	if (!timestamp_format.empty()) {
+		result = JSONCopyFormatExpression(std::move(result), "json_copy_strftime_if_timestamp", timestamp_format);
+	}
+	result->SetAlias(Identifier(partition_column));
+	return result;
+}
+
+static unique_ptr<ParsedExpression> JSONCopyFormatConstant(const string &format) {
+	if (format.empty()) {
+		return make_uniq<ConstantExpression>(Value(LogicalType::VARCHAR));
+	}
+	return make_uniq<ConstantExpression>(Value(format));
 }
 
 static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
@@ -168,13 +180,6 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	inner_select_stmt->node = std::move(copy_info.select_statement);
 
 	auto source_ref = make_uniq<SubqueryRef>(std::move(inner_select_stmt));
-	if (!date_format.empty()) {
-		source_ref = PushJSONFormatProjection(std::move(source_ref), "json_copy_strftime_if_date", date_format);
-	}
-	if (!timestamp_format.empty()) {
-		source_ref =
-		    PushJSONFormatProjection(std::move(source_ref), "json_copy_strftime_if_timestamp", timestamp_format);
-	}
 
 	// Build outer: SELECT TO_JSON(STRUCT_PACK(*COLUMNS(*))) FROM <source_ref>
 	copy_info.select_statement = make_uniq_base<QueryNode, SelectNode>();
@@ -198,13 +203,20 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 
 	vector<unique_ptr<ParsedExpression>> to_json_args;
 	to_json_args.push_back(std::move(struct_pack));
-	select_node.select_list.push_back(make_uniq<FunctionExpression>("to_json", std::move(to_json_args)));
+	if (!date_format.empty() || !timestamp_format.empty()) {
+		to_json_args.push_back(JSONCopyFormatConstant(date_format));
+		to_json_args.push_back(JSONCopyFormatConstant(timestamp_format));
+		select_node.select_list.push_back(make_uniq<FunctionExpression>("json_copy_to_json", std::move(to_json_args)));
+	} else {
+		select_node.select_list.push_back(make_uniq<FunctionExpression>("to_json", std::move(to_json_args)));
+	}
 
 	// Keep the partition columns as separate columns so the COPY writer can partition on them. The writer routes rows
 	// into the right files based on these columns but does not write them to disk (WRITE_PARTITION_COLUMNS is handled
 	// above by keeping the columns inside the JSON object instead).
 	for (const auto &partition_column : partition_columns) {
-		select_node.select_list.push_back(make_uniq<ColumnRefExpression>(Identifier(partition_column)));
+		select_node.select_list.push_back(
+		    JSONCopyPartitionColumnExpression(partition_column, date_format, timestamp_format));
 	}
 
 	// Now we can just use the CSV writer

@@ -248,6 +248,98 @@ select ts from '{TEMP_DIR}/my_file.json';
 ----
 2026-01-01 +00
 
+# issue #23152: COPY JSON dateformat/timestampformat should apply inside nested JSON values
+statement ok
+COPY (
+    SELECT
+        DATE '2026-01-02' AS d,
+        {'d': DATE '2026-01-02'} AS payload,
+        [DATE '2026-01-02'] AS date_list
+) TO '{TEMP_DIR}/nested_dateformat.json' (FORMAT JSON, dateformat '%d/%m/%Y');
+
+query III
+SELECT
+    json_extract_string(json, '$.d') AS top_level,
+    json_extract_string(json, '$.payload.d') AS nested_struct,
+    json_extract_string(json, '$.date_list[0]') AS nested_list
+FROM read_json_objects('{TEMP_DIR}/nested_dateformat.json');
+----
+02/01/2026	02/01/2026	02/01/2026
+
+statement ok
+COPY (
+    SELECT
+        TIMESTAMP '2026-01-02 03:04:05' AS ts,
+        {'ts': TIMESTAMP '2026-01-02 03:04:05'} AS payload,
+        TIMESTAMPTZ '2026-01-02 03:04:05+00' AS tstz,
+        {'tstz': TIMESTAMPTZ '2026-01-02 03:04:05+00'} AS payload_tz
+) TO '{TEMP_DIR}/nested_timestampformat.json' (FORMAT JSON, timestampformat '%Y/%m/%d %H:%M');
+
+query II
+SELECT
+    json_extract_string(json, '$.ts') AS top_level_ts,
+    json_extract_string(json, '$.payload.ts') AS nested_ts
+FROM read_json_objects('{TEMP_DIR}/nested_timestampformat.json');
+----
+2026/01/02 03:04	2026/01/02 03:04
+
+query II
+WITH copied AS (
+    SELECT json FROM read_json_objects('{TEMP_DIR}/nested_timestampformat.json')
+),
+expected AS (
+    SELECT strftime(TIMESTAMPTZ '2026-01-02 03:04:05+00', '%Y/%m/%d %H:%M') AS formatted
+)
+SELECT
+    json_extract_string(json, '$.tstz') = formatted AS top_level_tstz_matches,
+    json_extract_string(json, '$.payload_tz.tstz') = formatted AS nested_tstz_matches
+FROM copied, expected;
+----
+true	true
+
+statement ok
+COPY (
+    SELECT
+        TIMESTAMP_NS '2026-01-02 03:04:05.123456789' AS ts_ns,
+        TIMESTAMP_MS '2026-01-02 03:04:05.123' AS ts_ms,
+        TIMESTAMP_S '2026-01-02 03:04:05' AS ts_s,
+        TIME '03:04:05' AS t
+) TO '{TEMP_DIR}/timestampformat_unchanged_types.json' (FORMAT JSON, timestampformat '%Y/%m/%d %H:%M');
+
+query IIII
+SELECT
+    json_extract_string(json, '$.ts_ns') AS ts_ns,
+    json_extract_string(json, '$.ts_ms') AS ts_ms,
+    json_extract_string(json, '$.ts_s') AS ts_s,
+    json_extract_string(json, '$.t') AS t
+FROM read_json_objects('{TEMP_DIR}/timestampformat_unchanged_types.json');
+----
+2026-01-02 03:04:05.123456789	2026-01-02 03:04:05.123	2026-01-02 03:04:05	03:04:05
+
+statement ok
+COPY (
+    SELECT DATE '2026-01-02' AS d, {'d': DATE '2026-01-02'} AS payload, 42 AS v
+) TO '{TEMP_DIR}/nested_dateformat_partition'
+  (FORMAT JSON, PARTITION_BY (d), WRITE_PARTITION_COLUMNS, dateformat '%d/%m/%Y');
+
+query II
+SELECT filename, trim(content, chr(10))
+FROM read_text('{TEMP_DIR}/nested_dateformat_partition/*/*.json') ORDER BY filename;
+----
+{TEMP_DIR}/nested_dateformat_partition/d=02%2F01%2F2026/data_0.json	{"d":"02/01/2026","payload":{"d":"02/01/2026"},"v":42}
+
+statement ok
+COPY (
+    SELECT DATE '2026-01-02' AS d, {'d': DATE '2026-01-02'} AS payload, 42 AS v
+) TO '{TEMP_DIR}/nested_dateformat_partition_excluded'
+  (FORMAT JSON, PARTITION_BY (d), dateformat '%d/%m/%Y');
+
+query II
+SELECT filename, trim(content, chr(10))
+FROM read_text('{TEMP_DIR}/nested_dateformat_partition_excluded/*/*.json') ORDER BY filename;
+----
+{TEMP_DIR}/nested_dateformat_partition_excluded/d=02%2F01%2F2026/data_0.json	{"payload":{"d":"02/01/2026"},"v":42}
+
 # invalid timestampformat must produce a clear error
 statement ok
 CREATE TABLE t (ts TIMESTAMP[])

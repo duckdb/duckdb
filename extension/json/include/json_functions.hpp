@@ -85,6 +85,7 @@ private:
 	static ScalarFunctionSet GetArrayFunction();
 	static ScalarFunctionSet GetObjectFunction();
 	static ScalarFunctionSet GetToJSONFunction();
+	static ScalarFunctionSet GetJSONCopyToJSONFunction();
 	static ScalarFunctionSet GetArrayToJSONFunction();
 	static ScalarFunctionSet GetRowToJSONFunction();
 	static ScalarFunctionSet GetMergePatchFunction();
