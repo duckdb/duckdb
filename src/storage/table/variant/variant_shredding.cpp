@@ -10,6 +10,7 @@
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/function/variant/variant_normalize.hpp"
 #include "duckdb/common/serializer/varint.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #ifdef DEBUG
 #include "duckdb/common/value_operations/value_operations.hpp"
 #endif
@@ -811,13 +812,14 @@ void VariantColumnData::DebugShred(Vector &variant, idx_t count) {
 		return;
 	}
 
-	//! Normalize the input into the canonical (flat, unshredded) layout that the shredder consumes
-	variant.Flatten();
+	Vector materialized(LogicalType::VARIANT(), count);
+	VectorOperations::Copy(variant, materialized, count, 0, 0);
+	variant.Reference(materialized);
 
 	//! Derive the shredding schema from the *first* value only - subsequent values that don't match it
 	//! will be partially shredded (i.e. fall back to the unshredded/overlay component)
 	VariantShreddingStats stats;
-	stats.Update(variant, 1);
+	stats.Update(materialized, 1);
 	//! force_partial keeps the overlay columns so that later values that don't match the first value's
 	//! schema are partially shredded instead of failing to shred
 	auto shredded_struct_type = stats.GetShreddedType(true);

@@ -211,8 +211,10 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 	}
 	if (debug_vector_verification == DebugVectorVerification::SHREDDED_VECTOR) {
 		//! Shred (top-level) VARIANT vectors based on the schema of their first value, so downstream
-		//! operators are exercised against shredded (and partially-shredded) variant vectors
-		if (vector.GetType().id() == LogicalTypeId::VARIANT) {
+		//! operators are exercised against shredded (and partially-shredded) variant vectors.
+		//! A SHREDDED_VECTOR is never a constant vector - skip constant vectors so we don't break callers
+		//! that require a constant result (e.g. scalar expression folding in EvaluateScalar).
+		if (vector.GetType().id() == LogicalTypeId::VARIANT && vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			VariantColumnData::DebugShred(vector, count);
 			vector.Verify();
 		}
