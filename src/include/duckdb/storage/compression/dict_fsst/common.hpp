@@ -1,9 +1,9 @@
 #pragma once
 
 #include "duckdb/common/typedefs.hpp"
-#include "duckdb/function/compression_function.hpp"
 #include "duckdb/common/bitpacking.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
+#include "fsst.h"
 
 namespace duckdb {
 
@@ -35,6 +35,7 @@ enum class DictionaryAppendState : uint8_t {
 
 struct DictFSSTCompression {
 public:
+	static constexpr uint16_t FSST_SYMBOL_TABLE_SIZE = sizeof(duckdb_fsst_decoder_t);
 	//! Dictionary header size at the beginning of the string segment (offset + length)
 	static constexpr uint16_t DICTIONARY_HEADER_SIZE = sizeof(dict_fsst_compression_header_t);
 	static constexpr idx_t STRING_SIZE_LIMIT = 16384;

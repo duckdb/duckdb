@@ -1,18 +1,14 @@
 #include "duckdb/storage/compression/dict_fsst/analyze.hpp"
 
-#include <fsst.h>
-
 namespace duckdb {
 namespace dict_fsst {
-
-static constexpr uint16_t FSST_SYMBOL_TABLE_SIZE2 = sizeof(duckdb_fsst_decoder_t);
 
 DictFSSTAnalyzeState::DictFSSTAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {
 }
 
 //! Determine the size requirements for the worst case, which is when a single string fills an
 //! entire segment on its own.
-idx_t RequiredSpace(const idx_t str_len, const bool fsst_encoded) {
+static idx_t RequiredSpace(const idx_t str_len, const bool fsst_encoded) {
 	// Dictionary contains NULL and current string.
 	const idx_t string_lengths_width = BitpackingPrimitives::MinimumBitWidth(str_len);
 	const idx_t string_lengths_space = BitpackingPrimitives::GetRequiredSize(2, string_lengths_width);
@@ -25,9 +21,13 @@ idx_t RequiredSpace(const idx_t str_len, const bool fsst_encoded) {
 	size += sizeof(dict_fsst_compression_header_t);
 	size = AlignValue<idx_t>(size);
 	size += str_len;
+	if (fsst_encoded) {
+		// As denoted in fsst.h
+		size += 7;
+	}
 	size = AlignValue<idx_t>(size);
 	if (fsst_encoded) {
-		size += FSST_SYMBOL_TABLE_SIZE2;
+		size += DictFSSTCompression::FSST_SYMBOL_TABLE_SIZE;
 		size = AlignValue<idx_t>(size);
 	}
 	size += string_lengths_space;
@@ -39,14 +39,13 @@ idx_t RequiredSpace(const idx_t str_len, const bool fsst_encoded) {
 
 //! A segment cannot be spread out over multiple blocks, so if a string cannot fit in an empty segment
 //! the encoding will fail.
-bool StringFitsBlock(const idx_t block_size, const idx_t str_len) {
-	return RequiredSpace(str_len, false) <= block_size - FSST_SYMBOL_TABLE_SIZE2;
+static bool StringFitsBlock(const idx_t block_size, const idx_t str_len) {
+	return RequiredSpace(str_len, false) <= block_size - DictFSSTCompression::FSST_SYMBOL_TABLE_SIZE;
 }
 
 //! In the worst case FSST may double the string length by prepending every byte with an exception.
-bool FSSTFitsBlock(const idx_t block_size, const idx_t str_len) {
-	// +7 as denoted in fsst.h
-	return RequiredSpace(str_len * 2 + 7, true) <= block_size;
+static bool FSSTFitsBlock(const idx_t block_size, const idx_t str_len) {
+	return RequiredSpace(str_len * 2, true) <= block_size;
 }
 
 bool DictFSSTAnalyzeState::Analyze(Vector &input, idx_t count) {
@@ -54,7 +53,7 @@ bool DictFSSTAnalyzeState::Analyze(Vector &input, idx_t count) {
 	input.ToUnifiedFormat(count, vector_format);
 	const auto strings = vector_format.GetData<string_t>(vector_format);
 	const auto block_size = info.GetBlockSize();
-;
+
 	for (idx_t i = 0; i < count; i++) {
 		const auto idx = vector_format.sel->get_index(i);
 		if (!vector_format.validity.RowIsValid(idx)) {
@@ -69,12 +68,12 @@ bool DictFSSTAnalyzeState::Analyze(Vector &input, idx_t count) {
 			if (!StringFitsBlock(block_size, str_len)) {
 				return false;
 			}
-			if (!FSSTFitsBlock(block_size, str_len)) {
-				return false;
-			}
 			if (str_len >= DictFSSTCompression::STRING_SIZE_LIMIT) {
 				//! This string is too long, we don't want to use DICT_FSST for this rowgroup
 				return false;
+			}
+			if (!FSSTFitsBlock(block_size, str_len)) {
+				disable_fsst = true;
 			}
 		}
 	}

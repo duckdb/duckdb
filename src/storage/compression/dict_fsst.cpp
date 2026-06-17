@@ -232,7 +232,7 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, vector_count, sel_count);
 }
 
-string DictFSSTModeToString(const DictFSSTMode mode) {
+static string DictFSSTModeToString(const DictFSSTMode mode) {
 	switch (mode) {
 	case DictFSSTMode::DICTIONARY:
 		return "DICTIONARY";
@@ -248,7 +248,7 @@ string DictFSSTModeToString(const DictFSSTMode mode) {
 //===--------------------------------------------------------------------===//
 // GetSegmentInfo
 //===--------------------------------------------------------------------===//
-InsertionOrderPreservingMap<string> DictFSSTGetSegmentInfo(QueryContext, ColumnSegment &segment) {
+static InsertionOrderPreservingMap<string> DictFSSTGetSegmentInfo(QueryContext, ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto state = make_uniq<CompressedStringScanState>(segment, buffer_manager.Pin(segment.block));
 	state->Initialize(false);
