@@ -98,15 +98,16 @@ AtUnit <- VersionAtUnit / TimestampAtUnit
 VersionAtUnit <- 'VERSION'
 TimestampAtUnit <- 'TIMESTAMP'
 
-JoinClause <- RegularJoinClause / JoinWithoutOnClause
+JoinClause <- JoinByClause / RegularJoinClause / JoinWithoutOnClause
 RegularJoinClause <- Asof? JoinType? 'JOIN' TableRef JoinQualifier
+JoinByClause <- 'JOIN' 'BY' ColLabel TableRef JoinQualifier
 Asof <- 'ASOF'
 JoinWithoutOnClause <- JoinPrefix 'JOIN' TableRef
 JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON' Expression
 UsingClause <- 'USING' Parens(List(ColumnName))
 
-JoinType <- FullJoin / LeftJoin / RightJoin / SemiJoin / AntiJoin / MarkJoin / InnerJoin
+JoinType <- FullJoin / LeftJoin / RightJoin / SemiJoin / AntiJoin / InnerJoin
 JoinPrefix <- CrossJoinPrefix / NaturalJoinPrefix / PositionalJoinPrefix
 CrossJoinPrefix <- 'CROSS'
 NaturalJoinPrefix <- 'NATURAL' JoinType?
@@ -116,7 +117,6 @@ LeftJoin <- 'LEFT' 'OUTER'?
 RightJoin <- 'RIGHT' 'OUTER'?
 SemiJoin <- 'SEMI'
 AntiJoin <- 'ANTI'
-MarkJoin <- 'MARK'
 InnerJoin <- 'INNER'
 
 FromClause <- 'FROM' List(TableRef)

@@ -534,6 +534,7 @@ TableRef:
     - JoinOrPivot
     - JoinClause
     - RegularJoinClause
+    - JoinByClause
     - JoinWithoutOnClause
     - TableUnpivotClause
     - TableUnpivotClauseBody
@@ -1315,7 +1316,6 @@ JoinTypeValue:
     - RightJoin
     - SemiJoin
     - AntiJoin
-    - MarkJoin
     - InnerJoin
 
 OrderTypeValue:

@@ -1873,6 +1873,8 @@ private:
 	static unique_ptr<TransformResultValue> TransformJoinClauseInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformRegularJoinClauseInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformRegularJoinClause(PEGTransformer &transformer, const optional<bool> &asof, const optional<JoinType> &join_type, unique_ptr<TableRef> table_ref, JoinQualifier join_qualifier);
+	static unique_ptr<TransformResultValue> TransformJoinByClauseInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformJoinByClause(PEGTransformer &transformer, const string &col_label, unique_ptr<TableRef> table_ref, JoinQualifier join_qualifier);
 	static unique_ptr<TransformResultValue> TransformAsofInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformAsof(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformJoinWithoutOnClauseInternal(PEGTransformer &transformer, ParseResult &parse_result);
@@ -1900,8 +1902,6 @@ private:
 	static JoinType TransformSemiJoin(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformAntiJoinInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static JoinType TransformAntiJoin(PEGTransformer &transformer);
-	static unique_ptr<TransformResultValue> TransformMarkJoinInternal(PEGTransformer &transformer, ParseResult &parse_result);
-	static JoinType TransformMarkJoin(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformInnerJoinInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static JoinType TransformInnerJoin(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformFromClauseInternal(PEGTransformer &transformer, ParseResult &parse_result);

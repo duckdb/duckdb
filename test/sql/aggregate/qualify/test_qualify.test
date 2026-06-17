@@ -28,7 +28,7 @@ SELECT a, b, c, row_number() over (PARTITION BY b ORDER BY c) as row_num FROM qt
 3	B	1	1
 
 statement ok
-CREATE TABLE exam (student TEXT, subject TEXT, grade INTEGER);
+CREATE TABLE exam (student TEXT, subject TEXT, mark INTEGER);
 
 statement ok
 INSERT INTO exam VALUES 
@@ -43,33 +43,33 @@ INSERT INTO exam VALUES
 ('Olivia', 'english', 89);
 
 query TTI
-SELECT * FROM exam QUALIFY rank() OVER (ORDER BY grade desc) = 4
+SELECT * FROM exam QUALIFY rank() OVER (ORDER BY mark desc) = 4
 ----
 Lily	english	70
 Isabella	Science	70
 
 query TTI
-SELECT * FROM exam QUALIFY rank() OVER (PARTITION BY student ORDER BY grade DESC) = 2 ORDER BY student
+SELECT * FROM exam QUALIFY rank() OVER (PARTITION BY student ORDER BY mark DESC) = 2 ORDER BY student
 ----
 Isabella	Science	70
 Lily	english	70
 Olivia	Science	60
 
 query TTI
-SELECT * FROM exam WINDOW w AS (ORDER BY grade) QUALIFY row_number() OVER w >= 1 AND (rank() OVER w) <= 2 ORDER BY student
+SELECT * FROM exam WINDOW w AS (ORDER BY mark) QUALIFY row_number() OVER w >= 1 AND (rank() OVER w) <= 2 ORDER BY student
 ----
 Isabella	Maths	50
 Olivia	Maths	55
 
 query TTI
-SELECT * FROM exam QUALIFY first_value(grade) OVER (PARTITION BY student ORDER BY grade) >= 60 order by grade
+SELECT * FROM exam QUALIFY first_value(mark) OVER (PARTITION BY student ORDER BY mark) >= 60 order by mark
 ----
 Lily	Maths	65
 Lily	english	70
 Lily	Science	80
 
 query TTI
-SELECT * FROM exam QUALIFY last_value(grade) OVER (PARTITION BY student ORDER BY grade) >= 85 order by grade
+SELECT * FROM exam QUALIFY last_value(mark) OVER (PARTITION BY student ORDER BY mark) >= 85 order by mark
 ----
 Olivia	english	89	
 Isabella	english	90	
@@ -189,11 +189,11 @@ SELECT * FROM test QUALIFY row_number() OVER (PARTITION BY test.b) = (SELECT max
 
 # in the order of WINDOW clause
 statement ok
-SELECT * FROM exam WINDOW w AS (ORDER BY grade) QUALIFY row_number() OVER w = 1
+SELECT * FROM exam WINDOW w AS (ORDER BY mark) QUALIFY row_number() OVER w = 1
 
 # must appear WINDOW clause before QUALIFY clause
 statement error
-SELECT * FROM exam QUALIFY row_number() OVER w = 1 WINDOW w AS (ORDER BY grade)
+SELECT * FROM exam QUALIFY row_number() OVER w = 1 WINDOW w AS (ORDER BY mark)
 ----
 Parser Error: syntax error at or near "WINDOW"
 
