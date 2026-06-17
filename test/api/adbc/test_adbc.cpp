@@ -773,14 +773,14 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 	std::string schema_name = "my schema\"is.😬";
 	// Create a schema and allocate space for a single child
 	ArrowSchema arrow_schema;
-	duckdb_nanoarrow::ArrowSchemaInit(&arrow_schema, duckdb_nanoarrow::ArrowType::NANOARROW_TYPE_STRUCT);
-	duckdb_nanoarrow::ArrowSchemaAllocateChildren(&arrow_schema, static_cast<int64_t>(column_names.size()));
+	ArrowSchemaInit(&arrow_schema);
+	ArrowSchemaSetTypeStruct(&arrow_schema, static_cast<int64_t>(column_names.size()));
 
 	// Create the child schemas and build the select query to get test data
 	std::string query = "SELECT ";
 	for (size_t i = 0; i < column_names.size(); i++) {
-		duckdb_nanoarrow::ArrowSchemaInit(arrow_schema.children[i], duckdb_nanoarrow::ArrowType::NANOARROW_TYPE_INT32);
-		duckdb_nanoarrow::ArrowSchemaSetName(arrow_schema.children[i], column_names.at(i).c_str());
+		ArrowSchemaSetType(arrow_schema.children[i], NANOARROW_TYPE_INT32);
+		ArrowSchemaSetName(arrow_schema.children[i], column_names.at(i).c_str());
 		if (i > 0) {
 			query += ",";
 		}

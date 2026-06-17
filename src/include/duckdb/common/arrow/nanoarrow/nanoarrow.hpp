@@ -1,14 +1,14 @@
 #pragma once
 
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
+// Ensure Arrow C Data Interface structs are defined before nanoarrow.h so
+// nanoarrow skips its own (identical) definitions via ARROW_FLAG_DICTIONARY_ORDERED.
+#include "duckdb/common/arrow/arrow.hpp"
+// Full upstream nanoarrow (third_party/nanoarrow is in the include path for ADBC targets).
+#include "nanoarrow.h"
 
-// Bring in the symbols from duckdb_nanoarrow into duckdb
 namespace duckdb {
-
-// using duckdb_nanoarrow::ArrowBuffer; //We have a variant of this that should be renamed
-using duckdb_nanoarrow::ArrowBufferAllocator;
-using duckdb_nanoarrow::ArrowError;
-using duckdb_nanoarrow::ArrowSchemaView;
-using duckdb_nanoarrow::ArrowStringView;
-
+using ::ArrowBufferAllocator;
+using ::ArrowError;
+using ::ArrowSchemaView;
+using ::ArrowStringView;
 } // namespace duckdb

@@ -1,5 +1,4 @@
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
 #include "duckdb/common/adbc/adbc.hpp"
 
 #include "duckdb.h"
@@ -13,8 +12,6 @@
 #include <string.h>
 
 namespace duckdb_adbc {
-
-using duckdb_nanoarrow::ArrowSchemaDeepCopy;
 
 static const char *SingleBatchArrayStreamGetLastError(struct ArrowArrayStream *stream) {
 	return NULL;
