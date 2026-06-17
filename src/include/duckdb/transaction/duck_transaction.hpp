@@ -28,7 +28,8 @@ struct DataTableInfo;
 struct UndoBufferProperties;
 
 struct CommitInfo {
-	transaction_t commit_id;
+	//! Assigned at publish time on the deferred (group-commit) path, so it defaults to 0 until then
+	transaction_t commit_id = 0;
 	ActiveTransactionState active_transactions = ActiveTransactionState::UNSET;
 	optional_ptr<CommitDropState> drop_state;
 };

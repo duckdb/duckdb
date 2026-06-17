@@ -331,7 +331,8 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 ErrorData DuckTransaction::CommitToWAL(AttachedDatabase &db, CommitInfo &commit_info,
                                        unique_ptr<StorageCommitState> commit_state,
                                        idx_t &flush_marker_offset) noexcept {
-	this->commit_id = commit_info.commit_id;
+	// the commit timestamp is assigned later (at publish time, under the transaction lock) - writing the flush
+	// marker does not need it, and assigning it here would expose it to transactions that start before publish
 	flush_marker_offset = 0;
 	D_ASSERT(commit_state);
 	D_ASSERT(ChangesMade());
@@ -354,7 +355,11 @@ ErrorData DuckTransaction::CommitToWAL(AttachedDatabase &db, CommitInfo &commit_
 }
 
 ErrorData DuckTransaction::PublishCommit(AttachedDatabase &db, CommitInfo &commit_info) noexcept {
-	D_ASSERT(this->commit_id == commit_info.commit_id);
+	this->commit_id = commit_info.commit_id;
+	if (!ChangesMade()) {
+		// no need to flush anything if we made no changes
+		return ErrorData();
+	}
 	// deferred commits are data-only: catalog-changing transactions commit through Commit()
 	D_ASSERT(catalog_version < TRANSACTION_ID_START);
 	UndoBuffer::IteratorState iterator_state;

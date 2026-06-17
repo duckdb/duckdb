@@ -294,29 +294,29 @@ void DuckTransactionManager::CleanupTransactions() {
 	}
 }
 
-bool DuckTransactionManager::RegisterPendingCommit(transaction_t commit_id) {
+bool DuckTransactionManager::RegisterPendingCommit(transaction_t publish_seq) {
 	lock_guard<mutex> guard(publish_lock);
 	if (catalog_gate_waiters > 0) {
 		// a DDL operation is waiting for pending commits to drain - do not admit new deferred commits,
 		// the caller must fall back to the synchronous commit path
 		return false;
 	}
-	pending_commit_publishes.insert(commit_id);
+	pending_commit_publishes.insert(publish_seq);
 	return true;
 }
 
-void DuckTransactionManager::WaitForPublishTurn(transaction_t commit_id) {
+void DuckTransactionManager::WaitForPublishTurn(transaction_t publish_seq) {
 	std::unique_lock<mutex> guard(publish_lock);
 	publish_cv.wait(guard, [&]() {
 		D_ASSERT(!pending_commit_publishes.empty());
-		return *pending_commit_publishes.begin() == commit_id;
+		return *pending_commit_publishes.begin() == publish_seq;
 	});
 }
 
-void DuckTransactionManager::FinishPendingCommit(transaction_t commit_id) {
+void DuckTransactionManager::FinishPendingCommit(transaction_t publish_seq) {
 	{
 		lock_guard<mutex> guard(publish_lock);
-		pending_commit_publishes.erase(commit_id);
+		pending_commit_publishes.erase(publish_seq);
 	}
 	publish_cv.notify_all();
 }
@@ -432,9 +432,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			storage_manager.AddWALSize(undo_properties.estimated_size);
 		}
 	}
-	// obtain a commit id for the transaction
+	// The commit timestamp is assigned later, at publish time (not here): a transaction that starts while this
+	// commit is still being made durable must not observe a commit id that is not yet published, otherwise it
+	// could read pre-commit data without the update conflict being detected. The deferred path assigns it under
+	// the transaction lock right before publishing; the synchronous path assigns it just before committing below.
 	CommitInfo info;
-	info.commit_id = GetCommitTimestamp();
 
 	// Group commit: data-only commits that write to the WAL defer publishing
 	// (making their changes visible) until after their WAL entries have been fsynced. This way no transaction can
@@ -444,10 +446,15 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// before releasing it - no new transaction can start in the meantime, so those commits are also never visible
 	// before they are durable.
 	bool defer_publish = !error.HasError() && commit_state && !has_catalog_changes;
-	if (defer_publish && !RegisterPendingCommit(info.commit_id)) {
-		// a DDL operation is waiting for pending commits to drain before attaching a new catalog version -
-		// fall back to the synchronous commit path (publish + inline fsync under the locks)
-		defer_publish = false;
+	// the publish sequence orders deferred publishes in WAL order; it is independent of the commit timestamp
+	transaction_t publish_seq = 0;
+	if (defer_publish) {
+		publish_seq = next_publish_sequence++;
+		if (!RegisterPendingCommit(publish_seq)) {
+			// a DDL operation is waiting for pending commits to drain before attaching a new catalog version -
+			// fall back to the synchronous commit path (publish + inline fsync under the locks)
+			defer_publish = false;
+		}
 	}
 
 	// commit the UndoBuffer of the transaction
@@ -465,9 +472,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			// must SyncUpTo() to make this commit durable.
 			error = transaction.CommitToWAL(db, info, std::move(commit_state), flush_marker_offset);
 			if (error.HasError()) {
-				FinishPendingCommit(info.commit_id);
+				FinishPendingCommit(publish_seq);
 			}
 		} else {
+			// synchronous path: publishes under the transaction lock, so the commit id can be assigned now
+			info.commit_id = GetCommitTimestamp();
 			error = transaction.Commit(db, info, std::move(commit_state));
 		}
 	}
@@ -532,7 +541,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		} catch (std::exception &ex) {
 			// the WAL cannot be guaranteed to be durable, and the flush marker can no longer be truncated
 			// (other transactions may have appended in the meantime): this is fatal
-			FinishPendingCommit(info.commit_id);
+			FinishPendingCommit(publish_seq);
 			ErrorData sync_error(ex);
 			throw FatalException("Failed to sync WAL during commit. Cannot continue operation.\nError: %s",
 			                     sync_error.Message());
@@ -540,9 +549,12 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 		// publish in commit order - this keeps recently_committed_transactions ordered on commit_id and ensures
 		// that the visible state always corresponds to a prefix of the WAL (matching replay after a crash)
-		WaitForPublishTurn(info.commit_id);
+		WaitForPublishTurn(publish_seq);
 
 		t_lock.lock();
+		// now that it is our turn and we hold the transaction lock, assign the commit timestamp and publish: a
+		// transaction that starts after this point observes this commit, one that started before it does not
+		info.commit_id = GetCommitTimestamp();
 		// other transactions may have started or committed while we were syncing - recompute the state
 		if (HasOtherTransactions(transaction)) {
 			info.active_transactions = ActiveTransactionState::OTHER_TRANSACTIONS;
@@ -554,7 +566,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			// the commit is durable in the WAL and can no longer be rolled back: this is fatal
 			// (after a restart, WAL replay applies the transaction, which is the correct committed state)
 			t_lock.unlock();
-			FinishPendingCommit(info.commit_id);
+			FinishPendingCommit(publish_seq);
 			throw FatalException("Failed to publish commit after WAL write. Cannot continue operation.\nError: %s",
 			                     publish_error.Message());
 		}
@@ -586,7 +598,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	}
 	if (defer_publish) {
 		// the commit is now published - wake up any waiters (later commits and checkpoints)
-		FinishPendingCommit(info.commit_id);
+		FinishPendingCommit(publish_seq);
 	}
 
 	CleanupTransactions();

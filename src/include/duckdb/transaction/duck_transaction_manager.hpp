@@ -126,15 +126,15 @@ private:
 	bool HasOtherTransactions(DuckTransaction &transaction);
 	void CleanupTransactions();
 
-	//! Register a commit that is about to write its WAL flush marker and defer its publish.
-	//! Returns false if a DDL gate is currently waiting (see BlockPendingCommits) - the commit must then
-	//! fall back to the synchronous commit path.
-	bool RegisterPendingCommit(transaction_t commit_id);
-	//! Wait until all earlier pending commits have been published. Publishing in commit order keeps
-	//! recently_committed_transactions ordered on commit_id and matches WAL replay order.
-	void WaitForPublishTurn(transaction_t commit_id);
+	//! Register a commit that is about to write its WAL flush marker and defer its publish, identified by a
+	//! monotonic publish sequence number assigned in WAL order. Returns false if a DDL gate is currently
+	//! waiting (see BlockPendingCommits) - the commit must then fall back to the synchronous commit path.
+	bool RegisterPendingCommit(transaction_t publish_seq);
+	//! Wait until all earlier pending commits have been published. Publishing in WAL (publish-sequence) order
+	//! keeps recently_committed_transactions ordered on commit_id and matches WAL replay order.
+	void WaitForPublishTurn(transaction_t publish_seq);
 	//! Mark a pending commit as published (or abandoned on fatal failure) and wake up waiters.
-	void FinishPendingCommit(transaction_t commit_id);
+	void FinishPendingCommit(transaction_t publish_seq);
 
 private:
 	//! The current start timestamp used by transactions
@@ -169,10 +169,15 @@ private:
 	mutex publish_lock;
 	//! Signalled whenever a pending commit is published.
 	std::condition_variable publish_cv;
-	//! Commits that are durable in the WAL (flush marker written) but not yet published/visible.
+	//! Publish sequence numbers of commits that are durable in the WAL (flush marker written) but not yet
+	//! published/visible. Ordered by publish sequence (= WAL order) so publishes happen in WAL order.
 	//! Lock ordering: transaction_lock -> publish_lock. Waiting on publish_cv requires holding neither
 	//! the transaction lock nor the WAL lock.
 	set<transaction_t> pending_commit_publishes;
+	//! Monotonic sequence assigned to deferred commits in WAL order (under the transaction lock), used to order
+	//! their publishes. Decoupled from the commit timestamp, which is only assigned at publish time so that a
+	//! starting transaction can never observe a commit id that is not yet published.
+	transaction_t next_publish_sequence = 1;
 	//! Number of DDL operations currently waiting in BlockPendingCommits. While non-zero, new commits
 	//! cannot register as pending and fall back to the synchronous commit path.
 	idx_t catalog_gate_waiters = 0;
