@@ -6,7 +6,7 @@
 namespace duckdb {
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTypeStmt(PEGTransformer &transformer,
-                                                                           const bool &if_not_exists,
+                                                                           const optional<bool> &if_not_exists,
                                                                            const QualifiedName &qualified_name,
                                                                            unique_ptr<CreateTypeInfo> create_type) {
 	auto result = make_uniq<CreateStatement>();
@@ -35,15 +35,19 @@ PEGTransformerFactory::TransformEnumSelectType(PEGTransformer &transformer,
 	return result;
 }
 
-unique_ptr<CreateTypeInfo> PEGTransformerFactory::TransformEnumStringLiteralList(PEGTransformer &transformer,
-                                                                                 const vector<string> &string_literal) {
+unique_ptr<CreateTypeInfo>
+PEGTransformerFactory::TransformEnumStringLiteralList(PEGTransformer &transformer,
+                                                      const optional<vector<string>> &string_literal) {
 	auto result = make_uniq<CreateTypeInfo>();
-	Vector enum_vector(LogicalType::VARCHAR, string_literal.size());
-	auto string_data = FlatVector::Writer<string_t>(enum_vector, string_literal.size());
-	for (auto &literal : string_literal) {
-		string_data.WriteValue(string_t(literal));
+	idx_t enum_count = string_literal ? string_literal->size() : 0;
+	Vector enum_vector(LogicalType::VARCHAR, enum_count);
+	auto string_data = FlatVector::Writer<string_t>(enum_vector, enum_count);
+	if (string_literal) {
+		for (auto &literal : *string_literal) {
+			string_data.WriteValue(string_t(literal));
+		}
 	}
-	result->type = LogicalType::ENUM(enum_vector, string_literal.size());
+	result->type = LogicalType::ENUM(enum_vector, enum_count);
 	return result;
 }
 

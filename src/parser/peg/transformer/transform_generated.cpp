@@ -462,32 +462,35 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnalyzeVerboseI
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAttachStatementInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	bool or_replace {};
+	optional<bool> or_replace {};
 	auto &or_replace_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (or_replace_opt.HasResult()) {
 		auto or_replace_value = transformer.Transform<bool>(or_replace_opt.GetResult());
 		or_replace = or_replace_value;
 	}
-	bool if_not_exists {};
+	optional<bool> if_not_exists {};
 	auto &if_not_exists_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (if_not_exists_opt.HasResult()) {
 		auto if_not_exists_value = transformer.Transform<bool>(if_not_exists_opt.GetResult());
 		if_not_exists = if_not_exists_value;
 	}
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
 	auto database_path = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(4));
-	Identifier attach_alias {};
+	optional<Identifier> attach_alias {};
 	auto &attach_alias_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
 	if (attach_alias_opt.HasResult()) {
 		auto attach_alias_value = transformer.Transform<Identifier>(attach_alias_opt.GetResult());
 		attach_alias = attach_alias_value;
 	}
-	vector<GenericCopyOption> attach_options {};
+	optional<vector<GenericCopyOption>> attach_options {};
 	auto &attach_options_opt = list_pr.GetChild(6).Cast<OptionalParseResult>();
 	if (attach_options_opt.HasResult()) {
 		auto attach_options_value = transformer.Transform<vector<GenericCopyOption>>(attach_options_opt.GetResult());
 		attach_options = attach_options_value;
 	}
-	auto result = TransformAttachStatement(transformer, or_replace, if_not_exists, std::move(database_path),
+	auto result = TransformAttachStatement(transformer, or_replace, if_not_exists, has_result, std::move(database_path),
 	                                       attach_alias, attach_options);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
@@ -2136,7 +2139,7 @@ PEGTransformerFactory::TransformTableMacroDefinitionInternal(PEGTransformer &tra
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateSchemaStmtInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	bool if_not_exists {};
+	optional<bool> if_not_exists {};
 	auto &if_not_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (if_not_exists_opt.HasResult()) {
 		auto if_not_exists_value = transformer.Transform<bool>(if_not_exists_opt.GetResult());
@@ -2194,14 +2197,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSecretNameInter
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateSequenceStmtInternal(PEGTransformer &transformer,
                                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	bool if_not_exists {};
+	optional<bool> if_not_exists {};
 	auto &if_not_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (if_not_exists_opt.HasResult()) {
 		auto if_not_exists_value = transformer.Transform<bool>(if_not_exists_opt.GetResult());
 		if_not_exists = if_not_exists_value;
 	}
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.GetChild(2));
-	vector<pair<string, unique_ptr<SequenceOption>>> sequence_option {};
+	optional<vector<pair<string, unique_ptr<SequenceOption>>>> sequence_option {};
 	auto &sequence_option_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (sequence_option_opt.HasResult()) {
 		vector<pair<string, unique_ptr<SequenceOption>>> sequence_option_value;
@@ -2248,8 +2251,11 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqNoCycleInter
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqSetIncrementInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
 	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2));
-	auto result = TransformSeqSetIncrement(transformer, std::move(expression));
+	auto result = TransformSeqSetIncrement(transformer, has_result, std::move(expression));
 	return make_uniq<TypedTransformResult<pair<string, unique_ptr<SequenceOption>>>>(std::move(result));
 }
 
@@ -2273,8 +2279,11 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqNoMinMaxInte
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqStartWithInternal(PEGTransformer &transformer,
                                                                                       ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
 	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2));
-	auto result = TransformSeqStartWith(transformer, std::move(expression));
+	auto result = TransformSeqStartWith(transformer, has_result, std::move(expression));
 	return make_uniq<TypedTransformResult<pair<string, unique_ptr<SequenceOption>>>>(std::move(result));
 }
 
@@ -3287,7 +3296,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformForEachStatemen
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateTypeStmtInternal(PEGTransformer &transformer,
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	bool if_not_exists {};
+	optional<bool> if_not_exists {};
 	auto &if_not_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (if_not_exists_opt.HasResult()) {
 		auto if_not_exists_value = transformer.Transform<bool>(if_not_exists_opt.GetResult());
@@ -3327,7 +3336,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformEnumSelectTypeI
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformEnumStringLiteralListInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<string> string_literal {};
+	optional<vector<string>> string_literal {};
 	auto &string_literal_opt = ExtractResultFromParens(list_pr.GetChild(1)).Cast<OptionalParseResult>();
 	if (string_literal_opt.HasResult()) {
 		vector<string> string_literal_value;
@@ -9386,7 +9395,7 @@ PEGTransformerFactory::TransformZoneIntervalWithIntervalInternal(PEGTransformer 
                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto string_literal = transformer.Transform<string>(list_pr.GetChild(1));
-	DatePartSpecifier interval {};
+	optional<DatePartSpecifier> interval {};
 	auto &interval_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (interval_opt.HasResult()) {
 		auto interval_value = transformer.Transform<DatePartSpecifier>(interval_opt.GetResult());
@@ -9410,7 +9419,7 @@ PEGTransformerFactory::TransformZoneIntervalWithPrecisionInternal(PEGTransformer
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSetSettingInternal(PEGTransformer &transformer,
                                                                                     ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	SetScope setting_scope {};
+	optional<SetScope> setting_scope {};
 	auto &setting_scope_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
 	if (setting_scope_opt.HasResult()) {
 		auto setting_scope_value = transformer.Transform<SetScope>(setting_scope_opt.GetResult());
