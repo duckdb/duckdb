@@ -556,9 +556,15 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto opposite_for_each =
 	    create_trigger_info.for_each == TriggerForEach::ROW ? TriggerForEach::STATEMENT : TriggerForEach::ROW;
 	// Statement and row triggers use separate expansion paths that don't compose, so reject mixing them per event.
+	// CREATE OR REPLACE that targets the same-named trigger is allowed: that trigger is atomically replaced,
+	// so the final catalog contains only the new one and there is no mixing.
 	auto conflicting = table.GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context),
 	                                             create_trigger_info.event_type, opposite_for_each);
-	if (!conflicting.empty()) {
+	bool is_replace = create_trigger_info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
+	auto has_real_conflict = std::any_of(conflicting.begin(), conflicting.end(), [&](const_reference<TriggerCatalogEntry> t) {
+		return !(is_replace && t.get().name == create_trigger_info.trigger_name);
+	});
+	if (has_real_conflict) {
 		throw NotImplementedException(
 		    "Mixing FOR EACH STATEMENT and FOR EACH ROW triggers on the same table is not yet supported");
 	}

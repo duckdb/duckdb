@@ -518,3 +518,27 @@ CREATE TRIGGER trg_gen AFTER INSERT ON t_gen FOR EACH ROW
     INSERT INTO t_gen_log VALUES (NEW.a);
 ----
 Not implemented Error: FOR EACH ROW triggers on tables with generated columns are not yet supported
+
+# Replacing a STATEMENT trigger with a same-name ROW trigger is not mixing:
+# after the replace only one trigger exists, so the expansion paths never compose.
+statement ok
+CREATE TABLE replace_t (id INTEGER);
+
+statement ok
+CREATE TABLE replace_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER replace_trg AFTER INSERT ON replace_t FOR EACH STATEMENT
+    INSERT INTO replace_log VALUES (0);
+
+statement ok
+CREATE OR REPLACE TRIGGER replace_trg AFTER INSERT ON replace_t FOR EACH ROW
+    INSERT INTO replace_log VALUES (NEW.id);
+
+statement ok
+INSERT INTO replace_t VALUES (1);
+
+query I
+SELECT id FROM replace_log ORDER BY id;
+----
+1
