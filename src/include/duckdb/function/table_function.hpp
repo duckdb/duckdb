@@ -508,6 +508,8 @@ public:
 	bool sampling_pushdown;
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
+	//! Whether the scan can be re-executed
+	bool supports_multiple_scans = true;
 	TableFunctionReturnType return_type;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;

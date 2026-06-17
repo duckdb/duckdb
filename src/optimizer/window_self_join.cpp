@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/planner/logical_operator_deep_copy.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
 
@@ -116,6 +117,9 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 }
 
 bool WindowSelfJoinOptimizer::CanOptimize(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_GET && !op.Cast<LogicalGet>().function.supports_multiple_scans) {
+		return false;
+	}
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
