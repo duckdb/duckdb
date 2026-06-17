@@ -582,8 +582,6 @@ ArrowErrorCode ArrowDecimalAppendStringToBuffer(const struct ArrowDecimal* decim
 #include <stdlib.h>
 #include <string.h>
 
-#include "nanoarrow.h"
-
 static void ArrowSchemaReleaseInternal(struct ArrowSchema* schema) {
   if (schema->format != NULL) ArrowFree((void*)schema->format);
   if (schema->name != NULL) ArrowFree((void*)schema->name);
@@ -2313,8 +2311,6 @@ ArrowErrorCode ArrowMetadataBuilderRemove(struct ArrowBuffer* buffer,
 #include <stdlib.h>
 #include <string.h>
 
-#include "nanoarrow.h"
-
 static void ArrowArrayReleaseInternal(struct ArrowArray* array) {
   // Release buffers held by this array
   struct ArrowArrayPrivateData* private_data =
@@ -3978,8 +3974,6 @@ ArrowErrorCode ArrowArrayViewCompare(const struct ArrowArrayView* actual,
 // under the License.
 
 #include <errno.h>
-
-#include "nanoarrow.h"
 
 struct BasicArrayStreamPrivate {
   struct ArrowSchema schema;
