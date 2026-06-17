@@ -178,8 +178,8 @@ query I
 SELECT (SELECT list_filter(l, lambda elem: length(elem) >= 1)) FROM corr_test ORDER BY ALL
 ----
 []
-[a, 11, 23]
 [2, hello, wie gehts]
+[a, 11, 23]
 NULL
 
 query I
@@ -194,8 +194,8 @@ query I
 SELECT (SELECT (SELECT (SELECT list_filter(l, lambda elem: length(elem) >= 1)))) FROM corr_test ORDER BY ALL
 ----
 []
-[a, 11, 23]
 [2, hello, wie gehts]
+[a, 11, 23]
 NULL
 
 # positional references in lambda functions
