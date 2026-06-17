@@ -33,11 +33,11 @@ QualifiedName PEGTransformerFactory::TransformCatalogNameAsUseTarget(PEGTransfor
 }
 
 // UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
-QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(PEGTransformer &transformer,
-                                                                     const Identifier &catalog_name,
-                                                                     const Identifier &reserved_schema_name,
-                                                                     const vector<Identifier> &dot_identifier) {
-	if (!dot_identifier.empty()) {
+QualifiedName
+PEGTransformerFactory::TransformUseTargetCatalogSchema(PEGTransformer &transformer, const Identifier &catalog_name,
+                                                       const Identifier &reserved_schema_name,
+                                                       const optional<vector<Identifier>> &dot_identifier) {
+	if (dot_identifier && !dot_identifier->empty()) {
 		throw ParserException("Expected \"USE database\" or \"USE database.schema\"");
 	}
 	QualifiedName result;

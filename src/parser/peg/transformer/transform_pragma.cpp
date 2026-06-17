@@ -44,14 +44,14 @@ PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const 
 
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformPragmaFunction(PEGTransformer &transformer, const Identifier &pragma_name,
-                                               vector<unique_ptr<ParsedExpression>> pragma_parameters) {
+                                               optional<vector<unique_ptr<ParsedExpression>>> pragma_parameters) {
 	// Rule: PragmaFunction <- PragmaName PragmaParameters?
 	auto result = make_uniq<PragmaStatement>();
 	result->info->name = pragma_name;
-	if (pragma_parameters.empty()) {
+	if (!pragma_parameters) {
 		return std::move(result);
 	}
-	for (auto &parameter : pragma_parameters) {
+	for (auto &parameter : *pragma_parameters) {
 		if (parameter->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
 			auto &comp = parameter->Cast<ComparisonExpression>();
 			if (comp.Left().GetExpressionType() != ExpressionType::COLUMN_REF) {

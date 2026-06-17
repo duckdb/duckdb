@@ -1,3 +1,6 @@
 ConnectStatement <- 'CONNECT' SessionTarget?
 DisconnectStatement <- 'DISCONNECT'
-SessionTarget <- 'LOCAL' / StringLiteral / CatalogName
+SessionTarget <- LocalSessionTarget / StringSessionTarget / CatalogSessionTarget
+LocalSessionTarget <- 'LOCAL'
+StringSessionTarget <- StringLiteral
+CatalogSessionTarget <- CatalogName
