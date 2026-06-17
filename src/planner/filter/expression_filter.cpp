@@ -277,6 +277,21 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 	}
 }
 
+static bool TryGetVariantComparisonStatsType(const LogicalType &typed_type, const LogicalType &constant_type,
+                                             LogicalType &comparison_type) {
+	if (typed_type == constant_type) {
+		comparison_type = typed_type;
+		return true;
+	}
+	if (!typed_type.IsIntegral() || !constant_type.IsIntegral()) {
+		return false;
+	}
+	if (!LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(typed_type, constant_type, comparison_type)) {
+		return false;
+	}
+	return comparison_type.IsIntegral();
+}
+
 static optional_ptr<const BaseStatistics>
 TryPrepareVariantComparisonStats(const BaseStatistics &stats, Value &constant,
                                  vector<unique_ptr<BaseStatistics>> &owned_stats) {
@@ -304,10 +319,7 @@ TryPrepareVariantComparisonStats(const BaseStatistics &stats, Value &constant,
 	}
 
 	LogicalType comparison_type;
-	if (!LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(typed_type, constant.type(), comparison_type)) {
-		return nullptr;
-	}
-	if (comparison_type.IsNested() || comparison_type.id() == LogicalTypeId::VARIANT) {
+	if (!TryGetVariantComparisonStatsType(typed_type, constant.type(), comparison_type)) {
 		return nullptr;
 	}
 	if (!constant.DefaultTryCastAs(comparison_type)) {

@@ -2,7 +2,6 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
 
@@ -34,34 +33,12 @@ static bool HasVariantType(LogicalOperator &op) {
 }
 #endif
 
-struct VariantJoinKeyInfo {
-	optional_ptr<const Expression> child;
-	LogicalType shredded_type;
-	unique_ptr<BaseStatistics> typed_stats;
-};
-
-static bool IsVariantWrapperFunction(const BoundFunctionExpression &expr) {
-	const auto &function_name = expr.Function().GetName();
-	return function_name == "variant_comparator" || function_name == "variant_normalize";
-}
-
-static bool TryGetVariantJoinKeyInfo(const Expression &expr, const statistics_map_t &statistics_map,
-                                     VariantJoinKeyInfo &result) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+bool CompressedMaterialization::TryGetVariantJoinKeyInfo(const Expression &expr, VariantJoinKeyInfo &result) {
+	auto child = TryGetVariantWrapperColumnRef(expr);
+	if (!child) {
 		return false;
 	}
-	auto &function_expr = expr.Cast<BoundFunctionExpression>();
-	if (!IsVariantWrapperFunction(function_expr) || function_expr.GetChildren().size() != 1) {
-		return false;
-	}
-
-	auto &child = *function_expr.GetChildren()[0];
-	if (child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
-	    child.GetReturnType().id() != LogicalTypeId::VARIANT) {
-		return false;
-	}
-	auto &colref = child.Cast<BoundColumnRefExpression>();
-	auto stats_it = statistics_map.find(colref.Binding());
+	auto stats_it = statistics_map.find(child->Binding());
 	if (stats_it == statistics_map.end() || !stats_it->second) {
 		return false;
 	}
@@ -84,7 +61,7 @@ static bool TryGetVariantJoinKeyInfo(const Expression &expr, const statistics_ma
 		return false;
 	} // LCOV_EXCL_STOP
 
-	result.child = &child;
+	result.child = child.get();
 	result.shredded_type = std::move(shredded_type);
 	result.typed_stats = typed_stats.ToUnique();
 	if (variant_stats.CanHaveNull()) {
@@ -93,19 +70,28 @@ static bool TryGetVariantJoinKeyInfo(const Expression &expr, const statistics_ma
 	return true;
 }
 
-static unique_ptr<BaseStatistics> CastJoinKeyStats(const VariantJoinKeyInfo &key_info, const LogicalType &target_type) {
+unique_ptr<BaseStatistics> CompressedMaterialization::CastVariantJoinKeyStats(const VariantJoinKeyInfo &key_info,
+                                                                              const LogicalType &target_type) {
 	if (key_info.shredded_type == target_type) {
 		return key_info.typed_stats->ToUnique();
 	}
 	return StatisticsPropagator::TryPropagateCast(*key_info.typed_stats, key_info.shredded_type, target_type);
 }
 
-static bool TryCompressVariantComparisonJoinKey(ClientContext &context, JoinCondition &condition,
-                                                const statistics_map_t &statistics_map) {
+unique_ptr<Expression> CompressedMaterialization::CreateVariantJoinKeyCast(unique_ptr<Expression> input,
+                                                                           const LogicalType &shredded_type,
+                                                                           const LogicalType &target_type) {
+	input = BoundCastExpression::AddCastToType(context, std::move(input), shredded_type);
+	if (shredded_type == target_type) {
+		return input;
+	}
+	return BoundCastExpression::AddCastToType(context, std::move(input), target_type);
+}
+
+bool CompressedMaterialization::TryCompressVariantComparisonJoinKey(JoinCondition &condition) {
 	VariantJoinKeyInfo left;
 	VariantJoinKeyInfo right;
-	if (!TryGetVariantJoinKeyInfo(condition.GetLHS(), statistics_map, left) ||
-	    !TryGetVariantJoinKeyInfo(condition.GetRHS(), statistics_map, right)) {
+	if (!TryGetVariantJoinKeyInfo(condition.GetLHS(), left) || !TryGetVariantJoinKeyInfo(condition.GetRHS(), right)) {
 		return false;
 	}
 
@@ -115,14 +101,14 @@ static bool TryCompressVariantComparisonJoinKey(ClientContext &context, JoinCond
 		return false;
 	}
 
-	auto left_stats = CastJoinKeyStats(left, target_type);
-	auto right_stats = CastJoinKeyStats(right, target_type);
+	auto left_stats = CastVariantJoinKeyStats(left, target_type);
+	auto right_stats = CastVariantJoinKeyStats(right, target_type);
 	if (!left_stats || !right_stats) {
 		return false;
 	}
 
-	condition.LeftReference() = BoundCastExpression::AddCastToType(context, left.child->Copy(), target_type);
-	condition.RightReference() = BoundCastExpression::AddCastToType(context, right.child->Copy(), target_type);
+	condition.LeftReference() = CreateVariantJoinKeyCast(left.child->Copy(), left.shredded_type, target_type);
+	condition.RightReference() = CreateVariantJoinKeyCast(right.child->Copy(), right.shredded_type, target_type);
 	condition.SetLeftStats(std::move(left_stats));
 	condition.SetRightStats(std::move(right_stats));
 	return true;
@@ -180,7 +166,7 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 	for (auto &condition : join.conditions) {
 		if (join.conditions.size() == 1 && join.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			const bool compressed_variant_key =
-			    condition.IsComparison() && TryCompressVariantComparisonJoinKey(context, condition, statistics_map);
+			    condition.IsComparison() && TryCompressVariantComparisonJoinKey(condition);
 			if (compressed_variant_key) {
 				// The comparator wrapper has been lowered to casts over the VARIANT columns.
 				// The referenced bindings are marked below, so no child projection compression is needed.

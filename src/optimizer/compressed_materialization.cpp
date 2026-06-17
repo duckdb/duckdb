@@ -11,6 +11,7 @@
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -97,7 +98,6 @@ struct CMHelper {
 	                                                                   unique_ptr<BaseStatistics> compress_stats);
 	static bool GetVariantCompressInfo(const BaseStatistics &stats, LogicalType &shredded_type,
 	                                   unique_ptr<BaseStatistics> &typed_stats);
-	static bool IsVariantWrapperFunction(const BoundFunctionExpression &expr);
 };
 
 //===--------------------------------------------------------------------===//
@@ -330,6 +330,40 @@ void CompressedMaterialization::GetReferencedBindings(const Expression &root_exp
                                                       column_binding_set_t &referenced_bindings) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
 	    root_expr, [&](const BoundColumnRefExpression &col_ref) { referenced_bindings.insert(col_ref.Binding()); });
+}
+
+bool CompressedMaterialization::IsVariantWrapperFunction(const BoundFunctionExpression &expr) {
+	const auto &function_name = expr.Function().GetName();
+	return function_name == "variant_comparator" || function_name == "variant_normalize";
+}
+
+optional_ptr<const BoundColumnRefExpression>
+CompressedMaterialization::TryGetVariantWrapperColumnRef(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return nullptr;
+	}
+	auto &function_expr = expr.Cast<BoundFunctionExpression>();
+	if (!IsVariantWrapperFunction(function_expr) || function_expr.GetChildren().size() != 1) {
+		return nullptr;
+	}
+	auto &child = *function_expr.GetChildren()[0];
+	if (child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
+	    child.GetReturnType().id() != LogicalTypeId::VARIANT) {
+		return nullptr;
+	}
+	return child.Cast<BoundColumnRefExpression>();
+}
+
+optional_ptr<BaseStatistics> CompressedMaterialization::GetVariantWrapperStats(const Expression &expr) {
+	auto colref = TryGetVariantWrapperColumnRef(expr);
+	if (!colref) {
+		return nullptr;
+	}
+	auto stats_it = statistics_map.find(colref->Binding());
+	if (stats_it == statistics_map.end()) {
+		return nullptr;
+	}
+	return stats_it->second.get();
 }
 
 void CompressedMaterialization::UpdateBindingInfo(CompressedMaterializationInfo &info, const ColumnBinding &binding,
@@ -584,7 +618,7 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(
 	if (stats.GetType().id() == LogicalTypeId::VARIANT &&
 	    input->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &function_expr = input->Cast<BoundFunctionExpression>();
-		if (CMHelper::IsVariantWrapperFunction(function_expr) && function_expr.GetChildren().size() == 1) {
+		if (IsVariantWrapperFunction(function_expr) && function_expr.GetChildren().size() == 1) {
 			return GetVariantCompress(std::move(function_expr.GetChildrenMutable()[0]), stats);
 		}
 	}
@@ -780,11 +814,6 @@ bool CMHelper::GetVariantCompressInfo(const BaseStatistics &stats, LogicalType &
 	return true;
 }
 
-bool CMHelper::IsVariantWrapperFunction(const BoundFunctionExpression &expr) {
-	const auto &function_name = expr.Function().GetName();
-	return function_name == "variant_comparator" || function_name == "variant_normalize";
-}
-
 unique_ptr<CompressExpression> CompressedMaterialization::GetVariantCompress(unique_ptr<Expression> input,
                                                                              const BaseStatistics &stats) {
 	LogicalType shredded_type;
@@ -797,7 +826,7 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetVariantCompress(uni
 	// shredded value gives the same equality/order semantics without materializing comparator blobs.
 	if (input->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &function_expr = input->Cast<BoundFunctionExpression>();
-		if (CMHelper::IsVariantWrapperFunction(function_expr) && function_expr.GetChildren().size() == 1) {
+		if (IsVariantWrapperFunction(function_expr) && function_expr.GetChildren().size() == 1) {
 			input = std::move(function_expr.GetChildrenMutable()[0]);
 		}
 	}

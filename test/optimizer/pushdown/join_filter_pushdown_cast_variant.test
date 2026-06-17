@@ -21,6 +21,13 @@ CREATE TABLE probe_variant_smallint AS SELECT range::SMALLINT::VARIANT AS a FROM
 statement ok
 CREATE TABLE build_variant_bigint AS SELECT b::BIGINT::VARIANT AS b FROM (VALUES (10), (20), (30), (50)) t(b);
 
+# Direct fully shredded VARIANT joins preserve NULL semantics after lowering
+statement ok
+CREATE TABLE probe_direct_variant_null AS SELECT x::INT::VARIANT AS a FROM (VALUES (1), (NULL), (2)) t(x);
+
+statement ok
+CREATE TABLE build_direct_variant_null AS SELECT x::BIGINT::VARIANT AS b FROM (VALUES (1), (NULL), (3)) t(x);
+
 # VARIANT probe cast to integral
 statement ok
 CREATE TABLE probe_variant_int AS SELECT range::INT::VARIANT AS a FROM range(100);
@@ -45,6 +52,9 @@ restart
 statement ok
 SET variant_minimum_shredding_size = 0;
 
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_direct_variant JOIN build_direct_variant ON probe_direct_variant.a = build_direct_variant.b;
 ----
@@ -55,6 +65,17 @@ SELECT COUNT(*) FROM probe_direct_variant JOIN build_direct_variant ON probe_dir
 ----
 4
 
+# NUMBER and REAL are different VARIANT ranks, even when the shredded value is integral
+query I
+SELECT COUNT(*) FROM probe_direct_variant WHERE a < 1.0::DOUBLE::VARIANT;
+----
+100
+
+query II
+EXPLAIN (FORMAT yaml) SELECT COUNT(*) FROM probe_variant_smallint JOIN build_variant_bigint ON probe_variant_smallint.a = build_variant_bigint.b;
+----
+logical_opt	<REGEX>:.*CAST\(CAST\(a AS SMALLINT\) AS BIGINT\).*CAST\(b AS BIGINT\).*
+
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_variant_smallint JOIN build_variant_bigint ON probe_variant_smallint.a = build_variant_bigint.b;
 ----
@@ -64,6 +85,16 @@ query I
 SELECT COUNT(*) FROM probe_variant_smallint JOIN build_variant_bigint ON probe_variant_smallint.a = build_variant_bigint.b;
 ----
 4
+
+query I
+SELECT COUNT(*) FROM probe_direct_variant_null JOIN build_direct_variant_null ON probe_direct_variant_null.a = build_direct_variant_null.b;
+----
+1
+
+query I
+SELECT COUNT(*) FROM probe_direct_variant_null JOIN build_direct_variant_null ON probe_direct_variant_null.a IS NOT DISTINCT FROM build_direct_variant_null.b;
+----
+2
 
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::INT AS a FROM probe_variant_int) t JOIN build_int_for_variant ON t.a = build_int_for_variant.b;
