@@ -242,10 +242,19 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 			}
 		} else if (new_entry.type == CatalogType::DELETED_ENTRY && old_entry.set) {
 			old_entry.set->CommitDrop(commit_id, transaction.start_time, old_entry);
-		} else if (!new_entry.deleted && new_entry.IsStandardEntry()) {
-			// committing the creation (or alter) of a schema member - make sure the schema it lives in is still the
-			// current committed schema. If it was dropped (or dropped and re-created) by another transaction after we
-			// started, the entry would otherwise be orphaned in (and freed together with) the now-dropped schema.
+		}
+		// Grab a write lock on the catalog
+		auto &duck_catalog = catalog.Cast<DuckCatalog>();
+		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
+		if (!new_entry.deleted && new_entry.IsStandardEntry()) {
+			// We are committing the creation (or alter) of a schema member. The schema it lives in is tracked by
+			// name in the dependency manager, which cannot tell schema *versions* apart: if the schema was dropped
+			// and re-created by another transaction after we started, a same-named schema still exists, so the
+			// dependency check passes - yet this entry was created in (and is owned by) the now-dropped schema
+			// version. Collapsing that version during cleanup would free this entry while it is still referenced.
+			// So check, by object identity, that the exact schema we belong to is still the live committed schema.
+			// This runs under the write lock, which serializes all structural catalog changes (other commits, the
+			// concurrent DROP, and transaction cleanup), making it atomic with the UpdateTimestamp below.
 			auto &schema = new_entry.ParentSchema();
 			if (schema.set && !schema.set->IsCommittedCurrentEntry(schema)) {
 				throw TransactionException(
@@ -253,9 +262,6 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 				    new_entry.name, schema.name);
 			}
 		}
-		// Grab a write lock on the catalog
-		auto &duck_catalog = catalog.Cast<DuckCatalog>();
-		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
 		lock_guard<mutex> read_lock(old_entry.set->GetCatalogLock());
 		// Set the timestamp of the catalog entry to the given commit_id, marking it as committed
 		CatalogSet::UpdateTimestamp(old_entry.Parent(), commit_id);
