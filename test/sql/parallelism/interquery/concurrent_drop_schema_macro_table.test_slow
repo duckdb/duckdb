@@ -2,15 +2,6 @@
 # description: Concurrent DROP SCHEMA CASCADE while recreating a dependent macro and table
 # group: [interquery]
 
-# Concurrent sessions repeatedly DROP SCHEMA s CASCADE while recreating a macro
-# s.tok and a table s.t that depends on it. This used to trigger a heap-use-after-free
-# in transaction cleanup (CleanupState::CleanupEntry): a DROP SCHEMA could commit
-# while a table/macro had been created in that schema concurrently, leaving a live
-# entry orphaned in the dropped schema version. Collapsing the schema version then
-# freed that entry while it was still referenced by another transaction's undo buffer.
-# An on-disk database is required - the WAL commit path drops the transaction lock,
-# which is what opens the race window.
-
 load __TEST_DIR__/concurrent_drop_schema_macro_table.db
 
 concurrentloop threadid 0 12

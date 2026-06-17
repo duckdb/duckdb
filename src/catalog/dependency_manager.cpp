@@ -220,12 +220,8 @@ void DependencyManager::CreateDependent(CatalogTransaction transaction, const De
 }
 
 void DependencyManager::CreateDependency(CatalogTransaction transaction, DependencyInfo &info) {
-	// Record the current oid of the subject. At the dependent's commit (VerifyExistence) this lets us tell whether
-	// the subject was dropped and re-created (different oid) versus merely altered (oid preserved). The subject must
-	// already exist - you cannot depend on a non-existent entry - but if it cannot be resolved we leave the oid
-	// invalid and fall back to the name-based existence check.
 	auto subject_entry = LookupEntry(transaction, info.subject.entry);
-	info.subject.oid = subject_entry ? subject_entry->oid : DConstants::INVALID_INDEX;
+	info.subject.oid = subject_entry ? subject_entry->oid : optional_idx();
 
 	DependencyCatalogSet subjects(Subjects(), info.dependent.entry);
 	DependencyCatalogSet dependents(Dependents(), info.subject.entry);
@@ -477,12 +473,9 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 		throw DependencyException("Could not commit creation of dependency, subject \"%s\" has been deleted",
 		                          object.SourceInfo().name);
 	}
-	// The subject still exists by name - but if it is a different object than the one we recorded the dependency
-	// against, the subject was dropped and re-created by another transaction after we started (a same-named entry
-	// with a fresh oid; an alter would have preserved the oid). The entry we were created against is gone and may be
-	// getting cleaned up, so committing would leave us orphaned inside it.
-	if (!subject.flags.IsOwnership() && subject.oid != DConstants::INVALID_INDEX && lookup_result.result &&
-	    lookup_result.result->oid != subject.oid) {
+	// The subject still exists by name - check if it is the same object the dependency was created against
+	if (!subject.flags.IsOwnership() && subject.oid.IsValid() && lookup_result.result &&
+	    lookup_result.result->oid != subject.oid.GetIndex()) {
 		throw DependencyException(
 		    "Could not commit creation of dependency, subject \"%s\" was dropped and re-created by another transaction",
 		    object.EntryInfo().name);

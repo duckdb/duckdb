@@ -342,9 +342,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	// Mark this entry as being created by this transaction
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
-	// Preserve the oid across the alter: an altered entry is the same logical object as before, so it must keep
-	// its identity. This is what lets dependencies (which record the oid of the entry they point to) tell an ALTER
-	// (same oid) apart from a DROP + re-CREATE (new oid).
+	// Preserve the oid across the alter: an altered entry is the same logical object as before
 	value->oid = entry->oid;
 
 	if (!StringUtil::CIEquals(value->name, entry->name)) {

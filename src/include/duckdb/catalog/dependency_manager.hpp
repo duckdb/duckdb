@@ -29,11 +29,8 @@ struct DependencySubject {
 	CatalogEntryInfo entry;
 	//! The type of dependency this is (e.g, ownership)
 	DependencySubjectFlags flags;
-	//! The oid of the subject entry at the time the dependency was created. Used to detect, at the dependent's
-	//! commit, whether the subject has since been dropped and re-created (a different oid) rather than merely
-	//! altered (the oid is preserved across an alter). Set in CreateDependency; DConstants::INVALID_INDEX if the
-	//! subject could not be resolved. (No default member initializer: DependencySubject is aggregate-initialized.)
-	idx_t oid;
+	//! The oid of the subject entry when the dependency was created
+	optional_idx oid;
 };
 
 // The entry that relies on the other entry
@@ -109,7 +106,6 @@ private:
 	bool IsSystemEntry(CatalogEntry &entry) const;
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const LogicalDependency &dependency);
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
-	//! Resolve a (type, schema, name) identity to the live catalog entry visible to the transaction (or nullptr)
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const CatalogEntryInfo &info);
 	string CollectDependents(CatalogTransaction transaction, catalog_entry_set_t &entries, CatalogEntryInfo &info);
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
