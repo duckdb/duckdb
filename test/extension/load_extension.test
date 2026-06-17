@@ -8,9 +8,6 @@ require skip_reload
 
 require allow_unsigned_extensions
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 LOAD 'asdf';
 ----
@@ -35,11 +32,6 @@ SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'loadab
 default-version
 
 query I
-SELECT hello('World');
-----
-10
-
-query I
 QUACK QUACK QUACK
 ----
 QUACK
@@ -47,8 +39,9 @@ QUACK
 QUACK
 
 query I
-quACk QUaCk
+quACk QUaCk QUACK
 ----
+QUACK
 QUACK
 QUACK
 
@@ -61,7 +54,7 @@ QUAC
 statement error
 QUACK NOT QUACK
 ----
-<REGEX>:Parser Error: This is not a quack.*
+<REGEX>:Parser Error: syntax error at or near.*
 
 query I
 SELECT contains(loaded_extensions(), 'loadable_extension_demo')

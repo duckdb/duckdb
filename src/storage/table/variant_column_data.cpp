@@ -81,7 +81,7 @@ bool FindShreddedColumnInternal(const ColumnData &shredded, reference<const Base
 	auto &object_children = StructType::GetChildTypes(typed_value.type);
 	optional_idx opt_index;
 	for (idx_t i = 0; i < object_children.size(); i++) {
-		if (StringUtil::CIEquals(field_name, object_children[i].first)) {
+		if (field_name == object_children[i].first) {
 			opt_index = i;
 			break;
 		}
@@ -258,6 +258,7 @@ idx_t VariantColumnData::ScanWithCallback(
 			callback(*sub_columns[1], state.child_states[2], child_vectors[1], target_count);
 			scan_count = callback(*validity, state.child_states[0], unshredding_intermediate, target_count);
 
+			FlatVector::SetSize(unshredding_intermediate, count_t(scan_count));
 			intermediate.Shred(unshredding_intermediate, scan_count);
 		} else {
 			scan_count = callback(*validity, state.child_states[0], intermediate, target_count);
@@ -288,7 +289,6 @@ idx_t VariantColumnData::ScanWithCallback(
 			input.Reset();
 			target.Reset();
 			input.data[0].Reference(extract_intermediate);
-			input.SetCardinality(scan_count);
 			executor.Execute(input, target);
 			result.Reference(target.data[0]);
 		} else {
@@ -304,6 +304,7 @@ idx_t VariantColumnData::ScanWithCallback(
 			callback(*sub_columns[1], state.child_states[2], child_vectors[1], target_count);
 			auto scan_count = callback(*validity, state.child_states[0], intermediate, target_count);
 
+			FlatVector::SetSize(intermediate, count_t(scan_count));
 			result.Shred(intermediate, scan_count);
 			return scan_count;
 		}
@@ -329,7 +330,7 @@ idx_t VariantColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t
 	    state, result, count, [&](ColumnData &col, ColumnScanState &child_state, Vector &target_vector, idx_t count) {
 		    return col.ScanCount(child_state, target_vector, count, result_offset);
 	    });
-	result.Flatten(result_count);
+	result.Flatten();
 	return result_count;
 }
 
@@ -368,49 +369,37 @@ struct VariantShreddedAppendInput {
 
 } // namespace
 
-static void AppendShredded(Vector &input, Vector &append_vector, idx_t count, VariantShreddedAppendInput &append_data) {
-	D_ASSERT(append_vector.GetType().id() == LogicalTypeId::STRUCT);
-	auto &child_vectors = StructVector::GetEntries(append_vector);
-	D_ASSERT(child_vectors.size() == 2);
-
-	//! Create the new column data for the shredded data
-	VariantColumnData::ShredVariantData(input, append_vector, count);
-	auto &unshredded_vector = child_vectors[0];
-	auto &shredded_vector = child_vectors[1];
-
-	auto &unshredded = append_data.unshredded;
-	auto &shredded = append_data.shredded;
-
-	auto &unshredded_stats = append_data.unshredded_stats;
-	auto &shredded_stats = append_data.shredded_stats;
-
-	auto &unshredded_append_state = append_data.unshredded_append_state;
-	auto &shredded_append_state = append_data.shredded_append_state;
-
-	unshredded.Append(unshredded_stats, unshredded_append_state, unshredded_vector, count);
-	shredded.Append(shredded_stats, shredded_append_state, shredded_vector, count);
-}
-
-void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
+void VariantColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
-		append_vector.Flatten(count);
-		Append(stats, state, append_vector, count);
+		append_vector.Flatten();
+		Append(state, append_vector, count);
 		return;
 	}
 
 	// append the null values
-	validity->Append(stats, state.child_appends[0], vector, count);
+	validity->Append(state.child_appends[0], vector, count);
 
 	if (IsShredded()) {
 		throw InternalException("Can't append to a shredded VariantColumnData");
 	} else {
 		for (idx_t i = 0; i < sub_columns.size(); i++) {
-			sub_columns[i]->Append(VariantStats::GetUnshreddedStats(stats), state.child_appends[i + 1], vector, count);
+			sub_columns[i]->Append(state.child_appends[i + 1], vector, count);
 		}
-		VariantStats::MarkAsNotShredded(stats);
 	}
 	this->count += count;
+}
+
+void VariantColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
+		ColumnDataFinalizeAppendState child_finalize_state(finalize_state, LogicalTypeId::VARIANT);
+		sub_columns[i]->FinalizeAppend(child_finalize_state, state.child_appends[i + 1]);
+	}
+	if (!IsShredded()) {
+		for (auto &stats_ref : finalize_state.global_stats) {
+			VariantStats::MarkAsNotShredded(stats_ref.get());
+		}
+	}
 }
 
 void VariantColumnData::RevertAppend(row_t new_count) {
@@ -441,75 +430,79 @@ unique_ptr<BaseStatistics> VariantColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
 
-void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
-                                 const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
+void VariantColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
+                                  const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
+                                  idx_t fetch_count, Vector &result, idx_t result_offset) {
 	if (storage_index.IsPushdownExtract() && IsShredded()) {
 		StorageIndex struct_extract;
 		if (PushdownShreddedFieldExtract(storage_index.GetChildIndex(0), struct_extract)) {
 			//! Shredded field exists and is fully shredded,
 			//! add the storage index to create a pushed-down 'struct_extract' to get the leaf
-			sub_columns[1]->FetchRow(transaction, state, struct_extract, row_id, result, result_idx);
+			sub_columns[1]->FetchRows(transaction, state, struct_extract, offsets, sel, fetch_count, result,
+			                          result_offset);
 			return;
 		}
 	}
-	Vector variant_vec(LogicalType::VARIANT(), result_idx + 1);
-	validity->FetchRow(transaction, state, storage_index, row_id, variant_vec, result_idx);
-	if (IsShredded()) {
-		auto intermediate = CreateUnshreddingIntermediate(result_idx + 1);
-		auto &child_vectors = StructVector::GetEntries(intermediate);
-		// fetch the validity state
-		// fetch the sub-column states
-		StorageIndex empty(0);
-		for (idx_t i = 0; i < sub_columns.size(); i++) {
-			sub_columns[i]->FetchRow(transaction, state, empty, row_id, child_vectors[i], result_idx);
+
+	for (idx_t idx = 0; idx < fetch_count; idx++) {
+		const idx_t offset = offsets[sel.get_index(idx)];
+		const idx_t result_idx = result_offset + idx;
+		Vector variant_vec(LogicalType::VARIANT(), 1);
+		validity->FetchRowsAtSegmentLevel(transaction, state, &offset, *FlatVector::IncrementalSelectionVector(),
+		                                  /*count=*/1, variant_vec, 0);
+		if (IsShredded()) {
+			auto intermediate = CreateUnshreddingIntermediate(1);
+			auto &child_vectors = StructVector::GetEntries(intermediate);
+			// fetch the validity state
+			// fetch the sub-column states
+			StorageIndex empty(0);
+			for (idx_t i = 0; i < sub_columns.size(); i++) {
+				sub_columns[i]->FetchRows(transaction, state, empty, &offset, *FlatVector::IncrementalSelectionVector(),
+				                          /*count=*/1, child_vectors[i], 0);
+			}
+
+			//! FIXME: adjust UnshredVariantData so we can write the value in place directly.
+			Vector unshredded(variant_vec.GetType(), 1);
+			VariantUtils::UnshredVariantData(intermediate, unshredded, 1);
+			variant_vec.SetValue(0, unshredded.GetValue(0));
+		} else {
+			sub_columns[0]->FetchRows(transaction, state, storage_index, &offset,
+			                          *FlatVector::IncrementalSelectionVector(), /*count=*/1, variant_vec, 0);
 		}
-		if (result_idx) {
-			intermediate.SetValue(0, intermediate.GetValue(result_idx));
+
+		if (!storage_index.IsPushdownExtract()) {
+			//! No extract required
+			D_ASSERT(result.GetType().id() == LogicalTypeId::VARIANT);
+			result.SetValue(result_idx, variant_vec.GetValue(0));
+			continue;
 		}
 
-		//! FIXME: adjust UnshredVariantData so we can write the value in place directly.
-		Vector unshredded(variant_vec.GetType(), 1);
-		VariantUtils::UnshredVariantData(intermediate, unshredded, 1);
-		variant_vec.SetValue(0, unshredded.GetValue(0));
-	} else {
-		sub_columns[0]->FetchRow(transaction, state, storage_index, row_id, variant_vec, result_idx);
-		if (result_idx) {
-			variant_vec.SetValue(0, variant_vec.GetValue(result_idx));
+		Vector extracted_variant(variant_vec.GetType(), 1);
+		vector<VariantPathComponent> components;
+		reference<const StorageIndex> path_iter(storage_index.GetChildIndex(0));
+
+		while (true) {
+			auto &current = path_iter.get();
+			auto &field_name = current.GetFieldName();
+			components.emplace_back(field_name);
+			if (!current.HasChildren()) {
+				break;
+			}
+			path_iter = current.GetChildIndex(0);
 		}
-	}
+		VariantUtils::VariantExtract(variant_vec, components, extracted_variant, 1);
 
-	if (!storage_index.IsPushdownExtract()) {
-		//! No extract required
-		D_ASSERT(result.GetType().id() == LogicalTypeId::VARIANT);
-		result.SetValue(result_idx, variant_vec.GetValue(0));
-		return;
-	}
-
-	Vector extracted_variant(variant_vec.GetType(), 1);
-	vector<VariantPathComponent> components;
-	reference<const StorageIndex> path_iter(storage_index.GetChildIndex(0));
-
-	while (true) {
-		auto &current = path_iter.get();
-		auto &field_name = current.GetFieldName();
-		components.emplace_back(field_name);
-		if (!current.HasChildren()) {
-			break;
+		if (result.GetType().id() == LogicalTypeId::VARIANT) {
+			//! No cast required
+			result.SetValue(result_idx, extracted_variant.GetValue(0));
+			continue;
 		}
-		path_iter = current.GetChildIndex(0);
-	}
-	VariantUtils::VariantExtract(variant_vec, components, extracted_variant, 1);
 
-	if (result.GetType().id() == LogicalTypeId::VARIANT) {
-		//! No cast required
-		result.SetValue(result_idx, extracted_variant.GetValue(0));
-		return;
+		//! Need to perform the cast here as well
+		auto context = transaction.transaction->context.lock();
+		auto fetched_row = extracted_variant.GetValue(0).CastAs(*context, result.GetType());
+		result.SetValue(result_idx, fetched_row);
 	}
-
-	//! Need to perform the cast here as well
-	auto context = transaction.transaction->context.lock();
-	auto fetched_row = extracted_variant.GetValue(0).CastAs(*context, result.GetType());
-	result.SetValue(result_idx, fetched_row);
 }
 
 void VariantColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
@@ -604,6 +597,42 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::CreateCheckpointState(const
 	return make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
+static void AppendShredded(Vector &input, Vector &append_vector, idx_t count, VariantShreddedAppendInput &append_data) {
+	D_ASSERT(append_vector.GetType().id() == LogicalTypeId::STRUCT);
+	auto &child_vectors = StructVector::GetEntries(append_vector);
+	D_ASSERT(child_vectors.size() == 2);
+
+	//! Create the new column data for the shredded data
+	VariantColumnData::ShredVariantData(input, append_vector, count);
+	auto &unshredded_vector = child_vectors[0];
+	auto &shredded_vector = child_vectors[1];
+
+	auto &unshredded = append_data.unshredded;
+	auto &shredded = append_data.shredded;
+
+	auto &unshredded_append_state = append_data.unshredded_append_state;
+	auto &shredded_append_state = append_data.shredded_append_state;
+
+	unshredded.Append(unshredded_append_state, unshredded_vector, count);
+	shredded.Append(shredded_append_state, shredded_vector, count);
+}
+
+static void FinalizeShreddedAppend(VariantShreddedAppendInput &append_data) {
+	auto &unshredded_stats = append_data.unshredded_stats;
+	auto &shredded_stats = append_data.shredded_stats;
+
+	auto &unshredded = append_data.unshredded;
+	auto &shredded = append_data.shredded;
+
+	auto &unshredded_append_state = append_data.unshredded_append_state;
+	auto &shredded_append_state = append_data.shredded_append_state;
+
+	ColumnDataFinalizeAppendState unshredded_finalize_state(unshredded_stats);
+	unshredded.FinalizeAppend(unshredded_finalize_state, unshredded_append_state);
+	ColumnDataFinalizeAppendState shredded_finalize_state(shredded_stats);
+	shredded.FinalizeAppend(shredded_finalize_state, shredded_append_state);
+}
+
 vector<shared_ptr<ColumnData>> VariantColumnData::WriteShreddedData(const RowGroup &row_group,
                                                                     const LogicalType &shredded_type,
                                                                     BaseStatistics &stats) {
@@ -657,6 +686,8 @@ vector<shared_ptr<ColumnData>> VariantColumnData::WriteShreddedData(const RowGro
 
 		AppendShredded(scan_vector, append_vector, to_scan, append_data);
 	}
+	FinalizeShreddedAppend(append_data);
+
 	stats = std::move(transformed_stats);
 	return ret;
 }
@@ -817,12 +848,13 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 }
 
 void VariantColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                             vector<ColumnSegmentInfo> &result) {
+                                             vector<ColumnSegmentInfo> &result,
+                                             const ColumnSegmentInfoScanOptions &options) {
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		col_path.back() = i + 1;
-		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	}
 }
 

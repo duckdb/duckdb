@@ -27,7 +27,7 @@ public:
 
 static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<ConstantOrNullBindData>();
+	auto &info = func_expr.BindInfo()->Cast<ConstantOrNullBindData>();
 	result.Reference(info.value, count_t(args.size()));
 	for (idx_t idx = 1; idx < args.ColumnCount(); idx++) {
 		switch (args.data[idx].GetVectorType()) {
@@ -35,7 +35,7 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 			auto &input_mask = FlatVector::ValidityMutable(args.data[idx]);
 			if (input_mask.CanHaveNull()) {
 				// there are null values: need to merge them into the result
-				result.Flatten(args.size());
+				result.Flatten();
 				auto &result_mask = FlatVector::ValidityMutable(result);
 				result_mask.EnsureWritable();
 				result_mask.Combine(input_mask, args.size());
@@ -54,9 +54,9 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 			break;
 		}
 		default: {
-			auto entries = args.data[idx].Validity(args.size());
+			auto entries = args.data[idx].Validity();
 			if (entries.CanHaveNull()) {
-				result.Flatten(args.size());
+				result.Flatten();
 				auto &result_mask = FlatVector::ValidityMutable(result);
 				for (idx_t i = 0; i < args.size(); i++) {
 					if (!entries.IsValid(i)) {
@@ -83,7 +83,7 @@ unique_ptr<FunctionData> ConstantOrNullBind(BindScalarFunctionInput &input) {
 	}
 	D_ASSERT(arguments.size() >= 2);
 	auto value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
-	function.SetReturnType(arguments[0]->return_type);
+	function.SetReturnType(arguments[0]->GetReturnType());
 	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
 
@@ -94,11 +94,11 @@ unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
 }
 
 bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value &val) {
-	if (expr.function.name != "constant_or_null") {
+	if (expr.Function().GetName() != "constant_or_null") {
 		return false;
 	}
-	D_ASSERT(expr.bind_info);
-	auto &bind_data = expr.bind_info->Cast<ConstantOrNullBindData>();
+	D_ASSERT(expr.BindInfo());
+	auto &bind_data = expr.BindInfo()->Cast<ConstantOrNullBindData>();
 	D_ASSERT(bind_data.value.type() == val.type());
 	return bind_data.value == val;
 }

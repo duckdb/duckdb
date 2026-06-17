@@ -50,6 +50,10 @@ static char *GetStringData(ListSegment *segment) {
 	return reinterpret_cast<char *>(data_ptr_cast(segment) + sizeof(ListSegment));
 }
 
+static const char *GetStringData(const ListSegment *segment) {
+	return reinterpret_cast<const char *>(const_data_ptr_cast(segment) + sizeof(ListSegment));
+}
+
 //===--------------------------------------------------------------------===//
 // Lists
 //===--------------------------------------------------------------------===//
@@ -386,174 +390,327 @@ void ListSegmentFunctions::AppendRow(ArenaAllocator &allocator, LinkedList &link
 	segment->count++;
 }
 
-//===--------------------------------------------------------------------===//
-// Read
-//===--------------------------------------------------------------------===//
-template <class T>
-static void ReadDataFromPrimitiveSegment(const ListSegmentFunctions &, const ListSegment *segment, Vector &result,
-                                         idx_t &total_count) {
-	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
-
-	// set NULLs
-	auto null_mask = GetNullMask(segment);
-	for (idx_t i = 0; i < segment->count; i++) {
-		if (null_mask[i]) {
-			aggr_vector_validity.SetInvalid(total_count + i);
-		}
+void ListSegmentFunctions::AppendListEntry(ArenaAllocator &allocator, LinkedList &linked_list,
+                                           RecursiveUnifiedVectorFormat &child_data,
+                                           const list_entry_t &list_entry) const {
+	for (idx_t child_idx = list_entry.offset; child_idx < list_entry.offset + list_entry.length; child_idx++) {
+		allocator.AlignNext();
+		AppendRow(allocator, linked_list, child_data, child_idx);
 	}
+}
 
+//===--------------------------------------------------------------------===//
+// Scan
+//===--------------------------------------------------------------------===//
+//! Move the scan state to the next segment of the linked list (clearing any child scan states)
+static void MoveToNextSegment(ListSegmentScanState &state) {
+	state.segment = state.segment->next;
+	state.offset = 0;
+	state.children.clear();
+}
+
+template <class T>
+static idx_t ScanPrimitiveData(const ListSegmentFunctions &, ListSegmentScanState &state, idx_t count, Vector &result,
+                               idx_t result_offset) {
+	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
 	auto aggr_vector_data = FlatVector::GetDataMutable<T>(result);
 
-	// load values
-	for (idx_t i = 0; i < segment->count; i++) {
-		if (aggr_vector_validity.RowIsValid(total_count + i)) {
-			auto data = GetPrimitiveData<T>(segment);
-			aggr_vector_data[total_count + i] = Load<T>(const_data_ptr_cast(data + i));
+	idx_t total_read = 0;
+	while (total_read < count && state.segment) {
+		auto segment = state.segment;
+		auto read_count = MinValue<idx_t>(count - total_read, segment->count - state.offset);
+		auto null_mask = GetNullMask(segment);
+		auto data = GetPrimitiveData<T>(segment);
+		for (idx_t i = 0; i < read_count; i++) {
+			auto source_idx = state.offset + i;
+			auto target_idx = result_offset + total_read + i;
+			if (null_mask[source_idx]) {
+				aggr_vector_validity.SetInvalid(target_idx);
+			} else {
+				aggr_vector_data[target_idx] = Load<T>(const_data_ptr_cast(data + source_idx));
+			}
+		}
+		total_read += read_count;
+		state.offset += read_count;
+		if (state.offset == segment->count) {
+			MoveToNextSegment(state);
 		}
 	}
+	return total_read;
 }
 
-static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListSegment *segment, Vector &result,
-                                       idx_t &total_count) {
+static idx_t ScanVarcharData(const ListSegmentFunctions &, ListSegmentScanState &state, idx_t count, Vector &result,
+                             idx_t result_offset) {
 	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
-
-	// use length and (reconstructed) offset to get the correct substrings
 	auto aggr_vector_data = FlatVector::GetDataMutable<string_t>(result);
-	auto str_length_data = GetListLengthData(segment);
 
-	auto null_mask = GetNullMask(segment);
-	auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetListChildData(segment)));
-	auto current_segment = linked_child_list.first_segment;
-	idx_t child_offset = 0;
-	for (idx_t i = 0; i < segment->count; i++) {
-		if (null_mask[i]) {
-			// set to null
-			aggr_vector_validity.SetInvalid(total_count + i);
-			continue;
+	idx_t total_read = 0;
+	while (total_read < count && state.segment) {
+		auto segment = state.segment;
+		if (state.children.empty()) {
+			// entering this segment - point the child state at the start of the segment's character data
+			auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetListChildData(segment)));
+			state.children.emplace_back();
+			state.children.back().segment = linked_child_list.first_segment;
 		}
-		// read the string
-		auto &result_str = aggr_vector_data[total_count + i];
-		auto str_length = Load<uint64_t>(const_data_ptr_cast(str_length_data + i));
-		// allocate an empty string for the given size
-		result_str = StringVector::EmptyString(result, str_length);
-		auto result_data = result_str.GetDataWriteable();
-		// copy over the data
-		idx_t current_offset = 0;
-		while (current_offset < str_length) {
-			if (!current_segment) {
-				throw InternalException("Insufficient data to read string");
+		auto &child_state = state.children.back();
+		auto read_count = MinValue<idx_t>(count - total_read, segment->count - state.offset);
+		auto null_mask = GetNullMask(segment);
+		auto str_length_data = GetListLengthData(segment);
+		for (idx_t i = 0; i < read_count; i++) {
+			auto source_idx = state.offset + i;
+			auto target_idx = result_offset + total_read + i;
+			if (null_mask[source_idx]) {
+				// set to null
+				aggr_vector_validity.SetInvalid(target_idx);
+				continue;
 			}
-			auto child_data = GetStringData(current_segment);
-			idx_t max_copy = MinValue<idx_t>(str_length - current_offset, current_segment->capacity - child_offset);
-			memcpy(result_data + current_offset, child_data + child_offset, max_copy);
-			current_offset += max_copy;
-			child_offset += max_copy;
-			if (child_offset >= current_segment->capacity) {
-				D_ASSERT(child_offset == current_segment->capacity);
-				current_segment = current_segment->next;
-				child_offset = 0;
+			// read the string
+			auto &result_str = aggr_vector_data[target_idx];
+			auto str_length = Load<uint64_t>(const_data_ptr_cast(str_length_data + source_idx));
+			if (child_state.segment && child_state.offset + str_length <= child_state.segment->capacity) {
+				// the string fits in the current segment - reference it directly instead of copying
+				result_str = string_t(GetStringData(child_state.segment) + child_state.offset,
+				                      NumericCast<uint32_t>(str_length));
+				child_state.offset += str_length;
+				if (child_state.offset == child_state.segment->capacity) {
+					child_state.segment = child_state.segment->next;
+					child_state.offset = 0;
+				}
+				continue;
 			}
-		}
+			// allocate an empty string for the given size
+			result_str = StringVector::EmptyString(result, str_length);
+			auto result_data = result_str.GetDataWriteable();
+			idx_t current_offset = 0;
+			while (current_offset < str_length) {
+				if (!child_state.segment) {
+					throw InternalException("Insufficient data to read string");
+				}
+				auto child_data = GetStringData(child_state.segment);
+				idx_t max_copy =
+				    MinValue<idx_t>(str_length - current_offset, child_state.segment->capacity - child_state.offset);
+				memcpy(result_data + current_offset, child_data + child_state.offset, max_copy);
+				current_offset += max_copy;
+				child_state.offset += max_copy;
+				if (child_state.offset >= child_state.segment->capacity) {
+					D_ASSERT(child_state.offset == child_state.segment->capacity);
+					child_state.segment = child_state.segment->next;
+					child_state.offset = 0;
+				}
+			}
 
-		// finalize the str
-		result_str.Finalize();
+			// finalize the str
+			result_str.Finalize();
+		}
+		total_read += read_count;
+		state.offset += read_count;
+		if (state.offset == segment->count) {
+			MoveToNextSegment(state);
+		}
 	}
+	return total_read;
 }
 
-static void ReadDataFromListSegment(const ListSegmentFunctions &functions, const ListSegment *segment, Vector &result,
-                                    idx_t &total_count) {
+static idx_t ScanListData(const ListSegmentFunctions &functions, ListSegmentScanState &state, idx_t count,
+                          Vector &result, idx_t result_offset) {
 	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
-
-	// set NULLs
-	auto null_mask = GetNullMask(segment);
-	for (idx_t i = 0; i < segment->count; i++) {
-		if (null_mask[i]) {
-			aggr_vector_validity.SetInvalid(total_count + i);
-		}
-	}
-
 	auto list_vector_data = FlatVector::GetDataMutable<list_entry_t>(result);
 
-	// get the starting offset
-	idx_t offset = 0;
-	if (total_count != 0) {
-		offset = list_vector_data[total_count - 1].offset + list_vector_data[total_count - 1].length;
-	}
-	idx_t starting_offset = offset;
-
-	// set length and offsets
-	auto list_length_data = GetListLengthData(segment);
-	for (idx_t i = 0; i < segment->count; i++) {
-		auto list_length = Load<uint64_t>(const_data_ptr_cast(list_length_data + i));
-		list_vector_data[total_count + i].length = list_length;
-		list_vector_data[total_count + i].offset = offset;
-		offset += list_length;
-	}
-
-	auto &child_vector = ListVector::GetChildMutable(result);
-	auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetListChildData(segment)));
-	ListVector::Reserve(result, offset);
-
-	// recurse into the linked list of child values
 	D_ASSERT(functions.child_functions.size() == 1);
-	functions.child_functions[0].BuildListVector(linked_child_list, child_vector, starting_offset);
-	ListVector::SetListSize(result, offset);
-}
+	auto &child_function = functions.child_functions[0];
 
-static void ReadDataFromStructSegment(const ListSegmentFunctions &functions, const ListSegment *segment, Vector &result,
-                                      idx_t &total_count) {
-	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
+	idx_t total_read = 0;
+	while (total_read < count && state.segment) {
+		auto segment = state.segment;
+		if (state.children.empty()) {
+			// entering this segment - point the child state at the start of the segment's child values
+			auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetListChildData(segment)));
+			state.children.emplace_back();
+			state.children.back().segment = linked_child_list.first_segment;
+		}
+		auto &child_state = state.children.back();
+		auto read_count = MinValue<idx_t>(count - total_read, segment->count - state.offset);
+		auto null_mask = GetNullMask(segment);
+		auto list_length_data = GetListLengthData(segment);
 
-	// set NULLs
-	auto null_mask = GetNullMask(segment);
-	for (idx_t i = 0; i < segment->count; i++) {
-		if (null_mask[i]) {
-			aggr_vector_validity.SetInvalid(total_count + i);
+		// get the starting offset in the result child vector
+		auto current_result_offset = result_offset + total_read;
+		idx_t offset = 0;
+		if (current_result_offset != 0) {
+			offset =
+			    list_vector_data[current_result_offset - 1].offset + list_vector_data[current_result_offset - 1].length;
+		}
+		idx_t starting_offset = offset;
+
+		// set length and offsets
+		for (idx_t i = 0; i < read_count; i++) {
+			auto source_idx = state.offset + i;
+			auto target_idx = current_result_offset + i;
+			if (null_mask[source_idx]) {
+				aggr_vector_validity.SetInvalid(target_idx);
+			}
+			auto list_length = Load<uint64_t>(const_data_ptr_cast(list_length_data + source_idx));
+			list_vector_data[target_idx].length = list_length;
+			list_vector_data[target_idx].offset = offset;
+			offset += list_length;
+		}
+
+		ListVector::Reserve(result, offset);
+		auto &child_vector = ListVector::GetChildMutable(result);
+
+		// recurse into the linked list of child values
+		auto child_read = child_function.scan_data(child_function, child_state, offset - starting_offset, child_vector,
+		                                           starting_offset);
+		if (child_read != offset - starting_offset) {
+			throw InternalException("Insufficient data in linked list to read list entries");
+		}
+		ListVector::SetListSize(result, offset);
+
+		total_read += read_count;
+		state.offset += read_count;
+		if (state.offset == segment->count) {
+			MoveToNextSegment(state);
 		}
 	}
+	return total_read;
+}
 
+static idx_t ScanStructData(const ListSegmentFunctions &functions, ListSegmentScanState &state, idx_t count,
+                            Vector &result, idx_t result_offset) {
+	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
 	auto &children = StructVector::GetEntries(result);
-
-	// recurse into the child segments of each child of the struct
 	D_ASSERT(children.size() == functions.child_functions.size());
-	auto struct_children = GetStructData(segment);
-	for (idx_t child_count = 0; child_count < children.size(); child_count++) {
-		auto struct_children_segment = Load<ListSegment *>(const_data_ptr_cast(struct_children + child_count));
-		auto &child_function = functions.child_functions[child_count];
-		child_function.read_data(child_function, struct_children_segment, children[child_count], total_count);
-	}
-}
 
-static void ReadDataFromArraySegment(const ListSegmentFunctions &functions, const ListSegment *segment, Vector &result,
-                                     idx_t &total_count) {
-	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
+	idx_t total_read = 0;
+	while (total_read < count && state.segment) {
+		auto segment = state.segment;
+		if (state.children.empty()) {
+			// entering this segment - point the child states at the segment's child segments
+			auto struct_children = GetStructData(segment);
+			state.children.resize(children.size());
+			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+				state.children[child_idx].segment =
+				    Load<ListSegment *>(const_data_ptr_cast(struct_children + child_idx));
+			}
+		}
+		auto read_count = MinValue<idx_t>(count - total_read, segment->count - state.offset);
+		auto null_mask = GetNullMask(segment);
+		for (idx_t i = 0; i < read_count; i++) {
+			if (null_mask[state.offset + i]) {
+				aggr_vector_validity.SetInvalid(result_offset + total_read + i);
+			}
+		}
 
-	// set NULLs
-	auto null_mask = GetNullMask(segment);
-	for (idx_t i = 0; i < segment->count; i++) {
-		if (null_mask[i]) {
-			aggr_vector_validity.SetInvalid(total_count + i);
+		// recurse into the child segments of each child of the struct
+		// the child segments are aligned with the parent segment, so they advance in lockstep
+		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+			auto &child_function = functions.child_functions[child_idx];
+			child_function.scan_data(child_function, state.children[child_idx], read_count, children[child_idx],
+			                         result_offset + total_read);
+		}
+
+		total_read += read_count;
+		state.offset += read_count;
+		if (state.offset == segment->count) {
+			MoveToNextSegment(state);
 		}
 	}
+	return total_read;
+}
 
+static idx_t ScanArrayData(const ListSegmentFunctions &functions, ListSegmentScanState &state, idx_t count,
+                           Vector &result, idx_t result_offset) {
+	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
 	auto &child_vector = ArrayVector::GetChildMutable(result);
-	auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetArrayChildData(segment)));
 	auto array_size = ArrayType::GetSize(result.GetType());
-	auto child_size = array_size * total_count;
 
-	// recurse into the linked list of child values
 	D_ASSERT(functions.child_functions.size() == 1);
-	functions.child_functions[0].BuildListVector(linked_child_list, child_vector, child_size);
+	auto &child_function = functions.child_functions[0];
+
+	idx_t total_read = 0;
+	while (total_read < count && state.segment) {
+		auto segment = state.segment;
+		if (state.children.empty()) {
+			// entering this segment - point the child state at the start of the segment's child values
+			auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetArrayChildData(segment)));
+			state.children.emplace_back();
+			state.children.back().segment = linked_child_list.first_segment;
+		}
+		auto &child_state = state.children.back();
+		auto read_count = MinValue<idx_t>(count - total_read, segment->count - state.offset);
+		auto null_mask = GetNullMask(segment);
+		for (idx_t i = 0; i < read_count; i++) {
+			if (null_mask[state.offset + i]) {
+				aggr_vector_validity.SetInvalid(result_offset + total_read + i);
+			}
+		}
+
+		// recurse into the linked list of child values
+		child_function.scan_data(child_function, child_state, read_count * array_size, child_vector,
+		                         (result_offset + total_read) * array_size);
+
+		total_read += read_count;
+		state.offset += read_count;
+		if (state.offset == segment->count) {
+			MoveToNextSegment(state);
+		}
+	}
+	return total_read;
+}
+
+void ListSegmentFunctions::InitializeScan(const LinkedList &linked_list, ListSegmentScanState &state) const {
+	state.segment = linked_list.first_segment;
+	state.offset = 0;
+	state.children.clear();
+}
+
+idx_t ListSegmentFunctions::Scan(ListSegmentScanState &state, Vector &result) const {
+	return scan_data(*this, state, STANDARD_VECTOR_SIZE, result, 0);
 }
 
 void ListSegmentFunctions::BuildListVector(const LinkedList &linked_list, Vector &result, idx_t total_count) const {
-	auto &read_data_from_segment = *this;
-	auto segment = linked_list.first_segment;
-	while (segment) {
-		read_data_from_segment.read_data(read_data_from_segment, segment, result, total_count);
-		total_count += segment->count;
-		segment = segment->next;
+	ListSegmentScanState state;
+	InitializeScan(linked_list, state);
+	scan_data(*this, state, NumericLimits<idx_t>::Maximum(), result, total_count);
+}
+
+void ListSegmentFunctions::BuildLists(const vector<LinkedList> &linked_lists, Vector &result, idx_t offset) const {
+	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+	const idx_t count = linked_lists.size();
+
+	auto &mask = FlatVector::ValidityMutable(result);
+	auto result_data = FlatVector::ScatterWriter<list_entry_t>(result);
+	idx_t total_len = ListVector::GetListSize(result);
+
+	// first iterate over all entries and set up the list entries, and get the newly required total length
+	for (idx_t i = 0; i < count; i++) {
+		auto &linked_list = linked_lists[i];
+		const auto rid = offset + i;
+		result_data[rid].offset = total_len;
+		if (linked_list.total_capacity == 0) {
+			// empty linked list - set the result row to NULL
+			mask.SetInvalid(rid);
+			result_data[rid].length = 0;
+			continue;
+		}
+		result_data[rid].length = linked_list.total_capacity;
+		total_len += linked_list.total_capacity;
 	}
+
+	// reserve capacity, then iterate over all entries again and copy over the data to the child vector
+	ListVector::Reserve(result, total_len);
+	auto &result_child = ListVector::GetChildMutable(result);
+	for (idx_t i = 0; i < count; i++) {
+		auto &linked_list = linked_lists[i];
+		if (linked_list.total_capacity == 0) {
+			continue;
+		}
+		BuildListVector(linked_list, result_child, result_data[offset + i].offset);
+	}
+
+	ListVector::SetListSize(result, total_len);
+	FlatVector::SetSize(result, offset + count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -563,7 +720,7 @@ template <class T>
 void SegmentPrimitiveFunction(ListSegmentFunctions &functions) {
 	functions.create_segment = CreatePrimitiveSegment<T>;
 	functions.write_data = WriteDataToPrimitiveSegment<T>;
-	functions.read_data = ReadDataFromPrimitiveSegment<T>;
+	functions.scan_data = ScanPrimitiveData<T>;
 }
 
 void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType &type) {
@@ -622,12 +779,12 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 	case PhysicalType::VARCHAR: {
 		functions.create_segment = CreateListSegment;
 		functions.write_data = WriteDataToVarcharSegment;
-		functions.read_data = ReadDataFromVarcharSegment;
+		functions.scan_data = ScanVarcharData;
 
 		ListSegmentFunctions child_function;
 		child_function.create_segment = CreateVarcharDataSegment;
 		child_function.write_data = nullptr;
-		child_function.read_data = nullptr;
+		child_function.scan_data = nullptr;
 		child_function.initial_capacity = 16;
 		functions.child_functions.push_back(child_function);
 		break;
@@ -635,7 +792,7 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 	case PhysicalType::LIST: {
 		functions.create_segment = CreateListSegment;
 		functions.write_data = WriteDataToListSegment;
-		functions.read_data = ReadDataFromListSegment;
+		functions.scan_data = ScanListData;
 
 		// recurse
 		functions.child_functions.emplace_back();
@@ -645,7 +802,7 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 	case PhysicalType::STRUCT: {
 		functions.create_segment = CreateStructSegment;
 		functions.write_data = WriteDataToStructSegment;
-		functions.read_data = ReadDataFromStructSegment;
+		functions.scan_data = ScanStructData;
 
 		// recurse
 		auto child_types = StructType::GetChildTypes(type);
@@ -658,7 +815,7 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 	case PhysicalType::ARRAY: {
 		functions.create_segment = CreateArraySegment;
 		functions.write_data = WriteDataToArraySegment;
-		functions.read_data = ReadDataFromArraySegment;
+		functions.scan_data = ScanArrayData;
 
 		// recurse
 		functions.child_functions.emplace_back();

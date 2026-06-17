@@ -30,17 +30,17 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
                                                         const EntryLookupInfo &lookup_info) {
 	SimilarCatalogEntry result;
 	Scan(transaction.GetContext(), lookup_info.GetCatalogType(), [&](CatalogEntry &entry) {
-		auto entry_score = StringUtil::SimilarityRating(entry.name, lookup_info.GetEntryName());
+		auto entry_score = StringUtil::SimilarityRating(entry.name.GetIdentifierName(), lookup_info.GetEntryName());
 		if (entry_score > result.score) {
 			result.score = entry_score;
-			result.name = entry.name;
+			result.name = Identifier(entry.name.GetIdentifierName());
 		}
 	});
 	return result;
 }
 
 optional_ptr<CatalogEntry> SchemaCatalogEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
-                                                        const string &name) {
+                                                        const Identifier &name) {
 	EntryLookupInfo lookup_info(type, name);
 	return LookupEntry(transaction, lookup_info);
 }

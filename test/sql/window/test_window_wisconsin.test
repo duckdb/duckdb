@@ -6,9 +6,6 @@ statement ok
 SET default_null_order='nulls_first';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tenk1 (unique1 int4, unique2 int4, two int4, four int4, ten int4, twenty int4, hundred int4, thousand int4, twothousand int4, fivethous int4, tenthous int4, odd int4, even int4, stringu1 varchar, stringu2 varchar, string4 varchar)
 
 statement ok

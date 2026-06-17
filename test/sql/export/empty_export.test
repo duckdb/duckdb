@@ -3,7 +3,4 @@
 # group: [export]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 EXPORT DATABASE '{TEST_DIR}/empty_export' (FORMAT CSV)

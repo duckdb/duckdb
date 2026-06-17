@@ -3,9 +3,6 @@
 # group: [general]
 
 statement ok
-pragma enable_verification
-
-statement ok
 CREATE VIEW
   "tbl1" AS
   -- End of EXAMPLE 4 (pt1)

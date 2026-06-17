@@ -11,9 +11,6 @@ SET Calendar = 'gregorian';
 statement ok
 SET TimeZone = 'America/Chihuahua';
 
-statement ok
-PRAGMA enable_verification
-
 # get the millennium of the current date
 # FIXME: this needs to be updated in 982 years
 query I

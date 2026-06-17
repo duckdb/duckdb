@@ -26,9 +26,6 @@ FROM df
 ----
 252652	29774	17657	2498.192	2502.191	5000.383
 
-statement ok
-PRAGMA enable_verification
-
 # Test right_projection_map
 foreach prefer False True
 

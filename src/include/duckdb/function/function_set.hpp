@@ -19,11 +19,16 @@ namespace duckdb {
 template <class T>
 class FunctionSet {
 public:
-	explicit FunctionSet(string name) : name(std::move(name)) { // NOLINT
+	explicit FunctionSet(Identifier name) : name(std::move(name)) { // NOLINT
 	}
 
 	//! The name of the function set
-	string name;
+	Identifier name;
+
+public:
+	void SetName(Identifier name_p) {
+		name = std::move(name_p);
+	}
 	//! The set of functions.
 	vector<T> functions;
 
@@ -34,14 +39,12 @@ public:
 	idx_t Size() {
 		return functions.size();
 	}
-	T GetFunctionByOffset(idx_t offset) {
+
+	const T &GetFunctionByOffset(idx_t offset) const {
 		D_ASSERT(offset < functions.size());
 		return functions[offset];
 	}
-	T &GetFunctionReferenceByOffset(idx_t offset) {
-		D_ASSERT(offset < functions.size());
-		return functions[offset];
-	}
+
 	bool MergeFunctionSet(FunctionSet<T> new_functions, bool override = false) {
 		D_ASSERT(!new_functions.functions.empty());
 		for (auto &new_func : new_functions.functions) {
@@ -71,41 +74,62 @@ public:
 class ScalarFunctionSet : public FunctionSet<ScalarFunction> {
 public:
 	DUCKDB_API explicit ScalarFunctionSet();
-	DUCKDB_API explicit ScalarFunctionSet(string name);
+	DUCKDB_API explicit ScalarFunctionSet(Identifier name);
 	DUCKDB_API explicit ScalarFunctionSet(ScalarFunction fun);
 
-	DUCKDB_API ScalarFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);
+	DUCKDB_API const ScalarFunction &GetFunctionByArguments(ClientContext &context,
+	                                                        const vector<LogicalType> &arguments);
+
+	//! Apply the same per-arg property to every overload in the set.
+	void SetArgProperties(idx_t arg_idx, ArgProperties props) {
+		for (auto &fun : functions) {
+			fun.SetArgProperties(arg_idx, props);
+		}
+	}
+	void SetArgProperties(const vector<ArgProperties> &props) {
+		for (auto &fun : functions) {
+			fun.SetArgProperties(props);
+		}
+	}
+	void SetUnaryArgProperties(ArgProperties props) {
+		for (auto &fun : functions) {
+			fun.SetUnaryArgProperties(props);
+		}
+	}
 };
 
 class AggregateFunctionSet : public FunctionSet<AggregateFunction> {
 public:
 	DUCKDB_API explicit AggregateFunctionSet();
-	DUCKDB_API explicit AggregateFunctionSet(string name);
+	DUCKDB_API explicit AggregateFunctionSet(Identifier name);
 	DUCKDB_API explicit AggregateFunctionSet(AggregateFunction fun);
 
-	DUCKDB_API AggregateFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);
+	DUCKDB_API const AggregateFunction &GetFunctionByArguments(ClientContext &context,
+	                                                           const vector<LogicalType> &arguments);
 };
 
 class WindowFunctionSet : public FunctionSet<WindowFunction> {
 public:
 	DUCKDB_API explicit WindowFunctionSet();
-	DUCKDB_API explicit WindowFunctionSet(string name);
+	DUCKDB_API explicit WindowFunctionSet(Identifier name);
 	DUCKDB_API explicit WindowFunctionSet(WindowFunction fun);
 
-	DUCKDB_API WindowFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);
+	DUCKDB_API const WindowFunction &GetFunctionByArguments(ClientContext &context,
+	                                                        const vector<LogicalType> &arguments);
 };
 
 class TableFunctionSet : public FunctionSet<TableFunction> {
 public:
-	DUCKDB_API explicit TableFunctionSet(string name);
+	DUCKDB_API explicit TableFunctionSet(Identifier name);
 	DUCKDB_API explicit TableFunctionSet(TableFunction fun);
 
-	TableFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);
+	DUCKDB_API const TableFunction &GetFunctionByArguments(ClientContext &context,
+	                                                       const vector<LogicalType> &arguments);
 };
 
 class PragmaFunctionSet : public FunctionSet<PragmaFunction> {
 public:
-	DUCKDB_API explicit PragmaFunctionSet(string name);
+	DUCKDB_API explicit PragmaFunctionSet(Identifier name);
 	DUCKDB_API explicit PragmaFunctionSet(PragmaFunction fun);
 };
 

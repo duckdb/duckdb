@@ -91,7 +91,8 @@ InMemoryTableDataWriter::InMemoryTableDataWriter(InMemoryCheckpointer &checkpoin
 }
 
 void InMemoryTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
-                                                  const vector<MetaBlockPointer> &metadata_pointers, idx_t total_rows) {
+                                                  const vector<MetaBlockPointer> &metadata_pointers, idx_t total_rows,
+                                                  idx_t next_row_id) {
 }
 
 void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
@@ -117,7 +118,7 @@ MetadataManager &InMemoryTableDataWriter::GetMetadataManager() {
 
 InMemoryPartialBlock::InMemoryPartialBlock(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
                                            BlockManager &block_manager)
-    : PartialBlock(state, block_manager, segment.block) {
+    : PartialBlock(state, block_manager, segment.GetBlockHandle()) {
 	InMemoryPartialBlock::AddSegmentToTail(data, segment, 0);
 }
 

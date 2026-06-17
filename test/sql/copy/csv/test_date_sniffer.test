@@ -2,9 +2,6 @@
 # description: Test sniffer bug from date detection is issue https://github.com/duckdb/duckdb/issues/13121
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query III
 FROM '{DATA_DIR}/csv/bad_date.csv'
 ----

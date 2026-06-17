@@ -14,7 +14,7 @@ namespace duckdb {
 
 class ShreddedVectorBuffer : public VectorBuffer {
 public:
-	explicit ShreddedVectorBuffer(Vector &shredded_data, idx_t count);
+	explicit ShreddedVectorBuffer(Vector &shredded_data, count_t count);
 	~ShreddedVectorBuffer() override;
 
 public:
@@ -30,11 +30,14 @@ public:
 	idx_t GetAllocationSize() const override;
 	string ToString(const LogicalType &type, idx_t count) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
-	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	void SetVectorType(VectorType new_vector_type) override;
 
 protected:
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
+	void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
 	unique_ptr<Vector> shredded_data;
@@ -64,7 +67,7 @@ struct ShreddedVector {
 	DUCKDB_API static void Unshred(const Vector &vec, const SelectionVector &sel, idx_t count);
 
 	//! Returns whether or not the vector is fully shredded
-	DUCKDB_API static bool IsFullyShredded(Vector &vec);
+	DUCKDB_API static bool IsFullyShredded(const Vector &vec);
 };
 
 } // namespace duckdb

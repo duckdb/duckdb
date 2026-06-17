@@ -190,22 +190,29 @@ void ArrayColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(std::move(child_append));
 }
 
-void ArrayColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
+void ArrayColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
-		append_vector.Flatten(count);
-		Append(stats, state, append_vector, count);
+		append_vector.Flatten();
+		Append(state, append_vector, count);
 		return;
 	}
 
 	// Append validity
-	validity->Append(stats, state.child_appends[0], vector, count);
+	validity->Append(state.child_appends[0], vector, count);
 	// Append child column
 	auto array_size = ArrayType::GetSize(type);
-	auto &child_vec = ArrayVector::GetChildMutable(vector);
-	child_column->Append(ArrayStats::GetChildStats(stats), state.child_appends[1], child_vec, count * array_size);
+	const auto &child_vec = ArrayVector::GetChild(vector);
+	child_column->Append(state.child_appends[1], child_vec, count * array_size);
 
 	this->count += count;
+}
+
+void ArrayColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	validity->FinalizeAppendLocked(finalize_state, state.child_appends[0]);
+
+	ColumnDataFinalizeAppendState child_finalize_state(finalize_state, LogicalTypeId::ARRAY);
+	child_column->FinalizeAppendLocked(child_finalize_state, state.child_appends[1]);
 }
 
 void ArrayColumnData::RevertAppend(row_t new_count) {
@@ -237,31 +244,36 @@ unique_ptr<BaseStatistics> ArrayColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
 
-void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
-                               row_t row_id, Vector &result, idx_t result_idx) {
+void ArrayColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                                const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count, Vector &result,
+                                idx_t result_offset) {
 	// Create state for validity & child column
 	if (state.child_states.empty()) {
 		state.child_states.push_back(make_uniq<ColumnFetchState>());
 	}
 
 	// Fetch validity
-	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
+	validity->FetchRowsAtSegmentLevel(transaction, *state.child_states[0], offsets, sel, fetch_count, result,
+	                                  result_offset);
 
 	// Fetch child column
 	auto &child_vec = ArrayVector::GetChildMutable(result);
 	auto &child_type = ArrayType::GetChildType(type);
 	auto array_size = ArrayType::GetSize(type);
 
-	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
-	ColumnScanState child_state(nullptr);
-	child_state.Initialize(state.context, child_type, nullptr);
+	for (idx_t idx = 0; idx < fetch_count; idx++) {
+		// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
+		ColumnScanState child_state(nullptr);
+		child_state.Initialize(state.context, child_type, nullptr);
 
-	const auto child_offset = UnsafeNumericCast<idx_t>(row_id) * array_size;
+		const auto row_id = offsets[sel.get_index(idx)];
+		const auto child_offset = row_id * array_size;
 
-	child_column->InitializeScanWithOffset(child_state, child_offset);
-	Vector child_scan(child_type, array_size);
-	child_column->ScanCount(child_state, child_scan, array_size);
-	VectorOperations::Copy(child_scan, child_vec, array_size, 0, result_idx * array_size);
+		child_column->InitializeScanWithOffset(child_state, child_offset);
+		Vector child_scan(child_type, array_size);
+		child_column->ScanCount(child_state, child_scan, array_size);
+		VectorOperations::Copy(child_scan, child_vec, array_size, 0, (result_offset + idx) * array_size);
+	}
 }
 
 void ArrayColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
@@ -376,11 +388,12 @@ void ArrayColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSt
 }
 
 void ArrayColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                           vector<ColumnSegmentInfo> &result) {
+                                           vector<ColumnSegmentInfo> &result,
+                                           const ColumnSegmentInfoScanOptions &options) {
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	col_path.back() = 1;
-	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 }
 
 void ArrayColumnData::Verify(RowGroup &parent) {

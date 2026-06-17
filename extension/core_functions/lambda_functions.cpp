@@ -2,11 +2,13 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
-
+#include "duckdb/common/enums/dialect_compatibility_mode.hpp"
+#include "duckdb/main/settings.hpp"
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -32,11 +34,16 @@ struct LambdaExecuteInfo {
 		}
 
 		// get the result types
-		vector<LogicalType> result_types {lambda_expr.return_type};
+		vector<LogicalType> result_types {lambda_expr.GetReturnType()};
 
 		// initialize the data chunks
 		input_chunk.InitializeEmpty(input_types);
 		lambda_chunk.Initialize(Allocator::DefaultAllocator(), result_types);
+		// Spark Compatibility Mode: zero-based index for lambdas
+		if (Settings::Get<DialectCompatibilityModeSetting>(context) == DialectCompatibilityMode::SPARK) {
+			// Spark's lambda index parameter is 0-based; default SQL is 1-based
+			index_offset = 0;
+		}
 	};
 
 	//! The expression executor that executes the lambda expression
@@ -47,6 +54,8 @@ struct LambdaExecuteInfo {
 	DataChunk lambda_chunk;
 	//! True, if this lambda expression expects an index vector in the input chunk
 	bool has_index;
+	//! Added to child_idx to form the value the lambda sees in its index parameter (1 by default).
+	idx_t index_offset = 1;
 };
 
 //! A helper struct with information that is specific to the list_filter function
@@ -79,7 +88,7 @@ struct ListTransformFunctor {
 		offset += entry.length;
 	}
 	//! Appends the lambda vector to the result's child vector
-	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *,
+	static void AppendResult(Vector &result, const Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *,
 	                         ListFilterInfo &, LambdaExecuteInfo &) {
 		ListVector::Append(result, lambda_vector, elem_cnt);
 	}
@@ -101,13 +110,13 @@ struct ListFilterFunctor {
 		entry_lengths.push_back(entry.length);
 	}
 	//! Uses the lambda vector to filter the incoming list and to append the filtered list to the result vector
-	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *result_entries,
-	                         ListFilterInfo &info, LambdaExecuteInfo &execute_info) {
+	static void AppendResult(Vector &result, const Vector &lambda_vector, const idx_t elem_cnt,
+	                         list_entry_t *result_entries, ListFilterInfo &info, LambdaExecuteInfo &execute_info) {
 		idx_t count = 0;
 		SelectionVector sel(elem_cnt);
 
 		// compute the new lengths and offsets, and create a selection vector
-		for (auto entry : lambda_vector.Values<bool>(elem_cnt)) {
+		for (auto entry : lambda_vector.Values<bool>()) {
 			// set length and offset of empty lists
 			while (info.row_idx < info.entry_lengths.size() && !info.entry_lengths[info.row_idx]) {
 				result_entries[info.row_idx].offset = info.offset;
@@ -157,7 +166,7 @@ vector<LambdaFunctions::ColumnInfo> LambdaFunctions::GetColumnInfo(DataChunk &ar
 	// skip the input list and then insert all remaining input vectors
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
 		data.emplace_back(args.data[i]);
-		args.data[i].ToUnifiedFormat(row_count, data.back().format);
+		args.data[i].ToUnifiedFormat(data.back().format);
 	}
 	return data;
 }
@@ -176,9 +185,6 @@ LambdaFunctions::GetMutableColumnInfo(vector<LambdaFunctions::ColumnInfo> &data)
 static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &column_info,
                               const vector<LambdaFunctions::ColumnInfo> &column_infos, const Vector &index_vector,
                               LambdaExecuteInfo &info) {
-	info.input_chunk.SetCardinality(elem_cnt);
-	info.lambda_chunk.SetCardinality(elem_cnt);
-
 	// slice the child vector
 	Vector slice(column_info.vector, column_info.sel, elem_cnt);
 
@@ -194,16 +200,12 @@ static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::Colum
 	// (slice and) reference the other columns
 	vector<Vector> slices;
 	for (idx_t i = 0; i < column_infos.size(); i++) {
-		if (column_infos[i].vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			// only reference constant vectorsl
-			info.input_chunk.data[i + slice_offset].Reference(column_infos[i].vector);
-
-		} else {
-			// slice inconstant vectors
-			slices.emplace_back(column_infos[i].vector, column_infos[i].sel, elem_cnt);
-			info.input_chunk.data[i + slice_offset].Reference(slices.back());
-		}
+		slices.emplace_back(column_infos[i].vector, column_infos[i].sel, elem_cnt);
+		info.input_chunk.data[i + slice_offset].Reference(slices.back());
 	}
+
+	// ensure all input vectors are sized to the chunk cardinality (some references inherit a different size)
+	info.input_chunk.SetChildCardinality(elem_cnt);
 
 	// execute the lambda expression
 	info.expr_executor->Execute(info.input_chunk, info.lambda_chunk);
@@ -214,7 +216,7 @@ static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::Colum
 //===--------------------------------------------------------------------===//
 
 void ListLambdaBindData::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                   const ScalarFunction &) {
+                                   const BoundScalarFunction &) {
 	auto &bind_data = bind_data_p->Cast<ListLambdaBindData>();
 	serializer.WriteProperty(100, "return_type", bind_data.return_type);
 	serializer.WritePropertyWithDefault(101, "lambda_expr", bind_data.lambda_expr, unique_ptr<Expression>());
@@ -222,7 +224,7 @@ void ListLambdaBindData::Serialize(Serializer &serializer, const optional_ptr<Fu
 	serializer.WritePropertyWithDefault<bool>(103, "has_initial", bind_data.has_initial, false);
 }
 
-unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deserializer, ScalarFunction &) {
+unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deserializer, BoundScalarFunction &) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(100, "return_type");
 	auto lambda_expr = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Expression>>(101, "lambda_expr",
 	                                                                                        unique_ptr<Expression>());
@@ -273,9 +275,8 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 	auto mutable_column_infos = LambdaFunctions::GetMutableColumnInfo(info.column_infos);
 
 	// special-handling for the child_vector
-	auto child_vector_size = ListVector::GetListSize(args.data[0]);
 	LambdaFunctions::ColumnInfo child_info(*info.child_vector);
-	info.child_vector->ToUnifiedFormat(child_vector_size, child_info.format);
+	info.child_vector->ToUnifiedFormat(child_info.format);
 
 	// get the expression executor
 	LambdaExecuteInfo execute_info(state.GetContext(), *info.lambda_expr, args, info.has_index, *info.child_vector);
@@ -330,7 +331,8 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 
 			// set the index vector
 			if (info.has_index) {
-				index_vector.SetValue(elem_cnt, Value::BIGINT(NumericCast<int64_t>(child_idx + 1)));
+				index_vector.SetValue(elem_cnt,
+				                      Value::BIGINT(NumericCast<int64_t>(child_idx + execute_info.index_offset)));
 			}
 
 			elem_cnt++;
@@ -338,7 +340,11 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 	}
 
 	execute_info.lambda_chunk.Reset();
-	ExecuteExpression(elem_cnt, child_info, info.column_infos, index_vector, execute_info);
+	if (elem_cnt > 0) {
+		// only execute when there are remaining list elements; calling with elem_cnt = 0 would
+		// resize the (shared) source buffers down to size 0
+		ExecuteExpression(elem_cnt, child_info, info.column_infos, index_vector, execute_info);
+	}
 	auto &lambda_vector = execute_info.lambda_chunk.data[0];
 
 	FUNCTION_FUNCTOR::AppendResult(result, lambda_vector, elem_cnt, result_entries, list_filter_info, execute_info);
@@ -346,28 +352,29 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 	if (info.is_all_constant && !info.is_volatile) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+	FlatVector::SetSize(result, count_t(info.row_count));
 }
 
 unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments,
                                                                 ClientContext &context,
-                                                                ScalarFunction &bound_function) {
+                                                                BoundScalarFunction &bound_function) {
 	// NULL list parameter
-	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::SQLNULL) {
 		bound_function.GetArguments()[0] = LogicalType::SQLNULL;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
 		return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), nullptr);
 	}
 	// prepared statements
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
+	D_ASSERT(arguments[0]->GetReturnType().id() == LogicalTypeId::LIST);
 	return nullptr;
 }
 
-unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context, BoundScalarFunction &bound_function,
                                                          vector<unique_ptr<Expression>> &arguments,
                                                          const bool has_index) {
 	unique_ptr<FunctionData> bind_data = ListLambdaPrepareBind(arguments, context, bound_function);
@@ -377,7 +384,7 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 
 	// get the lambda expression and put it in the bind info
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
+	auto lambda_expr = std::move(bound_lambda_expr.LambdaExprMutable());
 	if (lambda_expr->IsVolatile()) {
 		bound_function.SetVolatile();
 	}

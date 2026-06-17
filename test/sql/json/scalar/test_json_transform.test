@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # aliases
 query T
 select from_json('42', '"UBIGINT"')

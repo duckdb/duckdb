@@ -20,7 +20,8 @@ bool ShellState::UseDescribeRenderMode(const duckdb::SQLStatement &statement, st
 		return false;
 	}
 	auto &select_node = select.node->Cast<duckdb::SelectNode>();
-	if (select_node.select_list.size() != 1 || select_node.select_list[0]->type != duckdb::ExpressionType::STAR) {
+	if (select_node.select_list.size() != 1 ||
+	    select_node.select_list[0]->GetExpressionType() != duckdb::ExpressionType::STAR) {
 		return false;
 	}
 	if (select_node.from_table->type != duckdb::TableReferenceType::SHOW_REF) {
@@ -32,12 +33,12 @@ bool ShellState::UseDescribeRenderMode(const duckdb::SQLStatement &statement, st
 	}
 	describe_table_name = "Describe";
 	if (!showref.table_name.empty()) {
-		describe_table_name = showref.table_name;
+		describe_table_name = showref.table_name.GetIdentifierName();
 	} else if (showref.query && showref.query->type == duckdb::QueryNodeType::SELECT_NODE) {
 		auto &show_select = showref.query->Cast<duckdb::SelectNode>();
 		if (show_select.from_table->type == duckdb::TableReferenceType::BASE_TABLE) {
 			auto &base_table = show_select.from_table->Cast<duckdb::BaseTableRef>();
-			describe_table_name = base_table.table_name;
+			describe_table_name = base_table.table_name.GetIdentifierName();
 		}
 	}
 	return true;

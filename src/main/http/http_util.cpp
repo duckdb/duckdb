@@ -117,6 +117,7 @@ bool HTTPResponse::ShouldRetry() const {
 	case HTTPStatusCode::ImATeapot_418:
 	case HTTPStatusCode::TooManyRequests_429:
 	case HTTPStatusCode::InternalServerError_500:
+	case HTTPStatusCode::BadGateway_502:
 	case HTTPStatusCode::ServiceUnavailable_503:
 	case HTTPStatusCode::GatewayTimeout_504:
 		return true;
@@ -196,6 +197,10 @@ public:
 		throw NotImplementedException("POST request not implemented");
 	}
 
+	unique_ptr<HTTPResponse> Options(OptionsRequestInfo &info) override {
+		throw NotImplementedException("OPTIONS request not implemented");
+	}
+
 	unique_ptr<duckdb_httplib::Client> client;
 
 private:
@@ -261,20 +266,14 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 		}
 
 		try {
-			if (request.have_request_timing) {
-				request.request_start = Timestamp::GetCurrentTimestamp();
-			}
+			request.request_start = Timestamp::GetCurrentTimestamp();
 			response = client->Request(request);
 		} catch (...) {
-			if (request.have_request_timing) {
-				request.request_end = Timestamp::GetCurrentTimestamp();
-			}
+			request.request_end = Timestamp::GetCurrentTimestamp();
 			LogRequest(request, nullptr);
 			throw;
 		}
-		if (request.have_request_timing) {
-			request.request_end = Timestamp::GetCurrentTimestamp();
-		}
+		request.request_end = Timestamp::GetCurrentTimestamp();
 		LogRequest(request, response ? response.get() : nullptr);
 		return response;
 	});
@@ -482,7 +481,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 	auto db = FileOpener::TryGetDatabase(opener);
 	if (db) {
-		auto http_proxy_setting = Settings::Get<HTTPProxySetting>(*db);
+		auto &http_proxy_setting = db->config.options.http_proxy;
 		if (!http_proxy_setting.empty()) {
 			idx_t port;
 			string host;
@@ -496,10 +495,7 @@ void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 
 	auto client_context = FileOpener::TryGetClientContext(opener);
 	if (client_context) {
-		auto &client_config = ClientConfig::GetConfig(*client_context);
-		if (client_config.enable_http_logging) {
-			logger = client_context->logger;
-		}
+		logger = client_context->logger;
 	}
 }
 
@@ -536,6 +532,8 @@ unique_ptr<HTTPResponse> HTTPClient::Request(BaseRequest &request) {
 		return Delete(request.Cast<DeleteRequestInfo>());
 	case RequestType::POST_REQUEST:
 		return Post(request.Cast<PostRequestInfo>());
+	case RequestType::OPTIONS_REQUEST:
+		return Options(request.Cast<OptionsRequestInfo>());
 	default:
 		throw InternalException("Unsupported request type");
 	}

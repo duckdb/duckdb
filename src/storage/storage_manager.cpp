@@ -2,9 +2,12 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
@@ -28,8 +31,8 @@ using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
 void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided) {
 	// storage version < v1.4.0
-	if (!storage_version.IsValid() ||
-	    storage_version.GetIndex() < SerializationCompatibility::FromString("v1.4.0").serialization_version) {
+	if (storage_version == StorageVersion::INVALID ||
+	    StorageManager::IsPriorToVersion(StorageVersion::V1_4_0, storage_version)) {
 		if (!storage_version_user_provided.empty()) {
 			throw InvalidInputException("Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= "
 			                            "v1.4.0) are not compatible",
@@ -46,12 +49,12 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 	switch (target_encryption_version) {
 	case EncryptionTypes::V0_1:
 		// storage version not explicitly set
-		if (!storage_version.IsValid() && storage_version_user_provided.empty()) {
-			storage_version = SerializationCompatibility::FromString("v1.5.0").serialization_version;
+		if (storage_version == StorageVersion::INVALID && storage_version_user_provided.empty()) {
+			storage_version = StorageVersion::V1_5_0;
 			break;
 		}
 		// storage version set, but v1.4.0 =< storage < v1.5.0
-		if (storage_version.GetIndex() < SerializationCompatibility::FromString("v1.5.0").serialization_version) {
+		if (StorageManager::IsPriorToVersion(StorageVersion::V1_5_0, storage_version)) {
 			if (!storage_version_user_provided.empty()) {
 				if (encryption_version == target_encryption_version) {
 					// encryption version is explicitly given, but not compatible with < v1.5.0
@@ -71,8 +74,8 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 
 	case EncryptionTypes::V0_0:
 		// we set this to V0 to V1.5.0 if no explicit storage version provided
-		if (!storage_version.IsValid() && storage_version_user_provided.empty()) {
-			storage_version = SerializationCompatibility::FromString("v1.5.0").serialization_version;
+		if (storage_version == StorageVersion::INVALID && storage_version_user_provided.empty()) {
+			storage_version = StorageVersion::V1_5_0;
 			break;
 		}
 		// if storage version is provided, we do nothing
@@ -114,8 +117,7 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 			row_group_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "storage_version") {
 			storage_version_user_provided = entry.second.ToString();
-			storage_version =
-			    SerializationCompatibility::FromString(storage_version_user_provided).serialization_version;
+			storage_version = StorageCompatibility::FromString(storage_version_user_provided).storage_version;
 		} else if (entry.first == "compress") {
 			if (entry.second.DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>()) {
 				compress_in_memory = CompressInMemory::COMPRESS;
@@ -124,6 +126,21 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 			}
 		} else if (entry.first == "debug_encryption_version") {
 			encryption_version = EncryptionTypes::StringToVersion(entry.second.ToString());
+		} else if (entry.first == "io_mode") {
+			auto io_mode_str = StringUtil::Upper(entry.second.ToString());
+			if (io_mode_str == "BUFFERED_IO") {
+				io_mode = FileIOMode::BUFFERED_IO;
+			} else if (io_mode_str == "MMAP") {
+				io_mode = FileIOMode::MMAP;
+			} else if (io_mode_str == "DIRECT_IO") {
+				io_mode = FileIOMode::DIRECT_IO;
+			} else {
+				throw BinderException(
+				    "Unrecognized IO_MODE \"%s\". Valid values are 'BUFFERED_IO', 'MMAP', or 'DIRECT_IO'.",
+				    entry.second.ToString());
+			}
+		} else if (entry.first == "mmap_reserve_size") {
+			mmap_reserve_size = DBConfig::ParseMemoryLimit(entry.second.ToString());
 		} else {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
@@ -195,6 +212,32 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 		return nullptr;
 	}
 	return wal.get();
+}
+
+// comparison used to see whether the storage version is compatible
+bool StorageManager::TargetAtLeastVersion(StorageVersion target_version, idx_t storage_version) {
+	if (storage_version < static_cast<idx_t>(target_version)) {
+		// storage version is lower then required storage version
+		return false;
+	}
+	return true;
+}
+
+// comparison used to see whether the storage version is compatible
+bool StorageManager::IsPriorToVersion(StorageVersion target_version, StorageVersion storage_version) {
+	if (storage_version < target_version) {
+		// storage version is lower then required storage version
+		return true;
+	}
+	return false;
+}
+
+bool StorageManager::TargetAtLeastVersion(StorageVersion target_version, StorageVersion storage_version) {
+	if (storage_version < target_version) {
+		// storage version is lower then required storage version
+		return false;
+	}
+	return true;
 }
 
 bool StorageManager::HasWAL() const {
@@ -369,7 +412,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		                                                DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		// in-memory databases can always use the latest storage version
-		storage_version = GetSerializationVersion("latest");
+		storage_version = GetLatestStorageVersion();
 		load_complete = true;
 		return;
 	}
@@ -382,7 +425,17 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 
 	StorageManagerOptions options;
 	options.read_only = read_only;
-	options.use_direct_io = config.options.use_direct_io;
+	// MMAP + encryption would corrupt the file (in-place decryption); demote to BUFFERED_IO.
+	auto resolved_io_mode =
+	    storage_options.io_mode ? *storage_options.io_mode : Settings::Get<DefaultIoModeSetting>(config);
+	if (storage_options.encryption && resolved_io_mode == FileIOMode::MMAP) {
+		DUCKDB_LOG_WARNING(db.GetDatabase(),
+		                   "MMAP IO_MODE is incompatible with encryption; falling back to BUFFERED_IO for \"%s\"",
+		                   path);
+		resolved_io_mode = FileIOMode::BUFFERED_IO;
+	}
+	options.io_mode = resolved_io_mode;
+	options.mmap_reserve_size = storage_options.mmap_reserve_size;
 	options.debug_initialize = config.options.debug_initialize;
 	options.storage_version = storage_options.storage_version;
 
@@ -438,9 +491,10 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			// No encryption; use the default option.
 			options.block_header_size = config.options.default_block_header_size;
 		}
-		if (!options.storage_version.IsValid()) {
+
+		if (options.storage_version == StorageVersion::INVALID) {
 			// when creating a new database we default to the serialization version specified in the config
-			options.storage_version = config.options.serialization_compatibility.serialization_version;
+			options.storage_version = config.options.storage_compatibility.storage_version;
 		}
 
 		// Initialize the block manager before creating a new database.
@@ -497,42 +551,39 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			}
 		}
 
-		unique_ptr<ActiveTimer> timer = nullptr;
+		unique_ptr<MetricsTimer> timer = nullptr;
 
 		// Start timing the storage load step.
 		auto client_context = context.GetClientContext();
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			timer = make_uniq<ActiveTimer>(profiler->StartTimer(MetricType::ATTACH_LOAD_STORAGE_LATENCY));
+			timer = make_uniq<MetricsTimer>(profiler->StartTimer<MetricStorageAttachLoadStorageLatency>());
 		}
 
 		// Load the checkpoint from storage.
 		auto checkpoint_reader = SingleFileCheckpointReader(*this);
 		checkpoint_reader.LoadFromStorage();
 
-		// End timing the storage load step.
+		// Reset the timer (also ends it).
 		if (timer) {
-			timer->EndTimer();
 			timer = nullptr;
 		}
 
 		// Start timing the WAL replay step.
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			timer = make_uniq<ActiveTimer>(profiler->StartTimer(MetricType::ATTACH_REPLAY_WAL_LATENCY));
+			timer = make_uniq<MetricsTimer>(profiler->StartTimer<MetricStorageAttachReplayWALLatency>());
 		}
 
 		// Replay the WAL.
 		wal_path = GetWALPath();
 		wal = WriteAheadLog::Replay(context, *this, wal_path);
 
-		// End timing the WAL replay step.
-		if (timer) {
-			timer->EndTimer();
-		}
+		// Timer will go out of scope here, if set.
 	}
 
-	if (row_group_size > 122880ULL && GetStorageVersion() < 4) {
+	//
+	if (row_group_size > 122880ULL && IsPriorToVersion(StorageVersion::V1_2_0, GetStorageVersion())) {
 		throw InvalidInputException("Unsupported row group size %llu - row group sizes >= 122_880 are only supported "
 		                            "with STORAGE_VERSION '1.2.0' or above.\nExplicitly specify a newer storage "
 		                            "version when creating the database to enable larger row groups",
@@ -705,14 +756,15 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 		try {
 			// Start timing the checkpoint.
 			auto client_context = context.GetClientContext();
-			ActiveTimer profiler;
+			MetricsTimer timer;
 			if (client_context) {
-				profiler = client_context->client_data->profiler->StartTimer(MetricType::CHECKPOINT_LATENCY);
+				timer = client_context->client_data->profiler->StartTimer<MetricStorageCheckpointLatency>();
 			}
 
 			// Write the checkpoint.
 			auto checkpointer = CreateCheckpointWriter(context, options);
 			checkpointer->CreateCheckpoint();
+			timer.EndTimer();
 
 		} catch (std::exception &ex) {
 			ErrorData error(ex);

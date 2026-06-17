@@ -7,9 +7,6 @@ require skip_reload
 require notmingw
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 statement ok
@@ -105,7 +102,7 @@ Binder Error: Type 'user_type' does not take any type parameters
 statement error
 SELECT 1::BOUNDED(NULL)
 ----
-Binder Error: BOUNDED type modifier cannot be NULL
+BOUNDED type modifier must be integer
 
 statement error
 SELECT 1::BOUNDED(900000000000000000)

@@ -11,7 +11,9 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/enums/column_segment_info_scan_type.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
@@ -54,6 +56,7 @@ class StorageCommitState;
 template <class T>
 struct SegmentNode;
 enum class ColumnDataType;
+class ClientContext;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
@@ -75,13 +78,17 @@ private:
 	optional_ptr<vector<unique_ptr<PartialBlockManager>>> column_partial_block_managers;
 };
 
+enum class RowGroupWriteAction {
+	REUSE_EXISTING_ROW_GROUP_METADATA,
+	PARTIALLY_REUSE_COLUMN_METADATA,
+	FULLY_CHECKPOINT_ROW_GROUP
+};
+
 struct RowGroupWriteData {
 	shared_ptr<RowGroup> result_row_group;
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
-	vector<bool> keep_column_loaded;
-	bool reuse_existing_metadata_blocks = false;
-	vector<idx_t> existing_extra_metadata_blocks;
+	RowGroupWriteAction write_action = RowGroupWriteAction::FULLY_CHECKPOINT_ROW_GROUP;
 	optional_idx write_count;
 };
 
@@ -110,10 +117,12 @@ public:
 	RowGroupCollection &GetCollection() const {
 		return collection.get();
 	}
-	//! Returns the list of meta block pointers used by the columns
-	vector<idx_t> GetOrComputeExtraMetadataBlocks(bool force_compute = false);
+	//! Compute per-column metadata blocks by reading column metadata from disk
+	PerColumnMetadataBlocks ComputePerColumnMetadataBlocks() const;
 
 	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
+
+	vector<MetaBlockPointer> GetExtraMetadataBlockPointers() const;
 
 	BlockManager &GetBlockManager() const;
 	DataTableInfo &GetTableInfo() const;
@@ -122,7 +131,7 @@ public:
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
 	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
-	                               ExpressionExecutor &executor, Vector &intermediate);
+	                               ExpressionExecutor &executor);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
 	//! Accumulates this row group's on-disk blocks into the drop state.
@@ -140,7 +149,7 @@ public:
 	bool InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset);
 	//! Checks the given set of table filters against the row-group statistics. Returns false if the entire row group
 	//! can be skipped.
-	bool CheckZonemap(ScanFilterInfo &filters);
+	bool CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters);
 	//! Checks the given set of table filters against the per-segment statistics. Returns false if any segments were
 	//! skipped.
 	bool CheckZonemapSegments(CollectionScanState &state);
@@ -149,11 +158,14 @@ public:
 
 	idx_t GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 
-	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
-	bool Fetch(TransactionData transaction, idx_t row);
-	//! Fetch a specific row from the row_group and insert it into the result at the specified index
-	void FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
-	              row_t row_id, DataChunk &result, idx_t result_idx);
+	//! Bulk visibility check. For each offset in [0, count), writes the input index into `visible_sel` if that row is
+	//! visible to the transaction. Returns the number of visible rows.
+	idx_t Fetch(TransactionData transaction, const idx_t *offsets, idx_t count, SelectionVector &visible_sel);
+	//! Bulk row fetch. For each `i` in [0, visible_count), fetches the row at `offsets[visible_sel.get_index(i)]`
+	//! and writes every requested column into `result.data[col_idx][result_offset + i]`.
+	void FetchRows(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
+	               const idx_t *offsets, const SelectionVector &visible_sel, idx_t visible_count, DataChunk &result,
+	               idx_t result_offset);
 
 	//! Append count rows to the version info
 	void AppendVersionInfo(TransactionData transaction, idx_t count);
@@ -184,8 +196,9 @@ public:
 	bool IsPersistent() const;
 	PersistentRowGroupData SerializeRowGroupInfo(idx_t row_group_start) const;
 
-	void InitializeAppend(RowGroupAppendState &append_state);
+	static void InitializeAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
+	void FinalizeAppend(RowGroupAppendState &append_state);
 
 	void Update(TransactionData transaction, DuckTableEntry &table_entry, DataChunk &updates, row_t *ids, idx_t offset,
 	            idx_t count, const vector<PhysicalIndex> &column_ids, idx_t row_group_start);
@@ -200,7 +213,8 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx) const;
 	unique_ptr<BaseStatistics> GetStatistics(const StorageIndex &column_idx) const;
 
-	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
+	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result,
+	                          const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {});
 	static PartitionStatistics GetPartitionStats(SegmentNode<RowGroup> &row_group);
 
 	idx_t GetAllocationSize() const {
@@ -215,7 +229,7 @@ public:
 	RowVersionManager &GetOrCreateVersionInfo();
 
 	// Serialization
-	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
+	static void Serialize(RowGroupPointer &pointer, Serializer &serializer, bool supports_per_column_writes);
 	static RowGroupPointer Deserialize(Deserializer &deserializer);
 
 	idx_t GetRowGroupSize() const;
@@ -225,7 +239,12 @@ public:
 
 	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
 
+	//! Direct accessors, fall outside of general use but can be useful to some extensions
+	ColumnData &GetRawColumnData(const StorageIndex &c) const;
+	ColumnData &GetRawColumnData(storage_t c) const;
+
 private:
+	void InitializeAppendInternal(RowGroupAppendState &append_state);
 	optional_ptr<RowVersionManager> GetVersionInfo();
 	optional_ptr<RowVersionManager> GetVersionInfoIfLoaded() const;
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
@@ -241,8 +260,12 @@ private:
 	void SetCount(idx_t count);
 	bool ColumnIsLoaded(storage_t c) const;
 	void UnloadColumn(storage_t c);
+	bool HasUnchangedColumns() const;
+	static shared_ptr<ColumnData> CheckpointColumn(const RowGroup &row_group, idx_t column_idx, RowGroupWriteInfo &info,
+	                                               RowGroupWriteData &write_data);
 
 	bool HasUnloadedDeletes() const;
+	unique_ptr<RowGroup> CreateNewRowGroupCopy(RowGroupCollection &new_collection, idx_t new_column_count);
 
 private:
 	mutable mutex row_group_lock;
@@ -252,6 +275,8 @@ private:
 	vector<MetaBlockPointer> deletes_pointers;
 	bool has_metadata_blocks = false;
 	vector<idx_t> extra_metadata_blocks;
+	bool has_per_column_metadata_blocks = false;
+	PerColumnMetadataBlocks per_column_metadata_blocks;
 	atomic<bool> deletes_is_loaded;
 	atomic<idx_t> allocation_size;
 	//! The row id column data (mutable because `const` can lazy load)

@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # Basic: remove null-valued key
 query T
 SELECT json_strip_nulls('{"a":1,"b":null}')

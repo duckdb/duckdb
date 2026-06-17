@@ -74,10 +74,12 @@ void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &in
 			if (result_vectors[i].get().GetVectorType() != VectorType::CONSTANT_VECTOR) {
 				throw InternalException("Default value in remap struct must be a constant");
 			}
-			if (has_top_level_null && !ConstantVector::IsNull(result_vectors[i])) {
+			bool default_is_null = ConstantVector::IsNull(result_vectors[i]);
+			FlatVector::SetSize(result_vectors[i], count);
+			result_vectors[i].get().Flatten();
+			if (has_top_level_null && !default_is_null) {
 				// if we have any top-level NULL values and the default value is not NULL, we need to propagate the NULL
 				// values to the default value
-				result_vectors[i].get().Flatten(count);
 				FlatVector::SetValidity(result_vectors[i], FlatVector::Validity(result));
 			}
 		} else {
@@ -97,8 +99,7 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 	ListVector::Reserve(result, list_size);
 	ListVector::SetListSize(result, list_size);
 
-	bool has_top_level_null = false;
-	// copy over the NULL values from the input vector
+	// copy over the list_entry_t values from the input vector, preserving top-level validity
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
 			ConstantVector::SetNull(result, count_t(result_size));
@@ -108,19 +109,13 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
-		auto entries = input.Values<list_entry_t>(result_size);
-		if (entries.CanHaveNull()) {
-			auto &result_validity = FlatVector::ValidityMutable(result);
-			for (idx_t i = 0; i < result_size; i++) {
-				if (!entries[i].IsValid()) {
-					result_validity.SetInvalid(i);
-				}
+		auto writer = FlatVector::Writer<list_entry_t>(result, result_size);
+		for (const auto entry : input.Values<list_entry_t>()) {
+			if (entry.IsValid()) {
+				writer.WriteValue(entry.GetValueUnsafe());
+			} else {
+				writer.WriteNull();
 			}
-			has_top_level_null = result_validity.CanHaveNull();
-		}
-		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-		for (idx_t i = 0; i < result_size; i++) {
-			result_list_data[i] = entries.GetValueUnsafe(i);
 		}
 	}
 	// set up the correct vector references
@@ -135,7 +130,7 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 	result_vectors.emplace_back(result_key_vector);
 	result_vectors.emplace_back(result_value_vector);
 
-	RemapChildVectors(result, input_vectors, result_vectors, remap_info, default_vector, has_top_level_null, list_size);
+	RemapChildVectors(result, input_vectors, result_vectors, remap_info, default_vector, false, list_size);
 }
 
 void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t result_size,
@@ -146,8 +141,7 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 	ListVector::Reserve(result, list_size);
 	ListVector::SetListSize(result, list_size);
 
-	bool has_top_level_null = false;
-	// copy over the NULL values from the input vector
+	// copy over the list_entry_t values from the input vector, preserving top-level validity
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
 			ConstantVector::SetNull(result, count_t(result_size));
@@ -157,19 +151,13 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
-		auto entries = input.Values<list_entry_t>(result_size);
-		if (entries.CanHaveNull()) {
-			auto &result_validity = FlatVector::ValidityMutable(result);
-			for (idx_t i = 0; i < result_size; i++) {
-				if (!entries[i].IsValid()) {
-					result_validity.SetInvalid(i);
-				}
+		auto writer = FlatVector::Writer<list_entry_t>(result, result_size);
+		for (const auto entry : input.Values<list_entry_t>()) {
+			if (entry.IsValid()) {
+				writer.WriteValue(entry.GetValueUnsafe());
+			} else {
+				writer.WriteNull();
 			}
-			has_top_level_null = result_validity.CanHaveNull();
-		}
-		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-		for (idx_t i = 0; i < result_size; i++) {
-			result_list_data[i] = entries.GetValueUnsafe(i);
 		}
 	}
 
@@ -180,7 +168,7 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 	vector<reference<Vector>> result_vectors;
 	result_vectors.emplace_back(result_vector);
 
-	RemapChildVectors(result, input_vectors, result_vectors, remap_info, default_vector, has_top_level_null, list_size);
+	RemapChildVectors(result, input_vectors, result_vectors, remap_info, default_vector, false, list_size);
 }
 
 void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t result_size,
@@ -198,7 +186,7 @@ void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t re
 			return;
 		}
 	} else {
-		auto validity_entries = input.Validity(result_size);
+		auto validity_entries = input.Validity();
 		if (validity_entries.CanHaveNull()) {
 			auto &result_validity = FlatVector::ValidityMutable(result);
 			for (idx_t i = 0; i < result_size; i++) {
@@ -243,7 +231,7 @@ void RemapNested(Vector &input, Vector &default_vector, Vector &result, idx_t re
 
 void RemapStructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<RemapStructBindData>();
+	auto &info = func_expr.BindInfo()->Cast<RemapStructBindData>();
 
 	auto &input = args.data[0];
 
@@ -252,10 +240,10 @@ void RemapStructFunction(DataChunk &args, ExpressionState &state, Vector &result
 struct RemapIndex {
 	idx_t index;
 	LogicalType type;
-	unique_ptr<case_insensitive_map_t<RemapIndex>> child_map;
+	unique_ptr<identifier_map_t<RemapIndex>> child_map;
 
-	static case_insensitive_map_t<RemapIndex> GetMap(const LogicalType &type) {
-		case_insensitive_map_t<RemapIndex> result;
+	static identifier_map_t<RemapIndex> GetMap(const LogicalType &type) {
+		identifier_map_t<RemapIndex> result;
 		switch (type.id()) {
 		case LogicalTypeId::STRUCT: {
 			auto &children = StructType::GetChildTypes(type);
@@ -288,7 +276,7 @@ struct RemapIndex {
 		index.index = idx;
 		index.type = type;
 		if (IsRemappable(type)) {
-			index.child_map = make_uniq<case_insensitive_map_t<RemapIndex>>(GetMap(type));
+			index.child_map = make_uniq<identifier_map_t<RemapIndex>>(GetMap(type));
 		}
 		return index;
 	}
@@ -298,12 +286,11 @@ struct RemapEntry {
 	optional_idx index;
 	optional_idx default_index;
 	LogicalType target_type;
-	unique_ptr<case_insensitive_map_t<RemapEntry>> child_remaps;
+	unique_ptr<identifier_map_t<RemapEntry>> child_remaps;
 
-	static void PerformRemap(const string &remap_target, const Value &remap_val,
-	                         case_insensitive_map_t<RemapIndex> &source_map,
-	                         case_insensitive_map_t<RemapIndex> &target_map, case_insensitive_map_t<RemapEntry> &result,
-	                         const LogicalType &parent_type) {
+	static void PerformRemap(const Identifier &remap_target, const Value &remap_val,
+	                         identifier_map_t<RemapIndex> &source_map, identifier_map_t<RemapIndex> &target_map,
+	                         identifier_map_t<RemapEntry> &result, const LogicalType &parent_type) {
 		string remap_source;
 		Value struct_val;
 		if (remap_val.type().id() == LogicalTypeId::VARCHAR) {
@@ -326,13 +313,13 @@ struct RemapEntry {
 		}
 
 		// find the source index
-		auto entry = source_map.find(remap_source);
+		auto entry = source_map.find(Identifier(remap_source));
 		if (entry == source_map.end()) {
 			throw BinderException("Source value %s not found", remap_source);
 		}
 		auto target_entry = target_map.find(remap_target);
 		if (target_entry == target_map.end()) {
-			throw BinderException("Target value %s not found", remap_target);
+			throw BinderException("Target value %s not found", remap_target.GetIdentifierName());
 		}
 
 		auto &source_type = entry->second.type;
@@ -356,7 +343,7 @@ struct RemapEntry {
 					                      struct_val.ToString(), entry->second.type.ToString(),
 					                      target_entry->second.type.ToString());
 				}
-				remap.child_remaps = make_uniq<case_insensitive_map_t<RemapEntry>>();
+				remap.child_remaps = make_uniq<identifier_map_t<RemapEntry>>();
 				auto &remap_types = StructType::GetChildTypes(struct_val.type());
 				auto &remap_values = StructValue::GetChildren(struct_val);
 				for (idx_t child_idx = 0; child_idx < remap_types.size(); child_idx++) {
@@ -369,9 +356,8 @@ struct RemapEntry {
 	}
 
 	static void HandleDefault(idx_t default_idx, const string &default_target, const LogicalType &default_type,
-	                          case_insensitive_map_t<RemapIndex> &target_map,
-	                          case_insensitive_map_t<RemapEntry> &result) {
-		auto entry = target_map.find(default_target);
+	                          identifier_map_t<RemapIndex> &target_map, identifier_map_t<RemapEntry> &result) {
+		auto entry = target_map.find(Identifier(default_target));
 		if (entry == target_map.end()) {
 			throw BinderException("Default value %s not found for remap", default_target);
 		}
@@ -386,11 +372,11 @@ struct RemapEntry {
 				                      target_type.ToString());
 			}
 			// add to the map at this level only if it does not yet exist
-			auto result_entry = result.find(default_target);
+			auto result_entry = result.find(Identifier(default_target));
 			if (result_entry == result.end()) {
 				result.emplace(default_target, std::move(remap));
-				result_entry = result.find(default_target);
-				result_entry->second.child_remaps = make_uniq<case_insensitive_map_t<RemapEntry>>();
+				result_entry = result.find(Identifier(default_target));
+				result_entry->second.child_remaps = make_uniq<identifier_map_t<RemapEntry>>();
 			} else {
 				// the entry exists - add the default index
 				result_entry->second.default_index = default_idx;
@@ -401,8 +387,8 @@ struct RemapEntry {
 				if (!result_entry->second.child_remaps || !entry->second.child_map) {
 					throw BinderException("No child remaps found");
 				}
-				HandleDefault(child_idx, child_default.first, child_default.second, *entry->second.child_map,
-				              *result_entry->second.child_remaps);
+				HandleDefault(child_idx, child_default.first.GetIdentifierName(), child_default.second,
+				              *entry->second.child_map, *result_entry->second.child_remaps);
 			}
 			return;
 		}
@@ -418,7 +404,7 @@ struct RemapEntry {
 	}
 
 	static vector<RemapColumnInfo> ConstructMapFromChildren(const child_list_t<LogicalType> &target_children,
-	                                                        const case_insensitive_map_t<RemapEntry> &remap_map) {
+	                                                        const identifier_map_t<RemapEntry> &remap_map) {
 		vector<RemapColumnInfo> result;
 		for (idx_t target_idx = 0; target_idx < target_children.size(); target_idx++) {
 			auto &target_name = target_children[target_idx].first;
@@ -440,7 +426,7 @@ struct RemapEntry {
 	}
 
 	static vector<RemapColumnInfo> ConstructMap(const LogicalType &type,
-	                                            const case_insensitive_map_t<RemapEntry> &remap_map) {
+	                                            const identifier_map_t<RemapEntry> &remap_map) {
 		D_ASSERT(IsRemappable(type));
 		switch (type.id()) {
 		case LogicalTypeId::STRUCT: {
@@ -467,7 +453,7 @@ struct RemapEntry {
 	}
 
 	static child_list_t<LogicalType> RemapCastChildren(const child_list_t<LogicalType> &source_children,
-	                                                   const case_insensitive_map_t<RemapEntry> &remap_map,
+	                                                   const identifier_map_t<RemapEntry> &remap_map,
 	                                                   const unordered_map<idx_t, string> &source_name_map) {
 		child_list_t<LogicalType> new_source_children;
 		for (idx_t source_idx = 0; source_idx < source_children.size(); source_idx++) {
@@ -475,7 +461,7 @@ struct RemapEntry {
 			auto &child_type = source_children[source_idx].second;
 			auto entry = source_name_map.find(source_idx);
 			if (entry != source_name_map.end()) {
-				auto remap_entry = remap_map.find(entry->second);
+				auto remap_entry = remap_map.find(Identifier(entry->second));
 				D_ASSERT(remap_entry != remap_map.end());
 				// this entry is remapped - fetch the target type
 				if (IsRemappable(child_type) && remap_entry->second.child_remaps) {
@@ -493,7 +479,7 @@ struct RemapEntry {
 		return new_source_children;
 	}
 
-	static LogicalType RemapCast(const LogicalType &type, const case_insensitive_map_t<RemapEntry> &remap_map) {
+	static LogicalType RemapCast(const LogicalType &type, const identifier_map_t<RemapEntry> &remap_map) {
 		unordered_map<idx_t, string> source_name_map;
 		for (auto &entry : remap_map) {
 			if (entry.second.index.IsValid()) {
@@ -541,27 +527,29 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 	D_ASSERT(arguments.size() == 4);
 	for (idx_t arg_idx = 0; arg_idx < 3; arg_idx++) {
 		auto &arg = arguments[arg_idx];
-		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
-		if (arg->return_type.id() == LogicalTypeId::SQLNULL && arg_idx == 2) {
+		if (arg->GetReturnType().id() == LogicalTypeId::SQLNULL && arg_idx == 2) {
 			// remap target can be NULL
 			continue;
 		}
-		if (!IsRemappable(arg->return_type)) {
-			throw BinderException("Struct remap can only remap nested types, not '%s'", arg->return_type.ToString());
-		} else if (arg->return_type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(arg->return_type)) {
+		if (!IsRemappable(arg->GetReturnType())) {
+			throw BinderException("Struct remap can only remap nested types, not '%s'",
+			                      arg->GetReturnType().ToString());
+		} else if (arg->GetReturnType().id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(arg->GetReturnType())) {
 			throw BinderException("Struct remap can only remap named structs");
 		}
 	}
-	auto &from_type = arguments[0]->return_type;
-	auto &to_type = arguments[1]->return_type;
+	auto &from_type = arguments[0]->GetReturnType();
+	auto &to_type = arguments[1]->GetReturnType();
 
 	auto &defaults = arguments[3];
-	if (defaults->return_type.id() != LogicalTypeId::SQLNULL && defaults->return_type.id() != LogicalTypeId::STRUCT) {
+	if (defaults->GetReturnType().id() != LogicalTypeId::SQLNULL &&
+	    defaults->GetReturnType().id() != LogicalTypeId::STRUCT) {
 		throw BinderException("The defaults provided to 'remap_struct' should be of type STRUCT if they're not NULL");
 	}
-	if (defaults->return_type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(defaults->return_type)) {
+	if (defaults->GetReturnType().id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(defaults->GetReturnType())) {
 		throw BinderException("The defaults have to be either NULL or a named STRUCT, not an unnamed struct");
 	}
 
@@ -579,9 +567,9 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 	Value remap_val = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
 
 	// (recursively) generate the remap entries
-	case_insensitive_map_t<RemapEntry> remap_map;
+	identifier_map_t<RemapEntry> remap_map;
 	if (!remap_val.IsNull()) {
-		auto &remap_types = StructType::GetChildTypes(arguments[2]->return_type);
+		auto &remap_types = StructType::GetChildTypes(arguments[2]->GetReturnType());
 		auto &remap_values = StructValue::GetChildren(remap_val);
 		for (idx_t remap_idx = 0; remap_idx < remap_values.size(); remap_idx++) {
 			auto &remap_val = remap_values[remap_idx];
@@ -593,13 +581,14 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 		throw BinderException("Default values must be constants");
 	}
 
-	if (arguments[3]->return_type.id() != LogicalTypeId::SQLNULL) {
+	if (arguments[3]->GetReturnType().id() != LogicalTypeId::SQLNULL) {
 		// (recursively) handle the defaults (if there are any)
-		auto &default_types = StructType::GetChildTypes(arguments[3]->return_type);
+		auto &default_types = StructType::GetChildTypes(arguments[3]->GetReturnType());
 		for (idx_t default_idx = 0; default_idx < default_types.size(); default_idx++) {
 			auto &default_target = default_types[default_idx].first;
 			auto &default_type = default_types[default_idx].second;
-			RemapEntry::HandleDefault(default_idx, default_target, default_type, target_map, remap_map);
+			RemapEntry::HandleDefault(default_idx, default_target.GetIdentifierName(), default_type, target_map,
+			                          remap_map);
 		}
 	}
 
@@ -610,10 +599,10 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 	auto new_type = RemapEntry::RemapCast(from_type, remap_map);
 
 	bound_function.GetArguments()[0] = std::move(new_type);
-	bound_function.GetArguments()[1] = arguments[1]->return_type;
-	bound_function.GetArguments()[2] = arguments[2]->return_type;
-	bound_function.GetArguments()[3] = arguments[3]->return_type;
-	bound_function.SetReturnType(arguments[1]->return_type);
+	bound_function.GetArguments()[1] = arguments[1]->GetReturnType();
+	bound_function.GetArguments()[2] = arguments[2]->GetReturnType();
+	bound_function.GetArguments()[3] = arguments[3]->GetReturnType();
+	bound_function.SetReturnType(arguments[1]->GetReturnType());
 
 	return make_uniq<RemapStructBindData>(std::move(remap));
 }

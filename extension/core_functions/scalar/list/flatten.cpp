@@ -19,7 +19,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	// Setup outer vec;
 	auto &outer_vec = args.data[0];
 	const auto outer_count = args.size();
-	outer_vec.ToUnifiedFormat(outer_count, outer_format);
+	outer_vec.ToUnifiedFormat(outer_format);
 
 	// Special case: outer list is all-null
 	if (outer_vec.GetType().id() == LogicalTypeId::SQLNULL) {
@@ -29,8 +29,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 	// Setup inner vec
 	auto &inner_vec = ListVector::GetChildMutable(outer_vec);
-	const auto inner_count = ListVector::GetListSize(outer_vec);
-	inner_vec.ToUnifiedFormat(inner_count, inner_format);
+	inner_vec.ToUnifiedFormat(inner_format);
 
 	// Special case: inner list is all-null
 	if (inner_vec.GetType().id() == LogicalTypeId::SQLNULL) {
@@ -47,8 +46,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 	// Setup items vec
 	auto &items_vec = ListVector::GetChildMutable(inner_vec);
-	const auto items_count = ListVector::GetListSize(inner_vec);
-	items_vec.ToUnifiedFormat(items_count, items_format);
+	items_vec.ToUnifiedFormat(items_format);
 
 	// First pass: Figure out the total amount of items.
 	// This can be more than items_count if the inner list reference the same item(s) multiple times.
@@ -129,7 +127,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 	auto &result_child_vector = ListVector::GetChildMutable(result);
 	result_child_vector.Slice(items_vec, sel, sel_idx);
-	result_child_vector.Flatten(sel_idx);
+	result_child_vector.Flatten();
 }
 
 unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, FunctionStatisticsInput &input) {

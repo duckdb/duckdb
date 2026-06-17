@@ -2,9 +2,6 @@
 # description: Test LIMIT with a parameter (issue 1866)
 # group: [order]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT 'Test' LIMIT ?
 ----

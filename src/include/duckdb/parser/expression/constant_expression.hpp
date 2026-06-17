@@ -21,13 +21,14 @@ public:
 public:
 	DUCKDB_API explicit ConstantExpression(Value val);
 
-	//! The constant value referenced
-	Value value;
+	auto GetValue() const -> const Value & {
+		return value;
+	}
 
 public:
 	string ToString() const override;
 
-	static bool Equal(const ConstantExpression &a, const ConstantExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 	hash_t Hash() const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
@@ -37,6 +38,9 @@ public:
 
 private:
 	ConstantExpression();
+
+	//! The constant value referenced
+	Value value;
 };
 
 } // namespace duckdb

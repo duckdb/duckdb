@@ -9,9 +9,6 @@ unzip data/storage/bc_0102.db.gz {TEST_DIR}/bc_0102.db
 
 load {TEST_DIR}/bc_0102.db readonly
 
-statement ok
-PRAGMA enable_verification
-
 query II
 SELECT database_name, schema_name FROM duckdb_schemas WHERE NOT internal
 ----

@@ -18,33 +18,36 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
-    paths-ignore:
-      - '**.md'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '!tools/juliapkg/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Main.yml'
-      - '!.github/workflows/Swift.yml'
-      - '!.github/workflows/Windows.yml'
-      - '!.github/workflows/Regression.yml'
-      - '!.github/workflows/Extensions.yml'
+      - 'gh-readonly-queue/**'
+    paths:
+      - '**'
+      - '!**.md'
+      - '!tools/**'
+      - 'tools/shell/**'
+      - 'tools/juliapkg/**'
+      - '!.github/patches/duckdb-wasm/**'
+      - '!.github/workflows/**'
+      - '.github/workflows/Main.yml'
+      - '.github/workflows/Swift.yml'
+      - '.github/workflows/Windows.yml'
+      - '.github/workflows/Regression.yml'
+      - '.github/workflows/Extensions.yml'
   merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize]
-    paths-ignore:
-      - '**.md'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '!tools/juliapkg/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Main.yml'
-      - '!.github/workflows/Swift.yml'
-      - '!.github/workflows/Windows.yml'
-      - '!.github/workflows/Regression.yml'
-      - '!.github/workflows/Extensions.yml'
+    paths:
+      - '**'
+      - '!**.md'
+      - '!tools/**'
+      - 'tools/shell/**'
+      - 'tools/juliapkg/**'
+      - '!.github/patches/duckdb-wasm/**'
+      - '!.github/workflows/**'
+      - '.github/workflows/Main.yml'
+      - '.github/workflows/Swift.yml'
+      - '.github/workflows/Windows.yml'
+      - '.github/workflows/Regression.yml'
+      - '.github/workflows/Extensions.yml'
 
 
 concurrency:
@@ -53,6 +56,13 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  # Run only specific jobs in CI (separated by whitespace) and skip the rest.
+  #
+  # Add the CI job's `needs:` list here as well. Otherwise, those are skipped
+  # and the dependent job is also skipped.
+  #
+  # For example, to run only "extensions", use:
+  # OVERRIDE_JOBS: linux-relassert linux-release extensions
 
 jobs:
  prepare:
@@ -63,14 +73,14 @@ jobs:
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     outputs:
       git_sha: ${{ steps.resolve_git_sha.outputs.git_sha }}
-      runner_linux_small: ${{ steps.config.outputs.runner_linux_small }}
-      runner_linux_x64: ${{ steps.config.outputs.runner_linux_x64 }}
-      runner_linux_22_x64: ${{ steps.config.outputs.runner_linux_22_x64 }}
-      runner_linux_arm64: ${{ steps.config.outputs.runner_linux_arm64 }}
-      runner_windows_2022_x64: ${{ steps.config.outputs.runner_windows_2022_x64 }}
-      runner_macos_arm64: ${{ steps.config.outputs.runner_macos_arm64 }}
-      runner_macos_14_arm64: ${{ steps.config.outputs.runner_macos_14_arm64 }}
-      runners: ${{ steps.config.outputs.runners }}
+      runner_linux_small: ${{ steps.runners.outputs.runner_linux_small }}
+      runner_linux_x64: ${{ steps.runners.outputs.runner_linux_x64 }}
+      runner_linux_22_x64: ${{ steps.runners.outputs.runner_linux_22_x64 }}
+      runner_linux_arm64: ${{ steps.runners.outputs.runner_linux_arm64 }}
+      runner_windows_2022_x64: ${{ steps.runners.outputs.runner_windows_2022_x64 }}
+      runner_macos_arm64: ${{ steps.runners.outputs.runner_macos_arm64 }}
+      runner_macos_14_arm64: ${{ steps.runners.outputs.runner_macos_14_arm64 }}
+      runners: ${{ steps.runners.outputs.runners }}
       linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
       linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
       static_libs_linux_matrix: ${{ steps.config.outputs.static_libs_linux_matrix }}
@@ -81,11 +91,15 @@ jobs:
       extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
       enabled_jobs: ${{ steps.config.outputs.enabled_jobs }}
       save_cache: ${{ steps.config.outputs.save_cache }}
-      runner_provider: ${{ steps.config.outputs.runner_provider }}
+      runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
     env:
       GEN: ninja
     steps:
+      - name: Detect runners
+        id: runners
+        uses: duckdb/duckdb-ci/detect-runners@main
+
       - name: Resolve git sha
         id: resolve_git_sha
         shell: bash
@@ -101,7 +115,7 @@ jobs:
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
+          runner_provider: ${{ steps.runners.outputs.runner_provider }}
           fetch_depth: 0
           ref: ${{ steps.resolve_git_sha.outputs.git_sha }}
 
@@ -121,26 +135,24 @@ jobs:
             tests_slow:
               - test/**/*.cpp
               - test/**/*.test_slow
+            capi:
+              - src/include/duckdb.h
+              - src/common/types.cpp
+              - src/include/duckdb/common/types.hpp
+              - src/function/table/system/test_all_types.cpp
             julia:
               - tools/juliapkg/**
 
-      - name: Check CI
+      - name: Lint CI
         if: steps.changed.outputs.github_any_changed == 'true'
-        run: |
-          echo "::add-matcher::.github/actionlint-matcher.json"
-          echo "::group::ShellCheck version"
-          shellcheck --version
-          echo "::endgroup::"
-          echo "::group::Install actionlint"
-          python3 scripts/ci/retry.py -- bash -c 'bash <(curl --fail --retry 5 --retry-all-errors https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)'
-          echo "::endgroup::"
-          ./actionlint -color
-          make test_ci
-        shell: bash
+        timeout-minutes: 10
+        uses: duckdb/duckdb-ci/lint-ci@main
 
       - name: Configure CI
         id: config
         run: |
+          make test_ci
+
           if [[ "${{ github.event_name }}" != "pull_request" || "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
             extra_exclude_archs=
           else
@@ -158,53 +170,8 @@ jobs:
           skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           echo "skip_tests=$skip_tests" >> "$GITHUB_OUTPUT"
 
-          # Fall back to GitHub-native runners for forks.
-          if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
-            runner_provider=namespace
-            runner_linux_small=namespace-profile-linux-small
-            runner_linux_x64=namespace-profile-linux-x64
-            runner_linux_22_x64=namespace-profile-linux-22-x64
-            runner_linux_arm64=namespace-profile-linux-arm64
-            runner_windows_2022_x64=namespace-profile-windows-x64
-            runner_macos_arm64=namespace-profile-macos-arm64
-            runner_macos_14_arm64=namespace-profile-macos-14-arm64
-          else
-            runner_provider=github
-            runner_linux_small=ubuntu-latest
-            runner_linux_x64=ubuntu-latest
-            runner_linux_22_x64=ubuntu-22.04
-            runner_linux_arm64=ubuntu-24.04-arm
-            runner_windows_2022_x64=windows-2022
-            runner_macos_arm64=macos-14
-            runner_macos_14_arm64=macos-14
-          fi
-
-          {
-            echo "runner_provider=$runner_provider"
-            echo "runner_linux_small=$runner_linux_small"
-            echo "runner_linux_x64=$runner_linux_x64"
-            echo "runner_linux_22_x64=$runner_linux_22_x64"
-            echo "runner_linux_arm64=$runner_linux_arm64"
-            echo "runner_windows_2022_x64=$runner_windows_2022_x64"
-            echo "runner_macos_arm64=$runner_macos_arm64"
-            echo "runner_macos_14_arm64=$runner_macos_14_arm64"
-          } >> "$GITHUB_OUTPUT"
-
-          {
-            echo "runners<<EOF"
-            cat <<EOF
-          {
-            "linux_x64": "$runner_linux_x64",
-            "linux_22_x64": "$runner_linux_22_x64",
-            "linux_arm64": "$runner_linux_arm64",
-            "windows_2022_x64": "$runner_windows_2022_x64",
-            "windows_x64": "$runner_windows_2022_x64",
-            "macos_arm64": "$runner_macos_arm64",
-            "macos_14_arm64": "$runner_macos_14_arm64"
-          }
-          EOF
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          runner_linux_x64="${{ steps.runners.outputs.runner_linux_x64 }}"
+          runner_linux_arm64="${{ steps.runners.outputs.runner_linux_arm64 }}"
 
           linux_cli_matrix=$(
             jq -nc --arg runner "$runner_linux_x64" \
@@ -254,12 +221,9 @@ jobs:
             echo "static_libs_linux_matrix=$static_libs_linux_matrix"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: ./.github/actions/ccache-action
-        with:
-          save: ${{ fromJson(steps.config.outputs.save_cache) }}
-
       - name: Install tools
-        run: python3 scripts/ci/retry.py -- make -j4 format_tools
+        timeout-minutes: 10
+        run: python3 scripts/ci/retry.py --timeout 2m -- make -j4 format_tools
 
       - name: Check format
         run: |
@@ -269,15 +233,15 @@ jobs:
           git diff --exit-code
           echo "::endgroup::"
 
- linux-debug:
-    name: Linux Debug
+ linux-relassert:
+    name: Linux Relassert
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-debug') }}
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-relassert') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
-      CC: gcc
-      CXX: g++
+      CC: clang-20
+      CXX: clang++-20
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -285,7 +249,7 @@ jobs:
       FORCE_ASSERT: 1
       EXPORT_DYNAMIC_SYMBOLS: 1
       REDUCE_SYMBOLS: 1
-      EXTENSIONS_STATIC_BUILD: 0
+      EXTENSION_STATIC_BUILD: 0
 
     steps:
     - name: "Checkout"
@@ -299,7 +263,19 @@ jobs:
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
+
+    - name: Fix ASan runtime
+      shell: bash
+      run: |
+        # libclang_rt.asan_static.a is missing in ubuntu 24.04.
+        asan_static_dir="/usr/lib/llvm-20/lib/clang/20/lib/x86_64-pc-linux-gnu"
+        asan_static_target="/usr/lib/llvm-20/lib/clang/20/lib/linux/libclang_rt.asan_static-x86_64.a"
+        if [[ ! -e "${asan_static_dir}/libclang_rt.asan_static.a" && -e "${asan_static_target}" ]]; then
+          sudo mkdir -p "${asan_static_dir}"
+          sudo ln -sf "${asan_static_target}" "${asan_static_dir}/libclang_rt.asan_static.a"
+        fi
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -311,23 +287,27 @@ jobs:
 
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
       with:
+        build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
         test: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
         bundle: make relassert-artifact
-        upload-name: linux-debug-relassert-build
+        upload-name: linux-relassert-build
         upload-path: build/relassert-artifact.tar.gz
         save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Output version info
       run: ./build/relassert/duckdb -c "PRAGMA version;"
 
- linux-debug-tests:
-    name: Linux Debug Tests
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-debug-tests') }}
+ linux-relassert-tests:
+    name: Linux Relassert Tests
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-relassert-tests') }}
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
@@ -335,12 +315,13 @@ jobs:
       with:
         ref: ${{ needs.prepare.outputs.git_sha }}
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Download relassert build artifact
       uses: actions/download-artifact@v8
       with:
-        name: linux-debug-relassert-build
+        name: linux-relassert-build
         path: build
 
     - name: Extract relassert build artifact
@@ -358,13 +339,16 @@ jobs:
     - name: Test
       run: make unittest_relassert
 
+    - name: Test Benchmark SQL
+      run: make test_benchmark_sql
+
  regression:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'regression') }}
     uses: ./.github/workflows/Regression.yml
     secrets: inherit
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
       - linux-release
     with:
       git_ref: ${{ needs.prepare.outputs.git_sha }}
@@ -378,11 +362,12 @@ jobs:
     name: Tidy Check
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'tidy-check') }}
     needs: prepare
-    runs-on: ubuntu-24.04
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       CC: gcc
       CXX: g++
       GEN: ninja
+      CLANGD_BINARY: clangd-20
 
     steps:
     - uses: actions/checkout@v6
@@ -391,62 +376,27 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
+      timeout-minutes: 10
       run: |
         python3 scripts/ci/retry.py -- make toolsci
         python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
 
-    - uses: ./.github/actions/ccache-action
-      with:
-        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
-
-    - name: Download clang-tidy-cache
-      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
-      run: |
-        set -e
-        curl -Lo /tmp/clang-tidy-cache https://github.com/ejfitzgerald/clang-tidy-cache/releases/download/v0.4.0/clang-tidy-cache-linux-amd64
-        md5sum /tmp/clang-tidy-cache | grep 880b290d7bbe7c1fb2a4f591f9a86cc1
-        chmod +x /tmp/clang-tidy-cache
-
-    - name: Tidy Check
-      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
-      run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
+    - name: Install clangd-tidy
+      run: python3 scripts/ci/retry.py -- make install-clangd-tidy
 
     - name: Tidy Check Diff
-      if: ${{ github.ref_name != 'main' && github.ref_name != 'feature' }}
+      if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
       run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
- check-clangd-tidy:
-   name: Tidy Check (clangd)
-   if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'check-clangd-tidy') }}
-   needs: prepare
-   runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-
-   steps:
-     - name: "Checkout"
-       uses: duckdb/duckdb-ci/.github/actions/checkout@main
-       with:
-         runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
-         fetch_depth: 0
-         ref: ${{ needs.prepare.outputs.git_sha }}
-
-     - name: Install
-       run: |
-         python3 scripts/ci/retry.py -- make toolsci
-         python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
-         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clangd
-         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
-         python3 scripts/ci/retry.py -- make install-clangd-tidy
-
-     - name: Tidy Check
-       run: |
-         mkdir -p ~/.config/clangd
-         cat > ~/.config/clangd/config.yaml <<'EOF'
-         Diagnostics:
-           UnusedIncludes: None
-         EOF
-         make tidy-check-clangd CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*
+    - name: Upload clangd-tidy logs
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: clangd-tidy-logs
+        path: build/tidy/clangd-tidy-logs
+        if-no-files-found: ignore
 
  extensions:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions') }}
@@ -454,7 +404,7 @@ jobs:
     secrets: inherit
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
       - linux-release
     with:
       override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
@@ -471,7 +421,7 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'wasm-eh') }}
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       GEN: make
@@ -481,12 +431,13 @@ jobs:
       with:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
-    - uses: mymindstorm/setup-emsdk@v16
+    - uses: emscripten-core/setup-emsdk@v16
       with:
         version: latest
 
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -500,8 +451,6 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-    env:
-      GEN: ninja
 
     steps:
     - name: "Checkout"
@@ -512,7 +461,8 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -527,9 +477,9 @@ jobs:
       env:
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: 1
-        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
         DISABLE_SANITIZER: 1
-        SMOKE_UNITTEST: build/release/test/unittest
+        SMOKE_RUNNER: build/release/test/run
       with:
         build: python3 scripts/ci/retry.py -- make release
         test: ${{ fromJson(needs.prepare.outputs.skip_tests) && 'true' || 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' }}
@@ -549,6 +499,16 @@ jobs:
     - name: Symbol Checks
       run: make -j4 --output-sync=target symbol-checks
 
+    - name: Deploy
+      shell: bash
+      env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      run: |
+        zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
+
  linux-release-tests:
     name: Linux Release Tests
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-tests') }}
@@ -566,7 +526,8 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
@@ -598,16 +559,20 @@ jobs:
     - uses: actions/checkout@v6
       with:
         ref: ${{ needs.prepare.outputs.git_sha }}
+        fetch-depth: 0
+        fetch-tags: true
 
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
-
-    - uses: ./.github/actions/cleanup_runner
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Install pytest
+      timeout-minutes: 10
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: |
-        python3 -m pip install --break-system-packages pytest
+        python3 scripts/ci/retry.py -- pip install --break-system-packages pytest
+
+    - uses: ./.github/actions/cleanup_runner
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -634,13 +599,20 @@ jobs:
           dnf install -y \
             ccache       \
             ninja-build  \
+            python3.12   \
             perl-IPC-Cmd
           git config --global --add safe.directory \"$PWD\"
           make -C \"$PWD\"
         "
 
-    - name: Print platform
-      run: ./build/release/duckdb -c "PRAGMA platform;"
+    - name: CLI check
+      shell: bash
+      run: |
+        ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          # Fail on non-zero major version.
+          ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+        fi
 
     - name: Deploy
       env:
@@ -697,9 +669,12 @@ jobs:
     - uses: actions/checkout@v6
       with:
         ref: ${{ needs.prepare.outputs.git_sha }}
+        fetch-depth: 0
+        fetch-tags: true
 
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/cleanup_runner
 
@@ -732,6 +707,7 @@ jobs:
             g++     \
             git     \
             make    \
+            python3 \
             samurai
           git config --global --add safe.directory \"$PWD\"
           make -C \"$PWD\"
@@ -851,37 +827,13 @@ jobs:
         julia -e "import Pkg; Pkg.add(\"JuliaFormatter\")"
         ./format_check.sh
 
- upload-libduckdb-src:
-    name: Upload libduckdb-src.zip
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'upload-libduckdb-src') }}
-    needs:
-      - prepare
-      - linux-release-cli
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
-        ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - name: Deploy
-      shell: bash
-      env:
-        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-      run: |
-        zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
-
  swift:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'swift') }}
     uses: ./.github/workflows/Swift.yml
     secrets: inherit
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     with:
       git_ref: ${{ needs.prepare.outputs.git_sha }}
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
@@ -892,11 +844,11 @@ jobs:
     secrets: inherit
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     with:
       override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
       git_ref: ${{ needs.prepare.outputs.git_sha }}
-      runner_windows_2022_x64: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
+      runners: ${{ needs.prepare.outputs.runners }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
 
@@ -938,9 +890,10 @@ jobs:
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install dependencies
+        timeout-minutes: 10
         shell: bash
         run: |
-          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache ninja-build zip python3-pip
+          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache python3.12 ninja-build zip python3-pip
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -956,9 +909,14 @@ jobs:
           git config --global --add safe.directory "$PWD"
           make gather-libs
 
-      - name: Print platform
+      - name: CLI check
         shell: bash
-        run: ./build/release/duckdb -c "PRAGMA platform;"
+        run: |
+          ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Fail on non-zero major version.
+            ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+          fi
 
       - name: Deploy
         shell: bash
@@ -1015,6 +973,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Ninja
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- brew install ninja
 
       - uses: ./.github/actions/ccache-action
@@ -1071,6 +1030,7 @@ jobs:
           python-version: '3.12'
 
       - name: Dependencies
+        timeout-minutes: 10
         shell: bash
         run: |
           python scripts/ci/retry.py -- choco install \
@@ -1145,15 +1105,10 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     env:
-      GEN: ninja
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      DISABLE_STRING_INLINE: 1
-      DESTROY_UNPINNED_BLOCKS: 1
-      ALTERNATIVE_VERIFY: 1
-      DISABLE_POINTER_SALT: 1
-      DISABLE_GCC_FUNCTION_SECTIONS: 1
+      CC: clang-20
+      CXX: clang++-20
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
@@ -1163,6 +1118,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -1170,7 +1126,26 @@ jobs:
           save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
       - name: Build
-        run: python3 scripts/ci/retry.py -- make relassert
+        uses: duckdb/duckdb-ci/build-duckdb@main
+        env:
+          CRASH_ON_ASSERT: 1
+          FORCE_DEBUG: 1
+          FORCE_ASSERT: 1
+          EXPORT_DYNAMIC_SYMBOLS: 1
+          REDUCE_SYMBOLS: 1
+          EXTENSION_STATIC_BUILD: 0
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          DISABLE_STRING_INLINE: 1
+          DESTROY_UNPINNED_BLOCKS: 1
+          ALTERNATIVE_VERIFY: 1
+          DISABLE_POINTER_SALT: 1
+          DISABLE_GCC_FUNCTION_SECTIONS: 1
+        with:
+          build-type: relassert
+          build: python3 scripts/ci/retry.py -- make relassert
+          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          cache-suffix: no_string_inline
+          save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
       - name: Test
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -1182,7 +1157,7 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     env:
       CC: gcc
       CXX: g++
@@ -1195,6 +1170,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -1208,63 +1184,17 @@ jobs:
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: make unittest_reldebug
 
- valgrind:
-    name: Valgrind
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'valgrind') }}
-    runs-on: ubuntu-24.04
-    needs:
-      - prepare
-      - linux-debug
-    env:
-      CC: clang
-      CXX: clang++
-      DISABLE_SANITIZER: 1
-      BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: 'icu;json;parquet;tpch'
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v6
-      with:
-        ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - name: Install
-      shell: bash
-      run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq valgrind clang
-
-    - uses: ./.github/actions/ccache-action
-      with:
-        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
-
-    - name: Build
-      shell: bash
-      run: python3 scripts/ci/retry.py -- make relassert
-
-    - name: Output version info
-      shell: bash
-      run: ./build/relassert/duckdb -c "PRAGMA version;"
-
-    - name: Test
-      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
-      shell: bash
-      run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
-
  threadsan:
     name: Thread Sanitizer
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'threadsan') }}
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
-      CC: clang
-      CXX: clang++
-      GEN: ninja
-      BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
-      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
+      CC: clang-20
+      CXX: clang++-20
+      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer-20
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
@@ -1273,14 +1203,25 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
-    - name: Build
-      run: THREADSAN=1 make reldebug
+    - name: Build threadsan
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        BUILD_JEMALLOC: 1
+        THREADSAN: 1
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+      with:
+        build-type: reldebug
+        build: python3 scripts/ci/retry.py -- make reldebug
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        cache-suffix: threadsan
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Test
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -1310,7 +1251,7 @@ jobs:
         python-version: '3.12'
 
     - name: Install
-      shell: bash
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
@@ -1320,154 +1261,29 @@ jobs:
         path: build
 
     - name: Extract linux release artifact
-      shell: bash
       run: |
         rm -rf build/release
         tar -xzf build/release-artifact.tar.gz -C build
 
-    - name: test/configs/force_storage.json
+    - name: Test Configurations
       if: success() || failure()
-      shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/force_storage.json ./build/release/test/unittest
+        make test_configs
 
-    - name: test/configs/force_storage_restart.json
+    - name: Test Vector Verification
       if: success() || failure()
-      shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/force_storage_restart.json ./build/release/test/unittest
+        make test_vector
 
-    - name: test/configs/latest_storage.json
+    - name: Test Synchronous Table Scan
       if: success() || failure()
-      shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/latest_storage.json ./build/release/test/unittest
+        make test_table_scan
 
-    - name: test/configs/block_verification.json
+    - name: Test Storage Compatibility
       if: success() || failure()
-      shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/block_verification.json ./build/release/test/unittest
-
-    - name: test/configs/verify_fetch_row.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_fetch_row.json ./build/release/test/unittest
-
-    - name: test/configs/wal_verification.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/wal_verification.json ./build/release/test/unittest
-
-    - name: test/configs/vacuum_rebuild_indexes_force_storage.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        ./build/release/test/unittest --test-config test/configs/vacuum_rebuild_indexes_force_storage.json
-
-    - name: test/configs/prefetch_all_parquet_files.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/prefetch_all_parquet_files.json ./build/release/test/unittest
-
-    - name: test/configs/no_local_filesystem.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/no_local_filesystem.json ./build/release/test/unittest
-
-    - name: test/configs/block_size_16kB.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/block_size_16kB.json ./build/release/test/unittest
-
-    - name: test/configs/latest_storage_block_size_16kB.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/latest_storage_block_size_16kB.json ./build/release/test/unittest
-
-    - name: test/configs/enable_verification.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/enable_verification.json ./build/release/test/unittest
-
-    - name: test/configs/block_allocator_100mib.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/block_allocator_100mib.json ./build/release/test/unittest
-
-    - name: Test dictionary_expression
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_expression --skip-compiled" ./build/release/test/unittest
-
-    - name: Test dictionary_operator
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_operator --skip-compiled" ./build/release/test/unittest
-
-    - name: Test constant_operator
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector constant_operator --skip-compiled" ./build/release/test/unittest
-
-    - name: Test sequence_operator
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector sequence_operator --skip-compiled" ./build/release/test/unittest
-
-    - name: Test nested_shuffle
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector nested_shuffle --skip-compiled" ./build/release/test/unittest
-
-    - name: Test variant_vector
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/variant_vector.json ./build/release/test/unittest
-
-    - name: Test compressed in memory
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/compressed_in_memory.json ./build/release/test/unittest
-
-    - name: Test sycnronous table scan implementation
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags='--on-init "SET debug_physical_table_scan_execution_strategy=SYNCHRONOUS;"' ./build/release/test/unittest
-
-    - name: Test block prefetching
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/prefetch_all_storage.json ./build/release/test/unittest
-
-    - name: Forwards compatibility tests
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2|1.4.3" --new-unittest build/release/test/unittest
-
-    - name: test/configs/encryption.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/encryption.json ./build/release/test/unittest
+        make test_storage
 
  summary:
     name: Summary
@@ -1475,11 +1291,10 @@ jobs:
     runs-on: ubuntu-slim
     needs:
       - prepare
-      - linux-debug
-      - linux-debug-tests
+      - linux-relassert
+      - linux-relassert-tests
       - regression
       - tidy-check
-      - check-clangd-tidy
       - extensions
       - wasm-eh
       - linux-release
@@ -1487,7 +1302,6 @@ jobs:
       - linux-release-cli
       - linux-musl-release-cli
       - main_julia
-      - upload-libduckdb-src
       - swift
       - windows
       - osx
@@ -1496,7 +1310,6 @@ jobs:
       - static-libs-windows-mingw
       - no-string-inline
       - vector-sizes
-      - valgrind
       - threadsan
       - linux-configs
     steps:

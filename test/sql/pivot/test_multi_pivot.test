@@ -3,9 +3,6 @@
 # group: [pivot]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE OR REPLACE TABLE sales(empid INT, amount INT, month TEXT, year INT);
 
 statement ok
@@ -52,6 +49,25 @@ SELECT *
 ----
 1	12020	7020	NULL	22040	2421	5021	15042	NULL
 2	37020	92520	NULL	6520	6521	2221	16042	2821
+
+query I
+SELECT *
+FROM (SELECT 1 a, NULL::INTEGER b, [1] c)
+PIVOT (min(a) FOR (b, c) IN ((NULL, [1])));
+----
+1
+
+query I
+SELECT *
+FROM (SELECT 1 a, 2 b, 3 c)
+PIVOT (min(a) FOR (b, c) IN ((NULL, [1])));
+----
+NULL
+
+query I
+SELECT (SELECT * FROM (SELECT 1 a, 2 b, 3 c) PIVOT (min(a) FOR (b, c) IN ((NULL, [1]))));
+----
+NULL
 
 statement ok
 SET pivot_limit=10000

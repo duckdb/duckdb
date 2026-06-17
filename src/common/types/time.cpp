@@ -77,7 +77,12 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 	if (pos > len) {
 		return false;
 	}
-	if (pos == len && (!strict || sep_pos + 2 == pos)) {
+	if (pos == len) {
+		// no seconds field: in strict mode this is only valid for a two-digit minute (HH:MM),
+		// otherwise there is no separator to read and we must not look past the end of the buffer
+		if (strict && sep_pos + 2 != pos) {
+			return false;
+		}
 		sec = 0;
 	} else {
 		if (buf[pos++] != sep) {
@@ -144,7 +149,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 			// last chance, check if we can parse as timestamp
 			timestamp_t timestamp;
 			if (Timestamp::TryConvertTimestamp(buf, len, timestamp, false, nanos) == TimestampCastResult::SUCCESS) {
-				if (!Timestamp::IsFinite(timestamp)) {
+				if (!timestamp.IsFinite()) {
 					return false;
 				}
 				result = Timestamp::GetTime(timestamp);
@@ -165,13 +170,18 @@ bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &
 			// last chance, check if we can parse as timestamp
 			timestamp_t timestamp;
 			if (Timestamp::TryConvertTimestamp(buf, len, timestamp, true, nanos) == TimestampCastResult::SUCCESS) {
-				if (!Timestamp::IsFinite(timestamp)) {
+				if (!timestamp.IsFinite()) {
 					return false;
 				}
 				result = dtime_tz_t(Timestamp::GetTime(timestamp), 0);
 				return true;
 			}
 		}
+		return false;
+	}
+
+	//	Interval parsing accepts larger hour counts, but we must limit ourselves to <= 24:00:00
+	if (time_part.micros > Interval::MICROS_PER_DAY) {
 		return false;
 	}
 

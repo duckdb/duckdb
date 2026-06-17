@@ -3,9 +3,6 @@
 # group: [list]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE struct_data(str STRUCT(val VARCHAR)[]);
 
 statement ok

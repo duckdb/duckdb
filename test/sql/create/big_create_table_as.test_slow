@@ -2,9 +2,6 @@
 # description: Test large CREATE TABLE AS statements
 # group: [create]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 CREATE TABLE integers AS SELECT * FROM range(1000000) tbl(i);
 ----

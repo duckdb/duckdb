@@ -255,7 +255,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction trans
 	// currently, we can not alter PK/FK/UNIQUE constraints
 	// concurrency-safe name checks against other INDEX catalog entries happens in the catalog
 	if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT &&
-	    !table.GetStorage().IndexNameIsUnique(info.index_name)) {
+	    !table.GetStorage().IndexNameIsUnique(info.index_name.GetIdentifierName())) {
 		throw CatalogException("An index with the name " + info.index_name + " already exists!");
 	}
 
@@ -307,7 +307,7 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 			throw CatalogException("Couldn't change ownership!");
 		}
 	} else {
-		string name = info.name;
+		auto &name = info.name;
 		if (!set.AlterEntry(transaction, name, info)) {
 			throw CatalogException::MissingEntry(type, name, string());
 		}
@@ -376,17 +376,17 @@ void DuckSchemaEntry::OnDropEntry(CatalogTransaction transaction, CatalogEntry &
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::LookupEntry(CatalogTransaction transaction,
                                                         const EntryLookupInfo &lookup_info) {
-	return GetCatalogSet(lookup_info.GetCatalogType()).GetEntry(transaction, lookup_info.GetEntryName());
+	return GetCatalogSet(lookup_info.GetCatalogType()).GetEntry(transaction, lookup_info.GetEntryIdentifier());
 }
 
 CatalogSet::EntryLookup DuckSchemaEntry::LookupEntryDetailed(CatalogTransaction transaction,
                                                              const EntryLookupInfo &lookup_info) {
-	return GetCatalogSet(lookup_info.GetCatalogType()).GetEntryDetailed(transaction, lookup_info.GetEntryName());
+	return GetCatalogSet(lookup_info.GetCatalogType()).GetEntryDetailed(transaction, lookup_info.GetEntryIdentifier());
 }
 
 SimilarCatalogEntry DuckSchemaEntry::GetSimilarEntry(CatalogTransaction transaction,
                                                      const EntryLookupInfo &lookup_info) {
-	return GetCatalogSet(lookup_info.GetCatalogType()).SimilarEntry(transaction, lookup_info.GetEntryName());
+	return GetCatalogSet(lookup_info.GetCatalogType()).SimilarEntry(transaction, lookup_info.GetEntryIdentifier());
 }
 
 CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {

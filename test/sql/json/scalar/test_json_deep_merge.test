@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # Basic merge (non-null patch value overwrites)
 query T
 SELECT json_deep_merge('{"a": 1}', '{"a": 2}')

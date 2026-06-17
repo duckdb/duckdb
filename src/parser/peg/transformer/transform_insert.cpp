@@ -6,24 +6,19 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(PEGTransformer &transformer,
-                                                                         ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(
+    PEGTransformer &transformer, CommonTableExpressionMap with_clause, const OnConflictAction &or_action,
+    unique_ptr<BaseTableRef> insert_target, const InsertColumnOrder &by_name_or_position,
+    const vector<string> &insert_column_list, InsertValues insert_values, unique_ptr<OnConflictInfo> on_conflict_clause,
+    vector<unique_ptr<ParsedExpression>> returning_clause) {
 	auto result = make_uniq<InsertStatement>();
 	auto &node = *result->node;
-	auto &with_opt = list_pr.Child<OptionalParseResult>(0);
-	if (with_opt.HasResult()) {
-		node.cte_map = transformer.Transform<CommonTableExpressionMap>(with_opt.GetResult());
-	}
-	auto &or_action_opt = list_pr.Child<OptionalParseResult>(2);
-	auto insert_target = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(4));
-	// TODO(Dtenwolde) What about the insert alias?
+	node.cte_map = std::move(with_clause);
 	node.catalog = insert_target->catalog_name;
 	node.schema = insert_target->schema_name;
 	node.table = insert_target->table_name;
-	transformer.TransformOptional<InsertColumnOrder>(list_pr, 5, node.column_order);
-	transformer.TransformOptional<vector<string>>(list_pr, 6, node.columns);
-	auto insert_values = transformer.Transform<InsertValues>(list_pr.Child<ListParseResult>(7));
+	node.column_order = by_name_or_position;
+	node.columns = StringsToIdentifiers(insert_column_list);
 	if (!node.columns.empty() && insert_values.default_values) {
 		throw ParserException(
 		    "You can not provide both a column list and DEFAULT VALUES, please remove one of the two");
@@ -34,156 +29,118 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(PEGTran
 	if (insert_values.select_statement) {
 		node.select_statement = std::move(insert_values.select_statement);
 	}
-	auto on_conflict_info = make_uniq<OnConflictInfo>();
-	auto &on_conflict_clause = list_pr.Child<OptionalParseResult>(8);
-	if (on_conflict_clause.HasResult()) {
-		if (or_action_opt.HasResult()) {
+	if (on_conflict_clause) {
+		if (or_action != OnConflictAction::THROW) {
 			// OR REPLACE | OR IGNORE are shorthands for the ON CONFLICT clause
 			throw ParserException("You can not provide both OR REPLACE|IGNORE and an ON CONFLICT clause, please remove "
-			                      "the first if you want to have more granual control");
+			                      "the first if you want to have more granular control");
 		}
-		on_conflict_info = transformer.Transform<unique_ptr<OnConflictInfo>>(on_conflict_clause.GetResult());
-		node.on_conflict_info = std::move(on_conflict_info);
+		node.on_conflict_info = std::move(on_conflict_clause);
 		node.table_ref = std::move(insert_target);
-	} else if (or_action_opt.HasResult()) {
-		on_conflict_info->action_type = transformer.Transform<OnConflictAction>(or_action_opt.GetResult());
+	} else if (or_action != OnConflictAction::THROW) {
+		auto on_conflict_info = make_uniq<OnConflictInfo>();
+		on_conflict_info->action_type = or_action;
 		node.on_conflict_info = std::move(on_conflict_info);
 		node.table_ref = std::move(insert_target);
 	}
-	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 9, node.returning_list);
+	node.returning_list = std::move(returning_clause);
 	return std::move(result);
 }
 
-OnConflictAction PEGTransformerFactory::TransformOrAction(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &replace_or_ignore = list_pr.Child<ChoiceParseResult>(1).GetResult();
-	auto &replace_or_ignore_keyword = replace_or_ignore.Cast<KeywordParseResult>().keyword;
-	if (StringUtil::CIEquals(replace_or_ignore_keyword, "replace")) {
-		return OnConflictAction::REPLACE;
-	} else if (StringUtil::CIEquals(replace_or_ignore_keyword, "ignore")) {
-		return OnConflictAction::NOTHING;
-	} else {
-		throw InternalException("Unexpected keyword %s encountered for OrAction", replace_or_ignore_keyword);
-	}
+OnConflictAction PEGTransformerFactory::TransformInsertOrReplace(PEGTransformer &transformer) {
+	return OnConflictAction::REPLACE;
+}
+
+OnConflictAction PEGTransformerFactory::TransformInsertOrIgnore(PEGTransformer &transformer) {
+	return OnConflictAction::NOTHING;
 }
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformInsertTarget(PEGTransformer &transformer,
-                                                                      ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto table_ref = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(0));
-	transformer.TransformOptional<string>(list_pr, 1, table_ref->alias);
-	return table_ref;
+                                                                      unique_ptr<BaseTableRef> base_table_name,
+                                                                      const Identifier &insert_alias) {
+	base_table_name->alias = insert_alias;
+	return base_table_name;
 }
 
-string PEGTransformerFactory::TransformInsertAlias(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return list_pr.Child<IdentifierParseResult>(1).identifier;
+Identifier PEGTransformerFactory::TransformInsertAlias(PEGTransformer &transformer, const Identifier &identifier) {
+	return identifier;
 }
 
-unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictClause(PEGTransformer &transformer,
-                                                                            ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto result = transformer.Transform<unique_ptr<OnConflictInfo>>(list_pr.Child<ListParseResult>(3));
-	auto &on_conflict_target_opt = list_pr.Child<OptionalParseResult>(2);
-	if (on_conflict_target_opt.HasResult()) {
-		auto expression_target = transformer.Transform<OnConflictExpressionTarget>(on_conflict_target_opt.GetResult());
-		result->indexed_columns = expression_target.indexed_columns;
-		if (expression_target.where_clause) {
-			result->condition = std::move(expression_target.where_clause);
-		}
+unique_ptr<OnConflictInfo>
+PEGTransformerFactory::TransformOnConflictClause(PEGTransformer &transformer,
+                                                 OnConflictExpressionTarget on_conflict_target,
+                                                 unique_ptr<OnConflictInfo> on_conflict_action) {
+	on_conflict_action->indexed_columns = on_conflict_target.indexed_columns;
+	if (on_conflict_target.where_clause) {
+		on_conflict_action->condition = std::move(on_conflict_target.where_clause);
 	}
-	return result;
+	return on_conflict_action;
 }
 
-OnConflictExpressionTarget PEGTransformerFactory::TransformOnConflictTarget(PEGTransformer &transformer,
-                                                                            ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<OnConflictExpressionTarget>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-}
-
-OnConflictExpressionTarget PEGTransformerFactory::TransformOnConflictExpressionTarget(PEGTransformer &transformer,
-                                                                                      ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+OnConflictExpressionTarget PEGTransformerFactory::TransformOnConflictExpressionTarget(
+    PEGTransformer &transformer, const vector<string> &column_id_list, unique_ptr<ParsedExpression> where_clause) {
 	OnConflictExpressionTarget result;
-	result.indexed_columns = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
-	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, result.where_clause);
+	result.indexed_columns = StringsToIdentifiers(column_id_list);
+	result.where_clause = std::move(where_clause);
 	return result;
 }
 
 OnConflictExpressionTarget PEGTransformerFactory::TransformOnConflictIndexTarget(PEGTransformer &transformer,
-                                                                                 ParseResult &parse_result) {
+                                                                                 const Identifier &constraint_name) {
 	throw NotImplementedException("ON CONSTRAINT conflict target is not supported yet");
 }
 
-unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictAction(PEGTransformer &transformer,
-                                                                            ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<OnConflictInfo>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-}
-
 unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictUpdate(PEGTransformer &transformer,
-                                                                            ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+                                                                            unique_ptr<UpdateSetInfo> update_set_clause,
+                                                                            unique_ptr<ParsedExpression> where_clause) {
 	auto result = make_uniq<OnConflictInfo>();
 	result->action_type = OnConflictAction::UPDATE;
-	result->set_info = transformer.Transform<unique_ptr<UpdateSetInfo>>(list_pr.Child<ListParseResult>(3));
-	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 4, result->set_info->condition);
+	result->set_info = std::move(update_set_clause);
+	result->set_info->condition = std::move(where_clause);
 	return result;
 }
 
-unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictNothing(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
+unique_ptr<OnConflictInfo> PEGTransformerFactory::TransformOnConflictNothing(PEGTransformer &transformer) {
 	auto result = make_uniq<OnConflictInfo>();
 	result->action_type = OnConflictAction::NOTHING;
 	return result;
 }
 
-InsertValues PEGTransformerFactory::TransformInsertValues(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+InsertValues PEGTransformerFactory::TransformSelectInsertValues(PEGTransformer &transformer,
+                                                                unique_ptr<SelectStatement> select_statement_internal) {
 	InsertValues result;
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	if (choice_pr.GetResult().name == "DefaultValues") {
-		result.default_values = true;
-		result.select_statement = nullptr;
-		return result;
-	}
-	if (choice_pr.GetResult().name == "SelectStatementInternal") {
-		result.default_values = false;
-		result.select_statement = transformer.Transform<unique_ptr<SelectStatement>>(choice_pr.GetResult());
-		return result;
-	}
-	throw InternalException("Unexpected choice in InsertValues statement.");
-}
-
-InsertColumnOrder PEGTransformerFactory::TransformByNameOrPosition(PEGTransformer &transformer,
-                                                                   ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.TransformEnum<InsertColumnOrder>(list_pr.Child<ChoiceParseResult>(1).GetResult());
-}
-
-vector<string> PEGTransformerFactory::TransformInsertColumnList(PEGTransformer &transformer,
-                                                                ParseResult &parse_result) {
-	// InsertColumnList <- Parens(ColumnList)
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &column_list = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	return transformer.Transform<vector<string>>(column_list);
-}
-
-vector<string> PEGTransformerFactory::TransformColumnList(PEGTransformer &transformer, ParseResult &parse_result) {
-	// ColumnList <- List(ColId)
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto column_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
-	vector<string> result;
-	for (auto &column : column_list) {
-		result.push_back(transformer.Transform<string>(column));
-	}
+	result.select_statement = std::move(select_statement_internal);
 	return result;
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformReturningClause(PEGTransformer &transformer,
-                                                                                     ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
+InsertValues PEGTransformerFactory::TransformDefaultValues(PEGTransformer &transformer) {
+	InsertValues result;
+	result.default_values = true;
+	return result;
+}
+
+InsertColumnOrder PEGTransformerFactory::TransformInsertByName(PEGTransformer &transformer) {
+	return InsertColumnOrder::INSERT_BY_NAME;
+}
+
+InsertColumnOrder PEGTransformerFactory::TransformInsertByPosition(PEGTransformer &transformer) {
+	return InsertColumnOrder::INSERT_BY_POSITION;
+}
+
+vector<string> PEGTransformerFactory::TransformInsertColumnList(PEGTransformer &transformer,
+                                                                const vector<string> &column_list) {
+	return column_list;
+}
+
+vector<string> PEGTransformerFactory::TransformColumnList(PEGTransformer &transformer,
+                                                          const vector<Identifier> &col_id) {
+	return IdentifiersToStrings(col_id);
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformReturningClause(PEGTransformer &transformer,
+                                                vector<unique_ptr<ParsedExpression>> target_list) {
+	return target_list;
 }
 
 } // namespace duckdb

@@ -134,7 +134,7 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 				result = StringUtil::Upper(result);
 			}
 		} else if (suggestion.candidate_type == CandidateType::IDENTIFIER) {
-			result = KeywordHelper::WriteOptionallyQuoted(result, '"');
+			result = SQLIdentifier::ToString(result);
 		}
 		if (suggestion.extra_char != '\0') {
 			result += suggestion.extra_char;
@@ -166,6 +166,10 @@ public:
 	AutoCompleteTokenizer(const string &sql, MatchState &state)
 	    : BaseTokenizer(sql, state.tokens), suggestions(state.suggestions) {
 		last_pos = 0;
+	}
+
+	TokenType GetTerminator() const override {
+		return TokenType::END_OF_INPUT_AUTOCOMPLETE;
 	}
 
 	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
@@ -201,15 +205,15 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	AutoCompleteTokenizer tokenizer(sql_ref, state);
-	auto allow_complete = tokenizer.TokenizeInput();
-	if (!allow_complete) {
+	tokenizer.TokenizeInput();
+	if (!tokenizer.CanAutocomplete()) {
 		return {};
 	}
 	if (state.suggestions.empty()) {
 		// no suggestions found during tokenizing
 		// run the root matcher
 		auto peg_matcher = provider.GetPEGMatcher();
-		peg_matcher->Root().Match(state);
+		peg_matcher->ProgramMatcher().Match(state);
 	}
 	if (state.suggestions.empty()) {
 		return {};

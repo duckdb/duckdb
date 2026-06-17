@@ -160,7 +160,8 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 }
 
 static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
-                                                 const vector<string> &names, const vector<LogicalType> &sql_types) {
+                                                 const vector<Identifier> &names,
+                                                 const vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
 	bool compression_level_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
@@ -213,7 +214,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			    StringUtil::Lower(StringValue::Get(option.second[0])) == "auto") {
 				throw NotImplementedException("The 'auto' option is not yet implemented for 'shredding'");
 			} else {
-				case_insensitive_set_t variant_names;
+				identifier_set_t variant_names;
 				for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 					if (sql_types[col_idx].id() != LogicalTypeId::VARIANT) {
 						continue;
@@ -229,8 +230,9 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				const auto &struct_children = StructValue::GetChildren(shredding_types_value);
 				D_ASSERT(StructType::GetChildTypes(struct_type).size() == struct_children.size());
 				for (idx_t i = 0; i < struct_children.size(); i++) {
-					const auto &col_name = StringUtil::Lower(StructType::GetChildName(struct_type, i));
-					auto it = variant_names.find(col_name);
+					const auto &col_name =
+					    StringUtil::Lower(StructType::GetChildName(struct_type, i).GetIdentifierName());
+					auto it = variant_names.find(Identifier(col_name));
 					if (it == variant_names.end()) {
 						string names;
 						for (const auto &entry : variant_names) {
@@ -252,7 +254,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 						}
 					}
 					const auto &child_value = struct_children[i];
-					bind_data->shredding_types.AddChild(col_name,
+					bind_data->shredding_types.AddChild(Identifier(col_name),
 					                                    ShreddingType::GetShreddingTypes(child_value, context));
 				}
 			}
@@ -349,7 +351,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 	}
 
 	bind_data->sql_types = sql_types;
-	bind_data->column_names = names;
+	bind_data->column_names = IdentifiersToStrings(names);
 
 	return std::move(bind_data);
 }
@@ -374,14 +376,26 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer = make_uniq<ParquetWriter>(
-	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
-	    parquet_bind.field_ids.Copy(), parquet_bind.shredding_types.Copy(), parquet_bind.kv_metadata,
-	    parquet_bind.encryption_config, parquet_bind.dictionary_size_limit,
-	    parquet_bind.string_dictionary_page_size_limit, parquet_bind.enable_bloom_filters,
-	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.parquet_version,
-	    parquet_bind.geoparquet_version, parquet_bind.write_timestamp_as_int96,
-	    parquet_bind.timestamp_is_adjusted_to_utc, parquet_bind.not_null_columns);
+
+	ParquetWriterOptions options;
+	options.file_name = file_path;
+	options.sql_types = parquet_bind.sql_types;
+	options.column_names = parquet_bind.column_names;
+	options.codec = parquet_bind.codec, options.field_ids = parquet_bind.field_ids.Copy();
+	options.shredding_types = parquet_bind.shredding_types.Copy();
+	options.encryption_config = parquet_bind.encryption_config;
+	options.dictionary_size_limit = parquet_bind.dictionary_size_limit,
+	options.string_dictionary_page_size_limit = parquet_bind.string_dictionary_page_size_limit;
+	options.enable_bloom_filters = parquet_bind.enable_bloom_filters,
+	options.bloom_filter_false_positive_ratio = parquet_bind.bloom_filter_false_positive_ratio;
+	options.compression_level = parquet_bind.compression_level;
+	options.parquet_version = parquet_bind.parquet_version,
+	options.geoparquet_version = parquet_bind.geoparquet_version;
+	options.write_timestamp_as_int96 = parquet_bind.write_timestamp_as_int96,
+	options.timestamp_is_adjusted_to_utc = parquet_bind.timestamp_is_adjusted_to_utc;
+	options.not_null_columns = parquet_bind.not_null_columns;
+
+	global_state->writer = make_uniq<ParquetWriter>(context, fs, std::move(options), parquet_bind.kv_metadata);
 	return std::move(global_state);
 }
 
@@ -540,6 +554,29 @@ ParquetVersion EnumUtil::FromString<ParquetVersion>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "V2")) {
 		return ParquetVersion::V2;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template <>
+const char *EnumUtil::ToChars<ParquetPrefetchStrategyOption>(ParquetPrefetchStrategyOption value) {
+	switch (value) {
+	case ParquetPrefetchStrategyOption::AUTO:
+		return "AUTO";
+	case ParquetPrefetchStrategyOption::WHOLE_GROUP:
+		return "WHOLE_GROUP";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption>(const char *value) {
+	if (StringUtil::Equals(value, "AUTO")) {
+		return ParquetPrefetchStrategyOption::AUTO;
+	}
+	if (StringUtil::Equals(value, "WHOLE_GROUP")) {
+		return ParquetPrefetchStrategyOption::WHOLE_GROUP;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -792,7 +829,7 @@ static unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, Repla
 
 	if (!FileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		table_function->alias = fs.ExtractBaseName(table_name);
+		table_function->alias = Identifier(fs.ExtractBaseName(table_name));
 	}
 
 	return std::move(table_function);
@@ -834,7 +871,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 	bool any_change = false;
 
 	for (auto &expr : input.select_list) {
-		const auto &type = expr->return_type;
+		const auto &type = expr->GetReturnType();
 		const auto &name = expr->GetAlias();
 
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
@@ -892,9 +929,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_uniq<ZStdFileSystem>());
 
 	auto scan_fun = ParquetScanFunction::GetFunctionSet();
-	scan_fun.name = "read_parquet";
+	scan_fun.SetName("read_parquet");
 	loader.RegisterFunction(scan_fun);
-	scan_fun.name = "parquet_scan";
+	scan_fun.SetName("parquet_scan");
 	loader.RegisterFunction(scan_fun);
 
 	// parquet_metadata
@@ -925,7 +962,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 
 	CopyFunction function("parquet");
-	function.supports_sql_null = true;
 	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
 	function.copy_to_propagate_statistics = ParquetCopyToPropagateStatistics;
@@ -965,8 +1001,12 @@ static void LoadInternal(ExtensionLoader &loader) {
 	config.AddExtensionOption("disable_parquet_prefetching", "Disable the prefetching mechanism in Parquet",
 	                          LogicalType::BOOLEAN, Value(false));
 	config.AddExtensionOption("prefetch_all_parquet_files",
-	                          "Use the prefetching mechanism for all types of parquet files", LogicalType::BOOLEAN,
-	                          Value(false));
+	                          "(deprecated) Parquet files are now always prefetched, this setting has no effect",
+	                          LogicalType::BOOLEAN, Value(false));
+	config.AddExtensionOption(
+	    "parquet_prefetch_column_gap",
+	    "Byte gap under which Parquet prefetch I/O ranges are coalesced (NULL lets the cost model adapt it)",
+	    LogicalType::UBIGINT, Value(LogicalType::UBIGINT));
 	config.AddExtensionOption("parquet_metadata_cache",
 	                          "Cache Parquet metadata - useful when reading the same files multiple times",
 	                          LogicalType::BOOLEAN, Value(false));

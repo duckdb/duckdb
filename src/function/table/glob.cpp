@@ -53,7 +53,6 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		count++;
 		state.file_list_scan.scan_type = MultiFileListScanType::FETCH_IF_AVAILABLE;
 	}
-	output.SetCardinality(count);
 }
 
 void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {

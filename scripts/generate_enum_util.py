@@ -16,7 +16,14 @@ blacklist = [
     "DictFSSTMode",
     "ComplexJSONType",
     "UnavailableReason",
+    "VirtualColumnBindingType",
     "Slot",
+    "ScheduleMode",
+    "MemoryUpdateMode",
+    "SchedulePolicy",
+    "DrainMode",
+    "BatchDrainMode",
+    "PendingTaskCountMode",
 ]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")
@@ -29,6 +36,7 @@ overrides = {
         "TIMESTAMP_TZ": "TIMESTAMP WITH TIME ZONE",
         "TIME_TZ": "TIME WITH TIME ZONE",
         "TIMESTAMP_SEC": "TIMESTAMP_S",
+        "TIMESTAMP_TZ_NS": "TIMESTAMPTZ_NS",
     },
     "JoinType": {"OUTER": "FULL"},
     "OrderType": {
@@ -71,6 +79,7 @@ overrides = {
         "HEAD_REQUEST": "HEAD",
         "DELETE_REQUEST": "DELETE",
         "POST_REQUEST": "POST",
+        "OPTIONS_REQUEST": "OPTIONS",
     },
     "CompressionType": {
         "COMPRESSION_AUTO": "AUTO",

@@ -6,8 +6,9 @@
 
 namespace duckdb {
 
-PhysicalCTE::PhysicalCTE(PhysicalPlan &physical_plan, string ctename, TableIndex table_index, vector<LogicalType> types,
-                         PhysicalOperator &top, PhysicalOperator &bottom, idx_t estimated_cardinality)
+PhysicalCTE::PhysicalCTE(PhysicalPlan &physical_plan, Identifier ctename, TableIndex table_index,
+                         vector<LogicalType> types, PhysicalOperator &top, PhysicalOperator &bottom,
+                         idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::CTE, std::move(types), estimated_cardinality),
       table_index(table_index), ctename(std::move(ctename)) {
 	children.push_back(top);
@@ -22,11 +23,30 @@ PhysicalCTE::~PhysicalCTE() {
 //===--------------------------------------------------------------------===//
 class CTEGlobalState : public GlobalSinkState {
 public:
-	explicit CTEGlobalState(ClientContext &context, const PhysicalCTE &op) : working_table_ref(op.working_table.get()) {
+	explicit CTEGlobalState(ClientContext &context, const PhysicalCTE &op)
+	    : op(op), working_table_ref(op.working_table.get()) {
+		ResetState(context);
 	}
+	const PhysicalCTE &op;
 	optional_ptr<ColumnDataCollection> working_table_ref;
 
 	mutex lhs_lock;
+
+private:
+	void ResetState(ClientContext &context) {
+		op.working_table->Reset();
+		working_table_ref = op.working_table.get();
+		GlobalSinkState::Reset(context);
+	}
+
+public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &context) override {
+		ResetState(context);
+	}
 
 	void MergeIT(ColumnDataCollection &input) {
 		lock_guard<mutex> guard(lhs_lock);
@@ -46,12 +66,11 @@ public:
 	ColumnDataAppendState append_state;
 
 	void Append(DataChunk &input) {
-		lhs_data.Append(input);
+		lhs_data.Append(append_state, input);
 	}
 };
 
 unique_ptr<GlobalSinkState> PhysicalCTE::GetGlobalSinkState(ClientContext &context) const {
-	working_table->Reset();
 	return make_uniq<CTEGlobalState>(context, *this);
 }
 
@@ -118,10 +137,25 @@ vector<const_reference<PhysicalOperator>> PhysicalCTE::GetSources() const {
 
 InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["CTE Name"] = ctename;
+	result["CTE Name"] = ctename.GetIdentifierName();
 	result["Table Index"] = StringUtil::Format("%llu", table_index.index);
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
+}
+
+ProgressData PhysicalCTE::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
+                                          const ProgressData source_progress) const {
+	auto &state = gstate.Cast<CTEGlobalState>();
+	lock_guard<mutex> guard(state.lhs_lock);
+	if (!state.working_table_ref) {
+		return ProgressData {0, 1, true};
+	}
+	auto &working_table = *state.working_table_ref;
+	auto count = double(working_table.Count());
+	ProgressData progress;
+	progress.done = count;
+	progress.total = count + source_progress.total;
+	return progress;
 }
 
 } // namespace duckdb

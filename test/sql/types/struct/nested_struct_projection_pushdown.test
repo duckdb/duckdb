@@ -10,9 +10,6 @@ require parquet
 statement ok
 SET variant_minimum_shredding_size = 0;
 
-statement ok
-PRAGMA enable_verification
-
 foreach type struct variant
 
 # 2 layers of nesting

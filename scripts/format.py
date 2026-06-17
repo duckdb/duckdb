@@ -119,8 +119,8 @@ ignored_directories = [
     'dbgen',
     os.path.join('tools', 'rpkg', 'src', 'duckdb'),
     os.path.join('tools', 'rpkg', 'inst', 'include', 'cpp11'),
+    os.path.join('extension', 'external'),
     os.path.join('extension', 'tpcds', 'dsdgen'),
-    os.path.join('extension', 'jemalloc', 'jemalloc'),
     os.path.join('extension', 'icu', 'third_party'),
     os.path.join('tools', 'nodejs', 'src', 'duckdb'),
 ]
@@ -428,11 +428,7 @@ def format_directory(directory):
 
 files = []
 if format_all:
-    try:
-        os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
-    except:
-        pass
-
+    files.append('CMakeLists.txt')
     for direct in formatted_directories:
         files += format_directory(direct)
 

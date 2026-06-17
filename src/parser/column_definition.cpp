@@ -3,14 +3,15 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 
 namespace duckdb {
 
-ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p)
+ColumnDefinition::ColumnDefinition(Identifier name_p, LogicalType type_p)
     : name(std::move(name_p)), type(std::move(type_p)) {
 }
 
-ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression,
+ColumnDefinition::ColumnDefinition(Identifier name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression,
                                    TableColumnType category)
     : name(std::move(name_p)), type(std::move(type_p)), category(category), expression(std::move(expression)) {
 }
@@ -63,10 +64,10 @@ void ColumnDefinition::SetType(const LogicalType &type) {
 	this->type = type;
 }
 
-const string &ColumnDefinition::Name() const {
+const Identifier &ColumnDefinition::Name() const {
 	return name;
 }
-void ColumnDefinition::SetName(const string &name) {
+void ColumnDefinition::SetName(const Identifier &name) {
 	this->name = name;
 }
 
@@ -126,6 +127,47 @@ bool ColumnDefinition::Generated() const {
 	return category == TableColumnType::GENERATED;
 }
 
+string ColumnDefinition::ToSQLString() const {
+	string result = SQLIdentifier(Name()) + " ";
+	auto &column_type = Type();
+	if (column_type.id() != LogicalTypeId::ANY) {
+		result += Type().ToString();
+	}
+	auto extra_type_info = column_type.AuxInfo();
+	if (extra_type_info) {
+		if (extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
+			auto &string_info = extra_type_info->Cast<StringTypeInfo>();
+			if (!string_info.collation.empty()) {
+				result += " COLLATE " + string_info.collation;
+			}
+		}
+		if (extra_type_info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO) {
+			// TODO
+			// auto &colllation = UnboundType::GetCollation(column_type);
+			// if (!colllation.empty()) {
+			//	ss << " COLLATE " + colllation;
+			//}
+		}
+	}
+	if (Generated()) {
+		reference<const ParsedExpression> generated_expression = GeneratedExpression();
+		if (column_type.id() != LogicalTypeId::ANY) {
+			// We artificially add a cast if the type is specified, need to strip it
+			auto &expr = generated_expression.get();
+			D_ASSERT(expr.GetExpressionType() == ExpressionType::OPERATOR_CAST);
+			auto &cast_expr = expr.Cast<CastExpression>();
+			generated_expression = cast_expr.Child();
+		}
+		result += " GENERATED ALWAYS AS(" + generated_expression.get().ToString() + ")";
+	} else if (HasDefaultValue()) {
+		result += " DEFAULT(" + DefaultValue().ToString() + ")";
+	}
+	if (CompressionType() != CompressionType::COMPRESSION_AUTO) {
+		result += " USING COMPRESSION " + CompressionTypeToString(CompressionType());
+	}
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Generated Columns (VIRTUAL)
 //===--------------------------------------------------------------------===//
@@ -143,7 +185,7 @@ static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &d
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto columnref = expr.Cast<ColumnRefExpression>();
 		auto &name = columnref.GetColumnName();
-		dependencies.push_back(name);
+		dependencies.emplace_back(name);
 	}
 	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
 		if (expr.GetExpressionType() == ExpressionType::LAMBDA) {
@@ -158,7 +200,7 @@ void ColumnDefinition::GetListOfDependencies(vector<string> &dependencies) const
 	InnerGetListOfDependencies(*expression, dependencies);
 }
 
-string ColumnDefinition::GetName() const {
+Identifier ColumnDefinition::GetName() const {
 	return name;
 }
 

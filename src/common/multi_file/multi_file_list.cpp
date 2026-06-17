@@ -5,6 +5,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
@@ -20,7 +21,7 @@ MultiFilePushdownInfo::MultiFilePushdownInfo(LogicalGet &get)
 	}
 }
 
-MultiFilePushdownInfo::MultiFilePushdownInfo(TableIndex table_index, const vector<string> &column_names,
+MultiFilePushdownInfo::MultiFilePushdownInfo(TableIndex table_index, const vector<Identifier> &column_names,
                                              const vector<column_t> &column_ids, ExtraOperatorInfo &extra_info)
     : table_index(table_index), column_names(column_names), column_ids(column_ids), extra_info(extra_info) {
 }
@@ -33,7 +34,7 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 		if (IsVirtualColumn(info.column_ids[i])) {
 			continue;
 		}
-		filter_info.column_map.insert({info.column_names[info.column_ids[i]], i});
+		filter_info.column_map.insert({info.column_names[info.column_ids[i]].GetIdentifierName(), i});
 	}
 	filter_info.hive_enabled = options.hive_partitioning;
 	filter_info.filename_enabled = options.filename;
@@ -48,7 +49,7 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 	return false;
 }
 
-bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, const vector<string> &names,
+bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, const vector<Identifier> &names,
                       const vector<LogicalType> &types, const vector<column_t> &column_ids,
                       const TableFilterSet &filters, vector<OpenFileInfo> &expanded_files) {
 	TableIndex table_index(0);
@@ -67,7 +68,8 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, c
 		}
 		auto column_ref =
 		    make_uniq<BoundColumnRefExpression>(types[column_idx], ColumnBinding(table_index, entry.GetIndex()));
-		auto filter_expr = entry.Filter().ToExpression(*column_ref);
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "MultiFilePushdownInfo::Pushdown");
+		auto filter_expr = expr_filter.ToExpression(*column_ref);
 		filter_expressions.push_back(std::move(filter_expr));
 	}
 
@@ -200,7 +202,7 @@ unique_ptr<MultiFileList> MultiFileList::ComplexFilterPushdown(ClientContext &co
 }
 
 unique_ptr<MultiFileList> MultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
-                                                               const vector<string> &names,
+                                                               const vector<Identifier> &names,
                                                                const vector<LogicalType> &types,
                                                                const vector<column_t> &column_ids,
                                                                TableFilterSet &filters) const {

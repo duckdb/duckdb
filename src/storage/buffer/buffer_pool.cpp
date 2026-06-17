@@ -44,26 +44,18 @@ BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockMemory> block_memory_p, idx
 	D_ASSERT(!memory_p.expired());
 }
 
-bool BufferEvictionNode::CanUnload(BlockMemory &memory) {
-	if (handle_sequence_number != memory.GetEvictionSequenceNumber()) {
-		// handle was used in between
-		return false;
-	}
-	return memory.CanUnload();
-}
-
-shared_ptr<BlockMemory> BufferEvictionNode::TryGetBlockMemory() {
+bool BufferEvictionNode::IsDeadNode(optional_idx debug_sleep_micros) {
 	auto shared_memory_p = memory_p.lock();
+	if (debug_sleep_micros.IsValid()) {
+		ThreadUtil::SleepMicroSeconds(debug_sleep_micros.GetIndex());
+	}
 	if (!shared_memory_p) {
-		// The block memory has been destroyed.
-		return nullptr;
+		return true;
 	}
-	if (!CanUnload(*shared_memory_p)) {
-		// The memory handle was used in between.
-		return nullptr;
+	if (handle_sequence_number != shared_memory_p->GetEvictionSequenceNumber()) {
+		return true;
 	}
-	// The node is the latest node in the queue with this memory.
-	return shared_memory_p;
+	return false;
 }
 
 typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
@@ -72,7 +64,7 @@ struct EvictionQueue {
 public:
 	explicit EvictionQueue(const vector<FileBufferType> &file_buffer_types_p)
 	    : file_buffer_types(file_buffer_types_p), debug_eviction_queue_sleep(0), evict_queue_insertions(0),
-	      total_dead_nodes(0) {
+	      total_dead_nodes(0), purge_consumer_token(q), purge_producer_token(q) {
 	}
 
 public:
@@ -108,7 +100,7 @@ public:
 	}
 
 private:
-	//! Bulk purge dead nodes from the eviction queue. Then, enqueue those that are still alive.
+	//! Bulk purge dead nodes from the eviction queue. Then, re-enqueue those that are still alive.
 	void PurgeIteration(const idx_t purge_size);
 
 public:
@@ -143,6 +135,10 @@ private:
 	mutex purge_lock;
 	//! A pre-allocated vector of eviction nodes. We reuse this to keep the allocation overhead of purges small.
 	vector<BufferEvictionNode> purge_nodes;
+	//! Consumer token for purge dequeuing — progresses through sub-queues sequentially.
+	duckdb_moodycamel::ConsumerToken purge_consumer_token;
+	//! Producer token for re-enqueuing alive nodes into a dedicated sub-queue.
+	duckdb_moodycamel::ProducerToken purge_producer_token;
 };
 
 bool EvictionQueue::AddToEvictionQueue(BufferEvictionNode &&node) {
@@ -191,6 +187,7 @@ void EvictionQueue::Purge() {
 	// guaranteeing that we always exit the loop.
 
 	idx_t max_purges = approx_q_size / purge_size;
+
 	while (max_purges != 0) {
 		PurgeIteration(purge_size);
 
@@ -224,28 +221,33 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 		purge_nodes.resize(purge_size);
 	}
 
-	// bulk purge
-	const idx_t actually_dequeued = q.try_dequeue_bulk(purge_nodes.begin(), purge_size);
+	// Dequeue using consumer token — progresses through sub-queues sequentially
+	const idx_t actually_dequeued = q.try_dequeue_bulk(purge_consumer_token, purge_nodes.begin(), purge_size);
+	if (actually_dequeued == 0) {
+		return;
+	}
 
-	// retrieve all alive nodes that have been wrongly dequeued
-	idx_t alive_nodes = 0;
-	auto debug_sleep_micros = debug_eviction_queue_sleep.load(std::memory_order_relaxed);
+	idx_t dead_count = 0;
+	idx_t alive_count = 0;
+	auto raw_sleep_micros = debug_eviction_queue_sleep.load(std::memory_order_relaxed);
+	optional_idx debug_sleep_micros = raw_sleep_micros > 0 ? optional_idx(raw_sleep_micros) : optional_idx();
 	for (idx_t i = 0; i < actually_dequeued; i++) {
 		auto &node = purge_nodes[i];
-		auto handle = node.TryGetBlockMemory();
-		if (debug_sleep_micros > 0) {
-			// Debug race conditions regarding the ownership of the BlockMemory.
-			ThreadUtil::SleepMicroSeconds(debug_sleep_micros);
-		}
-		if (handle) {
-			purge_nodes[alive_nodes++] = std::move(node);
+		if (node.IsDeadNode(debug_sleep_micros)) {
+			dead_count++;
+		} else {
+			// Move alive nodes to the front for bulk re-enqueue
+			purge_nodes[alive_count++] = std::move(node);
 		}
 	}
 
-	// bulk re-add (TODO order them by timestamp to better retain the LRU behavior)
-	q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
+	total_dead_nodes -= dead_count;
 
-	total_dead_nodes -= actually_dequeued - alive_nodes;
+	// Re-enqueue alive nodes via producer token — goes into a dedicated sub-queue
+	// that the consumer token has already passed
+	if (alive_count > 0) {
+		q.enqueue_bulk(purge_producer_token, purge_nodes.begin(), alive_count);
+	}
 }
 
 BufferPool::BufferPool(BlockAllocator &block_allocator, idx_t maximum_memory, bool track_eviction_timestamps,
@@ -266,24 +268,29 @@ BufferPool::BufferPool(BlockAllocator &block_allocator, idx_t maximum_memory, bo
 BufferPool::~BufferPool() {
 }
 
-bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
+bool BufferPool::AddToEvictionQueue(BlockLock &lock, shared_ptr<BlockHandle> &handle) {
 	auto &memory = handle->GetMemory();
+	// Verify the caller passed this block's lock before we mutate any of its state.
+	// The block lock is held throughout: Unpin holds it; ConvertToPersistent acquires the
+	// (uncontended) lock of the freshly created block before calling.
+	memory.VerifyMutex(lock);
 	auto &queue = GetEvictionQueueForBlockMemory(memory);
 
-	// The block handle is locked during this operation (Unpin),
-	// or the block handle is still a local variable (ConvertToPersistent)
 	D_ASSERT(memory.GetReaders() == 0);
+	if (memory.HasLiveQueueEntry(lock)) {
+		// Count the previous live entry before bumping the sequence number. PurgeIteration
+		// reads sequence numbers without the block lock; bumping first could let it see the
+		// previous entry as stale and decrement dead_nodes before this matching increment.
+		queue.IncrementDeadNodes();
+	}
+
 	auto ts = memory.NextEvictionSequenceNumber();
 	if (track_eviction_timestamps) {
 		memory.SetLRUTimestamp(std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
 		                           .time_since_epoch()
 		                           .count());
 	}
-
-	if (ts != 1) {
-		// we add a newer version, i.e., we kill exactly one previous version
-		queue.IncrementDeadNodes();
-	}
+	memory.SetHasLiveQueueEntry(lock, true);
 
 	// Get the eviction queue for the block and add it
 	BufferEvictionNode node(handle->GetMemoryWeak(), ts);
@@ -468,7 +475,7 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 		}
 
 		// get a reference to the underlying block pointer
-		auto handle = node.TryGetBlockMemory();
+		auto handle = node.memory_p.lock();
 		if (debug_sleep_micros > 0) {
 			// Debug race conditions regarding the ownership of the BlockMemory.
 			// Note that for this to trigger we need at least one purge iteration with the setting active.
@@ -481,9 +488,17 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 
 		// we might be able to free this block: grab the mutex and check if we can free it
 		auto lock = handle->GetLock();
-		if (!node.CanUnload(*handle)) {
-			// something changed in the mean-time, bail out
+		if (node.handle_sequence_number != handle->GetEvictionSequenceNumber()) {
+			// A newer entry superseded this node: it was counted as dead when that entry was added.
 			DecrementDeadNodes();
+			continue;
+		}
+		// This node is the block's live queue entry, and we just dequeued it: the block no longer
+		// has an entry in the queue. Live entries are never counted as dead, so no decrement.
+		handle->SetHasLiveQueueEntry(lock, false);
+		if (!handle->CanUnload()) {
+			// The block cannot be unloaded right now (e.g. it is pinned). It gets a new queue
+			// entry when it is unpinned again.
 			continue;
 		}
 

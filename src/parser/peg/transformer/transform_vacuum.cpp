@@ -4,90 +4,77 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformVacuumStatement(PEGTransformer &transformer,
-                                                                         ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	VacuumOptions options;
-	transformer.TransformOptional<VacuumOptions>(list_pr, 1, options);
-	auto result = make_uniq<VacuumStatement>(options);
-	auto &target_opt = list_pr.Child<OptionalParseResult>(2);
-	if (target_opt.HasResult()) {
-		auto target = transformer.Transform<AnalyzeTarget>(target_opt.GetResult());
-		result->info->columns = target.columns;
-		result->info->ref = std::move(target.ref);
+                                                                         const VacuumOptions &vacuum_options,
+                                                                         AnalyzeTarget analyze_target) {
+	auto result = make_uniq<VacuumStatement>(vacuum_options);
+	if (analyze_target.ref) {
+		result->info->columns = analyze_target.columns;
+		result->info->ref = std::move(analyze_target.ref);
 		result->info->has_table = true;
 	}
 	return std::move(result);
 }
 
-VacuumOptions PEGTransformerFactory::TransformVacuumOptions(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<VacuumOptions>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-}
-
-VacuumOptions PEGTransformerFactory::TransformVacuumLegacyOptions(PEGTransformer &transformer,
-                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+VacuumOptions PEGTransformerFactory::TransformVacuumLegacyOptions(PEGTransformer &transformer, const string &opt_full,
+                                                                  const string &opt_freeze, const string &opt_verbose,
+                                                                  const string &opt_analyze) {
 	VacuumOptions options;
 	options.vacuum = true;
-	options.analyze = list_pr.Child<OptionalParseResult>(3).HasResult();
-	if (list_pr.Child<OptionalParseResult>(0).HasResult()) {
+	options.analyze = !opt_analyze.empty();
+	if (!opt_full.empty()) {
 		throw NotImplementedException("FULL is not yet implemented");
 	}
-	if (list_pr.Child<OptionalParseResult>(1).HasResult()) {
+	if (!opt_freeze.empty()) {
 		throw NotImplementedException("FREEZE is not yet implemented");
 	}
-	if (list_pr.Child<OptionalParseResult>(2).HasResult()) {
+	if (!opt_verbose.empty()) {
 		throw NotImplementedException("VERBOSE is not yet implemented");
 	}
 	return options;
 }
 
 VacuumOptions PEGTransformerFactory::TransformVacuumParensOptions(PEGTransformer &transformer,
-                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	auto option_list = ExtractParseResultsFromList(extract_parens);
+                                                                  const vector<string> &vacuum_option) {
 	VacuumOptions options;
 	options.vacuum = true;
-	for (auto &option : option_list) {
-		string option_name = transformer.Transform<string>(option);
-		if (StringUtil::CIEquals(option_name, "disable_page_skipping")) {
+	for (auto &option : vacuum_option) {
+		if (StringUtil::CIEquals(option, "disable_page_skipping")) {
 			throw NotImplementedException("Disable Page Skipping vacuum option");
 		}
-		if (StringUtil::CIEquals(option_name, "freeze")) {
+		if (StringUtil::CIEquals(option, "freeze")) {
 			throw NotImplementedException("FREEZE is not yet implemented");
 		}
-		if (StringUtil::CIEquals(option_name, "full")) {
+		if (StringUtil::CIEquals(option, "full")) {
 			throw NotImplementedException("FULL is not yet implemented");
 		}
-		if (StringUtil::CIEquals(option_name, "verbose")) {
+		if (StringUtil::CIEquals(option, "verbose")) {
 			throw NotImplementedException("VERBOSE is not yet implemented");
 		}
-		if (StringUtil::CIEquals(option_name, "analyze")) {
+		if (StringUtil::CIEquals(option, "analyze")) {
 			options.analyze = true;
 		}
 	}
 	return options;
 }
 
-string PEGTransformerFactory::TransformVacuumOption(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &option = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	if (option.type == ParseResultType::IDENTIFIER) {
-		return option.Cast<IdentifierParseResult>().identifier;
-	}
-	return transformer.TransformEnum<string>(option);
+vector<string> PEGTransformerFactory::TransformNameList(PEGTransformer &transformer, const vector<Identifier> &col_id) {
+	return IdentifiersToStrings(col_id);
 }
 
-vector<string> PEGTransformerFactory::TransformNameList(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<string> result;
-	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	auto colid_list = ExtractParseResultsFromList(extract_parens);
-	for (auto &colid : colid_list) {
-		result.push_back(transformer.Transform<string>(colid));
-	}
-	return result;
+string PEGTransformerFactory::TransformOptAnalyze(PEGTransformer &transformer) {
+	return "analyze";
+}
+
+string PEGTransformerFactory::TransformOptFull(PEGTransformer &transformer) {
+	return "full";
+}
+
+string PEGTransformerFactory::TransformOptFreeze(PEGTransformer &transformer) {
+	return "freeze";
+}
+
+string PEGTransformerFactory::TransformOptVerbose(PEGTransformer &transformer) {
+	return "verbose";
 }
 
 } // namespace duckdb

@@ -13,9 +13,9 @@ TableFunctionBinder::TableFunctionBinder(Binder &binder, ClientContext &context,
 }
 
 BindResult TableFunctionBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
-	D_ASSERT(lambda_bindings && expr.lambda_idx < lambda_bindings->size());
+	D_ASSERT(lambda_bindings && expr.LambdaIndex() < lambda_bindings->size());
 	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
-	return (*lambda_bindings)[expr.lambda_idx].Bind(lambda_ref, depth);
+	return (*lambda_bindings)[expr.LambdaIndex()].Bind(lambda_ref, depth);
 }
 
 BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
@@ -28,16 +28,16 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}
 
-		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
+		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(Identifier(col_ref.GetName()))) {
 			throw ParameterNotResolvedException();
 		}
-	} else if (col_ref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos && binder.macro_binding &&
-	           binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
+	} else if (col_ref.ColumnNames()[0].GetIdentifierName().find(DummyBinding::DUMMY_NAME) != string::npos &&
+	           binder.macro_binding && binder.macro_binding->HasMatchingBinding(Identifier(col_ref.GetName()))) {
 		throw ParameterNotResolvedException();
 	}
 
 	auto query_location = col_ref.GetQueryLocation();
-	auto column_names = col_ref.column_names;
+	auto column_names = col_ref.ColumnNames();
 	auto result_name = StringUtil::Join(column_names, ".");
 	if (!table_function_name.empty()) {
 		// check if this is a lateral join column/parameter

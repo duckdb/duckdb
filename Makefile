@@ -23,7 +23,7 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
-FORMAT_VENV ?= build/format-venv
+FORMAT_VENV ?= .cache/format-venv
 FORMAT_PYTHON := $(FORMAT_VENV)/bin/python
 FORMAT_SETUP_DEPS := format_venv
 
@@ -33,8 +33,9 @@ EXE_SUFFIX := .exe
 endif
 UNITTEST_BINARY ?= test/unittest$(EXE_SUFFIX)
 SMOKE_UNITTEST ?= build/relassert/$(UNITTEST_BINARY)
-UNITTEST_SLOW_FLAGS ?= --batch-timeout=1800 --track-runtime=300
-UNITTEST_HUGE_FLAGS ?= --batch-size=1 --workers=50% $(UNITTEST_SLOW_FLAGS)
+SMOKE_RUNNER ?= build/relassert/test/run
+UNITTEST_SLOW_FLAGS ?= --track-runtime=100
+UNITTEST_HUGE_FLAGS ?= --workers=50% $(UNITTEST_SLOW_FLAGS)
 
 # Allow setting extra unit test parameters using `make smoke T=...`.
 T ?=
@@ -69,6 +70,13 @@ endif
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
 	FORCE_COLOR=-DFORCE_COLORED_OUTPUT=1
+endif
+DUCKDB_NINJA_FILTER ?= $(if $(CI),1,0)
+NINJA_BUILD_WRAPPER :=
+ifeq ($(GEN),ninja)
+ifneq ($(DUCKDB_NINJA_FILTER),0)
+	NINJA_BUILD_WRAPPER=$(PYTHON) ${PROJ_DIR}scripts/ci/filter_ninja_output.py --
+endif
 endif
 ifeq (${TREAT_WARNINGS_AS_ERRORS}, 1)
 	WARNINGS_AS_ERRORS=-DTREAT_WARNINGS_AS_ERRORS=1
@@ -188,8 +196,8 @@ endif
 ifeq (${BUILD_JSON}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};json
 endif
-ifeq (${BUILD_JEMALLOC}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};jemalloc
+ifdef BUILD_JEMALLOC
+	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_JEMALLOC=${BUILD_JEMALLOC}
 endif
 ifdef CORE_EXTENSIONS
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};${CORE_EXTENSIONS}
@@ -423,7 +431,7 @@ define cmake_build
 	$(call sync_extensions_into,${PROJ_DIR}$(1)) \
 	cd $(1) && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}$(1)) $(3) -DCMAKE_BUILD_TYPE=$(2) ../.. && \
-	cmake --build . --config $(2)
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config $(2)
 endef
 
 debug: ${EXTENSION_CONFIG_STEP}
@@ -437,12 +445,12 @@ BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
 windows_release: ${EXTENSION_CONFIG_STEP}
 	$(call sync_extensions_into,${PROJ_DIR}) \
 	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
-	cmake --build . --config Release
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 windows_release_32: ${EXTENSION_CONFIG_STEP}
 	$(call sync_extensions_into,${PROJ_DIR}) \
 	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
-	cmake --build . --config Release
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_mvp && \
@@ -468,7 +476,7 @@ clreldebug:
 	mkdir -p ./build/clreldebug && \
 	cd build/clreldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
-	cmake --build . --config RelWithDebInfo
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config RelWithDebInfo
 
 SYNC_OUTPUT_DIR ?= build
 sync_out_of_tree_extensions:
@@ -483,51 +491,104 @@ build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake
 	mkdir -p ./build/extension_configuration && \
 	cd build/extension_configuration && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DEXTENSION_CONFIG_BUILD=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
-	cmake --build . --config Release
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 unittest: debug
-	$(PYTHON) scripts/ci/run_tests.py build/debug/$(UNITTEST_BINARY) $(T)
+	build/debug/test/run $(T)
 
 unittest_reldebug:
-	$(PYTHON) scripts/ci/run_tests.py build/reldebug/$(UNITTEST_BINARY) $(T)
+	build/reldebug/test/run $(UNITTEST_SLOW_FLAGS) $(T)
 
 ifneq ($(SKIP_BUILD),1)
 unittest_release: release
 endif
 unittest_release:
-	$(PYTHON) scripts/ci/run_tests.py build/release/$(UNITTEST_BINARY) $(T)
+	build/release/test/run $(T)
+
+TEST_CONFIGS := \
+	test/configs/verify_statement_copy.json \
+	test/configs/verify_statement_to_string.json \
+	test/configs/verify_statement_explain.json \
+	test/configs/verify_statement_prepare.json \
+	test/configs/verify_serializer.json \
+	test/configs/verify_stats.json \
+	test/configs/verify_statement_serialization.json \
+	test/configs/force_storage.json \
+	test/configs/force_storage_restart.json \
+	test/configs/latest_storage.json \
+	test/configs/block_verification.json \
+	test/configs/block_verification_latest.json \
+	test/configs/disable_optimizer.json \
+	test/configs/internal_vector_serialization.json \
+	test/configs/internal_vector_verification.json \
+	test/configs/force_external.json \
+	test/configs/verify_fetch_row.json \
+	test/configs/disable_caching_operators.json \
+	test/configs/wal_verification.json \
+	test/configs/vacuum_rebuild_indexes_force_storage.json \
+	test/configs/verification_projection.json \
+	test/configs/verify_column_bindings.json \
+	test/configs/no_local_filesystem.json \
+	test/configs/block_size_16kB.json \
+	test/configs/latest_storage_block_size_16kB.json \
+	test/configs/block_allocator_100mib.json \
+	test/configs/variant_vector.json \
+	test/configs/compressed_in_memory.json \
+	test/configs/prefetch_all_storage.json \
+	test/configs/encryption.json \
+	test/configs/v1_storage.json \
+	test/configs/v1_storage_block_size_16kB.json \
+	test/configs/force_storage_mmap.json \
+	test/configs/verify_aggregate_state_export.json \
+	test/configs/verify_functions.json
+
+test_configs:
+	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg))
+
+test_vector:
+	./build/release/test/run --test-flags="--verify-vector dictionary_expression --skip-compiled"
+	./build/release/test/run --test-flags="--verify-vector dictionary_operator --skip-compiled"
+	./build/release/test/run --test-flags="--verify-vector constant_operator --skip-compiled"
+	./build/release/test/run --test-flags="--verify-vector sequence_operator --skip-compiled"
+	./build/release/test/run --test-flags="--verify-vector nested_shuffle --skip-compiled"
+
+test_table_scan:
+	./build/release/test/run --test-flags='--on-init "SET debug_physical_table_scan_execution_strategy=SYNCHRONOUS;"'
+
+test_storage:
+	$(PYTHON) scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2|1.4.3" --new-unittest build/release/$(UNITTEST_BINARY)
 
 .PHONY: alltest_release_tag test_release_tag
 alltest_release_tag:
-	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/$(UNITTEST_BINARY) '*' $(T)
+	./build/release/test/run --test-flags="--select-tag release" '*' $(T)
 
 test_release_tag:
-	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/$(UNITTEST_BINARY) $(T)
+	./build/release/test/run --test-flags="--select-tag release" $(T)
 
 unittest_relassert:
-	$(PYTHON) scripts/ci/run_tests.py build/relassert/$(UNITTEST_BINARY) $(T)
+	build/relassert/test/run $(UNITTEST_SLOW_FLAGS) $(T)
 
 smoke:
-	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
+	$(SMOKE_RUNNER) --batch-timeout 120 --test-list test/smoke_tests.list $(T)
 
 unittestarrow:
-	$(PYTHON) scripts/ci/run_tests.py build/debug/$(UNITTEST_BINARY) "[arrow]"
+	build/debug/test/run "[arrow]"
 
 allunit:
-	$(PYTHON) scripts/ci/run_tests.py --workers=50% build/release/$(UNITTEST_BINARY) '*' $(T)
+	./build/release/test/run --workers=50% '*' $(T)
 ifndef CI
 allunit: release
 endif
 
 unittest_threadsan: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
 unittest_threadsan: unittest_reldebug
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/$(UNITTEST_BINARY) "[intraquery],[interquery],[detailed_profiler],test/sql/tpch/tpch_sf01.test_slow" $(T)
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage --force-reload" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
+	build/reldebug/test/run $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json "[intraquery],[interquery],[detailed_profiler],test/sql/tpch/tpch_sf01.test_slow" $(T)
+	build/reldebug/test/run $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json --test-flags="--force-storage --force-reload" "[interquery]" $(T)
 
 .PHONY: unittest_threadsan_extra
 unittest_threadsan_extra: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
 unittest_threadsan_extra: unittest_reldebug
-	$(PYTHON) scripts/ci/run_tests.py --batch-size=1 --workers=50% --batch-timeout=1800 --track-runtime=300 --test-flags="--force-storage" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
+	build/reldebug/test/run $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json --test-flags="--force-storage" "[interquery]" $(T)
 
 docs:
 	mkdir -p ./build/docs && \
@@ -568,22 +629,33 @@ define ensure_apt_commands
 		command -v $$cmd >/dev/null 2>&1 || missing=1; \
 	done; \
 	if [ $$missing -eq 1 ]; then \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq $(2); \
+		sudo apt-get $(APT_TIMEOUT_OPTS) update -y -q && \
+		sudo apt-get $(APT_TIMEOUT_OPTS) install -y -q $(2); \
 	fi
 endef
+
+define ensure_apt_packages
+	missing=0; \
+	for pkg in $(1); do \
+		dpkg-query -W -f='$${Status}' $$pkg 2>/dev/null | grep -q "install ok installed" || missing=1; \
+	done; \
+	if [ $$missing -eq 1 ]; then \
+		sudo apt-get $(APT_TIMEOUT_OPTS) update -y -q && \
+		sudo apt-get $(APT_TIMEOUT_OPTS) install -y -q $(1); \
+	fi
+endef
+
+APT_TIMEOUT_OPTS=-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
 
 .PHONY: toolsci
 
 toolsci:
-	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz,ninja-build mold ccache pkg-config pigz)
-	pkg-config --exists libcurl || { \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq libcurl4-openssl-dev; \
-	}
-	ls -lh /usr/bin/gcc* /usr/bin/g++*
+	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz clang++-20 clangd-20,ninja-build mold ccache pkg-config pigz clang++-20 clangd-20)
+	$(call ensure_apt_packages,python3-requests libcurl4-openssl-dev llvm-20-dev libclang-rt-20-dev)
+	ls -lh /usr/bin/gcc* /usr/bin/g++* /usr/bin/clang++*
 	gcc --version
 	g++ --version
+	clang++ --version
 
 test_ci:
 	python3 -m unittest discover --buffer --start-directory scripts/ci $(T)
@@ -642,7 +714,11 @@ benchmark:
 	mkdir -p ./build/release && \
 	cd build/release && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_BENCHMARKS=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
-	cmake --build . --config Release
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
+
+.PHONY: test_benchmark_sql
+test_benchmark_sql:
+	$(PYTHON) -u scripts/test_benchmark_sql_runner.py --shell build/relassert/duckdb
 
 
 tidy-check:
@@ -688,6 +764,11 @@ format-check-silent: $(FORMAT_SETUP_DEPS)
 format-fix: $(FORMAT_SETUP_DEPS)
 	$(FORMAT_PYTHON) scripts/format.py --all --fix --noconfirm $(T)
 
+format-parser-grammar: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py src/include/duckdb/parser/peg/transformer/peg_transformer.hpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated.cpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher.cpp --fix --noconfirm
+
 .PHONY: check-extension-entries
 check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)
 	$(PYTHON) scripts/generate_extensions_function.py
@@ -719,11 +800,11 @@ format-configs:
 
 
 third_party/sqllogictest:
-	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/duckdb/sqllogictest.git third_party/sqllogictest
+	git clone --depth=1 --branch ccfelius/sqlite_overflow https://github.com/duckdb/sqllogictest.git third_party/sqllogictest
 
 sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull
-	$(PYTHON) scripts/ci/run_tests.py ./build/release/$(UNITTEST_BINARY) "[sqlitelogic]"
+	./build/release/test/run "[sqlitelogic]"
 
 sqlsmith: debug
 	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:
@@ -754,10 +835,11 @@ generate-files-deps:
 generate-files:
 	$(PYTHON) scripts/generate_c_api.py
 	$(PYTHON) scripts/generate_functions.py
+	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py
 	$(PYTHON) scripts/generate_serialization.py
+	$(PYTHON) scripts/generate_util.py
 	$(PYTHON) scripts/generate_storage_info.py
-	$(PYTHON) scripts/generate_metric_enums.py
 	$(PYTHON) scripts/generate_enum_util.py
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main

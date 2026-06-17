@@ -12,7 +12,7 @@
 #include "duckdb/common/arena_linked_list.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
@@ -34,6 +34,7 @@ class PipelineBuildState;
 class MetaPipeline;
 class PhysicalPlan;
 
+enum class TableFunctionParallelism : uint8_t;
 enum class OperatorCachingMode : uint8_t { NONE, PARTITIONED, ORDERED, UNORDERED };
 
 //! PhysicalOperator is the base class of the physical operators present in the execution plan.
@@ -73,7 +74,7 @@ public:
 		return InsertionOrderPreservingMap<string>();
 	}
 	static void SetEstimatedCardinality(InsertionOrderPreservingMap<string> &result, idx_t estimated_cardinality);
-	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
+	virtual string ToString(const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
 	void Print() const;
 	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
 
@@ -96,6 +97,7 @@ public:
 	// Operator interface
 	virtual unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const;
+	virtual bool ResetGlobalOperatorState(ClientContext &context, GlobalOperatorState &state) const;
 	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
 	virtual OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk,
@@ -145,6 +147,9 @@ public:
 		return false;
 	}
 
+	//! How this source manages parallelism
+	virtual TableFunctionParallelism SourceParallelism() const;
+
 	virtual bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
 		if (partition_info.AnyRequired()) {
 			return false;
@@ -164,11 +169,6 @@ public:
 	virtual ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
 	                                     const ProgressData source_progress) const {
 		return source_progress;
-	}
-
-	virtual InsertionOrderPreservingMap<string> ExtraSourceParams(GlobalSourceState &gstate,
-	                                                              LocalSourceState &lstate) const {
-		return InsertionOrderPreservingMap<string>();
 	}
 
 public:
@@ -253,6 +253,14 @@ public:
 	}
 
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
+	}
+
+	void ResetCachingState() {
+		cached_chunk.reset();
+		initialized = false;
+		can_cache_chunk = OperatorCachingMode::NONE;
+		must_return_continuation_chunk = false;
+		cached_result = OperatorResultType::NEED_MORE_INPUT;
 	}
 
 	unique_ptr<DataChunk> cached_chunk;

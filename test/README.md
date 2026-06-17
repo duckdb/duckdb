@@ -1,5 +1,9 @@
 This is the SQL and C++ DuckDB Unittests
 
+Typical entrypoints:
+- POSIX builds: `build/release/test/run`, `build/reldebug/test/run`, `build/debug/test/run`
+- Windows native layout: `build/release/test/run.py` or `build/release/test/run.bat`
+
 ## Test Contract
 
 Within SQL tests, the test runner (unittest) guarantees that these environment variables will be set. Many can be overridden when needed.

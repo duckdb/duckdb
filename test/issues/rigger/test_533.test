@@ -2,9 +2,6 @@
 # description: Issue 533
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Overflow when casting from REAL to INT results in 'Invalid TypeId -1'
 statement ok
 CREATE TABLE t0(c0 REAL);

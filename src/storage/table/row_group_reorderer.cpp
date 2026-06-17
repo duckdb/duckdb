@@ -22,9 +22,10 @@ bool CompareValues(const Value &v1, const Value &v2, const OrderByStatistics ord
 	return (order == OrderByStatistics::MAX && v1 < v2) || (order == OrderByStatistics::MIN && v1 > v2);
 }
 
-idx_t GetQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const OrderByColumnType type) {
+idx_t GetMinimumQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const OrderByColumnType type,
+                                     TransactionData transaction) {
 	if (!stats.CanHaveNull()) {
-		return row_group.count;
+		return row_group.GetVisibleRowCount(transaction);
 	}
 
 	if (type == OrderByColumnType::NUMERIC) {
@@ -42,9 +43,9 @@ idx_t GetQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const 
 }
 
 template <typename It, typename End>
-void AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It it, End end,
+bool AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It it, const End &end,
                   vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups, const idx_t row_limit,
-                  const OrderByColumnType column_type, const OrderByStatistics stat_type) {
+                  const OrderByColumnType column_type, const OrderByStatistics stat_type, TransactionData transaction) {
 	const auto opposite_stat_type =
 	    stat_type == OrderByStatistics::MAX ? OrderByStatistics::MIN : OrderByStatistics::MAX;
 
@@ -57,7 +58,7 @@ void AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It i
 	idx_t qualify_later = 0;
 
 	idx_t last_unresolved_row_group_sum =
-	    GetQualifyingTupleCount(it->second.row_group.get().GetNode(), *last_stats, column_type);
+	    GetMinimumQualifyingTupleCount(it->second.row_group.get().GetNode(), *last_stats, column_type, transaction);
 	for (; it != end; ++it) {
 		auto &current_key = it->first;
 		auto &row_group = it->second.row_group;
@@ -82,18 +83,20 @@ void AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It i
 			auto &upcoming_row_group = last_unresolved_entry->second.row_group.get().GetNode();
 			auto &upcoming_stats = *last_unresolved_entry->second.stats;
 
-			last_unresolved_row_group_sum += GetQualifyingTupleCount(upcoming_row_group, upcoming_stats, column_type);
+			last_unresolved_row_group_sum +=
+			    GetMinimumQualifyingTupleCount(upcoming_row_group, upcoming_stats, column_type, transaction);
 			last_unresolved_boundary = RowGroupReorderer::RetrieveStat(upcoming_stats, opposite_stat_type, column_type);
 		}
 		if (qualifying_tuples >= row_limit) {
-			return;
+			return true;
 		}
 		ordered_row_groups.emplace_back(row_group);
 	}
+	return false;
 }
 
 template <typename It, typename End>
-It SkipOffsetPrunedRowGroups(It it, End end, idx_t row_group_offset) {
+It SkipOffsetPrunedRowGroups(It it, const End &end, idx_t row_group_offset) {
 	while (row_group_offset > 0 && it != end) {
 		++it;
 		row_group_offset--;
@@ -102,37 +105,41 @@ It SkipOffsetPrunedRowGroups(It it, End end, idx_t row_group_offset) {
 }
 
 template <typename It, typename End>
-void InsertAllRowGroups(It it, End end, vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups) {
+void InsertAllRowGroups(It it, const End &end, vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups) {
 	for (; it != end; ++it) {
 		ordered_row_groups.push_back(it->second.row_group);
 	}
 }
 
-void SetRowGroupVector(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, const optional_idx row_limit,
+bool SetRowGroupVector(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, const optional_idx row_limit,
                        const idx_t row_group_offset, const OrderType order_type, const OrderByColumnType column_type,
-                       vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups) {
+                       vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups, TransactionData transaction) {
 	const auto stat_type = order_type == OrderType::ASCENDING ? OrderByStatistics::MIN : OrderByStatistics::MAX;
 	if (order_type == OrderType::ASCENDING) {
 		auto end = row_group_map.end();
 		auto it = SkipOffsetPrunedRowGroups(row_group_map.begin(), end, row_group_offset);
 		if (it == end) {
-			return;
+			return false;
 		}
 		if (row_limit.IsValid()) {
-			AddRowGroups(row_group_map, it, end, ordered_row_groups, row_limit.GetIndex(), column_type, stat_type);
+			return AddRowGroups(row_group_map, it, end, ordered_row_groups, row_limit.GetIndex(), column_type,
+			                    stat_type, transaction);
 		} else {
 			InsertAllRowGroups(it, end, ordered_row_groups);
+			return false;
 		}
 	} else {
 		auto end = row_group_map.rend();
 		auto it = SkipOffsetPrunedRowGroups(row_group_map.rbegin(), end, row_group_offset);
 		if (it == end) {
-			return;
+			return false;
 		}
 		if (row_limit.IsValid()) {
-			AddRowGroups(row_group_map, it, end, ordered_row_groups, row_limit.GetIndex(), column_type, stat_type);
+			return AddRowGroups(row_group_map, it, end, ordered_row_groups, row_limit.GetIndex(), column_type,
+			                    stat_type, transaction);
 		} else {
 			InsertAllRowGroups(it, end, ordered_row_groups);
+			return false;
 		}
 	}
 }
@@ -145,7 +152,7 @@ void AppendRowGroups(const vector<reference<SegmentNode<RowGroup>>> &source, idx
 }
 
 template <typename It, typename End>
-OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatistics order_by,
+OffsetPruningResult FindOffsetPrunableChunks(It it, const End &end, const OrderByStatistics order_by,
                                              const OrderByColumnType column_type, const idx_t row_offset) {
 	if (it == end) {
 		return {row_offset, 0, 0};
@@ -199,8 +206,8 @@ OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatis
 
 } // namespace
 
-RowGroupReorderer::RowGroupReorderer(const RowGroupOrderOptions &options_p)
-    : options(options_p), offset(0), initialized(false) {
+RowGroupReorderer::RowGroupReorderer(const RowGroupOrderOptions &options_p, TransactionData transaction_p)
+    : options(options_p), transaction(transaction_p), offset(0), initialized(false) {
 }
 
 optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetNextRowGroup(SegmentNode<RowGroup> &row_group) {
@@ -347,12 +354,17 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSe
 		AppendRowGroups(null_only_groups, options.leading_null_group_offset, ordered_row_groups);
 		AppendRowGroups(ambiguous_groups, 0, ordered_row_groups);
 		SetRowGroupVector(row_group_map, options.row_limit, options.row_group_offset, options.order_type,
-		                  options.column_type, ordered_row_groups);
+		                  options.column_type, ordered_row_groups, transaction);
 	} else {
-		SetRowGroupVector(row_group_map, options.row_limit, options.row_group_offset, options.order_type,
-		                  options.column_type, ordered_row_groups);
+		auto pruned_by_limit =
+		    SetRowGroupVector(row_group_map, options.row_limit, options.row_group_offset, options.order_type,
+		                      options.column_type, ordered_row_groups, transaction);
 		AppendRowGroups(ambiguous_groups, 0, ordered_row_groups);
-		AppendRowGroups(null_only_groups, 0, ordered_row_groups);
+		// Once an ascending NULLS LAST limit is already satisfied by earlier non-null row groups, null-only
+		// groups cannot contribute to the ordered prefix anymore.
+		if (!pruned_by_limit || options.order_type != OrderType::ASCENDING) {
+			AppendRowGroups(null_only_groups, 0, ordered_row_groups);
+		}
 	}
 
 	if (ordered_row_groups.empty()) {

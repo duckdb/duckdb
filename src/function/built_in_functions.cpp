@@ -13,6 +13,8 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/config.hpp"
 
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+
 namespace duckdb {
 
 BuiltinFunctions::BuiltinFunctions(CatalogTransaction transaction, Catalog &catalog)
@@ -24,7 +26,7 @@ BuiltinFunctions::~BuiltinFunctions() {
 
 void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool combinable,
                                     bool not_required_for_equality) {
-	CreateCollationInfo info(std::move(name), std::move(function), combinable, not_required_for_equality);
+	CreateCollationInfo info(Identifier(std::move(name)), std::move(function), combinable, not_required_for_equality);
 	info.internal = true;
 	catalog.CreateCollation(transaction, info);
 }
@@ -48,7 +50,7 @@ void BuiltinFunctions::AddFunction(PragmaFunction function) {
 }
 
 void BuiltinFunctions::AddFunction(const string &name, PragmaFunctionSet functions) {
-	CreatePragmaFunctionInfo info(name, std::move(functions));
+	CreatePragmaFunctionInfo info(Identifier(name), std::move(functions));
 	info.internal = true;
 	catalog.CreatePragmaFunction(transaction, info);
 }
@@ -61,7 +63,7 @@ void BuiltinFunctions::AddFunction(ScalarFunction function) {
 
 void BuiltinFunctions::AddFunction(const vector<string> &names, ScalarFunction function) { // NOLINT: false positive
 	for (auto &name : names) {
-		function.name = name;
+		function.name = Identifier(name);
 		AddFunction(function);
 	}
 }
@@ -97,10 +99,10 @@ struct ExtensionFunctionInfo : public ScalarFunctionInfo {
 	string extension;
 };
 
-static unique_ptr<FunctionData> BindExtensionFunction(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
+static unique_ptr<Expression> BindExtensionFunction(FunctionBindExpressionInput &input) {
+	auto &context = input.context;
+	auto &arguments = input.children;
+	auto &bound_function = input.bound_function;
 
 	// if this is triggered we are trying to call a method that is present in an extension
 	// but the extension is not loaded
@@ -113,22 +115,19 @@ static unique_ptr<FunctionData> BindExtensionFunction(BindScalarFunctionInput &i
 	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
 		throw BinderException("Trying to call function \"%s\" which is present in extension \"%s\" - but the extension "
 		                      "is not loaded and could not be auto-loaded",
-		                      bound_function.name, extension_name);
+		                      bound_function.GetName(), extension_name);
 	}
 	// auto-load the extension
 	ExtensionHelper::AutoLoadExtension(db, extension_name);
 
 	// now find the function in the catalog
 	auto &catalog = Catalog::GetSystemCatalog(db);
-	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, bound_function.name);
+	auto &function_entry =
+	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), bound_function.GetName());
+
 	// override the function with the extension function
-	bound_function = function_entry.functions.GetFunctionByArguments(context, bound_function.GetArguments());
-	// call the original bind (if any)
-	if (!bound_function.HasBindCallback()) {
-		return nullptr;
-	}
-	return bound_function.Bind(context, arguments);
-	;
+	const auto &func = function_entry.functions.GetFunctionByArguments(context, bound_function.GetArguments());
+	return func.Bind(context, std::move(arguments));
 }
 
 void BuiltinFunctions::AddExtensionFunction(ScalarFunctionSet set) {
@@ -157,8 +156,9 @@ void BuiltinFunctions::RegisterExtensionOverloads() {
 			    entry.name);
 		}
 
-		ScalarFunction function(entry.name, std::move(arguments), std::move(return_type), nullptr,
-		                        BindExtensionFunction);
+		ScalarFunction function(entry.name, std::move(arguments), std::move(return_type), nullptr);
+		function.SetBindExpressionCallback(BindExtensionFunction);
+
 		function.SetExtraFunctionInfo<ExtensionFunctionInfo>(entry.extension);
 		if (current_set.name != entry.name) {
 			if (!current_set.name.empty()) {

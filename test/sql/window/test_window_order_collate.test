@@ -2,9 +2,6 @@
 # description: Test collation is honoured by over(partition/order by)
 # group: [window]
 
-statement ok
-PRAGMA enable_verification
-
 query III rowsort
 select
     *,

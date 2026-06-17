@@ -35,14 +35,14 @@ unique_ptr<FunctionData> ParseLogMessageBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 
 	if (arguments.size() != 2) {
-		throw BinderException("structured_log_schema: expects 1 argument", arguments[0]->alias);
+		throw BinderException("structured_log_schema: expects 1 argument", arguments[0]->GetAlias());
 	}
 
 	if (!arguments[0]->IsFoldable()) {
-		throw BinderException("structured_log_schema: argument '%s' must be constant", arguments[0]->alias);
+		throw BinderException("structured_log_schema: argument '%s' must be constant", arguments[0]->GetAlias());
 	}
 
-	if (arguments[0]->return_type.id() != LogicalTypeId::VARCHAR) {
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("structured_log_schema: 'log_type' argument must be a string");
 	}
 
@@ -68,7 +68,7 @@ unique_ptr<FunctionData> ParseLogMessageBind(BindScalarFunctionInput &input) {
 
 void ParseLogMessageFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<ParseLogMessageData>();
+	const auto &info = func_expr.BindInfo()->Cast<ParseLogMessageData>();
 
 	if (info.log_type.is_structured) {
 		// TODO: allow more complex parsing operations than DefaultCast

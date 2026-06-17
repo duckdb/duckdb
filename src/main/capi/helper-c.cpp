@@ -73,6 +73,8 @@ LogicalTypeId LogicalTypeIdFromC(const duckdb_type type) {
 		return LogicalTypeId::TIME_TZ;
 	case DUCKDB_TYPE_TIMESTAMP_TZ:
 		return LogicalTypeId::TIMESTAMP_TZ;
+	case DUCKDB_TYPE_TIMESTAMP_TZ_NS:
+		return LogicalTypeId::TIMESTAMP_TZ_NS;
 	case DUCKDB_TYPE_ANY:
 		return LogicalTypeId::ANY;
 	case DUCKDB_TYPE_BIGNUM:
@@ -131,6 +133,8 @@ duckdb_type LogicalTypeIdToC(const LogicalTypeId type) {
 		return DUCKDB_TYPE_TIMESTAMP;
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return DUCKDB_TYPE_TIMESTAMP_TZ;
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return DUCKDB_TYPE_TIMESTAMP_TZ_NS;
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return DUCKDB_TYPE_TIMESTAMP_S;
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -198,6 +202,7 @@ idx_t GetCTypeSize(const duckdb_type type) {
 	case DUCKDB_TYPE_SMALLINT:
 		return sizeof(int16_t);
 	case DUCKDB_TYPE_INTEGER:
+	case DUCKDB_TYPE_SQLNULL:
 		return sizeof(int32_t);
 	case DUCKDB_TYPE_BIGINT:
 		return sizeof(int64_t);
@@ -228,6 +233,7 @@ idx_t GetCTypeSize(const duckdb_type type) {
 	case DUCKDB_TYPE_TIMESTAMP_S:
 	case DUCKDB_TYPE_TIMESTAMP_MS:
 	case DUCKDB_TYPE_TIMESTAMP_NS:
+	case DUCKDB_TYPE_TIMESTAMP_TZ_NS:
 		return sizeof(duckdb_timestamp);
 	case DUCKDB_TYPE_VARCHAR:
 		return sizeof(const char *);

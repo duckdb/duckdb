@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE ubn1(a BIGINT);
 
 statement ok
@@ -59,7 +56,7 @@ SELECT typeof(a), typeof(b), typeof(c)
 FROM  read_csv_auto('{TEST_DIR}/ubn*.csv', UNION_BY_NAME=TRUE, dtypes={'c': TINYINT, 'A': DOUBLE, 'C': FLOAT})
 LIMIT 1;
 ----
-Duplicate struct entry name
+Duplicate
 
 statement error
 SELECT typeof(a), typeof(b), typeof(c)

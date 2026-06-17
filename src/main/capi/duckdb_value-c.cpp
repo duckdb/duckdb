@@ -6,6 +6,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 
 using duckdb::LogicalTypeId;
@@ -139,6 +140,9 @@ duckdb_bignum duckdb_get_bignum(duckdb_value val) {
 	return {data, size, is_negative};
 }
 duckdb_value duckdb_create_decimal(duckdb_decimal input) {
+	if (!duckdb::Decimal::IsValidWidthScale(input.width, input.scale)) {
+		return nullptr;
+	}
 	duckdb::hugeint_t hugeint(input.value.upper, input.value.lower);
 	int64_t int64;
 	if (duckdb::Hugeint::TryCast<int64_t>(hugeint, int64)) {
@@ -219,6 +223,18 @@ duckdb_timestamp duckdb_get_timestamp_tz(duckdb_value val) {
 		return {0};
 	}
 	return {CAPIGetValue<duckdb::timestamp_tz_t, LogicalTypeId::TIMESTAMP_TZ>(val).value};
+}
+
+duckdb_value duckdb_create_timestamp_tz_ns(duckdb_timestamp_ns input) {
+	duckdb::timestamp_tz_ns_t ts(input.nanos);
+	return CAPICreateValue(ts);
+}
+
+duckdb_timestamp_ns duckdb_get_timestamp_tz_ns(duckdb_value val) {
+	if (!val) {
+		return {0};
+	}
+	return {CAPIGetValue<duckdb::timestamp_tz_ns_t, LogicalTypeId::TIMESTAMP_TZ_NS>(val).value};
 }
 
 duckdb_value duckdb_create_timestamp_s(duckdb_timestamp_s input) {

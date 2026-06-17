@@ -78,8 +78,8 @@ void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<TableInd
 void LogicalJoin::GetExpressionBindings(const Expression &root_expr, unordered_set<TableIndex> &bindings) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(root_expr,
 	                                                              [&](const BoundColumnRefExpression &colref) {
-		                                                              D_ASSERT(colref.depth == 0);
-		                                                              bindings.insert(colref.binding.table_index);
+		                                                              D_ASSERT(colref.Depth() == 0);
+		                                                              bindings.insert(colref.Binding().table_index);
 	                                                              });
 }
 

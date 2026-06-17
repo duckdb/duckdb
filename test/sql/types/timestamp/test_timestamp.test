@@ -6,9 +6,6 @@ statement ok
 SET default_null_order='nulls_first';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE IF NOT EXISTS timestamp (t TIMESTAMP);
 
 statement ok
@@ -25,6 +22,11 @@ SELECT timestamp '2017-07-23T13:10:11', timestamp '2017-07-23T13:10:11Z';
 ----
 2017-07-23 13:10:11
 2017-07-23 13:10:11
+
+query T
+SELECT timestamp '1970-01-01 00:00Z';
+----
+1970-01-01 00:00:00
 
 # spaces everywhere
 query T

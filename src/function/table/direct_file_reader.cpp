@@ -20,7 +20,7 @@ DirectFileReader::DirectFileReader(OpenFileInfo file_p, const LogicalType &type)
 DirectFileReader::~DirectFileReader() {
 }
 
-unique_ptr<BaseStatistics> DirectFileReader::GetStatistics(ClientContext &context, const string &name) {
+unique_ptr<BaseStatistics> DirectFileReader::GetStatistics(ClientContext &context, const Identifier &name) {
 	return nullptr;
 }
 
@@ -76,7 +76,6 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 		// At least verify that the file exist
 		// The globbing behavior in remote filesystems can lead to files being listed that do not actually exist
 		if (FileSystem::IsRemoteFile(file.path) && !fs.FileExists(file.path)) {
-			output.SetCardinality(0);
 			done = true;
 			return SourceResultType::FINISHED;
 		}
@@ -177,7 +176,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 			}
 		}
 	}
-	output.SetCardinality(1);
+	output.SetChildCardinality(1);
 	done = true;
 	return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
 }

@@ -18,15 +18,15 @@ enum class WindowDistinctSortStage : uint8_t { INIT, COMBINE, FINALIZE, SORTED, 
 // WindowDistinctAggregator
 //===--------------------------------------------------------------------===//
 bool WindowDistinctAggregator::CanAggregate(const BoundWindowExpression &wexpr) {
-	if (!wexpr.aggregate) {
+	if (!wexpr.AggregateFunction()) {
 		return false;
 	}
 
-	if (!wexpr.aggregate->CanAggregate()) {
+	if (!wexpr.AggregateFunction()->CanAggregate()) {
 		return false;
 	}
 
-	return wexpr.distinct && wexpr.exclude_clause == WindowExcludeMode::NO_OTHER && wexpr.arg_orders.empty();
+	return wexpr.Distinct() && wexpr.WindowExclude() == WindowExcludeMode::NO_OTHER && wexpr.ArgOrders().empty();
 }
 
 WindowDistinctAggregator::WindowDistinctAggregator(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared,
@@ -261,6 +261,7 @@ void WindowDistinctAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 	auto &sorted_vec = sort_chunk.data.back();
 	auto sorted = FlatVector::GetDataMutable<idx_t>(sorted_vec);
 	std::iota(sorted, sorted + count, input_idx);
+	FlatVector::SetSize(sorted_vec, count_t(count));
 
 	// Our arguments are being fully materialised,
 	// but we also need them as sort keys.
@@ -268,7 +269,6 @@ void WindowDistinctAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 	for (column_t c = 0; c < child_idx.size(); ++c) {
 		sort_chunk.data[c].Reference(coll_chunk.data[child_idx[c]]);
 	}
-	sort_chunk.SetCardinality(sink_chunk);
 
 	//	Apply FILTER clause, if any
 	if (filter_sel) {
@@ -447,7 +447,7 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 		                   const auto count = MinValue<idx_t>(prev.size(), curr.size());
 
 		                   // The input index has probably been sliced.
-		                   auto input_idx = curr.data.back().Values<idx_t>(count);
+		                   auto input_idx = curr.data.back().Values<idx_t>();
 
 		                   const auto nmatch = count - ndistinct;
 		                   //	9:	if sorted[i].first == sorted[i-1].first then
@@ -536,7 +536,7 @@ void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t run_idx, WindowDisti
 	auto &leaves = ldastate.leaves;
 	auto &sel = ldastate.sel;
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), ldastate.allocator);
+	AggregateInputData aggr_input_data(aggr, ldastate.allocator);
 
 	//! The states to update
 	auto &update_v = ldastate.update_v;
@@ -636,8 +636,8 @@ void WindowDistinctAggregatorLocalState::FlushStates() {
 	}
 
 	const auto &aggr = gdstate.aggr;
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	statel.Verify(flush_count);
+	AggregateInputData aggr_input_data(aggr, allocator);
+	statel.Verify();
 	aggr.function.GetStateCombineCallback()(statel, statep, aggr_input_data, flush_count);
 
 	flush_count = 0;

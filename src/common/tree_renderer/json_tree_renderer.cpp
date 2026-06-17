@@ -1,6 +1,7 @@
 #include "duckdb/common/tree_renderer/json_tree_renderer.hpp"
 
 #include "duckdb/common/pair.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
@@ -111,6 +112,17 @@ void JSONTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
 	ss << string(data);
 	free(data);
 	yyjson_mut_doc_free(doc);
+}
+
+string JSONTreeRenderer::RenderProfiler(const QueryProfiler &profiler) {
+	// the JSON profiler output is the full query profile result tree (including query-level metrics)
+	return profiler.ToJSON();
+}
+
+string JSONTreeRenderer::RenderProfilerDisabled() {
+	return R"({
+    "result": "disabled"
+})";
 }
 
 } // namespace duckdb

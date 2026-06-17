@@ -79,7 +79,7 @@ static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset,
 		}
 	}
 	result.Slice(sel, total_length);
-	result.Flatten(total_length);
+	result.Flatten();
 	return total_length;
 }
 
@@ -155,6 +155,11 @@ void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t c
 	Vector child_list(Vector::Ref(list_child));
 	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
 	GetChildWriter().Write(*state.child_state, child_list, child_length);
+}
+
+void ListColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
+	auto &state = state_p.Cast<ListColumnWriterState>();
+	GetChildWriter().PrepareWrite(*state.child_state);
 }
 
 void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {

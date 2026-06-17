@@ -6,6 +6,7 @@
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_functions.hpp"
 #include "duckdb/function/copy_function.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
@@ -57,15 +58,17 @@ static void LoadInternal(ExtensionLoader &loader) {
 	auto copy_fun = JSONFunctions::GetJSONCopyFunction();
 	loader.RegisterFunction(copy_fun);
 	copy_fun.extension = "ndjson";
-	copy_fun.name = "ndjson";
+	copy_fun.SetName("ndjson");
 	loader.RegisterFunction(copy_fun);
 	copy_fun.extension = "jsonl";
-	copy_fun.name = "jsonl";
+	copy_fun.SetName("jsonl");
 	loader.RegisterFunction(copy_fun);
 
-	// JSON macro's
+	// Pass the database's ParserCache so the parser matcher is reused, not rebuilt per macro.
+	ParserOptions parser_options;
+	parser_options.parser_cache = &loader.GetDatabaseInstance().GetParserCache();
 	for (idx_t index = 0; JSON_MACROS[index].name != nullptr; index++) {
-		auto info = DefaultFunctionGenerator::CreateInternalMacroInfo(JSON_MACROS[index]);
+		auto info = DefaultFunctionGenerator::CreateInternalMacroInfo(JSON_MACROS[index], parser_options);
 		loader.RegisterFunction(*info);
 	}
 }

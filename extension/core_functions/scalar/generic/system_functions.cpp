@@ -50,7 +50,7 @@ public:
 unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
-	if (arguments[0]->return_type.id() != LogicalTypeId::BOOLEAN) {
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 		throw BinderException("current_schemas requires a boolean input");
 	}
 	if (!arguments[0]->IsFoldable()) {
@@ -76,7 +76,7 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 // current_schemas
 void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<CurrentSchemasBindData>();
+	auto &info = func_expr.BindInfo()->Cast<CurrentSchemasBindData>();
 	result.Reference(info.result, count_t(input.size()));
 }
 
@@ -85,8 +85,9 @@ void InSearchPathFunction(DataChunk &input, ExpressionState &state, Vector &resu
 	auto &context = state.GetContext();
 	auto &search_path = ClientData::Get(context).catalog_search_path;
 	BinaryExecutor::Execute<string_t, string_t, bool>(
-	    input.data[0], input.data[1], result, input.size(), [&](string_t db_name, string_t schema_name) {
-		    return search_path->SchemaInSearchPath(context, db_name.GetString(), schema_name.GetString());
+	    input.data[0], input.data[1], result, [&](string_t db_name, string_t schema_name) {
+		    return search_path->SchemaInSearchPath(context, Identifier(db_name.GetString()),
+		                                           Identifier(schema_name.GetString()));
 	    });
 }
 

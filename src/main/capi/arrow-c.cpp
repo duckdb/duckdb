@@ -106,7 +106,7 @@ duckdb_error_data duckdb_data_chunk_from_arrow(duckdb_connection connection, str
 	dchunk->Initialize(duckdb::Allocator::DefaultAllocator(), types, duckdb::NumericCast<idx_t>(arrow_array->length));
 
 	auto &arrow_types = arrow_table->GetColumns();
-	dchunk->SetCardinality(duckdb::NumericCast<idx_t>(arrow_array->length));
+	dchunk->SetChildCardinality(duckdb::NumericCast<idx_t>(arrow_array->length));
 	for (idx_t i = 0; i < dchunk->ColumnCount(); i++) {
 		auto &parent_array = *arrow_array;
 		auto &array = parent_array.children[i];
@@ -422,7 +422,7 @@ duckdb_state Ingest(duckdb_connection connection, const char *table_name, struct
 		    ->TableFunction("arrow_scan", {duckdb::Value::POINTER((uintptr_t)input),
 		                                   duckdb::Value::POINTER((uintptr_t)FactoryGetNext),
 		                                   duckdb::Value::POINTER((uintptr_t)FactoryGetSchema)})
-		    ->CreateView(table_name, true, false);
+		    ->CreateView(duckdb::Identifier(table_name), true, false);
 	} catch (...) { // LCOV_EXCL_START
 		// Tried covering this in tests, but it proved harder than expected. At the time of writing:
 		// - Passing any name to `CreateView` worked without throwing an exception

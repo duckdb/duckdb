@@ -1,4 +1,6 @@
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -19,7 +21,12 @@ FunctionLocalState::~FunctionLocalState() {
 ScalarFunctionInfo::~ScalarFunctionInfo() {
 }
 
-ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
+ScalarFunction::ScalarFunction(Identifier name, FunctionSignature sig, scalar_function_t function)
+    : SimpleFunction(std::move(name), std::move(sig)) {
+	callbacks.function = std::move(function);
+}
+
+ScalarFunction::ScalarFunction(Identifier name, vector<LogicalType> arguments, LogicalType return_type,
                                scalar_function_t function, bind_scalar_function_t bind,
                                function_statistics_t statistics, init_local_state_t init_local_state,
                                LogicalType varargs, FunctionStability side_effects, FunctionNullHandling null_handling,
@@ -39,13 +46,12 @@ ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return
                                bind_scalar_function_t bind, function_statistics_t statistics,
                                init_local_state_t init_local_state, LogicalType varargs, FunctionStability side_effects,
                                FunctionNullHandling null_handling, bind_lambda_function_t bind_lambda)
-    : ScalarFunction(string(), std::move(arguments), std::move(return_type), std::move(function), bind, statistics,
+    : ScalarFunction(Identifier(), std::move(arguments), std::move(return_type), std::move(function), bind, statistics,
                      init_local_state, std::move(varargs), side_effects, null_handling, bind_lambda) {
 }
 
 bool ScalarFunction::operator==(const ScalarFunction &rhs) const {
-	return name == rhs.name && arguments == rhs.GetArguments() && return_type == rhs.return_type &&
-	       varargs == rhs.GetVarArgs() && callbacks == rhs.callbacks && properties == rhs.properties;
+	return name == rhs.name && signature == rhs.signature && callbacks == rhs.callbacks && properties == rhs.properties;
 }
 
 bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
@@ -53,31 +59,51 @@ bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
 }
 
 bool ScalarFunction::Equal(const ScalarFunction &rhs) const {
-	// number of types
-	if (this->GetArguments().size() != rhs.GetArguments().size()) {
-		return false;
-	}
-	// argument types
-	for (idx_t i = 0; i < this->GetArguments().size(); ++i) {
-		if (this->GetArguments()[i] != rhs.GetArguments()[i]) {
-			return false;
-		}
-	}
-	// return type
-	if (this->return_type != rhs.return_type) {
-		return false;
-	}
-	// varargs
-	if (this->GetVarArgs() != rhs.GetVarArgs()) {
-		return false;
-	}
-
-	return true; // they are equal
+	return signature.Equal(rhs.signature);
 }
 
 void ScalarFunction::NopFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() >= 1);
 	result.Reference(input.data[0]);
+}
+
+unique_ptr<BoundFunctionExpression> ScalarFunction::Bind(ClientContext &context,
+                                                         vector<unique_ptr<Expression>> arguments,
+                                                         optional_ptr<Binder> binder) const {
+	FunctionBinder func_binder(context);
+	auto expr = func_binder.BindScalarFunction(*this, std::move(arguments), binder);
+
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		throw InvalidInputException("BindScalarFunction did not return a BoundFunctionExpression");
+	}
+
+	return unique_ptr_cast<Expression, BoundFunctionExpression>(std::move(expr));
+}
+
+BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function) {
+	name = function.name;
+	schema_name = function.schema_name;
+	catalog_name = function.catalog_name;
+	extra_info = function.extra_info;
+	return_type = function.GetReturnType();
+	callbacks = function.GetCallbacks();
+	properties = function.GetProperties();
+	function_info = function.GetFunctionInfo();
+	arg_props = function.GetAllArgProperties();
+
+	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
+	// "bind" callback)
+	for (auto &param : function.GetSignature().GetParameters()) {
+		arguments.push_back(param.GetType());
+	}
+}
+
+bool BoundScalarFunction::operator==(const BoundScalarFunction &rhs) const {
+	return callbacks == rhs.callbacks && properties == rhs.properties && name == rhs.name &&
+	       return_type == rhs.return_type && arguments == rhs.arguments;
+}
+bool BoundScalarFunction::operator!=(const BoundScalarFunction &rhs) const {
+	return !(*this == rhs);
 }
 
 } // namespace duckdb

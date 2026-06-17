@@ -9,9 +9,6 @@ require block_size 262144
 require skip_reload
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE T (a INTEGER USING COMPRESSION RLE)
 
 statement ok

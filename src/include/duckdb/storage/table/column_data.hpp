@@ -35,6 +35,7 @@ struct TableScanOptions;
 struct TransactionData;
 struct PersistentColumnData;
 class ValidityColumnData;
+struct ColumnDataFinalizeAppendState;
 
 using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
@@ -154,18 +155,25 @@ public:
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
-	virtual void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count);
-	//! Append a vector of type [type] to the end of the column
-	void Append(ColumnAppendState &state, Vector &vector, idx_t count);
-	virtual void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count);
+	virtual void Append(ColumnAppendState &state, const Vector &vector, idx_t count);
+	virtual void AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count);
+	//! Finalize appending
+	virtual void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state);
+	void FinalizeAppend(optional_ptr<BaseStatistics> table_stats, ColumnAppendState &state);
+	//! Finalize appending while holding stats_lock (for use by child column calls)
+	void FinalizeAppendLocked(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state);
 	//! Revert a set of appends to the ColumnData
 	virtual void RevertAppend(row_t new_count);
 
 	//! Fetch the vector from the column data that belongs to this specific row
 	virtual idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result);
-	//! Fetch a specific row id and append it to the vector
-	virtual void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
-	                      row_t row_id, Vector &result, idx_t result_idx);
+	//! Fetch a batch of row offsets and append them to the vector
+	virtual void FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+	                       const idx_t *offsets, const SelectionVector &sel, idx_t count, Vector &result,
+	                       idx_t result_offset);
+	//! Fetches a batch of row offsets for leaf columns.
+	void FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetchState &state, const idx_t *offsets,
+	                             const SelectionVector &sel, idx_t count, Vector &result, idx_t result_offset);
 
 	virtual void Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
 	                    Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start);
@@ -196,10 +204,11 @@ public:
 	                                          ReadStream &source, const LogicalType &type);
 
 	virtual void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-	                                  vector<ColumnSegmentInfo> &result);
+	                                  vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options);
 	virtual void Verify(RowGroup &parent);
 
-	FilterPropagateResult CheckZonemap(const StorageIndex &index, TableFilter &filter);
+	FilterPropagateResult CheckZonemap(optional_ptr<ClientContext> context, const StorageIndex &index,
+	                                   TableFilter &filter);
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                           const LogicalType &type,
@@ -213,7 +222,7 @@ public:
 
 protected:
 	//! Append a transient segment
-	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
+	void AppendTransientSegment(SegmentLock &l, idx_t start_row, optional_ptr<ColumnSegment> prev_segment);
 	void AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment);
 
 	void BeginScanVectorInternal(ColumnScanState &state);

@@ -6,6 +6,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/storage/storage_options.hpp"
 #include "zstd.h"
 
 namespace duckdb {
@@ -142,6 +143,10 @@ idx_t BlockIndexManager::GetMaxIndex() const {
 	return max_index;
 }
 
+idx_t BlockIndexManager::GetUsedBlockCount() const {
+	return indexes_in_use.size();
+}
+
 bool BlockIndexManager::HasFreeBlocks() const {
 	return !free_indexes.empty();
 }
@@ -197,7 +202,7 @@ TemporaryFileHandle::TemporaryFileLock::TemporaryFileLock(mutex &mutex) : lock(m
 
 TemporaryFileIndex TemporaryFileHandle::TryGetBlockIndex(idx_t block_header_size) {
 	TemporaryFileLock lock(file_lock);
-	if (index_manager.GetMaxIndex() >= max_allowed_index && index_manager.HasFreeBlocks()) {
+	if (index_manager.GetMaxIndex() >= max_allowed_index && !index_manager.HasFreeBlocks()) {
 		// file is at capacity
 		return TemporaryFileIndex();
 	}
@@ -318,7 +323,7 @@ TemporaryFileInformation TemporaryFileHandle::GetTemporaryFile() {
 	TemporaryFileLock lock(file_lock);
 	TemporaryFileInformation info;
 	info.path = path;
-	info.size = GetPositionInFile(index_manager.GetMaxIndex());
+	info.size = GetPositionInFile(index_manager.GetUsedBlockCount());
 	return info;
 }
 
@@ -328,7 +333,8 @@ void TemporaryFileHandle::CreateFileIfNotExists(TemporaryFileLock &) {
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
-	if (db.config.options.use_direct_io) {
+	// Temp files have no per-file IO_MODE; they follow the global default_io_mode setting.
+	if (Settings::Get<DefaultIoModeSetting>(db) == FileIOMode::DIRECT_IO) {
 		open_flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 	}
 	handle = fs.OpenFile(path, open_flags);
@@ -644,13 +650,19 @@ bool TemporaryFileManager::IsEncrypted() const {
 }
 
 unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(QueryContext context, block_id_t id,
-                                                                 unique_ptr<FileBuffer> reusable_buffer) {
+                                                                 unique_ptr<FileBuffer> reusable_buffer,
+                                                                 idx_t *eviction_size) {
 	TemporaryFileIndex index;
 	optional_ptr<TemporaryFileHandle> handle;
 	{
 		TemporaryFileManagerLock lock(manager_lock);
 		index = GetTempBlockIndex(lock, id);
 		handle = GetFileHandle(lock, index.identifier);
+	}
+
+	// If eviction size requested, set it to the size of the block (compressed size if applicable).
+	if (eviction_size) {
+		*eviction_size = NumericCast<idx_t>(index.identifier.size);
 	}
 
 	// before the reusable buffer is given,

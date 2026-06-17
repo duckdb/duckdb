@@ -18,9 +18,6 @@ PRAGMA memory_limit='100MB'
 statement ok
 PRAGMA threads=4;
 
-statement ok
-PRAGMA enable_verification
-
 # MODE is very unstable on this data
 query III
 SELECT SUM(s), SUM(q), SUM(m)

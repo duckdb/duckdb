@@ -5,6 +5,7 @@
 #include "duckdb/function/window_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -22,12 +23,12 @@ public:
 			//	If the argument order is prefix of the partition ordering,
 			//	then we can just use the partition ordering.
 			auto &wexpr = executor.wexpr;
-			auto &arg_orders = executor.wexpr.arg_orders;
-			const auto optimize = ClientConfig::GetConfig(client).enable_optimizer;
-			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
+			auto &arg_orders = executor.wexpr.ArgOrders();
+			const auto optimize = Settings::Get<EnableOptimizerSetting>(client);
+			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.OrderBy(), arg_orders) != arg_orders.size()) {
 				//	"The ROW_NUMBER function can be computed by disambiguating duplicate elements based on their
 				//	position in the input data, such that two elements never compare as equal."
-				token_tree = make_uniq<WindowTokenTree>(client, executor.wexpr.arg_orders, executor.arg_order_idx,
+				token_tree = make_uniq<WindowTokenTree>(client, executor.wexpr.ArgOrders(), executor.arg_order_idx,
 				                                        payload_count, true);
 			}
 		}
@@ -142,7 +143,7 @@ WindowFunction RowNumberFun::GetFunction() {
 }
 
 void WindowRowNumberExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-	if (wexpr.arg_orders.empty()) {
+	if (wexpr.ArgOrders().empty()) {
 		required.insert(PARTITION_BEGIN);
 	} else {
 		// Secondary orders need to know where the frame is
@@ -155,12 +156,12 @@ void WindowRowNumberExecutor::GetSharing(WindowExecutor &executor, WindowSharedE
 	const auto &wexpr = executor.wexpr;
 
 	auto &child_idx = executor.child_idx;
-	for (auto &child : wexpr.children) {
+	for (auto &child : wexpr.GetChildren()) {
 		child_idx.emplace_back(shared.RegisterEvaluate(child));
 	}
 
 	auto &arg_order_idx = executor.arg_order_idx;
-	for (const auto &order : wexpr.arg_orders) {
+	for (const auto &order : wexpr.ArgOrders()) {
 		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
 }
@@ -179,7 +180,7 @@ unique_ptr<LocalSinkState> WindowRowNumberExecutor::GetLocal(ExecutionContext &c
 void WindowRowNumberExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                       Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto rdata = FlatVector::Writer<int64_t>(result, count);
 
 	if (grstate.use_framing) {
@@ -234,7 +235,7 @@ WindowFunction NtileFun::GetFunction() {
 }
 
 void WindowNtileExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-	if (wexpr.arg_orders.empty()) {
+	if (wexpr.ArgOrders().empty()) {
 		required.insert(PARTITION_BEGIN);
 		required.insert(PARTITION_END);
 	} else {
@@ -251,7 +252,7 @@ unique_ptr<LocalSinkState> WindowNtileExecutor::GetLocal(ExecutionContext &conte
 void WindowNtileExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
                                   idx_t row_idx, OperatorSinkInput &sink) {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 
 	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto partition_end = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);

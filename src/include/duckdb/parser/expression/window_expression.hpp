@@ -8,8 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {
 
@@ -41,40 +43,6 @@ public:
 public:
 	WindowExpression(const string &catalog_name, const string &schema, const string &function_name);
 
-	//! Catalog of the aggregate function
-	string catalog;
-	//! Schema of the aggregate function
-	string schema;
-	//! Name of the aggregate function
-	string function_name;
-	//! The child expression of the main window function
-	vector<unique_ptr<ParsedExpression>> children;
-	//! The set of expressions to partition by
-	vector<unique_ptr<ParsedExpression>> partitions;
-	//! The set of ordering clauses
-	vector<OrderByNode> orders;
-	//! Expression representing a filter, only used for aggregates
-	unique_ptr<ParsedExpression> filter_expr;
-	//! True if we parsed IGNORE/RESPECT NULLS
-	bool has_ignore_nulls = false;
-	//! True to ignore NULL values
-	bool ignore_nulls = false;
-	//! Whether or not the aggregate function is distinct, only used for aggregates
-	bool distinct = false;
-	//! The window boundaries
-	WindowBoundary start = WindowBoundary::INVALID;
-	WindowBoundary end = WindowBoundary::INVALID;
-	//! The EXCLUDE clause
-	WindowExcludeMode exclude_clause = WindowExcludeMode::NO_OTHER;
-
-	unique_ptr<ParsedExpression> start_expr;
-	unique_ptr<ParsedExpression> end_expr;
-
-	//! The set of argument ordering clauses
-	//! These are distinct from the frame ordering clauses e.g., the "x" in
-	//! FIRST_VALUE(a ORDER BY x) OVER (PARTITION BY p ORDER BY s)
-	vector<OrderByNode> arg_orders;
-
 public:
 	bool IsWindow() const override {
 		return true;
@@ -83,9 +51,10 @@ public:
 	//! Convert the Expression to a String
 	string ToString() const override;
 
-	static bool Equal(const WindowExpression &a, const WindowExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
+	hash_t Hash() const override;
 
-	bool HasBoundedParts();
+	bool HasBoundedParts() const;
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
@@ -98,6 +67,105 @@ public:
 	static ExpressionType WindowToExpressionType(const string &fun_name);
 
 public:
+	const Identifier &Catalog() const {
+		return catalog;
+	}
+	Identifier &CatalogMutable() {
+		return catalog;
+	}
+	const Identifier &Schema() const {
+		return schema;
+	}
+	Identifier &SchemaMutable() {
+		return schema;
+	}
+	const Identifier &FunctionName() const {
+		return function_name;
+	}
+	Identifier &FunctionNameMutable() {
+		return function_name;
+	}
+	const vector<unique_ptr<ParsedExpression>> &Partitions() const {
+		return partitions;
+	}
+	vector<unique_ptr<ParsedExpression>> &PartitionsMutable() {
+		return partitions;
+	}
+	const vector<OrderByNode> &OrderBy() const {
+		return orders;
+	}
+	vector<OrderByNode> &OrderByMutable() {
+		return orders;
+	}
+	const unique_ptr<ParsedExpression> &Filter() const {
+		return filter_expr;
+	}
+	unique_ptr<ParsedExpression> &FilterMutable() {
+		return filter_expr;
+	}
+	bool HasIgnoreNulls() const {
+		return has_ignore_nulls;
+	}
+	bool &HasIgnoreNullsMutable() {
+		return has_ignore_nulls;
+	}
+	bool IgnoreNulls() const {
+		return ignore_nulls;
+	}
+	bool &IgnoreNullsMutable() {
+		return ignore_nulls;
+	}
+	bool Distinct() const {
+		return distinct;
+	}
+	bool &DistinctMutable() {
+		return distinct;
+	}
+	WindowBoundary WindowStart() const {
+		return start;
+	}
+	WindowBoundary &WindowStartMutable() {
+		return start;
+	}
+	WindowBoundary WindowEnd() const {
+		return end;
+	}
+	WindowBoundary &WindowEndMutable() {
+		return end;
+	}
+	WindowExcludeMode WindowExclude() const {
+		return exclude_clause;
+	}
+	WindowExcludeMode &WindowExcludeMutable() {
+		return exclude_clause;
+	}
+	const unique_ptr<ParsedExpression> &StartExpr() const {
+		return start_expr;
+	}
+	unique_ptr<ParsedExpression> &StartExprMutable() {
+		return start_expr;
+	}
+	const unique_ptr<ParsedExpression> &EndExpr() const {
+		return end_expr;
+	}
+	unique_ptr<ParsedExpression> &EndExprMutable() {
+		return end_expr;
+	}
+	const vector<OrderByNode> &ArgOrders() const {
+		return arg_orders;
+	}
+	vector<OrderByNode> &ArgOrdersMutable() {
+		return arg_orders;
+	}
+
+	const vector<FunctionArgument> &GetArguments() const {
+		return arguments;
+	}
+
+	vector<FunctionArgument> &GetArgumentsMutable() {
+		return arguments;
+	}
+
 	static inline string ToUnits(const WindowBoundary boundary, const WindowBoundary rows, const WindowBoundary range,
 	                             const WindowBoundary groups) {
 		if (boundary == rows) {
@@ -114,27 +182,42 @@ public:
 		// Start with function call
 		string result = schema.empty() ? function_name : schema + "." + function_name;
 		result += "(";
-		if (entry.children.size()) {
-			//	Only one DISTINCT is allowed (on the first argument)
-			int distincts = entry.distinct ? 0 : 1;
-			result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
-				return (distincts++ ? "" : "DISTINCT ") + child->ToString();
-			});
+
+		if constexpr (std::is_same_v<T, WindowExpression>) {
+			auto &children = entry.GetArguments();
+			if (children.size()) {
+				//	Only one DISTINCT is allowed (on the first argument)
+				int distincts = entry.Distinct() ? 0 : 1;
+				result += StringUtil::Join(children, children.size(), ", ", [&](const FunctionArgument &child) {
+					return (distincts++ ? "" : "DISTINCT ") + child.ToString();
+				});
+			}
+		} else {
+			auto &children = entry.GetChildren();
+			if (children.size()) {
+				//	Only one DISTINCT is allowed (on the first argument)
+				int distincts = entry.Distinct() ? 0 : 1;
+				result += StringUtil::Join(children, children.size(), ", ", [&](const unique_ptr<BASE> &child) {
+					return (distincts++ ? "" : "DISTINCT ") + child->ToString();
+				});
+			}
 		}
+
 		// ORDER BY arguments
-		if (!entry.arg_orders.empty()) {
+		auto &arg_orders = entry.ArgOrders();
+		if (!arg_orders.empty()) {
 			result += " ORDER BY ";
-			result += StringUtil::Join(entry.arg_orders, entry.arg_orders.size(), ", ",
+			result += StringUtil::Join(arg_orders, arg_orders.size(), ", ",
 			                           [](const ORDER_NODE &order) { return order.ToString(); });
 		}
 
 		// IGNORE NULLS
-		if (entry.ignore_nulls) {
+		if (entry.IgnoreNulls()) {
 			result += " IGNORE NULLS";
 		}
 		// FILTER
-		if (entry.filter_expr) {
-			result += ") FILTER (WHERE " + entry.filter_expr->ToString();
+		if (entry.Filter()) {
+			result += ") FILTER (WHERE " + entry.Filter()->ToString();
 		}
 
 		// Over clause
@@ -142,50 +225,56 @@ public:
 		string sep;
 
 		// Partitions
-		if (!entry.partitions.empty()) {
+		auto &partitions = entry.Partitions();
+		if (!partitions.empty()) {
 			result += "PARTITION BY ";
-			result += StringUtil::Join(entry.partitions, entry.partitions.size(), ", ",
+			result += StringUtil::Join(partitions, partitions.size(), ", ",
 			                           [](const unique_ptr<BASE> &partition) { return partition->ToString(); });
 			sep = " ";
 		}
 
 		// Orders
-		if (!entry.orders.empty()) {
+		auto &orders = entry.OrderBy();
+		if (!orders.empty()) {
 			result += sep;
 			result += "ORDER BY ";
-			result += StringUtil::Join(entry.orders, entry.orders.size(), ", ",
-			                           [](const ORDER_NODE &order) { return order.ToString(); });
+			result +=
+			    StringUtil::Join(orders, orders.size(), ", ", [](const ORDER_NODE &order) { return order.ToString(); });
 			sep = " ";
 		}
 
 		// Rows/Range
 		string units = "ROWS";
 		string from;
-		switch (entry.start) {
+		auto window_start = entry.WindowStart();
+		auto window_end = entry.WindowEnd();
+		auto &start_expr = entry.StartExpr();
+		auto &end_expr = entry.EndExpr();
+		switch (window_start) {
 		case WindowBoundary::CURRENT_ROW_RANGE:
 		case WindowBoundary::CURRENT_ROW_ROWS:
 		case WindowBoundary::CURRENT_ROW_GROUPS:
 			from = "CURRENT ROW";
-			units = ToUnits(entry.start, WindowBoundary::CURRENT_ROW_ROWS, WindowBoundary::CURRENT_ROW_RANGE,
+			units = ToUnits(window_start, WindowBoundary::CURRENT_ROW_ROWS, WindowBoundary::CURRENT_ROW_RANGE,
 			                WindowBoundary::CURRENT_ROW_GROUPS);
 			break;
 		case WindowBoundary::UNBOUNDED_PRECEDING:
-			if (entry.end != WindowBoundary::CURRENT_ROW_RANGE) {
+			if (window_end != WindowBoundary::CURRENT_ROW_RANGE) {
 				from = "UNBOUNDED PRECEDING";
 			}
 			break;
 		case WindowBoundary::EXPR_PRECEDING_ROWS:
 		case WindowBoundary::EXPR_PRECEDING_RANGE:
 		case WindowBoundary::EXPR_PRECEDING_GROUPS:
-			from = entry.start_expr->ToString() + " PRECEDING";
-			units = ToUnits(entry.start, WindowBoundary::EXPR_PRECEDING_ROWS, WindowBoundary::EXPR_PRECEDING_RANGE,
+			from = start_expr->ToString() + " PRECEDING";
+			units = ToUnits(window_start, WindowBoundary::EXPR_PRECEDING_ROWS, WindowBoundary::EXPR_PRECEDING_RANGE,
 			                WindowBoundary::EXPR_PRECEDING_GROUPS);
 			break;
 		case WindowBoundary::EXPR_FOLLOWING_ROWS:
 		case WindowBoundary::EXPR_FOLLOWING_RANGE:
 		case WindowBoundary::EXPR_FOLLOWING_GROUPS:
-			from = entry.start_expr->ToString() + " FOLLOWING";
-			units = ToUnits(entry.start, WindowBoundary::EXPR_FOLLOWING_ROWS, WindowBoundary::EXPR_FOLLOWING_RANGE,
+			from = start_expr->ToString() + " FOLLOWING";
+			units = ToUnits(window_start, WindowBoundary::EXPR_FOLLOWING_ROWS, WindowBoundary::EXPR_FOLLOWING_RANGE,
 			                WindowBoundary::EXPR_FOLLOWING_GROUPS);
 			break;
 		case WindowBoundary::UNBOUNDED_FOLLOWING:
@@ -194,9 +283,9 @@ public:
 		}
 
 		string to;
-		switch (entry.end) {
+		switch (window_end) {
 		case WindowBoundary::CURRENT_ROW_RANGE:
-			if (entry.start != WindowBoundary::UNBOUNDED_PRECEDING) {
+			if (window_start != WindowBoundary::UNBOUNDED_PRECEDING) {
 				to = "CURRENT ROW";
 				units = "RANGE";
 			}
@@ -204,7 +293,7 @@ public:
 		case WindowBoundary::CURRENT_ROW_ROWS:
 		case WindowBoundary::CURRENT_ROW_GROUPS:
 			to = "CURRENT ROW";
-			units = ToUnits(entry.end, WindowBoundary::CURRENT_ROW_ROWS, WindowBoundary::CURRENT_ROW_RANGE,
+			units = ToUnits(window_end, WindowBoundary::CURRENT_ROW_ROWS, WindowBoundary::CURRENT_ROW_RANGE,
 			                WindowBoundary::CURRENT_ROW_GROUPS);
 			break;
 		case WindowBoundary::UNBOUNDED_PRECEDING:
@@ -216,21 +305,22 @@ public:
 		case WindowBoundary::EXPR_PRECEDING_ROWS:
 		case WindowBoundary::EXPR_PRECEDING_RANGE:
 		case WindowBoundary::EXPR_PRECEDING_GROUPS:
-			to = entry.end_expr->ToString() + " PRECEDING";
-			units = ToUnits(entry.end, WindowBoundary::EXPR_PRECEDING_ROWS, WindowBoundary::EXPR_PRECEDING_RANGE,
+			to = end_expr->ToString() + " PRECEDING";
+			units = ToUnits(window_end, WindowBoundary::EXPR_PRECEDING_ROWS, WindowBoundary::EXPR_PRECEDING_RANGE,
 			                WindowBoundary::EXPR_PRECEDING_GROUPS);
 			break;
 		case WindowBoundary::EXPR_FOLLOWING_ROWS:
 		case WindowBoundary::EXPR_FOLLOWING_RANGE:
 		case WindowBoundary::EXPR_FOLLOWING_GROUPS:
-			to = entry.end_expr->ToString() + " FOLLOWING";
-			units = ToUnits(entry.end, WindowBoundary::EXPR_FOLLOWING_ROWS, WindowBoundary::EXPR_FOLLOWING_RANGE,
+			to = end_expr->ToString() + " FOLLOWING";
+			units = ToUnits(window_end, WindowBoundary::EXPR_FOLLOWING_ROWS, WindowBoundary::EXPR_FOLLOWING_RANGE,
 			                WindowBoundary::EXPR_FOLLOWING_GROUPS);
 			break;
 		case WindowBoundary::INVALID:
 			throw InternalException("Unrecognized TO in WindowExpression");
 		}
-		if (entry.exclude_clause != WindowExcludeMode::NO_OTHER) {
+		auto exclude_clause = entry.WindowExclude();
+		if (exclude_clause != WindowExcludeMode::NO_OTHER) {
 			// if we have an explicit EXCLUDE we always need to fill in from/to
 			if (from.empty()) {
 				from = "UNBOUNDED PRECEDING";
@@ -257,10 +347,10 @@ public:
 			result += to;
 		}
 
-		if (entry.exclude_clause != WindowExcludeMode::NO_OTHER) {
+		if (exclude_clause != WindowExcludeMode::NO_OTHER) {
 			result += " EXCLUDE ";
 		}
-		switch (entry.exclude_clause) {
+		switch (exclude_clause) {
 		case WindowExcludeMode::CURRENT_ROW:
 			result += "CURRENT ROW";
 			break;
@@ -279,11 +369,53 @@ public:
 		return result;
 	}
 
-private:
-	//	Backwards-compatible serialization interface
-	WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children,
-	                 unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr);
+	bool IsLegacyFunctionCall() const {
+		return is_legacy_function_call;
+	}
 
+private:
+	//! Catalog of the aggregate function
+	Identifier catalog;
+	//! Schema of the aggregate function
+	Identifier schema;
+	//! Name of the aggregate function
+	Identifier function_name;
+	//! The child expression of the main window function
+	vector<FunctionArgument> arguments;
+	//! The set of expressions to partition by
+	vector<unique_ptr<ParsedExpression>> partitions;
+	//! The set of ordering clauses
+	vector<OrderByNode> orders;
+	//! Expression representing a filter, only used for aggregates
+	unique_ptr<ParsedExpression> filter_expr;
+	//! True if we parsed IGNORE/RESPECT NULLS
+	bool has_ignore_nulls = false;
+	//! True to ignore NULL values
+	bool ignore_nulls = false;
+	//! Whether or not the aggregate function is distinct, only used for aggregates
+	bool distinct = false;
+	//! The window boundaries
+	WindowBoundary start = WindowBoundary::INVALID;
+	WindowBoundary end = WindowBoundary::INVALID;
+	//! The EXCLUDE clause
+	WindowExcludeMode exclude_clause = WindowExcludeMode::NO_OTHER;
+
+	unique_ptr<ParsedExpression> start_expr;
+	unique_ptr<ParsedExpression> end_expr;
+
+	//! The set of argument ordering clauses
+	//! These are distinct from the frame ordering clauses e.g., the "x" in
+	//! FIRST_VALUE(a ORDER BY x) OVER (PARTITION BY p ORDER BY s)
+	vector<OrderByNode> arg_orders;
+
+	//! Whether this function is a legacy function call, which means it was parsed from a function call that does not
+	//! use the new function argument syntax. This is used to determine how to handle named arguments during binding.
+	bool is_legacy_function_call = false;
+
+private:
+	WindowExpression();
+
+	//	Backwards-compatible serialization interface
 	//	Remove LEAD/LAG offset/default
 	vector<unique_ptr<ParsedExpression>> SerializedChildren(Serializer &serializer) const;
 	unique_ptr<ParsedExpression> SerializedOffset(Serializer &serializer) const;

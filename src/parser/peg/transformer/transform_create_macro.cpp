@@ -5,14 +5,13 @@
 #include "duckdb/function/scalar_macro_function.hpp"
 
 namespace duckdb {
-unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(PEGTransformer &transformer,
-                                                                            ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+unique_ptr<CreateStatement>
+PEGTransformerFactory::TransformCreateMacroStmt(PEGTransformer &transformer, const bool &macro_or_function,
+                                                const bool &if_not_exists, const QualifiedName &qualified_name,
+                                                vector<unique_ptr<MacroFunction>> macro_definition) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 
-	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
 	if (qualified_name.schema.empty()) {
 		info->schema = qualified_name.catalog;
 	} else {
@@ -20,17 +19,15 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(PEGT
 		info->schema = qualified_name.schema;
 	}
 	info->name = qualified_name.name;
-	auto macro_definition_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(3));
 
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	vector<unique_ptr<MacroFunction>> macro_functions;
-	for (auto macro_definition : macro_definition_list) {
-		info->macros.push_back(transformer.Transform<unique_ptr<MacroFunction>>(macro_definition));
+	for (auto &macro_function : macro_definition) {
+		info->macros.push_back(std::move(macro_function));
 	}
 	D_ASSERT(!info->macros.empty());
 	auto macro_type = info->macros[0]->type;
 	if (info->macros.size() > 1) {
-		for (idx_t i = 1; i < macro_definition_list.size(); ++i) {
+		for (idx_t i = 1; i < info->macros.size(); ++i) {
 			if (info->macros[i]->type != macro_type) {
 				throw ParserException("Cannot mix table and scalar macro function definitions");
 			}
@@ -42,84 +39,73 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(PEGT
 	return result;
 }
 
-unique_ptr<MacroFunction> PEGTransformerFactory::TransformMacroDefinition(PEGTransformer &transformer,
-                                                                          ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &nested_list = list_pr.Child<ListParseResult>(2);
-
-	auto macro_function =
-	    transformer.Transform<unique_ptr<MacroFunction>>(nested_list.Child<ChoiceParseResult>(0).GetResult());
-	auto &parameters_pr = ExtractResultFromParens(list_pr.Child<ListParseResult>(0)).Cast<OptionalParseResult>();
-	if (parameters_pr.HasResult()) {
-		bool default_value_found = false;
-		auto parameters = transformer.Transform<vector<MacroParameter>>(parameters_pr.GetResult());
-		case_insensitive_string_set_t parameter_names;
-		for (auto &parameter : parameters) {
-			D_ASSERT(!parameter.name.empty());
-			if (parameter_names.find(parameter.name) != parameter_names.end()) {
-				throw ParserException("Duplicate parameter '%s' in macro definition", parameter.name);
-			}
-			parameter_names.insert(parameter.name);
-			if (parameter.is_default) {
-				auto default_expr = std::move(parameter.expression);
-				default_expr->SetAlias(parameter.name);
-				macro_function->default_parameters[parameter.name] = std::move(default_expr);
-				macro_function->parameters.push_back(make_uniq<ColumnRefExpression>(parameter.name));
-				default_value_found = true;
-			} else {
-				if (default_value_found) {
-					throw ParserException("Parameter without a default follows parameter with a default");
-				}
-				macro_function->parameters.push_back(std::move(parameter.expression));
-			}
-			macro_function->types.push_back(parameter.type);
-		}
-	}
-
-	return macro_function;
+bool PEGTransformerFactory::TransformMacroKeyword(PEGTransformer &transformer) {
+	return true;
 }
 
-unique_ptr<MacroFunction> PEGTransformerFactory::TransformTableMacroDefinition(PEGTransformer &transformer,
-                                                                               ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+bool PEGTransformerFactory::TransformFunctionKeyword(PEGTransformer &transformer) {
+	return false;
+}
+
+unique_ptr<MacroFunction>
+PEGTransformerFactory::TransformMacroDefinition(PEGTransformer &transformer, vector<MacroParameter> macro_parameters,
+                                                unique_ptr<MacroFunction> macro_definition_body) {
+	bool default_value_found = false;
+	identifier_set_t parameter_names;
+	for (auto &parameter : macro_parameters) {
+		D_ASSERT(!parameter.name.empty());
+		if (parameter_names.find(parameter.name) != parameter_names.end()) {
+			throw ParserException("Duplicate parameter '%s' in macro definition", parameter.name.GetIdentifierName());
+		}
+		parameter_names.insert(parameter.name);
+		if (parameter.is_default) {
+			auto default_expr = std::move(parameter.expression);
+			default_expr->SetAlias(parameter.name);
+			macro_definition_body->default_parameters[parameter.name] = std::move(default_expr);
+			macro_definition_body->parameters.push_back(make_uniq<ColumnRefExpression>(parameter.name));
+			default_value_found = true;
+		} else {
+			if (default_value_found) {
+				throw ParserException("Parameter without a default follows parameter with a default");
+			}
+			macro_definition_body->parameters.push_back(std::move(parameter.expression));
+		}
+		macro_definition_body->types.push_back(parameter.type);
+	}
+
+	return macro_definition_body;
+}
+
+unique_ptr<MacroFunction>
+PEGTransformerFactory::TransformTableMacroDefinition(PEGTransformer &transformer,
+                                                     unique_ptr<SelectStatement> select_statement_internal) {
 	auto result = make_uniq<TableMacroFunction>();
-	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(1));
-	result->query_node = std::move(select_statement->node);
+	result->query_node = std::move(select_statement_internal->node);
 	return std::move(result);
 }
 
-unique_ptr<MacroFunction> PEGTransformerFactory::TransformScalarMacroDefinition(PEGTransformer &transformer,
-                                                                                ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+unique_ptr<MacroFunction>
+PEGTransformerFactory::TransformScalarMacroDefinition(PEGTransformer &transformer,
+                                                      unique_ptr<ParsedExpression> expression) {
 	auto result = make_uniq<ScalarMacroFunction>();
-	result->expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
+	result->expression = std::move(expression);
 	return std::move(result);
 }
 
 vector<MacroParameter> PEGTransformerFactory::TransformMacroParameters(PEGTransformer &transformer,
-                                                                       ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto parameter_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
-	vector<MacroParameter> parameters;
-	for (auto parameter : parameter_list) {
-		parameters.push_back(transformer.Transform<MacroParameter>(parameter));
-	}
-	return parameters;
+                                                                       vector<MacroParameter> macro_parameter) {
+	return macro_parameter;
 }
 
-MacroParameter PEGTransformerFactory::TransformMacroParameter(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	return transformer.Transform<MacroParameter>(choice_pr);
-}
-
-MacroParameter PEGTransformerFactory::TransformSimpleParameter(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto parameter = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+MacroParameter PEGTransformerFactory::TransformSimpleParameter(PEGTransformer &transformer,
+                                                               const Identifier &type_func_name,
+                                                               const LogicalType &type) {
 	MacroParameter result;
-	result.name = parameter;
-	result.expression = make_uniq<ColumnRefExpression>(parameter);
-	transformer.TransformOptional<LogicalType>(list_pr, 1, result.type);
+	result.name = Identifier(type_func_name);
+	result.expression = make_uniq<ColumnRefExpression>(Identifier(type_func_name));
+	if (type.id() != LogicalTypeId::INVALID) {
+		result.type = type;
+	}
 	result.is_default = false;
 	return result;
 }

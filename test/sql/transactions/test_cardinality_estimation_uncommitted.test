@@ -2,9 +2,6 @@
 # description: Test that cardinality estimation includes uncommitted rows from local storage
 # group: [transactions]
 
-statement ok
-PRAGMA enable_verification
-
 # create an empty table
 statement ok
 CREATE TABLE t1 (id INTEGER, val INTEGER)

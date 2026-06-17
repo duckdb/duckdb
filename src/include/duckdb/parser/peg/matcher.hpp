@@ -9,13 +9,16 @@
 #pragma once
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include <mutex>
 
 namespace duckdb {
+class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
@@ -50,6 +53,11 @@ struct AutoCompleteCandidate {
 	AutoCompleteCandidate(const char *candidate_p, SuggestionState suggestion_type, int32_t score_bonus = 0,
 	                      CandidateType candidate_type = CandidateType::IDENTIFIER)
 	    : AutoCompleteCandidate(string(candidate_p), suggestion_type, score_bonus, candidate_type) {
+	}
+	// NOLINTNEXTLINE: allow implicit conversion from Identifier
+	AutoCompleteCandidate(const Identifier &candidate_p, SuggestionState suggestion_type, int32_t score_bonus = 0,
+	                      CandidateType candidate_type = CandidateType::IDENTIFIER)
+	    : AutoCompleteCandidate(candidate_p.GetIdentifierName(), suggestion_type, score_bonus, candidate_type) {
 	}
 
 	string candidate;
@@ -114,8 +122,8 @@ struct MatcherSuggestion {
 
 struct MatchState {
 	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, bool preserve_identifier_case_p = true)
-	    : tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator),
+	           idx_t &max_token_index, bool preserve_identifier_case_p = true, idx_t starting_token_index = 0)
+	    : tokens(tokens), suggestions(suggestions), token_index(starting_token_index), allocator(allocator),
 	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p) {
 	}
 	MatchState(MatchState &state)
@@ -145,7 +153,18 @@ struct MatchState {
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
 
-enum class MatcherType { KEYWORD, LIST, OPTIONAL, CHOICE, REPEAT, VARIABLE, STRING_LITERAL, NUMBER_LITERAL, OPERATOR };
+enum class MatcherType {
+	KEYWORD,
+	LIST,
+	OPTIONAL,
+	CHOICE,
+	REPEAT,
+	VARIABLE,
+	STRING_LITERAL,
+	NUMBER_LITERAL,
+	OPERATOR,
+	END_OF_INPUT
+};
 
 class Matcher {
 public:
@@ -210,26 +229,33 @@ private:
 struct PEGMatcher {
 	MatcherAllocator allocator;
 
-	Matcher &Root() {
-		return *root;
+	Matcher &ProgramMatcher() {
+		return *program_matcher;
+	}
+	Matcher &TopLevelStatementMatcher() {
+		return *top_level_statement_matcher;
 	}
 
+	static shared_ptr<PEGMatcher> Get(ClientContext &context);
+	static shared_ptr<PEGMatcher> Get(DatabaseInstance &db);
+
 private:
-	friend struct PEGMatcherCache;
-	optional_ptr<Matcher> root;
+	friend struct ParserCache;
+	optional_ptr<Matcher> program_matcher;
+	optional_ptr<Matcher> top_level_statement_matcher;
 };
 
-//! Per-database cache holder for the compiled PEG root matcher.
-struct PEGMatcherCache : ParserExtensionInfo {
+//! Per-database cache holder for the compiled PEG root matcher and transformer factory.
+//! Both are always invalidated together, so they share one mutex and one Invalidate() call.
+struct ParserCache {
 	shared_ptr<PEGMatcher> GetMatcher();
+	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
 	void Invalidate();
 
 private:
 	std::mutex mutex;
 	shared_ptr<PEGMatcher> matcher;
+	shared_ptr<PEGTransformerFactory> transformer_factory;
 };
-
-//! Returns the process-wide singleton PEGMatcherCache (built once, reused for all parses).
-PEGMatcherCache &GetGlobalPEGMatcherCache();
 
 } // namespace duckdb

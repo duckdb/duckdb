@@ -74,10 +74,24 @@ struct Settings {
 		return StringUtil::ToDouble(OP::DefaultValue);
 	}
 
+	template <class SOURCE>
+	static void Set(SOURCE &source, idx_t setting_index, SetScope scope, Value target_value) {
+		SetSettingInternal(source, setting_index, scope, std::move(target_value));
+	}
+
+	template <class OP, class SOURCE>
+	static void Set(SOURCE &source, SetScope scope, Value target_value) {
+		Set(source, OP::SettingIndex, scope, std::move(target_value));
+	}
+
 private:
 	static bool TryGetSettingInternal(const DatabaseInstance &db, idx_t setting_index, Value &result);
 	static bool TryGetSettingInternal(const DBConfig &config, idx_t setting_index, Value &result);
 	static bool TryGetSettingInternal(const ClientContext &context, idx_t setting_index, Value &result);
+
+	static void SetSettingInternal(DatabaseInstance &db, idx_t setting_index, SetScope scope, Value target_value);
+	static void SetSettingInternal(DBConfig &config, idx_t setting_index, SetScope scope, Value target_value);
+	static void SetSettingInternal(ClientContext &context, idx_t setting_index, SetScope scope, Value target_value);
 };
 
 static constexpr idx_t SETTING_INDEX_BASE = __COUNTER__ + 1;
@@ -140,9 +154,10 @@ struct AllocatorFlushThresholdSetting {
 	static constexpr const char *Description =
 	    "Peak allocation threshold at which to flush the allocator after completing a task.";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "134217728B";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct AllowCommunityExtensionsSetting {
@@ -300,6 +315,17 @@ struct AsofLoopJoinThresholdSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct AsyncThreadsSetting {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "async_threads";
+	static constexpr const char *Description =
+	    "The number of total async threads used by the system for tasks like I/O.";
+	static constexpr const char *InputType = "BIGINT";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AutoCheckpointSkipWalThresholdSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "auto_checkpoint_skip_wal_threshold";
@@ -362,6 +388,17 @@ struct BlockAllocatorMemorySetting {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct CacheLocalFilesSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "cache_local_files";
+	static constexpr const char *Description =
+	    "Whether the external file cache also caches local files (remote files are always cached)";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct CatalogErrorMaxSchemasSetting {
@@ -473,6 +510,16 @@ struct DebugCheckpointSleepMsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugDisableOptimizerSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_disable_optimizer";
+	static constexpr const char *Description = "DEBUG SETTING: disable optimizer for most queries";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugEvictionQueueSleepMicroSecondsSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "debug_eviction_queue_sleep_micro_seconds";
@@ -490,9 +537,19 @@ struct DebugForceExternalSetting {
 	static constexpr const char *Description =
 	    "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugForceFetchRowSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_force_fetch_row";
+	static constexpr const char *Description = "DEBUG SETTING: force per-row fetching during scans, used for testing";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct DebugForceNoCrossProductSetting {
@@ -504,6 +561,17 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugOrderVerificationSetting {
+	using RETURN_TYPE = DebugOrderVerification;
+	static constexpr const char *Name = "debug_order_verification";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DebugPhysicalTableScanExecutionStrategySetting {
@@ -528,10 +596,83 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugVerificationModeSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "debug_verification_mode";
+	static constexpr const char *Description = "DEBUG SETTING: toggle the verification mode.";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct DebugVerificationProjectionSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verification_projection";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: add internal verification projections to stress optimizers";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugVerifyAggregateStateExportSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_aggregate_state_export";
+	static constexpr const char *Description = "DEBUG SETTING: enable verification of aggregate state export";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugVerifyBlocksSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_verify_blocks";
 	static constexpr const char *Description = "DEBUG SETTING: verify block metadata during checkpointing";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugVerifyColumnBindingsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_column_bindings";
+	static constexpr const char *Description = "DEBUG SETTING: run extra internal verification of column bindings";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugVerifySerializerSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_serializer";
+	static constexpr const char *Description = "DEBUG SETTING: verify logical plan serializer";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugVerifyStatementSetting {
+	using RETURN_TYPE = DebugStatementVerification;
+	static constexpr const char *Name = "debug_verify_statement";
+	static constexpr const char *Description = "DEBUG SETTING: the type of statement verification to perform";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "NONE";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct DebugVerifyStatsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_stats";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: verify statistics are correct during execution, instead of assuming";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
@@ -583,6 +724,18 @@ struct DefaultCollationSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DefaultIoModeSetting {
+	using RETURN_TYPE = FileIOMode;
+	static constexpr const char *Name = "default_io_mode";
+	static constexpr const char *Description =
+	    "The default IO_MODE for newly attached database files when no explicit IO_MODE is given (BUFFERED_IO or MMAP)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "BUFFERED_IO";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct DefaultNullOrderSetting {
 	using RETURN_TYPE = DefaultOrderByNullType;
 	static constexpr const char *Name = "default_null_order";
@@ -615,12 +768,48 @@ struct DefaultSecretStorageSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DefaultTransactionInvalidationPolicySetting {
+	using RETURN_TYPE = TransactionInvalidationPolicy;
+	static constexpr const char *Name = "default_transaction_invalidation_policy";
+	static constexpr const char *Description =
+	    "When to invalidate transactions when errors occur (SYNTACTIC_ERRORS_DO_NOT_INVALIDATE, i.e. parser and binder "
+	    "exceptions do not invalidate, or ALL_ERRORS_INVALIDATE_TRANSACTION)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "ALL_ERRORS_INVALIDATE_TRANSACTION";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct DelimJoinAsCteSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "delim_join_as_cte";
+	static constexpr const char *Description =
+	    "Rewrite delim joins to materialized CTEs during dependent join flattening";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DeprecatedUsingKeySyntaxSetting {
 	using RETURN_TYPE = DeprecatedUsingKeySyntax;
 	static constexpr const char *Name = "deprecated_using_key_syntax";
 	static constexpr const char *Description = "Configures the use of the deprecated union syntax for USING KEY CTEs.";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr const char *DefaultValue = "DEFAULT";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct DialectCompatibilityModeSetting {
+	using RETURN_TYPE = DialectCompatibilityMode;
+	static constexpr const char *Name = "dialect_compatibility_mode";
+	static constexpr const char *Description =
+	    "Enable SQL dialect compatibility for a certain engine (e.g. `SET dialect_compatibility_mode='spark'`)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "NONE";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -716,9 +905,9 @@ struct EnableCachingOperatorsSetting {
 	static constexpr const char *Name = "enable_caching_operators";
 	static constexpr const char *Description = "Enables caching operators that cache intermediate results";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct EnableExternalAccessSetting {
@@ -754,16 +943,6 @@ struct EnableFSSTVectorsSetting {
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
-struct EnableHTTPLoggingSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "enable_http_logging";
-	static constexpr const char *Description = "(deprecated) Enables HTTP logging";
-	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
 };
 
 struct EnableHTTPMetadataCacheSetting {
@@ -803,6 +982,16 @@ struct EnableObjectCacheSetting {
 	static constexpr const char *Description = "[PLACEHOLDER] Legacy setting - does nothing";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct EnableOptimizerSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_optimizer";
+	static constexpr const char *Description = "Whether or not query optimization is enabled";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
@@ -914,6 +1103,30 @@ struct ExtensionDirectorySetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct ExternalFileCacheLocalBlockSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "external_file_cache_local_block_size";
+	static constexpr const char *Description =
+	    "Block size in bytes for the external file cache when reading local (non-remote) files.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "16384";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct ExternalFileCacheRemoteBlockSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "external_file_cache_remote_block_size";
+	static constexpr const char *Description =
+	    "Block size in bytes for the external file cache when reading remote files (e.g. HTTP/S3).";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "2097152";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct ExternalThreadsSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "external_threads";
@@ -946,6 +1159,18 @@ struct ForceBitpackingModeSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct ForceColumnMetadataReuseSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "force_column_metadata_reuse";
+	static constexpr const char *Description =
+	    "Force re-use of row group metadata on a column-level when checkpointing on older storage versions 6 and 7. "
+	    "This breaks storage backward-compatibility with older DuckDB versions.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct ForceCompressionSetting {
 	using RETURN_TYPE = CompressionType;
 	static constexpr const char *Name = "force_compression";
@@ -965,6 +1190,17 @@ struct ForceMbedtlsUnsafeSetting {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct ForceUpdateToDelAndInsertSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "force_update_to_del_and_insert";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: forces all updates to use the delete + insert code path instead of in-place updates";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct ForceVariantShredding {
@@ -1000,25 +1236,15 @@ struct HomeDirectorySetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
-struct HTTPLoggingOutputSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "http_logging_output";
-	static constexpr const char *Description =
-	    "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal";
-	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct HTTPProxySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "http_proxy";
-	static constexpr const char *Description = "HTTP proxy host";
+	static constexpr const char *Description =
+	    "HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)";
 	static constexpr const char *InputType = "VARCHAR";
-	static constexpr const char *DefaultValue = "";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct HTTPProxyPasswordSetting {
@@ -1099,6 +1325,20 @@ struct IndexScanPercentageSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct InitialColumnSegmentSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "initial_column_segment_size";
+	static constexpr const char *Description =
+	    "The initial memory (in bytes) reserved for the first transient column segment. Must be a power of two. "
+	    "Internally, we subtract the block header size (typically 8 bytes) for segments with or exceeding 1024 bytes. "
+	    "Subsequent segments double in size until reaching the block size.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "2048";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct IntegerDivisionSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "integer_division";
@@ -1129,6 +1369,28 @@ struct LateMaterializationMaxRowsSetting {
 	    "The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "50";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct LegacyDisableNullTypeSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "legacy_disable_null_type";
+	static constexpr const char *Description =
+	    "When enabled, prevent the NULL type from leaving the binder (< v2.0 default behavior)";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct LegacyMetricsFormatSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "legacy_metrics_format";
+	static constexpr const char *Description =
+	    "When enabled, profiling output uses the legacy flat format instead of the current grouped format";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
@@ -1191,7 +1453,7 @@ struct MaxExecutionTimeSetting {
 	static constexpr const char *Description = "The maximum execution time per query in milliseconds (0 = no limit)";
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr const char *DefaultValue = "0";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_ONLY;
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
@@ -1300,6 +1562,16 @@ struct OrderedAggregateThresholdSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct ParallelizeSequentialSourcesSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "parallelize_sequential_sources";
+	static constexpr const char *Description = "Whether to automatically parallelize sequential sources";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct PartitionedWriteFlushThresholdSetting {
@@ -1422,17 +1694,6 @@ struct ProduceArrowStringViewSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct ProfileOutputSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "profile_output";
-	static constexpr const char *Description =
-	    "The file to which profile output should be saved, or empty to print to the terminal";
-	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct ProfilingCoverageSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "profiling_coverage";
@@ -1446,8 +1707,31 @@ struct ProfilingCoverageSetting {
 struct ProfilingModeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "profiling_mode";
-	static constexpr const char *Description = "The profiling mode (STANDARD or DETAILED)";
+	static constexpr const char *Description = "DEPRECATED: Sets the profiling mode";
 	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ProfilingOutputSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "profiling_output";
+	static constexpr const char *Description =
+	    "The file to which profile output should be saved, or empty to print to the terminal";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ProfilingRendererSettingsSetting {
+	using RETURN_TYPE = unordered_map<string, string>;
+	static constexpr const char *Name = "profiling_renderer_settings";
+	static constexpr const char *Description =
+	    "A map of settings passed to the renderer of the profiler output (e.g. {'max_extra_lines': 100}) - settings "
+	    "not recognized by the active renderer are ignored";
+	static constexpr const char *InputType = "MAP(VARCHAR, VARCHAR)";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -1522,6 +1806,16 @@ struct SecretDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct StandardVectorSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "standard_vector_size";
+	static constexpr const char *Description = "The compiled-in STANDARD_VECTOR_SIZE (read-only)";
+	static constexpr const char *InputType = "UBIGINT";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct StorageBlockPrefetchSetting {
 	using RETURN_TYPE = StorageBlockPrefetch;
 	static constexpr const char *Name = "storage_block_prefetch";
@@ -1585,6 +1879,17 @@ struct ThreadsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct TrackedMetricsSetting {
+	using RETURN_TYPE = vector<string>;
+	static constexpr const char *Name = "tracked_metrics";
+	static constexpr const char *Description =
+	    "A list of metric glob patterns to enable for collection (e.g. ['query.*', 'optimizer.*'])";
+	static constexpr const char *InputType = "VARCHAR[]";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct UsernameSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "username";
@@ -1600,7 +1905,8 @@ struct VacuumRebuildIndexesSetting {
 	static constexpr const char *Name = "vacuum_rebuild_indexes";
 	static constexpr const char *Description =
 	    "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes "
-	    "afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled.";
+	    "afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled. Can also be set "
+	    "per-database via the 'vacuum_rebuild_indexes' ATTACH option, which overrides this default.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "0";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
@@ -1663,6 +1969,19 @@ struct WriteBufferRowGroupCountSetting {
 	static constexpr const char *DefaultValue = "5";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct WriteBufferRowGroupMemoryLimitSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "write_buffer_row_group_memory_limit";
+	static constexpr const char *Description =
+	    "The maximum data to buffer in row groups (in bytes) to buffer prior to flushing them together. When either "
+	    "this limit is reached, or write_buffer_row_group_count is reached, we flush the data to disk. Defaults to 20% "
+	    "of memory limit divided by thread count.";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ZstdMinStringLengthSetting {

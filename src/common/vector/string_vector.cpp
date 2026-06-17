@@ -101,15 +101,13 @@ void VectorStringBuffer::SetValue(const LogicalType &type, idx_t index, const Va
 	}
 }
 
-void VectorStringBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	StandardVectorBuffer::Verify(type, sel, count);
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		count = 1;
-	}
+void VectorStringBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	StandardVectorBuffer::VerifyInternal(type, sel, count);
+
 	D_ASSERT(type.InternalType() == PhysicalType::VARCHAR);
 	auto data = reinterpret_cast<const string_t *>(data_ptr);
 	for (idx_t i = 0; i < count; i++) {
-		auto idx = vector_type == VectorType::CONSTANT_VECTOR ? 0 : sel.get_index(i);
+		auto idx = sel.get_index(i);
 		if (!validity.RowIsValid(idx)) {
 			// NULL
 			continue;
@@ -118,7 +116,10 @@ void VectorStringBuffer::Verify(const LogicalType &type, const SelectionVector &
 		switch (type.id()) {
 		case LogicalTypeId::BIT: {
 			auto buf = str.GetData();
-			D_ASSERT(idx_t(*buf) < 8);
+			if (idx_t(*buf) >= 8) {
+				throw InternalException("Internal bit type inconsistency - padding bits should be < 8 but got %d",
+				                        idx_t(*buf));
+			}
 			Bit::Verify(str);
 			break;
 		}
@@ -127,7 +128,7 @@ void VectorStringBuffer::Verify(const LogicalType &type, const SelectionVector &
 			break;
 		case LogicalTypeId::VARCHAR:
 			// verify that the string is correct unicode
-			str.Verify();
+			str.ForceVerify();
 			break;
 		default:
 			break;

@@ -2,9 +2,6 @@
 # description: STRUCT comparison semantics with NULLs
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 # Integer STRUCTs with NULLs in various positions
 statement ok
 CREATE VIEW struct_int AS

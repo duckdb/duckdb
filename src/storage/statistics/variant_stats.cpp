@@ -165,7 +165,7 @@ optional_ptr<const BaseStatistics> VariantShreddedStats::FindChildStats(const Ba
 		auto &object_fields = StructType::GetChildTypes(typed_value_type);
 		for (idx_t i = 0; i < object_fields.size(); i++) {
 			auto &object_field = object_fields[i];
-			if (StringUtil::CIEquals(object_field.first, component.key)) {
+			if (object_field.first == component.key) {
 				return StructStats::GetChildStats(typed_value_stats, i);
 			}
 		}
@@ -388,7 +388,8 @@ static Value GetShreddedStatsStruct(const BaseStatistics &stats, bool fully_shre
 		std::sort(indices.begin(), indices.end(), [&](const idx_t &lhs, const idx_t &rhs) {
 			auto &a = fields[lhs].first;
 			auto &b = fields[rhs].first;
-			return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end());
+			return std::lexicographical_compare(a.GetIdentifierName().begin(), a.GetIdentifierName().end(),
+			                                    b.GetIdentifierName().begin(), b.GetIdentifierName().end());
 		});
 		for (idx_t i = 0; i < indices.size(); i++) {
 			auto &child_stats = StructStats::GetChildStats(typed_value, indices[i]);
@@ -520,7 +521,7 @@ bool VariantStats::MergeShredding(const BaseStatistics &stats, const BaseStatist
 
 		for (idx_t i = 0; i < stats_object_children.size(); i++) {
 			auto &stats_object_child = stats_object_children[i];
-			auto other_it = key_to_index.find(stats_object_child.first);
+			auto other_it = key_to_index.find(stats_object_child.first.GetIdentifierName());
 			if (other_it == key_to_index.end()) {
 				continue;
 			}
@@ -672,7 +673,7 @@ void VariantStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 	}
 }
 
-void VariantStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void VariantStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	// TODO: Verify stats
 }
 

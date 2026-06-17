@@ -74,13 +74,13 @@ struct ReservoirQuantileBindData : public FunctionData {
 	}
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const AggregateFunction &function) {
+	                      const BoundAggregateFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ReservoirQuantileBindData>();
 		serializer.WriteProperty(100, "quantiles", bind_data.quantiles);
 		serializer.WriteProperty(101, "sample_size", bind_data.sample_size);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
 		auto result = make_uniq<ReservoirQuantileBindData>();
 		deserializer.ReadProperty(100, "quantiles", result->quantiles);
 		deserializer.ReadProperty(101, "sample_size", result->sample_size);
@@ -92,14 +92,6 @@ struct ReservoirQuantileBindData : public FunctionData {
 };
 
 struct ReservoirQuantileOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.v = nullptr;
-		state.len = 0;
-		state.pos = 0;
-		state.r_samp = nullptr;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
@@ -175,37 +167,37 @@ struct ReservoirQuantileScalarOperation : public ReservoirQuantileOperation {
 AggregateFunction GetReservoirQuantileAggregateFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT8:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<int8_t>, int8_t, int8_t,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::TINYINT,
-		                                                                                     LogicalType::TINYINT);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<int8_t>, int8_t, int8_t,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::TINYINT,
+		                                                                           LogicalType::TINYINT);
 
 	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<int16_t>, int16_t, int16_t,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::SMALLINT,
-		                                                                                     LogicalType::SMALLINT);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<int16_t>, int16_t, int16_t,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::SMALLINT,
+		                                                                           LogicalType::SMALLINT);
 
 	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<int32_t>, int32_t, int32_t,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::INTEGER,
-		                                                                                     LogicalType::INTEGER);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<int32_t>, int32_t, int32_t,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::INTEGER,
+		                                                                           LogicalType::INTEGER);
 
 	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<int64_t>, int64_t, int64_t,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::BIGINT,
-		                                                                                     LogicalType::BIGINT);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<int64_t>, int64_t, int64_t,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::BIGINT,
+		                                                                           LogicalType::BIGINT);
 
 	case PhysicalType::INT128:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<hugeint_t>, hugeint_t, hugeint_t,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::HUGEINT,
-		                                                                                     LogicalType::HUGEINT);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<hugeint_t>, hugeint_t, hugeint_t,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::HUGEINT,
+		                                                                           LogicalType::HUGEINT);
 	case PhysicalType::FLOAT:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<float>, float, float,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::FLOAT,
-		                                                                                     LogicalType::FLOAT);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<float>, float, float,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::FLOAT,
+		                                                                           LogicalType::FLOAT);
 	case PhysicalType::DOUBLE:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<double>, double, double,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::DOUBLE,
-		                                                                                     LogicalType::DOUBLE);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<double>, double, double,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::DOUBLE,
+		                                                                           LogicalType::DOUBLE);
 	default:
 		throw InternalException("Unimplemented reservoir quantile aggregate");
 	}
@@ -251,8 +243,8 @@ AggregateFunction ReservoirQuantileListAggregate(const LogicalType &input_type, 
 	return AggregateFunction(
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>,
-	    nullptr, AggregateFunction::StateDestroy<STATE, OP>);
+	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	    AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
 }
 
 template <typename INPUT_TYPE, typename SAVE_TYPE>
@@ -366,9 +358,9 @@ unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input
 unique_ptr<FunctionData> BindReservoirQuantileDecimal(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function = GetReservoirQuantileAggregateFunction(arguments[0]->return_type.InternalType());
+	function.ReplaceImplementation(GetReservoirQuantileAggregateFunction(arguments[0]->GetReturnType().InternalType()));
 	auto bind_data = BindReservoirQuantile(input);
-	function.name = "reservoir_quantile";
+	function.SetName("reservoir_quantile");
 	function.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	return bind_data;
@@ -380,7 +372,7 @@ AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 	fun.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
-	fun.GetArguments().emplace_back(LogicalType::DOUBLE);
+	fun.GetSignature().AddParameter(LogicalType::DOUBLE);
 	return fun;
 }
 
@@ -391,7 +383,7 @@ AggregateFunction GetReservoirQuantileListAggregate(const LogicalType &type) {
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
-	fun.GetArguments().push_back(list_of_double);
+	fun.GetSignature().AddParameter(list_of_double);
 	return fun;
 }
 
@@ -400,14 +392,14 @@ void DefineReservoirQuantile(AggregateFunctionSet &set, const LogicalType &type)
 	auto fun = GetReservoirQuantileAggregate(type.InternalType());
 	set.AddFunction(fun);
 
-	fun.GetArguments().emplace_back(LogicalType::INTEGER);
+	fun.GetSignature().AddParameter(LogicalType::INTEGER);
 	set.AddFunction(fun);
 
 	// List variants
 	fun = GetReservoirQuantileListAggregate(type);
 	set.AddFunction(fun);
 
-	fun.GetArguments().emplace_back(LogicalType::INTEGER);
+	fun.GetSignature().AddParameter(LogicalType::INTEGER);
 	set.AddFunction(fun);
 }
 
@@ -419,7 +411,7 @@ void GetReservoirQuantileDecimalFunction(AggregateFunctionSet &set, const vector
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	set.AddFunction(fun);
 
-	fun.GetArguments().emplace_back(LogicalType::INTEGER);
+	fun.GetSignature().AddParameter(LogicalType::INTEGER);
 	set.AddFunction(fun);
 }
 

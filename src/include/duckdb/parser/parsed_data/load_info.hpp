@@ -10,9 +10,10 @@
 
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
-enum class LoadType : uint8_t { LOAD, INSTALL, FORCE_INSTALL };
+enum class LoadType : uint8_t { LOAD, INSTALL, FORCE_INSTALL, LOAD_AS };
 
 struct LoadInfo : public ParseInfo {
 public:
@@ -27,6 +28,7 @@ public:
 	bool repo_is_alias;
 	string version;
 	LoadType load_type;
+	Identifier alias;
 
 public:
 	unique_ptr<LoadInfo> Copy() const;

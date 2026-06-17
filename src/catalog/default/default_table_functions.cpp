@@ -4,6 +4,8 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/function/table_macro_function.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -79,7 +81,7 @@ SELECT * EXCLUDE(input_type, scope, aliases)
       'profiling_coverage',
       'profiling_output',
       'profiling_mode',
-      'custom_profiling_settings'
+      'tracked_metrics'
   );
 )"},
 	{nullptr, nullptr, {nullptr}, {{nullptr, nullptr}}, nullptr}
@@ -103,13 +105,13 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 			throw InternalException("Expected a single expression");
 		}
 		function->parameters.push_back(make_uniq<ColumnRefExpression>(named_param.name));
-		function->default_parameters.insert(make_pair(named_param.name, std::move(expr_list[0])));
+		function->default_parameters.insert(Identifier(named_param.name), std::move(expr_list[0]));
 	}
 
 	auto type = CatalogType::TABLE_MACRO_ENTRY;
 	auto bind_info = make_uniq<CreateMacroInfo>(type);
-	bind_info->schema = default_macro.schema;
-	bind_info->name = default_macro.name;
+	bind_info->schema = Identifier(default_macro.schema);
+	bind_info->name = Identifier(default_macro.name);
 	bind_info->temporary = true;
 	bind_info->internal = true;
 	bind_info->macros.push_back(std::move(function));
@@ -118,7 +120,12 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 
 unique_ptr<CreateMacroInfo>
 DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &default_macro) {
-	Parser parser;
+	return CreateTableMacroInfo(default_macro, ParserOptions());
+}
+
+unique_ptr<CreateMacroInfo> DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &default_macro,
+                                                                                ParserOptions options) {
+	Parser parser(options);
 	parser.ParseQuery(default_macro.macro);
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw InternalException("Expected a single select statement in CreateTableMacroInfo internal");
@@ -129,28 +136,29 @@ DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &def
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
-static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const string &input_schema, const string &input_name) {
-	auto schema = StringUtil::Lower(input_schema);
-	auto name = StringUtil::Lower(input_name);
+static unique_ptr<CreateFunctionInfo> GetDefaultTableFunction(const Identifier &input_schema,
+                                                              const Identifier &input_name, ParserOptions options) {
 	for (idx_t index = 0; internal_table_macros[index].name != nullptr; index++) {
-		if (internal_table_macros[index].schema == schema && internal_table_macros[index].name == name) {
-			return DefaultTableFunctionGenerator::CreateTableMacroInfo(internal_table_macros[index]);
+		if (internal_table_macros[index].schema == input_schema && internal_table_macros[index].name == input_name) {
+			return DefaultTableFunctionGenerator::CreateTableMacroInfo(internal_table_macros[index], options);
 		}
 	}
 	return nullptr;
 }
 
 unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateDefaultEntry(ClientContext &context,
-                                                                           const string &entry_name) {
-	auto info = GetDefaultTableFunction(schema.name, entry_name);
+                                                                           const Identifier &entry_name) {
+	ParserOptions options;
+	options.parser_cache = &context.db->GetParserCache();
+	auto info = GetDefaultTableFunction(schema.name, entry_name, options);
 	if (info) {
 		return make_uniq_base<CatalogEntry, TableMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());
 	}
 	return nullptr;
 }
 
-vector<string> DefaultTableFunctionGenerator::GetDefaultEntries() {
-	vector<string> result;
+vector<Identifier> DefaultTableFunctionGenerator::GetDefaultEntries() {
+	vector<Identifier> result;
 	for (idx_t index = 0; internal_table_macros[index].name != nullptr; index++) {
 		if (StringUtil::Lower(internal_table_macros[index].name) != internal_table_macros[index].name) {
 			throw InternalException("Default macro name %s should be lowercase", internal_table_macros[index].name);

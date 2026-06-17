@@ -2,9 +2,6 @@
 # description: Test macro expansion for window functions
 # group: [function]
 
-statement ok
-PRAGMA enable_verification
-
 # Windowed aggregate macro
 statement ok
 CREATE OR REPLACE MACRO my_agg(x) AS SUM(CASE WHEN x THEN 1 END);
@@ -29,7 +26,7 @@ statement error
 select my_func(range) OVER () 
 from range(2);
 ----
-mod is not an aggregate function
+Window function macro bodies must contain exactly one aggregate function
 
 # Windowed non-aggregate expression macro
 statement ok
@@ -43,7 +40,7 @@ statement error
 select my_case(range) OVER () 
 from range(2);
 ----
-Window function macros must be functions
+Window function macro bodies must contain exactly one aggregate function
 
 statement error
 CREATE MACRO my_lag(x) AS LAG(x);

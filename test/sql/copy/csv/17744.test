@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 COPY (
     SELECT
         -- The string must start with a hash to reproduce the issue

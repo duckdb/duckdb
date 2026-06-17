@@ -14,11 +14,6 @@ namespace {
 template <class MAP_TYPE>
 struct HistogramFunction {
 	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.hist = nullptr;
-	}
-
-	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &) {
 		if (state.hist) {
 			delete state.hist;
@@ -68,11 +63,11 @@ void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, id
 
 	auto &input = inputs[0];
 
-	auto extra_state = OP::CreateExtraState(count);
+	auto extra_state = OP::CreateExtraState();
 	UnifiedVectorFormat input_data;
-	OP::PrepareData(input, count, extra_state, input_data);
+	OP::PrepareData(input, extra_state, input_data);
 
-	auto states = state_vector.Values<HistogramAggState<T, typename MAP_TYPE::MAP_TYPE> *>(count);
+	auto states = state_vector.Values<HistogramAggState<T, typename MAP_TYPE::MAP_TYPE> *>();
 	auto input_values = UnifiedVectorFormat::GetData<T>(input_data);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
@@ -89,10 +84,11 @@ void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, id
 }
 
 template <class OP, class T, class MAP_TYPE>
-void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
+void HistogramFinalizeFunction(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count,
+                               idx_t offset) {
 	using HIST_STATE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
 
-	auto states = state_vector.Values<HIST_STATE *>(count);
+	auto states = state_vector.Values<HIST_STATE *>();
 
 	auto &mask = FlatVector::ValidityMutable(result);
 	auto old_len = ListVector::GetListSize(result);
@@ -132,7 +128,7 @@ void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vecto
 	}
 	D_ASSERT(current_offset == old_len + new_entries);
 	ListVector::SetListSize(result, current_offset);
-	result.Verify(count);
+	result.Verify();
 }
 
 template <class OP, class T, class MAP_TYPE>
@@ -210,10 +206,10 @@ unique_ptr<FunctionData> HistogramBindFunction(BindAggregateFunctionInput &input
 	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() == 1);
 
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	function = GetHistogramFunction<IS_ORDERED>(arguments[0]->return_type);
+	function.ReplaceImplementation(GetHistogramFunction<IS_ORDERED>(arguments[0]->GetReturnType()));
 	return make_uniq<VariableReturnBindData>(function.GetReturnType());
 }
 

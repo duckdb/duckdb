@@ -1,9 +1,13 @@
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
@@ -20,17 +24,17 @@ constexpr idx_t StringValueScanner::LINE_FINDER_ID;
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
                                      const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
                                      idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler_p,
-                                     CSVIterator &iterator_p, bool store_line_size_p,
-                                     shared_ptr<CSVFileScan> csv_file_scan_p, idx_t &lines_read_p, bool sniffing_p,
-                                     const string &path_p, idx_t scan_id, bool &used_unstrictness)
+                                     CSVIterator &iterator_p, shared_ptr<CSVFileScan> csv_file_scan_p,
+                                     idx_t &lines_read_p, bool sniffing_p, const string &path_p, idx_t scan_id,
+                                     bool &used_unstrictness)
     : ScannerResult(states, state_machine, result_size_p),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
       extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()
                                 ? 0
                                 : state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
-      error_handler(error_handler_p), iterator(iterator_p), store_line_size(store_line_size_p),
-      csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p), used_unstrictness(used_unstrictness),
+      error_handler(error_handler_p), iterator(iterator_p), csv_file_scan(std::move(csv_file_scan_p)),
+      lines_read(lines_read_p), used_unstrictness(used_unstrictness),
       current_errors(scan_id, state_machine.options.IgnoreErrors()), sniffing(sniffing_p), path(path_p) {
 	// Vector information
 	D_ASSERT(number_of_columns > 0);
@@ -299,7 +303,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 	}
 	bool success = true;
 	string strip_thousands;
-	if (LogicalType::IsNumeric(parse_types[chunk_col_id].type_id) &&
+	// Whether current type is logically numeric (BIGNUM is physically stored as VARCHAR instead of numerical value).
+	if ((LogicalType::IsNumeric(parse_types[chunk_col_id].type_id) ||
+	     parse_types[chunk_col_id].type_id == LogicalTypeId::BIGNUM) &&
 	    state_machine.options.thousands_separator != '\0') {
 		// If we have a thousands separator we should try to use that
 		strip_thousands = BaseScanner::RemoveSeparator(value_ptr, size, state_machine.options.thousands_separator);
@@ -327,6 +333,12 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		success = TrySimpleIntegerCast(value_ptr, size,
 		                               static_cast<int64_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
+	case LogicalTypeId::HUGEINT: {
+		auto &result_value = static_cast<hugeint_t *>(vector_ptr[chunk_col_id])[number_of_rows];
+		success = TryCast::Operation<string_t, hugeint_t>(string_t(value_ptr, NumericCast<uint32_t>(size)),
+		                                                  result_value, false);
+		break;
+	}
 	case LogicalTypeId::UTINYINT:
 		success = TrySimpleIntegerCast<uint8_t, false>(
 		    value_ptr, size, static_cast<uint8_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
@@ -343,6 +355,29 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		success = TrySimpleIntegerCast<uint64_t, false>(
 		    value_ptr, size, static_cast<uint64_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
+	case LogicalTypeId::UHUGEINT: {
+		auto &result_value = static_cast<uhugeint_t *>(vector_ptr[chunk_col_id])[number_of_rows];
+		success = TryCast::Operation<string_t, uhugeint_t>(string_t(value_ptr, NumericCast<uint32_t>(size)),
+		                                                   result_value, false);
+		break;
+	}
+	case LogicalTypeId::BIGNUM: {
+		try {
+			while (size > 0 && StringUtil::CharacterIsSpace(*value_ptr)) {
+				value_ptr++;
+				size--;
+			}
+			while (size > 0 && StringUtil::CharacterIsSpace(value_ptr[size - 1])) {
+				size--;
+			}
+			auto bignum = Bignum::VarcharToBignum(string_t(value_ptr, NumericCast<uint32_t>(size)));
+			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] =
+			    StringVector::AddStringOrBlob(parse_chunk.data[chunk_col_id], bignum.data(), bignum.size());
+		} catch (const ConversionException &) {
+			success = false;
+		}
+		break;
+	}
 	case LogicalTypeId::DOUBLE:
 		success =
 		    TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[chunk_col_id])[number_of_rows],
@@ -493,7 +528,10 @@ DataChunk &StringValueResult::ToChunk() {
 		throw InternalException("CSVScanner: ToChunk() function. Has a negative number of rows, this indicates an "
 		                        "issue with the error handler.");
 	}
-	parse_chunk.SetCardinality(static_cast<idx_t>(number_of_rows));
+	const idx_t n = static_cast<idx_t>(number_of_rows);
+	if (parse_chunk.size() != n) {
+		parse_chunk.SetChildCardinality(n);
+	}
 	return parse_chunk;
 }
 
@@ -820,9 +858,6 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() const {
 bool StringValueResult::AddRowInternal() {
 	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
 	idx_t current_line_size = current_line_start - current_line_position.end;
-	if (store_line_size) {
-		error_handler.NewMaxLineSize(current_line_size);
-	}
 	current_line_position.begin = current_line_position.end;
 	current_line_position.end = current_line_start;
 	if (current_line_size > state_machine.options.maximum_line_size.GetValue()) {
@@ -924,7 +959,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		if (result.quoted) {
 			AddQuotedValue(result, buffer_pos);
 		} else {
-			char *value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
+			const char *value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
 			idx_t size = buffer_pos - result.last_position.buffer_pos;
 			if (result.escaped) {
 				AddPossiblyEscapedValue(result, buffer_pos, value_ptr, size, size == 0);
@@ -1003,8 +1038,7 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
     : BaseScanner(buffer_manager, state_machine, error_handler, sniffing, csv_file_scan, boundary),
       scanner_idx(scanner_idx_p),
       result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
-             iterator.pos.buffer_pos, *error_handler, iterator,
-             buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
+             iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
              buffer_manager->GetFilePath(), scanner_idx_p, used_unstrictness),
       start_pos(0) {
 	if (scanner_idx == 0 && csv_file_scan) {
@@ -1020,8 +1054,7 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
                                        const CSVIterator &boundary)
     : BaseScanner(buffer_manager, state_machine, error_handler, false, nullptr, boundary), scanner_idx(0),
       result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size,
-             iterator.pos.buffer_pos, *error_handler, iterator,
-             buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
+             iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
              buffer_manager->GetFilePath(), 0, used_unstrictness),
       start_pos(0) {
 	if (scanner_idx == 0 && csv_file_scan) {
@@ -1073,7 +1106,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			return;
 		}
 		// convert the columns in the parsed chunk to the types of the table
-		insert_chunk.SetCardinality(parse_chunk);
+		insert_chunk.SetChildCardinality(parse_chunk.size());
 
 		// We keep track of the borked lines, in case we are ignoring errors
 		D_ASSERT(csv_file_scan);
@@ -1104,8 +1137,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					continue;
 				}
 				// An error happened, to propagate it we need to figure out the exact line where the casting failed.
-				auto inserted_validity = result_vector.Validity(parse_chunk.size());
-				auto parse_validity = parse_vector.Validity(parse_chunk.size());
+				auto inserted_validity = result_vector.Validity();
+				auto parse_validity = parse_vector.Validity();
 
 				for (; line_error < parse_chunk.size(); line_error++) {
 					if (!inserted_validity.IsValid(line_error) && parse_validity.IsValid(line_error)) {
@@ -1188,6 +1221,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			insert_chunk.Slice(successful_rows, sel_idx);
 			result.borked_rows.clear();
 		}
+		insert_chunk.SetChildCardinality(insert_chunk.size());
 		if (insert_chunk.size() == 0 && cur_buffer_handle) {
 			idx_t to_pos;
 			if (iterator.IsBoundarySet()) {
@@ -1764,10 +1798,13 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loade
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DATE:
@@ -1835,9 +1872,6 @@ ValidRowInfo StringValueScanner::TryRow(CSVState state, idx_t start_pos, idx_t e
 void StringValueScanner::SetStart() {
 	start_pos = iterator.GetGlobalCurrentPos();
 	if (iterator.first_one) {
-		if (result.store_line_size) {
-			result.error_handler.NewMaxLineSize(iterator.pos.buffer_pos);
-		}
 		return;
 	}
 	if (iterator.GetEndPos() > cur_buffer_handle->actual_size) {

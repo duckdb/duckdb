@@ -11,18 +11,13 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/prefix_range_filter.hpp"
-#include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
-#include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
-#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 
 #include <cstring>
 
@@ -33,21 +28,21 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
-                                                                 block_id_t block_id, idx_t offset,
-                                                                 const LogicalType &type, idx_t count,
+                                                                 block_id_t block_id, idx_t offset, idx_t count,
                                                                  CompressionType compression_type,
                                                                  BaseStatistics statistics,
                                                                  unique_ptr<ColumnSegmentState> segment_state) {
 	auto &config = DBConfig::GetConfig(db);
 	shared_ptr<BlockHandle> block;
 
+	auto &type = statistics.GetType();
 	auto function = config.GetCompressionFunction(compression_type, type.InternalType());
 	if (block_id != INVALID_BLOCK) {
 		block = block_manager.RegisterBlock(block_id);
 	}
 
 	auto segment_size = block_manager.GetBlockSize();
-	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::PERSISTENT, count, function,
+	return make_uniq<ColumnSegment>(db, std::move(block), ColumnSegmentType::PERSISTENT, count, function,
 	                                std::move(statistics), block_id, offset, segment_size, std::move(segment_state));
 }
 
@@ -60,22 +55,22 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	D_ASSERT(&buffer_manager == &block_manager.buffer_manager);
 	auto block = buffer_manager.RegisterTransientMemory(segment_size, block_manager);
 
-	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, 0U, function,
+	return make_uniq<ColumnSegment>(db, std::move(block), ColumnSegmentType::TRANSIENT, 0U, function,
 	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size);
 }
 
 //===--------------------------------------------------------------------===//
 // Construct/Destruct
 //===--------------------------------------------------------------------===//
-ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block_p, const LogicalType &type,
+ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block_p,
                              const ColumnSegmentType segment_type, const idx_t count,
                              const CompressionFunction &function_p, BaseStatistics statistics,
                              const block_id_t block_id_p, const idx_t offset, const idx_t segment_size_p,
                              const unique_ptr<ColumnSegmentState> segment_state_p)
 
-    : SegmentBase<ColumnSegment>(count), db(db), type(type), type_size(GetTypeIdSize(type.InternalType())),
-      segment_type(segment_type), stats(std::move(statistics)), block(std::move(block_p)), function(function_p),
-      block_id(block_id_p), offset(offset), segment_size(segment_size_p) {
+    : SegmentBase<ColumnSegment>(count), db(db), segment_type(segment_type), block(std::move(block_p)),
+      function(function_p), block_id(block_id_p), offset(offset), segment_size(segment_size_p),
+      stats(std::move(statistics)) {
 	if (function.get().init_segment) {
 		segment_state = function.get().init_segment(*this, block_id, segment_state_p.get());
 	}
@@ -85,10 +80,9 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 }
 
 ColumnSegment::ColumnSegment(ColumnSegment &other)
-    : SegmentBase<ColumnSegment>(other.count.load()), db(other.db), type(std::move(other.type)),
-      type_size(other.type_size), segment_type(other.segment_type), stats(std::move(other.stats)),
+    : SegmentBase<ColumnSegment>(other.count.load()), db(other.db), segment_type(other.segment_type),
       block(std::move(other.block)), function(other.function), block_id(other.block_id), offset(other.offset),
-      segment_size(other.segment_size), segment_state(std::move(other.segment_state)) {
+      segment_size(other.segment_size), segment_state(std::move(other.segment_state)), stats(std::move(other.stats)) {
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
 	D_ASSERT(!block || segment_size <= GetBlockSize());
 }
@@ -182,7 +176,7 @@ void ColumnSegment::Resize(idx_t new_size) {
 	auto old_handle = buffer_manager.Pin(block);
 	auto new_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size);
 	auto new_block = new_handle.GetBlockHandle();
-	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
+	memcpy(new_handle.GetDataMutable(), old_handle.Ptr(), segment_size);
 
 	this->block_id = new_block->BlockId();
 	this->block = std::move(new_block);
@@ -202,7 +196,7 @@ idx_t ColumnSegment::Append(ColumnAppendState &state, UnifiedVectorFormat &appen
 	if (!function.get().append) {
 		throw InternalException("Attempting to append to a segment without append method");
 	}
-	return function.get().append(*state.append_state, *this, stats, append_data, offset, count);
+	return function.get().append(*state.append_state, *this, *state.append_stats, append_data, offset, count);
 }
 
 idx_t ColumnSegment::FinalizeAppend(ColumnAppendState &state) {
@@ -210,7 +204,7 @@ idx_t ColumnSegment::FinalizeAppend(ColumnAppendState &state) {
 	if (!function.get().finalize_append) {
 		throw InternalException("Attempting to call FinalizeAppend on a segment without a finalize_append method");
 	}
-	auto result_count = function.get().finalize_append(*this, stats);
+	auto result_count = function.get().finalize_append(*this, *state.append_stats);
 	state.append_state.reset();
 	return result_count;
 }
@@ -247,7 +241,7 @@ void ColumnSegment::ConvertToPersistent(QueryContext context, optional_ptr<Block
 	// Thus, we set the compression function to constant and reset the block buffer.
 	D_ASSERT(stats.statistics.IsConstant());
 	auto &config = DBConfig::GetConfig(db);
-	function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
+	function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, GetType().InternalType());
 	block.reset();
 }
 
@@ -412,130 +406,82 @@ static idx_t TemplatedNullSelection(UnifiedVectorFormat &vdata, SelectionVector 
 	}
 }
 
+static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vector, ExpressionFilterState &state,
+                                              idx_t scan_count, idx_t &approved_tuple_count) {
+	if (approved_tuple_count == 0) {
+		return 0;
+	}
+	D_ASSERT(state.executor);
+	SelectionVector result_sel(approved_tuple_count);
+	if (scan_count > STANDARD_VECTOR_SIZE) {
+		// scan count is > vector size - split up the vector into multiple chunks
+		idx_t offset = 0;
+		idx_t result_offset = 0;
+		idx_t current_sel_offset = 0;
+		SelectionVector current_sel(approved_tuple_count);
+		while (offset < scan_count) {
+			idx_t chunk_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, scan_count - offset);
+			idx_t chunk_end = offset + chunk_count;
+			DataChunk chunk;
+			chunk.data.emplace_back(vector, offset, chunk_end);
+
+			// construct the relevant selection vector for the current chunk (offset ... offset + chunk_count)
+			idx_t current_count = 0;
+			for (; current_sel_offset < approved_tuple_count; current_sel_offset++) {
+				auto sel_index = sel.get_index(current_sel_offset);
+				if (sel_index >= chunk_end) {
+					// exhausted the chunk
+					break;
+				}
+				if (sel_index < offset) {
+					throw InternalException("sel_index < offset in expression filter");
+				}
+				current_sel.set_index(current_count++, sel_index - offset);
+			}
+			if (current_count == 0) {
+				// no matching tuples in this chunk
+				offset += chunk_count;
+				continue;
+			}
+			auto current_result_data = result_sel.data() + result_offset;
+			SelectionVector current_result_sel(current_result_data, result_sel.Capacity() - result_offset);
+			idx_t new_matches = state.executor->SelectExpression(chunk, current_result_sel, current_sel, current_count);
+			// increment all matches by the offset
+			for (idx_t i = 0; i < new_matches; i++) {
+				current_result_data[i] += offset;
+			}
+			result_offset += new_matches;
+			offset += chunk_count;
+		}
+		approved_tuple_count = result_offset;
+	} else {
+		// standard case: we can handle everything at once - run the expression once
+		DataChunk chunk;
+		chunk.data.emplace_back(Vector::Ref(vector));
+		chunk.SetChildCardinality(scan_count);
+		SelectionVector identity_sel;
+		optional_ptr<SelectionVector> current_sel = &sel;
+		if (!sel.IsSet()) {
+			identity_sel = SelectionVector::Incremental(approved_tuple_count);
+			current_sel = &identity_sel;
+		}
+		approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, current_sel, approved_tuple_count);
+	}
+	sel.Initialize(result_sel);
+	return approved_tuple_count;
+}
+
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
                                      const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
                                      idx_t &approved_tuple_count) {
-	switch (filter.filter_type) {
-	case TableFilterType::OPTIONAL_FILTER: {
-		auto &opt_filter = filter.Cast<OptionalFilter>();
-		return opt_filter.FilterSelection(sel, vector, vdata, filter_state, scan_count, approved_tuple_count);
-	}
-	case TableFilterType::CONJUNCTION_OR: {
-		// similar to the CONJUNCTION_AND, but we need to take care of the SelectionVectors (OR all of them)
-		auto &state = filter_state.Cast<ConjunctionOrFilterState>();
-		idx_t count_total = 0;
-		SelectionVector result_sel(approved_tuple_count);
-		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
-		for (idx_t child_idx = 0; child_idx < conjunction_or.child_filters.size(); child_idx++) {
-			auto &child_filter = *conjunction_or.child_filters[child_idx];
-			SelectionVector temp_sel;
-			temp_sel.Initialize(sel);
-			idx_t temp_tuple_count = approved_tuple_count;
-			idx_t temp_count = FilterSelection(temp_sel, vector, vdata, child_filter, *state.child_states[child_idx],
-			                                   scan_count, temp_tuple_count);
-			// tuples passed, move them into the actual result vector
-			for (idx_t i = 0; i < temp_count; i++) {
-				auto new_idx = temp_sel.get_index(i);
-				bool is_new_idx = true;
-				for (idx_t res_idx = 0; res_idx < count_total; res_idx++) {
-					if (result_sel.get_index(res_idx) == new_idx) {
-						is_new_idx = false;
-						break;
-					}
-				}
-				if (is_new_idx) {
-					result_sel.set_index(count_total++, new_idx);
-				}
-			}
-		}
-		sel.Initialize(result_sel);
-		approved_tuple_count = count_total;
-		return approved_tuple_count;
-	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
-		auto &state = filter_state.Cast<ConjunctionAndFilterState>();
-		for (idx_t child_idx = 0; child_idx < conjunction_and.child_filters.size(); child_idx++) {
-			auto &child_filter = *conjunction_and.child_filters[child_idx];
-			FilterSelection(sel, vector, vdata, child_filter, *state.child_states[child_idx], scan_count,
-			                approved_tuple_count);
-		}
-		return approved_tuple_count;
-	}
-	case TableFilterType::BLOOM_FILTER: {
-		auto &bloom_filter = filter.Cast<BFTableFilter>();
-		auto &state = filter_state.Cast<JoinFilterTableFilterState>();
-		return bloom_filter.Filter(vector, sel, approved_tuple_count, state);
-	}
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
-		auto &perfect_hash_join_filter = filter.Cast<PerfectHashJoinFilter>();
-		auto &state = filter_state.Cast<JoinFilterTableFilterState>();
-		return perfect_hash_join_filter.Filter(vector, sel, approved_tuple_count, state);
-	}
-	case TableFilterType::PREFIX_RANGE_FILTER: {
-		auto &prefix_range_filter = filter.Cast<PrefixRangeTableFilter>();
-		auto &state = filter_state.Cast<JoinFilterTableFilterState>();
-		return prefix_range_filter.Filter(vector, sel, approved_tuple_count, state);
-	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &state = filter_state.Cast<ExpressionFilterState>();
-		SelectionVector result_sel(approved_tuple_count);
-		if (scan_count > STANDARD_VECTOR_SIZE) {
-			// scan count is > vector size - split up the vector into multiple chunks
-			idx_t offset = 0;
-			idx_t result_offset = 0;
-			idx_t current_sel_offset = 0;
-			SelectionVector current_sel(approved_tuple_count);
-			while (offset < scan_count) {
-				idx_t chunk_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, scan_count - offset);
-				idx_t chunk_end = offset + chunk_count;
-				DataChunk chunk;
-				chunk.data.emplace_back(vector, offset, chunk_end);
-				chunk.SetCardinality(chunk_count);
+	(void)vdata;
+	return FilterSelection(sel, vector, filter_state, scan_count, approved_tuple_count);
+}
 
-				// construct the relevant selection vector for the current chunk (offset ... offset + chunk_count)
-				idx_t current_count = 0;
-				for (; current_sel_offset < approved_tuple_count; current_sel_offset++) {
-					auto sel_index = sel.get_index(current_sel_offset);
-					if (sel_index >= chunk_end) {
-						// exhausted the chunk
-						break;
-					}
-					if (sel_index < offset) {
-						throw InternalException("sel_index < offset in expression filter");
-					}
-					current_sel.set_index(current_count++, sel_index - offset);
-				}
-				if (current_count == 0) {
-					// no matching tuples in this chunk
-					offset += chunk_count;
-					continue;
-				}
-				auto current_result_data = result_sel.data() + result_offset;
-				SelectionVector current_result_sel(current_result_data, result_sel.Capacity() - result_offset);
-				idx_t new_matches =
-				    state.executor->SelectExpression(chunk, current_result_sel, current_sel, current_count);
-				// increment all matches by the offset
-				for (idx_t i = 0; i < new_matches; i++) {
-					current_result_data[i] += offset;
-				}
-				result_offset += new_matches;
-				offset += chunk_count;
-			}
-			approved_tuple_count = result_offset;
-		} else {
-			// standard case: we can handle everything at once - run the expression once
-			DataChunk chunk;
-			chunk.data.emplace_back(Vector::Ref(vector));
-			chunk.SetCardinality(scan_count);
-			approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, sel, approved_tuple_count);
-		}
-		sel.Initialize(result_sel);
-		return approved_tuple_count;
-	}
-	default:
-		throw InternalException("FIXME: unsupported type for filter selection");
-	}
+idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, TableFilterState &filter_state,
+                                     idx_t scan_count, idx_t &approved_tuple_count) {
+	auto &state = filter_state.Cast<ExpressionFilterState>();
+	return ExecuteExpressionFilterSelection(sel, vector, state, scan_count, approved_tuple_count);
 }
 
 const CompressionFunction &ColumnSegment::GetCompressionFunction() {

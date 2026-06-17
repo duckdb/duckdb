@@ -156,8 +156,12 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 	}
 }
 
-string LogicalOperator::ToString(ExplainFormat format) const {
+string LogicalOperator::ToString(const ProfilerPrintFormat &format) const {
 	auto renderer = TreeRenderer::CreateRenderer(format);
+	if (!renderer) {
+		// formats without output (e.g. "no_output") render nothing
+		return string();
+	}
 	duckdb::stringstream ss;
 	auto tree = RenderTree::CreateRenderTree(*this);
 	renderer->ToStream(*tree, ss);
@@ -198,10 +202,10 @@ void LogicalOperator::Verify(ClientContext &context) {
 		try {
 			auto &config = DBConfig::GetConfig(context);
 			SerializationOptions options;
-			if (config.options.serialization_compatibility.manually_set) {
-				options.serialization_compatibility = config.options.serialization_compatibility;
+			if (config.options.storage_compatibility.manually_set) {
+				options.storage_compatibility = config.options.storage_compatibility;
 			} else {
-				options.serialization_compatibility = SerializationCompatibility::Latest();
+				options.storage_compatibility = StorageCompatibility::Latest();
 			}
 
 			BinarySerializer::Serialize(*expressions[expr_idx], stream, options);
@@ -257,7 +261,7 @@ vector<TableIndex> LogicalOperator::GetTableIndex() const {
 unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
 	MemoryStream stream(Allocator::Get(context));
 	SerializationOptions options;
-	options.serialization_compatibility = SerializationCompatibility::Latest();
+	options.storage_compatibility = StorageCompatibility::Latest();
 	BinarySerializer serializer(stream, options);
 	try {
 		serializer.Begin();

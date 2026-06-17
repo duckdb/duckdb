@@ -615,8 +615,8 @@ string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
 
 void BoxRendererImplementation::ConvertRenderVector(Vector &vector, Vector &render_lengths, idx_t count,
                                                     const LogicalType &original_type, idx_t null_render_length) {
-	vector.Flatten(count);
-	auto input_values = vector.Values<string_t>(count);
+	vector.Flatten();
+	auto input_values = vector.Values<string_t>();
 	auto &validity = FlatVector::ValidityMutable(vector);
 	auto result_data = FlatVector::ScatterWriter<string_t>(vector);
 	auto render_length_data = FlatVector::Writer<uint64_t>(render_lengths, count);
@@ -682,7 +682,7 @@ void BoxRendererImplementation::FetchTopCollection(RenderDataCollection &top_col
 			ConvertRenderVector(target_vector, render_lengths, insert_count, source_vector.GetType(),
 			                    null_render_length);
 		}
-		insert_result.SetCardinality(insert_count);
+		insert_result.SetChildCardinality(insert_count);
 
 		// construct the render collection
 		top_collection.render_values->Append(insert_result);
@@ -718,7 +718,7 @@ void BoxRendererImplementation::FetchTopCollection(RenderDataCollection &top_col
 					values.SetValue(0, Value(readable_numbers[c]));
 					render_widths.SetValue(0, Value::UBIGINT(Utf8Proc::RenderWidth(readable_numbers[c])));
 				}
-				insert_result.SetCardinality(1);
+				insert_result.SetChildCardinality(1);
 				top_collection.render_values->Append(insert_result);
 			} else {
 				config.large_number_rendering = LargeNumberRendering::NONE;
@@ -801,7 +801,7 @@ void BoxRendererImplementation::FetchBottomCollection(RenderDataCollection &bott
 			ConvertRenderVector(target_vector, render_lengths, insert_count, source_vector.GetType(),
 			                    null_render_length);
 		}
-		insert_result.SetCardinality(insert_count);
+		insert_result.SetChildCardinality(insert_count);
 		// construct the render collection
 		bottom_collection.render_values->Append(insert_result);
 	}
@@ -881,7 +881,7 @@ vector<RenderDataCollection> BoxRendererImplementation::PivotCollections(vector<
 				}
 			}
 		}
-		row_chunk.SetCardinality(row_chunk.size() + 1);
+		// the appends above add exactly one row (per column) to the child vectors, growing row_chunk.size()
 		if (row_chunk.size() == STANDARD_VECTOR_SIZE || c + 1 == column_names.size()) {
 			res_coll.Append(append_state, row_chunk);
 			row_chunk.Reset();

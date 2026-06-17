@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/column_segment_info_scan_type.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
@@ -45,6 +46,8 @@ struct ConstraintState;
 struct TableUpdateState;
 struct OptimisticWriteCollection;
 struct ColumnFetchState;
+struct ColumnSegmentInfo;
+struct ColumnSegmentInfoScanState;
 struct DataTableInfo;
 struct LocalAppendState;
 struct ParallelTableScanState;
@@ -246,8 +249,16 @@ public:
 
 	idx_t ColumnCount() const;
 	idx_t GetTotalRows() const;
+	idx_t GetNextRowId() const;
+	idx_t GetRowGroupCount() const;
+	idx_t GetRowGroupCountWithLocalStorage(ClientContext &context);
 
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
+	vector<ColumnSegmentInfo>
+	GetColumnSegmentInfo(const QueryContext &context,
+	                     const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {});
+	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state);
+	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+	                           vector<ColumnSegmentInfo> &result);
 
 	//! Scans the next chunk for the CREATE INDEX operator
 	bool CreateIndexScan(TableScanState &state, DataChunk &result);
@@ -264,6 +275,12 @@ public:
 
 	shared_ptr<DataTableInfo> &GetDataTableInfo();
 
+	//! Direct access to the row group collection. Intended for extensions that need to walk storage internals;
+	//! prefer the higher-level DataTable API for normal use.
+	const shared_ptr<RowGroupCollection> &GetRowGroupCollection() const {
+		return row_groups;
+	}
+
 	void BindIndexes(ClientContext &context);
 	bool HasIndexes() const;
 	bool HasUniqueIndexes() const;
@@ -274,8 +291,8 @@ public:
 	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
 	void Destroy();
 
-	string GetTableName() const;
-	void SetTableName(string new_name);
+	Identifier GetTableName() const;
+	void SetTableName(Identifier new_name);
 
 	TableStorageInfo GetStorageInfo();
 

@@ -90,10 +90,9 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 
 void RowGroupPruner::GetLimitAndOffset(const LogicalLimit &logical_limit, optional_idx &row_limit,
                                        optional_idx &row_offset) const {
+	// UNSET = no LIMIT = unbounded; leave row_limit invalid.
 	if (logical_limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
 		row_limit = logical_limit.limit_val.GetConstantValue();
-	} else if (logical_limit.limit_val.Type() == LimitNodeType::UNSET) {
-		row_limit = 0;
 	}
 
 	if (logical_limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
@@ -114,13 +113,13 @@ optional_ptr<LogicalOrder> RowGroupPruner::FindLogicalOrder(const LogicalLimit &
 	}
 
 	auto &logical_order = current_op.get().Cast<LogicalOrder>();
-	auto order_column_type = logical_order.orders[0].expression->return_type;
+	auto order_column_type = logical_order.orders[0].expression->GetReturnType();
 	if (!order_column_type.IsNumeric() && !order_column_type.IsTemporal() &&
 	    order_column_type != LogicalType::VARCHAR) {
 		return nullptr;
 	}
 
-	if (logical_order.orders[0].expression->type != ExpressionType::BOUND_COLUMN_REF) {
+	if (logical_order.orders[0].expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return nullptr;
 	}
 
@@ -133,7 +132,7 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 	auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
 
 	JoinFilterPushdownColumn column;
-	column.probe_column_index = colref.binding;
+	column.probe_column_index = colref.Binding();
 	vector<JoinFilterPushdownColumn> columns {std::move(column)};
 	vector<PushdownFilterTarget> pushdown_targets;
 	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*logical_order.children[0], std::move(columns),
@@ -162,7 +161,7 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
                                                const StorageIndex &storage_index, LogicalLimit &logical_limit) const {
 	const auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
 	const auto column_type =
-	    colref.return_type == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
+	    colref.GetReturnType() == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
 	const auto order_type = primary_order.type;
 	const auto null_order = primary_order.null_order;
 	const auto order_by = order_type == OrderType::ASCENDING ? OrderByStatistics::MIN : OrderByStatistics::MAX;

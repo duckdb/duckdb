@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
@@ -33,14 +34,14 @@ public:
 	//! The select statement to insert from
 	unique_ptr<SelectStatement> select_statement;
 	//! Column names to insert into
-	vector<string> columns;
+	vector<Identifier> columns;
 
 	//! Table name to insert to
-	string table;
+	Identifier table;
 	//! Schema name to insert to
-	string schema;
+	Identifier schema;
 	//! The catalog name to insert to
-	string catalog;
+	Identifier catalog;
 
 	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;

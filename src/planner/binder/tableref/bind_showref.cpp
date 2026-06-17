@@ -52,7 +52,7 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding bindi
 		if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 			// if the projection at this index only has a column reference we can directly trace it to the base table
 			auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
-			return FindBaseTableColumn(*projection.children[0], bound_colref.binding);
+			return FindBaseTableColumn(*projection.children[0], bound_colref.Binding());
 		}
 		break;
 	}
@@ -93,7 +93,7 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 	auto plan = child_binder->Bind(*ref.query);
 
 	// construct a column data collection with the result
-	vector<string> return_names = {"column_name", "column_type", "null", "key", "default", "extra"};
+	vector<Identifier> return_names = {"column_name", "column_type", "null", "key", "default", "extra"};
 	vector<LogicalType> return_types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
 	                                    LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
 	DataChunk output;
@@ -132,7 +132,7 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 			output.data[5].Append(Value());
 		}
 
-		output.SetCardinality(output.size() + 1);
+		// both branches above append exactly one row to the child vectors, growing output.size() accordingly
 		if (output.size() == STANDARD_VECTOR_SIZE) {
 			collection->Append(append_state, output);
 			output.Reset();
@@ -151,7 +151,7 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 }
 
 BoundStatement Binder::BindShowTable(ShowRef &ref) {
-	auto lname = StringUtil::Lower(ref.table_name);
+	auto &lname = ref.table_name;
 
 	string sql;
 	if (lname == "\"databases\"") {
@@ -179,8 +179,8 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 		if (!catalog_name.empty() && !schema_name.empty()) {
 			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
 			if (!schema_entry) {
-				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.", catalog_name,
-				                       schema_name);
+				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.",
+				                       catalog_name.GetIdentifierName(), schema_name.GetIdentifierName());
 			}
 		} else if (catalog_name.empty() && !schema_name.empty()) {
 			// We have a schema name, use default catalog
@@ -189,17 +189,17 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 			catalog_name = default_entry.catalog;
 			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
 			if (!schema_entry) {
-				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.", catalog_name,
-				                       schema_name);
+				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.",
+				                       catalog_name.GetIdentifierName(), schema_name.GetIdentifierName());
 			}
 		}
-		sql = PragmaShowTables(catalog_name, schema_name);
+		sql = PragmaShowTables(catalog_name.GetIdentifierName(), schema_name.GetIdentifierName());
 	} else if (lname == "\"variables\"") {
 		sql = PragmaShowVariables();
 	} else if (lname == "__show_tables_expanded") {
 		sql = PragmaShowTablesExpanded();
 	} else {
-		sql = PragmaShow(ref.table_name);
+		sql = PragmaShow(ref.table_name.GetIdentifierName());
 	}
 	auto select = CreateViewInfo::ParseSelect(sql);
 	auto subquery = make_uniq<SubqueryRef>(std::move(select));

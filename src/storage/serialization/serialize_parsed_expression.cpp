@@ -12,14 +12,14 @@ namespace duckdb {
 void ParsedExpression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<ExpressionClass>(100, "class", expression_class);
 	serializer.WriteProperty<ExpressionType>(101, "type", type);
-	serializer.WritePropertyWithDefault<string>(102, "alias", alias);
+	serializer.WritePropertyWithDefault<Identifier>(102, "alias", alias);
 	serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
 }
 
 unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deserializer) {
 	auto expression_class = deserializer.ReadProperty<ExpressionClass>(100, "class");
 	auto type = deserializer.ReadProperty<ExpressionType>(101, "type");
-	auto alias = deserializer.ReadPropertyWithDefault<string>(102, "alias");
+	auto alias = deserializer.ReadPropertyWithDefault<Identifier>(102, "alias");
 	auto query_location = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "query_location", optional_idx());
 	deserializer.Set<ExpressionType>(type);
 	unique_ptr<ParsedExpression> result;
@@ -148,12 +148,12 @@ unique_ptr<ParsedExpression> CollateExpression::Deserialize(Deserializer &deseri
 
 void ColumnRefExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<string>>(200, "column_names", column_names);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(200, "column_names", column_names);
 }
 
 unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ColumnRefExpression>(new ColumnRefExpression());
-	deserializer.ReadPropertyWithDefault<vector<string>>(200, "column_names", result->column_names);
+	deserializer.ReadPropertyWithDefault<vector<Identifier>>(200, "column_names", result->column_names);
 	return std::move(result);
 }
 
@@ -201,39 +201,11 @@ unique_ptr<ParsedExpression> DefaultExpression::Deserialize(Deserializer &deseri
 	return std::move(result);
 }
 
-void FunctionExpression::Serialize(Serializer &serializer) const {
-	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
-	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", children);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(203, "filter", filter);
-	serializer.WritePropertyWithDefault<unique_ptr<OrderModifier>>(204, "order_bys", order_bys);
-	serializer.WritePropertyWithDefault<bool>(205, "distinct", distinct);
-	serializer.WritePropertyWithDefault<bool>(206, "is_operator", is_operator);
-	serializer.WritePropertyWithDefault<bool>(207, "export_state", export_state);
-	serializer.WritePropertyWithDefault<string>(208, "catalog", catalog);
-}
-
-unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
-	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->function_name);
-	deserializer.ReadPropertyWithDefault<string>(201, "schema", result->schema);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", result->children);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(203, "filter", result->filter);
-	auto order_bys = deserializer.ReadPropertyWithDefault<unique_ptr<ResultModifier>>(204, "order_bys");
-	result->order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(std::move(order_bys));
-	deserializer.ReadPropertyWithDefault<bool>(205, "distinct", result->distinct);
-	deserializer.ReadPropertyWithDefault<bool>(206, "is_operator", result->is_operator);
-	deserializer.ReadPropertyWithDefault<bool>(207, "export_state", result->export_state);
-	deserializer.ReadPropertyWithDefault<string>(208, "catalog", result->catalog);
-	return std::move(result);
-}
-
 void LambdaExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "lhs", lhs);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "expr", expr);
-	if (serializer.ShouldSerialize(5)) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_3_0)) {
 		serializer.WritePropertyWithDefault<LambdaSyntaxType>(202, "syntax_type", syntax_type, LambdaSyntaxType::SINGLE_ARROW_STORAGE);
 	}
 }
@@ -249,12 +221,12 @@ unique_ptr<ParsedExpression> LambdaExpression::Deserialize(Deserializer &deseria
 void LambdaRefExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<idx_t>(200, "lambda_idx", lambda_idx);
-	serializer.WritePropertyWithDefault<string>(201, "column_name", column_name);
+	serializer.WritePropertyWithDefault<Identifier>(201, "column_name", column_name);
 }
 
 unique_ptr<ParsedExpression> LambdaRefExpression::Deserialize(Deserializer &deserializer) {
 	auto lambda_idx = deserializer.ReadPropertyWithDefault<idx_t>(200, "lambda_idx");
-	auto column_name = deserializer.ReadPropertyWithDefault<string>(201, "column_name");
+	auto column_name = deserializer.ReadPropertyWithDefault<Identifier>(201, "column_name");
 	auto result = duckdb::unique_ptr<LambdaRefExpression>(new LambdaRefExpression(lambda_idx, std::move(column_name)));
 	return std::move(result);
 }
@@ -272,12 +244,12 @@ unique_ptr<ParsedExpression> OperatorExpression::Deserialize(Deserializer &deser
 
 void ParameterExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "identifier", identifier);
+	serializer.WritePropertyWithDefault<duckdb::Identifier>(200, "identifier", identifier);
 }
 
 unique_ptr<ParsedExpression> ParameterExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ParameterExpression>(new ParameterExpression());
-	deserializer.ReadPropertyWithDefault<string>(200, "identifier", result->identifier);
+	deserializer.ReadPropertyWithDefault<duckdb::Identifier>(200, "identifier", result->identifier);
 	return std::move(result);
 }
 
@@ -294,25 +266,29 @@ unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(Deserial
 
 void StarExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "relation_name", relation_name);
-	serializer.WriteProperty<case_insensitive_set_t>(201, "exclude_list", SerializedExcludeList());
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list", replace_list);
+	serializer.WritePropertyWithDefault<Identifier>(200, "relation_name", relation_name);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<identifier_set_t>(201, "exclude_list", SerializedExcludeList());
+	} else {
+		serializer.WriteProperty<identifier_set_t>(201, "exclude_list", SerializedExcludeList());
+	}
+	serializer.WritePropertyWithDefault<identifier_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list", replace_list);
 	serializer.WritePropertyWithDefault<bool>(203, "columns", columns);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
 	/* [Deleted] (bool) "unpacked" */
 	serializer.WritePropertyWithDefault<qualified_column_set_t>(206, "qualified_exclude_list", SerializedQualifiedExcludeList(), qualified_column_set_t());
-	serializer.WritePropertyWithDefault<qualified_column_map_t<string>>(207, "rename_list", rename_list, qualified_column_map_t<string>());
+	serializer.WritePropertyWithDefault<qualified_column_map_t<Identifier>>(207, "rename_list", rename_list, qualified_column_map_t<Identifier>());
 }
 
 unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deserializer) {
-	auto relation_name = deserializer.ReadPropertyWithDefault<string>(200, "relation_name");
-	auto exclude_list = deserializer.ReadProperty<case_insensitive_set_t>(201, "exclude_list");
-	auto replace_list = deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list");
+	auto relation_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "relation_name");
+	auto exclude_list = deserializer.ReadPropertyWithDefault<identifier_set_t>(201, "exclude_list");
+	auto replace_list = deserializer.ReadPropertyWithDefault<identifier_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list");
 	auto columns = deserializer.ReadPropertyWithDefault<bool>(203, "columns");
 	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr");
 	auto unpacked = deserializer.ReadPropertyWithExplicitDefault<bool>(205, "unpacked", false);
 	auto qualified_exclude_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_set_t>(206, "qualified_exclude_list", qualified_column_set_t());
-	auto rename_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_map_t<string>>(207, "rename_list", qualified_column_map_t<string>());
+	auto rename_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_map_t<Identifier>>(207, "rename_list", qualified_column_map_t<Identifier>());
 	auto result = StarExpression::DeserializeStarExpression(std::move(relation_name), exclude_list, std::move(replace_list), columns, std::move(expr), unpacked, qualified_exclude_list, std::move(rename_list));
 	return result;
 }
@@ -336,74 +312,18 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(Deserializer &deser
 
 void TypeExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "catalog", catalog);
-	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
-	serializer.WritePropertyWithDefault<string>(202, "type_name", type_name);
+	serializer.WritePropertyWithDefault<Identifier>(200, "catalog", catalog);
+	serializer.WritePropertyWithDefault<Identifier>(201, "schema", schema);
+	serializer.WritePropertyWithDefault<Identifier>(202, "type_name", type_name);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", children);
 }
 
 unique_ptr<ParsedExpression> TypeExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TypeExpression>(new TypeExpression());
-	deserializer.ReadPropertyWithDefault<string>(200, "catalog", result->catalog);
-	deserializer.ReadPropertyWithDefault<string>(201, "schema", result->schema);
-	deserializer.ReadPropertyWithDefault<string>(202, "type_name", result->type_name);
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "catalog", result->catalog);
+	deserializer.ReadPropertyWithDefault<Identifier>(201, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(202, "type_name", result->type_name);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", result->children);
-	return std::move(result);
-}
-
-void WindowExpression::Serialize(Serializer &serializer) const {
-	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
-	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
-	serializer.WritePropertyWithDefault<string>(202, "catalog", catalog);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", SerializedChildren(serializer));
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partitions", partitions);
-	serializer.WritePropertyWithDefault<vector<OrderByNode>>(205, "orders", orders);
-	serializer.WriteProperty<WindowBoundary>(206, "start", start);
-	serializer.WriteProperty<WindowBoundary>(207, "end", end);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(208, "start_expr", start_expr);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(209, "end_expr", end_expr);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(210, "offset_expr", SerializedOffset(serializer));
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(211, "default_expr", SerializedDefault(serializer));
-	serializer.WritePropertyWithDefault<bool>(212, "ignore_nulls", ignore_nulls);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(213, "filter_expr", filter_expr);
-	serializer.WritePropertyWithDefault<WindowExcludeMode>(214, "exclude_clause", exclude_clause, WindowExcludeMode::NO_OTHER);
-	serializer.WritePropertyWithDefault<bool>(215, "distinct", distinct);
-	serializer.WritePropertyWithDefault<vector<OrderByNode>>(216, "arg_orders", arg_orders);
-	if (serializer.ShouldSerialize(8)) {
-		serializer.WritePropertyWithDefault<bool>(217, "has_ignore_nulls", has_ignore_nulls);
-	}
-}
-
-unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deserializer) {
-	auto function_name = deserializer.ReadPropertyWithDefault<string>(200, "function_name");
-	auto schema = deserializer.ReadPropertyWithDefault<string>(201, "schema");
-	auto catalog = deserializer.ReadPropertyWithDefault<string>(202, "catalog");
-	auto children = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children");
-	auto partitions = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partitions");
-	auto orders = deserializer.ReadPropertyWithDefault<vector<OrderByNode>>(205, "orders");
-	auto start = deserializer.ReadProperty<WindowBoundary>(206, "start");
-	auto end = deserializer.ReadProperty<WindowBoundary>(207, "end");
-	auto start_expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(208, "start_expr");
-	auto end_expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(209, "end_expr");
-	auto offset_expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(210, "offset_expr");
-	auto default_expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(211, "default_expr");
-	auto result = duckdb::unique_ptr<WindowExpression>(new WindowExpression(deserializer.Get<ExpressionType>(), std::move(children), std::move(offset_expr), std::move(default_expr)));
-	result->function_name = std::move(function_name);
-	result->schema = std::move(schema);
-	result->catalog = std::move(catalog);
-	result->partitions = std::move(partitions);
-	result->orders = std::move(orders);
-	result->start = start;
-	result->end = end;
-	result->start_expr = std::move(start_expr);
-	result->end_expr = std::move(end_expr);
-	deserializer.ReadPropertyWithDefault<bool>(212, "ignore_nulls", result->ignore_nulls);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(213, "filter_expr", result->filter_expr);
-	deserializer.ReadPropertyWithExplicitDefault<WindowExcludeMode>(214, "exclude_clause", result->exclude_clause, WindowExcludeMode::NO_OTHER);
-	deserializer.ReadPropertyWithDefault<bool>(215, "distinct", result->distinct);
-	deserializer.ReadPropertyWithDefault<vector<OrderByNode>>(216, "arg_orders", result->arg_orders);
-	deserializer.ReadPropertyWithDefault<bool>(217, "has_ignore_nulls", result->has_ignore_nulls);
 	return std::move(result);
 }
 

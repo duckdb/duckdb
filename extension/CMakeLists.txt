@@ -6,9 +6,6 @@
 # then use `configure_file` again the advantage of this is that we don't change
 # modification time if nothing changed
 
-# include generated includes
-include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
-
 add_library(dummy_static_extension_loader STATIC
             loader/dummy_static_extension_loader.cpp)
 
@@ -17,8 +14,6 @@ install(
   EXPORT "${DUCKDB_EXPORT_SET}"
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
   ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
-
-add_extension_definitions()
 
 configure_file(
   generated_extension_headers.hpp.in
@@ -29,11 +24,17 @@ get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}"
 foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
   string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
   if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
-    set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
-    file(
-      APPEND
-      "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp.cand"
-      "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
+    get_property(
+      EXT_KIND
+      TARGET ${EXT_NAME}_extension
+      PROPERTY DUCKDB_EXTENSION_KIND)
+    if(NOT "${EXT_KIND}" STREQUAL "CAPI")
+      set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
+      file(
+        APPEND
+        "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp.cand"
+        "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
+    endif()
   endif()
 endforeach()
 
@@ -44,6 +45,7 @@ configure_file(
 # generated_extension_loader.hpp
 set(EXT_LOADER_NAME_LIST "")
 set(EXT_LOADER_BODY "")
+set(EXT_CAPI_DECLARATIONS "")
 foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
   string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
   if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
@@ -58,14 +60,31 @@ foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
       set(EXT_NAME_CAMELCASE "${EXT_NAME_CAMELCASE}${FIRST_LETTER}${REMAINDER}")
     endforeach()
 
+    get_property(
+      EXT_KIND
+      TARGET ${EXT_NAME}_extension
+      PROPERTY DUCKDB_EXTENSION_KIND)
     set(EXT_LOADER_NAME_LIST "${EXT_LOADER_NAME_LIST},\n\t\"${EXT_NAME}\"")
-    set(EXT_LOADER_BODY
-        "${EXT_LOADER_BODY}\
+    if("${EXT_KIND}" STREQUAL "CAPI")
+      set(EXT_CAPI_DECLARATIONS
+          "${EXT_CAPI_DECLARATIONS}extern \"C\" bool ${EXT_NAME}_init_c_api(duckdb_extension_info, duckdb_extension_access *);\n"
+      )
+      set(EXT_LOADER_BODY
+          "${EXT_LOADER_BODY}\
+    if (extension==\"${EXT_NAME}\") {
+        db.LoadStaticCAPIExtension(\"${EXT_NAME}\", ${EXT_NAME}_init_c_api);
+        return ExtensionLoadResult::LOADED_EXTENSION;
+    }
+")
+    else()
+      set(EXT_LOADER_BODY
+          "${EXT_LOADER_BODY}\
     if (extension==\"${EXT_NAME}\") {
         db.LoadStaticExtension<${EXT_NAME_CAMELCASE}Extension>();
         return ExtensionLoadResult::LOADED_EXTENSION;
     }
 ")
+    endif()
   endif()
 endforeach()
 
@@ -92,11 +111,6 @@ endif()
 set(GENERATED_CPP_FILE
     ${PROJECT_BINARY_DIR}/codegen/src/generated_extension_loader.cpp)
 configure_file(generated_extension_loader.cpp.in "${GENERATED_CPP_FILE}")
-add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
-add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
-add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
-add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
-
 add_library(duckdb_generated_extension_loader STATIC ${GENERATED_CPP_FILE})
 
 set(ALL_OBJECT_FILES

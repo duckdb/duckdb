@@ -3,9 +3,6 @@
 # group: [generic]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 ATTACH '{TEST_DIR}/board1.db' AS b1;
 
 statement ok

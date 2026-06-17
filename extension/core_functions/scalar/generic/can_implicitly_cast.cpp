@@ -20,8 +20,8 @@ void CanCastImplicitlyFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 unique_ptr<Expression> BindCanCastImplicitlyExpression(FunctionBindExpressionInput &input) {
-	auto &source_type = input.children[0]->return_type;
-	auto &target_type = input.children[1]->return_type;
+	auto &source_type = input.children[0]->GetReturnType();
+	auto &target_type = input.children[1]->GetReturnType();
 	if (source_type.id() == LogicalTypeId::UNKNOWN || source_type.id() == LogicalTypeId::SQLNULL ||
 	    target_type.id() == LogicalTypeId::UNKNOWN || target_type.id() == LogicalTypeId::SQLNULL) {
 		// parameter - unknown return type

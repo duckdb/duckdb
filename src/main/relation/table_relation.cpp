@@ -34,7 +34,7 @@ unique_ptr<TableRef> TableRelation::GetTableRef() {
 	return std::move(table_ref);
 }
 
-string TableRelation::GetAlias() {
+Identifier TableRelation::GetAlias() {
 	return description->table;
 }
 
@@ -61,7 +61,7 @@ static unique_ptr<ParsedExpression> ParseCondition(ClientContext &context, const
 
 void TableRelation::Update(vector<string> names, vector<unique_ptr<ParsedExpression>> &&update,
                            unique_ptr<ParsedExpression> condition) {
-	vector<string> update_columns = std::move(names);
+	vector<Identifier> update_columns = StringsToIdentifiers(names);
 	vector<unique_ptr<ParsedExpression>> expressions = std::move(update);
 
 	auto update_relation =
@@ -71,7 +71,7 @@ void TableRelation::Update(vector<string> names, vector<unique_ptr<ParsedExpress
 }
 
 void TableRelation::Update(const string &update_list, const string &condition) {
-	vector<string> update_columns;
+	vector<Identifier> update_columns;
 	vector<unique_ptr<ParsedExpression>> expressions;
 	auto cond = ParseCondition(*context->GetContext(), condition);
 	Parser::ParseUpdateList(update_list, update_columns, expressions, context->GetContext()->GetParserOptions());

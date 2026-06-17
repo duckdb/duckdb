@@ -13,13 +13,14 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct CreateTriggerInfo : public CreateInfo {
 	CreateTriggerInfo();
 
 	//! Trigger name
-	string trigger_name;
+	Identifier trigger_name;
 	//! The table the trigger is on
 	unique_ptr<BaseTableRef> base_table;
 	//! When the trigger fires (BEFORE/AFTER/INSTEAD OF)
@@ -27,9 +28,13 @@ struct CreateTriggerInfo : public CreateInfo {
 	//! The event that fires the trigger (INSERT/DELETE/UPDATE)
 	TriggerEventType event_type;
 	//! Columns for UPDATE OF
-	vector<string> columns;
+	vector<Identifier> columns;
 	//! Whether this fires FOR EACH ROW or FOR EACH STATEMENT
 	TriggerForEach for_each;
+	//! Alias for the NEW TABLE transition table (REFERENCING NEW TABLE AS <alias>)
+	Identifier referencing_new_table;
+	//! Alias for the OLD TABLE transition table (REFERENCING OLD TABLE AS <alias>)
+	Identifier referencing_old_table;
 	//! The trigger action (INSERT/UPDATE/DELETE as QueryNode)
 	unique_ptr<QueryNode> trigger_action;
 

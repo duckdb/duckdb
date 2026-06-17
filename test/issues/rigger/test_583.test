@@ -2,9 +2,6 @@
 # description: Issue 583
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Comparing a string with a boolean yields an incorrect result after UPDATE
 statement ok
 CREATE TABLE t0(c0 VARCHAR);

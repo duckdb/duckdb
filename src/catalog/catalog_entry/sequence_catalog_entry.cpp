@@ -48,7 +48,7 @@ int64_t SequenceCatalogEntry::CurrentValue() {
 	if (!data.last_value) {
 		throw SequenceException("currval: sequence is not yet defined in this session");
 	}
-	result = data.last_value.GetValue();
+	result = data.last_value.value();
 	return result;
 }
 
@@ -114,7 +114,7 @@ string SequenceCatalogEntry::ToSQL() const {
 
 	duckdb::stringstream ss;
 	ss << "CREATE SEQUENCE ";
-	ss << name;
+	ss << name.GetIdentifierName();
 	ss << " INCREMENT BY " << seq_data.increment;
 	ss << " MINVALUE " << seq_data.min_value;
 	ss << " MAXVALUE " << seq_data.max_value;

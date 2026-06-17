@@ -2,9 +2,6 @@
 # description: Test url_encode/url_decode
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 SELECT url_encode(''), url_decode('')
 ----

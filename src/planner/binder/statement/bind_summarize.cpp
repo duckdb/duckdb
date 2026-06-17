@@ -18,24 +18,24 @@ static unique_ptr<ParsedExpression> SummarizeWrapUnnest(vector<unique_ptr<Parsed
 	vector<unique_ptr<ParsedExpression>> unnest_children;
 	unnest_children.push_back(std::move(list_function));
 	auto unnest_function = make_uniq<FunctionExpression>("unnest", std::move(unnest_children));
-	unnest_function->SetAlias(alias);
+	unnest_function->SetAlias(Identifier(alias));
 	return std::move(unnest_function);
 }
 
-static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, string column_name) {
+static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, Identifier column_name) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ColumnRefExpression>(std::move(column_name)));
-	auto aggregate_function = make_uniq<FunctionExpression>(aggregate, std::move(children));
+	auto aggregate_function = make_uniq<FunctionExpression>(Identifier(aggregate), std::move(children));
 	auto cast_function = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(aggregate_function));
 	return std::move(cast_function);
 }
 
-static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, string column_name,
+static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, Identifier column_name,
                                                              const Value &modifier) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ColumnRefExpression>(std::move(column_name)));
 	children.push_back(make_uniq<ConstantExpression>(modifier));
-	auto aggregate_function = make_uniq<FunctionExpression>(aggregate, std::move(children));
+	auto aggregate_function = make_uniq<FunctionExpression>(Identifier(aggregate), std::move(children));
 	auto cast_function = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(aggregate_function));
 	return std::move(cast_function);
 }
@@ -51,11 +51,11 @@ static unique_ptr<ParsedExpression> SummarizeCreateBinaryFunction(const string &
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
-	auto binary_function = make_uniq<FunctionExpression>(op, std::move(children));
+	auto binary_function = make_uniq<FunctionExpression>(Identifier(op), std::move(children));
 	return std::move(binary_function);
 }
 
-static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_name) {
+static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(Identifier column_name) {
 	auto count_star = make_uniq<CastExpression>(LogicalType::DOUBLE, SummarizeCreateCountStar());
 	auto count =
 	    make_uniq<CastExpression>(LogicalType::DOUBLE, SummarizeCreateAggregate("count", std::move(column_name)));
@@ -71,8 +71,8 @@ static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_
 	CaseCheck check;
 	check.when_expr = std::move(comp_expr);
 	check.then_expr = std::move(percentage_x);
-	case_expr->case_checks.push_back(std::move(check));
-	case_expr->else_expr = make_uniq<ConstantExpression>(Value());
+	case_expr->CaseChecksMutable().push_back(std::move(check));
+	case_expr->ElseMutable() = make_uniq<ConstantExpression>(Value());
 
 	return make_uniq<CastExpression>(LogicalType::DECIMAL(9, 2), std::move(case_expr));
 }
@@ -82,7 +82,7 @@ BoundStatement Binder::BindSummarize(ShowRef &ref) {
 	if (ref.query) {
 		query = std::move(ref.query);
 	} else {
-		auto table_name = QualifiedName::Parse(ref.table_name);
+		auto table_name = QualifiedName::Parse(ref.table_name.GetIdentifierName());
 		auto node = make_uniq<SelectNode>();
 		node->select_list.push_back(make_uniq<StarExpression>());
 		auto basetableref = make_uniq<BaseTableRef>();

@@ -47,9 +47,9 @@ public:
 
 	//! Serializes a lambda function's bind data
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const ScalarFunction &function);
+	                      const BoundScalarFunction &function);
 	//! Deserializes a lambda function's bind data
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &);
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &);
 };
 
 class LambdaFunctions {
@@ -62,10 +62,10 @@ public:
 
 	//! Checks for NULL list parameter and prepared statements and adds bound cast expression
 	static unique_ptr<FunctionData> ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments,
-	                                                      ClientContext &context, ScalarFunction &bound_function);
+	                                                      ClientContext &context, BoundScalarFunction &bound_function);
 
 	//! Returns the ListLambdaBindData containing the lambda expression
-	static unique_ptr<FunctionData> ListLambdaBind(ClientContext &, ScalarFunction &bound_function,
+	static unique_ptr<FunctionData> ListLambdaBind(ClientContext &, BoundScalarFunction &bound_function,
 	                                               vector<unique_ptr<Expression>> &arguments,
 	                                               const bool has_index = false);
 
@@ -108,14 +108,14 @@ public:
 
 			// get the lambda expression
 			auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-			auto &bind_info = func_expr.bind_info->Cast<ListLambdaBindData>();
+			auto &bind_info = func_expr.BindInfo()->Cast<ListLambdaBindData>();
 			lambda_expr = bind_info.lambda_expr;
 			is_volatile = lambda_expr->IsVolatile();
 			has_index = bind_info.has_index;
 			has_initial = bind_info.has_initial;
 
 			// get the list column entries
-			list_column.ToUnifiedFormat(row_count, list_column_format);
+			list_column.ToUnifiedFormat(list_column_format);
 			list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_column_format);
 			child_vector = &ListVector::GetChildMutable(list_column);
 

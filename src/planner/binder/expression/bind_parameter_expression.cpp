@@ -10,7 +10,7 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t depth) {
 	auto parameters = binder.GetParameters();
-	auto parameter_id = expr.identifier;
+	auto parameter_id = expr.Identifier();
 
 	if (parameters) {
 		// Check if a parameter value has already been supplied (named params take precedence)
@@ -31,8 +31,7 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 			return BindResult(std::move(cast));
 		}
 	} else {
-		// No explicit parameter value supplied. During PREPARE we leave it as a placeholder slot.
-		// During standard binding (direct query or rebind), fall back to a user variable of the same name.
+		// No explicit parameter value supplied; fall back to a user variable of the same name.
 		if (binder.GetBindingMode() != BindingMode::PREPARE) {
 			Value variable_value;
 			if (ClientConfig::GetConfig(context).GetUserVariable(parameter_id, variable_value)) {
@@ -41,6 +40,7 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 				return BindResult(std::move(constant));
 			}
 		}
+		throw BinderException("Unexpected prepared parameter. This type of statement can't be prepared!");
 	}
 
 	auto bound_parameter = parameters->BindParameterExpression(expr);

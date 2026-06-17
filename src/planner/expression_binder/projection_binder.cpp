@@ -10,7 +10,12 @@ ProjectionBinder::ProjectionBinder(Binder &binder, ClientContext &context, Table
 }
 
 BindResult ProjectionBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	if (in_child_projection) {
+		return ExpressionBinder::BindExpression(expr_ptr, depth);
+	}
+	in_child_projection = true;
 	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
+	in_child_projection = false;
 	if (result.HasError()) {
 		return result;
 	}
@@ -18,11 +23,11 @@ BindResult ProjectionBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 		return result;
 	}
 	// we have successfully bound a column - push it into the projection and emit a reference
-	auto return_type = result.expression->return_type;
+	auto return_type = result.expression->GetReturnType();
 	auto alias = result.expression->GetName();
 	auto proj_col_idx = ColumnBinding::PushExpression(proj_expressions, std::move(result.expression));
 	auto proj_ref = make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(proj_index, proj_col_idx));
-	proj_ref->alias = std::move(alias);
+	proj_ref->SetAlias(std::move(alias));
 	return BindResult(std::move(proj_ref));
 }
 
@@ -34,6 +39,7 @@ BindResult ProjectionBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	case ExpressionClass::WINDOW:
 		return BindUnsupportedExpression(expr, depth, clause + " cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
+	case ExpressionClass::SUBQUERY:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);

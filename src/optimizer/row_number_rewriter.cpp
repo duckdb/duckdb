@@ -16,11 +16,11 @@ bool RowNumberRewriter::CanOptimize(LogicalOperator &op) {
 	}
 
 	auto &expression = op.expressions[0];
-	if (expression->type != ExpressionType::WINDOW_ROW_NUMBER) {
+	if (expression->GetExpressionType() != ExpressionType::WINDOW_ROW_NUMBER) {
 		return false;
 	}
 	auto &window_expr = expression->Cast<BoundWindowExpression>();
-	if (!window_expr.partitions.empty() || !window_expr.orders.empty()) {
+	if (!window_expr.Partitions().empty() || !window_expr.OrderBy().empty()) {
 		return false;
 	}
 

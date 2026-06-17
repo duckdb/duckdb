@@ -793,7 +793,7 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 	input_data.get_next(&input_data, &prepared_array);
 
 	// Create the schema
-	db.Query("CREATE SCHEMA " + KeywordHelper::WriteOptionallyQuoted(schema_name));
+	db.Query("CREATE SCHEMA " + SQLIdentifier(schema_name));
 
 	// Create ADBC statement that will create a table called "test"
 	AdbcStatement adbc_stmt;
@@ -827,8 +827,7 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 	}
 
 	// Check we can query
-	auto schema_table =
-	    KeywordHelper::WriteOptionallyQuoted(schema_name) + "." + KeywordHelper::WriteOptionallyQuoted(table_name);
+	auto schema_table = SQLIdentifier(schema_name) + "." + SQLIdentifier(table_name);
 	auto res = db.Query("select * from " + schema_table);
 	for (size_t i = 0; i < column_names.size(); i++) {
 		REQUIRE((res->ColumnName(i) == column_names.at(i)));
@@ -3171,7 +3170,7 @@ TEST_CASE("Test AdbcConnectionGetObjects - empty list not NULL", "[adbc]") {
 		                                         "nonexistent_table", nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		auto res = db.Query(R"(
-			SELECT list_transform(catalog_db_schemas, s -> s.db_schema_tables) AS tables
+			SELECT list_transform(catalog_db_schemas, lambda s: s.db_schema_tables) AS tables
 			FROM result WHERE catalog_name = 'test_empty_list'
 		)");
 		REQUIRE(res->RowCount() == 1);
@@ -4587,6 +4586,52 @@ TEST_CASE("ADBC - regression test for #21772", "[adbc]") {
 			stream.release(&stream);
 		}
 	}
+}
+
+TEST_CASE("ADBC - StatementExecuteSchema", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	ADBCTestDatabase db;
+	AdbcStatement stmt;
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+
+	SECTION("basic SELECT") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 42 AS answer, 'hello' AS greeting", &db.adbc_error)));
+
+		ArrowSchema schema;
+		schema.release = nullptr;
+		REQUIRE(SUCCESS(AdbcStatementExecuteSchema(&stmt, &schema, &db.adbc_error)));
+
+		REQUIRE(schema.n_children == 2);
+		REQUIRE(string(schema.children[0]->name) == "answer");
+		REQUIRE(string(schema.children[1]->name) == "greeting");
+		schema.release(&schema);
+	}
+
+	SECTION("no query set") {
+		ArrowSchema schema;
+		schema.release = nullptr;
+		REQUIRE(!SUCCESS(AdbcStatementExecuteSchema(&stmt, &schema, &db.adbc_error)));
+		REQUIRE(string(db.adbc_error.message).find("StatementSetSqlQuery") != string::npos);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	SECTION("missing schema pointer") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 1", &db.adbc_error)));
+		REQUIRE(!SUCCESS(AdbcStatementExecuteSchema(&stmt, nullptr, &db.adbc_error)));
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
 }
 
 } // namespace duckdb

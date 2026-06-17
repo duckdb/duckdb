@@ -59,7 +59,6 @@ public:
 			for (idx_t c = 0; c < op.parameters.size(); c++) {
 				input_chunk.data[c].Reference(op.parameters[c], count_t(1));
 			}
-			input_chunk.SetCardinality(1);
 		}
 	}
 
@@ -187,12 +186,15 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 		switch (output_async_result) {
 		case AsyncResultType::BLOCKED: {
 			D_ASSERT(data.async_result.HasTasks());
-			annotated_lock_guard<annotated_mutex> guard(g_state.lock);
-			if (g_state.CanBlock()) {
-				data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
-				return SourceResultType::BLOCKED;
+			{
+				annotated_lock_guard<annotated_mutex> guard(g_state.lock);
+				if (g_state.CanBlock()) {
+					data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
+					return SourceResultType::BLOCKED;
+				}
 			}
-			return SourceResultType::FINISHED;
+			data.async_result.ExecuteTasksSynchronously();
+			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
 		case AsyncResultType::IMPLICIT:
 			if (chunk.size() > 0) {
@@ -313,7 +315,7 @@ string PhysicalTableScan::GetFilterInfo(const TableFilterSet &filter_set) const 
 	bool first_item = true;
 	for (auto &f : filter_set) {
 		auto filter_idx = f.GetIndex();
-		auto &filter = f.Filter();
+		auto &filter = f.Filter().Cast<ExpressionFilter>();
 		if (filter_idx < names.size()) {
 			if (!first_item) {
 				filters_info += "\n";
@@ -327,7 +329,7 @@ string PhysicalTableScan::GetFilterInfo(const TableFilterSet &filter_set) const 
 				if (entry == virtual_columns.end()) {
 					throw InternalException("Virtual column not found");
 				}
-				filters_info += filter.ToString(entry->second.name);
+				filters_info += filter.ToString(entry->second.name.GetIdentifierName());
 			} else {
 				auto column_name = column_id.GetName(names[col_id]);
 				filters_info += filter.ToString(column_name);
@@ -346,7 +348,7 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 			result[it.first] = it.second;
 		}
 	} else {
-		result["Function"] = StringUtil::Upper(function.name);
+		result["Function"] = StringUtil::Upper(function.name.GetIdentifierName());
 	}
 	if (function.projection_pushdown) {
 		string projections;
@@ -371,7 +373,8 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 	}
 
 	if (extra_info.sample_options) {
-		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
+		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() +
+		                          (extra_info.sample_options->is_percentage ? "%" : " rows");
 	}
 	if (!extra_info.file_filters.empty()) {
 		result["File Filters"] = extra_info.file_filters;
@@ -411,25 +414,20 @@ bool PhysicalTableScan::ParallelSource() const {
 	return true;
 }
 
-InsertionOrderPreservingMap<string> PhysicalTableScan::ExtraSourceParams(GlobalSourceState &gstate_p,
-                                                                         LocalSourceState &lstate) const {
-	if (!function.dynamic_to_string) {
-		return InsertionOrderPreservingMap<string>();
+TableFunctionParallelism PhysicalTableScan::SourceParallelism() const {
+	return function.parallelism;
+}
+
+void PhysicalTableScan::GetMetrics(ClientContext &context, GlobalSourceState &gstate_p, LocalSourceState &lstate,
+                                   OperatorMetrics &operator_metrics) const {
+	if (!function.get_metrics) {
+		return;
 	}
 	auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
 	auto &state = lstate.Cast<TableScanLocalSourceState>();
-	TableFunctionDynamicToStringInput input(function, bind_data.get(), state.local_state.get(),
-	                                        gstate.global_state.get());
-	return function.dynamic_to_string(input);
-}
-
-optional_idx PhysicalTableScan::GetRowsScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
-	if (function.rows_scanned) {
-		auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
-		auto &state = lstate.Cast<TableScanLocalSourceState>();
-		return function.rows_scanned(*gstate.global_state, *state.local_state);
-	}
-	return optional_idx();
+	TableFunctionGetMetricsInput input(context, bind_data.get(), state.local_state.get(), gstate.global_state.get(),
+	                                   operator_metrics);
+	function.get_metrics(input);
 }
 
 } // namespace duckdb

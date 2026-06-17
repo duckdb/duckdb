@@ -49,6 +49,28 @@ TEST_CASE("Test decimal types C API", "[capi]") {
 	REQUIRE(duckdb_decimal_internal_type(nullptr) == DUCKDB_TYPE_INVALID);
 }
 
+TEST_CASE("Test duckdb_create_decimal_type width/scale validation", "[capi]") {
+	// valid width/scale combinations succeed and round-trip
+	duckdb::vector<std::pair<uint8_t, uint8_t>> valid = {{1, 0}, {4, 1}, {9, 2}, {18, 3}, {38, 4}, {38, 38}};
+	for (auto &entry : valid) {
+		auto type = duckdb_create_decimal_type(entry.first, entry.second);
+		REQUIRE(type != nullptr);
+		REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_DECIMAL);
+		REQUIRE(duckdb_decimal_width(type) == entry.first);
+		REQUIRE(duckdb_decimal_scale(type) == entry.second);
+		duckdb_destroy_logical_type(&type);
+	}
+
+	// invalid width/scale combinations return nullptr instead of throwing or returning a malformed type
+	duckdb::vector<std::pair<uint8_t, uint8_t>> invalid = {{0, 0},  // width below the minimum
+	                                                       {39, 0}, // width above the maximum (MAX_WIDTH_DECIMAL == 38)
+	                                                       {4, 5},  // scale greater than width
+	                                                       {255, 255}};
+	for (auto &entry : invalid) {
+		REQUIRE(duckdb_create_decimal_type(entry.first, entry.second) == nullptr);
+	}
+}
+
 TEST_CASE("Test enum types C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
@@ -274,9 +296,9 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 	id.SetAlias(type_name);
 	CreateTypeInfo info(type_name, id);
 
-	auto &catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
+	auto catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
 	auto &transaction = MetaTransaction::Get(*connection->context);
-	auto &catalog = Catalog::GetCatalog(*connection->context, catalog_name);
+	auto &catalog = Catalog::GetCatalog(*connection->context, Identifier(catalog_name));
 	transaction.ModifyDatabase(catalog.GetAttached(), DatabaseModificationType::CREATE_CATALOG_ENTRY);
 	catalog.CreateType(*connection->context, info);
 
@@ -675,6 +697,26 @@ TEST_CASE("Test Infinite Dates", "[capi]") {
 		ts = result->Fetch<duckdb_timestamp>(2, 0);
 		REQUIRE(!duckdb_is_finite_timestamp(ts));
 		REQUIRE(ts.micros > 0);
+	}
+
+	{
+		auto result =
+		    tester.Query("SELECT '-infinity'::TIMESTAMPTZ_NS, 'epoch'::TIMESTAMPTZ_NS, 'infinity'::TIMESTAMPTZ_NS");
+		REQUIRE(NO_FAIL(*result));
+		REQUIRE(result->ColumnCount() == 3);
+		REQUIRE(result->ErrorMessage() == nullptr);
+
+		auto ts = result->Fetch<duckdb_timestamp_ns>(0, 0);
+		REQUIRE(!duckdb_is_finite_timestamp_ns(ts));
+		REQUIRE(ts.nanos < 0);
+
+		ts = result->Fetch<duckdb_timestamp_ns>(1, 0);
+		REQUIRE(duckdb_is_finite_timestamp_ns(ts));
+		REQUIRE(ts.nanos == 0);
+
+		ts = result->Fetch<duckdb_timestamp_ns>(2, 0);
+		REQUIRE(!duckdb_is_finite_timestamp_ns(ts));
+		REQUIRE(ts.nanos > 0);
 	}
 
 	{

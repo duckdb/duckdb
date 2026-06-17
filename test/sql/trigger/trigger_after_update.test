@@ -83,7 +83,7 @@ SELECT COUNT(*) FROM strict_log;
 ----
 1
 
-# Multiple triggers on the same event are not yet supported
+# Multiple triggers on the same event are supported
 statement ok
 CREATE TABLE t_multi (id INTEGER);
 
@@ -94,11 +94,20 @@ statement ok
 CREATE TRIGGER trg_multi_a AFTER UPDATE ON t_multi FOR EACH STATEMENT
     INSERT INTO t_multi_audit VALUES ('a');
 
-statement error
+statement ok
 CREATE TRIGGER trg_multi_b AFTER UPDATE ON t_multi FOR EACH STATEMENT
     INSERT INTO t_multi_audit VALUES ('b');
+
+statement ok
+INSERT INTO t_multi VALUES (1);
+
+statement ok
+UPDATE t_multi SET id = 2;
+
+query I
+SELECT COUNT(*) FROM t_multi_audit;
 ----
-Not implemented Error: Multiple triggers per table event are not yet supported
+2
 
 # Trigger body can be a DELETE statement
 statement ok
@@ -155,5 +164,130 @@ UPDATE t_upd2_target SET val = 2;
 
 query I
 SELECT n FROM t_counter;
+----
+2
+
+# UPDATE OF columns: trigger only fires when listed columns are updated
+statement ok
+CREATE TABLE t_col (id INTEGER, val INTEGER, other INTEGER);
+
+statement ok
+INSERT INTO t_col VALUES (1, 10, 100);
+
+statement ok
+CREATE TABLE t_col_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_col AFTER UPDATE OF val ON t_col FOR EACH STATEMENT
+    INSERT INTO t_col_audit VALUES ('val_changed');
+
+# Updating 'val' fires the trigger
+statement ok
+UPDATE t_col SET val = 20 WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM t_col_audit;
+----
+1
+
+# Updating 'other' (NOT in the OF list) does NOT fire the trigger
+statement ok
+UPDATE t_col SET other = 200 WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM t_col_audit;
+----
+1
+
+# Updating both columns -> fires (overlap with OF list)
+statement ok
+UPDATE t_col SET val = 30, other = 300 WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM t_col_audit;
+----
+2
+
+# Multi-column OF: fires when ANY listed column is touched
+statement ok
+CREATE TABLE t_multi_col (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO t_multi_col VALUES (1, 2, 3);
+
+statement ok
+CREATE TABLE t_multi_col_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_multi_col AFTER UPDATE OF a, b ON t_multi_col FOR EACH STATEMENT
+    INSERT INTO t_multi_col_audit VALUES ('ab_changed');
+
+statement ok
+UPDATE t_multi_col SET a = 10;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+1
+
+statement ok
+UPDATE t_multi_col SET b = 20;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+2
+
+# 'c' alone -> does NOT fire
+statement ok
+UPDATE t_multi_col SET c = 30;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+2
+
+# Mix (a + c) -> fires
+statement ok
+UPDATE t_multi_col SET a = 100, c = 300;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+3
+
+# Mixed BEFORE OF + AFTER OF on the same event
+statement ok
+CREATE TABLE t_mix (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO t_mix VALUES (1, 2);
+
+statement ok
+CREATE TABLE t_mix_audit (phase VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_mix_before BEFORE UPDATE OF a ON t_mix FOR EACH STATEMENT
+    INSERT INTO t_mix_audit VALUES ('before');
+
+statement ok
+CREATE TRIGGER trg_mix_after AFTER UPDATE OF a ON t_mix FOR EACH STATEMENT
+    INSERT INTO t_mix_audit VALUES ('after');
+
+# Updating 'a' fires both
+statement ok
+UPDATE t_mix SET a = 10;
+
+query I
+SELECT COUNT(*) FROM t_mix_audit;
+----
+2
+
+# Updating 'b' fires neither (both filters disjoint)
+statement ok
+UPDATE t_mix SET b = 20;
+
+query I
+SELECT COUNT(*) FROM t_mix_audit;
 ----
 2

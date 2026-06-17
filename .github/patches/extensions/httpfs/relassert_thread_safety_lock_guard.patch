@@ -1,0 +1,13 @@
+diff --git a/src/http_state.cpp b/src/http_state.cpp
+index 1b09114..0ac79cf 100644
+--- a/src/http_state.cpp
++++ b/src/http_state.cpp
+@@ -6,7 +6,7 @@ namespace duckdb {
+ CachedFileHandle::CachedFileHandle(shared_ptr<CachedFile> &file_p) {
+ 	// If the file was not yet initialized, we need to grab a lock.
+ 	if (!file_p->initialized) {
+-		lock = make_uniq<lock_guard<mutex>>(file_p->lock);
++		lock = unique_ptr<lock_guard<mutex>>(new lock_guard<mutex>(file_p->lock));
+ 	}
+ 	file = file_p;
+ }

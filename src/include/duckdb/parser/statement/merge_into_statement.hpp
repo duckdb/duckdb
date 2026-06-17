@@ -17,6 +17,9 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 
 namespace duckdb {
+class Serializer;
+class Deserializer;
+class MergeQueryNode;
 
 class MergeIntoAction {
 public:
@@ -27,7 +30,7 @@ public:
 	//! The SET information (if action_type == MERGE_UPDATE)
 	unique_ptr<UpdateSetInfo> update_info;
 	//! Column names to insert into (if action_type == MERGE_INSERT)
-	vector<string> insert_columns;
+	vector<Identifier> insert_columns;
 	//! Set of expressions for INSERT
 	vector<unique_ptr<ParsedExpression>> expressions;
 	//! INSERT BY POSITION or INSERT BY NAME
@@ -35,10 +38,14 @@ public:
 	//! Whether or not this is a INSERT DEFAULT VALUES
 	bool default_values = false;
 	//! INSERT_BY_NAME exclude column list - columns to skip when generating the SET list
-	unordered_set<string> exclude_columns;
+	identifier_set_t exclude_columns;
 
 	string ToString() const;
 	unique_ptr<MergeIntoAction> Copy() const;
+	static bool Equals(const MergeIntoAction &left, const MergeIntoAction &right);
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<MergeIntoAction> Deserialize(Deserializer &deserializer);
 };
 
 class MergeIntoStatement : public SQLStatement {
@@ -48,18 +55,7 @@ public:
 public:
 	MergeIntoStatement();
 
-	unique_ptr<TableRef> target;
-	unique_ptr<TableRef> source;
-	unique_ptr<ParsedExpression> join_condition;
-	vector<string> using_columns;
-
-	map<MergeActionCondition, vector<unique_ptr<MergeIntoAction>>> actions;
-
-	//! keep track of optional returningList if statement contains a RETURNING keyword
-	vector<unique_ptr<ParsedExpression>> returning_list;
-
-	//! CTEs
-	CommonTableExpressionMap cte_map;
+	unique_ptr<MergeQueryNode> node;
 
 protected:
 	MergeIntoStatement(const MergeIntoStatement &other);
@@ -67,8 +63,6 @@ protected:
 public:
 	string ToString() const override;
 	unique_ptr<SQLStatement> Copy() const override;
-
-	static string ActionConditionToString(MergeActionCondition condition);
 };
 
 } // namespace duckdb

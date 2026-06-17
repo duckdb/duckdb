@@ -50,11 +50,13 @@ public:
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
-	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
+	void Append(ColumnAppendState &state, const Vector &vector, idx_t count) override;
+	void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) override;
 	void RevertAppend(row_t new_count) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
-	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,
-	              Vector &result, idx_t result_idx) override;
+	void FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+	               const idx_t *offsets, const SelectionVector &sel, idx_t count, Vector &result,
+	               idx_t result_offset) override;
 	void Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index, Vector &update_vector,
 	            row_t *row_ids, idx_t update_count, idx_t row_group_start) override;
 	void UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, const vector<column_t> &column_path,
@@ -75,7 +77,8 @@ public:
 	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 
 	void GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
-	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result) override;
+	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result,
+	                          const ColumnSegmentInfoScanOptions &options) override;
 
 	void Verify(RowGroup &parent) override;
 

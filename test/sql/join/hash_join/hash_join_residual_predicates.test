@@ -2,13 +2,9 @@
 # description: Test hash join with residual predicates (non-pushdown conditions in ON clause)
 # group: [hash_join]
 
-statement ok
-PRAGMA enable_verification
+set variable sf 0
 
-require tpch
-
-statement ok
-CALL dbgen(sf=0);
+include test/sql/tpch/tpch_setup.test_template
 
 statement ok
 set disabled_optimizers to 'build_side_probe_side';

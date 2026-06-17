@@ -22,8 +22,8 @@ public:
 		for (auto &exp : select_list) {
 			D_ASSERT(exp->GetExpressionType() == ExpressionType::BOUND_UNNEST);
 			auto &bue = exp->Cast<BoundUnnestExpression>();
-			list_data_types.push_back(bue.child->return_type);
-			executor.AddExpression(*bue.child.get());
+			list_data_types.push_back(bue.Child()->GetReturnType());
+			executor.AddExpression(*bue.Child().get());
 
 			unnest_sels.emplace_back(STANDARD_VECTOR_SIZE);
 			null_sels.emplace_back(STANDARD_VECTOR_SIZE);
@@ -53,12 +53,12 @@ public:
 
 public:
 	//! Reset the fields of the unnest operator state
-	void Reset();
+	void ResetState();
 	//! Prepare the input for the next unnest
 	void PrepareInput(DataChunk &input, const vector<unique_ptr<Expression>> &select_list);
 };
 
-void UnnestOperatorState::Reset() {
+void UnnestOperatorState::ResetState() {
 	current_row = 0;
 	list_position = 0;
 	first_fetch = true;
@@ -79,7 +79,7 @@ void UnnestOperatorState::PrepareInput(DataChunk &input, const vector<unique_ptr
 	executor.Execute(input, list_data);
 
 	// verify incoming lists
-	list_data.Verify(executor.HasContext() ? executor.GetContext().db : nullptr);
+	list_data.Verify(executor.GetContextPtr());
 	D_ASSERT(input.size() == list_data.size());
 	D_ASSERT(list_data.ColumnCount() == select_list.size());
 	D_ASSERT(list_vector_data.size() == list_data.ColumnCount());
@@ -88,18 +88,17 @@ void UnnestOperatorState::PrepareInput(DataChunk &input, const vector<unique_ptr
 	// get the UnifiedVectorFormat of each list_data vector (LIST vectors for the different UNNESTs)
 	// both for the vector itself and its child vector
 	for (idx_t col_idx = 0; col_idx < list_data.ColumnCount(); col_idx++) {
-		auto &list_vector = list_data.data[col_idx];
-		list_vector.ToUnifiedFormat(list_data.size(), list_vector_data[col_idx]);
+		const auto &list_vector = list_data.data[col_idx];
+		list_vector.ToUnifiedFormat(list_vector_data[col_idx]);
 
 		if (list_vector.GetType() == LogicalType::SQLNULL) {
 			// UNNEST(NULL): SQLNULL vectors don't have child vectors, but we need to point to the child vector of
 			// each vector, so we just get the UnifiedVectorFormat of the vector itself
-			auto &child_vector = list_vector;
-			child_vector.ToUnifiedFormat(0, list_child_data[col_idx]);
+			const auto &child_vector = list_vector;
+			child_vector.ToUnifiedFormat(list_child_data[col_idx]);
 		} else {
-			auto list_size = ListVector::GetListSize(list_vector);
-			auto &child_vector = ListVector::GetChild(list_vector);
-			child_vector.ToUnifiedFormat(list_size, list_child_data[col_idx]);
+			const auto &child_vector = ListVector::GetChild(list_vector);
+			child_vector.ToUnifiedFormat(list_child_data[col_idx]);
 		}
 	}
 	// get the unnest lengths
@@ -152,7 +151,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 
 		// finished with all rows of this input chunk, reset
 		if (state.current_row >= input.size()) {
-			state.Reset();
+			state.ResetState();
 			return OperatorResultType::NEED_MORE_INPUT;
 		}
 
@@ -218,7 +217,11 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			}
 		}
 		idx_t col_offset = 0;
-		chunk.SetCardinality(result_length);
+		chunk.SetChildCardinality(result_length);
+		if (result_length == 0) {
+			// nothing to unnest - skip column processing entirely
+			continue;
+		}
 		if (include_input) {
 			for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 				if (unnest_list_count == 1) {
@@ -233,7 +236,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			col_offset = input.ColumnCount();
 		}
 		for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
-			auto &list_vector = state.list_data.data[col_idx];
+			const auto &list_vector = state.list_data.data[col_idx];
 			auto &result_vector = chunk.data[col_offset + col_idx];
 			if (state.list_data.data[col_idx].GetType() == LogicalType::SQLNULL ||
 			    ListType::GetChildType(state.list_data.data[col_idx].GetType()) == LogicalType::SQLNULL ||
@@ -243,11 +246,11 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 				ConstantVector::SetNull(result_vector, count_t(result_length));
 				continue;
 			}
-			auto &child_vector = ListVector::GetChild(list_vector);
+			const auto &child_vector = ListVector::GetChild(list_vector);
 			result_vector.Slice(child_vector, state.unnest_sels[col_idx], result_length);
 			if (state.null_counts[col_idx] > 0) {
 				// we have NULL values that we need to set - flatten
-				result_vector.Flatten(result_length);
+				result_vector.Flatten();
 				auto &null_sel = state.null_sels[col_idx];
 				for (idx_t idx = 0; idx < state.null_counts[col_idx]; idx++) {
 					auto null_index = null_sel.get_index(idx);

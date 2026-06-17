@@ -10,6 +10,7 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/execution_context.hpp"
 
@@ -17,10 +18,12 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
-DataChunk::DataChunk() : count(0) {
+DataChunk::DataChunk() {
 }
 
 DataChunk::~DataChunk() {
@@ -74,7 +77,7 @@ void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &type
 idx_t DataChunk::GetDataSize() const {
 	idx_t total_size = 0;
 	for (auto &vec : data) {
-		total_size += vec.GetDataSize(count);
+		total_size += vec.GetDataSize();
 	}
 	return total_size;
 }
@@ -88,8 +91,9 @@ idx_t DataChunk::GetAllocationSize() const {
 }
 
 void DataChunk::Reset() {
-	SetCardinality(0);
+	count = optional_idx();
 	if (data.empty() || vector_caches.empty()) {
+		count = 0;
 		return;
 	}
 	if (vector_caches.size() != data.size()) {
@@ -103,7 +107,7 @@ void DataChunk::Reset() {
 void DataChunk::Destroy() {
 	data.clear();
 	vector_caches.clear();
-	SetCardinality(0);
+	count = optional_idx();
 }
 
 Value DataChunk::GetValue(idx_t col_idx, idx_t index) const {
@@ -124,7 +128,31 @@ bool DataChunk::AllConstant() const {
 	return true;
 }
 
-void DataChunk::SetCardinality(idx_t count_p) {
+void DataChunk::CheckCardinality(idx_t count_p) {
+	for (auto &v : data) {
+		if (v.size() != count_p) {
+			throw InternalException("DataChunk::CheckCardinality - vector has size %d but expected size %d", v.size(),
+			                        count_p);
+		}
+	}
+	this->count = optional_idx();
+}
+
+void DataChunk::SetChildCardinality(idx_t count_p) {
+	for (auto &v : data) {
+		// null-buffer placeholders (InitializeEmpty) and non-flat/constant vectors cannot be resized
+		if (!v.GetBufferRef()) {
+			continue;
+		}
+		auto vtype = v.GetVectorType();
+		if (vtype == VectorType::FLAT_VECTOR || vtype == VectorType::CONSTANT_VECTOR) {
+			FlatVector::SetSize(v, count_p);
+		} else if (v.size() != count_p) {
+			throw InternalException("DataChunk::SetChildCardinality - vector has size %d but expected size %d - and "
+			                        "cannot change vector size because it is not a flat or constant vector",
+			                        v.size(), count_p);
+		}
+	}
 	this->count = count_p;
 }
 
@@ -133,14 +161,13 @@ void DataChunk::Reference(DataChunk &chunk) {
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
 		data[i].Reference(chunk.data[i]);
 	}
-	SetCardinality(chunk);
+	count = chunk.count;
 }
 
 void DataChunk::Move(DataChunk &chunk) {
-	SetCardinality(chunk);
 	data = std::move(chunk.data);
 	vector_caches = std::move(chunk.vector_caches);
-
+	count = chunk.count;
 	chunk.Destroy();
 }
 
@@ -148,11 +175,13 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) const {
 	D_ASSERT(ColumnCount() == other.ColumnCount());
 	D_ASSERT(other.size() == 0);
 
+	const idx_t target_count = size() - offset;
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], size(), offset, 0);
+		FlatVector::SetSize(other.data[i], target_count);
 	}
-	other.SetCardinality(size() - offset);
+	other.count = optional_idx();
 }
 
 void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count, const idx_t offset) const {
@@ -160,11 +189,13 @@ void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t s
 	D_ASSERT(other.size() == 0);
 	D_ASSERT(source_count <= size());
 
+	const idx_t target_count = source_count - offset;
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], sel, source_count, offset, 0);
+		FlatVector::SetSize(other.data[i], target_count);
 	}
-	other.SetCardinality(source_count - offset);
+	other.count = optional_idx();
 }
 
 void DataChunk::Split(DataChunk &other, idx_t split_idx) {
@@ -180,7 +211,7 @@ void DataChunk::Split(DataChunk &other, idx_t split_idx) {
 		data.pop_back();
 		vector_caches.pop_back();
 	}
-	other.SetCardinality(*this);
+	count = other.count;
 }
 
 void DataChunk::Fuse(DataChunk &other) {
@@ -190,6 +221,7 @@ void DataChunk::Fuse(DataChunk &other) {
 		data.emplace_back(std::move(other.data[col_idx]));
 		vector_caches.emplace_back(std::move(other.vector_caches[col_idx]));
 	}
+	count = other.count;
 	other.Destroy();
 }
 
@@ -197,12 +229,12 @@ void DataChunk::ReferenceColumns(DataChunk &other, const vector<column_t> &colum
 	D_ASSERT(ColumnCount() == column_ids.size());
 	Reset();
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		auto &other_col = other.data[column_ids[col_idx]];
+		const auto &other_col = other.data[column_ids[col_idx]];
 		auto &this_col = data[col_idx];
 		D_ASSERT(other_col.GetType() == this_col.GetType());
 		this_col.Reference(other_col);
 	}
-	SetCardinality(other.size());
+	count = other.count;
 }
 
 void DataChunk::Append(const DataChunk &other, VectorAppendMode append_mode) {
@@ -214,24 +246,34 @@ void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t
 	if (sel_count == 0) {
 		return;
 	}
-	idx_t new_size = size() + sel_count;
 	if (ColumnCount() != other.ColumnCount()) {
 		throw InternalException("Column counts of appending chunk doesn't match!");
 	}
+	idx_t current_size = size();
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		FlatVector::SetSize(data[i], size());
+		// ensure data[i] has the chunk's current size so the append computes new_size = current + append_size
+		if (data[i].size() != current_size) {
+			throw InternalException("DataChunk::Append size mismatch - child has count %d but chunk has size %d",
+			                        data[i].size(), current_size);
+		}
 		if (sel.IsSet()) {
 			data[i].Append(other.data[i], sel, sel_count, append_mode);
 		} else {
 			data[i].Append(other.data[i], other.size(), append_mode);
 		}
 	}
-	SetCardinality(new_size);
+	CheckCardinality(current_size + sel_count);
+	if (ColumnCount() == 0) {
+		// a column-less chunk has no child vectors to carry the cardinality - record it explicitly
+		count = current_size + sel_count;
+	} else {
+		count = optional_idx();
+	}
 }
 
 void DataChunk::Flatten() {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		data[i].Flatten(size());
+		data[i].Flatten();
 	}
 }
 
@@ -246,7 +288,7 @@ vector<LogicalType> DataChunk::GetTypes() const {
 string DataChunk::ToString() const {
 	string retval = "Chunk - [" + to_string(ColumnCount()) + " Columns]\n";
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		retval += "- " + data[i].ToString(size()) + "\n";
+		retval += "- " + data[i].ToString() + "\n";
 	}
 	return retval;
 }
@@ -270,7 +312,7 @@ void DataChunk::Serialize(Serializer &serializer, bool compressed_serialization)
 			// Reference the vector to avoid potentially mutating it during serialization
 			Vector serialized_vector(data[i].GetType());
 			serialized_vector.Reference(data[i]);
-			serialized_vector.Serialize(object, row_count, compressed_serialization);
+			serialized_vector.Serialize(object, compressed_serialization);
 		});
 	});
 }
@@ -289,20 +331,20 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 	// initialize the data chunk
 	D_ASSERT(!types.empty());
 	Initialize(Allocator::DefaultAllocator(), types, MaxValue<idx_t>(row_count, STANDARD_VECTOR_SIZE));
-	SetCardinality(row_count);
 
 	// read the data
 	deserializer.ReadList(102, "columns", [&](Deserializer::List &list, idx_t i) {
 		list.ReadObject([&](Deserializer &object) { data[i].Deserialize(object, row_count); });
 	});
+	SetChildCardinality(row_count);
 }
 
 void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
-	this->count = count_p;
 	SelCache merge_cache;
 	for (idx_t c = 0; c < ColumnCount(); c++) {
 		data[c].Slice(sel_vector, count_p, merge_cache);
 	}
+	count = count_p;
 }
 
 void DataChunk::Slice(const DataChunk &other, idx_t offset, idx_t end) {
@@ -312,12 +354,11 @@ void DataChunk::Slice(const DataChunk &other, idx_t offset, idx_t end) {
 	for (idx_t c = 0; c < other.ColumnCount(); c++) {
 		data[c].Slice(other.data[c], offset, end);
 	}
-	SetCardinality(end - offset);
+	count = end - offset;
 }
 
 void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
 	D_ASSERT(other.ColumnCount() <= col_offset + ColumnCount());
-	this->count = count_p;
 	SelCache merge_cache;
 	for (idx_t c = 0; c < other.ColumnCount(); c++) {
 		if (other.data[c].GetVectorType() == VectorType::DICTIONARY_VECTOR) {
@@ -328,6 +369,7 @@ void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t 
 			data[col_offset + c].Slice(other.data[c], sel, count_p);
 		}
 	}
+	count = count_p;
 }
 
 void DataChunk::Slice(idx_t offset, idx_t slice_count) {
@@ -345,87 +387,126 @@ void DataChunk::Slice(idx_t offset, idx_t slice_count) {
 unsafe_unique_array<UnifiedVectorFormat> DataChunk::ToUnifiedFormat() {
 	auto unified_data = make_unsafe_uniq_array<UnifiedVectorFormat>(ColumnCount());
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		data[col_idx].ToUnifiedFormat(size(), unified_data[col_idx]);
+		data[col_idx].ToUnifiedFormat(unified_data[col_idx]);
 	}
 	return unified_data;
 }
 
 void DataChunk::Hash(Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
-	VectorOperations::Hash(data[0], result, size());
+	auto hash_count = size();
+	VectorOperations::Hash(data[0], result, hash_count);
 	for (idx_t i = 1; i < ColumnCount(); i++) {
-		VectorOperations::CombineHash(result, data[i], size());
+		VectorOperations::CombineHash(result, data[i], hash_count);
 	}
 }
 
 void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
 	D_ASSERT(!column_ids.empty());
-
-	VectorOperations::Hash(data[column_ids[0]], result, size());
+	auto hash_count = size();
+	VectorOperations::Hash(data[column_ids[0]], result, hash_count);
 	for (idx_t i = 1; i < column_ids.size(); i++) {
-		VectorOperations::CombineHash(result, data[column_ids[i]], size());
+		VectorOperations::CombineHash(result, data[column_ids[i]], hash_count);
 	}
 }
 
-void DataChunk::Verify(optional_ptr<DatabaseInstance> database_instance) {
-	// for (idx_t i = 0; i < ColumnCount(); i++) {
-	// 	if (data[i].HasSize() && data[i].size() != size()) {
-	// 		throw InternalException("DataChunk::Verify - size mismatch: vector has size %d but chunk has size %d",
-	// 		                        data[i].size(), size());
-	// 	}
-	// }
-#ifdef DEBUG
-	// verify that all vectors in this chunk have the chunk selection vector
-	for (idx_t i = 0; i < ColumnCount(); i++) {
-		data[i].Verify(size());
-	}
+void DataChunk::Verify(ClientContext &context) {
+	Verify(DatabaseInstance::GetDatabase(context));
+}
 
-	if (!ColumnCount()) {
-		// don't try to round-trip dummy data chunks with no data
-		// e.g., these exist in queries like 'SELECT distinct(col0, col1) FROM tbl', where we have groups, but no
-		// payload so the payload will be such an empty data chunk
+void DataChunk::Verify(shared_ptr<DatabaseInstance> &db) {
+	if (db) {
+		Verify(*db);
+	} else {
+		Verify();
+	}
+}
+
+void DataChunk::Verify(optional_ptr<ClientContext> context) {
+	if (context) {
+		Verify(*context);
+	} else {
+		Verify();
+	}
+}
+
+void DataChunk::Verify(DatabaseInstance &database_instance) {
+	VerifyInternal(DebugVerificationMode::DEFAULT, database_instance);
+}
+
+void DataChunk::Verify() {
+	VerifyInternal(DebugVerificationMode::DEFAULT, nullptr);
+}
+
+void DataChunk::VerifyInternal(DebugVerificationMode mode, optional_ptr<DatabaseInstance> db) {
+	if (mode == DebugVerificationMode::DEFAULT) {
+		mode = DBConfigOptions::global_verification_mode;
+	}
+	if (mode == DebugVerificationMode::NONE) {
 		return;
 	}
-
-	// verify that we can round-trip chunk serialization
-	Allocator allocator;
-	MemoryStream mem_stream(allocator);
-
-	// this is the way we can ensure that the `Serialize` and `Deserialize` methods of a `DataChunk` are consistent with
-	// each other within the current and previous versions of the code.
-	// This is an internal round-trip sanity check performed in memory. It does not write to a
-	// persistent database file. Therefore, when a version is not indicated (latest),
-	// it should always use the full set of capabilities currently supported by the engine to ensure that all
-	// valid in-memory states can be verified.
-
-	SerializationOptions options;
-	options.serialization_compatibility = SerializationCompatibility::Latest();
-
-	if (database_instance) {
-		DBConfig &config = DBConfig::GetConfig(*database_instance);
-		if (config.options.serialization_compatibility.manually_set) {
-			options.serialization_compatibility = config.options.serialization_compatibility;
+	if (mode == DebugVerificationMode::VERIFY_VECTORS) {
+		// verify all vectors have the same size as the chunk
+		for (idx_t i = 0; i < ColumnCount(); i++) {
+			if (data[i].size() != size()) {
+				throw InternalException(
+				    "DataChunk::Verify - size mismatch: vector %d (%s) has size %d but chunk has size %d", i,
+				    data[i].GetType().ToString(), data[i].size(), size());
+			}
+		}
+		// verify internal consistency of the chunk
+		for (idx_t i = 0; i < ColumnCount(); i++) {
+			data[i].Verify();
 		}
 	}
+	if (mode == DebugVerificationMode::VERIFY_SERIALIZATION) {
+		if (!ColumnCount()) {
+			// don't try to round-trip dummy data chunks with no data
+			// e.g., these exist in queries like 'SELECT distinct(col0, col1) FROM tbl', where we have groups, but no
+			// payload so the payload will be such an empty data chunk
+			return;
+		}
 
-	BinarySerializer serializer(mem_stream, options);
+		// verify that we can round-trip chunk serialization
+		Allocator allocator;
+		MemoryStream mem_stream(allocator);
 
-	serializer.Begin();
-	Serialize(serializer);
-	serializer.End();
+		// this is the way we can ensure that the `Serialize` and `Deserialize` methods of a `DataChunk` are consistent
+		// with each other within the current and previous versions of the code. This is an internal round-trip sanity
+		// check performed in memory. It does not write to a persistent database file. Therefore, when a version is not
+		// indicated (latest), it should always use the full set of capabilities currently supported by the engine to
+		// ensure that all valid in-memory states can be verified.
 
-	mem_stream.Rewind();
+		SerializationOptions options;
+		options.storage_compatibility = StorageCompatibility::Latest();
 
-	BinaryDeserializer deserializer(mem_stream);
-	DataChunk new_chunk;
+		if (db) {
+			DBConfig &config = DBConfig::GetConfig(*db);
+			if (config.options.storage_compatibility.manually_set) {
+				options.storage_compatibility = config.options.storage_compatibility;
+			}
+		}
 
-	deserializer.Begin();
-	new_chunk.Deserialize(deserializer);
-	deserializer.End();
+		BinarySerializer serializer(mem_stream, options);
 
-	D_ASSERT(size() == new_chunk.size());
-#endif
+		serializer.Begin();
+		Serialize(serializer);
+		serializer.End();
+
+		mem_stream.Rewind();
+
+		BinaryDeserializer deserializer(mem_stream);
+		DataChunk new_chunk;
+
+		deserializer.Begin();
+		new_chunk.Deserialize(deserializer);
+		deserializer.End();
+
+		if (size() != new_chunk.size()) {
+			throw InternalException("Data Chunk Verification: Serialization size mismatch");
+		}
+	}
 }
 
 void DataChunk::Print() const {

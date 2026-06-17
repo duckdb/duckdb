@@ -19,7 +19,7 @@
 namespace duckdb {
 
 struct GlobalFileState;
-enum class PhysicalCopyToFilePhase : uint8_t;
+struct BoundOrderByNode;
 
 struct CopyToFileInfo {
 	explicit CopyToFileInfo(string file_path_p) : file_path(std::move(file_path_p)) {
@@ -49,11 +49,19 @@ public:
 	static void ReturnStatistics(DataChunk &chunk, CopyToFileInfo &written_file_info);
 
 	bool Rotate() const;
-	bool RotateNow(GlobalFileState &global_state) const;
+
+	void PrepareAndFlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
+	                          unique_ptr<GlobalFileState> &file_state_ptr,
+	                          const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+	                          unique_ptr<ColumnDataCollection> batch) const;
+	pair<const CopyFunctionBatchAnalyzer, unique_ptr<PreparedBatchData>>
+	PrepareBatch(ClientContext &context, GlobalSinkState &gstate_p, unique_ptr<GlobalFileState> &file_state_ptr,
+	             const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+	             unique_ptr<ColumnDataCollection> batch) const;
 	void FlushBatch(ClientContext &context, GlobalSinkState &gstate_p, unique_ptr<GlobalFileState> &file_state_ptr,
 	                const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
-	                unique_ptr<LocalFunctionData> &lstate, unique_ptr<ColumnDataCollection> batch,
-	                PhysicalCopyToFilePhase phase) const;
+	                const CopyFunctionBatchAnalyzer &batch_analyzer,
+	                unique_ptr<PreparedBatchData> prepared_batch) const;
 
 public:
 	//===--------------------------------------------------------------------===//
@@ -63,6 +71,9 @@ public:
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
+	//! Synchronously complete any pending partitioned-copy flush work after Finalize has been called.
+	//! Used by callers (e.g. DuckLakeUpdate) that drive Sink/Finalize/GetData manually outside a pipeline.
+	void FinalizePartitionedSync(ExecutionContext &execution_context, InterruptState &interrupt_state) const;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
@@ -96,7 +107,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 
 	//! Names and types going into the file(s)
-	vector<string> names;
+	vector<Identifier> names;
 	vector<LogicalType> expected_types;
 
 	//! Where to write the file
@@ -131,6 +142,9 @@ public:
 	bool partition_output;
 	bool write_partition_columns;
 	bool hive_file_pattern;
+
+	//! If the data should be sorted
+	vector<BoundOrderByNode> order_columns;
 };
 
 } // namespace duckdb

@@ -32,13 +32,22 @@ public:
 		return candidate_formats.find(type)->second.back();
 	}
 
+	const vector<StrpTimeFormat> &GetFormats(LogicalTypeId type) const {
+		D_ASSERT(candidate_formats.find(type) != candidate_formats.end());
+		return candidate_formats.find(type)->second;
+	}
+
 public:
 	static void AddFormat(type_id_map_t<vector<StrpTimeFormat>> &candidate_formats, LogicalTypeId type,
 	                      const string &format_string) {
 		auto &formats = candidate_formats[type];
 		formats.emplace_back();
 		formats.back().format_specifier = format_string;
-		StrpTimeFormat::ParseFormatSpecifier(formats.back().format_specifier, formats.back());
+		const auto error = StrpTimeFormat::ParseFormatSpecifier(formats.back().format_specifier, formats.back());
+		if (!error.empty()) {
+			formats.pop_back();
+			throw InvalidInputException(error);
+		}
 	}
 
 	static bool HasFormats(const type_id_map_t<vector<StrpTimeFormat>> &candidate_formats, LogicalTypeId type) {
@@ -72,14 +81,6 @@ public:
 		}
 		format = formats[index];
 		return true;
-	}
-
-	void ShrinkFormatsToSize(LogicalTypeId type, idx_t size) {
-		lock_guard<mutex> lock(format_lock);
-		auto &formats = date_format_map.candidate_formats[type];
-		while (formats.size() > size) {
-			formats.pop_back();
-		}
 	}
 
 private:

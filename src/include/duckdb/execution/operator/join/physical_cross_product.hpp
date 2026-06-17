@@ -40,6 +40,7 @@ protected:
 public:
 	// Sink Interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 
 	bool IsSink() const override {
@@ -62,6 +63,7 @@ public:
 	explicit CrossProductExecutor(ColumnDataCollection &rhs);
 
 	OperatorResultType Execute(const DataChunk &input, DataChunk &output);
+	void Reset();
 
 	// returns if the left side is scanned as a constant vector
 	bool ScanLHS() {

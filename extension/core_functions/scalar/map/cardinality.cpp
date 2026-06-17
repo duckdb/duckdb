@@ -8,8 +8,8 @@
 namespace duckdb {
 
 static void CardinalityFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &map = args.data[0];
-	auto entries = map.Values<list_entry_t>(args.size());
+	const auto &map = args.data[0];
+	auto entries = map.Values<list_entry_t>();
 
 	auto result_data = FlatVector::Writer<uint64_t>(result, args.size());
 	for (idx_t row = 0; row < args.size(); row++) {
@@ -29,7 +29,7 @@ static unique_ptr<FunctionData> CardinalityBind(BindScalarFunctionInput &input) 
 		throw BinderException("Cardinality must have exactly one arguments");
 	}
 
-	if (arguments[0]->return_type.id() != LogicalTypeId::MAP) {
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::MAP) {
 		throw BinderException("Cardinality can only operate on MAPs");
 	}
 

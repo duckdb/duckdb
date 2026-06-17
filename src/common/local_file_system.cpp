@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
@@ -22,6 +23,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/types.h>
 #include <unistd.h>
 #else
@@ -96,14 +98,70 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 }
 
 #else
+
+// Maximum length of a path that does not require a long path prefix or
+// LongPathsEnabled setting along with longPathAware manifest.
+// For files the limit is 260 - 1 characters.
+// Directories additionally must be able to create 8+3 files inside them.
+// The limit applies to fully resolved absolute paths.
+static const size_t WINDOWS_MAX_SHORT_PATH = 247;
+static const size_t WINDOWS_MAX_LONG_PATH = 32000;
+static const std::wstring WINDOWS_LOCAL_LONG_PATH_PREFIX = L"\\\\?\\";
+static const std::wstring WINDOWS_UNC_LONG_PATH_PREFIX = L"\\\\?\\UNC\\";
+
 static std::wstring ConvertPathToUnicode(const string &path) {
 	return WindowsUtil::UTF8ToUnicode(path.c_str());
 }
 
+static std::wstring ConvertPathToNormalizedAbsolute(const std::wstring &path) {
+	// len includes NULL-terminator
+	DWORD len = GetFullPathNameW(path.c_str(), 0, nullptr, nullptr);
+	if (len == 0) {
+		string error = LocalFileSystem::GetLastErrorAsString();
+		string utf8_path = WindowsUtil::UnicodeToUTF8(path.c_str());
+		throw IOException("Failed to get length for normalized path \"%s\": %s", utf8_path, error);
+	}
+
+	std::vector<wchar_t> buf;
+	buf.resize(len);
+
+	// written does NOT include NULL-terminator
+	DWORD written = GetFullPathNameW(path.c_str(), len, buf.data(), nullptr);
+	if (written == 0) {
+		string error = LocalFileSystem::GetLastErrorAsString();
+		string utf8_path = WindowsUtil::UnicodeToUTF8(path.c_str());
+		throw IOException("Failed to normalize path \"%s\", length: %lu: %s", utf8_path, len, error);
+	}
+
+	return std::wstring(buf.data(), written);
+}
+
 static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const string &path,
                                                      optional_ptr<FileOpener> opener) {
-	auto normalized_path = fs.ExpandPath(path, opener);
-	return ConvertPathToUnicode(normalized_path);
+	string normalized_path = fs.ExpandPath(path, opener);
+	std::wstring unicode_path = ConvertPathToUnicode(normalized_path);
+
+	// We need to get absolute path to check the length. Normalizing it (removing "." and "..",
+	// flipping forward slashes) is only required if the path is long.
+	// We are doing it for all paths to not perform current working dir resolving twice.
+	std::wstring abs_path = ConvertPathToNormalizedAbsolute(unicode_path);
+
+	if (abs_path.length() <= WINDOWS_MAX_SHORT_PATH || abs_path.find(WINDOWS_LOCAL_LONG_PATH_PREFIX) == 0 ||
+	    abs_path.find(WINDOWS_UNC_LONG_PATH_PREFIX) == 0) {
+		return abs_path;
+	}
+
+	if (abs_path.length() > WINDOWS_MAX_LONG_PATH) {
+		string resolved_path = WindowsUtil::UnicodeToUTF8(abs_path.c_str());
+		throw IOException("Path is longer than Windows MAX_PATH, length: %zu, beginning: %s[...]", abs_path.length(),
+		                  resolved_path.substr(0, 100));
+	}
+
+	if (abs_path.find(L"\\\\") == 0) {
+		return WINDOWS_UNC_LONG_PATH_PREFIX + abs_path;
+	}
+
+	return WINDOWS_LOCAL_LONG_PATH_PREFIX + abs_path;
 }
 
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
@@ -166,6 +224,13 @@ public:
 		}
 	};
 };
+
+static void CloseFileAndAppendError(int fd, string &extended_error) {
+	if (close(fd) == -1) {
+		extended_error += ". Also, failed closing file: ";
+		extended_error += strerror(errno);
+	}
+}
 
 static FileMetadata StatsFromStruct(struct stat s) {
 	FileMetadata file_metadata;
@@ -300,6 +365,64 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 }
 #endif
 
+// Apply a fcntl advisory lock per flags.Lock(); throws (and closes fd) on failure. Shared
+// by OpenFile and MemoryMapFile.
+static void TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileOpenFlags flags) {
+	if (flags.Lock() == FileLockType::NO_LOCK) {
+		return;
+	}
+	// only attempt locking on regular files (not FIFOs/sockets)
+	auto file_type = StatsInternal(fd, path).file_type;
+	if (file_type == FileType::FILE_TYPE_FIFO || file_type == FileType::FILE_TYPE_SOCKET) {
+		return;
+	}
+	struct flock fl;
+	memset(&fl, 0, sizeof fl);
+	fl.l_type = flags.Lock() == FileLockType::READ_LOCK ? F_RDLCK : F_WRLCK;
+	fl.l_whence = SEEK_SET;
+	fl.l_start = 0;
+	fl.l_len = 0;
+	int rc = fcntl(fd, F_SETLK, &fl);
+	int retained_errno = errno;
+	bool has_error = rc == -1;
+	string extended_error;
+	if (has_error) {
+		if (retained_errno == ENOTSUP) {
+			if (flags.Lock() == FileLockType::READ_LOCK) {
+				// file lock not supported here; ignore for read-only
+				return;
+			}
+			extended_error = "File locks are not supported for this file system, cannot open the file in "
+			                 "read-write mode. Try opening the file in read-only mode";
+		}
+	}
+	if (!has_error) {
+		return;
+	}
+	if (extended_error.empty()) {
+		// who is holding the lock?
+		rc = fcntl(fd, F_GETLK, &fl);
+		if (rc == -1) {
+			extended_error = strerror(errno);
+		} else {
+			extended_error = AdditionalProcessInfo(fs, fl.l_pid);
+		}
+		if (flags.Lock() == FileLockType::WRITE_LOCK) {
+			// could we get a read lock?
+			fl.l_type = F_RDLCK;
+			rc = fcntl(fd, F_SETLK, &fl);
+			if (rc != -1) {
+				extended_error += ". However, you would be able to open this database in read-only mode, e.g. by "
+				                  "using the -readonly parameter in the CLI";
+			}
+		}
+	}
+	CloseFileAndAppendError(fd, extended_error);
+	extended_error += ". See also https://duckdb.org/docs/current/connect/concurrency";
+	throw IOException({{"errno", std::to_string(retained_errno)}}, "Could not set lock on file \"%s\": %s", path,
+	                  extended_error);
+}
+
 bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
 
@@ -329,7 +452,6 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	flags.Verify();
 
 	int open_flags = 0;
-	int rc;
 	bool open_read = flags.OpenForReading();
 	bool open_write = flags.OpenForWriting();
 	if (open_read && open_write) {
@@ -394,72 +516,18 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 #if defined(__DARWIN__) || defined(__APPLE__)
 	if (flags.DirectIO()) {
 		// OSX requires fcntl for Direct IO
-		rc = fcntl(fd, F_NOCACHE, 1);
+		int rc = fcntl(fd, F_NOCACHE, 1);
 		if (rc == -1) {
-			throw IOException("Could not enable direct IO for file \"%s\": %s", path, strerror(errno));
+			int retained_errno = errno;
+			string extended_error = strerror(retained_errno);
+			CloseFileAndAppendError(fd, extended_error);
+			throw IOException({{"errno", std::to_string(retained_errno)}},
+			                  "Could not enable direct IO for file \"%s\": %s", path, extended_error);
 		}
 	}
 #endif
 
-	if (flags.Lock() != FileLockType::NO_LOCK) {
-		// set lock on file
-		// but only if it is not an input/output stream
-		auto file_type = StatsInternal(fd, path_p).file_type;
-		if (file_type != FileType::FILE_TYPE_FIFO && file_type != FileType::FILE_TYPE_SOCKET) {
-			struct flock fl;
-			memset(&fl, 0, sizeof fl);
-			fl.l_type = flags.Lock() == FileLockType::READ_LOCK ? F_RDLCK : F_WRLCK;
-			fl.l_whence = SEEK_SET;
-			fl.l_start = 0;
-			fl.l_len = 0;
-			rc = fcntl(fd, F_SETLK, &fl);
-			// Retain the original error.
-			int retained_errno = errno;
-			bool has_error = rc == -1;
-			string extended_error;
-			if (has_error) {
-				if (retained_errno == ENOTSUP) {
-					// file lock not supported for this file system
-					if (flags.Lock() == FileLockType::READ_LOCK) {
-						// for read-only, we ignore not-supported errors
-						has_error = false;
-						errno = 0;
-					} else {
-						extended_error = "File locks are not supported for this file system, cannot open the file in "
-						                 "read-write mode. Try opening the file in read-only mode";
-					}
-				}
-			}
-			if (has_error) {
-				if (extended_error.empty()) {
-					// try to find out who is holding the lock using F_GETLK
-					rc = fcntl(fd, F_GETLK, &fl);
-					if (rc == -1) { // fnctl does not want to help us
-						extended_error = strerror(errno);
-					} else {
-						extended_error = AdditionalProcessInfo(*this, fl.l_pid);
-					}
-					if (flags.Lock() == FileLockType::WRITE_LOCK) {
-						// maybe we can get a read lock instead and tell this to the user.
-						fl.l_type = F_RDLCK;
-						rc = fcntl(fd, F_SETLK, &fl);
-						if (rc != -1) { // success!
-							extended_error +=
-							    ". However, you would be able to open this database in read-only mode, e.g. by "
-							    "using the -readonly parameter in the CLI";
-						}
-					}
-				}
-				rc = close(fd);
-				if (rc == -1) {
-					extended_error += ". Also, failed closing file";
-				}
-				extended_error += ". See also https://duckdb.org/docs/current/connect/concurrency";
-				throw IOException({{"errno", std::to_string(retained_errno)}}, "Could not set lock on file \"%s\": %s",
-				                  path, extended_error);
-			}
-		}
-	}
+	TryAcquireFileLock(*this, fd, path, flags);
 
 	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags);
 	if (opener) {
@@ -825,12 +893,146 @@ string LocalFileSystem::MakePathAbsolute(const string &path_p, optional_ptr<File
 	auto parsed = Path::FromString(ExpandPath(path_p, opener));
 	return (parsed.IsAbsolute() ? parsed : Path::FromString(GetWorkingDirectory()).Join(parsed)).ToString();
 }
+
+//===----------------------------------------------------------------------===//
+// Memory-mapped files (Unix)
+//===----------------------------------------------------------------------===//
+class UnixMemoryMappedFile : public MemoryMappedFile {
+public:
+	UnixMemoryMappedFile(string path_p, FileOpenFlags flags_p, int fd_p, data_ptr_t data_p, idx_t size_p);
+	~UnixMemoryMappedFile() override;
+
+	void Sync() override;
+	bool Trim(idx_t offset, idx_t length) override;
+	void Close() override;
+
+private:
+	int fd;
+};
+
+UnixMemoryMappedFile::UnixMemoryMappedFile(string path_p, FileOpenFlags flags_p, int fd_p, data_ptr_t data_p,
+                                           idx_t size_p)
+    : MemoryMappedFile(std::move(path_p), flags_p, data_p, size_p), fd(fd_p) {
+}
+
+UnixMemoryMappedFile::~UnixMemoryMappedFile() {
+	try {
+		UnixMemoryMappedFile::Close();
+	} catch (...) {
+		// not allowed to throw in destructor
+	}
+}
+
+void UnixMemoryMappedFile::Sync() {
+	if (data == nullptr || size == 0) {
+		return;
+	}
+	if (msync(data, size, MS_SYNC) != 0) {
+		throw IOException({{"errno", std::to_string(errno)}}, "Could not msync file \"%s\": %s", path, strerror(errno));
+	}
+}
+
+bool UnixMemoryMappedFile::Trim(idx_t offset, idx_t length) {
+#if defined(__linux__) && !(defined(__GLIBC__) && (__GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 18)))
+	int rc = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, NumericCast<off_t>(offset),
+	                   NumericCast<off_t>(length));
+	return rc == 0;
+#else
+	(void)offset;
+	(void)length;
+	return false;
+#endif
+}
+
+void UnixMemoryMappedFile::Close() {
+	if (data != nullptr) {
+		munmap(data, size);
+		data = nullptr;
+		size = 0;
+	}
+	if (fd != -1) {
+		close(fd);
+		fd = -1;
+	}
+}
+
+unique_ptr<MemoryMappedFile> LocalFileSystem::MemoryMapFile(const OpenFileInfo &path_info, FileOpenFlags flags,
+                                                            const MMapOptions &options,
+                                                            optional_ptr<FileOpener> opener) {
+	auto path = ExpandPath(path_info.path, opener);
+	flags.Verify();
+
+	bool open_read = flags.OpenForReading();
+	bool open_write = flags.OpenForWriting();
+	int open_flags;
+	if (open_read && open_write) {
+		open_flags = O_RDWR;
+	} else if (open_read) {
+		open_flags = O_RDONLY;
+	} else {
+		throw InternalException("READ or READ+WRITE must be specified when memory-mapping a file");
+	}
+	if (open_write && flags.CreateFileIfNotExists()) {
+		open_flags |= O_CREAT;
+	}
+
+	int fd = open(path.c_str(), open_flags, 0666);
+	if (fd == -1) {
+		if (flags.ReturnNullIfNotExists() && errno == ENOENT) {
+			return nullptr;
+		}
+		throw IOException({{"errno", std::to_string(errno)}}, "Cannot open file \"%s\" for memory mapping: %s", path,
+		                  strerror(errno));
+	}
+
+	TryAcquireFileLock(*this, fd, path, flags);
+
+	struct stat st;
+	if (fstat(fd, &st) != 0) {
+		int saved_errno = errno;
+		close(fd);
+		throw IOException({{"errno", std::to_string(saved_errno)}}, "Could not stat file \"%s\": %s", path,
+		                  strerror(saved_errno));
+	}
+	auto initial_file_size = NumericCast<idx_t>(st.st_size);
+
+	// Writable mappings sparsely extend the file to the reserve size so the region never
+	// needs to be remapped; read-only mappings just span the existing file.
+	idx_t mapping_size;
+	if (open_write) {
+		mapping_size = MaxValue<idx_t>(initial_file_size, options.reserve_size);
+		if (initial_file_size < mapping_size) {
+			if (ftruncate(fd, NumericCast<off_t>(mapping_size)) != 0) {
+				int saved_errno = errno;
+				close(fd);
+				throw IOException({{"errno", std::to_string(saved_errno)}},
+				                  "Could not ftruncate file \"%s\" to reserve size %llu: %s", path, mapping_size,
+				                  strerror(saved_errno));
+			}
+		}
+	} else {
+		mapping_size = initial_file_size;
+	}
+
+	data_ptr_t data = nullptr;
+	if (mapping_size > 0) {
+		int prot = PROT_READ | (open_write ? PROT_WRITE : 0);
+		void *mapped = mmap(nullptr, mapping_size, prot, MAP_SHARED, fd, 0);
+		if (mapped == MAP_FAILED) {
+			int saved_errno = errno;
+			close(fd);
+			throw IOException({{"errno", std::to_string(saved_errno)}}, "Could not mmap file \"%s\" (size=%llu): %s",
+			                  path, mapping_size, strerror(saved_errno));
+		}
+		data = data_ptr_cast(mapped);
+	}
+
+	return make_uniq<UnixMemoryMappedFile>(path, flags, fd, data, mapping_size);
+}
+
 #else
 
 constexpr char PIPE_PREFIX[] = "\\\\.\\pipe\\";
-
-static const std::wstring WINDOWS_LOCAL_LONG_PATH_PREFIX = L"\\\\?\\";
-static const std::wstring WINDOWS_UNC_LONG_PATH_PREFIX = L"\\\\?\\UNC\\";
 
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
 std::string LocalFileSystem::GetLastErrorAsString() {
@@ -1096,7 +1298,8 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		if (!extended_error.empty()) {
 			extended_error = "\n" + extended_error;
 		}
-		throw IOException("Cannot open file \"%s\": %s%s", path.c_str(), error, extended_error);
+		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+		throw IOException("Cannot open file \"%s\": %s%s", abs_path, error, extended_error);
 	}
 	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags);
 	if (flags.OpenForAppending()) {
@@ -1259,7 +1462,8 @@ void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<File
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
 	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to create directory \"%s\": %s", directory.c_str(), error);
+		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+		throw IOException("Failed to create directory \"%s\": %s", abs_path, error);
 	}
 }
 
@@ -1274,7 +1478,8 @@ static void DeleteDirectoryRecursive(FileSystem &fs, string directory, optional_
 	auto unicode_path = NormalizePathAndConvertToUnicode(fs, directory, opener);
 	if (!RemoveDirectoryW(unicode_path.c_str())) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to delete directory \"%s\": %s", directory, error);
+		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+		throw IOException("Failed to delete directory \"%s\": %s", abs_path, error);
 	}
 }
 
@@ -1292,7 +1497,8 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
 	if (!DeleteFileW(unicode_path.c_str())) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to delete file \"%s\": %s", filename, error);
+		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+		throw IOException("Failed to delete file \"%s\": %s", abs_path, error);
 	}
 }
 
@@ -1457,9 +1663,189 @@ string LocalFileSystem::MakePathAbsolute(const string &path_p, optional_ptr<File
 	return parsed_wd.Join(parsed.GetPath()).ToString();
 }
 
+//===----------------------------------------------------------------------===//
+// Memory-mapped files (Windows)
+//===----------------------------------------------------------------------===//
+class WindowsMemoryMappedFile : public MemoryMappedFile {
+public:
+	WindowsMemoryMappedFile(string path_p, FileOpenFlags flags_p, HANDLE file_handle_p, HANDLE mapping_handle_p,
+	                        data_ptr_t data_p, idx_t size_p);
+	~WindowsMemoryMappedFile() override;
+
+	void Sync() override;
+	bool Trim(idx_t offset, idx_t length) override;
+	void Close() override;
+
+private:
+	HANDLE file_handle;
+	HANDLE mapping_handle;
+};
+
+WindowsMemoryMappedFile::WindowsMemoryMappedFile(string path_p, FileOpenFlags flags_p, HANDLE file_handle_p,
+                                                 HANDLE mapping_handle_p, data_ptr_t data_p, idx_t size_p)
+    : MemoryMappedFile(std::move(path_p), flags_p, data_p, size_p), file_handle(file_handle_p),
+      mapping_handle(mapping_handle_p) {
+}
+
+WindowsMemoryMappedFile::~WindowsMemoryMappedFile() {
+	try {
+		WindowsMemoryMappedFile::Close();
+	} catch (...) {
+		// not allowed to throw in destructor
+	}
+}
+
+void WindowsMemoryMappedFile::Sync() {
+	if (data == nullptr || size == 0) {
+		return;
+	}
+	if (!FlushViewOfFile(data, size)) {
+		throw IOException("Could not FlushViewOfFile for \"%s\": %s", path, LocalFileSystem::GetLastErrorAsString());
+	}
+	if (!FlushFileBuffers(file_handle)) {
+		throw IOException("Could not FlushFileBuffers for \"%s\": %s", path, LocalFileSystem::GetLastErrorAsString());
+	}
+}
+
+bool WindowsMemoryMappedFile::Trim(idx_t offset, idx_t length) {
+	// FSCTL_SET_ZERO_DATA on NTFS sparse files would work; not implemented yet.
+	(void)offset;
+	(void)length;
+	return false;
+}
+
+void WindowsMemoryMappedFile::Close() {
+	if (data != nullptr) {
+		UnmapViewOfFile(data);
+		data = nullptr;
+		size = 0;
+	}
+	if (mapping_handle != nullptr) {
+		CloseHandle(mapping_handle);
+		mapping_handle = nullptr;
+	}
+	if (file_handle != nullptr && file_handle != INVALID_HANDLE_VALUE) {
+		CloseHandle(file_handle);
+		file_handle = nullptr;
+	}
+}
+
+unique_ptr<MemoryMappedFile> LocalFileSystem::MemoryMapFile(const OpenFileInfo &path_info, FileOpenFlags flags,
+                                                            const MMapOptions &options,
+                                                            optional_ptr<FileOpener> opener) {
+	auto path = ExpandPath(path_info.path, opener);
+	flags.Verify();
+
+	bool open_read = flags.OpenForReading();
+	bool open_write = flags.OpenForWriting();
+	DWORD desired_access;
+	DWORD share_mode;
+	DWORD creation_disposition = OPEN_EXISTING;
+
+	if (open_read && open_write) {
+		desired_access = GENERIC_READ | GENERIC_WRITE;
+	} else if (open_read) {
+		desired_access = GENERIC_READ;
+	} else {
+		throw InternalException("READ or READ+WRITE must be specified when memory-mapping a file");
+	}
+	// share_mode mirrors OpenFile's handling: write lock excludes, read lock blocks writers.
+	switch (flags.Lock()) {
+	case FileLockType::NO_LOCK:
+		share_mode = FILE_SHARE_READ | FILE_SHARE_WRITE;
+		break;
+	case FileLockType::READ_LOCK:
+		share_mode = FILE_SHARE_READ;
+		break;
+	case FileLockType::WRITE_LOCK:
+		share_mode = 0;
+		break;
+	default:
+		throw InternalException("Unknown FileLockType");
+	}
+	share_mode |= FILE_SHARE_DELETE;
+	if (open_write && flags.CreateFileIfNotExists()) {
+		creation_disposition = OPEN_ALWAYS;
+	}
+
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
+	HANDLE file_handle = CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition,
+	                                 FILE_ATTRIBUTE_NORMAL, NULL);
+	if (file_handle == INVALID_HANDLE_VALUE) {
+		if (flags.ReturnNullIfNotExists() && GetLastError() == ERROR_FILE_NOT_FOUND) {
+			return nullptr;
+		}
+		throw IOException("Cannot open file \"%s\" for memory mapping: %s", path,
+		                  LocalFileSystem::GetLastErrorAsString());
+	}
+
+	LARGE_INTEGER size_li;
+	if (!GetFileSizeEx(file_handle, &size_li)) {
+		auto err = LocalFileSystem::GetLastErrorAsString();
+		CloseHandle(file_handle);
+		throw IOException("Could not GetFileSizeEx for \"%s\": %s", path, err);
+	}
+	auto initial_file_size = NumericCast<idx_t>(size_li.QuadPart);
+
+	// Writable mappings sparsely extend the file to the reserve size so the region never
+	// needs to be remapped; read-only mappings just span the existing file.
+	idx_t mapping_size;
+	if (open_write) {
+		mapping_size = MaxValue<idx_t>(initial_file_size, options.reserve_size);
+		if (initial_file_size < mapping_size) {
+			// Sparse so the SetEndOfFile below doesn't allocate the untouched range.
+			DWORD bytes_returned = 0;
+			DeviceIoControl(file_handle, FSCTL_SET_SPARSE, NULL, 0, NULL, 0, &bytes_returned, NULL);
+			LARGE_INTEGER li;
+			li.QuadPart = static_cast<LONGLONG>(mapping_size);
+			if (!SetFilePointerEx(file_handle, li, NULL, FILE_BEGIN)) {
+				auto err = LocalFileSystem::GetLastErrorAsString();
+				CloseHandle(file_handle);
+				throw IOException("Could not SetFilePointerEx for \"%s\": %s", path, err);
+			}
+			if (!SetEndOfFile(file_handle)) {
+				auto err = LocalFileSystem::GetLastErrorAsString();
+				CloseHandle(file_handle);
+				throw IOException("Could not SetEndOfFile for \"%s\" (reserve_size=%llu): %s", path, mapping_size, err);
+			}
+		}
+	} else {
+		mapping_size = initial_file_size;
+	}
+
+	HANDLE mapping_handle = nullptr;
+	data_ptr_t data = nullptr;
+	if (mapping_size > 0) {
+		DWORD protect = open_write ? PAGE_READWRITE : PAGE_READONLY;
+		DWORD desired_map_access = open_write ? FILE_MAP_WRITE : FILE_MAP_READ;
+		DWORD high = static_cast<DWORD>((static_cast<uint64_t>(mapping_size) >> 32) & 0xFFFFFFFFULL);
+		DWORD low = static_cast<DWORD>(static_cast<uint64_t>(mapping_size) & 0xFFFFFFFFULL);
+		mapping_handle = CreateFileMappingW(file_handle, NULL, protect, high, low, NULL);
+		if (mapping_handle == NULL) {
+			auto err = LocalFileSystem::GetLastErrorAsString();
+			CloseHandle(file_handle);
+			throw IOException("Could not CreateFileMapping for \"%s\": %s", path, err);
+		}
+		void *mapped = MapViewOfFile(mapping_handle, desired_map_access, 0, 0, mapping_size);
+		if (mapped == NULL) {
+			auto err = LocalFileSystem::GetLastErrorAsString();
+			CloseHandle(mapping_handle);
+			CloseHandle(file_handle);
+			throw IOException("Could not MapViewOfFile for \"%s\": %s", path, err);
+		}
+		data = data_ptr_cast(mapped);
+	}
+
+	return make_uniq<WindowsMemoryMappedFile>(path, flags, file_handle, mapping_handle, data, mapping_size);
+}
+
 #endif
 
 bool LocalFileSystem::CanSeek() {
+	return true;
+}
+
+bool LocalFileSystem::SupportsPositionalWrites(FileHandle &handle) {
 	return true;
 }
 

@@ -2,9 +2,6 @@
 # description: Test unnest in having/qualfiy clauses
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 select 42 having unnest([1,2,3]);
 ----

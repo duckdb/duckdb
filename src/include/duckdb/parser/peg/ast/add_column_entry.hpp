@@ -4,20 +4,13 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/constraint.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 
 struct AddColumnEntry {
 	LogicalType type;
-	vector<string> column_path;
+	vector<Identifier> column_path;
 	unique_ptr<ParsedExpression> default_value;
-
-	AddColumnEntry Copy() {
-		AddColumnEntry result;
-		result.type = type;
-		result.column_path = column_path;
-		result.default_value = default_value->Copy();
-		return result;
-	}
 };
 
 } // namespace duckdb

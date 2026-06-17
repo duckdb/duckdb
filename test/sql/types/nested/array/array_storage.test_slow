@@ -4,9 +4,6 @@
 load {TEST_DIR}/temp_array_storage.db
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t1(i INT, a INT[3]);
 
 statement ok
@@ -19,7 +16,7 @@ statement ok
 checkpoint;
 
 query IIIIIIIIIIIIII rowsort
-SELECT * EXCLUDE (additional_block_ids, stats) FROM pragma_storage_info('t1');
+SELECT * EXCLUDE (additional_block_ids, stats) FROM pragma_storage_info('t1', include_segment_info=true);
 ----
 0	a	1	[1, 0]		0	VALIDITY	0	1	Constant		false	true	-1	0	(empty)
 0	a	1	[1, 1, 0]	0	VALIDITY	0	3	Constant		false	true	-1	0	(empty)

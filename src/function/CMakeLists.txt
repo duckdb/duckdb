@@ -16,6 +16,7 @@ add_library_unity(
   aggregate_function.cpp
   built_in_functions.cpp
   cast_rules.cpp
+  combine_types_rules.cpp
   compression_config.cpp
   copy_function.cpp
   encoding_function.cpp
@@ -30,7 +31,7 @@ add_library_unity(
   table_macro_function.cpp
   scalar_function.cpp
   table_function.cpp
-  udf_function.cpp
+  window_function.cpp
   copy_blob.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_function>

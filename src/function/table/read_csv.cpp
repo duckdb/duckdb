@@ -79,6 +79,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["rejects_table"] = LogicalType::VARCHAR;
 	table_function.named_parameters["rejects_scan"] = LogicalType::VARCHAR;
 	table_function.named_parameters["rejects_limit"] = LogicalType::BIGINT;
+	table_function.named_parameters["rejects_line_size_limit"] = LogicalType::BIGINT;
 	table_function.named_parameters["force_not_null"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
@@ -151,7 +152,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 
 TableFunction ReadCSVTableFunction::GetAutoFunction() {
 	auto read_csv_auto = ReadCSVTableFunction::GetFunction();
-	read_csv_auto.name = "read_csv_auto";
+	read_csv_auto.SetName("read_csv_auto");
 	return read_csv_auto;
 }
 
@@ -184,7 +185,7 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanI
 
 	if (!FileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		table_function->alias = fs.ExtractBaseName(table_name);
+		table_function->alias = Identifier(fs.ExtractBaseName(table_name));
 	}
 
 	return std::move(table_function);

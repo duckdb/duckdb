@@ -64,7 +64,6 @@ enum class RenderMode : uint32_t {
 	EXPLAIN,   /* Like RenderMode::Column, but do not truncate data */
 	DESCRIBE,  /* Special DESCRIBE Renderer */
 	ASCII,     /* Use ASCII unit and record separators (0x1F/0x1E) */
-	PRETTY,    /* Pretty-print schemas */
 	EQP,       /* Converts EXPLAIN QUERY PLAN output into a graph */
 	JSON,      /* Output JSON */
 	MARKDOWN,  /* Markdown formatting */
@@ -206,7 +205,7 @@ public:
 	string initFile;
 	bool run_init = true;
 	unique_ptr<duckdb::MaterializedQueryResult> last_result;
-	bool last_result_referenced;
+	bool last_result_referenced = false;
 	//! If the following flag is set, then command execution stops at an error
 	BailOnError bail = BailOnError::AUTOMATIC;
 	//! Controls automatic SQL formatting before execution
@@ -440,6 +439,8 @@ public:
 	static string ModeToString(RenderMode mode);
 	MetadataResult FormatSQL(string &sql);
 	void HighlightSQL(string &sql);
+	// Print a complete SQL statement directly to the output, applying syntax highlighting when appropriate
+	void PrintSQL(const string &sql);
 	string ReadFileContents(FILE *f);
 	string ReadFileContents(const string &filename);
 };

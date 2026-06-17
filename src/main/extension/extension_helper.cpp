@@ -1,6 +1,8 @@
 #include "duckdb/main/extension_helper.hpp"
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -46,10 +48,6 @@
 #define DUCKDB_EXTENSION_JSON_LINKED false
 #endif
 
-#ifndef DUCKDB_EXTENSION_JEMALLOC_LINKED
-#define DUCKDB_EXTENSION_JEMALLOC_LINKED false
-#endif
-
 #ifndef DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
 #define DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED false
 #endif
@@ -84,10 +82,6 @@
 #include "json_extension.hpp"
 #endif
 
-#if DUCKDB_EXTENSION_JEMALLOC_LINKED
-#include "jemalloc_extension.hpp"
-#endif
-
 #if DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
 #include "autocomplete_extension.hpp"
 #endif
@@ -108,7 +102,6 @@ static const DefaultExtension internal_extensions[] = {
     {"tpcds", "Adds TPC-DS data generation and query support", DUCKDB_EXTENSION_TPCDS_LINKED},
     {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", DUCKDB_EXTENSION_HTTPFS_LINKED},
     {"json", "Adds support for JSON operations", DUCKDB_EXTENSION_JSON_LINKED},
-    {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_EXTENSION_JEMALLOC_LINKED},
     {"autocomplete", "Adds support for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
     {"motherduck", "Enables motherduck integration with the system", false},
     {"mysql_scanner", "Adds support for connecting to a MySQL database", false},
@@ -126,8 +119,11 @@ static const DefaultExtension internal_extensions[] = {
     {"fts", "Adds support for Full-Text Search Indexes", false},
     {"ui", "Adds local UI for DuckDB", false},
     {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format", false},
+    {"quack", "The DuckDB 'Quack' Client/Server Protocol", false},
     {"vortex", "Adds support for reading and writing files using the Vortex file format", false},
     {"lance", "Adds support for querying Lance datasets", false},
+    {"avro", "Adds support for reading Avro files", false},
+    {"unity_catalog", "Adds support for connecting to Unity Catalog", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -219,7 +215,7 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(context, extension_name, options);
 		}
-		ExtensionHelper::LoadExternalExtension(context, extension_name);
+		ExtensionHelper::LoadExternalExtension(context, {extension_name});
 		return true;
 	} catch (...) {
 		return false;
@@ -249,7 +245,7 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 			ExtensionHelper::InstallExtension(instance, fs, extension_name, options);
 		}
 		if (Settings::Get<AutoloadKnownExtensionsSetting>(instance)) {
-			ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
+			ExtensionHelper::LoadExternalExtension(instance, fs, {extension_name});
 			return true;
 		}
 		return false;
@@ -264,7 +260,7 @@ bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance, 
 	}
 	try {
 		auto &fs = FileSystem::GetFileSystem(instance);
-		ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
+		ExtensionHelper::LoadExternalExtension(instance, fs, {extension_name});
 		return true;
 	} catch (...) {
 		return false;
@@ -353,7 +349,7 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &c
 	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
 
 #ifndef WASM_LOADABLE_EXTENSIONS
-	case_insensitive_set_t seen_extensions;
+	identifier_set_t seen_extensions;
 
 	// scan the install directory for installed extensions
 	auto ext_directory = ExtensionHelper::ExtensionDirectory(db, fs);
@@ -365,7 +361,7 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &c
 		auto extension_file_name = StringUtil::GetFileName(path);
 		auto extension_name = StringUtil::Split(extension_file_name, ".")[0];
 
-		seen_extensions.insert(extension_name);
+		seen_extensions.insert(Identifier(extension_name));
 
 		result.push_back(UpdateExtensionInternal(context, db, fs, fs.JoinPath(ext_directory, path), extension_name));
 	});
@@ -403,17 +399,17 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 	}
 	auto &dbconfig = DBConfig::GetConfig(db);
 	try {
-		auto fs = FileSystem::CreateLocal();
+		auto &fs = FileSystem::GetLocal(db);
 #ifndef DUCKDB_WASM
 		if (Settings::Get<AutoinstallKnownExtensionsSetting>(db)) {
 			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(repository_url);
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
-			ExtensionHelper::InstallExtension(db, *fs, extension_name, options);
+			ExtensionHelper::InstallExtension(db, fs, extension_name, options);
 		}
 #endif
-		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
+		ExtensionHelper::LoadExternalExtension(db, fs, {extension_name});
 		DUCKDB_LOG_INFO(db, "Loaded extension '%s'", extension_name);
 	} catch (std::exception &e) {
 		ErrorData error(e);

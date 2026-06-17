@@ -5,6 +5,7 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "include/icu-casts.hpp"
 #include "include/icu-datefunc.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
@@ -12,16 +13,6 @@
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
-
-template <typename T>
-static bool ICUIsFinite(const T &t) {
-	return true;
-}
-
-template <>
-bool ICUIsFinite(const timestamp_t &t) {
-	return Timestamp::IsFinite(t);
-}
 
 struct ICUTimeZoneData : public GlobalTableFunctionState {
 	ICUTimeZoneData() : tzs(icu::TimeZone::createEnumeration()) {
@@ -111,13 +102,12 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 		is_dst.Append(Value::BOOLEAN(dst_offset_ms != 0));
 		++index;
 	}
-	output.SetCardinality(index);
 }
 
 struct ICUFromNaiveTimestamp : public ICUDateFunc {
-	static inline timestamp_t Operation(icu::Calendar *calendar, timestamp_t naive) {
-		if (!ICUIsFinite(naive)) {
-			return naive;
+	static inline timestamp_tz_t Operation(icu::Calendar *calendar, timestamp_t naive) {
+		if (!naive.IsFinite()) {
+			return timestamp_tz_t(naive);
 		}
 
 		// Extract the parts from the "instant"
@@ -150,24 +140,46 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		return GetTime(calendar, micros);
 	}
 
-	struct CastTimestampUsToUs {
-		template <class SRC, class DST>
-		static inline DST Operation(SRC input) {
-			// no-op
-			return input;
+	static inline timestamp_tz_ns_t Operation(icu::Calendar *calendar, timestamp_ns_t naive) {
+		if (!naive.IsFinite()) {
+			return timestamp_tz_ns_t(naive);
 		}
-	};
 
-	template <class OP, class T = timestamp_t>
+		auto nanos = naive.value % Interval::NANOS_PER_MICRO;
+		timestamp_t micros(naive.value / Interval::NANOS_PER_MICRO);
+		timestamp_t cast(Operation(calendar, micros));
+
+		timestamp_ns_t result;
+		if (!Timestamp::TryFromTimestampNanos(cast, nanos, result)) {
+			throw ConversionException("ICU date overflows timestamp_ns range");
+		}
+		return timestamp_tz_ns_t(result);
+	}
+
+	template <class SRC, class DST>
 	static bool CastFromNaive(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
-		UnaryExecutor::Execute<T, timestamp_t>(source, result, count, [&](T input) {
-			return Operation(calendar.get(), OP::template Operation<T, timestamp_t>(input));
+		UnaryExecutor::Execute<SRC, DST>(source, result, count, [&](SRC input) {
+			using NAIVE = timebase_t<DST::PRECISION, false>;
+			return Operation(calendar.get(), Cast::Operation<SRC, NAIVE>(input));
 		});
 		return true;
+	}
+
+	template <typename SRC>
+	static BoundCastInfo BindCastFromNaiveType(BindCastInput &input, const LogicalType &target) {
+		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
+		switch (target.id()) {
+		case LogicalTypeId::TIMESTAMP_TZ:
+			return BoundCastInfo(CastFromNaive<SRC, timestamp_tz_t>, std::move(cast_data));
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+			return BoundCastInfo(CastFromNaive<SRC, timestamp_tz_ns_t>, std::move(cast_data));
+		default:
+			throw InternalException("Type %s not handled in BindCastFromNaiveType", LogicalTypeIdToString(target.id()));
+		}
 	}
 
 	static BoundCastInfo BindCastFromNaive(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
@@ -179,18 +191,17 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 			                      "has been disabled  - use \"AT TIME ZONE ...\"");
 		}
 
-		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP:
-			return BoundCastInfo(CastFromNaive<CastTimestampUsToUs>, std::move(cast_data));
+			return BindCastFromNaiveType<timestamp_t>(input, target);
 		case LogicalTypeId::TIMESTAMP_MS:
-			return BoundCastInfo(CastFromNaive<CastTimestampMsToUs>, std::move(cast_data));
+			return BindCastFromNaiveType<timestamp_ms_t>(input, target);
 		case LogicalTypeId::TIMESTAMP_NS:
-			return BoundCastInfo(CastFromNaive<CastTimestampNsToUs>, std::move(cast_data));
+			return BindCastFromNaiveType<timestamp_ns_t>(input, target);
 		case LogicalTypeId::TIMESTAMP_SEC:
-			return BoundCastInfo(CastFromNaive<CastTimestampSecToUs>, std::move(cast_data));
+			return BindCastFromNaiveType<timestamp_sec_t>(input, target);
 		case LogicalTypeId::DATE:
-			return BoundCastInfo(CastFromNaive<Cast, date_t>, std::move(cast_data));
+			return BindCastFromNaiveType<date_t>(input, target);
 		default:
 			throw InternalException("Type %s not handled in BindCastFromNaive", LogicalTypeIdToString(source.id()));
 		}
@@ -213,9 +224,9 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 };
 
 struct ICUToNaiveTimestamp : public ICUDateFunc {
-	static inline timestamp_t Operation(icu::Calendar *calendar, timestamp_t instant) {
-		if (!ICUIsFinite(instant)) {
-			return instant;
+	static inline timestamp_t Operation(icu::Calendar *calendar, timestamp_tz_t instant) {
+		if (!instant.IsFinite()) {
+			return timestamp_t(instant);
 		}
 
 		// Extract the time zone parts
@@ -247,22 +258,27 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		return naive;
 	}
 
-	struct CastTimestampUsToUs {
-		template <class SRC, class DST>
-		static inline DST Operation(SRC input) {
-			// no-op
-			return input;
+	static inline timestamp_ns_t Operation(icu::Calendar *calendar, timestamp_tz_ns_t instant) {
+		if (!instant.IsFinite()) {
+			return timestamp_ns_t(instant);
 		}
-	};
 
-	template <class OP, class TO = timestamp_t>
+		auto nanos = instant.value % Interval::NANOS_PER_MICRO;
+		timestamp_t micros(instant.value / Interval::NANOS_PER_MICRO);
+		auto cast = Operation(calendar, instant);
+
+		return timestamp_ns_t(cast.value * Interval::NANOS_PER_MICRO + nanos);
+	}
+
+	template <class SRC, class DST>
 	static bool CastToNaive(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
-		UnaryExecutor::Execute<timestamp_t, TO>(source, result, count, [&](timestamp_t input) {
-			return OP::template Operation<timestamp_t, TO>(Operation(calendar.get(), input));
+		UnaryExecutor::Execute<SRC, DST>(source, result, count, [&](SRC input) {
+			using NAIVE = timebase_t<SRC::PRECISION, false>;
+			return Cast::Operation<NAIVE, DST>(Operation(calendar.get(), input));
 		});
 		return true;
 	}
@@ -278,17 +294,28 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		}
 
 		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
-		switch (target.id()) {
-		case LogicalTypeId::TIMESTAMP:
-			return BoundCastInfo(CastToNaive<CastTimestampUsToUs>, std::move(cast_data));
-		case LogicalTypeId::TIMESTAMP_MS:
-			return BoundCastInfo(CastToNaive<CastTimestampUsToMs>, std::move(cast_data));
-		case LogicalTypeId::TIMESTAMP_NS:
-			return BoundCastInfo(CastToNaive<CastTimestampUsToNs>, std::move(cast_data));
-		case LogicalTypeId::TIMESTAMP_SEC:
-			return BoundCastInfo(CastToNaive<CastTimestampUsToSec>, std::move(cast_data));
-		case LogicalTypeId::DATE:
-			return BoundCastInfo(CastToNaive<Cast, date_t>, std::move(cast_data));
+
+		switch (source.id()) {
+		case LogicalTypeId::TIMESTAMP_TZ:
+			switch (target.id()) {
+			case LogicalType::TIMESTAMP:
+				return BoundCastInfo(CastToNaive<timestamp_tz_t, timestamp_t>, std::move(cast_data));
+			case LogicalType::TIMESTAMP_MS:
+				return BoundCastInfo(CastToNaive<timestamp_tz_t, timestamp_ms_t>, std::move(cast_data));
+			case LogicalType::TIMESTAMP_NS:
+				return BoundCastInfo(CastToNaive<timestamp_tz_t, timestamp_ns_t>, std::move(cast_data));
+			case LogicalType::TIMESTAMP_S:
+				return BoundCastInfo(CastToNaive<timestamp_tz_t, timestamp_sec_t>, std::move(cast_data));
+			default:
+				throw InternalException("Type %s not handled in BindCastToNaive", LogicalTypeIdToString(target.id()));
+			}
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+			switch (target.id()) {
+			case LogicalType::TIMESTAMP_NS:
+				return BoundCastInfo(CastToNaive<timestamp_tz_ns_t, timestamp_ns_t>, std::move(cast_data));
+			default:
+				throw InternalException("Type %s not handled in BindCastToNaive", LogicalTypeIdToString(target.id()));
+			}
 		default:
 			throw InternalException("Type %s not handled in BindCastToNaive", LogicalTypeIdToString(source.id()));
 		}
@@ -307,6 +334,8 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_MS);
 		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_NS);
 		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_S);
+
+		AddCast(casts, LogicalType::TIMESTAMP_TZ_NS, LogicalType::TIMESTAMP_NS);
 	}
 };
 
@@ -341,11 +370,11 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 
 	static timestamp_t GetLocalTimestamp(ExpressionState &state) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindDataNow>();
+		auto &info = func_expr.BindInfo()->Cast<BindDataNow>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
-		const auto now = info.now;
+		const auto now = timestamp_tz_t(info.now);
 		return ICUToNaiveTimestamp::Operation(calendar, now);
 	}
 
@@ -356,8 +385,8 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 		rdata[0] = GetLocalTimestamp(state);
 	}
 
-	static void AddFunction(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
+		ScalarFunctionSet set {name};
 		set.AddFunction(ScalarFunction({}, LogicalType::TIMESTAMP, Execute, BindNow));
 		loader.RegisterFunction(set);
 	}
@@ -372,8 +401,8 @@ struct ICULocalTimeFunc : public ICUDateFunc {
 		rdata[0] = Timestamp::GetTime(local);
 	}
 
-	static void AddFunction(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
+		ScalarFunctionSet set {name};
 		set.AddFunction(ScalarFunction({}, LogicalType::TIME, Execute, ICULocalTimestampFunc::BindNow));
 		loader.RegisterFunction(set);
 	}
@@ -392,8 +421,8 @@ dtime_tz_t ICUToTimeTZ::Operation(icu::Calendar *calendar, dtime_tz_t timetz) {
 	return dtime_tz_t(time, offset);
 }
 
-bool ICUToTimeTZ::ToTimeTZ(icu::Calendar *calendar, timestamp_t instant, dtime_tz_t &result) {
-	if (!ICUIsFinite(instant)) {
+bool ICUToTimeTZ::ToTimeTZ(icu::Calendar *calendar, timestamp_tz_t instant, dtime_tz_t &result) {
+	if (!instant.IsFinite()) {
 		return false;
 	}
 
@@ -423,16 +452,15 @@ bool ICUToTimeTZ::CastToTimeTZ(Vector &source, Vector &result, idx_t count, Cast
 	auto &info = cast_data.info->Cast<BindData>();
 	CalendarPtr calendar(info.calendar->clone());
 
-	UnaryExecutor::ExecuteWithNulls<timestamp_t, dtime_tz_t>(source, result, count,
-	                                                         [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
-		                                                         dtime_tz_t output;
-		                                                         if (ToTimeTZ(calendar.get(), input, output)) {
-			                                                         return output;
-		                                                         } else {
-			                                                         mask.SetInvalid(idx);
-			                                                         return dtime_tz_t();
-		                                                         }
-	                                                         });
+	UnaryExecutor::Execute<timestamp_tz_t, dtime_tz_t>(source, result, count,
+	                                                   [&](timestamp_tz_t input) -> optional<dtime_tz_t> {
+		                                                   dtime_tz_t output;
+		                                                   if (ToTimeTZ(calendar.get(), input, output)) {
+			                                                   return output;
+		                                                   } else {
+			                                                   return nullopt;
+		                                                   }
+	                                                   });
 	return true;
 }
 
@@ -485,44 +513,43 @@ void ICUToTimeTZ::AddCasts(ExtensionLoader &loader) {
 }
 
 struct ICUTimeZoneFunc : public ICUDateFunc {
-	template <typename OP, typename T>
+	template <typename OP, typename SRC, typename DST>
 	static void Execute(DataChunk &input, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
 		// Two cases: constant TZ, variable TZ
 		D_ASSERT(input.ColumnCount() == 2);
-		auto &tz_vec = input.data[0];
-		auto &ts_vec = input.data[1];
+		const auto &tz_vec = input.data[0];
+		const auto &ts_vec = input.data[1];
 		if (tz_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(tz_vec)) {
 				throw InternalException("ICUTimeZone called with constant NULL tz");
 			}
 			SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
-			UnaryExecutor::Execute<T, T>(ts_vec, result, input.size(),
-			                             [&](T ts) { return OP::Operation(calendar, ts); });
+			UnaryExecutor::Execute<SRC, DST>(ts_vec, result, [&](SRC ts) { return OP::Operation(calendar, ts); });
 		} else {
-			BinaryExecutor::Execute<string_t, T, T>(tz_vec, ts_vec, result, input.size(), [&](string_t tz_id, T ts) {
-				if (ICUIsFinite(ts)) {
+			BinaryExecutor::Execute<string_t, SRC, DST>(tz_vec, ts_vec, result, [&](string_t tz_id, SRC ts) {
+				if (ts.IsFinite()) {
 					SetTimeZone(calendar, tz_id);
 					return OP::Operation(calendar, ts);
 				} else {
-					return ts;
+					return Cast::Operation<SRC, DST>(ts);
 				}
 			});
 		}
 	}
 
-	static void AddFunction(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+	static void AddFunction(const Identifier &name, ExtensionLoader &loader) {
+		ScalarFunctionSet set {name};
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP_TZ,
-		                               Execute<ICUFromNaiveTimestamp, timestamp_t>, Bind));
+		                               Execute<ICUFromNaiveTimestamp, timestamp_t, timestamp_tz_t>, Bind));
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::TIMESTAMP,
-		                               Execute<ICUToNaiveTimestamp, timestamp_t>, Bind));
+		                               Execute<ICUToNaiveTimestamp, timestamp_tz_t, timestamp_t>, Bind));
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME_TZ}, LogicalType::TIME_TZ,
-		                               Execute<ICUToTimeTZ, dtime_tz_t>, Bind));
+		                               Execute<ICUToTimeTZ, dtime_tz_t, dtime_tz_t>, Bind));
 		for (auto &func : set.functions) {
 			func.SetFallible();
 		}
@@ -530,7 +557,7 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 	}
 };
 
-timestamp_t ICUDateFunc::FromNaive(icu::Calendar *calendar, timestamp_t naive) {
+timestamp_tz_t ICUDateFunc::FromNaive(icu::Calendar *calendar, timestamp_t naive) {
 	return ICUFromNaiveTimestamp::Operation(calendar, naive);
 }
 

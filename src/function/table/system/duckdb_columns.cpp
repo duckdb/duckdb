@@ -82,6 +82,12 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableF
 	names.emplace_back("tags");
 	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
 
+	names.emplace_back("is_generated");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
+	names.emplace_back("generation_expression");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	return nullptr;
 }
 
@@ -112,6 +118,8 @@ public:
 	virtual bool IsNullable(idx_t col) = 0;
 	virtual const Value ColumnComment(idx_t col) = 0;
 	virtual const Value ColumnTags(idx_t col) = 0;
+	virtual bool IsGenerated(idx_t col) = 0;
+	virtual const Value GenerationExpression(idx_t col) = 0;
 
 	void WriteColumns(idx_t start_col, idx_t end_col, DataChunk &output);
 };
@@ -156,6 +164,16 @@ public:
 	}
 	const Value ColumnTags(idx_t col) override {
 		return Value::MAP(entry.GetColumn(LogicalIndex(col)).Tags());
+	}
+	bool IsGenerated(idx_t col) override {
+		return entry.GetColumn(LogicalIndex(col)).Generated();
+	}
+	const Value GenerationExpression(idx_t col) override {
+		auto &column = entry.GetColumn(LogicalIndex(col));
+		if (!column.Generated()) {
+			return Value();
+		}
+		return Value(column.GeneratedExpression().ToString());
 	}
 
 private:
@@ -211,10 +229,16 @@ public:
 		InsertionOrderPreservingMap<string> empty;
 		return Value::MAP(empty);
 	}
+	bool IsGenerated(idx_t col) override {
+		return false;
+	}
+	const Value GenerationExpression(idx_t col) override {
+		return Value();
+	}
 
 private:
 	ViewCatalogEntry &entry;
-	vector<string> column_names;
+	vector<Identifier> column_names;
 	vector<LogicalType> types;
 	bool bound_view = false;
 };
@@ -270,6 +294,10 @@ void ColumnHelper::WriteColumns(idx_t start_col, idx_t end_col, DataChunk &outpu
 	auto &numeric_scale_col = output.data[17];
 	// tags, MAP(VARCHAR, VARCHAR)
 	auto &tags = output.data[18];
+	// is_generated, BOOLEAN
+	auto &is_generated = output.data[19];
+	// generation_expression, VARCHAR
+	auto &generation_expression = output.data[20];
 
 	for (idx_t i = start_col; i < end_col; i++) {
 		auto &entry = Entry();
@@ -345,6 +373,8 @@ void ColumnHelper::WriteColumns(idx_t start_col, idx_t end_col, DataChunk &outpu
 		numeric_precision_radix_col.Append(numeric_precision_radix);
 		numeric_scale_col.Append(numeric_scale);
 		tags.Append(ColumnTags(i));
+		is_generated.Append(Value::BOOLEAN(IsGenerated(i)));
+		generation_expression.Append(GenerationExpression(i));
 	}
 }
 
@@ -369,7 +399,6 @@ static void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &da
 		// Check to see if we are going to exceed the maximum index for a DataChunk
 		if (index + (columns - column_offset) > STANDARD_VECTOR_SIZE) {
 			idx_t column_limit = column_offset + (STANDARD_VECTOR_SIZE - index);
-			output.SetCardinality(STANDARD_VECTOR_SIZE);
 			column_helper->WriteColumns(column_offset, column_limit, output);
 
 			// Make the current column limit the column offset when we process the next chunk
@@ -378,13 +407,13 @@ static void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &da
 		} else {
 			// Otherwise, write all of the columns from the current relation and
 			// then move on to the next one.
-			output.SetCardinality(index + (columns - column_offset));
 			column_helper->WriteColumns(column_offset, columns, output);
 			index += columns - column_offset;
 			next++;
 			column_offset = 0;
 		}
 	}
+	// WriteColumns appends to the child vectors - record the resulting cardinality on the chunk
 	data.offset = next;
 	data.column_offset = column_offset;
 }

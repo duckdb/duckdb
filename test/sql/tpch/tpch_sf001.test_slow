@@ -2,16 +2,15 @@
 # description: Test TPC-H SF0.01
 # group: [tpch]
 
-require tpch
+set variable sf 0.01
+
+include test/sql/tpch/tpch_setup.test_template
 
 statement ok
-pragma verify_external
+SET debug_force_external=true;
 
 statement ok
-PRAGMA verify_serializer
-
-statement ok
-CALL dbgen(sf=0.01);
+SET debug_verify_serializer=true;
 
 loop i 1 9
 

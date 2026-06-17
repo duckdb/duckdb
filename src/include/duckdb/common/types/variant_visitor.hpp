@@ -33,6 +33,7 @@ public:
 	template <typename... Args>
 	static ReturnType Visit(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx, Args &&...args) {
 		if (!variant.RowIsValid(row)) {
+			VisitMetadata(VariantLogicalType::VARIANT_NULL, std::forward<Args>(args)...);
 			return Visitor::VisitNull(std::forward<Args>(args)...);
 		}
 
@@ -108,6 +109,8 @@ public:
 			return Visitor::VisitTimestampNanos(Load<timestamp_ns_t>(ptr), std::forward<Args>(args)...);
 		case VariantLogicalType::TIMESTAMP_MICROS_TZ:
 			return Visitor::VisitTimestampTZ(Load<timestamp_tz_t>(ptr), std::forward<Args>(args)...);
+		case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+			return Visitor::VisitTimestampTZNanos(Load<timestamp_tz_ns_t>(ptr), std::forward<Args>(args)...);
 		default:
 			return Visitor::VisitDefault(type_id, ptr, std::forward<Args>(args)...);
 		}

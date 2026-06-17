@@ -297,6 +297,27 @@ def create_function_comment(function_obj):
     return result
 
 
+def create_parameter_list(function_obj):
+    params = function_obj.get('params', [])
+    if len(params) == 0:
+        return 'void'
+
+    result = ''
+    for param in params:
+        param_type = param['type']
+        param_name = param['name']
+        result += f'{param_type}'
+        if result[-1] != '*':
+            result += ' '
+        result += f'{param_name}, '
+    return result[:-2]  # Trailing comma
+
+
+def create_argument_list(function_obj):
+    params = function_obj.get('params', [])
+    return ', '.join(param['name'] for param in params)
+
+
 # Creates the function declaration for the regular C header file
 def create_function_declaration(function_obj):
     result = ''
@@ -308,17 +329,7 @@ def create_function_declaration(function_obj):
     if result[-1] != '*':
         result += ' '
     result += f'{function_name}('
-
-    if 'params' in function_obj:
-        if len(function_obj['params']) > 0:
-            for param in function_obj['params']:
-                param_type = param['type']
-                param_name = param['name']
-                result += f'{param_type}'
-                if result[-1] != '*':
-                    result += ' '
-                result += f'{param_name}, '
-            result = result[:-2]  # Trailing comma
+    result += create_parameter_list(function_obj)
     result += ');\n'
 
     return result
@@ -331,13 +342,7 @@ def create_struct_member(function_obj):
     function_name = function_obj['name']
     function_return_type = function_obj['return_type']
     result += f'    {function_return_type} (*{function_name})('
-    if 'params' in function_obj:
-        if len(function_obj['params']) > 0:
-            for param in function_obj['params']:
-                param_type = param['type']
-                param_name = param['name']
-                result += f'{param_type} {param_name},'
-            result = result[:-1]  # Trailing comma
+    result += create_parameter_list(function_obj)
     result += ');'
 
     return result
@@ -564,23 +569,10 @@ def create_struct_member_invoker(function_obj):
     if result[-1] != '*':
         result += ' '
     result += f'{function_name}('
-    invoked_params = ''
-
-    if 'params' in function_obj:
-        if len(function_obj['params']) > 0:
-            for param in function_obj['params']:
-                param_type = param['type']
-                param_name = param['name']
-                result += f'{param_type}'
-                if result[-1] != '*':
-                    result += ' '
-                result += f'{param_name}, '
-                invoked_params += f'{param_name}, '
-            result = result[:-2]  # Trailing comma
+    result += create_parameter_list(function_obj)
     result += ') {\n'
 
-    if invoked_params != '':
-        invoked_params = invoked_params[:-2]  # Trailing comma
+    invoked_params = create_argument_list(function_obj)
     result += f'\treturn duckdb_ext_api->{function_name}({invoked_params}); \n'
     result += '}'
     return result
@@ -705,7 +697,7 @@ def create_extension_api_struct(
 
     if with_create_method:
         extension_struct_finished += COMMENT_HEADER("Struct Create Method")
-        extension_struct_finished += f"inline {DUCKDB_EXT_API_STRUCT_TYPENAME} {create_method_name}() {{\n"
+        extension_struct_finished += f"inline {DUCKDB_EXT_API_STRUCT_TYPENAME} {create_method_name}(void) {{\n"
         extension_struct_finished += f"    {DUCKDB_EXT_API_STRUCT_TYPENAME} result;\n"
 
         for api_version_entry in api_definition:
@@ -849,15 +841,25 @@ def create_duckdb_c_ext_h(file, ext_api_version, function_groups, api_struct_def
         typedefs += '\n'
 
     duckdb_ext_h += COMMENT_HEADER("Typedefs mapping functions to struct entries")
+    duckdb_ext_h += "// When building as a static extension, DuckDB symbols are resolved directly at link time.\n"
+    duckdb_ext_h += "// The vtable (duckdb_ext_api) is not used - skip these macro redirections.\n"
+    duckdb_ext_h += "#ifndef DUCKDB_BUILD_STATIC_EXTENSION\n"
     duckdb_ext_h += typedefs
+    duckdb_ext_h += "#endif // DUCKDB_BUILD_STATIC_EXTENSION\n"
     duckdb_ext_h += "\n"
 
     # Add The struct global macros
     duckdb_ext_h += COMMENT_HEADER("Struct Global Macros")
-    duckdb_ext_h += f"""// This goes in the c/c++ file containing the entrypoint (handle
+    duckdb_ext_h += f"""#ifdef DUCKDB_BUILD_STATIC_EXTENSION
+// No vtable global needed for static builds - DuckDB symbols are resolved directly at link time
+#define DUCKDB_EXTENSION_GLOBAL
+#define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version)
+#else
+// This goes in the c/c++ file containing the entrypoint (handle
 #define DUCKDB_EXTENSION_GLOBAL {DUCKDB_EXT_API_STRUCT_TYPENAME} {DUCKDB_EXT_API_VAR_NAME} = {{0}};
 // Initializes the C Extension API: First thing to call in the extension entrypoint
 #define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version) {DUCKDB_EXT_API_STRUCT_TYPENAME} * res = ({DUCKDB_EXT_API_STRUCT_TYPENAME} *)access->get_api(info, minimum_api_version); if (!res) {{return false;}}; {DUCKDB_EXT_API_VAR_NAME} = *res;
+#endif // DUCKDB_BUILD_STATIC_EXTENSION
 """
     duckdb_ext_h += f"""
 // Place in global scope of any C/C++ file that needs to access the extension API

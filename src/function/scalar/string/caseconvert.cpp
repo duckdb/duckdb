@@ -107,7 +107,7 @@ struct CaseConvertOperator {
 
 template <bool IS_UPPER>
 static void CaseConvertFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperator<IS_UPPER>>(args.data[0], result, args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperator<IS_UPPER>>(args.data[0], result);
 }
 
 namespace {
@@ -124,8 +124,7 @@ struct CaseConvertOperatorASCII {
 
 template <bool IS_UPPER>
 static void CaseConvertFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperatorASCII<IS_UPPER>>(args.data[0], result,
-	                                                                                     args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperatorASCII<IS_UPPER>>(args.data[0], result);
 }
 
 template <bool IS_UPPER>
@@ -135,7 +134,7 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.SetFunctionCallback(CaseConvertFunctionASCII<IS_UPPER>);
+		expr.FunctionMutable().SetFunctionCallback(CaseConvertFunctionASCII<IS_UPPER>);
 	}
 	return nullptr;
 }

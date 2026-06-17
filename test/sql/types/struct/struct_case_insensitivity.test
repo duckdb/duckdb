@@ -3,9 +3,6 @@
 # group: [struct]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl AS SELECT ({'HELLO': 3}) col;
 
 query I

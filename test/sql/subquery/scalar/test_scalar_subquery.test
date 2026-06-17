@@ -2,9 +2,6 @@
 # description: Test subqueries
 # group: [scalar]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT 1+(SELECT 1)
 ----
@@ -35,6 +32,34 @@ query I
 SELECT (SELECT 42)
 ----
 42
+
+statement ok
+PRAGMA explain_output='optimized_only'
+
+query II
+EXPLAIN SELECT (SELECT 42)
+----
+logical_opt	<!REGEX>:.*AGGREGATE.*
+
+query II
+EXPLAIN SELECT (SELECT 42 LIMIT 1)
+----
+logical_opt	<!REGEX>:.*AGGREGATE.*
+
+query II
+EXPLAIN SELECT (SELECT NULL)
+----
+logical_opt	<REGEX>:.*AGGREGATE.*
+
+query I
+SELECT (SELECT 42 WHERE false LIMIT 1)
+----
+NULL
+
+query II
+EXPLAIN SELECT (SELECT 42 WHERE false LIMIT 1)
+----
+logical_opt	<REGEX>:.*AGGREGATE.*
 
 # nested subquery
 query I

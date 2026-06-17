@@ -2,13 +2,12 @@
 # description: Test TPC-H SF1
 # group: [tpch]
 
-require tpch
+set variable sf 1
+
+include test/sql/tpch/tpch_setup.test_template
 
 statement ok
-pragma verify_external
-
-statement ok
-CALL dbgen(sf=1);
+SET debug_force_external=true;
 
 loop i 1 9
 

@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -122,8 +123,6 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_AGGREGATE:
 		return PropagateExpression(expr.Cast<BoundAggregateExpression>(), expr_ptr);
-	case ExpressionClass::BOUND_BETWEEN:
-		return PropagateExpression(expr.Cast<BoundBetweenExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CASE:
 		return PropagateExpression(expr.Cast<BoundCaseExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CONJUNCTION:
@@ -132,8 +131,6 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 		return PropagateExpression(expr.Cast<BoundFunctionExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CAST:
 		return PropagateExpression(expr.Cast<BoundCastExpression>(), expr_ptr);
-	case ExpressionClass::BOUND_COMPARISON:
-		return PropagateExpression(expr.Cast<BoundComparisonExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CONSTANT:
 		return PropagateExpression(expr.Cast<BoundConstantExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_COLUMN_REF:
@@ -149,8 +146,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(unique_ptr<Expression> &expr) {
 	auto stats = PropagateExpression(*expr, expr);
-	if (ClientConfig::GetConfig(context).query_verification_enabled && stats) {
-		expr->verification_stats = stats->ToUnique();
+	if (Settings::Get<DebugVerifyStatsSetting>(context) && stats) {
+		expr->SetVerificationStats(stats->ToUnique());
 	}
 	return stats;
 }

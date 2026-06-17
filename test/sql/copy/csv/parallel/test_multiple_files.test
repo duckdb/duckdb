@@ -6,9 +6,6 @@
 statement ok
 PRAGMA verify_parallelism
 
-statement ok
-PRAGMA enable_verification
-
 query IIII rowsort
 select * from read_csv_auto('{DATA_DIR}/csv/auto/glob/[0-9].csv');
 ----

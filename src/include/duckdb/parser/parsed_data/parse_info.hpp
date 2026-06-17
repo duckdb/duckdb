@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/common/identifier.hpp"
 
 namespace duckdb {
 
@@ -32,7 +33,9 @@ enum class ParseInfoType : uint8_t {
 	COMMENT_ON_INFO,
 	COMMENT_ON_COLUMN_INFO,
 	COPY_DATABASE_INFO,
-	UPDATE_EXTENSIONS_INFO
+	UPDATE_EXTENSIONS_INFO,
+	CONNECT_INFO,
+	DISCONNECT_INFO
 };
 
 struct ParseInfo {
@@ -58,7 +61,7 @@ public:
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
-	static string QualifierToString(const string &catalog, const string &schema, const string &name);
+	static string QualifierToString(const Identifier &catalog, const Identifier &schema, const Identifier &name);
 	static string TypeToString(CatalogType type);
 };
 

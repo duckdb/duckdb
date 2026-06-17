@@ -50,7 +50,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		auto &extra_info = info->extra_drop_info->Cast<ExtraDropSecretInfo>();
 		SecretManager::Get(context.client)
 		    .DropSecretByName(context.client, info->name, info->if_not_found, extra_info.persist_mode,
-		                      extra_info.secret_storage);
+		                      Identifier(extra_info.secret_storage));
 		break;
 	}
 	case CatalogType::TRIGGER_ENTRY: {

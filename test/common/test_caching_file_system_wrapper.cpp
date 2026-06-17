@@ -1,16 +1,12 @@
 #include "catch.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/common/local_file_system.hpp"
+#include "caching_test_utils.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/opener_file_system.hpp"
-#include "duckdb/common/string.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
-#include "test_helpers.hpp"
 
 #include <thread>
 
@@ -20,30 +16,9 @@ namespace duckdb {
 // Test Utilities
 //===----------------------------------------------------------------------===//
 
+using TestFileGuard = CachingTestFileGuard;
+
 constexpr idx_t TEST_BUFFER_SIZE = 200;
-
-// RAII wrapper for test file creation and cleanup
-class TestFileGuard {
-public:
-	TestFileGuard(const string &filename, const string &content) : file_path(TestCreatePath(filename)) {
-		auto local_fs = FileSystem::CreateLocal();
-		auto handle = local_fs->OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-		handle->Write(QueryContext(), const_cast<char *>(content.data()), content.size(), 0);
-		handle->Sync();
-	}
-
-	~TestFileGuard() {
-		auto local_fs = FileSystem::CreateLocal();
-		local_fs->TryRemoveFile(file_path);
-	}
-
-	const string &GetPath() const {
-		return file_path;
-	}
-
-private:
-	string file_path;
-};
 
 class FailingFileSystem : public LocalFileSystem {
 public:
@@ -186,7 +161,7 @@ public:
 //===----------------------------------------------------------------------===//
 
 TEST_CASE("CachingFileSystemWrapper write operations not allowed", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto caching_wrapper =
@@ -230,7 +205,7 @@ TEST_CASE("CachingFileSystemWrapper write operations not allowed", "[file_system
 }
 
 TEST_CASE("CachingFileSystemWrapper caches reads", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto tracking_fs_ptr = tracking_fs.get();
@@ -314,7 +289,7 @@ TEST_CASE("CachingFileSystemWrapper caches reads", "[file_system][caching]") {
 }
 
 TEST_CASE("CachingFileSystemWrapper sequential reads", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto tracking_fs_ptr = tracking_fs.get();
@@ -345,7 +320,7 @@ TEST_CASE("CachingFileSystemWrapper sequential reads", "[file_system][caching]")
 }
 
 TEST_CASE("CachingFileSystemWrapper seek operations", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto caching_wrapper =
@@ -424,7 +399,7 @@ TEST_CASE("CachingFileSystemWrapper seek operations", "[file_system][caching]") 
 }
 
 TEST_CASE("CachingFileSystemWrapper list operations", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto caching_wrapper =
@@ -470,7 +445,7 @@ TEST_CASE("CachingFileSystemWrapper list operations", "[file_system][caching]") 
 }
 
 TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto caching_wrapper =
@@ -527,7 +502,7 @@ TEST_CASE("Open file in opener filesystem cache modes", "[file_system][caching]"
 	const string test_content = "File used for caching enabled testing";
 	TestFileGuard test_file("test_caching_parallel.txt", test_content);
 
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
 	auto &vfs = opener_filesystem.GetFileSystem();
@@ -568,7 +543,7 @@ TEST_CASE("Request over-sized range read", "[file_system][caching]") {
 	const string test_content = "File used for over-sized read testing";
 	TestFileGuard test_file("test_oversized_read.txt", test_content);
 
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto &opener_filesystem = db_instance.GetFileSystem().Cast<OpenerFileSystem>();
 	auto &vfs = opener_filesystem.GetFileSystem();
@@ -586,7 +561,7 @@ TEST_CASE("Request over-sized range read", "[file_system][caching]") {
 }
 
 TEST_CASE("CachingFileSystemWrapper concurrent reads same block", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto tracking_fs_ptr = tracking_fs.get();
@@ -632,7 +607,7 @@ TEST_CASE("CachingFileSystemWrapper concurrent reads same block", "[file_system]
 }
 
 TEST_CASE("CachingFileSystemWrapper IO error propagates to waiters", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto failing_fs = make_uniq<FailingFileSystem>();
 	auto failing_fs_ptr = failing_fs.get();
@@ -676,7 +651,7 @@ TEST_CASE("CachingFileSystemWrapper IO error propagates to waiters", "[file_syst
 }
 
 TEST_CASE("CachingFileSystemWrapper transient IO error recovery", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto failing_fs = make_uniq<FailingFileSystem>();
 	auto failing_fs_ptr = failing_fs.get();
@@ -709,7 +684,7 @@ TEST_CASE("CachingFileSystemWrapper transient IO error recovery", "[file_system]
 }
 
 TEST_CASE("CachingFileSystemWrapper zero-byte read", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 	auto caching_wrapper =
@@ -730,7 +705,7 @@ TEST_CASE("CachingFileSystemWrapper zero-byte read", "[file_system][caching]") {
 }
 
 TEST_CASE("CachingFileSystemWrapper does not overflow on ninfinity last_modified", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto no_meta_fs = make_uniq<NoMetadataFileSystem>();
 	auto caching_wrapper =
@@ -750,11 +725,11 @@ TEST_CASE("CachingFileSystemWrapper does not overflow on ninfinity last_modified
 //===----------------------------------------------------------------------===//
 
 TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 
-	const idx_t BLOCK_SIZE = ExternalFileCache::LOCAL_FILE_CACHE_BLOCK_SIZE;
+	const idx_t BLOCK_SIZE = db_instance.GetExternalFileCache().GetCacheBlockSize(TestDirectoryPath());
 	const idx_t EXTRA = 100;
 	const idx_t FILE_SIZE = BLOCK_SIZE + EXTRA;
 
@@ -841,7 +816,7 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 }
 
 TEST_CASE("CachingFileHandle EOF read behavior", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 
@@ -883,12 +858,12 @@ TEST_CASE("CachingFileHandle EOF read behavior", "[file_system][caching]") {
 }
 
 TEST_CASE("Fully cached read skips doesn't open file", "[file_system][caching]") {
-	DuckDB db(":memory:");
+	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto counting_fs = make_uniq<CountingFileSystem>();
 	auto *counting_fs_ptr = counting_fs.get();
 
-	const idx_t BLOCK_SIZE = ExternalFileCache::LOCAL_FILE_CACHE_BLOCK_SIZE;
+	const idx_t BLOCK_SIZE = db_instance.GetExternalFileCache().GetCacheBlockSize(TestDirectoryPath());
 	const idx_t FILE_SIZE = BLOCK_SIZE;
 
 	string content(FILE_SIZE, 'X');
