@@ -849,9 +849,7 @@ void ColumnReader::DirectFilter(ColumnReaderInput &input, Vector &result, const 
 void ColumnReader::ApplyFilter(Vector &v, const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
                                SelectionVector &sel, idx_t &approved_tuple_count) {
 	FlatVector::SetSize(v, count_t(scan_count));
-	UnifiedVectorFormat vdata;
-	v.ToUnifiedFormat(vdata);
-	ColumnSegment::FilterSelection(sel, v, vdata, filter, filter_state, scan_count, approved_tuple_count);
+	ColumnSegment::FilterSelection(sel, v, filter_state, scan_count, approved_tuple_count);
 }
 
 void ColumnReader::Skip(idx_t num_values) {
