@@ -408,7 +408,10 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	}
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
-			throw InvalidInputException("Failed to read file \"%s\": Page size mismatch", Reader().GetFileName());
+			const auto &file_name = Reader().GetFileName();
+			throw InvalidInputException(
+			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
+			    page_hdr.uncompressed_page_size, page_hdr.compressed_page_size);
 		}
 		uncompressed = true;
 	}
@@ -467,7 +470,10 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (compressed_page_size != NumericCast<uint32_t>(page_hdr.uncompressed_page_size)) {
-			throw InternalException("Page size mismatch");
+			const auto &file_name = Reader().GetFileName();
+			throw InvalidInputException(
+			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
+			    page_hdr.uncompressed_page_size, compressed_page_size);
 		}
 		ReadData(block->ptr, compressed_page_size, page_hdr.type);
 		return;
