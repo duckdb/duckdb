@@ -548,13 +548,36 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	if (from.empty()) {
 		throw InternalException("Invalid argument to StringUtil::Replace - empty FROM");
 	}
+	if (source.empty() || from == to) {
+		return source;
+	}
+
+	const auto from_length = from.length();
+	const auto to_length = to.length();
+
+	idx_t match_count = 0;
 	idx_t start_pos = 0;
 	while ((start_pos = source.find(from, start_pos)) != string::npos) {
-		source.replace(start_pos, from.length(), to);
-		start_pos += to.length(); // In case 'to' contains 'from', like
-		                          // replacing 'x' with 'yx'
+		match_count++;
+		start_pos += from_length;
 	}
-	return source;
+	if (match_count == 0) {
+		return source;
+	}
+
+	string result;
+	result.reserve(source.length() - match_count * from_length + match_count * to_length);
+
+	idx_t last_pos = 0;
+	start_pos = 0;
+	while ((start_pos = source.find(from, start_pos)) != string::npos) {
+		result.append(source, last_pos, start_pos - last_pos);
+		result += to;
+		start_pos += from_length;
+		last_pos = start_pos;
+	}
+	result.append(source, last_pos, string::npos);
+	return result;
 }
 
 vector<string> StringUtil::TopNStrings(vector<pair<string, double>> scores, idx_t n, double threshold) {
