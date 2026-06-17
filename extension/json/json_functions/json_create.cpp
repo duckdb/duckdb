@@ -703,8 +703,25 @@ static void CreateValuesTimestamp(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 		CreateValuesFromDefaultCast(doc, vals, value_v, count);
 		return;
 	}
+	if (value_v.GetType().id() != LogicalTypeId::TIMESTAMP) {
+		Vector timestamp_vector(LogicalType::TIMESTAMP, count);
+		VectorOperations::DefaultCast(value_v, timestamp_vector, count);
+		CreateValuesTimestamp(doc, vals, timestamp_vector, count, options);
+		return;
+	}
 	Vector string_vector(LogicalType::VARCHAR, count);
 	options.timestamp_format.get_mutable()->ConvertTimestampVector(value_v, string_vector);
+	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
+}
+
+static void CreateValuesTimestampNS(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
+                                    const JSONCopyFormatOptions &options) {
+	if (!options.timestamp_format) {
+		CreateValuesFromDefaultCast(doc, vals, value_v, count);
+		return;
+	}
+	Vector string_vector(LogicalType::VARCHAR, count);
+	options.timestamp_format.get_mutable()->ConvertTimestampNSVector(value_v, string_vector);
 	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
 }
 
@@ -797,7 +814,12 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		CreateValuesDate(doc, vals, value_v, count, options);
 		break;
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_SEC:
 		CreateValuesTimestamp(doc, vals, value_v, count, options);
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		CreateValuesTimestampNS(doc, vals, value_v, count, options);
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ:
 		CreateValuesTimestampTZ(doc, vals, value_v, count, options);
@@ -811,9 +833,6 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ_NS:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::GEOMETRY: {
 		CreateValuesFromDefaultCast(doc, vals, value_v, count);

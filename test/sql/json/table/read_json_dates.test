@@ -304,7 +304,7 @@ COPY (
         TIMESTAMP_MS '2026-01-02 03:04:05.123' AS ts_ms,
         TIMESTAMP_S '2026-01-02 03:04:05' AS ts_s,
         TIME '03:04:05' AS t
-) TO '{TEMP_DIR}/timestampformat_unchanged_types.json' (FORMAT JSON, timestampformat '%Y/%m/%d %H:%M');
+) TO '{TEMP_DIR}/timestampformat_timestamp_variants.json' (FORMAT JSON, timestampformat '%Y/%m/%d %H:%M');
 
 query IIII
 SELECT
@@ -312,9 +312,9 @@ SELECT
     json_extract_string(json, '$.ts_ms') AS ts_ms,
     json_extract_string(json, '$.ts_s') AS ts_s,
     json_extract_string(json, '$.t') AS t
-FROM read_json_objects('{TEMP_DIR}/timestampformat_unchanged_types.json');
+FROM read_json_objects('{TEMP_DIR}/timestampformat_timestamp_variants.json');
 ----
-2026-01-02 03:04:05.123456789	2026-01-02 03:04:05.123	2026-01-02 03:04:05	03:04:05
+2026/01/02 03:04	2026/01/02 03:04	2026/01/02 03:04	03:04:05
 
 statement ok
 COPY (
