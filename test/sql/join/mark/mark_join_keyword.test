@@ -136,6 +136,37 @@ UNION ALL
  EXCEPT SELECT a, NOT m FROM (SELECT * FROM l MARK JOIN r ON (a = b)) x(a, m));
 ----
 
+# show the actual marker next to the IN result, right side WITHOUT a NULL
+# (marker column: true on match, false on no-match, NULL when the left value is NULL)
+statement ok
+DELETE FROM r;
+
+statement ok
+INSERT INTO r VALUES (2), (3);
+
+query ITT
+SELECT a, mark_marker, a IN (SELECT b FROM r) AS in_result
+FROM (SELECT * FROM l MARK JOIN r ON (a = b)) x(a, mark_marker)
+ORDER BY a NULLS LAST;
+----
+1	false	false
+2	true	true
+NULL	NULL	NULL
+
+# show the actual marker next to the IN result, right side WITH a NULL
+# (a non-matching, non-NULL left value now yields NULL instead of false)
+statement ok
+INSERT INTO r VALUES (NULL);
+
+query ITT
+SELECT a, mark_marker, a IN (SELECT b FROM r) AS in_result
+FROM (SELECT * FROM l MARK JOIN r ON (a = b)) x(a, mark_marker)
+ORDER BY a NULLS LAST;
+----
+1	NULL	NULL
+2	true	true
+NULL	NULL	NULL
+
 # like SEMI/ANTI, MARK is still usable as a quoted identifier
 statement ok
 CREATE TABLE "mark"("mark" INTEGER);
