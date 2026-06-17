@@ -528,13 +528,13 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCallStatementIn
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformCheckpointStatementInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	bool checkpoint_force {};
+	optional<bool> checkpoint_force {};
 	auto &checkpoint_force_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
 	if (checkpoint_force_opt.HasResult()) {
 		auto checkpoint_force_value = transformer.Transform<bool>(checkpoint_force_opt.GetResult());
 		checkpoint_force = checkpoint_force_value;
 	}
-	Identifier catalog_name {};
+	optional<Identifier> catalog_name {};
 	auto &catalog_name_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (catalog_name_opt.HasResult()) {
 		auto catalog_name_value = catalog_name_opt.GetResult().Cast<IdentifierParseResult>().identifier;
@@ -3387,7 +3387,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateRecursive
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformDeallocateStatementInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	bool deallocate_prepare {};
+	optional<bool> deallocate_prepare {};
 	auto &deallocate_prepare_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (deallocate_prepare_opt.HasResult()) {
 		auto deallocate_prepare_value = transformer.Transform<bool>(deallocate_prepare_opt.GetResult());
@@ -3974,7 +3974,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExecuteStatemen
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto identifier = list_pr.GetChild(1).Cast<IdentifierParseResult>().identifier;
-	vector<FunctionArgument> table_function_arguments {};
+	optional<vector<FunctionArgument>> table_function_arguments {};
 	auto &table_function_arguments_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (table_function_arguments_opt.HasResult()) {
 		auto table_function_arguments_value =
@@ -7083,7 +7083,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformLoadStatementIn
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto col_id_or_string = transformer.Transform<Identifier>(list_pr.GetChild(1));
-	Identifier extension_alias {};
+	optional<Identifier> extension_alias {};
 	auto &extension_alias_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (extension_alias_opt.HasResult()) {
 		auto extension_alias_value = transformer.Transform<Identifier>(extension_alias_opt.GetResult());
@@ -7104,20 +7104,24 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExtensionAliasI
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformInstallStatementInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
 	auto identifier_or_string_literal = transformer.Transform<QualifiedName>(list_pr.GetChild(2));
-	ExtensionRepositoryInfo from_source {};
+	optional<ExtensionRepositoryInfo> from_source {};
 	auto &from_source_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (from_source_opt.HasResult()) {
 		auto from_source_value = transformer.Transform<ExtensionRepositoryInfo>(from_source_opt.GetResult());
 		from_source = from_source_value;
 	}
-	string version_number {};
+	optional<string> version_number {};
 	auto &version_number_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
 	if (version_number_opt.HasResult()) {
 		auto version_number_value = transformer.Transform<string>(version_number_opt.GetResult());
 		version_number = version_number_value;
 	}
-	auto result = TransformInstallStatement(transformer, identifier_or_string_literal, from_source, version_number);
+	auto result =
+	    TransformInstallStatement(transformer, has_result, identifier_or_string_literal, from_source, version_number);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
@@ -7125,7 +7129,7 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformUpdateExtensionsStatementInternal(PEGTransformer &transformer,
                                                                   ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<Identifier> identifier {};
+	optional<vector<Identifier>> identifier {};
 	auto &identifier_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (identifier_opt.HasResult()) {
 		vector<Identifier> identifier_value;
@@ -7584,7 +7588,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPragmaFunctionI
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto pragma_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
-	vector<unique_ptr<ParsedExpression>> pragma_parameters {};
+	optional<vector<unique_ptr<ParsedExpression>>> pragma_parameters {};
 	auto &pragma_parameters_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (pragma_parameters_opt.HasResult()) {
 		auto pragma_parameters_value =
@@ -9706,7 +9710,7 @@ PEGTransformerFactory::TransformUseTargetCatalogSchemaInternal(PEGTransformer &t
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto catalog_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	auto reserved_schema_name = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;
-	vector<Identifier> dot_identifier {};
+	optional<vector<Identifier>> dot_identifier {};
 	auto &dot_identifier_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (dot_identifier_opt.HasResult()) {
 		vector<Identifier> dot_identifier_value;
