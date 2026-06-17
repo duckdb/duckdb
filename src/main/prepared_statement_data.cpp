@@ -86,8 +86,7 @@ void PreparedStatementData::PopulateMissingParameterValues(ClientContext &contex
 		Value variable_value;
 		const bool can_read_user_variable =
 		    allow_user_variables && PreparedStatement::AllowsUserVariableFallback(entry.first);
-		if (can_read_user_variable &&
-		    ClientConfig::GetConfig(context).GetUserVariable(entry.first, variable_value)) {
+		if (can_read_user_variable && ClientConfig::GetConfig(context).GetUserVariable(entry.first, variable_value)) {
 			values[entry.first] = BoundParameterData(std::move(variable_value));
 		}
 	}
