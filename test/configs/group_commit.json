@@ -1,7 +1,7 @@
 {
-  "description": "Run on persistent databases with experimental group commit enabled (batched WAL fsync, commits published only once durable).",
+  "description": "Run on persistent databases with the group-commit micro-batching delay disabled (delay=0, no-wait path).",
   "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__group_commit.db",
-  "on_init": "SET experimental_group_commit=true;",
+  "on_init": "SET group_commit_delay=0;",
   "skip_compiled": "true",
   "inherit_skip_tests": "test/configs/force_storage.json"
 }

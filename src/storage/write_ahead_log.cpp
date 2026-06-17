@@ -675,11 +675,11 @@ void WriteAheadLog::SyncUpTo(idx_t target_offset, bool wait_for_batch, bool lead
 			// Before fsync-ing, give concurrently committing transactions a window to finish appending their
 			// flush markers, so that this fsync covers them as well and they do not have to wait for the next
 			// one (micro-batching, similar in spirit to PostgreSQL's commit_delay).
-			// The maximum window is experimental_group_commit_delay microseconds; with -1 (automatic, the
+			// The maximum window is group_commit_delay microseconds; with -1 (automatic, the
 			// default) it is scaled to a fraction of the observed fsync duration: a wait that is small relative
 			// to the fsync adds little commit latency, while letting (at best) an entire round of concurrent
 			// committers share this fsync. The wait stops early as soon as no new appends arrive.
-			auto delay_micros = Settings::Get<ExperimentalGroupCommitDelaySetting>(GetDatabase().GetDatabase());
+			auto delay_micros = Settings::Get<GroupCommitDelaySetting>(GetDatabase().GetDatabase());
 			if (delay_micros < 0) {
 				delay_micros = static_cast<int64_t>(sync_duration_micros.load() / 4);
 			}

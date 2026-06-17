@@ -375,7 +375,6 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		}
 	}
 	bool should_write_to_wal = transaction.ShouldWriteToWAL(db);
-	bool allow_group_commit = Settings::Get<ExperimentalGroupCommitSetting>(db.GetDatabase());
 	// Catalog-changing commits cannot defer publishing their changes (see below) - they publish while holding the
 	// transaction lock. To guarantee that no catalog change can interleave between a data commit's WAL flush marker
 	// and its publish, they first wait for all pending (unpublished) commits to be published.
@@ -397,7 +396,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		if (!skip_wal_write_due_to_checkpoint) {
 			error = transaction.WriteToWAL(context, db, commit_state);
 			wal_written = true;
-			if (allow_group_commit && !error.HasError() && has_catalog_changes) {
+			if (!error.HasError() && has_catalog_changes) {
 				// we hold the WAL lock (no new pending commits can register), but not the transaction lock
 				// (pending commits can finish publishing)
 				WaitForPendingCommits();
@@ -437,18 +436,14 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	CommitInfo info;
 	info.commit_id = GetCommitTimestamp();
 
-	// Group commit (experimental, off by default): data-only commits that write to the WAL defer publishing
+	// Group commit: data-only commits that write to the WAL defer publishing
 	// (making their changes visible) until after their WAL entries have been fsynced. This way no transaction can
 	// ever observe a commit that is not yet durable, while the fsync itself happens outside of the transaction
 	// lock and the WAL lock, so that concurrently committing transactions can share a single fsync.
 	// Catalog-changing commits take the non-deferred path: they publish under the transaction lock and fsync inline
 	// before releasing it - no new transaction can start in the meantime, so those commits are also never visible
 	// before they are durable.
-	// With the setting disabled, all commits take the non-deferred path, which behaves exactly like the
-	// pre-group-commit code (publish + inline durable fsync under the locks). The pending-commit drains and the
-	// catalog gate are kept unconditional: they are no-ops while no deferred commits exist, which also makes
-	// toggling the setting at runtime safe.
-	bool defer_publish = allow_group_commit && !error.HasError() && commit_state && !has_catalog_changes;
+	bool defer_publish = !error.HasError() && commit_state && !has_catalog_changes;
 	if (defer_publish && !RegisterPendingCommit(info.commit_id)) {
 		// a DDL operation is waiting for pending commits to drain before attaching a new catalog version -
 		// fall back to the synchronous commit path (publish + inline fsync under the locks)

@@ -239,14 +239,10 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 				// if we have optimistically written any data AND we are writing to the WAL, we have written
 				// references to optimistically written blocks
 				// hence we need to ensure those optimistically written blocks are persisted
-				if (Settings::Get<ExperimentalGroupCommitSetting>(db.GetDatabase())) {
-					// group commit: defer the database file sync to the WAL sync leader, which performs it (batched
-					// across transactions, outside of the WAL lock) before any WAL fsync that makes this commit's
-					// flush marker durable - preserving the blocks-before-references ordering
-					commit_state->DeferBlockSync();
-				} else {
-					storage_manager.GetBlockManager().FileSync();
-				}
+				// group commit: defer the database file sync to the WAL sync leader, which performs it (batched
+				// across transactions, outside of the WAL lock) before any WAL fsync that makes this commit's
+				// flush marker durable - preserving the blocks-before-references ordering
+				commit_state->DeferBlockSync();
 			}
 			wal_timer.EndTimer();
 		}
