@@ -73,7 +73,7 @@ end
 
 function duckdb_bind_internal(stmt::Stmt, i::Integer, val::Any)
     println(val)
-    throw(NotImplementedException("unsupported type for bind"))
+    return throw(NotImplementedException("unsupported type for bind"))
 end
 
 function bind_parameters(stmt::Stmt, params::DBInterface.PositionalStatementParams)
