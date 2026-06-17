@@ -74,9 +74,9 @@ def _build_expression_command(command):
         match = re.match(r"^/([A-Za-z]+)\s+(.*)$", stripped, re.DOTALL)
         if match:
             fmt, expr = match.groups()
-            return f"expression -f {fmt} -- {expr}"
+            return f"expression -d no-run-target -f {fmt} -- {expr}"
         return f"expression {command}"
-    return f"expression -- {command}"
+    return f"expression -d no-run-target -- {command}"
 
 
 def _extract_expression_text(command):
@@ -113,14 +113,18 @@ def duckdb_smart_ptr_summary(valobj, _internal_dict):
     if address == 0:
         return "nullptr"
 
-    pointee_value = None
-    if _get_template_argument_type(valobj) is None:
-        pointee_value = _dereference_pointer(pointer_value)
+    pointee_value = _dereference_pointer(pointer_value)
     pointee_name = _get_pointee_name(valobj, pointer_value, pointee_value)
     return f"{pointee_name} @ 0x{address:016x}"
 
 
 def _get_pointee_name(valobj, pointer_value, pointee_value):
+    if pointee_value is not None and pointee_value.IsValid():
+        pointee_type = pointee_value.GetType()
+        dynamic_name = pointee_type.GetDisplayTypeName() or pointee_type.GetName()
+        if dynamic_name:
+            return dynamic_name
+
     template_type = _get_template_argument_type(valobj)
     if template_type is not None and template_type.IsValid():
         template_name = template_type.GetDisplayTypeName() or template_type.GetName()
@@ -226,7 +230,25 @@ def _dereference_pointer(pointer_value):
     error = pointee.GetError()
     if error.Fail():
         return None
+
+    dynamic_pointee = _get_dynamic_value(pointee)
+    if dynamic_pointee is not None and dynamic_pointee.IsValid():
+        return dynamic_pointee
     return pointee
+
+
+def _get_dynamic_value(value):
+    if value is None or not value.IsValid():
+        return None
+
+    try:
+        dynamic_value = value.GetDynamicValue(lldb.eDynamicDontRunTarget)
+    except Exception:
+        return None
+
+    if dynamic_value is None or not dynamic_value.IsValid():
+        return None
+    return dynamic_value
 
 
 def _find_pointer_descendant(value):
