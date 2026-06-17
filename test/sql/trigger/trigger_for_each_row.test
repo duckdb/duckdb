@@ -456,6 +456,32 @@ CREATE TRIGGER trg_casc2_a AFTER INSERT ON casc2_a FOR EACH ROW
 ----
 writes to a table that has its own FOR EACH ROW trigger (cascading row triggers are not yet supported)
 
+# FIXME: reverse-angle cascade: creating a trigger on a table that existing triggers already write to
+# should also be rejected at CREATE time. Currently only caught at INSERT time because we don't maintain
+# a reverse index of "which triggers write to this table". Needs catalog metadata support to fix.
+statement ok
+CREATE TABLE casc3_a (id INTEGER);
+
+statement ok
+CREATE TABLE casc3_b (id INTEGER);
+
+statement ok
+CREATE TABLE casc3_c (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_casc3_a AFTER INSERT ON casc3_a FOR EACH ROW
+    INSERT INTO casc3_b VALUES (NEW.id);
+
+mode skip instable
+
+statement error
+CREATE TRIGGER trg_casc3_b AFTER INSERT ON casc3_b FOR EACH ROW
+    INSERT INTO casc3_c VALUES (NEW.id);
+----
+writes to a table that has its own FOR EACH ROW trigger (cascading row triggers are not yet supported)
+
+mode unskip
+
 # INSERT trigger body with SELECT
 statement ok
 CREATE TABLE t_ins2 (id INTEGER);
