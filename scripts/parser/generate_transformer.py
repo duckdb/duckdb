@@ -209,6 +209,9 @@ OPTIONAL_VALUE_GRAMMARS = {
     'checkpoint',
     'deallocate',
     'detach',
+    'delete',
+    'describe',
+    'drop',
     'execute',
     'export',
     'expression',
@@ -218,6 +221,7 @@ OPTIONAL_VALUE_GRAMMARS = {
     'select',
     'transaction',
     'use',
+    'vacuum',
 }
 
 
