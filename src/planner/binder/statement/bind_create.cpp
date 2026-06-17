@@ -476,6 +476,8 @@ void Binder::BindLogicalType(LogicalType &type) {
 	});
 }
 
+bool BoundBodyContainsTrigger(const LogicalOperator &op);
+
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres)
 	TableDescription table_description(create_trigger_info.base_table->catalog_name,
@@ -602,12 +604,18 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	}
 	if (row_scope_binder) {
 		auto body_binder = Binder::CreateBinder(context, validation_binder.get());
-		body_binder->Bind(*body_copy);
+		auto bound_body = body_binder->Bind(*body_copy);
 		validation_binder->GetActiveBinders().pop_back();
 		if (body_binder->correlated_columns.empty()) {
 			throw BinderException("FOR EACH ROW trigger \"%s\" on table \"%s\" must reference at least one NEW "
 			                      "column in the trigger body (use FOR EACH STATEMENT if row data is not needed)",
 			                      create_trigger_info.trigger_name, table.name);
+		}
+		if (BoundBodyContainsTrigger(*bound_body.plan)) {
+			throw NotImplementedException(
+			    "FOR EACH ROW trigger \"%s\" on table \"%s\" writes to a table that has its own FOR EACH ROW "
+			    "trigger (cascading row triggers are not yet supported)",
+			    create_trigger_info.trigger_name, table.name);
 		}
 	} else {
 		validation_binder->Bind(*body_copy);

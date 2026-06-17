@@ -424,7 +424,7 @@ static bool BoundBodyTargetsTable(const LogicalOperator &op, const TableCatalogE
 //     so it fires once per (outer row x inner row) instead of once per inner row.
 //  2. all firings run as one set-based batch against a single snapshot, so a downstream trigger cannot
 //     see rows an upstream trigger wrote earlier in the same statement. Correct semantics need per-row execution.
-static bool BoundBodyContainsTrigger(const LogicalOperator &op) {
+bool BoundBodyContainsTrigger(const LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_TRIGGER) {
 		return true;
 	}

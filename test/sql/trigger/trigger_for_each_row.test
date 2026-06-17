@@ -436,6 +436,26 @@ INSERT INTO casc_a VALUES (1);
 ----
 writes to a table that has its own FOR EACH ROW trigger (cascading row triggers are not yet supported)
 
+# Cascade detected at CREATE TRIGGER time when the target table already has a FOR EACH ROW trigger
+statement ok
+CREATE TABLE casc2_a (id INTEGER);
+
+statement ok
+CREATE TABLE casc2_b (id INTEGER);
+
+statement ok
+CREATE TABLE casc2_c (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_casc2_b AFTER INSERT ON casc2_b FOR EACH ROW
+    INSERT INTO casc2_c VALUES (NEW.id);
+
+statement error
+CREATE TRIGGER trg_casc2_a AFTER INSERT ON casc2_a FOR EACH ROW
+    INSERT INTO casc2_b VALUES (NEW.id);
+----
+writes to a table that has its own FOR EACH ROW trigger (cascading row triggers are not yet supported)
+
 # INSERT trigger body with SELECT
 statement ok
 CREATE TABLE t_ins2 (id INTEGER);
