@@ -563,9 +563,10 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto conflicting = table.GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context),
 	                                             create_trigger_info.event_type, opposite_for_each);
 	bool is_replace = create_trigger_info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
-	auto has_real_conflict = std::any_of(conflicting.begin(), conflicting.end(), [&](const_reference<TriggerCatalogEntry> t) {
-		return !(is_replace && t.get().name == create_trigger_info.trigger_name);
-	});
+	auto has_real_conflict =
+	    std::any_of(conflicting.begin(), conflicting.end(), [&](const_reference<TriggerCatalogEntry> t) {
+		    return !(is_replace && t.get().name == create_trigger_info.trigger_name);
+	    });
 	if (has_real_conflict) {
 		throw NotImplementedException(
 		    "Mixing FOR EACH STATEMENT and FOR EACH ROW triggers on the same table is not yet supported");
