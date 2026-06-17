@@ -479,6 +479,11 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 		return LogicalType::UNION(union_members);
 	}
 
+	if (type == "STRUCT") {
+		// empty struct
+		return LogicalType::STRUCT({});
+	}
+
 	if (StringUtil::StartsWith(type, "STRUCT(") && StringUtil::EndsWith(type, ")")) {
 		// struct - recurse
 		string struct_members_str = type.substr(7, type.size() - 8);
