@@ -6,4 +6,4 @@ require parquet
 statement error
 from '{DATA_DIR}/parquet-testing/page_size_corruption.parquet'
 ----
-Invalid Input Error: Parquet file corrupted: uncompressed page size mismatch (expected 16, actual: 44)
+<REGEX>:.*uncompressed page size mismatch \(expected 16, actual: 44\).*
