@@ -43,6 +43,99 @@ SELECT a, m FROM (SELECT * FROM t1 MARK JOIN t2 ON (a = b + 100)) tbl(a, m) ORDE
 2	false
 3	false
 
+# three-valued marker logic
+# ==========================
+statement ok
+CREATE TABLE l(a INTEGER);
+
+statement ok
+INSERT INTO l VALUES (1), (2), (NULL);
+
+statement ok
+CREATE TABLE r(b INTEGER);
+
+# right side WITHOUT NULLs: marker is true on match, false on no-match, NULL when the
+# left value is NULL (NULL = b is unknown so it can never be a confirmed match)
+statement ok
+INSERT INTO r VALUES (2), (3);
+
+query II
+SELECT a, m FROM (SELECT * FROM l MARK JOIN r ON (a = b)) x(a, m) ORDER BY a NULLS LAST;
+----
+1	false
+2	true
+NULL	NULL
+
+# right side WITH a NULL: a non-matching left value now yields NULL instead of false,
+# because the unmatched NULL on the right makes the absence of a match unknown
+statement ok
+INSERT INTO r VALUES (NULL);
+
+query II
+SELECT a, m FROM (SELECT * FROM l MARK JOIN r ON (a = b)) x(a, m) ORDER BY a NULLS LAST;
+----
+1	NULL
+2	true
+NULL	NULL
+
+# empty right side: marker is false for every left row, including NULL
+# (mirrors `x IN (empty set)` being false even for NULL x)
+statement ok
+DELETE FROM r;
+
+query II
+SELECT a, m FROM (SELECT * FROM l MARK JOIN r ON (a = b)) x(a, m) ORDER BY a NULLS LAST;
+----
+1	false
+2	false
+NULL	false
+
+# equivalence with subquery-generated MARK joins
+# ==============================================
+# `x IN (subquery)` is planned as a MARK join. An explicit single-condition MARK join
+# must produce exactly the same three-valued marker as the IN expression.
+statement ok
+DELETE FROM r;
+
+statement ok
+INSERT INTO r VALUES (2), (3), (NULL);
+
+# verify the IN subquery actually compiles to a MARK join
+query II
+EXPLAIN SELECT a, a IN (SELECT b FROM r) FROM l;
+----
+physical_plan	<REGEX>:.*MARK.*
+
+# symmetric difference between explicit MARK join and IN must be empty (right has NULL)
+query II
+(SELECT a, m FROM (SELECT * FROM l MARK JOIN r ON (a = b)) x(a, m)
+ EXCEPT SELECT a, a IN (SELECT b FROM r) FROM l)
+UNION ALL
+(SELECT a, a IN (SELECT b FROM r) FROM l
+ EXCEPT SELECT a, m FROM (SELECT * FROM l MARK JOIN r ON (a = b)) x(a, m));
+----
+
+# same equivalence with the right side containing no NULLs
+statement ok
+DELETE FROM r WHERE b IS NULL;
+
+query II
+(SELECT a, m FROM (SELECT * FROM l MARK JOIN r ON (a = b)) x(a, m)
+ EXCEPT SELECT a, a IN (SELECT b FROM r) FROM l)
+UNION ALL
+(SELECT a, a IN (SELECT b FROM r) FROM l
+ EXCEPT SELECT a, m FROM (SELECT * FROM l MARK JOIN r ON (a = b)) x(a, m));
+----
+
+# the negated marker matches NOT IN (NULL-aware)
+query II
+(SELECT a, NOT m FROM (SELECT * FROM l MARK JOIN r ON (a = b)) x(a, m)
+ EXCEPT SELECT a, a NOT IN (SELECT b FROM r) FROM l)
+UNION ALL
+(SELECT a, a NOT IN (SELECT b FROM r) FROM l
+ EXCEPT SELECT a, NOT m FROM (SELECT * FROM l MARK JOIN r ON (a = b)) x(a, m));
+----
+
 # like SEMI/ANTI, MARK is still usable as a quoted identifier
 statement ok
 CREATE TABLE "mark"("mark" INTEGER);
