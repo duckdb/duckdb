@@ -355,6 +355,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 	}
 
 	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
+		if (type.id() == LogicalTypeId::STRUCT && StructType::GetChildTypes(type).empty()) {
+			throw InvalidInputException("Empty STRUCT columns are not supported in the Parquet format");
+		}
 		auto struct_column =
 		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
 		if (field_id && field_id->set) {

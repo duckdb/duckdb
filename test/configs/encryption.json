@@ -74,6 +74,12 @@
         "test/sql/trigger/trigger_returning_binder_parity.test",
         "test/sql/merge/trigger_merge_into.test"
       ]
+    },
+    {
+      "reason": "test_all_types() require latest storage",
+      "paths": [
+        "test/fuzzer/duckfuzz/vector_type.test"
+      ]
     }
   ]
 }

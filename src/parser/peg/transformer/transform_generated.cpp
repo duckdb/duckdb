@@ -1196,7 +1196,13 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeModifiersIn
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowTypeInternal(PEGTransformer &transformer,
                                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto col_id_type_list = transformer.Transform<child_list_t<LogicalType>>(list_pr.GetChild(1));
+	child_list_t<LogicalType> col_id_type_list {};
+	auto &col_id_type_list_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (col_id_type_list_opt.HasResult()) {
+		auto col_id_type_list_value =
+		    transformer.Transform<child_list_t<LogicalType>>(col_id_type_list_opt.GetResult());
+		col_id_type_list = col_id_type_list_value;
+	}
 	auto result = TransformRowType(transformer, col_id_type_list);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }

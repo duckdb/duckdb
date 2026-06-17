@@ -39,7 +39,8 @@ set variable my_type = (
 	where
 		column_type NOT ILIKE '%union%' AND
 		column_type NOT ILIKE '%enum%' AND
-		column_type NOT ILIKE '%map%'
+		column_type NOT ILIKE '%map%' AND
+		column_type <> 'STRUCT'
 	limit 1 offset {i}
 );
 

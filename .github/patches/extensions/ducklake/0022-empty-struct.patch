@@ -1,0 +1,24 @@
+diff --git a/test/sql/data_inlining/data_inlining_types.test b/test/sql/data_inlining/data_inlining_types.test
+index f8c13219..293c494d 100644
+--- a/test/sql/data_inlining/data_inlining_types.test
++++ b/test/sql/data_inlining/data_inlining_types.test
+@@ -18,6 +18,7 @@ CREATE VIEW all_types AS SELECT * EXCLUDE (BIGNUM, BIT, small_enum,
+ medium_enum,
+ large_enum,
+ "union",
++empty_struct,
+ fixed_int_array,
+ fixed_varchar_array,
+ fixed_nested_int_array,
+diff --git a/test/sql/types/all_types.test b/test/sql/types/all_types.test
+index 2bcfc4f2..d733d2b9 100644
+--- a/test/sql/types/all_types.test
++++ b/test/sql/types/all_types.test
+@@ -19,6 +19,7 @@ CREATE VIEW all_types AS SELECT * EXCLUDE (BIGNUM, BIT, small_enum,
+ medium_enum,
+ large_enum,
+ "union",
++empty_struct,
+ fixed_int_array,
+ fixed_varchar_array,
+ fixed_nested_int_array,
