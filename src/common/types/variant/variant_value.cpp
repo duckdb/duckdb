@@ -3,6 +3,7 @@
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/variant_value.hpp"
+#include "duckdb/common/types/variant_iterator.hpp"
 #include "yyjson.hpp"
 
 #include "duckdb/common/serializer/varint.hpp"
@@ -688,9 +689,320 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 	selvec_size = keys_offset;
 }
 
-void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
-	auto count = input.size();
-	if (input.empty()) {
+//===--------------------------------------------------------------------===//
+// Building a VARIANT directly from a VariantIterator
+//===--------------------------------------------------------------------===//
+// The VariantIterator traverses a (possibly shredded) variant lazily, merging the shredded and
+// unshredded components on the fly. Encoding it directly into the canonical layout avoids
+// materializing the intermediate vector<VariantValue> tree. The two passes below mirror
+// AnalyzeValue / ConvertValue, but switch on VariantLogicalType (which the iterator already speaks)
+// instead of on a Value's LogicalType.
+
+//! The (fixed) blob payload size of a fixed-width primitive VariantLogicalType
+static idx_t VariantFixedPayloadSize(VariantLogicalType type_id) {
+	switch (type_id) {
+	case VariantLogicalType::VARIANT_NULL:
+	case VariantLogicalType::BOOL_TRUE:
+	case VariantLogicalType::BOOL_FALSE:
+		return 0;
+	case VariantLogicalType::INT8:
+		return sizeof(int8_t);
+	case VariantLogicalType::INT16:
+		return sizeof(int16_t);
+	case VariantLogicalType::INT32:
+		return sizeof(int32_t);
+	case VariantLogicalType::INT64:
+		return sizeof(int64_t);
+	case VariantLogicalType::INT128:
+		return sizeof(hugeint_t);
+	case VariantLogicalType::UINT8:
+		return sizeof(uint8_t);
+	case VariantLogicalType::UINT16:
+		return sizeof(uint16_t);
+	case VariantLogicalType::UINT32:
+		return sizeof(uint32_t);
+	case VariantLogicalType::UINT64:
+		return sizeof(uint64_t);
+	case VariantLogicalType::UINT128:
+		return sizeof(uhugeint_t);
+	case VariantLogicalType::FLOAT:
+		return sizeof(float);
+	case VariantLogicalType::DOUBLE:
+		return sizeof(double);
+	case VariantLogicalType::UUID:
+		return sizeof(hugeint_t);
+	case VariantLogicalType::DATE:
+		return sizeof(date_t);
+	case VariantLogicalType::TIME_MICROS:
+		return sizeof(dtime_t);
+	case VariantLogicalType::TIME_NANOS:
+		return sizeof(dtime_ns_t);
+	case VariantLogicalType::TIME_MICROS_TZ:
+		return sizeof(dtime_tz_t);
+	case VariantLogicalType::TIMESTAMP_SEC:
+		return sizeof(timestamp_sec_t);
+	case VariantLogicalType::TIMESTAMP_MILIS:
+		return sizeof(timestamp_ms_t);
+	case VariantLogicalType::TIMESTAMP_MICROS:
+		return sizeof(timestamp_t);
+	case VariantLogicalType::TIMESTAMP_NANOS:
+		return sizeof(timestamp_ns_t);
+	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+		return sizeof(timestamp_tz_t);
+	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+		return sizeof(timestamp_tz_ns_t);
+	case VariantLogicalType::INTERVAL:
+		return sizeof(interval_t);
+	default:
+		throw InternalException("Unexpected VariantLogicalType (%d) when unshredding via VariantIterator",
+		                        static_cast<int>(type_id));
+	}
+}
+
+//! Whether 'type_id' is encoded as a (length-prefixed) string in the blob
+static bool VariantIsStringType(VariantLogicalType type_id) {
+	switch (type_id) {
+	case VariantLogicalType::VARCHAR:
+	case VariantLogicalType::BLOB:
+	case VariantLogicalType::BIGNUM:
+	case VariantLogicalType::BITSTRING:
+	case VariantLogicalType::GEOMETRY:
+		return true;
+	default:
+		return false;
+	}
+}
+
+//! Collect the (non-missing) object children in lexicographic key order
+static vector<VariantObjectEntry> CollectObjectChildren(const VariantIterator &it) {
+	vector<VariantObjectEntry> children;
+	for (auto &entry : it.GetObjectChildren(VariantIterationOrder::LEXICOGRAPHIC)) {
+		children.push_back(entry);
+	}
+	return children;
+}
+
+static void AnalyzeIterator(const VariantIterator &it, idx_t row, DataChunk &offsets) {
+	auto &keys_offset = variant::OffsetData::GetKeys(offsets)[row];
+	auto &children_offset = variant::OffsetData::GetChildren(offsets)[row];
+	auto &values_offset = variant::OffsetData::GetValues(offsets)[row];
+	auto &data_offset = variant::OffsetData::GetBlob(offsets)[row];
+
+	values_offset++;
+	if (it.IsNull() || it.IsMissing()) {
+		//! A (nested) NULL/missing value occupies a value slot but no blob data
+		return;
+	}
+
+	auto type_id = it.GetTypeId();
+	switch (type_id) {
+	case VariantLogicalType::OBJECT: {
+		auto children = CollectObjectChildren(it);
+		data_offset += GetVarintSize(children.size());
+		if (!children.empty()) {
+			data_offset += GetVarintSize(children_offset);
+			children_offset += children.size();
+			keys_offset += children.size();
+			for (auto &child : children) {
+				AnalyzeIterator(child.value, row, offsets);
+			}
+		}
+		break;
+	}
+	case VariantLogicalType::ARRAY: {
+		auto array = it.GetArrayChildren();
+		auto length = array.size();
+		data_offset += GetVarintSize(length);
+		if (length) {
+			data_offset += GetVarintSize(children_offset);
+			children_offset += length;
+			for (auto child : array) {
+				AnalyzeIterator(child, row, offsets);
+			}
+		}
+		break;
+	}
+	case VariantLogicalType::DECIMAL: {
+		auto decimal = it.GetDecimal();
+		data_offset += GetVarintSize(decimal.width);
+		data_offset += GetVarintSize(decimal.scale);
+		data_offset += GetTypeIdSize(decimal.GetPhysicalType());
+		break;
+	}
+	default:
+		if (VariantIsStringType(type_id)) {
+			auto string_data = it.GetString();
+			data_offset += GetVarintSize(string_data.GetSize());
+			data_offset += string_data.GetSize();
+		} else {
+			data_offset += VariantFixedPayloadSize(type_id);
+		}
+		break;
+	}
+}
+
+static void ConvertIteratorPrimitive(const VariantIterator &it, VariantLogicalType type_id, VariantVectorData &result,
+                                     idx_t values_index, data_ptr_t blob_data, uint32_t &data_offset) {
+	result.type_ids_data[values_index] = static_cast<uint8_t>(type_id);
+	result.byte_offset_data[values_index] = data_offset;
+
+	if (type_id == VariantLogicalType::DECIMAL) {
+		auto decimal = it.GetDecimal();
+		VarintEncode<uint32_t>(decimal.width, blob_data + data_offset);
+		data_offset += GetVarintSize(decimal.width);
+		VarintEncode<uint32_t>(decimal.scale, blob_data + data_offset);
+		data_offset += GetVarintSize(decimal.scale);
+		auto value_size = GetTypeIdSize(decimal.GetPhysicalType());
+		memcpy(blob_data + data_offset, decimal.value_ptr, value_size);
+		data_offset += value_size;
+		return;
+	}
+	if (VariantIsStringType(type_id)) {
+		auto string_data = it.GetString();
+		auto string_size = string_data.GetSize();
+		VarintEncode<uint32_t>(static_cast<uint32_t>(string_size), blob_data + data_offset);
+		data_offset += GetVarintSize(string_size);
+		memcpy(blob_data + data_offset, string_data.GetData(), string_size);
+		data_offset += string_size;
+		return;
+	}
+	//! Fixed-width primitive (or BOOL/NULL with no payload). The iterator exposes the value in the same
+	//! little-endian layout the blob uses, so the payload is a straight copy.
+	auto value_size = VariantFixedPayloadSize(type_id);
+	if (value_size) {
+		memcpy(blob_data + data_offset, it.GetDataPointer(), value_size);
+		data_offset += value_size;
+	}
+}
+
+static void ConvertIterator(const VariantIterator &it, VariantVectorData &result, idx_t row, DataChunk &offsets,
+                            SelectionVector &keys_selvec, OrderedOwningStringMap<uint32_t> &dictionary) {
+	auto blob_data = data_ptr_cast(result.blob_data[row].GetDataWriteable());
+	auto keys_list_offset = result.keys_data[row].offset;
+	auto children_list_offset = result.children_data[row].offset;
+	auto values_list_offset = result.values_data[row].offset;
+
+	auto &keys_offset = variant::OffsetData::GetKeys(offsets)[row];
+	auto &children_offset = variant::OffsetData::GetChildren(offsets)[row];
+	auto &values_offset = variant::OffsetData::GetValues(offsets)[row];
+	auto &data_offset = variant::OffsetData::GetBlob(offsets)[row];
+
+	if (it.IsNull() || it.IsMissing()) {
+		result.type_ids_data[values_list_offset + values_offset] =
+		    static_cast<uint8_t>(VariantLogicalType::VARIANT_NULL);
+		result.byte_offset_data[values_list_offset + values_offset] = data_offset;
+		values_offset++;
+		return;
+	}
+
+	auto type_id = it.GetTypeId();
+	switch (type_id) {
+	case VariantLogicalType::OBJECT: {
+		auto children = CollectObjectChildren(it);
+
+		result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::OBJECT);
+		result.byte_offset_data[values_list_offset + values_offset] = data_offset;
+		values_offset++;
+
+		VarintEncode<uint32_t>(static_cast<uint32_t>(children.size()), blob_data + data_offset);
+		data_offset += GetVarintSize(children.size());
+		if (!children.empty()) {
+			VarintEncode<uint32_t>(children_offset, blob_data + data_offset);
+			data_offset += GetVarintSize(children_offset);
+
+			auto start_of_children = children_offset;
+			children_offset += children.size();
+
+			for (idx_t i = 0; i < children.size(); i++) {
+				result.keys_index_data[children_list_offset + start_of_children + i] = keys_offset;
+				result.values_index_data[children_list_offset + start_of_children + i] = values_offset;
+
+				auto dictionary_index = GetOrCreateIndex(dictionary, children[i].key);
+				keys_selvec.set_index(keys_list_offset + keys_offset, dictionary_index);
+				keys_offset++;
+
+				ConvertIterator(children[i].value, result, row, offsets, keys_selvec, dictionary);
+			}
+		}
+		break;
+	}
+	case VariantLogicalType::ARRAY: {
+		auto array = it.GetArrayChildren();
+		auto length = array.size();
+
+		result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::ARRAY);
+		result.byte_offset_data[values_list_offset + values_offset] = data_offset;
+		values_offset++;
+
+		VarintEncode<uint32_t>(static_cast<uint32_t>(length), blob_data + data_offset);
+		data_offset += GetVarintSize(length);
+		if (length) {
+			VarintEncode<uint32_t>(children_offset, blob_data + data_offset);
+			data_offset += GetVarintSize(children_offset);
+
+			auto start_of_children = children_offset;
+			children_offset += length;
+
+			for (idx_t i = 0; i < length; i++) {
+				result.keys_index_validity.SetInvalid(children_list_offset + start_of_children + i);
+				result.values_index_data[children_list_offset + start_of_children + i] = values_offset;
+
+				ConvertIterator(array[i], result, row, offsets, keys_selvec, dictionary);
+			}
+		}
+		break;
+	}
+	default:
+		ConvertIteratorPrimitive(it, type_id, result, values_list_offset + values_offset, blob_data, data_offset);
+		values_offset++;
+		break;
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Generic VARIANT build driver
+//===--------------------------------------------------------------------===//
+// The two builders (from a vector<VariantValue> and from a VariantIterator) share the same orchestration
+// (analyze sizes -> allocate -> convert -> finalize); only the per-row analyze/convert differs.
+
+struct VariantValueSource {
+	explicit VariantValueSource(vector<VariantValue> &input) : input(input) {
+	}
+	bool IsNullOrMissing(idx_t row) const {
+		return input[row].IsNull() || input[row].IsMissing();
+	}
+	void Analyze(idx_t row, DataChunk &offsets) const {
+		AnalyzeValue(input[row], row, offsets);
+	}
+	void Convert(idx_t row, VariantVectorData &variant, DataChunk &offsets, SelectionVector &keys_selvec,
+	             OrderedOwningStringMap<uint32_t> &dictionary) const {
+		ConvertValue(input[row], variant, row, offsets, keys_selvec, dictionary);
+	}
+
+	vector<VariantValue> &input;
+};
+
+struct VariantIteratorSource {
+	explicit VariantIteratorSource(const VariantIteratorState &state) : state(state) {
+	}
+	bool IsNullOrMissing(idx_t row) const {
+		//! Root() never returns a "missing" value - it resolves a missing root to a SQL NULL
+		return state.Root(row).IsNull();
+	}
+	void Analyze(idx_t row, DataChunk &offsets) const {
+		AnalyzeIterator(state.Root(row), row, offsets);
+	}
+	void Convert(idx_t row, VariantVectorData &variant, DataChunk &offsets, SelectionVector &keys_selvec,
+	             OrderedOwningStringMap<uint32_t> &dictionary) const {
+		ConvertIterator(state.Root(row), variant, row, offsets, keys_selvec, dictionary);
+	}
+
+	const VariantIteratorState &state;
+};
+
+template <class SOURCE>
+static void BuildVariant(const SOURCE &source, idx_t count, Vector &result) {
+	if (count == 0) {
 		return;
 	}
 
@@ -703,11 +1015,10 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	variant::InitializeOffsets(analyze_offsets, count);
 
 	for (idx_t i = 0; i < count; i++) {
-		auto &value = input[i];
-		if (value.IsNull() || value.IsMissing()) {
+		if (source.IsNullOrMissing(i)) {
 			continue;
 		}
-		AnalyzeValue(value, i, analyze_offsets);
+		source.Analyze(i, analyze_offsets);
 	}
 
 	SelectionVector keys_selvec;
@@ -727,13 +1038,12 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 
 	VariantVectorData variant_data(result);
 	for (idx_t i = 0; i < count; i++) {
-		auto &value = input[i];
-		if (value.IsNull() || value.IsMissing()) {
+		if (source.IsNullOrMissing(i)) {
 			//! SPEC: If a Variant is missing in a context where a value is required, readers must return a Variant null
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
-		ConvertValue(value, variant_data, i, conversion_offsets, keys_selvec, dictionary);
+		source.Convert(i, variant_data, conversion_offsets, keys_selvec, dictionary);
 	}
 
 #ifdef DEBUG
@@ -770,6 +1080,16 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	keys_entry.Slice(keys_selvec, keys_selvec_size);
 	FlatVector::SetSize(result, count);
 	result.Verify();
+}
+
+void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
+	VariantValueSource source(input);
+	BuildVariant(source, input.size(), result);
+}
+
+void VariantValue::ToVARIANT(const VariantIteratorState &state, idx_t count, Vector &result) {
+	VariantIteratorSource source(state);
+	BuildVariant(source, count, result);
 }
 
 yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc) const {

@@ -1,0 +1,19 @@
+# name: benchmark/micro/variant/variant_unshred_object.benchmark
+# description: Unshred a fully-shredded 32-field VARIANT object column for every row. The v::VARCHAR cast falls back to RecursiveToUnifiedFormat, which flattens the SHREDDED_VECTOR via VariantUtils::UnshredVariantData - so this stresses the unshredding path (object reconstruction dominates; the two boolean values keep downstream max() trivial).
+# group: [variant]
+
+name variant_unshred_object
+group variant
+storage persistent v2.0.0
+
+cache variant_unshred_object.duckdb
+
+load
+SET variant_minimum_shredding_size = 0;
+CREATE TABLE tbl AS SELECT {
+	'f28': (i % 2 = 0), 'f09': (i % 2 = 0), 'f19': (i % 2 = 0), 'f10': (i % 2 = 0), 'f29': (i % 2 = 0), 'f05': (i % 2 = 0), 'f07': (i % 2 = 0), 'f22': (i % 2 = 0), 'f00': (i % 2 = 0), 'f14': (i % 2 = 0), 'f08': (i % 2 = 0), 'f15': (i % 2 = 0), 'f23': (i % 2 = 0), 'f24': (i % 2 = 0), 'f21': (i % 2 = 0), 'f13': (i % 2 = 0), 'f25': (i % 2 = 0), 'f27': (i % 2 = 0), 'f06': (i % 2 = 0), 'f16': (i % 2 = 0), 'f26': (i % 2 = 0), 'f18': (i % 2 = 0), 'f11': (i % 2 = 0), 'f03': (i % 2 = 0), 'f17': (i % 2 = 0), 'f02': (i % 2 = 0), 'f01': (i % 2 = 0), 'f31': (i % 2 = 0), 'f12': (i % 2 = 0), 'f04': (i % 2 = 0), 'f30': (i % 2 = 0), 'f20': (i % 2 = 0)
+}::VARIANT v FROM range(3000000) t(i);
+CHECKPOINT;
+
+run
+SELECT max(v::VARCHAR) FROM tbl;

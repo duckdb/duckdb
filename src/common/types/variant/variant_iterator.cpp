@@ -76,6 +76,12 @@ VariantIteratorState::VariantIteratorState(const Vector &variant)
 	shredded_format.Build(shredded_vec);
 }
 
+VariantIteratorState::VariantIteratorState(const Vector &unshredded_vec, const Vector &shredded)
+    : unshredded(unshredded_vec) {
+	is_shredded = true;
+	shredded_format.Build(shredded);
+}
+
 //===--------------------------------------------------------------------===//
 // ShreddedVariantIterator
 //===--------------------------------------------------------------------===//
