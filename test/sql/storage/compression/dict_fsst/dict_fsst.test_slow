@@ -1,0 +1,26 @@
+# name: test/sql/storage/compression/dict_fsst/dict_fsst_test.test_slow
+# group: [dict_fsst]
+
+loop tail_len 13991 16383
+
+# Create database with 16KB blocks
+statement ok
+ATTACH '__TEST_DIR__/dict_fsst_test_{tail_len}.db' AS db (BLOCK_SIZE 16384, STORAGE_VERSION 'v1.4.0');
+
+# Create rows which are compressible using dict_fsst
+statement ok
+CREATE TABLE db.base AS SELECT i, lpad((i % 128)::VARCHAR, 6, '0') AS s FROM range(0, 2000) t(i);
+
+# Create unusually long row which does not have an easily compressible structure
+statement ok
+CREATE TABLE db.long_tail AS SELECT 2000 AS i, substr(string_agg(md5(j::VARCHAR), ''), 1, {tail_len}) AS s FROM range(0, 800) x(j);
+
+# Join the two tables into one (long row last)
+statement ok
+CREATE TABLE db.t AS SELECT s FROM db.base UNION ALL SELECT s FROM db.long_tail;
+
+# Crash
+statement ok
+DETACH db;
+
+endloop
