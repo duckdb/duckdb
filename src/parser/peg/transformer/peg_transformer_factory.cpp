@@ -109,7 +109,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
 	PEGTransformerState transformer_state(tokens);
-	PEGTransformer transformer(transformer_allocator, transformer_state, sql_transform_functions, parser.rules, options);
+	PEGTransformer transformer(transformer_allocator, transformer_state, sql_transform_functions, parser.rules,
+	                           options);
 
 	return ExtractAndTransformStatement(transformer, tokens, stmt_opt.GetResult(), terminator_offset);
 }
