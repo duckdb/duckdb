@@ -43,6 +43,7 @@ struct DropNotNullInfo;
 struct SetColumnCommentInfo;
 struct CreateTableInfo;
 struct BoundCreateTableInfo;
+struct ColumnBinding;
 
 class TableFunction;
 struct FunctionData;
@@ -138,6 +139,11 @@ public:
 	//! Returns true, if the table has a primary key, else false.
 	bool HasPrimaryKey() const;
 
+	virtual LogicalType GetExpectedTypeForInsert(const ColumnDefinition &column) const;
+	virtual unique_ptr<Expression> GetDefaultExpressionForColumn(ClientContext &context, const LogicalType &input_type,
+	                                                             const LogicalType &result_type, ColumnBinding binding,
+	                                                             const Expression &constant_value) const;
+
 	//! Returns the virtual columns for this table
 	virtual virtual_column_map_t GetVirtualColumns() const;
 
@@ -148,9 +154,13 @@ public:
 	//! Scan all triggers on this table (default: no-op - non-DuckDB tables have no triggers)
 	virtual void ScanTriggers(CatalogTransaction transaction,
 	                          const std::function<void(CatalogEntry &)> &callback) const;
-	//! Collect triggers matching the given timing and event type
+	//! Collect triggers matching the given event type and for_each granularity, regardless of timing
 	vector<const_reference<TriggerCatalogEntry>>
-	GetTriggersForEvent(CatalogTransaction transaction, TriggerTiming timing, TriggerEventType event_type) const;
+	GetTriggersForEvent(CatalogTransaction transaction, TriggerEventType event_type, TriggerForEach for_each) const;
+	//! Collect triggers matching the given timing, event type, and for_each granularity
+	vector<const_reference<TriggerCatalogEntry>> GetTriggersForEvent(CatalogTransaction transaction,
+	                                                                 TriggerTiming timing, TriggerEventType event_type,
+	                                                                 TriggerForEach for_each) const;
 
 protected:
 	//! A list of columns that are part of this table

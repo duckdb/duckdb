@@ -70,12 +70,12 @@ SELECT val FROM pre_target WHERE id = 1;
 ----
 999
 
-# FOR EACH ROW is rejected
+# BEFORE FOR EACH ROW is rejected
 statement error
 CREATE TRIGGER trg_row BEFORE UPDATE ON target FOR EACH ROW
     INSERT INTO audit VALUES ('row');
 ----
-Not implemented Error: FOR EACH ROW triggers are not yet supported
+Not implemented Error: BEFORE FOR EACH ROW triggers are not yet supported
 
 # REFERENCING is rejected for BEFORE triggers
 statement error
@@ -256,11 +256,13 @@ SELECT COUNT(*) FROM t_case_audit;
 ----
 1
 
-# RETURNING is rejected
-statement error
+# RETURNING works on tables with triggers
+query I
 UPDATE target SET val = 1 RETURNING id;
 ----
-RETURNING is not yet supported on tables with triggers
+1
+2
+3
 
 # DROP TRIGGER works
 statement ok
@@ -269,8 +271,8 @@ DROP TRIGGER trg_basic ON target;
 statement ok
 UPDATE target SET val = 7 WHERE id = 1;
 
-# Audit count unchanged
+# Audit count reflects the RETURNING UPDATE that fired the trigger
 query I
 SELECT COUNT(*) FROM audit;
 ----
-2
+3

@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
@@ -16,6 +17,8 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 #include <sstream>
 
@@ -305,7 +308,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
 	// If the returning keyword is used, we need access to the whole row in case the user requests it.
 	// Therefore switch the update to a delete and insert.
-	update.update_is_del_and_insert = false;
+	update.update_is_del_and_insert = Settings::Get<ForceUpdateToDelAndInsertSetting>(context);
 	TableStorageInfo table_storage_info = GetStorageInfo(context);
 	for (auto index : table_storage_info.index_info) {
 		for (auto &column : update.columns) {
@@ -352,6 +355,21 @@ bool TableCatalogEntry::HasPrimaryKey() const {
 	return GetPrimaryKey() != nullptr;
 }
 
+LogicalType TableCatalogEntry::GetExpectedTypeForInsert(const ColumnDefinition &column) const {
+	return column.Type();
+}
+
+unique_ptr<Expression> TableCatalogEntry::GetDefaultExpressionForColumn(ClientContext &context,
+                                                                        const LogicalType &input_type,
+                                                                        const LogicalType &result_type,
+                                                                        ColumnBinding binding,
+                                                                        const Expression &constant_value) const {
+	(void)context;
+	(void)constant_value;
+	return BoundCastExpression::AddCastToType(context, make_uniq<BoundColumnRefExpression>(input_type, binding),
+	                                          result_type);
+}
+
 virtual_column_map_t TableCatalogEntry::GetVirtualColumns() const {
 	virtual_column_map_t virtual_columns;
 	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
@@ -374,14 +392,28 @@ void TableCatalogEntry::ScanTriggers(CatalogTransaction transaction,
 }
 
 vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction,
-                                                                                    TriggerTiming timing,
-                                                                                    TriggerEventType event_type) const {
+                                                                                    TriggerEventType event_type,
+                                                                                    TriggerForEach for_each) const {
 	vector<const_reference<TriggerCatalogEntry>> result;
 	// CatalogSet is backed by case_insensitive_tree_t (a map with case-insensitive comparator),
 	// so ScanTriggers yields entries in alphabetical order by name
 	ScanTriggers(transaction, [&](CatalogEntry &entry) {
 		auto &trigger = entry.Cast<TriggerCatalogEntry>();
-		if (trigger.timing == timing && trigger.event_type == event_type) {
+		if (trigger.event_type == event_type && trigger.for_each == for_each) {
+			result.emplace_back(trigger);
+		}
+	});
+	return result;
+}
+
+vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction,
+                                                                                    TriggerTiming timing,
+                                                                                    TriggerEventType event_type,
+                                                                                    TriggerForEach for_each) const {
+	vector<const_reference<TriggerCatalogEntry>> result;
+	ScanTriggers(transaction, [&](CatalogEntry &entry) {
+		auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		if (trigger.event_type == event_type && trigger.for_each == for_each && trigger.timing == timing) {
 			result.emplace_back(trigger);
 		}
 	});

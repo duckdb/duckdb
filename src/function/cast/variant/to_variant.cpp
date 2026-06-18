@@ -111,7 +111,7 @@ struct VariantCastData : BoundCastData {
 	LogicalType shredded_type;
 
 	unique_ptr<BoundCastData> Copy() const override {
-		return make_uniq<VariantCastData>(shredded_type);
+		return make_uniq<VariantCastData>(*this);
 	}
 };
 
@@ -154,6 +154,10 @@ static bool SupportsShreddedCast(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::STRUCT) {
 		// for struct types recurse into the child types
 		auto &child_types = StructType::GetChildTypes(type);
+		if (child_types.empty()) {
+			// an empty struct has no typed_value to shred into
+			return false;
+		}
 		for (auto &entry : child_types) {
 			if (!SupportsShreddedCast(entry.second)) {
 				return false;

@@ -19,7 +19,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/metrics_manager.hpp"
+#include "duckdb/main/profiler/metrics_manager.hpp"
 
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "re2/re2.h"
@@ -365,6 +365,10 @@ void ExtensionLoader::RegisterCastFunction(const LogicalType &source, const Logi
 	auto &config = DBConfig::GetConfig(db);
 	auto &casts = config.GetCastFunctions();
 	casts.RegisterCastFunction(source, target, std::move(function), implicit_cast_cost);
+}
+
+void ExtensionLoader::RegisterCombineTypesRule(CombineTypesRule rule) {
+	DBConfig::GetConfig(db).GetCastFunctions().RegisterCombineTypesRule(rule);
 }
 
 void ExtensionLoader::RegisterMetric(MetricInfo info) {

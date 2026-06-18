@@ -115,6 +115,21 @@ public:
 	idx_t NextEvictionSequenceNumber() {
 		return ++eviction_seq_num;
 	}
+	//! Returns true, if the block has a live (not yet dead-counted) entry in the eviction queue.
+	bool HasLiveQueueEntry(BlockLock &l) const {
+		VerifyMutex(l);
+		return has_queue_entry;
+	}
+	//! Lock-free overload of HasLiveQueueEntry. Only safe for callers with exclusive ownership of the
+	//! block memory (i.e., the destructor).
+	bool HasLiveQueueEntry() const {
+		return has_queue_entry;
+	}
+	//! Marks whether the block has a live entry in the eviction queue. Requires the block lock.
+	void SetHasLiveQueueEntry(BlockLock &l, bool has_queue_entry_p) {
+		VerifyMutex(l);
+		has_queue_entry = has_queue_entry_p;
+	}
 	//! Get the LRU timestamp.
 	int64_t GetLRUTimestamp() const {
 		return lru_timestamp_msec;
@@ -211,8 +226,13 @@ private:
 	const FileBufferType buffer_type;
 	//! A pointer to the loaded data, if any.
 	unique_ptr<FileBuffer> buffer;
-	//! The internal eviction sequence number.
+	//! The internal eviction sequence number. Monotonic: it is never reset, so an eviction queue
+	//! entry is stale if and only if its sequence number differs from this one.
 	atomic<idx_t> eviction_seq_num;
+	//! Whether the block has a live entry in the eviction queue, i.e., an entry whose sequence
+	//! number matches eviction_seq_num and which has not been counted as a dead node.
+	//! Guarded by the block lock (read without it only by the destructor, which has exclusive ownership).
+	bool has_queue_entry;
 	//! The LRU timestamp for age-based eviction.
 	atomic<int64_t> lru_timestamp_msec;
 	//! When to destroy the data buffer.

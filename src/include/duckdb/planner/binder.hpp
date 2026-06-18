@@ -297,10 +297,12 @@ public:
 
 	unique_ptr<LogicalOperator> BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
 	                                          UpdateSetInfo &set_info, TableCatalogEntry &table,
+	                                          const vector<unique_ptr<Expression>> &bound_defaults,
 	                                          vector<PhysicalIndex> &columns,
 	                                          bool prioritize_table_when_binding = false);
 	void BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
 	                   TableCatalogEntry &table, vector<PhysicalIndex> &columns,
+	                   const vector<unique_ptr<Expression>> &bound_defaults,
 	                   vector<unique_ptr<Expression>> &update_expressions,
 	                   vector<unique_ptr<Expression>> &projection_expressions,
 	                   bool prioritize_table_when_binding = false);
@@ -465,11 +467,21 @@ private:
 	BoundStatement BindNode(QueryNode &node);
 	BoundStatement BindNode(StatementNode &node);
 	BoundStatement BindNode(InsertQueryNode &node);
-	unique_ptr<BoundStatement> TryExpandTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
-	                                             TableCatalogEntry &table, TriggerEventType event_type);
-	BoundStatement ExpandTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+	unique_ptr<BoundStatement> TryExpandTriggers(QueryNode &node, TableCatalogEntry &table,
+	                                             TriggerEventType event_type);
+	BoundStatement ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 	                              const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
 	                              const vector<const_reference<TriggerCatalogEntry>> &after_triggers);
+	unique_ptr<BoundStatement> TryExpandRowTriggers(QueryNode &node,
+	                                                vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                                TableCatalogEntry &table, TriggerEventType event_type);
+	BoundStatement ExpandRowTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                 const TableCatalogEntry &table,
+	                                 const vector<const_reference<TriggerCatalogEntry>> &triggers);
+	//! Registers NEW as a generic binding so child binders resolve NEW.col at depth=1. The returned binder is
+	//! pushed onto GetActiveBinders(). the caller must keep it alive until the matching pop_back().
+	unique_ptr<ExpressionBinder> SetupNewRowScope(TableIndex table_index, const vector<Identifier> &col_names,
+	                                              const vector<LogicalType> &col_types);
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 	BoundStatement BindNode(MergeQueryNode &node);
@@ -586,6 +598,12 @@ private:
 	void ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry &table,
 	                               optional_ptr<ExpressionListRef> values_list,
 	                               const vector<LogicalIndex> &named_column_map);
+
+	unique_ptr<LogicalOperator> ResolveInputProjection(LogicalInsert &insert,
+	                                                   const IndexVector<idx_t, PhysicalIndex> &column_index_map,
+	                                                   unique_ptr<LogicalOperator> root,
+	                                                   const vector<LogicalType> &source_types);
+
 	unique_ptr<BoundMergeIntoAction>
 	BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, LogicalGet &get, TableIndex proj_index,
 	                vector<unique_ptr<Expression>> &expressions, MergeIntoAction &action,

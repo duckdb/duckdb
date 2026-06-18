@@ -7,6 +7,7 @@
 
 #include <cstddef> // For std::size_t
 #include <atomic>
+#include <cassert>
 #include <type_traits> // For std::make_signed<T>
 
 // VS2012 doesn't support deleted functions.

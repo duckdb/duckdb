@@ -10,7 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/main/profiling_node.hpp"
+#include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/render_tree.hpp"
 
@@ -39,6 +39,8 @@ public:
 	void Render(const Pipeline &op, std::ostream &ss);
 
 	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
+
+	string RenderProfilerDisabled() override;
 };
 
 } // namespace duckdb

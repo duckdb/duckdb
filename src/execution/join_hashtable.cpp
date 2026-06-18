@@ -761,6 +761,24 @@ unique_ptr<PrefixRangeFilter::BuildState> JoinHashTable::InitializePrefixRangeBu
 	return prefix_range_filter->InitializeBuildState(context);
 }
 
+void JoinHashTable::BuildPrefixRangeFilter() {
+	if (!ShouldBuildPrefixRangeFilter()) {
+		return;
+	}
+
+	auto prefix_range_state = InitializePrefixRangeBuildState();
+	TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, 0,
+	                                data_collection->ChunkCount(), false);
+	do {
+		const auto count = iterator.GetCurrentChunkCount();
+		if (count == 0) {
+			continue;
+		}
+		InsertPrefixRangeChunk(iterator.GetChunkState(), count, *prefix_range_state);
+	} while (iterator.Next());
+	MergePrefixRangeBuildState(*prefix_range_state);
+}
+
 void JoinHashTable::InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count,
                                            PrefixRangeFilter::BuildState &state) {
 	D_ASSERT(prefix_range_filter);

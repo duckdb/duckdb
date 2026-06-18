@@ -22,7 +22,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/async_file_writer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "parquet_statistics.hpp"
@@ -216,7 +216,7 @@ public:
 	LogicalType GetSQLType(idx_t schema_idx) const {
 		return options.sql_types[schema_idx];
 	}
-	BufferedFileWriter &GetWriter() {
+	AsyncFileWriter &GetWriter() {
 		return *writer;
 	}
 	idx_t FileSize() const {
@@ -259,6 +259,9 @@ public:
 
 	uint32_t Write(const duckdb_apache::thrift::TBase &object);
 	uint32_t WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size);
+	unique_ptr<AsyncWriteBuffer> PrepareWrite(const duckdb_apache::thrift::TBase &object);
+	unique_ptr<AsyncWriteBuffer> PrepareWriteData(unique_ptr<AsyncWriteBuffer> buffer);
+	uint32_t WriteData(unique_ptr<AsyncWriteBuffer> buffer);
 
 	GeoParquetFileMetadata &GetGeoParquetData();
 
@@ -292,7 +295,7 @@ private:
 	ParquetWriterOptions options;
 	shared_ptr<EncryptionUtil> encryption_util;
 
-	unique_ptr<BufferedFileWriter> writer;
+	unique_ptr<AsyncFileWriter> writer;
 	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::FileMetaData file_meta_data;
 	std::mutex lock;

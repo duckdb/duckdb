@@ -2,29 +2,34 @@
 # description: test comparison logic for VARIANT columns
 # group: [filter]
 
-statement error
+# VARIANT comparison no longer throws on "incompatible" types - it uses a total, type-first order
+# (see variant_comparator). Values of different type ranks are simply not equal.
+
+# VARCHAR '12' and INTEGER 12 have different type ranks -> not equal
+query I
 WITH cte as (
 	select '12'::VARIANT a
 )
 select IF(a == 12, 1, 0) from cte
 ----
-Invalid Input Error: Can't compare values of type VARCHAR (12) and type INTEGER (12) - an explicit cast is required
+0
 
-statement error
+query I
 WITH cte as (
 	select '12'::VARIANT a
 )
 select IF(a == [1,2,3], 1, 0) from cte
 ----
-Invalid Input Error: Can't compare values of type VARCHAR (12) and type INTEGER[] ([1, 2, 3]) - an explicit cast is required
+0
 
-statement error
+# the VARCHAR '[1,2,3]' is not equal to the ARRAY [1,2,3] (different type ranks)
+query I
 WITH cte as (
 	select '[1,2,3]'::VARIANT a
 )
 select IF(a == [1,2,3], 1, 0) from cte
 ----
-Invalid Input Error: Can't compare values of type VARCHAR ([1,2,3]) and type INTEGER[] ([1, 2, 3]) - an explicit cast is required
+0
 
 # Different lists, not equal
 query I
@@ -44,21 +49,24 @@ select IF(a == [1,2,3], 1, 0) from cte
 ----
 1
 
+# the middle element is a VARCHAR '2', which has a different type rank than the INTEGER 2, so the
+# lists are not equal (type-first ordering)
 query I
 WITH cte as (
 	select [1::VARIANT,'2',3]::VARIANT a
 )
 select IF(a == [1,2,3], 1, 0) from cte
 ----
-1
+0
 
-statement error
+# an OBJECT and an ARRAY have different type ranks -> not equal
+query I
 WITH cte as (
 	select {a: 21, b: [1,2,3]}::VARIANT a
 )
 select IF(a == [1,2,3], 1, 0) from cte
 ----
-Invalid Input Error: Can't compare values of type STRUCT(a INTEGER, b INTEGER[]) ({'a': 21, 'b': [1, 2, 3]}) and type INTEGER[] ([1, 2, 3]) - an explicit cast is required
+0
 
 # Compare equal because objects are compared by key, not position
 query I
@@ -69,20 +77,20 @@ select IF(a == {b: [1,2,3], a: 21}, 1, 0) from cte
 ----
 1
 
-# GreaterThan / LessThan
+# GreaterThan / LessThan: OBJECT ranks above ARRAY, so an object is greater than any array
 
-statement error
+query I
 WITH cte as (
 	select {a: 21, b: [1,2,3]}::VARIANT a
 )
 select IF(a < [1,2,3], 1, 0) from cte
 ----
-Can't compare values
+0
 
-statement error
+query I
 WITH cte as (
 	select {a: 21, b: [1,2,3]}::VARIANT a
 )
 select IF(a > [1,2,3], 1, 0) from cte
 ----
-Invalid Input Error: Can't compare values of type STRUCT(a INTEGER, b INTEGER[]) ({'a': 21, 'b': [1, 2, 3]}) and type INTEGER[] ([1, 2, 3]) - an explicit cast is required
+1

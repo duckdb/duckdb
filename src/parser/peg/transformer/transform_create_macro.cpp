@@ -5,10 +5,9 @@
 #include "duckdb/function/scalar_macro_function.hpp"
 
 namespace duckdb {
-unique_ptr<CreateStatement>
-PEGTransformerFactory::TransformCreateMacroStmt(PEGTransformer &transformer, const bool &macro_or_function,
-                                                const bool &if_not_exists, const QualifiedName &qualified_name,
-                                                vector<unique_ptr<MacroFunction>> macro_definition) {
+unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(
+    PEGTransformer &transformer, const bool &macro_or_function, const optional<bool> &if_not_exists,
+    const QualifiedName &qualified_name, vector<unique_ptr<MacroFunction>> macro_definition) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 
@@ -48,11 +47,15 @@ bool PEGTransformerFactory::TransformFunctionKeyword(PEGTransformer &transformer
 }
 
 unique_ptr<MacroFunction>
-PEGTransformerFactory::TransformMacroDefinition(PEGTransformer &transformer, vector<MacroParameter> macro_parameters,
+PEGTransformerFactory::TransformMacroDefinition(PEGTransformer &transformer,
+                                                optional<vector<MacroParameter>> macro_parameters,
                                                 unique_ptr<MacroFunction> macro_definition_body) {
+	if (!macro_parameters) {
+		return macro_definition_body;
+	}
 	bool default_value_found = false;
 	identifier_set_t parameter_names;
-	for (auto &parameter : macro_parameters) {
+	for (auto &parameter : *macro_parameters) {
 		D_ASSERT(!parameter.name.empty());
 		if (parameter_names.find(parameter.name) != parameter_names.end()) {
 			throw ParserException("Duplicate parameter '%s' in macro definition", parameter.name.GetIdentifierName());
@@ -99,12 +102,12 @@ vector<MacroParameter> PEGTransformerFactory::TransformMacroParameters(PEGTransf
 
 MacroParameter PEGTransformerFactory::TransformSimpleParameter(PEGTransformer &transformer,
                                                                const Identifier &type_func_name,
-                                                               const LogicalType &type) {
+                                                               const optional<LogicalType> &type) {
 	MacroParameter result;
 	result.name = Identifier(type_func_name);
 	result.expression = make_uniq<ColumnRefExpression>(Identifier(type_func_name));
-	if (type.id() != LogicalTypeId::INVALID) {
-		result.type = type;
+	if (type) {
+		result.type = *type;
 	}
 	result.is_default = false;
 	return result;

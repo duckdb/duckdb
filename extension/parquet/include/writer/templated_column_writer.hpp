@@ -310,7 +310,8 @@ public:
 		});
 
 		// flush the dictionary page and add it to the to-be-written pages
-		WriteDictionary(state, state.dictionary.GetTargetMemoryStream(), state.dictionary.GetSize());
+		auto dictionary_size = state.dictionary.GetSize();
+		WriteDictionary(state, state.dictionary.TakeTargetData(), dictionary_size);
 		// bloom filter will be queued for writing in ParquetWriter::BufferBloomFilter one level up
 	}
 

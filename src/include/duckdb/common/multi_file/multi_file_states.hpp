@@ -198,6 +198,8 @@ public:
 	unique_ptr<LocalTableFunctionState> local_state;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
 	DataChunk scan_chunk;
+	//! Whether the last Scan call returned BLOCKED
+	bool scan_blocked = false;
 	//! The executor to transform scan_chunk into the final result with FinalizeChunk
 	ExpressionExecutor executor;
 	//! Number of rows scanned by this thread (for profiling)

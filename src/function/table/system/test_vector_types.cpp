@@ -101,7 +101,7 @@ struct TestVectorFlat {
 		}
 		default: {
 			auto entry = info.test_type_map.find(type.id());
-			if (entry == info.test_type_map.end()) {
+			if (entry == info.test_type_map.end() || entry->second.type != type) {
 				throw NotImplementedException("Unimplemented type for test_vector_types %s", type.ToString());
 			}
 			result.push_back(entry->second.min_value);

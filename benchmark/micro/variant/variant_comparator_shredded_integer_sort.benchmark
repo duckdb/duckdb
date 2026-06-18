@@ -1,0 +1,20 @@
+# name: benchmark/micro/variant/variant_comparator_shredded_integer_sort.benchmark
+# description: ORDER BY over a VARIANT column shredded on an INTEGER value - stresses variant_comparator's NUMBER encoding on the shredded primitive path
+# group: [variant]
+
+name variant_comparator_shredded_integer_sort
+group variant
+storage persistent v2.0.0
+
+cache variant_comparator_shredded_integer_sort.duckdb
+
+load
+SET variant_minimum_shredding_size = 0;
+CREATE TABLE tbl AS SELECT i::INTEGER::VARIANT v FROM range(10000000) t(i);
+CHECKPOINT;
+
+run
+SELECT v FROM tbl ORDER BY v LIMIT 1;
+
+result I
+0

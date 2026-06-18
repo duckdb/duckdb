@@ -60,14 +60,13 @@ struct PrefixRangeBitmapBuildState : public PrefixRangeFilter::BuildState {
 template <typename U>
 class PrefixRangeBitmap {
 public:
-	void Initialize(ClientContext &context, U min_p, U span_p) {
+	void Initialize(ClientContext &context, U min_p, U span_p, idx_t max_bits) {
 		min = min_p;
 		span = span_p;
 		shift = 0;
 
-		if (span >= CAP_BITS) {
-			const auto q = UnsafeNumericCast<uint64_t>(span >> MAX_PREFIX_LENGTH);
-			shift = (q <= 1) ? 0 : (64 - CountZeros<uint64_t>::Leading(q - 1));
+		while ((span >> shift) >= max_bits) {
+			shift++;
 		}
 
 		const idx_t buckets = UnsafeNumericCast<idx_t>((span >> shift) + 1);
@@ -189,8 +188,6 @@ public:
 	}
 
 private:
-	static constexpr idx_t MAX_PREFIX_LENGTH = 20;
-	static constexpr idx_t CAP_BITS = 1ULL << MAX_PREFIX_LENGTH;
 	static constexpr idx_t WORD_SHIFT = 6;
 	static constexpr idx_t WORD_MASK = 63;
 
@@ -244,12 +241,13 @@ private:
 	using Comparable = typename MakeUnsigned<T>::type;
 
 public:
-	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val) override {
+	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val,
+	                idx_t max_bits) override {
 		D_ASSERT(min_val <= max_val);
 		D_ASSERT(number_of_rows > 0);
 		const auto min = NumericConverter<T>::Convert(min_val.GetValueUnsafe<T>());
 		const auto max = NumericConverter<T>::Convert(max_val.GetValueUnsafe<T>());
-		bitmap.Initialize(context, min, max - min);
+		bitmap.Initialize(context, min, max - min, max_bits);
 	}
 
 	unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const override {
@@ -297,13 +295,14 @@ private:
 
 class StringPrefixRangeFilter : public PrefixRangeFilter {
 public:
-	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val) override {
+	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val,
+	                idx_t max_bits) override {
 		D_ASSERT(min_val <= max_val);
 		D_ASSERT(number_of_rows > 0);
 		const auto min = StringPrefixConverter::Convert(min_val.GetValueUnsafe<string_t>());
 		const auto max = StringPrefixConverter::Convert(max_val.GetValueUnsafe<string_t>());
 		D_ASSERT(min <= max);
-		bitmap.Initialize(context, min, max - min);
+		bitmap.Initialize(context, min, max - min, max_bits);
 	}
 
 	unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const override {

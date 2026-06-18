@@ -46,9 +46,8 @@ Connection::~Connection() {
 	ConnectionManager::Get(*context->db).RemoveConnection(*context);
 }
 
-string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
-	auto &profiler = QueryProfiler::Get(*context);
-	return profiler.ToString(format);
+string Connection::GetProfilingInformation(const ProfilerPrintFormat &format) {
+	return QueryProfiler::Get(*context).ToString(format);
 }
 
 void Connection::Interrupt() {

@@ -141,9 +141,9 @@ bool PushVariantCollation(ClientContext &context, unique_ptr<Expression> &source
 	}
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto &function_entry =
-	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "variant_normalize");
+	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "variant_comparator");
 	if (function_entry.functions.Size() != 1) {
-		throw InternalException("variant_normalize should only have a single overload");
+		throw InternalException("variant_comparator should only have a single overload");
 	}
 	auto source_alias = source->GetAlias();
 	const auto &scalar_function = function_entry.functions.GetFunctionByOffset(0);

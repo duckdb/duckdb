@@ -55,6 +55,23 @@ explain select * from lineitem l1 where (
 ----
 logical_opt	<!REGEX>:.*INNER.*
 
+# disabling the deliminator should preserve the INNER join
+statement ok
+SET disabled_optimizers='deliminator'
+
+query II
+explain select * from lineitem l1 where exists (
+    select * from lineitem l2
+    where
+        l2.l_orderkey = l1.l_orderkey
+        and l2.l_suppkey <> l1.l_suppkey
+);
+----
+logical_opt	<REGEX>:.*INNER.*
+
+statement ok
+SET disabled_optimizers=''
+
 # operations on the columns - we can't do the optimization here,
 # but with enable_verification we check the results are the same with/without optimizer
 query I

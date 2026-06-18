@@ -2,6 +2,7 @@ add_library_unity(
   test_common
   OBJECT
   caching_test_utils.cpp
+  test_async_file_writer.cpp
   test_cast.cpp
   test_checked_integer.cpp
   test_checksum.cpp

@@ -54,6 +54,15 @@ idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
 	return Settings::Get<ExternalFileCacheLocalBlockSizeSetting>(db);
 }
 
+bool ExternalFileCache::ShouldCacheFile(const string &path) const {
+	if (FileSystem::IsRemoteFile(path)) {
+		return true;
+	}
+	// Local files are not cached: the OS page cache already serves repeated reads
+	auto &db = buffer_manager.GetDatabase();
+	return Settings::Get<CacheLocalFilesSetting>(db);
+}
+
 void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size,
                                               idx_t new_block_size) {
 	D_ASSERT(old_block_size > 0);

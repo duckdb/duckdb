@@ -115,7 +115,7 @@ end
 
 function append(appender::Appender, val::Any)
     println(val)
-    throw(NotImplementedException("unsupported type for append"))
+    return throw(NotImplementedException("unsupported type for append"))
 end
 
 function end_row(appender::Appender)

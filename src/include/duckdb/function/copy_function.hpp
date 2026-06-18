@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/common/enums/copy_option_mode.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
@@ -190,7 +191,9 @@ struct CopyFunctionFileStatistics {
 	idx_t row_count = 0;
 	idx_t file_size_bytes = 0;
 	Value footer_size_bytes;
-	// map of column name -> statistics name -> statistics value
+	//! Format-specific statistics (e.g. row_group_count for Parquet)
+	InsertionOrderPreservingMap<Value> extra_info;
+	//! map of column name -> statistics name -> statistics value
 	case_insensitive_map_t<case_insensitive_map_t<Value>> column_statistics;
 };
 

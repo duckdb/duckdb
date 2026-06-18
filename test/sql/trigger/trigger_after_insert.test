@@ -41,18 +41,24 @@ SELECT COUNT(*) FROM audit;
 ----
 3
 
-# FOR EACH ROW is not yet supported - blocked at CREATE TRIGGER time
+# FOR EACH ROW AFTER INSERT is supported (must reference NEW)
 statement ok
 CREATE TABLE multi_target (id INTEGER);
 
 statement ok
-CREATE TABLE multi_audit (msg VARCHAR);
+CREATE TABLE multi_audit (fired_id INTEGER);
 
-statement error
+statement ok
 CREATE TRIGGER trg_multi AFTER INSERT ON multi_target FOR EACH ROW
-    INSERT INTO multi_audit VALUES ('row');
+    INSERT INTO multi_audit VALUES (NEW.id);
+
+statement ok
+INSERT INTO multi_target VALUES (1), (2), (3);
+
+query I
+SELECT COUNT(*) FROM multi_audit;
 ----
-Not implemented Error: FOR EACH ROW triggers are not yet supported
+3
 
 # Trigger body failure rolls back the entire statement
 statement ok
@@ -371,7 +377,7 @@ SELECT COUNT(*) FROM t_nn_log;
 ----
 0
 
-# RETURNING is not yet supported on tables with triggers
+# RETURNING works on tables with triggers
 statement ok
 CREATE TABLE t_returning (id INTEGER);
 
@@ -382,10 +388,10 @@ statement ok
 CREATE TRIGGER trg_returning AFTER INSERT ON t_returning FOR EACH STATEMENT
     INSERT INTO t_returning_log VALUES ('fired');
 
-statement error
+query I
 INSERT INTO t_returning VALUES (1) RETURNING id;
 ----
-Not implemented Error: RETURNING is not yet supported on tables with triggers
+1
 
 # MERGE INTO is not supported on tables with triggers
 statement ok

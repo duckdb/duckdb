@@ -87,10 +87,10 @@ void PEGTransformerFactory::ConvertToRecursiveView(unique_ptr<CreateViewInfo> &i
 }
 
 unique_ptr<CreateStatement>
-PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, const bool &create_recursive,
-                                               const bool &if_not_exists, const QualifiedName &qualified_name,
-                                               const vector<string> &insert_column_list,
-                                               case_insensitive_map_t<unique_ptr<ParsedExpression>> with_list,
+PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, const optional<bool> &create_recursive,
+                                               const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
+                                               const optional<vector<string>> &insert_column_list,
+                                               optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list,
                                                unique_ptr<SelectStatement> select_statement_internal) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateViewInfo>();
@@ -98,9 +98,11 @@ PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, cons
 	info->catalog = qualified_name.catalog;
 	info->schema = qualified_name.schema;
 	info->view_name = qualified_name.name;
-	info->aliases = StringsToIdentifiers(insert_column_list);
-	if (!with_list.empty()) {
-		for (auto &option_entry : with_list) {
+	if (insert_column_list) {
+		info->aliases = StringsToIdentifiers(*insert_column_list);
+	}
+	if (with_list) {
+		for (auto &option_entry : *with_list) {
 			if (!StringUtil::CIEquals(option_entry.first, "defer_binding")) {
 				throw ParserException("Only DEFER_BINDING is currently supported as option for CREATE VIEW");
 			}

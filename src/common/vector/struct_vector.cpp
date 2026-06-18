@@ -293,6 +293,10 @@ vector<Vector> &StructVector::GetEntries(Vector &vector) {
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		throw InternalException("Struct vectors cannot be dictionary vectors");
 	}
+	if (vector.GetVectorType() != VectorType::FLAT_VECTOR && vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+		// non-flat representation (e.g. a shredded variant) - flatten so we can access the struct entries
+		vector.Flatten();
+	}
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.GetBufferRef());
