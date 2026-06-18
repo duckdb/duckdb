@@ -57,17 +57,21 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransform
 
 unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTransformer &transformer,
                                                                         const ShowType &show_or_describe_or_summarize,
-                                                                        DescribeTarget describe_target) {
+                                                                        optional<DescribeTarget> describe_target) {
 	auto showref = make_uniq<ShowRef>();
 	showref->show_type = show_or_describe_or_summarize;
+	DescribeTarget target;
+	if (describe_target) {
+		target = std::move(*describe_target);
+	}
 
-	if (describe_target.is_table_name || describe_target.table_ref) {
-		if (describe_target.is_table_name) {
+	if (target.is_table_name || target.table_ref) {
+		if (target.is_table_name) {
 			// Case: SHOW 'something' or DESCRIBE 'something'
-			showref->table_name = describe_target.table_name;
+			showref->table_name = target.table_name;
 		} else {
 			// Case: A relation/table reference
-			auto &base_table = *describe_target.table_ref;
+			auto &base_table = *target.table_ref;
 
 			if (showref->show_type == ShowType::SHOW_FROM) {
 				// Logic for SHOW TABLES FROM [database].[schema]
@@ -90,14 +94,14 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 		if (showref->table_name.empty() && showref->show_type != ShowType::SHOW_FROM) {
 			auto show_select_node = make_uniq<SelectNode>();
 			show_select_node->select_list.push_back(make_uniq<StarExpression>());
-			if (describe_target.is_table_name) {
+			if (target.is_table_name) {
 				// Case: SHOW 'something' or DESCRIBE 'something'
 				auto table_ref = make_uniq<BaseTableRef>();
-				table_ref->table_name = describe_target.table_name;
+				table_ref->table_name = target.table_name;
 				show_select_node->from_table = std::move(table_ref);
 			} else {
 				// Case: A relation/table reference
-				show_select_node->from_table = std::move(describe_target.table_ref);
+				show_select_node->from_table = std::move(target.table_ref);
 			}
 			showref->query = std::move(show_select_node);
 		}

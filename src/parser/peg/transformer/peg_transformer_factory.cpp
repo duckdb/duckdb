@@ -24,6 +24,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 		// Avoid overriding a previous move with nothing
 		result->named_param_map = transformer.named_parameter_map;
 	}
+	result->has_anonymous_parameters = transformer.has_anonymous_parameters;
 	return result;
 }
 
@@ -147,9 +148,6 @@ void PEGTransformerFactory::RegisterExpression() {
 }
 
 void PEGTransformerFactory::RegisterConnect() {
-	// connect.gram — both rules are hand-written; the generator skips them because of the
-	// optional SessionTarget sub-rule.
-	REGISTER_TRANSFORM(TransformConnectStatement);
 }
 
 void PEGTransformerFactory::RegisterPivot() {

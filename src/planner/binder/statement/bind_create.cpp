@@ -476,6 +476,8 @@ void Binder::BindLogicalType(LogicalType &type) {
 	});
 }
 
+bool BoundBodyContainsTrigger(const LogicalOperator &op);
+
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres)
 	TableDescription table_description(create_trigger_info.base_table->catalog_name,
@@ -521,8 +523,16 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			}
 		}
 	}
-	if (create_trigger_info.for_each == TriggerForEach::ROW) {
-		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
+	if (create_trigger_info.for_each == TriggerForEach::ROW &&
+	    (!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty())) {
+		throw BinderException("REFERENCING is not valid for FOR EACH ROW triggers");
+	}
+	if (create_trigger_info.for_each == TriggerForEach::ROW && create_trigger_info.timing != TriggerTiming::AFTER) {
+		throw NotImplementedException("BEFORE FOR EACH ROW triggers are not yet supported");
+	}
+	if (create_trigger_info.for_each == TriggerForEach::ROW &&
+	    create_trigger_info.event_type != TriggerEventType::INSERT_EVENT) {
+		throw NotImplementedException("UPDATE and DELETE FOR EACH ROW triggers are not yet supported");
 	}
 	if ((!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty()) &&
 	    create_trigger_info.timing != TriggerTiming::AFTER) {
@@ -545,6 +555,23 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		throw BinderException("REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers");
 	}
 
+	auto opposite_for_each =
+	    create_trigger_info.for_each == TriggerForEach::ROW ? TriggerForEach::STATEMENT : TriggerForEach::ROW;
+	// Statement and row triggers use separate expansion paths that don't compose, so reject mixing them per event.
+	// CREATE OR REPLACE that targets the same-named trigger is allowed: that trigger is atomically replaced,
+	// so the final catalog contains only the new one and there is no mixing.
+	auto conflicting = table.GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context),
+	                                             create_trigger_info.event_type, opposite_for_each);
+	bool is_replace = create_trigger_info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
+	auto has_real_conflict =
+	    std::any_of(conflicting.begin(), conflicting.end(), [&](const_reference<TriggerCatalogEntry> t) {
+		    return !(is_replace && t.get().name == create_trigger_info.trigger_name);
+	    });
+	if (has_real_conflict) {
+		throw NotImplementedException(
+		    "Mixing FOR EACH STATEMENT and FOR EACH ROW triggers on the same table is not yet supported");
+	}
+
 	// Validate the trigger body using an isolated binder (own GlobalBinderState).
 	// Set up trigger_expanded_tables to match runtime behavior.
 	// Set up trigger_creation_table to detect recursive triggers during the validation.
@@ -559,7 +586,44 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			body_copy->cte_map.map[alias] = MakeTriggerValidationCTE(table);
 		}
 	}
-	validation_binder->Bind(*body_copy);
+	// For FOR EACH ROW: register NEW as a generic binding so BindCorrelatedColumns can resolve NEW.col column
+	// references.
+	unique_ptr<ExpressionBinder> row_scope_binder;
+	if (create_trigger_info.for_each == TriggerForEach::ROW) {
+		if (table.HasGeneratedColumns()) {
+			throw NotImplementedException(
+			    "FOR EACH ROW triggers on tables with generated columns are not yet supported");
+		}
+		if (create_trigger_info.trigger_action->type == QueryNodeType::UPDATE_QUERY_NODE) {
+			throw NotImplementedException("UPDATE trigger bodies in FOR EACH ROW triggers are not yet supported");
+		}
+		vector<Identifier> col_names;
+		vector<LogicalType> col_types;
+		for (auto &col : table.GetColumns().Physical()) {
+			col_names.push_back(col.GetName());
+			col_types.push_back(col.GetType());
+		}
+		auto new_idx = validation_binder->GenerateTableIndex();
+		row_scope_binder = validation_binder->SetupNewRowScope(new_idx, col_names, col_types);
+	}
+	if (row_scope_binder) {
+		auto body_binder = Binder::CreateBinder(context, validation_binder.get());
+		auto bound_body = body_binder->Bind(*body_copy);
+		validation_binder->GetActiveBinders().pop_back();
+		if (body_binder->correlated_columns.empty()) {
+			throw BinderException("FOR EACH ROW trigger \"%s\" on table \"%s\" must reference at least one NEW "
+			                      "column in the trigger body (use FOR EACH STATEMENT if row data is not needed)",
+			                      create_trigger_info.trigger_name, table.name);
+		}
+		if (BoundBodyContainsTrigger(*bound_body.plan)) {
+			throw NotImplementedException(
+			    "FOR EACH ROW trigger \"%s\" on table \"%s\" writes to a table that has its own FOR EACH ROW "
+			    "trigger (cascading row triggers are not yet supported)",
+			    create_trigger_info.trigger_name, table.name);
+		}
+	} else {
+		validation_binder->Bind(*body_copy);
+	}
 
 	// Add table dependency
 	create_trigger_info.dependencies.AddDependency(table);

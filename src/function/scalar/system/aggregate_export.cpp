@@ -1,6 +1,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 #include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
@@ -665,7 +666,6 @@ unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
 
 void ExportAggregateFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_data, Vector &result, idx_t count,
                              idx_t offset) {
-	D_ASSERT(offset == 0);
 	const data_ptr_t *addresses_ptrs;
 	if (state.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (count != 1) {
@@ -678,8 +678,15 @@ void ExportAggregateFinalize(Vector &state, AggregateFinalizeInputData &aggr_inp
 
 	auto layout = GetLayout(aggr_input_data.function, aggr_input_data.bind_data);
 
-	result.Flatten();
-	SerializeState(layout, result, count, addresses_ptrs);
+	if (offset == 0) {
+		SerializeState(layout, result, count, addresses_ptrs);
+		return;
+	}
+	// finalizing at a non-zero offset (e.g. ordered aggregates) - serialize into a temporary vector and copy the
+	// result into place so the rest of the result vector is left untouched
+	Vector temp(result.GetType(), count);
+	SerializeState(layout, temp, count, addresses_ptrs);
+	VectorOperations::Copy(temp, result, count, 0, offset);
 }
 
 // the executor invokes this callback with combine_aggr's own bind data (ExportAggregateBindData) - the underlying
@@ -760,14 +767,21 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 
 void CombineAggrFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_data, Vector &result, idx_t count,
                          idx_t offset) {
-	D_ASSERT(offset == 0);
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
 	auto &underlying_aggr = bind_data.aggr;
 
 	auto layout = GetLayout(underlying_aggr, bind_data.bind_data.get());
 
-	result.Flatten();
-	SerializeState(underlying_aggr, bind_data.bind_data.get(), layout, state, count, result, aggr_input_data.allocator);
+	if (offset == 0) {
+		SerializeState(underlying_aggr, bind_data.bind_data.get(), layout, state, count, result,
+		               aggr_input_data.allocator);
+		return;
+	}
+	// finalizing at a non-zero offset (e.g. ordered aggregates) - serialize into a temporary vector and copy the
+	// result into place so the rest of the result vector is left untouched
+	Vector temp(result.GetType(), count);
+	SerializeState(underlying_aggr, bind_data.bind_data.get(), layout, state, count, temp, aggr_input_data.allocator);
+	VectorOperations::Copy(temp, result, count, 0, offset);
 }
 
 // constructs the AGGREGATE_STATE type for the given bound aggregate function

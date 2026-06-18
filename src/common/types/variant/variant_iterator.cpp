@@ -58,9 +58,9 @@ bool ShreddedIsValid(const ShreddedVariantIterator &node, idx_t index) {
 } // namespace
 
 //===--------------------------------------------------------------------===//
-// VariantIteratorState
+// VariantIterator
 //===--------------------------------------------------------------------===//
-VariantIteratorState::VariantIteratorState(const Vector &variant)
+VariantIterator::VariantIterator(const Vector &variant)
     //! The unshredded ("core") source is the variant itself, or the unshredded component of a shredded vector
     : unshredded(variant.GetVectorType() == VectorType::SHREDDED_VECTOR ? ShreddedVector::GetUnshreddedVector(variant)
                                                                         : variant) {
@@ -155,27 +155,27 @@ uint32_t UnshreddedVariantIterator::GetValuesIndex(idx_t row, idx_t child_index)
 //===--------------------------------------------------------------------===//
 // Root / row validity
 //===--------------------------------------------------------------------===//
-VariantIterator VariantIteratorState::Root(idx_t row) const {
+VariantNode VariantIterator::Root(idx_t row) const {
 	if (is_shredded) {
 		//! The shredded component's top-level validity is the authoritative row validity (a SQL-NULL row
 		//! has the whole shredded struct set to NULL). This must be checked separately because
 		//! ResolveShredded only inspects the typed_value / untyped_value_index of a wrapper, never the
 		//! wrapper's own struct validity.
 		if (!ShreddedIsValid(shredded_format, row)) {
-			return VariantIterator::MakeNull(*this);
+			return VariantNode::MakeNull(*this);
 		}
-		auto root = VariantIterator::ResolveShredded(*this, shredded_format, row, row);
+		auto root = VariantNode::ResolveShredded(*this, shredded_format, row, row);
 		//! a root value is never "missing" - treat any such case as a SQL NULL
-		return root.IsMissing() ? VariantIterator::MakeNull(*this) : root;
+		return root.IsMissing() ? VariantNode::MakeNull(*this) : root;
 	}
 	if (!unshredded.RowIsValid(row)) {
-		return VariantIterator::MakeNull(*this);
+		return VariantNode::MakeNull(*this);
 	}
 	//! The unshredded root value lives at values[0]
-	return VariantIterator::MakeUnshredded(*this, row, 0);
+	return VariantNode::MakeUnshredded(*this, row, 0);
 }
 
-bool VariantIteratorState::RowIsValid(idx_t row) const {
+bool VariantIterator::RowIsValid(idx_t row) const {
 	//! A VARIANT is never NULL at the root via a VARIANT_NULL value (that is reserved for nested values) -
 	//! a root that resolves to NULL is a genuine SQL NULL. This matches the semantics of unshredding,
 	//! where a shredded value whose typed leaf is NULL (with no unshredded leftover) becomes a SQL NULL.
@@ -183,24 +183,24 @@ bool VariantIteratorState::RowIsValid(idx_t row) const {
 }
 
 //===--------------------------------------------------------------------===//
-// VariantIterator - factory helpers
+// VariantNode - factory helpers
 //===--------------------------------------------------------------------===//
-VariantIterator VariantIterator::MakeNull(const VariantIteratorState &state) {
-	VariantIterator result;
+VariantNode VariantNode::MakeNull(const VariantIterator &state) {
+	VariantNode result;
 	result.state = &state;
 	result.kind = Kind::NULL_VALUE;
 	return result;
 }
 
-VariantIterator VariantIterator::MakeMissing(const VariantIteratorState &state) {
-	VariantIterator result;
+VariantNode VariantNode::MakeMissing(const VariantIterator &state) {
+	VariantNode result;
 	result.state = &state;
 	result.kind = Kind::MISSING;
 	return result;
 }
 
-VariantIterator VariantIterator::MakeUnshredded(const VariantIteratorState &state, idx_t row, uint32_t value_index) {
-	VariantIterator result;
+VariantNode VariantNode::MakeUnshredded(const VariantIterator &state, idx_t row, uint32_t value_index) {
+	VariantNode result;
 	result.state = &state;
 	result.kind = Kind::UNSHREDDED;
 	result.row = row;
@@ -208,9 +208,9 @@ VariantIterator VariantIterator::MakeUnshredded(const VariantIteratorState &stat
 	return result;
 }
 
-VariantIterator VariantIterator::MakeShredded(const VariantIteratorState &state, const ShreddedVariantIterator &content,
-                                              idx_t index, idx_t row, uint32_t overlay_value_index) {
-	VariantIterator result;
+VariantNode VariantNode::MakeShredded(const VariantIterator &state, const ShreddedVariantIterator &content, idx_t index,
+                                      idx_t row, uint32_t overlay_value_index) {
+	VariantNode result;
 	result.state = &state;
 	result.kind = Kind::SHREDDED;
 	result.row = row;
@@ -223,8 +223,8 @@ VariantIterator VariantIterator::MakeShredded(const VariantIteratorState &state,
 //===--------------------------------------------------------------------===//
 // Shredded resolution
 //===--------------------------------------------------------------------===//
-VariantIterator VariantIterator::ResolveShredded(const VariantIteratorState &state, const ShreddedVariantIterator &node,
-                                                 idx_t index, idx_t row) {
+VariantNode VariantNode::ResolveShredded(const VariantIterator &state, const ShreddedVariantIterator &node, idx_t index,
+                                         idx_t row) {
 	if (node.logical_type.id() != LogicalTypeId::STRUCT) {
 		//! A flattened (fully-consistent) primitive - a NULL here represents a VARIANT_NULL value
 		if (!ShreddedIsValid(node, index)) {
@@ -348,12 +348,11 @@ static VariantLogicalType ShreddedTypeId(const ShreddedVariantIterator &content,
 	case LogicalTypeId::GEOMETRY:
 		return VariantLogicalType::GEOMETRY;
 	default:
-		throw NotImplementedException("Shredded VARIANT type '%s' is not supported by VariantIterator",
-		                              type.ToString());
+		throw NotImplementedException("Shredded VARIANT type '%s' is not supported by VariantNode", type.ToString());
 	}
 }
 
-VariantLogicalType VariantIterator::GetTypeId() const {
+VariantLogicalType VariantNode::GetTypeId() const {
 	switch (kind) {
 	case Kind::NULL_VALUE:
 		return VariantLogicalType::VARIANT_NULL;
@@ -362,14 +361,14 @@ VariantLogicalType VariantIterator::GetTypeId() const {
 	case Kind::SHREDDED:
 		return ShreddedTypeId(*shredded_format, shredded_index);
 	default:
-		throw InternalException("VariantIterator::GetTypeId called on a MISSING value");
+		throw InternalException("VariantNode::GetTypeId called on a MISSING value");
 	}
 }
 
 //===--------------------------------------------------------------------===//
 // Primitive accessors
 //===--------------------------------------------------------------------===//
-const_data_ptr_t VariantIterator::GetDataPointer() const {
+const_data_ptr_t VariantNode::GetDataPointer() const {
 	if (kind == Kind::UNSHREDDED) {
 		auto &blob = state->unshredded.GetBlob(row);
 		return const_data_ptr_cast(blob.GetData()) + state->unshredded.GetByteOffset(row, value_index);
@@ -380,7 +379,7 @@ const_data_ptr_t VariantIterator::GetDataPointer() const {
 	return content.unified.data + content.unified.sel->get_index(shredded_index) * type_size;
 }
 
-string_t VariantIterator::GetString() const {
+string_t VariantNode::GetString() const {
 	if (kind == Kind::UNSHREDDED) {
 		return DecodeStringData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, value_index));
 	}
@@ -389,7 +388,7 @@ string_t VariantIterator::GetString() const {
 	return content.unified.GetData<string_t>()[content.unified.sel->get_index(shredded_index)];
 }
 
-VariantDecimalData VariantIterator::GetDecimal() const {
+VariantDecimalData VariantNode::GetDecimal() const {
 	if (kind == Kind::UNSHREDDED) {
 		return DecodeDecimalData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, value_index));
 	}
@@ -406,22 +405,22 @@ VariantDecimalData VariantIterator::GetDecimal() const {
 //===--------------------------------------------------------------------===//
 // Nested accessors
 //===--------------------------------------------------------------------===//
-VariantObjectIterator VariantIterator::GetObjectChildren(VariantIterationOrder order) const {
+VariantObjectIterator VariantNode::GetObjectChildren(VariantIterationOrder order) const {
 	return VariantObjectIterator(*this, order);
 }
 
-VariantArrayIterator VariantIterator::GetArrayChildren() const {
+VariantArrayIterator VariantNode::GetArrayChildren() const {
 	return VariantArrayIterator(*this);
 }
 
 //===--------------------------------------------------------------------===//
 // VariantArrayIterator
 //===--------------------------------------------------------------------===//
-VariantArrayIterator::VariantArrayIterator(const VariantIterator &array)
-    : state(array.state), row(array.row), shredded(array.kind == VariantIterator::Kind::SHREDDED) {
+VariantArrayIterator::VariantArrayIterator(const VariantNode &array)
+    : state(*array.state), row(array.row), shredded(array.kind == VariantNode::Kind::SHREDDED) {
 	if (!shredded) {
-		auto nested =
-		    DecodeNestedData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, array.value_index));
+		auto &unshredded = state.get().unshredded;
+		auto nested = DecodeNestedData(unshredded.GetBlob(row), unshredded.GetByteOffset(row, array.value_index));
 		base = nested.children_idx;
 		length = nested.child_count;
 		return;
@@ -435,21 +434,22 @@ VariantArrayIterator::VariantArrayIterator(const VariantIterator &array)
 	element_node = content.children[0];
 }
 
-VariantIterator VariantArrayIterator::operator[](idx_t i) const {
+VariantNode VariantArrayIterator::operator[](idx_t i) const {
+	auto &state_ref = state.get();
 	if (shredded) {
-		return VariantIterator::ResolveShredded(*state, *element_node, base + i, row);
+		return VariantNode::ResolveShredded(state_ref, *element_node, base + i, row);
 	}
-	return VariantIterator::MakeUnshredded(*state, row, state->unshredded.GetValuesIndex(row, base + i));
+	return VariantNode::MakeUnshredded(state_ref, row, state_ref.unshredded.GetValuesIndex(row, base + i));
 }
 
 //===--------------------------------------------------------------------===//
 // VariantObjectIterator
 //===--------------------------------------------------------------------===//
-VariantObjectIterator::VariantObjectIterator(const VariantIterator &object, VariantIterationOrder order)
-    : state(object.state), row(object.row), order(order), shredded(object.kind == VariantIterator::Kind::SHREDDED) {
+VariantObjectIterator::VariantObjectIterator(const VariantNode &object, VariantIterationOrder order)
+    : state(*object.state), row(object.row), order(order), shredded(object.kind == VariantNode::Kind::SHREDDED) {
+	auto &unshredded = state.get().unshredded;
 	if (!shredded) {
-		auto nested =
-		    DecodeNestedData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, object.value_index));
+		auto nested = DecodeNestedData(unshredded.GetBlob(row), unshredded.GetByteOffset(row, object.value_index));
 		base = nested.children_idx;
 		raw_count = nested.child_count;
 	} else {
@@ -460,8 +460,7 @@ VariantObjectIterator::VariantObjectIterator(const VariantIterator &object, Vari
 		raw_count = typed_field_count;
 		if (object.overlay_value_index != 0) {
 			auto overlay_value_index = object.overlay_value_index - 1;
-			auto nested = DecodeNestedData(state->unshredded.GetBlob(row),
-			                               state->unshredded.GetByteOffset(row, overlay_value_index));
+			auto nested = DecodeNestedData(unshredded.GetBlob(row), unshredded.GetByteOffset(row, overlay_value_index));
 			overlay_base = nested.children_idx;
 			raw_count += nested.child_count;
 		}
@@ -485,26 +484,27 @@ VariantObjectIterator::VariantObjectIterator(const VariantIterator &object, Vari
 }
 
 VariantObjectEntry VariantObjectIterator::RawEntry(idx_t raw_pos) const {
+	auto &state_ref = state.get();
+	auto &unshredded = state_ref.unshredded;
 	if (!shredded) {
 		auto child_idx = base + raw_pos;
-		auto key_idx = state->unshredded.GetKeysIndex(row, child_idx);
-		auto value_idx = state->unshredded.GetValuesIndex(row, child_idx);
-		return VariantObjectEntry {state->unshredded.GetKey(row, key_idx),
-		                           VariantIterator::MakeUnshredded(*state, row, value_idx)};
+		auto key_idx = unshredded.GetKeysIndex(row, child_idx);
+		auto value_idx = unshredded.GetValuesIndex(row, child_idx);
+		return VariantObjectEntry {unshredded.GetKey(row, key_idx),
+		                           VariantNode::MakeUnshredded(state_ref, row, value_idx)};
 	}
 	if (raw_pos < typed_field_count) {
 		//! A shredded (typed) field - struct fields preserve the (logical) index of the parent
 		auto &name = StructType::GetChildTypes(content->logical_type)[raw_pos].first;
 		return VariantObjectEntry {
 		    string_t(name.c_str(), NumericCast<uint32_t>(name.size())),
-		    VariantIterator::ResolveShredded(*state, content->children[raw_pos], shredded_index, row)};
+		    VariantNode::ResolveShredded(state_ref, content->children[raw_pos], shredded_index, row)};
 	}
 	//! A leftover field from the overlay (unshredded) object
 	auto child_idx = overlay_base + (raw_pos - typed_field_count);
-	auto key_idx = state->unshredded.GetKeysIndex(row, child_idx);
-	auto value_idx = state->unshredded.GetValuesIndex(row, child_idx);
-	return VariantObjectEntry {state->unshredded.GetKey(row, key_idx),
-	                           VariantIterator::MakeUnshredded(*state, row, value_idx)};
+	auto key_idx = unshredded.GetKeysIndex(row, child_idx);
+	auto value_idx = unshredded.GetValuesIndex(row, child_idx);
+	return VariantObjectEntry {unshredded.GetKey(row, key_idx), VariantNode::MakeUnshredded(state_ref, row, value_idx)};
 }
 
 void VariantObjectIterator::Iterator::Load() {

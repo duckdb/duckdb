@@ -37,16 +37,12 @@
         "test/sql/aggregate/aggregates/test_aggregate_types_scalar.test",
         "test/sql/aggregate/aggregates/test_approx_quantile.test",
         "test/sql/aggregate/aggregates/test_binned_histogram.test",
-        "test/sql/aggregate/aggregates/test_bit_and.test",
-        "test/sql/aggregate/aggregates/test_bit_or.test",
-        "test/sql/aggregate/aggregates/test_bit_xor.test",
         "test/sql/aggregate/aggregates/test_bitstring_agg.test",
         "test/sql/aggregate/aggregates/test_entropy.test",
         "test/sql/aggregate/aggregates/test_histogram.test",
         "test/sql/aggregate/aggregates/test_histogram_3529.test",
         "test/sql/aggregate/aggregates/test_mode.test",
         "test/sql/aggregate/aggregates/test_ordered_aggregates.test",
-        "test/sql/cte/recursive_cte_key_aggregation.test",
         "test/sql/function/list/aggregates/histogram_decimal.test",
         "test/sql/pivot/pivot_operator_expression.test",
         "test/sql/types/struct/struct_equality_bug.test",
@@ -73,22 +69,9 @@
       ]
     },
     {
-      "reason": "FIXME: ExportAggregateFinalize asserts offset == 0 - finalizing with an offset is not supported (hit by list/array_agg results and ordered first/last/any_value/string_agg)",
-      "paths": [
-        "test/sql/aggregate/aggregates/test_any_value.test",
-        "test/sql/aggregate/aggregates/test_last.test",
-        "test/sql/aggregate/aggregates/test_order_by_aggregate.test",
-        "test/sql/aggregate/aggregates/test_string_agg.test",
-        "test/sql/aggregate/aggregates/test_string_agg_big.test",
-        "test/sql/attach/attach_show_all_tables.test",
-        "test/sql/function/list/flatten.test",
-        "test/sql/types/nested/array/array_list_aggregate.test",
-        "test/sql/types/nested/list/array_agg.test"
-      ]
-    },
-    {
       "reason": "FIXME: ordered aggregate rewrite fails - list_sort cannot bind over an exported AGGREGATE_STATE",
       "paths": [
+        "test/sql/aggregate/aggregates/test_order_by_aggregate.test",
         "test/sql/copy/csv/read_csv_variable.test",
         "test/sql/cte/test_recursive_cte_recurring.test"
       ]

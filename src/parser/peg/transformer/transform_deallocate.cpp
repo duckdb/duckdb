@@ -4,7 +4,7 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformDeallocateStatement(PEGTransformer &transformer,
-                                                                             const bool &deallocate_prepare,
+                                                                             const optional<bool> &deallocate_prepare,
                                                                              const Identifier &identifier) {
 	auto result = make_uniq<DropStatement>();
 	result->info->type = CatalogType::PREPARED_STATEMENT;
