@@ -1355,6 +1355,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAnonymousParameter(
 	// Register it
 	transformer.SetParam(Identifier(identifier), known_param_index, PreparedParamType::AUTO_INCREMENT);
 	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
+	transformer.has_anonymous_parameters = true;
 
 	expr->IdentifierMutable() = Identifier(identifier);
 	return std::move(expr);
@@ -1411,6 +1412,7 @@ PEGTransformerFactory::TransformNumberedParameter(PEGTransformer &transformer,
 
 	expr->IdentifierMutable() = Identifier(identifier);
 	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
+	transformer.has_anonymous_parameters = true;
 	return std::move(expr);
 }
 
