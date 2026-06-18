@@ -250,7 +250,8 @@ void DictFSSTCompressionState::CreateEmptySegment() {
 	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 	current_handle = buffer_manager.Pin(current_segment->block);
 
-	append_state = DictionaryAppendState::REGULAR;
+	// If analysis determined that FSST cannot be used, skip the decision phase.
+	append_state = analyze->disable_fsst ? DictionaryAppendState::NOT_ENCODED : DictionaryAppendState::REGULAR;
 	string_lengths_width = 0;
 	real_string_lengths_width = 0;
 	dictionary_indices_width = 0;
@@ -851,7 +852,7 @@ void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 				break;
 			}
 
-			if (append_state == DictionaryAppendState::REGULAR && !analyze->disable_fsst) {
+			if (append_state == DictionaryAppendState::REGULAR) {
 				append_state = TryEncode();
 				D_ASSERT(append_state != DictionaryAppendState::REGULAR);
 				if (CompressInternal(vector_format, str, is_null, encoded_input, i, count, false)) {
