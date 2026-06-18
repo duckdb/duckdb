@@ -132,39 +132,39 @@ struct LoadOp {
 	}
 };
 
-// Store rows from the packed binary state buffer into a result vector.
+// Store rows from the packed binary state buffer into a result vector at [offset, offset + count).
 struct StoreOp {
 	template <class T>
-	static void Operation(Vector &result, idx_t count, const data_ptr_t *sources, idx_t field_offset) {
-		auto dst = FlatVector::Writer<T>(result, count);
+	static void Operation(Vector &result, idx_t count, const data_ptr_t *sources, idx_t field_offset, idx_t offset) {
+		auto dst = FlatVector::Writer<T>(result, count, offset);
 		for (idx_t i = 0; i < count; i++) {
 			dst.WriteValue(Load<T>(sources[i] + field_offset));
 		}
 	}
 };
 
-// Recursively serialize a state field to a result vector.
+// Recursively serialize a state field to a result vector, writing the `count` rows at [offset, offset + count).
 // base: accumulated byte offset from the state slot start to this field's parent base.
 // Each child's field_offset is relative to that parent base.
 static void SerializeField(const LogicalType &type, const AggregateStateField &field, Vector &result, idx_t count,
-                           const data_ptr_t *addresses, idx_t base) {
+                           const data_ptr_t *addresses, idx_t base, idx_t offset) {
 	switch (field.kind) {
 	case AggregateFieldKind::OPTIONAL_VALUE:
 		D_ASSERT(field.children.size() == 1);
 		for (idx_t i = 0; i < count; i++) {
 			if (!Load<bool>(addresses[i] + base + field.field_offset)) {
-				FlatVector::SetNull(result, i, true);
+				FlatVector::SetNull(result, offset + i, true);
 			}
 		}
-		SerializeField(type, field.children[0], result, count, addresses, base);
+		SerializeField(type, field.children[0], result, count, addresses, base, offset);
 		break;
 	case AggregateFieldKind::SORT_KEY:
 		for (idx_t i = 0; i < count; i++) {
-			if (!FlatVector::Validity(result).RowIsValid(i)) {
+			if (!FlatVector::Validity(result).RowIsValid(offset + i)) {
 				continue;
 			}
 			const string_t sort_key = Load<string_t>(addresses[i] + base + field.field_offset);
-			CreateSortKeyHelpers::DecodeSortKey(sort_key, result, i,
+			CreateSortKeyHelpers::DecodeSortKey(sort_key, result, offset + i,
 			                                    OrderModifiers(field.sort_key_order, OrderByNullType::NULLS_LAST));
 		}
 		break;
@@ -174,12 +174,12 @@ static void SerializeField(const LogicalType &type, const AggregateStateField &f
 		const idx_t new_base = base + field.field_offset;
 		for (idx_t field_idx = 0; field_idx < field.children.size(); field_idx++) {
 			SerializeField(child_types[field_idx].second, field.children[field_idx], struct_entries[field_idx], count,
-			               addresses, new_base);
+			               addresses, new_base, offset);
 		}
 		break;
 	}
 	case AggregateFieldKind::PRIMITIVE:
-		TemplateDispatch<StoreOp>(type.InternalType(), result, count, addresses, base + field.field_offset);
+		TemplateDispatch<StoreOp>(type.InternalType(), result, count, addresses, base + field.field_offset, offset);
 		break;
 	case AggregateFieldKind::LIST: {
 		// linked list field: build the result LIST vector from each state's linked list
@@ -194,7 +194,8 @@ static void SerializeField(const LogicalType &type, const AggregateStateField &f
 		const auto &element = field.children[0];
 		if (element.kind != AggregateFieldKind::SORT_KEY) {
 			// elements are stored directly - build the result LIST vector from each state's linked list
-			field.list_functions.BuildLists(linked_lists, result, 0);
+			// (BuildLists appends to the result's child, writing the list entries at [offset, offset + count))
+			field.list_functions.BuildLists(linked_lists, result, offset);
 			break;
 		}
 		// the elements are sort keys: build the physically stored (BLOB) elements into a temporary LIST vector, then
@@ -202,14 +203,15 @@ static void SerializeField(const LogicalType &type, const AggregateStateField &f
 		Vector physical_list(LogicalType::LIST(LogicalType::BLOB), count);
 		field.list_functions.BuildLists(linked_lists, physical_list, 0);
 
-		ListVector::Reserve(result, ListVector::GetListSize(physical_list));
+		// append to the result child, starting after any rows already written at a lower offset
+		idx_t child_offset = ListVector::GetListSize(result);
+		ListVector::Reserve(result, child_offset + ListVector::GetListSize(physical_list));
 		auto &result_child = ListVector::GetChildMutable(result);
 		auto result_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 		const OrderModifiers modifiers(element.sort_key_order, OrderByNullType::NULLS_LAST);
 
-		idx_t child_offset = 0;
 		for (const auto list_entry : physical_list.Values<VectorListType<string_t>>()) {
-			const auto row = list_entry.GetIndex();
+			const auto row = offset + list_entry.GetIndex();
 			if (!list_entry.IsValid()) {
 				// an empty linked list is exported as NULL, matching the finalize semantics of list aggregates
 				FlatVector::SetNull(result, row, true);
@@ -323,18 +325,18 @@ static void DeserializeState(const BoundAggregateFunction &aggr, const Aggregate
 	DeserializeField(layout.type, layout.field, input_vec, count, dest_buffer, layout.total_state_size, 0, allocator);
 }
 
-static void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count,
-                           const data_ptr_t *addresses) {
-	SerializeField(layout.type, layout.field, result, count, addresses, 0);
+static void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count, const data_ptr_t *addresses,
+                           idx_t offset) {
+	SerializeField(layout.type, layout.field, result, count, addresses, 0, offset);
 }
 
 static void SerializeState(const BoundAggregateFunction &aggr, optional_ptr<FunctionData> bind_data,
                            const AggregateStateLayout &layout, Vector &states, idx_t count, Vector &result,
-                           ArenaAllocator &allocator) {
+                           ArenaAllocator &allocator, idx_t offset) {
 	if (aggr.HasExportAggregateStateCallback()) {
 		// the aggregate explicitly serializes its own states
 		AggregateFinalizeInputData aggr_input_data(aggr, bind_data, allocator);
-		aggr.GetExportAggregateStateCallback()(states, aggr_input_data, result, count, 0);
+		aggr.GetExportAggregateStateCallback()(states, aggr_input_data, result, count, offset);
 		return;
 	}
 	const data_ptr_t *addresses;
@@ -343,7 +345,7 @@ static void SerializeState(const BoundAggregateFunction &aggr, optional_ptr<Func
 	} else {
 		addresses = FlatVector::GetData<data_ptr_t>(states);
 	}
-	SerializeState(layout, result, count, addresses);
+	SerializeState(layout, result, count, addresses, offset);
 }
 
 // destroys the temporary underlying-aggregate states referenced by `states` (no-op if the aggregate has no
@@ -488,7 +490,7 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 		bind_data.aggr.GetStateCombineCallback()(local_state.addresses0, local_state.addresses1, aggr_input_data,
 		                                         count);
 		SerializeState(bind_data.aggr, bind_data.bind_data.get(), layout, local_state.addresses1, count, result,
-		               local_state.allocator);
+		               local_state.allocator, 0);
 	} catch (...) {
 		destroy_states();
 		throw;
@@ -665,7 +667,6 @@ unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
 
 void ExportAggregateFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_data, Vector &result, idx_t count,
                              idx_t offset) {
-	D_ASSERT(offset == 0);
 	const data_ptr_t *addresses_ptrs;
 	if (state.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (count != 1) {
@@ -678,8 +679,12 @@ void ExportAggregateFinalize(Vector &state, AggregateFinalizeInputData &aggr_inp
 
 	auto layout = GetLayout(aggr_input_data.function, aggr_input_data.bind_data);
 
-	result.Flatten();
-	SerializeState(layout, result, count, addresses_ptrs);
+	// only flatten the result the first time it is written - ordered aggregates finalize one group at a time at
+	// increasing offsets, appending into the (already flat) result
+	if (offset == 0) {
+		result.Flatten();
+	}
+	SerializeState(layout, result, count, addresses_ptrs, offset);
 }
 
 // the executor invokes this callback with combine_aggr's own bind data (ExportAggregateBindData) - the underlying
@@ -767,7 +772,8 @@ void CombineAggrFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_d
 	auto layout = GetLayout(underlying_aggr, bind_data.bind_data.get());
 
 	result.Flatten();
-	SerializeState(underlying_aggr, bind_data.bind_data.get(), layout, state, count, result, aggr_input_data.allocator);
+	SerializeState(underlying_aggr, bind_data.bind_data.get(), layout, state, count, result, aggr_input_data.allocator,
+	               0);
 }
 
 // constructs the AGGREGATE_STATE type for the given bound aggregate function

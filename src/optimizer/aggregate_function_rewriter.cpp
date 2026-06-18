@@ -182,6 +182,11 @@ public:
 			return false;
 		}
 		auto &expr = expr_p.Cast<BoundAggregateExpression>();
+		// don't rewrite state-export aggregates - list(x ORDER BY x) EXPORT_STATE would become
+		// list_sort(list(x) EXPORT_STATE, ...), which cannot bind list_sort on the AGGREGATE_STATE result
+		if (expr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+			return false;
+		}
 		if (!FunctionMatcher::Match(function, expr.Function().GetName())) {
 			return false;
 		}
