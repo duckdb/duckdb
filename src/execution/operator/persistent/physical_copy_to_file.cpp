@@ -204,6 +204,15 @@ private:
 	unique_ptr<GlobalFileState> file_state;
 };
 
+struct PendingFileStateOpen {
+	PendingFileState pending_file_state;
+	shared_ptr<FileStateOpenJob> open_job;
+
+	explicit operator bool() const {
+		return open_job.get();
+	}
+};
+
 struct FileStateHandle {
 public:
 	FileStateHandle() = default;
@@ -417,8 +426,12 @@ public:
 	PendingFileState PrepareFileStateLocked(string output_path = string(),
 	                                        optional_ptr<const vector<Value>> partition_values = nullptr)
 	    DUCKDB_REQUIRES(lock);
+	PendingFileStateOpen CreateFileStateOpenLocked(FileStateHandle &file_state, string output_path = string(),
+	                                               optional_ptr<const vector<Value>> partition_values = nullptr)
+	    DUCKDB_REQUIRES(lock);
 	unique_ptr<GlobalFileState> InitializeFileState(PendingFileState pending_file_state);
 	void RegisterPrepareGlobalStateLocked(GlobalFileState &file_state) DUCKDB_REQUIRES(lock);
+	void ScheduleFileStateOpen(PendingFileStateOpen pending_file_state_open) DUCKDB_EXCLUDES(lock);
 	void RequestFileState(FileStateHandle &file_state, string output_path = string(),
 	                      optional_ptr<const vector<Value>> partition_values = nullptr) DUCKDB_EXCLUDES(lock);
 	GlobalFileState &EnsureFileStateReady(FileStateHandle &file_state,
@@ -1022,8 +1035,6 @@ public:
 	PartitionFileStateReservation
 	ReservePartitionFileStateLocked(const vector<Value> &values, FileCreationReason reason = FileCreationReason::NORMAL)
 	    DUCKDB_REQUIRES(active_writes_lock);
-	void RequestPartitionFileStateFromReservation(FileStateHandle &file_state, const vector<Value> &values,
-	                                              idx_t offset) DUCKDB_EXCLUDES(active_writes_lock);
 	void FinalizeActiveWrites() DUCKDB_EXCLUDES(active_writes_lock);
 	void FinalizeFileStates(vector<FileStateHandle> files_to_finalize) DUCKDB_EXCLUDES(active_writes_lock);
 	string GetOrCreateDirectory(string path, const vector<Value> &values) DUCKDB_REQUIRES(copy_gstate.lock);
@@ -2446,16 +2457,54 @@ void PartitionedCopy::ReleasePartitionWriteInfo(PartitionWriteInfo &write_info) 
 
 void PartitionedCopy::RequestPartitionFileState(FileStateHandle &file_state, const vector<Value> &values,
                                                 FileCreationReason reason) {
-	if (file_state) {
-		return;
-	}
 	PartitionFileStateReservation reservation;
-	{
+	PendingFileStateOpen pending_file_state_open;
+	try {
 		annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
-		reservation = ReservePartitionFileStateLocked(values, reason);
+		{
+			annotated_lock_guard<annotated_mutex> global_guard(copy_gstate.lock);
+			if (file_state) {
+				return;
+			}
+			reservation = ReservePartitionFileStateLocked(values, reason);
+
+			auto &fs = FileSystem::GetFileSystem(context);
+			const auto hive_path = GetOrCreateDirectory(op.GetTrimmedPath(context, op.file_path), values);
+			auto full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, reservation.offset);
+			if (op.overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
+				// when appending, we first check if the file exists
+				while (fs.FileExists(full_path)) {
+					// file already exists - re-generate name
+					if (!op.filename_pattern.HasUUID()) {
+						throw InternalException("CopyOverwriteMode::COPY_APPEND without {uuid} - and file exists");
+					}
+					full_path =
+					    op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, reservation.offset);
+				}
+			}
+
+			pending_file_state_open = copy_gstate.CreateFileStateOpenLocked(file_state, std::move(full_path), values);
+			D_ASSERT(pending_file_state_open);
+		}
+	} catch (...) {
+		auto error = std::current_exception();
+		try {
+			FinalizeFileStates(std::move(reservation.files_to_finalize));
+		} catch (...) {
+		}
+		std::rethrow_exception(error);
 	}
-	FinalizeFileStates(std::move(reservation.files_to_finalize));
-	RequestPartitionFileStateFromReservation(file_state, values, reservation.offset);
+
+	auto open_job = pending_file_state_open.open_job;
+	try {
+		FinalizeFileStates(std::move(reservation.files_to_finalize));
+		copy_gstate.ScheduleFileStateOpen(std::move(pending_file_state_open));
+	} catch (...) {
+		if (open_job && !open_job->IsFinished()) {
+			open_job->CompleteException(std::current_exception());
+		}
+		throw;
+	}
 }
 
 PartitionFileStateReservation PartitionedCopy::ReservePartitionFileStateLocked(const vector<Value> &values,
@@ -2488,33 +2537,6 @@ PartitionFileStateReservation PartitionedCopy::ReservePartitionFileStateLocked(c
 	}
 
 	return reservation;
-}
-
-void PartitionedCopy::RequestPartitionFileStateFromReservation(FileStateHandle &file_state, const vector<Value> &values,
-                                                               idx_t offset) {
-	string full_path;
-	{
-		// The reservation/eviction decision has already been made under active_writes_lock. This section only
-		// serializes global file bookkeeping and directory tracking.
-		annotated_lock_guard<annotated_mutex> guard(copy_gstate.lock);
-
-		// Create a writer for the current file
-		auto &fs = FileSystem::GetFileSystem(context);
-		const auto hive_path = GetOrCreateDirectory(op.GetTrimmedPath(context, op.file_path), values);
-		full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
-		if (op.overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
-			// when appending, we first check if the file exists
-			while (fs.FileExists(full_path)) {
-				// file already exists - re-generate name
-				if (!op.filename_pattern.HasUUID()) {
-					throw InternalException("CopyOverwriteMode::COPY_APPEND without {uuid} - and file exists");
-				}
-				full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
-			}
-		}
-	}
-	// Initialize write
-	copy_gstate.RequestFileState(file_state, std::move(full_path), values);
 }
 
 void PartitionedCopy::EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &write_info,
@@ -2656,17 +2678,8 @@ void CopyToFileGlobalState::Initialize() {
 	if (initialized) {
 		return;
 	}
-	bool request_file_state = false;
-	{
-		annotated_lock_guard<annotated_mutex> guard(lock);
-		if (!initialized) {
-			initialized = true;
-			request_file_state = true;
-		}
-	}
-	if (request_file_state) {
-		RequestFileState(global_state, op.file_path);
-	}
+	RequestFileState(global_state, op.file_path);
+	initialized = true;
 }
 
 void CopyToFileGlobalState::CreateDir(const string &dir_path) {
@@ -2732,30 +2745,45 @@ void CopyToFileGlobalState::RegisterPrepareGlobalStateLocked(GlobalFileState &fi
 	}
 }
 
-void CopyToFileGlobalState::RequestFileState(FileStateHandle &file_state, string output_path,
-                                             optional_ptr<const vector<Value>> partition_values) {
-	PendingFileState pending_file_state;
-	shared_ptr<FileStateOpenJob> open_job;
-	{
-		annotated_lock_guard<annotated_mutex> guard(lock);
-		if (file_state.HasFileState()) {
-			return;
-		}
-		pending_file_state = PrepareFileStateLocked(std::move(output_path), partition_values);
-		open_job = make_shared_ptr<FileStateOpenJob>();
-		file_state.open_job = open_job;
+PendingFileStateOpen
+CopyToFileGlobalState::CreateFileStateOpenLocked(FileStateHandle &file_state, string output_path,
+                                                 optional_ptr<const vector<Value>> partition_values) {
+	if (file_state.HasFileState()) {
+		return PendingFileStateOpen();
 	}
+	PendingFileStateOpen result;
+	result.pending_file_state = PrepareFileStateLocked(std::move(output_path), partition_values);
+	result.open_job = make_shared_ptr<FileStateOpenJob>();
+	file_state.open_job = result.open_job;
+	return result;
+}
 
+void CopyToFileGlobalState::ScheduleFileStateOpen(PendingFileStateOpen pending_file_state_open) {
+	D_ASSERT(pending_file_state_open);
+	auto open_job = pending_file_state_open.open_job;
 	try {
-		lifecycle_executor.Schedule(open_job,
-		                            [this, open_job, pending_file_state = std::move(pending_file_state)]() mutable {
-			                            open_job->Complete(InitializeFileState(std::move(pending_file_state)));
-		                            });
+		lifecycle_executor.Schedule(
+		    open_job,
+		    [this, open_job, pending_file_state = std::move(pending_file_state_open.pending_file_state)]() mutable {
+			    open_job->Complete(InitializeFileState(std::move(pending_file_state)));
+		    });
 	} catch (...) {
 		if (!open_job->IsFinished()) {
 			open_job->CompleteException(std::current_exception());
 		}
 		throw;
+	}
+}
+
+void CopyToFileGlobalState::RequestFileState(FileStateHandle &file_state, string output_path,
+                                             optional_ptr<const vector<Value>> partition_values) {
+	PendingFileStateOpen pending_file_state_open;
+	{
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		pending_file_state_open = CreateFileStateOpenLocked(file_state, std::move(output_path), partition_values);
+	}
+	if (pending_file_state_open) {
+		ScheduleFileStateOpen(std::move(pending_file_state_open));
 	}
 }
 
