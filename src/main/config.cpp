@@ -228,6 +228,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(StorageBlockPrefetchSetting),
     DUCKDB_GLOBAL(StorageCompatibilityVersionSetting),
     DUCKDB_LOCAL(StreamingBufferSizeSetting),
+    DUCKDB_SETTING_CALLBACK(TableFunctionIdentifierConversionSetting),
     DUCKDB_GLOBAL(TempDirectorySetting),
     DUCKDB_SETTING_CALLBACK(TempFileEncryptionSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
@@ -248,9 +249,9 @@ static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("confi
                                                      DUCKDB_SETTING_ALIAS("memory_limit", 127),
                                                      DUCKDB_SETTING_ALIAS("null_order", 60),
                                                      DUCKDB_SETTING_ALIAS("profile_output", 150),
-                                                     DUCKDB_SETTING_ALIAS("user", 166),
+                                                     DUCKDB_SETTING_ALIAS("user", 167),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 28),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 164),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 165),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -482,6 +483,11 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 			throw InternalException("Invalid number of union members: '%s'", type);
 		}
 		return LogicalType::UNION(union_members);
+	}
+
+	if (type == "STRUCT") {
+		// empty struct
+		return LogicalType::STRUCT({});
 	}
 
 	if (StringUtil::StartsWith(type, "STRUCT(") && StringUtil::EndsWith(type, ")")) {

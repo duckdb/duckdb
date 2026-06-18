@@ -224,8 +224,9 @@ static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &s
 		auto row = row_sel ? static_cast<uint32_t>(row_sel->get_index(i)) : i;
 		auto unshredded = UnshreddedVariantValue(variant, row, value_index);
 
-		if (res[i].IsNull()) {
-			//! Unshredded, has no shredded value
+		if (res[i].IsNull() || res[i].IsMissing()) {
+			//! No shredded value was produced for this row - either the value was not shredded at all, or it is a
+			//! shredded object none of whose fields are present in the typed schema. Take the overlay value as-is.
 			res[i] = std::move(unshredded);
 		} else {
 			//! Partial shredding, already has a shredded value that this has to be combined into

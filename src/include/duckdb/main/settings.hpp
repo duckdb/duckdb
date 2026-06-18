@@ -820,7 +820,7 @@ struct DelimJoinAsCteSetting {
 	static constexpr const char *Description =
 	    "Rewrite delim joins to materialized CTEs during dependent join flattening";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
@@ -1879,6 +1879,18 @@ struct StreamingBufferSizeSetting {
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct TableFunctionIdentifierConversionSetting {
+	using RETURN_TYPE = TableFunctionIdentifierConversion;
+	static constexpr const char *Name = "table_function_identifier_conversion";
+	static constexpr const char *Description = "Configures the use of deprecated implicit conversion of unbound "
+	                                           "identifiers to strings in table function arguments.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "DEFAULT";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct TempDirectorySetting {

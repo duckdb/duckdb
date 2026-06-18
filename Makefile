@@ -540,7 +540,8 @@ TEST_CONFIGS := \
 	test/configs/v1_storage_block_size_16kB.json \
 	test/configs/force_storage_mmap.json \
 	test/configs/verify_aggregate_state_export.json \
-	test/configs/verify_functions.json
+	test/configs/verify_functions.json \
+	test/configs/shredded_vector.json
 
 test_configs:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg))

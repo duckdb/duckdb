@@ -6,10 +6,13 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -257,7 +260,7 @@ VariantNumberKey IntegerNumberKey(T value) {
 }
 
 //! Compute the number key for any value in the NUMBER rank (integer, decimal or bignum)
-VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantIterator &it) {
+VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantNode &it) {
 	switch (type_id) {
 	case VariantLogicalType::DECIMAL: {
 		auto decimal_data = it.GetDecimal();
@@ -360,7 +363,7 @@ void VariantEncodeString(SINK &sink, const string_t &str, bool is_varchar) {
 }
 
 template <class SINK>
-void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
+void EncodeVariantValue(const VariantNode &it, SINK &sink) {
 	auto type_id = it.GetTypeId();
 	// write the type rank - this guarantees values are ordered by type first
 	sink.Write(GetVariantTypeRank(type_id));
@@ -484,7 +487,7 @@ void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
 //! encode the *logical* value of the variant - this encoding is intentionally not reversible (e.g.
 //! all integer widths fold together). NULLs are propagated into the result validity.
 void CreateVariantComparator(const Vector &input, idx_t count, Vector &result) {
-	VariantIteratorState variant(input);
+	auto variant = input.Values<VectorVariantType>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto writer = FlatVector::Writer<string_t>(result, count);
@@ -492,7 +495,7 @@ void CreateVariantComparator(const Vector &input, idx_t count, Vector &result) {
 	//! reused growable buffer - the key is encoded once and then copied into the result vector
 	string buffer;
 	for (idx_t r = 0; r < count; r++) {
-		auto root = variant.Root(r);
+		auto root = variant[r];
 		// a VARIANT is only NULL at the root via a genuine SQL NULL (never a VARIANT_NULL value)
 		if (root.IsNull()) {
 			// propagate NULL so that NULL = NULL stays NULL and ORDER BY ... NULLS FIRST/LAST is honored
@@ -519,11 +522,114 @@ void VariantComparatorFunction(DataChunk &input, ExpressionState &state, Vector 
 	CreateVariantComparator(input.data[0], input.size(), result);
 }
 
+//===--------------------------------------------------------------------===//
+// Statistics Propagation
+//===--------------------------------------------------------------------===//
+// When the input VARIANT is fully shredded onto a single primitive type, every (non-NULL) value lives
+// in the same comparator "bucket" - all of its sort keys share the type-rank prefix - and the values
+// are bounded by the typed min/max of the shredded column. Because the comparator encoding is
+// order-preserving, encoding the typed min/max with the exact same encoding yields valid min/max sort
+// keys for the BLOB output: min/max are derived by running the real comparator (CreateVariantComparator)
+// over a cast of the bound to VARIANT, so the derived bounds can never diverge from the runtime encoding.
+// A root that resolves to NULL is always a genuine SQL NULL (VARIANT_NULL is reserved for nested values),
+// so its NULL is propagated via validity and never lands in the primitive bucket.
+
+//! Encode a single bound value into its comparator sort key by reusing the exact comparator encoding.
+bool TryEncodeBoundKey(ClientContext &context, const Value &bound, string &result_key) {
+	if (bound.IsNull()) {
+		return false;
+	}
+	Value variant_value;
+	if (!bound.TryCastAs(context, LogicalType::VARIANT(), variant_value, nullptr)) {
+		return false;
+	}
+	if (variant_value.IsNull()) {
+		return false;
+	}
+	Vector input(LogicalType::VARIANT(), 1);
+	input.SetValue(0, variant_value);
+	Vector sort_key(LogicalType::BLOB, 1);
+	CreateVariantComparator(input, 1, sort_key);
+	auto key = sort_key.GetValue(0);
+	if (key.IsNull()) {
+		return false;
+	}
+	result_key = StringValue::Get(key);
+	return true;
+}
+
+//! Extract the lower/upper bound of the (primitive) typed stats as Values - leaves a bound as NULL when
+//! it is not available.
+void GetTypedBounds(const BaseStatistics &typed_stats, Value &min_bound, Value &max_bound) {
+	switch (typed_stats.GetStatsType()) {
+	case StatisticsType::NUMERIC_STATS:
+		if (NumericStats::HasMin(typed_stats)) {
+			min_bound = NumericStats::Min(typed_stats);
+		}
+		if (NumericStats::HasMax(typed_stats)) {
+			max_bound = NumericStats::Max(typed_stats);
+		}
+		break;
+	case StatisticsType::STRING_STATS:
+		// only VARCHAR has UTF-8 ordered min/max we can turn into valid lower/upper bounds
+		if (typed_stats.GetType().id() == LogicalTypeId::VARCHAR) {
+			if (StringStats::HasMin(typed_stats)) {
+				min_bound = StringStats::TryGetValidMin(typed_stats);
+			}
+			if (StringStats::HasMax(typed_stats)) {
+				max_bound = StringStats::TryGetValidMax(typed_stats);
+			}
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+unique_ptr<BaseStatistics> VariantComparatorStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &variant_stats = input.child_stats[0];
+	// Keep the (loosest) validity baseline - the BLOB sort key is NULL only when the input variant is a
+	// SQL NULL, but the input validity is not propagated here: this code only narrows the value bounds,
+	// and over-claiming "cannot be NULL" off of incomplete child stats would prune valid rows.
+	auto result = BaseStatistics::CreateUnknown(input.expr.GetReturnType());
+
+	if (variant_stats.GetStatsType() != StatisticsType::VARIANT_STATS || !VariantStats::IsShredded(variant_stats)) {
+		return result.ToUnique();
+	}
+	auto &shredded_stats = VariantStats::GetShreddedStats(variant_stats);
+	if (!VariantShreddedStats::IsFullyShredded(shredded_stats)) {
+		// values can live in the unshredded component with arbitrary type ranks - no bucket
+		return result.ToUnique();
+	}
+	auto &typed_stats = VariantStats::GetTypedStats(shredded_stats);
+	if (typed_stats.GetType().IsNested()) {
+		// only a primitive shredding maps every value into a single comparator bucket
+		return result.ToUnique();
+	}
+
+	Value min_bound, max_bound;
+	GetTypedBounds(typed_stats, min_bound, max_bound);
+
+	string min_key;
+	if (TryEncodeBoundKey(context, min_bound, min_key)) {
+		StringStats::SetMin(result, string_t(min_key.data(), NumericCast<uint32_t>(min_key.size())),
+		                    StringStatsType::TRUNCATED_STATS);
+	}
+	string max_key;
+	if (TryEncodeBoundKey(context, max_bound, max_key)) {
+		StringStats::SetMax(result, string_t(max_key.data(), NumericCast<uint32_t>(max_key.size())),
+		                    StringStatsType::TRUNCATED_STATS);
+	}
+	return result.ToUnique();
+}
+
 } // namespace
 
 ScalarFunction VariantComparatorFun::GetFunction() {
 	auto variant_type = LogicalType::VARIANT();
-	return ScalarFunction("variant_comparator", {variant_type}, LogicalType::BLOB, VariantComparatorFunction);
+	ScalarFunction function("variant_comparator", {variant_type}, LogicalType::BLOB, VariantComparatorFunction);
+	function.SetStatisticsCallback(VariantComparatorStats);
+	return function;
 }
 
 } // namespace duckdb

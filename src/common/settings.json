@@ -514,7 +514,7 @@
         "description": "Rewrite delim joins to materialized CTEs during dependent join flattening",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "false"
+        "default_value": "true"
     },
     {
         "name": "deprecated_using_key_syntax",
@@ -1276,6 +1276,13 @@
         "type": "VARCHAR",
         "scope": "local",
         "custom_implementation": true
+    },
+    {
+        "name": "table_function_identifier_conversion",
+        "description": "Configures the use of deprecated implicit conversion of unbound identifiers to strings in table function arguments.",
+        "type": "ENUM<TableFunctionIdentifierConversion>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
     },
     {
         "name": "temp_directory",

@@ -92,10 +92,11 @@ SELECT ROW(42, 'asdf');
 ----
 (42, asdf)
 
-statement error
+# ROW() with no arguments produces an empty struct
+query I
 SELECT ROW();
 ----
-pack nothing into a struct
+{}
 
 query I
 SELECT ROW(NULL);
