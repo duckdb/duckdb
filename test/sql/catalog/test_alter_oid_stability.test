@@ -2,6 +2,10 @@
 # description: A catalog entry keeps its oid across ALTER/RENAME (same logical object), but a DROP + re-CREATE
 # group: [catalog]
 
+# oids are a runtime identity assigned on catalog load - they are stable within a session but not across a
+# database restart (which reloads the catalog from storage). Skip reloading so we test the in-session invariant.
+require skip_reload
+
 statement ok
 CREATE TABLE t(i INTEGER);
 
