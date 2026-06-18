@@ -604,6 +604,9 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::INSERT_EVENT)) {
 		return std::move(*expanded);
 	}
+	if (auto expanded = TryExpandRowTriggers(node, node.returning_list, table, TriggerEventType::INSERT_EVENT)) {
+		return std::move(*expanded);
+	}
 
 	if (node.on_conflict_info) {
 		// generate a MERGE INTO statement and bind it instead

@@ -217,6 +217,13 @@ void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parame
 }
 
 //===----------------------------------------------------------------------===//
+// Table Function Identifier Conversion
+//===----------------------------------------------------------------------===//
+void TableFunctionIdentifierConversionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<TableFunctionIdentifierConversion>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Validate External File Cache
 //===----------------------------------------------------------------------===//
 void ValidateExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

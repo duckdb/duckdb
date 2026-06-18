@@ -17,6 +17,8 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/planner/operator/logical_trigger.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/planner/planner_extension.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -24,6 +26,35 @@
 namespace duckdb {
 
 Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
+}
+
+// Pre-decorrelation pass: replace LogicalTrigger with LogicalDependentJoin so the standard
+// FlattenDependentJoins machinery can decorrelate the trigger body.
+static void RewriteTriggersToDependent(Binder &binder, LogicalOperator &op) {
+	for (auto &child : op.children) {
+		if (child) {
+			RewriteTriggersToDependent(binder, *child);
+		}
+	}
+	for (idx_t i = 0; i < op.children.size(); i++) {
+		if (!op.children[i] || op.children[i]->type != LogicalOperatorType::LOGICAL_TRIGGER) {
+			continue;
+		}
+		auto &trig = op.children[i]->Cast<LogicalTrigger>();
+		auto dep_join = make_uniq<LogicalDependentJoin>(JoinType::INNER);
+		dep_join->correlated_columns = std::move(trig.correlated_columns);
+		// Trigger bodies have side effects and must fire once per row. Dedup on a synthetic per-row
+		// row_number() key instead of the NEW columns (mirrors PerformDuplicateElimination's
+		// perform_delim=false path). otherwise rows with identical NEW values would underfire.
+		auto binding = ColumnBinding(binder.GenerateTableIndex(), ProjectionIndex(0));
+		CorrelatedColumnInfo info(binding, LogicalType::BIGINT, "delim_index", 0);
+		dep_join->correlated_columns.AddColumn(std::move(info));
+		dep_join->correlated_columns.SetDelimIndexToZero();
+		dep_join->perform_delim = false;
+		dep_join->children.push_back(std::move(trig.children[0]));
+		dep_join->children.push_back(std::move(trig.children[1]));
+		op.children[i] = std::move(dep_join);
+	}
 }
 
 static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t depth = 0) {
@@ -96,6 +127,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		auto max_tree_depth = Settings::Get<MaxExpressionDepthSetting>(context);
 		CheckTreeDepth(*plan, max_tree_depth);
 
+		RewriteTriggersToDependent(*this->binder, *this->plan);
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
 	}
 	this->properties = binder->GetStatementProperties();

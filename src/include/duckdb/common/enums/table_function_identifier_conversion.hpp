@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/enums/debug_vector_verification.hpp
+// duckdb/common/enums/table_function_identifier_conversion.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,15 +12,10 @@
 
 namespace duckdb {
 
-enum class DebugVectorVerification : uint8_t {
-	NONE,
-	DICTIONARY_EXPRESSION,
-	DICTIONARY_OPERATOR,
-	CONSTANT_OPERATOR,
-	SEQUENCE_OPERATOR,
-	NESTED_SHUFFLE,
-	VARIANT_VECTOR,
-	SHREDDED_VECTOR
+enum class TableFunctionIdentifierConversion : uint8_t {
+	DEFAULT = 0,
+	ENABLE_IMPLICIT_STRING = 1,
+	DISABLE_IMPLICIT_STRING = 2
 };
 
 } // namespace duckdb
