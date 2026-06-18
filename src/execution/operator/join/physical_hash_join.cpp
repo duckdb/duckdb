@@ -1291,29 +1291,49 @@ static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const Jo
 	}
 }
 
-static unique_ptr<Expression> CreateComparisonExpressionFilter(ExpressionType comparison_type, const Value &constant,
-                                                               const LogicalType &column_type) {
+static unique_ptr<Expression> CreateComparisonExpressionFilter(ExpressionType comparison_type,
+                                                               unique_ptr<Expression> input, const Value &constant,
+                                                               const LogicalType &comparison_logical_type) {
 	auto constant_value = constant;
 	if (!constant_value.IsNull()) {
-		constant_value.DefaultTryCastAs(column_type);
+		constant_value.DefaultTryCastAs(comparison_logical_type);
 	}
-	auto column = make_uniq<BoundReferenceExpression>(column_type, 0ULL);
-	return BoundComparisonExpression::Create(comparison_type, std::move(column),
+	return BoundComparisonExpression::Create(comparison_type, std::move(input),
 	                                         make_uniq<BoundConstantExpression>(std::move(constant_value)));
 }
 
+static unique_ptr<Expression> CreateComparisonExpressionFilter(ExpressionType comparison_type, const Value &constant,
+                                                               const LogicalType &column_type) {
+	auto column = make_uniq<BoundReferenceExpression>(column_type, 0ULL);
+	return CreateComparisonExpressionFilter(comparison_type, std::move(column), constant, column_type);
+}
+
+static unique_ptr<Expression>
+CreateJoinFilterComparisonExpression(ClientContext &context, const JoinFilterPushdownColumn &column,
+                                     ExpressionType comparison_type, const Value &constant,
+                                     const LogicalType &comparison_logical_type, bool reconstruct_expression) {
+	if (!reconstruct_expression) {
+		return CreateComparisonExpressionFilter(comparison_type, constant, comparison_logical_type);
+	}
+	auto input = CreateRuntimeFilterInputExpression(context, column, comparison_logical_type);
+	return CreateComparisonExpressionFilter(comparison_type, std::move(input), constant, comparison_logical_type);
+}
+
 static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const JoinFilterPushdownFilter &info,
+                                       ClientContext &context, const JoinFilterPushdownColumn &column,
                                        ProjectionIndex filter_col_idx, ExpressionType cmp, const Value &min_val,
                                        const Value &max_val, const LogicalType &condition_type,
-                                       bool selectivity_optional) {
+                                       bool reconstruct_expression, bool selectivity_optional) {
+	auto filter_column_type = reconstruct_expression ? column.storage_type : condition_type;
 	switch (cmp) {
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_GREATERTHAN:
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-		CreateDynamicMinMaxFilter(
-		    op, info, filter_col_idx,
-		    CreateComparisonExpressionFilter(ExpressionType::COMPARE_GREATERTHANOREQUALTO, min_val, condition_type),
-		    condition_type, selectivity_optional);
+		CreateDynamicMinMaxFilter(op, info, filter_col_idx,
+		                          CreateJoinFilterComparisonExpression(context, column,
+		                                                               ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+		                                                               min_val, condition_type, reconstruct_expression),
+		                          filter_column_type, selectivity_optional);
 		break;
 	}
 	default:
@@ -1323,10 +1343,11 @@ static void CreateDynamicMinMaxFilters(const PhysicalComparisonJoin &op, const J
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_LESSTHAN:
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-		CreateDynamicMinMaxFilter(
-		    op, info, filter_col_idx,
-		    CreateComparisonExpressionFilter(ExpressionType::COMPARE_LESSTHANOREQUALTO, max_val, condition_type),
-		    condition_type, selectivity_optional);
+		CreateDynamicMinMaxFilter(op, info, filter_col_idx,
+		                          CreateJoinFilterComparisonExpression(context, column,
+		                                                               ExpressionType::COMPARE_LESSTHANOREQUALTO,
+		                                                               max_val, condition_type, reconstruct_expression),
+		                          filter_column_type, selectivity_optional);
 		break;
 	}
 	default:
@@ -1360,9 +1381,14 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 
 			auto min_val = min_val_before_cast;
 			auto max_val = max_val_before_cast;
+			auto runtime_filter_input_type = GetRuntimeFilterInputType(pushdown_column, min_val_before_cast.type());
+			const bool reconstruct_filter_expression =
+			    pushdown_column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION &&
+			    pushdown_column.storage_type.id() == LogicalTypeId::VARIANT &&
+			    runtime_filter_input_type != pushdown_column.storage_type;
 
 			// Cast to storage type, skip if fails
-			if (pushdown_column.storage_type.IsValid()) {
+			if (pushdown_column.storage_type.IsValid() && !reconstruct_filter_expression) {
 				if (!min_val.DefaultTryCastAs(pushdown_column.storage_type)) {
 					continue;
 				}
@@ -1379,7 +1405,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 			}
 
 			auto condition_type = min_val.type();
-			auto runtime_filter_input_type = GetRuntimeFilterInputType(pushdown_column, condition_type);
+			runtime_filter_input_type = GetRuntimeFilterInputType(pushdown_column, condition_type);
 			bool can_emit_runtime_filters = pushdown_column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
 			if (can_emit_runtime_filters && ht) {
 				can_emit_runtime_filters = runtime_filter_input_type == ht->conditions[0].GetLHS().GetReturnType();
@@ -1391,12 +1417,14 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				// Note that this also works for equalities.
 				info.dynamic_filters->PushFilter(
 				    op, filter_col_idx,
-				    make_uniq<ExpressionFilter>(CreateComparisonExpressionFilter(cmp, min_val, condition_type)));
+				    make_uniq<ExpressionFilter>(CreateJoinFilterComparisonExpression(
+				        context, pushdown_column, cmp, min_val, condition_type, reconstruct_filter_expression)));
 			} else {
 				if (cmp != ExpressionType::COMPARE_EQUAL) {
 					// min != max - generate range filters for non-equality comparisons.
 					// For non-equalities, the range must be half-open.
-					CreateDynamicMinMaxFilters(op, info, filter_col_idx, cmp, min_val, max_val, condition_type, true);
+					CreateDynamicMinMaxFilters(op, info, context, pushdown_column, filter_col_idx, cmp, min_val,
+					                           max_val, condition_type, reconstruct_filter_expression, true);
 					continue;
 				}
 
@@ -1432,7 +1460,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				}
 
 				if (!pushed_in_filter) {
-					CreateDynamicMinMaxFilters(op, info, filter_col_idx, cmp, min_val, max_val, condition_type, false);
+					CreateDynamicMinMaxFilters(op, info, context, pushdown_column, filter_col_idx, cmp, min_val,
+					                           max_val, condition_type, reconstruct_filter_expression, false);
 				}
 				if (allow_bloom_filters && can_emit_runtime_filters && ht && CanUseBloomFilter(context, op, cmp, ht)) {
 					PushBloomFilter(context, op, *ht, info, filter_idx, filter_col_idx);
