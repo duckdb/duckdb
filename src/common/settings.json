@@ -507,7 +507,7 @@
         "description": "Rewrite delim joins to materialized CTEs during dependent join flattening",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "false"
+        "default_value": "true"
     },
     {
         "name": "deprecated_using_key_syntax",

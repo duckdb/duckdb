@@ -249,7 +249,7 @@ COPY multi_partitioned_test TO '{TEST_DIR}/multi_partitioned_test' (FORMAT PARQU
 
 # test all types
 statement ok
-COPY (FROM test_all_types()) TO '{TEST_DIR}/test_all_types.parquet' (RETURN_STATS);
+COPY (SELECT * EXCLUDE (empty_struct) FROM test_all_types()) TO '{TEST_DIR}/test_all_types.parquet' (RETURN_STATS);
 
 # unsupported format (CSV)
 statement error

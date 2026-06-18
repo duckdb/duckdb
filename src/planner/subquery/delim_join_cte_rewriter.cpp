@@ -772,23 +772,11 @@ bool GeneratedDedupRefEliminator::CoversAllDedupColumns(const GeneratedDedupRef 
 
 optional_idx GeneratedDedupRefEliminator::FindGeneratedOutputBinding(const Expression &expr,
                                                                      const GeneratedDedupRef &dedup_ref) const {
-	optional_idx result;
-	bool unsupported = false;
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
-		if (unsupported || colref.Depth() != 0) {
-			return;
-		}
-		auto binding_idx = FindBindingIndex(dedup_ref.output_bindings, colref.Binding());
-		if (!binding_idx.IsValid()) {
-			return;
-		}
-		if (result.IsValid() && result.GetIndex() != binding_idx.GetIndex()) {
-			unsupported = true;
-			return;
-		}
-		result = binding_idx;
-	});
-	return unsupported ? optional_idx() : result;
+	ColumnBinding binding;
+	if (!GetBoundColumnRefBinding(expr, binding)) {
+		return optional_idx();
+	}
+	return FindBindingIndex(dedup_ref.output_bindings, binding);
 }
 
 bool GeneratedDedupRefEliminator::ExpressionReferencesGeneratedSide(const Expression &expr,
@@ -1782,23 +1770,11 @@ unique_ptr<GeneratedDomainRef> GeneratedDomainJoinEliminator::GetGeneratedDomain
 
 optional_idx GeneratedDomainJoinEliminator::FindOutputBinding(Expression &expr,
                                                               const vector<ColumnBinding> &bindings) const {
-	optional_idx result;
-	bool unsupported = false;
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
-		if (unsupported || colref.Depth() != 0) {
-			return;
-		}
-		auto binding_idx = FindBindingIndex(bindings, colref.Binding());
-		if (!binding_idx.IsValid()) {
-			return;
-		}
-		if (result.IsValid() && result.GetIndex() != binding_idx.GetIndex()) {
-			unsupported = true;
-			return;
-		}
-		result = binding_idx;
-	});
-	return unsupported ? optional_idx() : result;
+	ColumnBinding binding;
+	if (!GetBoundColumnRefBinding(expr, binding)) {
+		return optional_idx();
+	}
+	return FindBindingIndex(bindings, binding);
 }
 
 bool GeneratedDomainJoinEliminator::ContainsRecursiveCTERef(LogicalOperator &op) const {

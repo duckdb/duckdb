@@ -638,7 +638,9 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 
 			auto &expanded = expr->Cast<BoundExpandedExpression>();
 			auto &struct_expressions = expanded.GetChildrenMutable();
-			D_ASSERT(!struct_expressions.empty());
+			if (struct_expressions.empty()) {
+				throw BinderException("UNNEST of an empty struct is not supported");
+			}
 
 			for (auto &struct_expr : struct_expressions) {
 				new_names.emplace_back(struct_expr->GetName());

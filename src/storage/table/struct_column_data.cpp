@@ -16,8 +16,7 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
     : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
-	D_ASSERT(!child_types.empty());
-	if (type.id() != LogicalTypeId::UNION && StructType::IsUnnamed(type)) {
+	if (type.id() != LogicalTypeId::UNION && !child_types.empty() && StructType::IsUnnamed(type)) {
 		throw InvalidInputException("A table cannot be created from an unnamed struct");
 	}
 	if (type.id() == LogicalTypeId::VARIANT) {
