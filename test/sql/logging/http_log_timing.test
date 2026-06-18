@@ -31,3 +31,14 @@ WHERE
 HEAD	true	true	NULL
 HEAD	true	true	NULL
 HEAD	true	true	NULL
+
+query II
+SELECT DISTINCT
+	response.status,
+	response.reason IS NOT NULL
+FROM
+	duckdb_logs_parsed('HTTP')
+WHERE
+	request.type='HEAD'
+----
+INVALID	true

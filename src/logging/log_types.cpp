@@ -104,7 +104,7 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 	if (response) {
 		child_list_t<Value> response_child_list = {
 		    {"status", Value(EnumUtil::ToString(response->status))},
-		    {"reason", Value(response->reason)},
+		    {"reason", Value(response->reason.empty() ? response->GetRequestError() : response->reason)},
 		    {"headers", CreateHTTPHeadersValue(response->headers)},
 		};
 		response_value = Value::STRUCT(response_child_list);
