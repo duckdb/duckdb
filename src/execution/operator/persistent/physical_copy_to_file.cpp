@@ -420,7 +420,7 @@ public:
 	~CopyToFileGlobalState() override;
 
 public:
-	void Initialize();
+	void Initialize() DUCKDB_EXCLUDES(lock);
 
 	void CreateDir(const string &dir_path) DUCKDB_REQUIRES(lock);
 	PendingFileState PrepareFileStateLocked(string output_path = string(),
@@ -429,7 +429,7 @@ public:
 	PendingFileStateOpen CreateFileStateOpenLocked(FileStateHandle &file_state, string output_path = string(),
 	                                               optional_ptr<const vector<Value>> partition_values = nullptr)
 	    DUCKDB_REQUIRES(lock);
-	unique_ptr<GlobalFileState> InitializeFileState(PendingFileState pending_file_state);
+	unique_ptr<GlobalFileState> InitializeFileState(PendingFileState pending_file_state) DUCKDB_EXCLUDES(lock);
 	void RegisterPrepareGlobalStateLocked(GlobalFileState &file_state) DUCKDB_REQUIRES(lock);
 	void ScheduleFileStateOpen(PendingFileStateOpen pending_file_state_open) DUCKDB_EXCLUDES(lock);
 	void RequestFileState(FileStateHandle &file_state, string output_path = string(),
@@ -442,7 +442,7 @@ public:
 
 	FileStateHandle TryFinalizeOwnedFileStateLocked() DUCKDB_REQUIRES(lock);
 	void TryFinalizeOwnedFileState() DUCKDB_EXCLUDES(lock);
-	void WaitForLifecycleTasks();
+	void WaitForLifecycleTasks() DUCKDB_EXCLUDES(lock);
 
 private:
 	optional_ptr<CopyToFileInfo> AddFile(const string &file_name) DUCKDB_REQUIRES(lock);
@@ -1031,12 +1031,13 @@ public:
 	                              DelayedPartitionFlush flush);
 	void RequestPartitionFileState(FileStateHandle &file_state, const vector<Value> &values,
 	                               FileCreationReason reason = FileCreationReason::NORMAL)
-	    DUCKDB_EXCLUDES(active_writes_lock);
+	    DUCKDB_EXCLUDES(active_writes_lock, copy_gstate.lock);
 	PartitionFileStateReservation
 	ReservePartitionFileStateLocked(const vector<Value> &values, FileCreationReason reason = FileCreationReason::NORMAL)
 	    DUCKDB_REQUIRES(active_writes_lock);
-	void FinalizeActiveWrites() DUCKDB_EXCLUDES(active_writes_lock);
-	void FinalizeFileStates(vector<FileStateHandle> files_to_finalize) DUCKDB_EXCLUDES(active_writes_lock);
+	void FinalizeActiveWrites() DUCKDB_EXCLUDES(active_writes_lock, copy_gstate.lock);
+	void FinalizeFileStates(vector<FileStateHandle> files_to_finalize)
+	    DUCKDB_EXCLUDES(active_writes_lock, copy_gstate.lock);
 	string GetOrCreateDirectory(string path, const vector<Value> &values) DUCKDB_REQUIRES(copy_gstate.lock);
 
 private:
@@ -1045,13 +1046,13 @@ private:
 	bool ShouldStopFlushing() const;
 	bool RequiresSerializedPartitionWrites() const;
 	void EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &write_info, const vector<Value> &values)
-	    DUCKDB_EXCLUDES(active_writes_lock);
+	    DUCKDB_EXCLUDES(active_writes_lock, copy_gstate.lock);
 	void EnsureFreshPartitionFileForRotation(PartitionWriteInfo &write_info, const vector<Value> &values)
-	    DUCKDB_EXCLUDES(active_writes_lock);
+	    DUCKDB_EXCLUDES(active_writes_lock, copy_gstate.lock);
 	//! Swaps write_info.file_state after temporarily dropping copy_gstate.lock to request the replacement file.
 	//! Callers that can reach the swap path must serialize the full partition writer run for this write_info.
 	void EnsureFreshPartitionFile(PartitionWriteInfo &write_info, const vector<Value> &values,
-	                              FileCreationReason reason) DUCKDB_EXCLUDES(active_writes_lock);
+	                              FileCreationReason reason) DUCKDB_EXCLUDES(active_writes_lock, copy_gstate.lock);
 	template <class FUNC>
 	void WithSerializedPartitionWriteRun(PartitionWriteInfo &write_info, FUNC &&func) {
 		annotated_unique_lock<annotated_mutex> run_guard(write_info.lock, std::defer_lock);
