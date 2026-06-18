@@ -765,15 +765,18 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 
 void CombineAggrFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_data, Vector &result, idx_t count,
                          idx_t offset) {
-	D_ASSERT(offset == 0);
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
 	auto &underlying_aggr = bind_data.aggr;
 
 	auto layout = GetLayout(underlying_aggr, bind_data.bind_data.get());
 
-	result.Flatten();
+	// only flatten the result the first time it is written - ordered aggregates finalize one group at a time at
+	// increasing offsets, appending into the (already flat) result
+	if (offset == 0) {
+		result.Flatten();
+	}
 	SerializeState(underlying_aggr, bind_data.bind_data.get(), layout, state, count, result, aggr_input_data.allocator,
-	               0);
+	               offset);
 }
 
 // constructs the AGGREGATE_STATE type for the given bound aggregate function
