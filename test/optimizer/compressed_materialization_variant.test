@@ -75,7 +75,7 @@ NULL
 query II
 EXPLAIN (FORMAT yaml) SELECT count(*) FROM tv GROUP BY v
 ----
-logical_opt	<REGEX>:.*__internal_compress_integral.*
+logical_opt	<REGEX>:.*(__internal_compress_integral|AS INTEGER).*
 
 query III
 SELECT v, count(*), sum(payload) FROM tv GROUP BY v ORDER BY ALL
