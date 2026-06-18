@@ -21,6 +21,7 @@ add_library_unity(
   cte_filter_pusher.cpp
   cte_inlining.cpp
   deliminator.cpp
+  distinct_aggregate_rewriter.cpp
   expression_heuristics.cpp
   expression_rewriter.cpp
   filter_combiner.cpp

@@ -1,0 +1,88 @@
+# name: test/sql/aggregate/distinct/rewrite/distinct_aggregate_rewrite.test
+# description: DISTINCT aggregate logical rewrites
+# group: [rewrite]
+
+statement ok
+CREATE TABLE distinct_rewrite AS
+	SELECT i % 4 AS g, CASE WHEN i % 5 = 0 THEN NULL ELSE i % 7 END AS x, i % 11 AS y
+	FROM range(100) tbl(i);
+
+# ungrouped shared distinct input
+query III
+SELECT count(DISTINCT x), sum(DISTINCT x), avg(DISTINCT x) FROM distinct_rewrite;
+----
+7	21	3
+
+# grouped shared distinct input
+query III
+SELECT g, count(DISTINCT x), sum(DISTINCT x)
+FROM distinct_rewrite
+GROUP BY g
+ORDER BY g;
+----
+0	7	21
+1	7	21
+2	7	21
+3	7	21
+
+# ungrouped mixed distinct/non-distinct aggregates
+query IIII
+SELECT count(DISTINCT x), count(DISTINCT y), sum(DISTINCT x), sum(y)
+FROM distinct_rewrite;
+----
+7	11	21	495
+
+# grouped mixed distinct/non-distinct aggregates
+query III
+SELECT g, count(DISTINCT x), sum(y)
+FROM distinct_rewrite
+GROUP BY g
+ORDER BY g;
+----
+0	7	122
+1	7	125
+2	7	128
+3	7	120
+
+statement ok
+CREATE TABLE distinct_rewrite_nulls(g INTEGER, x INTEGER, y INTEGER);
+
+statement ok
+INSERT INTO distinct_rewrite_nulls VALUES
+	(NULL, NULL, 1),
+	(NULL, NULL, 2),
+	(1, NULL, 3),
+	(1, 4, 4),
+	(1, 4, 5),
+	(2, 5, 6),
+	(2, NULL, 7);
+
+# multi distinct inputs with NULL group keys
+query IIIII
+SELECT g, count(DISTINCT x), count(DISTINCT y), sum(DISTINCT x), sum(y)
+FROM distinct_rewrite_nulls
+GROUP BY g
+ORDER BY g NULLS FIRST;
+----
+NULL	0	2	NULL	3
+1	1	3	4	12
+2	1	2	5	13
+
+# empty ungrouped input
+query III
+SELECT count(DISTINCT x), sum(DISTINCT x), avg(DISTINCT x)
+FROM distinct_rewrite_nulls
+WHERE false;
+----
+0	NULL	NULL
+
+# aggregate-local filters stay on the existing physical DISTINCT path
+query II
+SELECT g, count(DISTINCT x) FILTER (WHERE y > 3)
+FROM distinct_rewrite_nulls
+GROUP BY g
+ORDER BY g NULLS FIRST;
+----
+NULL	0
+1	1
+2	1
