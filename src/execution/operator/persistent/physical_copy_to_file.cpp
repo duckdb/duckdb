@@ -164,8 +164,8 @@ public:
 		finished.store(true, std::memory_order_release);
 	}
 
-	void CompleteException(std::exception_ptr error_p) {
-		error = std::move(error_p);
+	void CompleteException(const std::exception_ptr &error_p) {
+		error = error_p;
 		Complete();
 	}
 
@@ -269,7 +269,7 @@ public:
 	void WaitForJob(CopyFileLifecycleJob &job);
 	void WaitAll();
 	void FinishTask();
-	void PushError(std::exception_ptr error);
+	void PushError(const std::exception_ptr &error);
 
 private:
 	bool WorkOnTask(bool throw_error = true);
@@ -360,10 +360,10 @@ void CopyFileLifecycleExecutor::FinishTask() {
 	--pending_tasks;
 }
 
-void CopyFileLifecycleExecutor::PushError(std::exception_ptr error_p) {
+void CopyFileLifecycleExecutor::PushError(const std::exception_ptr &error_p) {
 	lock_guard<mutex> guard(error_lock);
 	if (!error) {
-		error = std::move(error_p);
+		error = error_p;
 	}
 }
 

@@ -15,9 +15,9 @@
 
 namespace duckdb {
 
-static ErrorData ErrorDataFromExceptionPtr(std::exception_ptr error_ptr) {
+static ErrorData ErrorDataFromExceptionPtr(const std::exception_ptr &error_ptr) {
 	try {
-		std::rethrow_exception(std::move(error_ptr));
+		std::rethrow_exception(error_ptr);
 	} catch (const std::exception &ex) {
 		return ErrorData(ex);
 	} catch (...) { // LCOV_EXCL_START
