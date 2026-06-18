@@ -23,6 +23,7 @@
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
 
@@ -509,6 +510,9 @@ public:
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
 	TableFunctionReturnType return_type;
+	//! The return type used when this function is invoked through a CALL statement
+	//! By default a CALL returns a query result - functions that only have side effects can use NOTHING instead
+	StatementReturnType call_return_type = StatementReturnType::QUERY_RESULT;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 	//! The order preservation type of the table function
