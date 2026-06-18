@@ -503,7 +503,7 @@ static unique_ptr<BaseStatistics> TryBuildShreddingStats(const LogicalType &type
 }
 
 unique_ptr<BaseStatistics> VariantStats::StatisticsPropagateToVariant(const LogicalType &source_type,
-                                                                     const BaseStatistics &child_stats) {
+                                                                      const BaseStatistics &child_stats) {
 	if (source_type.id() == LogicalTypeId::VARIANT) {
 		return nullptr;
 	}
