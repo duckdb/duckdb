@@ -3,6 +3,7 @@
 
 #include <thread>
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 
 using namespace duckdb;
 
@@ -114,9 +115,10 @@ TEST_CASE("Test Pending Query API", "[api][.]") {
 }
 
 TEST_CASE("Abandoned pending query must release the active query", "[api]") {
-	// A pending query created but never executed must not leak the active-query state (executor,
-	// plan, and the autocommit transaction it opens). We observe that transaction: abandoning the
-	// pending must release it immediately, not defer it to the next query or context teardown.
+	// A pending query created but never executed must not leak the active-query state (executor, plan,
+	// autocommit transaction). We observe the autocommit transaction it opens, which is created and
+	// released together with the active query: abandoning the pending must release it immediately, not
+	// defer it to the next query or context teardown.
 	DuckDB db;
 	Connection con(db);
 
@@ -130,12 +132,12 @@ TEST_CASE("Abandoned pending query must release the active query", "[api]") {
 		pending_query->Close();
 		REQUIRE(!con.context->transaction.HasActiveTransaction());
 	}
-	SECTION("Abandon by destroying the result") {
-		{
-			auto pending_query = con.PendingQuery("ATTACH ':memory:' AS abandoned_db");
-			REQUIRE(!pending_query->HasError());
-			REQUIRE(con.context->transaction.HasActiveTransaction());
-		}
+	SECTION("Abandon an ATTACH via Close()") {
+		auto pending_query = con.PendingQuery("ATTACH ':memory:' AS abandoned_db");
+		REQUIRE(!pending_query->HasError());
+		REQUIRE(con.context->transaction.HasActiveTransaction());
+
+		pending_query->Close();
 		REQUIRE(!con.context->transaction.HasActiveTransaction());
 	}
 	SECTION("Abandon a prepared pending query") {
@@ -151,6 +153,74 @@ TEST_CASE("Abandoned pending query must release the active query", "[api]") {
 	// the connection must remain usable after abandoning pending queries
 	auto result = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+}
+
+TEST_CASE("Abandoned streaming result must release the active query", "[api]") {
+	// A streaming result keeps the active-query state alive to feed the stream; it is normally
+	// released when the stream is fully consumed. A stream abandoned before being drained must still
+	// release that state, not leak it until the next query or context teardown.
+	DuckDB db;
+	Connection con(db);
+
+	REQUIRE(!con.context->transaction.HasActiveTransaction());
+
+	SECTION("Abandon via Close() before consuming") {
+		auto result = con.SendQuery("SELECT * FROM range(10000)");
+		REQUIRE(!result->HasError());
+		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		// the stream is in flight: the active query is still open
+		REQUIRE(con.context->transaction.HasActiveTransaction());
+
+		result->Cast<StreamQueryResult>().Close();
+		REQUIRE(!con.context->transaction.HasActiveTransaction());
+	}
+	SECTION("Abandon via Close() after a partial fetch") {
+		auto result = con.SendQuery("SELECT * FROM range(10000)");
+		REQUIRE(!result->HasError());
+		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		auto chunk = result->Fetch(); // consume one chunk; the stream is not drained
+		REQUIRE(chunk);
+		REQUIRE(con.context->transaction.HasActiveTransaction());
+
+		result->Cast<StreamQueryResult>().Close();
+		REQUIRE(!con.context->transaction.HasActiveTransaction());
+	}
+	// the connection must remain usable after abandoning streaming results
+	auto check = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(check, 0, {42}));
+}
+
+TEST_CASE("PROBE cancel a streaming producer parked on a full buffer", "[api][.]") {
+	// Force the producer to park on a full buffer (result >> streaming_buffer_size), abandon the
+	// stream mid-flight, then run another query so InitialCleanup -> CleanupInternal -> CancelTasks
+	// runs against the parked producer. If CancelTasks cannot reap a parked result-collector task,
+	// this hangs (busy-spins in `while (executor_tasks > 0) WorkOnTasks()`).
+	DuckDB db;
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='16KB'"));
+
+	SECTION("abandon by dropping, then run another query") {
+		auto result = con.SendQuery("SELECT * FROM range(10000000)");
+		REQUIRE(!result->HasError());
+		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		auto chunk = result->Fetch(); // ensure the pipeline is actually streaming and re-parks
+		REQUIRE(chunk);
+		result.reset(); // abandon while the producer is parked on the full buffer
+
+		auto check = con.Query("SELECT 42");
+		REQUIRE(CHECK_COLUMN(check, 0, {42}));
+	}
+	SECTION("abandon via Close(), then run another query") {
+		auto result = con.SendQuery("SELECT * FROM range(10000000)");
+		REQUIRE(!result->HasError());
+		REQUIRE(result->type == QueryResultType::STREAM_RESULT);
+		auto chunk = result->Fetch();
+		REQUIRE(chunk);
+		result->Cast<StreamQueryResult>().Close();
+
+		auto check = con.Query("SELECT 42");
+		REQUIRE(CHECK_COLUMN(check, 0, {42}));
+	}
 }
 
 static void parallel_pending_query(Connection *conn, bool *correct, size_t threadnr) {
