@@ -350,7 +350,7 @@
     },
     {
         "name": "debug_local_file_system_delay_ms",
-        "description": "DEBUG SETTING: time to sleep before local file system open/close/read/write operations",
+        "description": "DEBUG SETTING: time to sleep before local file system open/read/write operations",
         "type": "UBIGINT",
         "scope": "global",
         "default_value": "0"

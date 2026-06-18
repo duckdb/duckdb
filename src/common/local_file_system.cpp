@@ -237,7 +237,6 @@ public:
 public:
 	void Close() override {
 		if (fd != -1) {
-			ApplyLocalFileSystemDelay(db);
 			close(fd);
 			fd = -1;
 			DUCKDB_LOG_FILE_SYSTEM_CLOSE((*this));
