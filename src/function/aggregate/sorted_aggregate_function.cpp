@@ -31,58 +31,35 @@ struct SortedAggregateBindData : public FunctionData {
 	                        BindInfoPtr &bind_info, OrderBys &order_bys)
 	    : context(context), function(aggregate), bind_info(std::move(bind_info)),
 	      threshold(Settings::Get<OrderedAggregateThresholdSetting>(context)) {
-		//	Describe the arguments.
+		//	Describe the arguments - column 0 in the sort data is the group number, so the args start at 1
 		for (const auto &child : children) {
 			buffered_cols.emplace_back(buffered_cols.size());
 			buffered_types.emplace_back(child->GetReturnType());
-
-			//	Column 0 in the sort data is the group number
 			scan_cols.emplace_back(buffered_cols.size());
 		}
 		scan_types = buffered_types;
 
-		//	The first sort column is the group number. It is prefixed onto the buffered data
-		sort_types.emplace_back(LogicalType::USMALLINT);
-		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST,
-		                    make_uniq<BoundReferenceExpression>(sort_types.back(), 0U));
-
-		// Determine whether we are sorted on all the arguments.
-		// Even if we are not, we want to share inputs for sorting.
+		// Determine which buffered column each ORDER BY key sorts on. A key that matches an argument reuses that
+		// argument's column; any other key is appended as its own buffered column (so we are no longer sorted on args).
+		vector<SortedAggregateStateOrder> order_spec;
 		for (idx_t ord_idx = 0; ord_idx < order_bys.size(); ++ord_idx) {
-			auto order = order_bys[ord_idx].Copy();
-			bool matched = false;
-			const auto &type = order.expression->GetReturnType();
-
+			auto &order = order_bys[ord_idx];
+			idx_t column = DConstants::INVALID_INDEX;
 			for (idx_t arg_idx = 0; arg_idx < children.size(); ++arg_idx) {
-				auto &child = children[arg_idx];
-				if (child->Equals(*order.expression)) {
-					order.expression = make_uniq<BoundReferenceExpression>(type, arg_idx + 1);
-					matched = true;
+				if (children[arg_idx]->Equals(*order.expression)) {
+					column = arg_idx;
 					break;
 				}
 			}
-
-			if (!matched) {
+			if (column == DConstants::INVALID_INDEX) {
 				sorted_on_args = false;
+				column = buffered_types.size();
 				buffered_cols.emplace_back(children.size() + ord_idx);
-				buffered_types.emplace_back(type);
-				order.expression = make_uniq<BoundReferenceExpression>(type, buffered_cols.size());
+				buffered_types.emplace_back(order.expression->GetReturnType());
 			}
-
-			orders.emplace_back(std::move(order));
+			order_spec.push_back(SortedAggregateStateOrder {column, order.type, order.null_order});
 		}
-
-		// The buffered rows are stored in a linked list of structs
-		child_list_t<LogicalType> buffered_children;
-		for (idx_t i = 0; i < buffered_types.size(); i++) {
-			buffered_children.emplace_back("v" + to_string(i), buffered_types[i]);
-			sort_types.emplace_back(buffered_types[i]);
-		}
-		buffered_struct_type = LogicalType::STRUCT(std::move(buffered_children));
-		GetSegmentDataFunctions(buffered_funcs, buffered_struct_type);
-
-		//	Only scan the argument columns after sorting
-		sort = make_uniq<Sort>(context, orders, sort_types, scan_cols);
+		BuildSort(order_spec);
 	}
 
 	SortedAggregateBindData(ClientContext &context, BoundAggregateExpression &expr)
@@ -102,31 +79,42 @@ struct SortedAggregateBindData : public FunctionData {
 	                        const vector<SortedAggregateStateOrder> &order_spec, idx_t argument_count)
 	    : context(context), function(inner_function), bind_info(std::move(inner_bind_info)),
 	      threshold(Settings::Get<OrderedAggregateThresholdSetting>(context)) {
-		const auto &struct_children = StructType::GetChildTypes(buffer_struct);
-		for (idx_t i = 0; i < struct_children.size(); i++) {
-			buffered_cols.emplace_back(i);
-			buffered_types.emplace_back(struct_children[i].second);
+		for (auto &child : StructType::GetChildTypes(buffer_struct)) {
+			buffered_cols.emplace_back(buffered_cols.size());
+			buffered_types.emplace_back(child.second);
 		}
-		//	Only scan the argument columns after sorting
+		//	Only scan the argument columns after sorting (column 0 in the sort data is the group number)
 		for (idx_t i = 0; i < argument_count; i++) {
-			scan_cols.emplace_back(i + 1); // +1 for the group-number prefix
-			scan_types.emplace_back(struct_children[i].second);
+			scan_cols.emplace_back(i + 1);
+			scan_types.emplace_back(buffered_types[i]);
 		}
+		sorted_on_args = (argument_count == buffered_types.size());
+		BuildSort(order_spec);
+	}
+
+	//! Builds the sort layout once the buffered columns and the per-key (column, modifiers) are known: prefixes the
+	//! group number onto the sort, stores the buffered rows as a linked list of structs, and creates the sort.
+	void BuildSort(const vector<SortedAggregateStateOrder> &order_spec) {
 		//	The first sort column is the group number, prefixed onto the buffered data
 		sort_types.emplace_back(LogicalType::USMALLINT);
 		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST,
 		                    make_uniq<BoundReferenceExpression>(LogicalType::USMALLINT, 0U));
-		for (auto &col_type : buffered_types) {
-			sort_types.emplace_back(col_type);
+
+		//	The buffered rows are stored in a linked list of structs
+		child_list_t<LogicalType> buffered_children;
+		for (idx_t i = 0; i < buffered_types.size(); i++) {
+			buffered_children.emplace_back("v" + to_string(i), buffered_types[i]);
+			sort_types.emplace_back(buffered_types[i]);
 		}
+		buffered_struct_type = LogicalType::STRUCT(std::move(buffered_children));
+		GetSegmentDataFunctions(buffered_funcs, buffered_struct_type);
+
+		//	The sort keys reference the buffered columns (offset by 1 for the group-number prefix)
 		for (const auto &entry : order_spec) {
 			orders.emplace_back(entry.order_type, entry.null_order,
-			                    make_uniq<BoundReferenceExpression>(struct_children[entry.column].second,
+			                    make_uniq<BoundReferenceExpression>(buffered_types[entry.column],
 			                                                        UnsafeNumericCast<idx_t>(entry.column + 1)));
 		}
-		sorted_on_args = (argument_count == struct_children.size());
-		buffered_struct_type = buffer_struct;
-		GetSegmentDataFunctions(buffered_funcs, buffered_struct_type);
 		sort = make_uniq<Sort>(context, orders, sort_types, scan_cols);
 	}
 

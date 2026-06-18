@@ -1,7 +1,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 #include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
@@ -331,28 +330,14 @@ static void SerializeState(const AggregateStateLayout &layout, Vector &result, i
 	SerializeField(layout.type, layout.field, result, count, addresses, 0, offset);
 }
 
-// Invokes an aggregate's explicit export-state callback. These callbacks only write at offset 0 - when finalizing at a
-// non-zero offset (e.g. one group at a time through the sorted aggregate wrapper) serialize into a temporary vector and
-// copy the result into place, so every export callback works at an offset without each having to support one.
-static void CallExportStateCallback(AggregateFinalizeInputData &aggr_input_data, Vector &states, idx_t count,
-                                    Vector &result, idx_t offset) {
-	auto callback = aggr_input_data.function.GetExportAggregateStateCallback();
-	if (offset == 0) {
-		callback(states, aggr_input_data, result, count, 0);
-		return;
-	}
-	Vector temp(result.GetType(), count);
-	callback(states, aggr_input_data, temp, count, 0);
-	VectorOperations::Copy(temp, result, count, 0, offset);
-}
-
 static void SerializeState(const BoundAggregateFunction &aggr, optional_ptr<FunctionData> bind_data,
                            const AggregateStateLayout &layout, Vector &states, idx_t count, Vector &result,
                            ArenaAllocator &allocator, idx_t offset) {
 	if (aggr.HasExportAggregateStateCallback()) {
-		// the aggregate explicitly serializes its own states
+		// the aggregate explicitly serializes its own states (the callback writes the count rows at [offset, offset +
+		// count))
 		AggregateFinalizeInputData aggr_input_data(aggr, bind_data, allocator);
-		CallExportStateCallback(aggr_input_data, states, count, result, offset);
+		aggr.GetExportAggregateStateCallback()(states, aggr_input_data, result, count, offset);
 		return;
 	}
 	const data_ptr_t *addresses;
@@ -733,13 +718,6 @@ void ExportAggregateFinalize(Vector &state, AggregateFinalizeInputData &aggr_inp
 	SerializeState(layout, result, count, addresses_ptrs, offset);
 }
 
-// Finalize callback for aggregates that serialize their state through an explicit export callback (e.g. approx_top_k).
-// Routes through CallExportStateCallback so the callback keeps working when finalizing at a non-zero offset.
-void ExportAggregateExplicitFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_data, Vector &result,
-                                     idx_t count, idx_t offset) {
-	CallExportStateCallback(aggr_input_data, state, count, result, offset);
-}
-
 // the executor invokes this callback with combine_aggr's own bind data (ExportAggregateBindData) - the underlying
 // aggregate's combine expects its own bind data, so we forward it here
 void CombineAggrStateCombine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
@@ -1098,10 +1076,10 @@ void ToAggregateStateFunction(DataChunk &input, ExpressionState &state, Vector &
 
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {
 	auto &bound_function = aggregate.FunctionMutable();
-	// functions with an explicit export callback use it as the finalize (wrapped so it honors a non-zero offset);
-	// others use the field-based serialization
-	bound_function.SetStateFinalizeCallback(
-	    bound_function.HasExportAggregateStateCallback() ? ExportAggregateExplicitFinalize : ExportAggregateFinalize);
+	// functions with an explicit export callback use it as the finalize; others use the field-based serialization
+	bound_function.SetStateFinalizeCallback(bound_function.HasExportAggregateStateCallback()
+	                                            ? bound_function.GetExportAggregateStateCallback()
+	                                            : ExportAggregateFinalize);
 	// statistics propagation is no longer correct post
 	bound_function.SetStatisticsCallback(nullptr);
 	bound_function.SetReturnType(state_layout);
