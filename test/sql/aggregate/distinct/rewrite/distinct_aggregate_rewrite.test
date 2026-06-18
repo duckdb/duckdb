@@ -76,7 +76,69 @@ WHERE false;
 ----
 0	NULL	NULL
 
-# aggregate-local filters stay on the existing physical DISTINCT path
+statement ok
+CREATE TABLE distinct_rewrite_order(g INTEGER, s VARCHAR, y INTEGER, keep BOOLEAN);
+
+statement ok
+INSERT INTO distinct_rewrite_order VALUES
+	(1, 'a', 2, true),
+	(1, 'b', 1, false),
+	(1, 'b', 4, true),
+	(1, 'c', 3, true),
+	(2, 'a', 5, false),
+	(2, 'd', 1, true),
+	(2, 'd', 2, true),
+	(3, NULL, 3, true);
+
+# distinct aggregate ORDER BY
+query IT
+SELECT count(DISTINCT s), string_agg(DISTINCT s, ',' ORDER BY s DESC)
+FROM distinct_rewrite_order;
+----
+4	d,c,b,a
+
+# grouped distinct aggregate ORDER BY
+query IT
+SELECT g, string_agg(DISTINCT s, ',' ORDER BY s DESC)
+FROM distinct_rewrite_order
+GROUP BY g
+ORDER BY g;
+----
+1	c,b,a
+2	d,a
+3	NULL
+
+# regular aggregate filters can be kept in the regular branch
+query III
+SELECT g, count(DISTINCT s), sum(y) FILTER (WHERE keep)
+FROM distinct_rewrite_order
+GROUP BY g
+ORDER BY g;
+----
+1	3	9
+2	2	3
+3	0	3
+
+# regular aggregate ORDER BY can be kept in the regular branch
+query IIT
+SELECT g, count(DISTINCT s), string_agg(y::VARCHAR, ',' ORDER BY y DESC)
+FROM distinct_rewrite_order
+GROUP BY g
+ORDER BY g;
+----
+1	3	4,3,2,1
+2	2	5,2,1
+3	0	3
+
+# ungrouped distinct aggregate filters
+query IT
+SELECT count(DISTINCT s) FILTER (WHERE keep),
+       string_agg(DISTINCT s, ',' ORDER BY s DESC) FILTER (WHERE keep)
+FROM distinct_rewrite_order;
+----
+4	d,c,b,a
+
+# grouped distinct aggregate filters preserve groups with no matching distinct values
 query II
 SELECT g, count(DISTINCT x) FILTER (WHERE y > 3)
 FROM distinct_rewrite_nulls
@@ -86,3 +148,40 @@ ORDER BY g NULLS FIRST;
 NULL	0
 1	1
 2	1
+
+# grouped distinct aggregate filters can be combined with ORDER BY
+query IIT
+SELECT g,
+       count(DISTINCT s) FILTER (WHERE keep),
+       string_agg(DISTINCT s, ',' ORDER BY s DESC) FILTER (WHERE keep)
+FROM distinct_rewrite_order
+GROUP BY g
+ORDER BY g;
+----
+1	3	c,b,a
+2	1	d
+3	0	NULL
+
+# same distinct arguments with different filters are separate branches
+query III
+SELECT g,
+       count(DISTINCT s) FILTER (WHERE keep),
+       count(DISTINCT s) FILTER (WHERE NOT keep)
+FROM distinct_rewrite_order
+GROUP BY g
+ORDER BY g;
+----
+1	3	1
+2	1	1
+3	0	0
+
+# filtered grouped list aggregates must see empty inputs, not artificial left-join NULLs
+query II
+SELECT g, list(DISTINCT s ORDER BY s) FILTER (WHERE keep AND y < 0)
+FROM distinct_rewrite_order
+GROUP BY g
+ORDER BY g;
+----
+1	NULL
+2	NULL
+3	NULL
