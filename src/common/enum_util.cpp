@@ -3761,7 +3761,7 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN), "PARTIAL_AGGREGATE_PUSHDOWN" },
 		{ static_cast<uint32_t>(OptimizerType::REMOTE_PUSHDOWN), "REMOTE_PUSHDOWN" },
 		{ static_cast<uint32_t>(OptimizerType::GROUPING_SETS), "GROUPING_SETS" },
-		{ static_cast<uint32_t>(OptimizerType::REMOTE_PUSHDOWN), "REMOTE_PUSHDOWN" }
+		{ static_cast<uint32_t>(OptimizerType::REMOTE_PUSHDOWN), "REMOTE_PUSHDOWN" },
 		{ static_cast<uint32_t>(OptimizerType::TYPE_PUSHDOWN), "TYPE_PUSHDOWN" }
 	};
 	return values;
