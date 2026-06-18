@@ -1,0 +1,50 @@
+# name: test/sql/cte/materialized/materialized_cte_order_preservation.test
+# description: Test order preservation for materialized CTE scans
+# group: [materialized]
+
+statement ok
+PRAGMA threads=4;
+
+query I
+WITH t(i) AS MATERIALIZED (
+	SELECT i
+	FROM range(10000) tbl(i)
+	ORDER BY i DESC
+)
+SELECT i FROM t LIMIT 5;
+----
+9999
+9998
+9997
+9996
+9995
+
+statement ok
+SET preserve_insertion_order=false;
+
+query I
+WITH t(i) AS MATERIALIZED (
+	SELECT i
+	FROM range(10000) tbl(i)
+	ORDER BY i DESC
+)
+SELECT i FROM t LIMIT 5;
+----
+9999
+9998
+9997
+9996
+9995
+
+query II
+WITH t(i) AS MATERIALIZED (
+	SELECT i
+	FROM range(10000) tbl(i)
+	ORDER BY i DESC
+)
+SELECT (SELECT i FROM t LIMIT 1), (SELECT i FROM t LIMIT 1);
+----
+9999	9999
+
+statement ok
+SET preserve_insertion_order=true;
