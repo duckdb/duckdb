@@ -72,6 +72,7 @@
         "test/sql/trigger/trigger_before_after_mixed.test",
         "test/sql/trigger/trigger_returning.test",
         "test/sql/trigger/trigger_returning_binder_parity.test",
+        "test/sql/trigger/trigger_for_each_row.test",
         "test/sql/merge/trigger_merge_into.test"
       ]
     },

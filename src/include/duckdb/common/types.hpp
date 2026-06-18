@@ -38,6 +38,9 @@ struct VectorStructType;
 template <class T>
 struct VectorListType;
 
+//! Marker type selecting the VARIANT specialization of VectorIterator (see variant_iterator.hpp)
+struct VectorVariantType;
+
 template <class T, typename... ARGS>
 buffer_ptr<T> make_buffer(ARGS &&...args) { // NOLINT: mimic std casing
 	return make_shared_ptr<T>(std::forward<ARGS>(args)...);

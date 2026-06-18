@@ -1643,19 +1643,20 @@ const StringUtil::EnumStringLiteral *GetDebugVectorVerificationValues() {
 		{ static_cast<uint32_t>(DebugVectorVerification::CONSTANT_OPERATOR), "CONSTANT_OPERATOR" },
 		{ static_cast<uint32_t>(DebugVectorVerification::SEQUENCE_OPERATOR), "SEQUENCE_OPERATOR" },
 		{ static_cast<uint32_t>(DebugVectorVerification::NESTED_SHUFFLE), "NESTED_SHUFFLE" },
-		{ static_cast<uint32_t>(DebugVectorVerification::VARIANT_VECTOR), "VARIANT_VECTOR" }
+		{ static_cast<uint32_t>(DebugVectorVerification::VARIANT_VECTOR), "VARIANT_VECTOR" },
+		{ static_cast<uint32_t>(DebugVectorVerification::SHREDDED_VECTOR), "SHREDDED_VECTOR" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<DebugVectorVerification>(DebugVectorVerification value) {
-	return StringUtil::EnumToString(GetDebugVectorVerificationValues(), 7, "DebugVectorVerification", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetDebugVectorVerificationValues(), 8, "DebugVectorVerification", static_cast<uint32_t>(value));
 }
 
 template<>
 DebugVectorVerification EnumUtil::FromString<DebugVectorVerification>(const char *value) {
-	return static_cast<DebugVectorVerification>(StringUtil::StringToEnum(GetDebugVectorVerificationValues(), 7, "DebugVectorVerification", value));
+	return static_cast<DebugVectorVerification>(StringUtil::StringToEnum(GetDebugVectorVerificationValues(), 8, "DebugVectorVerification", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDebugVerificationModeValues() {
@@ -3175,6 +3176,7 @@ const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DELETE), "LOGICAL_DELETE" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_UPDATE), "LOGICAL_UPDATE" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_MERGE_INTO), "LOGICAL_MERGE_INTO" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_TRIGGER), "LOGICAL_TRIGGER" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_ALTER), "LOGICAL_ALTER" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_TABLE), "LOGICAL_CREATE_TABLE" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_INDEX), "LOGICAL_CREATE_INDEX" },
@@ -3208,12 +3210,12 @@ const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
-	return StringUtil::EnumToString(GetLogicalOperatorTypeValues(), 65, "LogicalOperatorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetLogicalOperatorTypeValues(), 66, "LogicalOperatorType", static_cast<uint32_t>(value));
 }
 
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value) {
-	return static_cast<LogicalOperatorType>(StringUtil::StringToEnum(GetLogicalOperatorTypeValues(), 65, "LogicalOperatorType", value));
+	return static_cast<LogicalOperatorType>(StringUtil::StringToEnum(GetLogicalOperatorTypeValues(), 66, "LogicalOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogicalTypeIdValues() {
