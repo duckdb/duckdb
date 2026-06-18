@@ -1581,7 +1581,10 @@ DeleteUsingClause <- 'USING' List(TableRef)
 
 ConnectStatement <- 'CONNECT' SessionTarget?
 DisconnectStatement <- 'DISCONNECT'
-SessionTarget <- 'LOCAL' / StringLiteral / CatalogName
+SessionTarget <- LocalSessionTarget / StringSessionTarget / CatalogSessionTarget
+LocalSessionTarget <- 'LOCAL'
+StringSessionTarget <- StringLiteral
+CatalogSessionTarget <- CatalogName
 
 CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType
 CreateType <- EnumSelectType / EnumStringLiteralList / CreateTypeFromType

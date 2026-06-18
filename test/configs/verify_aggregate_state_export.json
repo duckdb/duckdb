@@ -17,7 +17,7 @@
       ]
     },
     {
-      "reason": "FIXME: aggregate states that own memory cannot be exported and have no state type callback (approx_top_k, arg_min/arg_max(N), min/max(N), bitstring_agg, bit_and/or/xor over BIT, histograms, mode, reservoir_quantile, approx_quantile, etc.)",
+      "reason": "FIXME: aggregate states that own memory cannot be exported and have no state type callback (arg_min/arg_max(N), min/max(N), bitstring_agg, bit_and/or/xor over BIT, histograms, mode, reservoir_quantile, etc.)",
       "paths": [
         "test/fuzzer/duckfuzz/bitstring_agg_minmax.test",
         "test/fuzzer/duckfuzz/bitstring_agg_uhugeint.test",
@@ -27,7 +27,6 @@
         "test/fuzzer/pedro/non_boolean_aggregate_filter.test",
         "test/fuzzer/sqlsmith/bitstring_agg_overflow.test",
         "test/issues/general/test_5072.test",
-        "test/sql/aggregate/aggregates/approx_top_k.test",
         "test/sql/aggregate/aggregates/arg_min_max_n.test",
         "test/sql/aggregate/aggregates/arg_min_max_n_tpch.test",
         "test/sql/aggregate/aggregates/arg_min_max_nulls_last.test",

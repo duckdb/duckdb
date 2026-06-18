@@ -16,7 +16,7 @@ void VariantUtils::UnshredVariantData(Vector &input, Vector &output, idx_t count
 
 	//! Traverse the (shredded) variant directly through the iterator and encode it into the canonical
 	//! unshredded layout - no intermediate vector<VariantValue> materialization is required.
-	VariantIteratorState state(unshredded, shredded);
+	VariantIterator state(unshredded, shredded);
 	VariantValue::ToVARIANT(state, count, output);
 }
 

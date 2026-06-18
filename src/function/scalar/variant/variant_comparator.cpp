@@ -257,7 +257,7 @@ VariantNumberKey IntegerNumberKey(T value) {
 }
 
 //! Compute the number key for any value in the NUMBER rank (integer, decimal or bignum)
-VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantIterator &it) {
+VariantNumberKey VariantGetNumberKey(VariantLogicalType type_id, const VariantNode &it) {
 	switch (type_id) {
 	case VariantLogicalType::DECIMAL: {
 		auto decimal_data = it.GetDecimal();
@@ -360,7 +360,7 @@ void VariantEncodeString(SINK &sink, const string_t &str, bool is_varchar) {
 }
 
 template <class SINK>
-void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
+void EncodeVariantValue(const VariantNode &it, SINK &sink) {
 	auto type_id = it.GetTypeId();
 	// write the type rank - this guarantees values are ordered by type first
 	sink.Write(GetVariantTypeRank(type_id));
@@ -484,7 +484,7 @@ void EncodeVariantValue(const VariantIterator &it, SINK &sink) {
 //! encode the *logical* value of the variant - this encoding is intentionally not reversible (e.g.
 //! all integer widths fold together). NULLs are propagated into the result validity.
 void CreateVariantComparator(const Vector &input, idx_t count, Vector &result) {
-	VariantIteratorState variant(input);
+	auto variant = input.Values<VectorVariantType>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto writer = FlatVector::Writer<string_t>(result, count);
@@ -492,7 +492,7 @@ void CreateVariantComparator(const Vector &input, idx_t count, Vector &result) {
 	//! reused growable buffer - the key is encoded once and then copied into the result vector
 	string buffer;
 	for (idx_t r = 0; r < count; r++) {
-		auto root = variant.Root(r);
+		auto root = variant[r];
 		// a VARIANT is only NULL at the root via a genuine SQL NULL (never a VARIANT_NULL value)
 		if (root.IsNull()) {
 			// propagate NULL so that NULL = NULL stays NULL and ORDER BY ... NULLS FIRST/LAST is honored

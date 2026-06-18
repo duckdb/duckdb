@@ -248,7 +248,7 @@ bool VariantIsStringType(VariantLogicalType type_id) {
 }
 
 //! Collect the (non-missing) object children in lexicographic key order
-vector<VariantObjectEntry> CollectObjectChildren(const VariantIterator &it) {
+vector<VariantObjectEntry> CollectObjectChildren(const VariantNode &it) {
 	vector<VariantObjectEntry> children;
 	for (auto &entry : it.GetObjectChildren(VariantIterationOrder::LEXICOGRAPHIC)) {
 		children.push_back(entry);
@@ -257,9 +257,9 @@ vector<VariantObjectEntry> CollectObjectChildren(const VariantIterator &it) {
 }
 
 //===--------------------------------------------------------------------===//
-// Emit (source: VariantIterator)
+// Emit (source: VariantNode)
 //===--------------------------------------------------------------------===//
-void EmitIterator(const VariantIterator &it, VariantBuilder &builder) {
+void EmitIterator(const VariantNode &it, VariantBuilder &builder) {
 	auto byte_offset = NumericCast<uint32_t>(builder.blob.size());
 	if (it.IsNull() || it.IsMissing()) {
 		builder.type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::VARIANT_NULL));
@@ -569,7 +569,7 @@ struct VariantValueSource {
 };
 
 struct VariantIteratorSource {
-	explicit VariantIteratorSource(const VariantIteratorState &state) : state(state) {
+	explicit VariantIteratorSource(const VariantIterator &state) : state(state) {
 	}
 	bool Emit(idx_t row, VariantBuilder &builder) const {
 		auto root = state.Root(row);
@@ -581,7 +581,7 @@ struct VariantIteratorSource {
 		return false;
 	}
 
-	const VariantIteratorState &state;
+	const VariantIterator &state;
 };
 
 template <class SOURCE>
@@ -674,7 +674,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	BuildVariant(source, input.size(), result);
 }
 
-void VariantValue::ToVARIANT(const VariantIteratorState &state, idx_t count, Vector &result) {
+void VariantValue::ToVARIANT(const VariantIterator &state, idx_t count, Vector &result) {
 	VariantIteratorSource source(state);
 	BuildVariant(source, count, result);
 }

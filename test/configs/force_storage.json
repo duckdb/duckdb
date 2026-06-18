@@ -77,7 +77,9 @@
         "test/sql/aggregate/aggregate_state_export/test_state_export_struct.test",
         "test/sql/aggregate/aggregate_state_export/arg_min_max_export_state.test",
         "test/sql/aggregate/aggregate_state_export/first_last_export_state.test",
-        "test/sql/aggregate/aggregate_state_export/list_export_state.test"
+        "test/sql/aggregate/aggregate_state_export/list_export_state.test",
+        "test/sql/aggregate/aggregate_state_export/approx_top_k_export_state.test",
+        "test/sql/aggregate/aggregate_state_export/approx_quantile_export_state.test"
       ]
     },
     {

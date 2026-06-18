@@ -531,6 +531,28 @@ struct DebugEvictionQueueSleepMicroSecondsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugForceCommitFailureSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_force_commit_failure";
+	static constexpr const char *Description = "DEBUG SETTING: force transaction commit to fail after the undo buffer "
+	                                           "has been committed, used for testing commit error recovery";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugForceCommitRevertFailureSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_force_commit_revert_failure";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: force RevertCommit to fail while recovering from a commit failure, used for testing";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugForceExternalSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_force_external";
@@ -787,7 +809,7 @@ struct DelimJoinAsCteSetting {
 	static constexpr const char *Description =
 	    "Rewrite delim joins to materialized CTEs during dependent join flattening";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
