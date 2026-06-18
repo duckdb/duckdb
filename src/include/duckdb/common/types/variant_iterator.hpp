@@ -31,7 +31,8 @@ enum class VariantIterationOrder {
 //===--------------------------------------------------------------------===//
 // VariantIterator
 //===--------------------------------------------------------------------===//
-// VariantIterator iterates over the logical values of a VARIANT vector *without* unshredding it.
+// VariantIterator iterates over the logical values of a VARIANT vector *without* unshredding it,
+// handing out a VariantNode cursor per row (each cursor points at a single logical value/node).
 //
 // A VARIANT vector is either stored in its canonical "unshredded" layout:
 //     STRUCT(
@@ -95,19 +96,19 @@ public:
 	LogicalType logical_type;
 };
 
-class VariantIterator;
+class VariantNode;
 
 //! Shared state required to iterate a single VARIANT vector. Owns the vector iterators / flattened
-//! vectors that the individual VariantIterator cursors point into - so it must outlive any cursor.
-class VariantIteratorState {
+//! vectors that the individual VariantNode cursors point into - so it must outlive any cursor.
+class VariantIterator {
 public:
-	explicit VariantIteratorState(const Vector &variant);
+	explicit VariantIterator(const Vector &variant);
 
 public:
 	//! Whether the row is a (SQL) NULL variant
 	bool RowIsValid(idx_t row) const;
 	//! Returns a cursor pointing at the root value of the given row
-	VariantIterator Root(idx_t row) const;
+	VariantNode Root(idx_t row) const;
 
 private:
 	//! The "core": the unshredded component reader (plain vector iterators)
@@ -118,7 +119,7 @@ private:
 	//! The shredded component - the (recursive) view of the root of the shredded tree
 	ShreddedVariantIterator shredded_format;
 
-	friend class VariantIterator;
+	friend class VariantNode;
 	friend class VariantArrayIterator;
 	friend class VariantObjectIterator;
 };
@@ -127,7 +128,7 @@ class VariantArrayIterator;
 class VariantObjectIterator;
 
 //! A lightweight cursor pointing at a single logical VARIANT value.
-class VariantIterator {
+class VariantNode {
 public:
 	enum class Kind {
 		NULL_VALUE, //! a (SQL/variant) NULL value
@@ -137,7 +138,7 @@ public:
 	};
 
 public:
-	VariantIterator() : state(nullptr), kind(Kind::NULL_VALUE) {
+	VariantNode() : state(nullptr), kind(Kind::NULL_VALUE) {
 	}
 
 public:
@@ -172,17 +173,18 @@ public:
 private:
 	//! Resolve the shredded node (a "STRUCT(typed_value, [untyped_value_index])" wrapper, or a
 	//! flattened primitive) at the given index into a concrete cursor
-	static VariantIterator ResolveShredded(const VariantIteratorState &state, const ShreddedVariantIterator &node,
-	                                       idx_t index, idx_t row);
+	static VariantNode ResolveShredded(const VariantIterator &state, const ShreddedVariantIterator &node, idx_t index,
+	                                   idx_t row);
 
-	static VariantIterator MakeUnshredded(const VariantIteratorState &state, idx_t row, uint32_t value_index);
-	static VariantIterator MakeShredded(const VariantIteratorState &state, const ShreddedVariantIterator &content,
-	                                    idx_t index, idx_t row, uint32_t overlay_value_index);
-	static VariantIterator MakeNull(const VariantIteratorState &state);
-	static VariantIterator MakeMissing(const VariantIteratorState &state);
+	static VariantNode MakeUnshredded(const VariantIterator &state, idx_t row, uint32_t value_index);
+	static VariantNode MakeShredded(const VariantIterator &state, const ShreddedVariantIterator &content, idx_t index,
+	                                idx_t row, uint32_t overlay_value_index);
+	static VariantNode MakeNull(const VariantIterator &state);
+	static VariantNode MakeMissing(const VariantIterator &state);
 
 private:
-	const VariantIteratorState *state;
+	//! The owning iterator this value lives in (null only for a default-constructed cursor)
+	optional_ptr<const VariantIterator> state;
 	Kind kind;
 
 	//! The row this value belongs to (used for the unshredded component / overlay lookups)
@@ -199,28 +201,28 @@ private:
 	//! (0 means there is no leftover object to merge)
 	uint32_t overlay_value_index = 0;
 
-	friend class VariantIteratorState;
+	friend class VariantIterator;
 	friend class VariantArrayIterator;
 	friend class VariantObjectIterator;
 };
 
-//! Lazily iterates the element values of an ARRAY VariantIterator. Random-access: no child cursor is
+//! Lazily iterates the element values of an ARRAY VariantNode. Random-access: no child cursor is
 //! materialized until it is dereferenced.
 class VariantArrayIterator {
 public:
-	explicit VariantArrayIterator(const VariantIterator &array);
+	explicit VariantArrayIterator(const VariantNode &array);
 
 public:
 	idx_t size() const {
 		return length;
 	}
-	VariantIterator operator[](idx_t i) const;
+	VariantNode operator[](idx_t i) const;
 
 	class Iterator {
 	public:
 		Iterator(const VariantArrayIterator &parent, idx_t pos) : parent(parent), pos(pos) {
 		}
-		VariantIterator operator*() const {
+		VariantNode operator*() const {
 			return parent[pos];
 		}
 		Iterator &operator++() { // NOLINT: match stl API
@@ -243,7 +245,8 @@ public:
 	}
 
 private:
-	const VariantIteratorState *state;
+	//! The owning iterator this array's elements live in (always non-null for a real ARRAY node)
+	reference<const VariantIterator> state;
 	idx_t row;
 	idx_t length;
 	bool shredded;
@@ -256,16 +259,16 @@ private:
 //! A single (key, value) entry of an OBJECT
 struct VariantObjectEntry {
 	string_t key;
-	VariantIterator value;
+	VariantNode value;
 };
 
-//! Iterates the (key, value) children of an OBJECT VariantIterator, merging the shredded (typed)
+//! Iterates the (key, value) children of an OBJECT VariantNode, merging the shredded (typed)
 //! fields with the leftover unshredded fields. There are two backing modes:
 //!   - INTERNAL order: lazy forward iteration over the raw entries (skipping missing fields)
 //!   - LEXICOGRAPHIC order: iterates the materialized + sorted 'ordered_entries'
 class VariantObjectIterator {
 public:
-	VariantObjectIterator(const VariantIterator &object, VariantIterationOrder order);
+	VariantObjectIterator(const VariantNode &object, VariantIterationOrder order);
 
 public:
 	//! Forward iterator over the object entries. All modes are position-based, so the only difference is
@@ -315,7 +318,8 @@ private:
 	}
 
 private:
-	const VariantIteratorState *state;
+	//! The owning iterator this object's values live in (always non-null for a real OBJECT node)
+	reference<const VariantIterator> state;
 	idx_t row;
 	VariantIterationOrder order;
 	bool shredded;
@@ -336,6 +340,59 @@ private:
 	vector<VariantObjectEntry> ordered_entries;
 
 	friend class Iterator;
+};
+
+//! Specialization of VectorIterator for VectorVariantType.
+//! Iterates over a VARIANT vector, handing out a VariantNode cursor per row via operator[].
+//! The cursors point back into the owned VariantIterator, so this iterator must outlive them.
+template <>
+class VectorIterator<VectorVariantType> {
+public:
+	explicit VectorIterator(const Vector &vector) : state(vector), count(vector.size()) {
+	}
+
+public:
+	//! Returns a cursor pointing at the root VARIANT value of the given row
+	VariantNode operator[](idx_t row) const {
+		return state.Root(row);
+	}
+	//! Whether the row is a valid (non-NULL) variant
+	bool RowIsValid(idx_t row) const {
+		return state.RowIsValid(row);
+	}
+	idx_t size() const {
+		return count;
+	}
+
+	class Iterator {
+	public:
+		Iterator(const VectorIterator &parent, idx_t index) : parent(parent), index(index) {
+		}
+		VariantNode operator*() const {
+			return parent[index];
+		}
+		Iterator &operator++() { // NOLINT: match stl API
+			++index;
+			return *this;
+		}
+		bool operator!=(const Iterator &other) const {
+			return index != other.index;
+		}
+
+	private:
+		const VectorIterator &parent;
+		idx_t index;
+	};
+	Iterator begin() const { // NOLINT: match stl API
+		return Iterator(*this, 0);
+	}
+	Iterator end() const { // NOLINT: match stl API
+		return Iterator(*this, count);
+	}
+
+private:
+	VariantIterator state;
+	idx_t count;
 };
 
 } // namespace duckdb
