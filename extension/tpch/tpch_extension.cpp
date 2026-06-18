@@ -185,6 +185,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
 	dbgen_func.named_parameters["children"] = LogicalType::UINTEGER;
 	dbgen_func.named_parameters["step"] = LogicalType::UINTEGER;
+	dbgen_func.call_return_type = StatementReturnType::NOTHING;
 	loader.RegisterFunction(dbgen_func);
 
 	// create the TPCH pragma that allows us to run the query
