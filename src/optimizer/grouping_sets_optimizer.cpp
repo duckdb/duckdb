@@ -9,6 +9,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
@@ -66,6 +67,137 @@ static bool CanRewriteAggregate(const BoundAggregateExpression &aggregate) {
 	return true;
 }
 
+static vector<Identifier> GenerateGroupingSetColumnNames(const string &prefix, idx_t column_count) {
+	vector<Identifier> result;
+	result.reserve(column_count);
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		result.emplace_back(StringUtil::Format("%s_%llu", prefix, col_idx));
+	}
+	return result;
+}
+
+static unique_ptr<Expression> CopyAndRebindGroupingSet(const Expression &expr,
+                                                       const column_binding_map_t<ColumnBinding> &replacement_map) {
+	auto result = expr.Copy();
+	if (replacement_map.empty()) {
+		return result;
+	}
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    result, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
+		    auto entry = replacement_map.find(colref.Binding());
+		    if (entry != replacement_map.end()) {
+			    colref.BindingMutable() = entry->second;
+		    }
+	    });
+	return result;
+}
+
+static void RebindGroupingSetExpression(unique_ptr<Expression> &expr,
+                                        const column_binding_map_t<ColumnBinding> &replacement_map) {
+	if (!expr || replacement_map.empty()) {
+		return;
+	}
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
+		    auto entry = replacement_map.find(colref.Binding());
+		    if (entry != replacement_map.end()) {
+			    colref.BindingMutable() = entry->second;
+		    }
+	    });
+}
+
+static bool StageGroupingSetExpression(unique_ptr<Expression> &expr, TableIndex projection_index,
+                                       vector<unique_ptr<Expression>> &projection_expressions, bool force = false) {
+	if (!expr || (!force && !expr->IsVolatile())) {
+		return false;
+	}
+	auto return_type = expr->GetReturnType();
+	const auto column_index = projection_expressions.size();
+	projection_expressions.push_back(std::move(expr));
+	expr = make_uniq<BoundColumnRefExpression>(return_type,
+	                                           ColumnBinding(projection_index, ProjectionIndex(column_index)));
+	return true;
+}
+
+static bool StageVolatileGroupingSetInputs(Optimizer &optimizer, LogicalAggregate &aggr,
+                                           unique_ptr<LogicalOperator> &child) {
+	child->ResolveOperatorTypes();
+	auto child_bindings = child->GetColumnBindings();
+	auto projection_index = optimizer.binder.GenerateTableIndex();
+
+	column_binding_map_t<ColumnBinding> projection_replacements;
+	vector<unique_ptr<Expression>> projection_expressions;
+	projection_expressions.reserve(child_bindings.size());
+	for (idx_t col_idx = 0; col_idx < child_bindings.size(); col_idx++) {
+		projection_replacements[child_bindings[col_idx]] = ColumnBinding(projection_index, ProjectionIndex(col_idx));
+		projection_expressions.push_back(
+		    make_uniq<BoundColumnRefExpression>(child->types[col_idx], child_bindings[col_idx]));
+	}
+
+	bool staged = false;
+	for (auto &group : aggr.groups) {
+		staged |= StageGroupingSetExpression(group, projection_index, projection_expressions);
+	}
+	for (auto &expr : aggr.expressions) {
+		auto &aggregate = expr->Cast<BoundAggregateExpression>();
+		bool has_volatile_payload = false;
+		for (auto &child_expr : aggregate.GetChildrenMutable()) {
+			has_volatile_payload |= child_expr->IsVolatile();
+			staged |= StageGroupingSetExpression(child_expr, projection_index, projection_expressions);
+		}
+		if (aggregate.GetOrderBys()) {
+			for (auto &order : aggregate.GetOrderBysMutable()->orders) {
+				has_volatile_payload |= order.expression->IsVolatile();
+				staged |= StageGroupingSetExpression(order.expression, projection_index, projection_expressions);
+			}
+		}
+		const bool stage_filter =
+		    aggregate.GetFilter() && (has_volatile_payload || aggregate.GetFilter()->IsVolatile());
+		staged |= StageGroupingSetExpression(aggregate.GetFilterMutable(), projection_index, projection_expressions,
+		                                     stage_filter);
+	}
+
+	if (!staged) {
+		return false;
+	}
+
+	for (auto &group : aggr.groups) {
+		RebindGroupingSetExpression(group, projection_replacements);
+	}
+	for (auto &expr : aggr.expressions) {
+		RebindGroupingSetExpression(expr, projection_replacements);
+	}
+
+	auto projection = make_uniq<LogicalProjection>(projection_index, std::move(projection_expressions));
+	projection->children.push_back(std::move(child));
+	child = std::move(projection);
+	return true;
+}
+
+static unique_ptr<LogicalOperator> CreateGroupingSetCTERef(Optimizer &optimizer, TableIndex cte_index,
+                                                           const vector<LogicalType> &input_types,
+                                                           const vector<Identifier> &input_names,
+                                                           const vector<ColumnBinding> &input_bindings,
+                                                           column_binding_map_t<ColumnBinding> &replacement_map) {
+	auto cte_ref_index = optimizer.binder.GenerateTableIndex();
+	for (idx_t col_idx = 0; col_idx < input_bindings.size(); col_idx++) {
+		replacement_map[input_bindings[col_idx]] = ColumnBinding(cte_ref_index, ProjectionIndex(col_idx));
+	}
+	return make_uniq<LogicalCTERef>(cte_ref_index, cte_index, input_types, input_names);
+}
+
+static int64_t GetGroupingValue(const GroupingSet &grouping_set,
+                                const unsafe_vector<ProjectionIndex> &grouping_function) {
+	int64_t grouping_value = 0;
+	for (idx_t i = 0; i < grouping_function.size(); i++) {
+		if (grouping_set.find(grouping_function[i]) == grouping_set.end()) {
+			// we do not group on this column in this grouping set
+			grouping_value += 1LL << (grouping_function.size() - (i + 1));
+		}
+	}
+	return grouping_value;
+}
+
 //! Order the grouping sets so that each set can be computed by re-aggregating an already-computed superset
 static bool FindCascade(const vector<GroupingSet> &grouping_sets, vector<GroupingSetLevel> &levels) {
 	// order the grouping sets by size (descending) - supersets must be computed before their subsets
@@ -95,6 +227,113 @@ static bool FindCascade(const vector<GroupingSet> &grouping_sets, vector<Groupin
 	return true;
 }
 
+bool GroupingSetsOptimizer::TryExpandGroupingSets(unique_ptr<LogicalOperator> &op) {
+	auto &aggr = op->Cast<LogicalAggregate>();
+	const idx_t group_count = aggr.groups.size();
+	const idx_t aggregate_count = aggr.expressions.size();
+
+	StageVolatileGroupingSetInputs(optimizer, aggr, op->children[0]);
+
+	op->children[0]->ResolveOperatorTypes();
+	auto input_types = op->children[0]->types;
+	auto input_names = GenerateGroupingSetColumnNames("__grouping_sets_input", input_types.size());
+	auto input_bindings = op->children[0]->GetColumnBindings();
+	const auto cte_index = optimizer.binder.GenerateTableIndex();
+
+	vector<unique_ptr<LogicalOperator>> branches(aggr.grouping_sets.size());
+	for (idx_t grouping_set_idx = 0; grouping_set_idx < aggr.grouping_sets.size(); grouping_set_idx++) {
+		auto &grouping_set = aggr.grouping_sets[grouping_set_idx];
+
+		column_binding_map_t<ColumnBinding> input_replacements;
+		auto branch_child =
+		    CreateGroupingSetCTERef(optimizer, cte_index, input_types, input_names, input_bindings, input_replacements);
+
+		map<ProjectionIndex, idx_t> group_positions;
+		vector<unique_ptr<Expression>> branch_groups;
+		branch_groups.reserve(grouping_set.size());
+		for (auto &group_idx : grouping_set) {
+			group_positions[group_idx] = branch_groups.size();
+			branch_groups.push_back(CopyAndRebindGroupingSet(*aggr.groups[group_idx], input_replacements));
+		}
+
+		vector<unique_ptr<Expression>> branch_aggregates;
+		branch_aggregates.reserve(aggregate_count);
+		for (auto &expr : aggr.expressions) {
+			branch_aggregates.push_back(CopyAndRebindGroupingSet(*expr, input_replacements));
+		}
+
+		auto branch_group_index = optimizer.binder.GenerateTableIndex();
+		auto branch_aggregate_index = optimizer.binder.GenerateTableIndex();
+		auto branch_aggregate =
+		    make_uniq<LogicalAggregate>(branch_group_index, branch_aggregate_index, std::move(branch_aggregates));
+		branch_aggregate->groups = std::move(branch_groups);
+		branch_aggregate->children.push_back(std::move(branch_child));
+		if (aggr.has_estimated_cardinality) {
+			branch_aggregate->SetEstimatedCardinality(aggr.estimated_cardinality);
+		}
+
+		vector<unique_ptr<Expression>> projection_expressions;
+		projection_expressions.reserve(group_count + aggregate_count + aggr.grouping_functions.size());
+		for (idx_t group_idx = 0; group_idx < group_count; group_idx++) {
+			auto &group_type = aggr.groups[group_idx]->GetReturnType();
+			auto entry = group_positions.find(ProjectionIndex(group_idx));
+			if (entry == group_positions.end()) {
+				projection_expressions.push_back(make_uniq<BoundConstantExpression>(Value(group_type)));
+			} else {
+				projection_expressions.push_back(make_uniq<BoundColumnRefExpression>(
+				    group_type, ColumnBinding(branch_group_index, ProjectionIndex(entry->second))));
+			}
+		}
+		for (idx_t aggregate_idx = 0; aggregate_idx < aggregate_count; aggregate_idx++) {
+			projection_expressions.push_back(make_uniq<BoundColumnRefExpression>(
+			    aggr.expressions[aggregate_idx]->GetReturnType(),
+			    ColumnBinding(branch_aggregate_index, ProjectionIndex(aggregate_idx))));
+		}
+		for (auto &grouping_function : aggr.grouping_functions) {
+			projection_expressions.push_back(
+			    make_uniq<BoundConstantExpression>(Value::BIGINT(GetGroupingValue(grouping_set, grouping_function))));
+		}
+
+		auto projection =
+		    make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(projection_expressions));
+		projection->children.push_back(std::move(branch_aggregate));
+		branches[grouping_set_idx] = std::move(projection);
+	}
+
+	const idx_t column_count = group_count + aggregate_count + aggr.grouping_functions.size();
+	const auto union_index = optimizer.binder.GenerateTableIndex();
+	unique_ptr<LogicalOperator> result = make_uniq<LogicalSetOperation>(union_index, column_count, std::move(branches),
+	                                                                    LogicalOperatorType::LOGICAL_UNION, true);
+	if (aggr.has_estimated_cardinality) {
+		result->SetEstimatedCardinality(aggr.estimated_cardinality);
+	}
+
+	auto cte_name = Identifier(StringUtil::Format("__grouping_sets_input_cte_%llu", cte_index.index));
+	result = make_uniq<LogicalMaterializedCTE>(std::move(cte_name), cte_index, input_types.size(),
+	                                           std::move(op->children[0]), std::move(result),
+	                                           CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	if (aggr.has_estimated_cardinality) {
+		result->SetEstimatedCardinality(aggr.estimated_cardinality);
+	}
+
+	for (idx_t group_idx = 0; group_idx < group_count; group_idx++) {
+		replacement_map[ColumnBinding(aggr.group_index, ProjectionIndex(group_idx))] =
+		    ColumnBinding(union_index, ProjectionIndex(group_idx));
+	}
+	for (idx_t aggregate_idx = 0; aggregate_idx < aggregate_count; aggregate_idx++) {
+		replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(aggregate_idx))] =
+		    ColumnBinding(union_index, ProjectionIndex(group_count + aggregate_idx));
+	}
+	for (idx_t grouping_idx = 0; grouping_idx < aggr.grouping_functions.size(); grouping_idx++) {
+		replacement_map[ColumnBinding(aggr.groupings_index, ProjectionIndex(grouping_idx))] =
+		    ColumnBinding(union_index, ProjectionIndex(group_count + aggregate_count + grouping_idx));
+	}
+
+	result->ResolveOperatorTypes();
+	op = std::move(result);
+	return true;
+}
+
 bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &op) {
 	if (op->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY || op->children.size() != 1) {
 		return false;
@@ -104,17 +343,18 @@ bool GroupingSetsOptimizer::TryRewriteGroupingSets(unique_ptr<LogicalOperator> &
 		// the rewrite is only beneficial when multiple grouping sets are computed
 		return false;
 	}
+	bool can_cascade = true;
 	for (auto &expr : aggr.expressions) {
 		if (expr->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
 			return false;
 		}
 		if (!CanRewriteAggregate(expr->Cast<BoundAggregateExpression>())) {
-			return false;
+			can_cascade = false;
 		}
 	}
 	vector<GroupingSetLevel> levels;
-	if (!FindCascade(aggr.grouping_sets, levels)) {
-		return false;
+	if (!can_cascade || !FindCascade(aggr.grouping_sets, levels)) {
+		return TryExpandGroupingSets(op);
 	}
 
 	const idx_t group_count = aggr.groups.size();
