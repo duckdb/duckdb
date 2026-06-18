@@ -282,3 +282,40 @@ select
 from (select 21 a, 42 b, 1337 c)
 ----
 Column "d" was selected but was not found in the FROM clause
+
+# *COLUMNS(*) with lambda expressions (issue #17617)
+# Lambda bodies should be skipped during *COLUMNS(*) expansion
+
+statement ok
+CREATE TABLE lambda_test (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO lambda_test VALUES (1, NULL, 3), (NULL, NULL, NULL);
+
+# list_filter with IS NOT NULL in lambda body
+query I
+SELECT list_filter([*COLUMNS(*)], lambda x: x IS NOT NULL) FROM lambda_test;
+----
+[1, 3]
+[]
+
+# list_filter with IS NULL in lambda body
+query I
+SELECT list_filter([*COLUMNS(*)], lambda x: x IS NULL) FROM lambda_test;
+----
+[NULL]
+[NULL, NULL, NULL]
+
+# list_filter with NOT in lambda body (was also broken before fix)
+query I
+SELECT list_filter([*COLUMNS(*)], lambda x: NOT (x = 1)) FROM lambda_test;
+----
+[3]
+[]
+
+# list_filter with multiple conditions in lambda body
+query I
+SELECT list_filter([*COLUMNS(*)], lambda x: x IS NOT NULL AND x > 1) FROM lambda_test;
+----
+[3]
+[]
