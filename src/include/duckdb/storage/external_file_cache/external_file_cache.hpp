@@ -18,6 +18,7 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
@@ -34,6 +35,8 @@ class ExternalFileCache {
 public:
 	//! Get the cache block size for a given file path.
 	DUCKDB_API idx_t GetCacheBlockSize(const string &path) const;
+	//! Whether reads of the given file should go through the cache (remote files only, unless forced).
+	DUCKDB_API bool ShouldCacheFile(const string &path) const;
 
 	//! Cached files
 	struct CachedFile {
@@ -72,7 +75,7 @@ public:
 	void SetEnabled(bool enable);
 	idx_t GetGeneration() const;
 	vector<CachedFileInformation> GetCachedFileInformation() const;
-	//! Number of files tracked in the cache map, expose for testing purpose.
+	//! Number of files tracked in the ObjectCache, exposed for testing.
 	idx_t GetCachedFileCount() const;
 
 	//! Re-index to `current_block_size` if it differs from the cache block size.
@@ -89,9 +92,18 @@ public:
 	                               const string &current_version_tag, timestamp_t current_last_modified);
 
 private:
+	class ExternalFileCacheObjectCacheEntry;
+
 	//! Re-index blocks of a single cached file.
 	void ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size, idx_t new_block_size)
 	    DUCKDB_REQUIRES(cached_file.map_lock);
+
+	//! Registers a cached file path in the tracked set.
+	void InsertCachedFileKey(const string &path);
+	//! Removes a cached file path from the tracked set.
+	void EraseCachedFileKey(const string &path);
+	//! Delete the ObjectCache entries for the given cached file paths.
+	void DeleteObjectCacheEntries(const vector<string> &paths);
 
 	//! The BufferManager used to cache files
 	BufferManager &buffer_manager;
@@ -99,10 +111,11 @@ private:
 	atomic<bool> enable;
 	//! Generation counter, incremented whenever cache enablement changes.
 	atomic<idx_t> generation;
-	//! Mapping from file path to cached file with cached blocks
-	unordered_map<string, shared_ptr<CachedFile>> cached_files;
-	//! Lock for accessing the cached files
-	mutable mutex lock;
+	//! Paths of the cached files tracked in the ObjectCache.
+	//! Entries should only be inserted at `GetOrCreateCachedFile` and deleted at object cache entry deletion.
+	unordered_set<string> cached_file_keys DUCKDB_GUARDED_BY(lock);
+	//! Lock for accessing cached_file_keys.
+	mutable annotated_mutex lock;
 };
 
 } // namespace duckdb

@@ -14,9 +14,13 @@ namespace duckdb {
 
 class CardinalityEstimator;
 
+enum class DistinctCountSource : uint8_t { CARDINALITY, MIN_MAX, HLL, EXACT };
+
 struct DistinctCount {
+	DistinctCount(idx_t distinct_count, DistinctCountSource source);
+
 	idx_t distinct_count;
-	bool from_hll;
+	DistinctCountSource source;
 };
 
 struct ExpressionBinding {
@@ -42,8 +46,8 @@ public:
 	bool stats_initialized = false;
 
 	//! for debug, column names and tables
-	vector<string> column_names;
-	string table_name;
+	vector<Identifier> column_names;
+	Identifier table_name;
 };
 
 class RelationStatisticsHelper {
@@ -73,7 +77,10 @@ public:
 	static void CopyRelationStats(RelationStats &to, const RelationStats &from);
 
 private:
-	static idx_t GetDistinctCount(LogicalGet &get, ClientContext &context, const ColumnIndex &column_id);
+	static unique_ptr<BaseStatistics> GetColumnStatistics(LogicalGet &get, ClientContext &context,
+	                                                      const ColumnIndex &column_id);
+	static DistinctCount GetDistinctCount(LogicalGet &get, ClientContext &context, const ColumnIndex &column_id,
+	                                      idx_t base_table_cardinality);
 };
 
 } // namespace duckdb

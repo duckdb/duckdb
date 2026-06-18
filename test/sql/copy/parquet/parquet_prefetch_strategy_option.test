@@ -10,9 +10,6 @@ statement ok
 SET threads=1
 
 statement ok
-SET prefetch_all_parquet_files=true
-
-statement ok
 COPY (
     SELECT i AS a,
         ((i * 73 + 41) % 1000) AS b,

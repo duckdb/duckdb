@@ -238,7 +238,7 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 		payload_chunk.data[c].Reference(sink_chunk.data[child_idx[c]]);
 	}
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), statef.allocator);
+	AggregateInputData aggr_input_data(aggr, statef.allocator);
 	idx_t begin = 0;
 	idx_t filter_idx = 0;
 	auto partition_end = partition_offsets[partition + 1];

@@ -29,7 +29,7 @@ string ShowRef::ToString() const {
 		result += query->ToString();
 		result += ")";
 	} else if (table_name != "__show_tables_expanded") {
-		result += table_name;
+		result += table_name.GetIdentifierName();
 	}
 	return result;
 }

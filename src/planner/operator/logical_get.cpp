@@ -39,7 +39,7 @@ LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 }
 
 LogicalGet::LogicalGet(TableIndex table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
-                       vector<LogicalType> returned_types, vector<string> returned_names,
+                       vector<LogicalType> returned_types, vector<Identifier> returned_names,
                        virtual_column_map_t virtual_columns_p)
     : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(std::move(function)),
       bind_data(std::move(bind_data)), returned_types(std::move(returned_types)), names(std::move(returned_names)),
@@ -70,13 +70,13 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 					filters_info += "\n";
 				}
 				first_item = false;
-				filters_info += filter.ToString(entry->second.name);
+				filters_info += filter.ToString(entry->second.name.GetIdentifierName());
 			}
 		} else if (col_id < names.size()) {
 			if (!first_item) {
 				filters_info += "\n";
 			}
-			auto column_name = col_id_entry.GetName(names[col_id]);
+			auto column_name = col_id_entry.GetName(names[col_id].GetIdentifierName());
 			first_item = false;
 			filters_info += filter.ToString(column_name);
 		}
@@ -84,7 +84,11 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	result["Filters"] = filters_info;
 
 	if (extra_info.sample_options) {
-		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
+		if (extra_info.sample_options->is_percentage) {
+			result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
+		} else {
+			result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + " rows";
+		}
 	}
 
 	if (!extra_info.file_filters.empty()) {
@@ -189,7 +193,7 @@ const LogicalType &LogicalGet::GetColumnType(const ColumnIndex &index) const {
 	}
 }
 
-const string &LogicalGet::GetColumnName(const ColumnIndex &index) const {
+const Identifier &LogicalGet::GetColumnName(const ColumnIndex &index) const {
 	if (index.IsVirtualColumn()) {
 		auto entry = virtual_columns.find(index.GetPrimaryIndex());
 		if (entry == virtual_columns.end()) {
@@ -431,10 +435,10 @@ vector<TableIndex> LogicalGet::GetTableIndex() const {
 string LogicalGet::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return StringUtil::Upper(function.name) + StringUtil::Format(" #%llu", table_index.index);
+		return StringUtil::Upper(function.name.GetIdentifierName()) + StringUtil::Format(" #%llu", table_index.index);
 	}
 #endif
-	return StringUtil::Upper(function.name);
+	return StringUtil::Upper(function.name.GetIdentifierName());
 }
 
 } // namespace duckdb

@@ -204,6 +204,13 @@
         ]
     },
     {
+        "name": "cache_local_files",
+        "description": "Whether the external file cache also caches local files (remote files are always cached)",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "catalog_error_max_schemas",
         "description": "The maximum number of schemas the system will scan for \\\"did you mean...\\\" style errors in the catalog",
         "type": "UBIGINT",
@@ -307,6 +314,20 @@
         "default_value": "0"
     },
     {
+        "name": "debug_force_commit_failure",
+        "description": "DEBUG SETTING: force transaction commit to fail after the undo buffer has been committed, used for testing commit error recovery",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_force_commit_revert_failure",
+        "description": "DEBUG SETTING: force RevertCommit to fail while recovering from a commit failure, used for testing",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_force_external",
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
@@ -326,6 +347,12 @@
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "false"
+    },
+    {
+        "name": "debug_order_verification",
+        "description": "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)",
+        "type": "ENUM<DebugOrderVerification>",
+        "scope": "global"
     },
     {
         "name": "debug_physical_table_scan_execution_strategy",
@@ -351,6 +378,13 @@
     {
         "name": "debug_verification_projection",
         "description": "DEBUG SETTING: add internal verification projections to stress optimizers",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_aggregate_state_export",
+        "description": "DEBUG SETTING: enable verification of aggregate state export",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
@@ -469,11 +503,25 @@
         "default_value": "ALL_ERRORS_INVALIDATE_TRANSACTION"
     },
     {
+        "name": "delim_join_as_cte",
+        "description": "Rewrite delim joins to materialized CTEs during dependent join flattening",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true"
+    },
+    {
         "name": "deprecated_using_key_syntax",
         "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
         "type": "ENUM<DeprecatedUsingKeySyntax>",
         "default_scope": "local",
         "default_value": "DEFAULT"
+    },
+    {
+        "name": "dialect_compatibility_mode",
+        "description": "Enable SQL dialect compatibility for a certain engine (e.g. `SET dialect_compatibility_mode='spark'`)",
+        "type": "ENUM<DialectCompatibilityMode>",
+        "default_scope": "local",
+        "default_value": "NONE"
     },
     {
         "name": "disable_database_invalidation",
@@ -573,14 +621,6 @@
         "scope": "global",
         "default_value": "false",
         "struct": "EnableFSSTVectorsSetting"
-    },
-    {
-        "name": "enable_http_logging",
-        "description": "(deprecated) Enables HTTP logging",
-        "type": "BOOLEAN",
-        "scope": "local",
-        "struct": "EnableHTTPLoggingSetting",
-        "custom_implementation": true
     },
     {
         "name": "enable_http_metadata_cache",
@@ -769,6 +809,13 @@
         "custom_implementation": true
     },
     {
+        "name": "force_update_to_del_and_insert",
+        "description": "DEBUG SETTING: forces all updates to use the delete + insert code path instead of in-place updates",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "force_variant_shredding",
         "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
         "type": "VARCHAR",
@@ -793,14 +840,6 @@
         "on_callbacks": [
             "set"
         ]
-    },
-    {
-        "name": "http_logging_output",
-        "description": "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal",
-        "type": "VARCHAR",
-        "scope": "local",
-        "struct": "HTTPLoggingOutputSetting",
-        "custom_implementation": true
     },
     {
         "name": "http_proxy",
@@ -1124,16 +1163,6 @@
         "default_value": "false"
     },
     {
-        "name": "profile_output",
-        "description": "The file to which profile output should be saved, or empty to print to the terminal",
-        "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true,
-        "aliases": [
-            "profiling_output"
-        ]
-    },
-    {
         "name": "profiling_coverage",
         "description": "The profiling coverage (SELECT or ALL)",
         "type": "VARCHAR",
@@ -1142,8 +1171,25 @@
     },
     {
         "name": "profiling_mode",
-        "description": "The profiling mode (STANDARD or DETAILED)",
+        "description": "DEPRECATED: Sets the profiling mode",
         "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "profiling_output",
+        "description": "The file to which profile output should be saved, or empty to print to the terminal",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true,
+        "aliases": [
+            "profile_output"
+        ]
+    },
+    {
+        "name": "profiling_renderer_settings",
+        "description": "A map of settings passed to the renderer of the profiler output (e.g. {'max_extra_lines': 100}) - settings not recognized by the active renderer are ignored",
+        "type": "MAP(VARCHAR, VARCHAR)",
         "scope": "local",
         "custom_implementation": true
     },

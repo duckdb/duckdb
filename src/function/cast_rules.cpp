@@ -494,7 +494,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 			for (idx_t to_member_idx = 0; to_member_idx < UnionType::GetMemberCount(to); to_member_idx++) {
 				auto &to_member_name = UnionType::GetMemberName(to, to_member_idx);
 
-				if (StringUtil::CIEquals(from_member_name, to_member_name)) {
+				if (from_member_name == to_member_name) {
 					auto &from_member_type = UnionType::GetMemberType(from, from_member_idx);
 					auto &to_member_type = UnionType::GetMemberType(to, to_member_idx);
 
@@ -513,8 +513,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 			return cost;
 		}
 	}
-	if ((from.id() == LogicalTypeId::STRUCT || from.IsAggregateStateStructType()) &&
-	    (to.id() == LogicalTypeId::STRUCT || to.IsAggregateStateStructType())) {
+	if ((from.id() == LogicalTypeId::STRUCT) && (to.id() == LogicalTypeId::STRUCT)) {
 		if (to.AuxInfo() == nullptr) {
 			// If this struct is not fully resolved, we'll leave it to the actual cast logic to handle it.
 			return 0;
@@ -535,7 +534,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		int64_t cost = -1;
 		if (named_struct_cast) {
 			// Collect the target members in a map for easy lookup
-			case_insensitive_map_t<idx_t> target_members;
+			identifier_map_t<idx_t> target_members;
 			for (idx_t target_idx = 0; target_idx < target_children.size(); target_idx++) {
 				auto &target_name = target_children[target_idx].first;
 				if (target_members.find(target_name) != target_members.end()) {

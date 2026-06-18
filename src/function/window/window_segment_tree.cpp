@@ -195,7 +195,7 @@ void WindowSegmentTreePart::FlushStates(bool combining) {
 		return;
 	}
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateInputData aggr_input_data(aggr, allocator);
 	if (combining) {
 		statel.Verify();
 		aggr.function.GetStateCombineCallback()(statel, statep, aggr_input_data, flush_count);
@@ -210,7 +210,7 @@ void WindowSegmentTreePart::FlushStates(bool combining) {
 }
 
 void WindowSegmentTreePart::Combine(WindowSegmentTreePart &other, idx_t count) {
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateInputData aggr_input_data(aggr, allocator);
 	aggr.function.GetStateCombineCallback()(other.statef, statef, aggr_input_data, count);
 }
 
@@ -281,7 +281,7 @@ void WindowSegmentTreePart::WindowSegmentValue(const WindowSegmentTreeGlobalStat
 }
 void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 	//	Finalise the result aggregates and write to result if write_result is set
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateFinalizeInputData aggr_input_data(aggr, allocator);
 	aggr.function.GetStateFinalizeCallback()(statef, aggr_input_data, result, count, 0);
 
 	//	Destruct the result aggregates

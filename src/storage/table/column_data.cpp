@@ -304,7 +304,8 @@ void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vecto
 	if (!updates) {
 		return;
 	}
-	updates->FetchRow(transaction, NumericCast<idx_t>(row_id), result, result_idx);
+	const idx_t offset = NumericCast<idx_t>(row_id);
+	updates->FetchRows(transaction, &offset, *FlatVector::IncrementalSelectionVector(), 1, result, result_idx);
 }
 
 void ColumnData::UpdateInternal(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
@@ -376,9 +377,7 @@ void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnS
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
 	FlatVector::SetSize(result, count_t(scan_count));
 
-	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(vdata);
-	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, scan_count, s_count);
+	ColumnSegment::FilterSelection(sel, result, filter_state, scan_count, s_count);
 }
 
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -681,19 +680,42 @@ idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE, ScanVectorType::SCAN_FLAT_VECTOR);
 }
 
-void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
-                          row_t row_id, Vector &result, idx_t result_idx) {
-	if (UnsafeNumericCast<idx_t>(row_id) > count) {
-		throw InternalException("ColumnData::FetchRow - row_id out of range");
+void ColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                           const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count, Vector &result,
+                           idx_t result_offset) {
+	FetchRowsAtSegmentLevel(transaction, state, offsets, sel, fetch_count, result, result_offset);
+}
+
+void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetchState &state, const idx_t *offsets,
+                                         const SelectionVector &sel, idx_t fetch_count, Vector &result,
+                                         idx_t result_offset) {
+	if (fetch_count == 0) {
+		return;
 	}
-	auto segment = data.GetSegment(UnsafeNumericCast<idx_t>(row_id));
 
-	// now perform the fetch within the segment
-	auto index_in_segment = row_id - UnsafeNumericCast<row_t>(segment->GetRowStart());
-	segment->GetNode().FetchRow(state, index_in_segment, result, result_idx);
-	// merge any updates made to this row
-
-	FetchUpdateRow(transaction, row_id, result, result_idx);
+	optional_ptr<SegmentNode<ColumnSegment>> current_segment;
+	idx_t segment_start = 0;
+	idx_t segment_end = 0;
+	for (idx_t idx = 0; idx < fetch_count; idx++) {
+		const idx_t offset = offsets[sel.get_index(idx)];
+		if (offset > count) {
+			throw InternalException("ColumnData::FetchRowsAtSegmentLevel - row_id %lld out of range for count %lld",
+			                        offset, count);
+		}
+		if (!current_segment || offset < segment_start || offset >= segment_end) {
+			current_segment = data.GetSegment(offset);
+			segment_start = current_segment->GetRowStart();
+			segment_end = segment_start + current_segment->GetNode().count;
+		}
+		const idx_t index_in_segment = offset - segment_start;
+		current_segment->GetNode().FetchRow(state, NumericCast<row_t>(index_in_segment), result, result_offset + idx);
+	}
+	{
+		const lock_guard<mutex> update_guard(update_lock);
+		if (updates) {
+			updates->FetchRows(transaction, offsets, sel, fetch_count, result, result_offset);
+		}
+	}
 }
 
 idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector, idx_t row_group_start) {

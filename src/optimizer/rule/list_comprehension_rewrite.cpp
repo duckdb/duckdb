@@ -25,8 +25,8 @@ bool IsTargetListFunction(ClientContext &context, const BoundFunctionExpression 
 
 	// Compare function name with catalog to recognize aliases
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, expr.Function().GetName(),
-	                                                          OnEntryNotFound::RETURN_NULL);
+	auto entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(),
+	                                                          expr.Function().GetName(), OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		return false;
 	}

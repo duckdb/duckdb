@@ -614,7 +614,6 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 
 		// Mark the rid column
 		payload.data[0].Sequence(rid, increment, scan_count);
-		payload.SetChildCardinality(scan_count);
 		keys.Fuse(payload);
 		rid += increment * UnsafeNumericCast<int64_t>(scan_count);
 
@@ -1430,8 +1429,6 @@ void IEJoinLocalSourceState::SplitPayloads(DataChunk &chunk) {
 			rpayload.data[col_idx - left_cols].Reference(chunk.data[col_idx - left_cols]);
 		}
 	}
-	lpayload.SetChildCardinality(chunk.size());
-	rpayload.SetChildCardinality(chunk.size());
 }
 
 const SelectionVector *IEJoinLocalSourceState::ApplyArbitraryPredicate(DataChunk &chunk) {
@@ -1550,7 +1547,6 @@ void IEJoinLocalSourceState::ResolveSimpleJoin(ExecutionContext &context) {
 			left_table.Repin(*left_iterator);
 			op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, lsel,
 			                      *left_scan_state);
-			lpayload.SetChildCardinality(result_count);
 		}
 
 		//	Handle chunk boundaries: If we found a match for the last value
@@ -1649,7 +1645,6 @@ void IEJoinLocalSourceState::ResolveAntiJoin(ExecutionContext &context, DataChun
 		left_table.Repin(*left_iterator);
 		op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, rsel,
 		                      *left_scan_state);
-		lpayload.SetChildCardinality(result_count);
 
 		result.Reference(lpayload);
 		result.Verify(context.client.db);
@@ -1673,13 +1668,12 @@ void IEJoinLocalSourceState::ResolveMarkJoin(ExecutionContext &context, DataChun
 
 	//	Merge lsel and unmatched LHS rids into (the unused) rsel, tracking the matches
 	bool found_match[STANDARD_VECTOR_SIZE];
-	const idx_t result_count = FindSimpleMatches(context, found_match);
+	FindSimpleMatches(context, found_match);
 
 	//	Read the lhs rows
 	left_table.Repin(*left_iterator);
 	op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, rsel,
 	                      *left_scan_state);
-	lpayload.SetChildCardinality(result_count);
 
 	//	Compute the residual keys
 	//	We know here that the two sort columns are not NULL, so the tail columns are all we need
@@ -2040,7 +2034,6 @@ void IEJoinLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChun
 	}
 
 	op.ProjectResult(chunk, result);
-	result.SetChildCardinality(count);
 	result.Verify(context.client.db);
 }
 
@@ -2073,7 +2066,6 @@ void IEJoinLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChu
 	}
 
 	op.ProjectResult(chunk, result);
-	result.SetChildCardinality(count);
 	result.Verify(context.client.db);
 }
 

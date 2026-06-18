@@ -1,4 +1,6 @@
-Program <- Statement? (';'+ Statement)* ';'*
+Program <- TopLevelStatement*
+
+TopLevelStatement <- Statement? (';'+ / EndOfInput)
 
 Statement <-
 	CreateStatement /
@@ -162,7 +164,7 @@ TypeNameAsQualifiedName <- TypeName
 CatalogReservedSchemaTypeName <- CatalogQualification ReservedSchemaQualification ReservedTypeName
 SchemaReservedTypeName <- SchemaQualification ReservedTypeName
 TypeModifiers <- Parens(List(Expression)?)
-RowType <- RowOrStruct ColIdTypeList
+RowType <- RowOrStruct ColIdTypeList?
 SetofType <- 'SETOF' Type
 UnionType <- 'UNION' ColIdTypeList
 ColIdTypeList <- Parens(List(ColIdType))

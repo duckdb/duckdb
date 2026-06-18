@@ -210,7 +210,9 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 
 	auto &struct_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 	if (struct_children.empty()) {
-		throw InternalException("Can't check for containment in an empty struct");
+		// an empty struct contains nothing, the search always returns false (or position 0)
+		bound_function.GetArguments()[0] = child_type;
+		return nullptr;
 	}
 	if (!StructType::IsUnnamed(child_type)) {
 		throw BinderException("%s can only be used on unnamed structs", bound_function.GetName());

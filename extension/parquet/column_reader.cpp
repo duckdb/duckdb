@@ -160,7 +160,7 @@ unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vect
 }
 
 uint64_t ColumnReader::TotalCompressedSize() {
-	if (!chunk) {
+	if (IsSkipped()) {
 		return 0;
 	}
 
@@ -171,8 +171,9 @@ uint64_t ColumnReader::TotalCompressedSize() {
 // apparently is not the first page of the data. Therefore we determine the address of the first page by taking the
 // minimum of all page offsets.
 idx_t ColumnReader::FileOffset() const {
-	if (!chunk) {
-		throw std::runtime_error("FileOffset called on ColumnReader with no chunk");
+	if (IsSkipped()) {
+		//! This column reader is skipped
+		return 0;
 	}
 	auto min_offset = NumericLimits<idx_t>::Maximum();
 	if (chunk->meta_data.__isset.dictionary_page_offset) {
@@ -407,7 +408,10 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	}
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
-			throw InvalidInputException("Failed to read file \"%s\": Page size mismatch", Reader().GetFileName());
+			const auto &file_name = Reader().GetFileName();
+			throw InvalidInputException(
+			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
+			    page_hdr.uncompressed_page_size, page_hdr.compressed_page_size);
 		}
 		uncompressed = true;
 	}
@@ -466,7 +470,10 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (compressed_page_size != NumericCast<uint32_t>(page_hdr.uncompressed_page_size)) {
-			throw std::runtime_error("Page size mismatch");
+			const auto &file_name = Reader().GetFileName();
+			throw InvalidInputException(
+			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
+			    page_hdr.uncompressed_page_size, compressed_page_size);
 		}
 		ReadData(block->ptr, compressed_page_size, page_hdr.type);
 		return;
@@ -848,9 +855,7 @@ void ColumnReader::DirectFilter(ColumnReaderInput &input, Vector &result, const 
 void ColumnReader::ApplyFilter(Vector &v, const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
                                SelectionVector &sel, idx_t &approved_tuple_count) {
 	FlatVector::SetSize(v, count_t(scan_count));
-	UnifiedVectorFormat vdata;
-	v.ToUnifiedFormat(vdata);
-	ColumnSegment::FilterSelection(sel, v, vdata, filter, filter_state, scan_count, approved_tuple_count);
+	ColumnSegment::FilterSelection(sel, v, filter_state, scan_count, approved_tuple_count);
 }
 
 void ColumnReader::Skip(idx_t num_values) {

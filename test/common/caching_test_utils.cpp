@@ -21,6 +21,12 @@ const string &CachingTestFileGuard::GetPath() const {
 	return file_path;
 }
 
+DuckDB MakeCacheLocalFilesDB() {
+	DBConfig config;
+	config.SetOptionByName("cache_local_files", true);
+	return DuckDB(":memory:", &config);
+}
+
 string SimpleTrackingFileSystem::GetName() const {
 	return "TrackingFileSystem";
 }

@@ -110,6 +110,10 @@ static bool TryShreddedExtractRecursive(const Vector &input, const vector<Varian
 		// only by key supported
 		return false;
 	}
+	if (input.GetType().id() != LogicalTypeId::STRUCT) {
+		//! Not shredded on OBJECT, can't extract a key
+		return false;
+	}
 	// first entry is "typed_value"
 	auto &typed_entries = StructVector::GetEntries(input);
 	auto &typed_value = typed_entries[0];
@@ -119,7 +123,7 @@ static bool TryShreddedExtractRecursive(const Vector &input, const vector<Varian
 	auto &child_entries = StructVector::GetEntries(typed_value);
 	for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
 		auto &entry = child_types[child_idx];
-		if (StringUtil::CIEquals(entry.first, component.key)) {
+		if (entry.first == component.key) {
 			// key found - move onto next component
 			return TryShreddedExtractRecursive(child_entries[child_idx], components, result, count, path_index + 1);
 		}

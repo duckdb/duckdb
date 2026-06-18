@@ -30,7 +30,7 @@ public:
 	static ChildShreddingTypes Deserialize(Deserializer &source);
 
 public:
-	unique_ptr<case_insensitive_map_t<ShreddingType>> types;
+	unique_ptr<identifier_map_t<ShreddingType>> types;
 };
 
 struct ShreddingType {
@@ -50,8 +50,8 @@ public:
 
 public:
 	static ShreddingType GetShreddingTypes(const Value &val, ClientContext &context);
-	void AddChild(const string &name, ShreddingType &&child);
-	optional_ptr<const ShreddingType> GetChild(const string &name) const;
+	void AddChild(const Identifier &name, ShreddingType &&child);
+	optional_ptr<const ShreddingType> GetChild(const Identifier &name) const;
 
 public:
 	bool set = false;

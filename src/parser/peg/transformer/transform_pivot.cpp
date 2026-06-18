@@ -89,7 +89,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformPivotStatement(PEGTr
 			GroupingSet set;
 			for (idx_t gr = 0; gr < pivot_group_list.size(); gr++) {
 				auto &group = pivot_group_list[gr];
-				auto colref = make_uniq<ColumnRefExpression>(group);
+				auto colref = make_uniq<ColumnRefExpression>(Identifier(group));
 				select_node->select_list.push_back(colref->Copy());
 				select_node->groups.group_expressions.push_back(std::move(colref));
 				set.insert(ProjectionIndex(gr));
@@ -122,7 +122,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformPivotStatement(PEGTr
 		new_select->from_table = source->Copy();
 		AddPivotEntry(transformer, enum_name, std::move(new_select), col.pivot_expressions[0]->Copy(),
 		              std::move(col.subquery), has_parameters);
-		col.pivot_enum = enum_name;
+		col.pivot_enum = Identifier(enum_name);
 	}
 
 	// Generate the actual query, including the pivot
@@ -141,7 +141,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformPivotStatement(PEGTr
 		pivot_ref->aggregates.push_back(std::move(function));
 	}
 	if (pivot_group.HasResult()) {
-		pivot_ref->groups = transformer.Transform<vector<string>>(pivot_group.GetResult());
+		pivot_ref->groups = transformer.Transform<vector<Identifier>>(pivot_group.GetResult());
 	}
 	pivot_ref->pivots = std::move(columns);
 	select_node->from_table = std::move(pivot_ref);
@@ -157,15 +157,15 @@ PEGTransformerFactory::TransformPivotUsing(PEGTransformer &transformer,
 }
 
 vector<string> PEGTransformerFactory::TransformUnpivotHeaderSingle(PEGTransformer &transformer,
-                                                                   const string &col_id_or_string) {
+                                                                   const Identifier &col_id_or_string) {
 	vector<string> result;
-	result.push_back(col_id_or_string);
+	result.push_back(col_id_or_string.GetIdentifierName());
 	return result;
 }
 
 vector<string> PEGTransformerFactory::TransformUnpivotHeaderList(PEGTransformer &transformer,
-                                                                 const vector<string> &col_id_or_string) {
-	return col_id_or_string;
+                                                                 const vector<Identifier> &col_id_or_string) {
+	return IdentifiersToStrings(col_id_or_string);
 }
 
 bool PEGTransformerFactory::TransformIncludeNulls(PEGTransformer &transformer) {
@@ -229,7 +229,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformUnpivotStatement(PEG
 		new_select->from_table = source->Copy();
 		AddPivotEntry(transformer, enum_name, std::move(new_select), col.pivot_expressions[0]->Copy(),
 		              std::move(col.subquery), has_parameters);
-		col.pivot_enum = enum_name;
+		col.pivot_enum = Identifier(enum_name);
 	}
 
 	auto pivot_ref = make_uniq<PivotRef>();
@@ -250,11 +250,11 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformUnpivotStatement(PEG
 }
 
 UnpivotNameValues PEGTransformerFactory::TransformIntoNameValues(PEGTransformer &transformer,
-                                                                 const string &col_id_or_string,
-                                                                 const vector<string> &identifier) {
+                                                                 const Identifier &col_id_or_string,
+                                                                 const vector<Identifier> &identifier) {
 	UnpivotNameValues result;
 	PivotColumn column;
-	column.unpivot_names.push_back(col_id_or_string);
+	column.unpivot_names.push_back(Identifier(col_id_or_string));
 	result.column = std::move(column);
 	result.unpivot_names = identifier;
 	return result;

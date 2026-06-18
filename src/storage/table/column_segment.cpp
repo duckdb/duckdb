@@ -424,7 +424,6 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 			idx_t chunk_end = offset + chunk_count;
 			DataChunk chunk;
 			chunk.data.emplace_back(vector, offset, chunk_end);
-			chunk.SetChildCardinality(chunk_count);
 
 			// construct the relevant selection vector for the current chunk (offset ... offset + chunk_count)
 			idx_t current_count = 0;
@@ -476,6 +475,11 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
                                      const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
                                      idx_t &approved_tuple_count) {
 	(void)vdata;
+	return FilterSelection(sel, vector, filter_state, scan_count, approved_tuple_count);
+}
+
+idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, TableFilterState &filter_state,
+                                     idx_t scan_count, idx_t &approved_tuple_count) {
 	auto &state = filter_state.Cast<ExpressionFilterState>();
 	return ExecuteExpressionFilterSelection(sel, vector, state, scan_count, approved_tuple_count);
 }

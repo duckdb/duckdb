@@ -134,7 +134,7 @@ unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, P
 		auto &column_id = get.GetColumnIndex(column_binding);
 		auto column_name = get.GetColumnName(column_id);
 		auto &column_type = get.GetColumnType(column_id);
-		auto expr = make_uniq<BoundColumnRefExpression>(column_name, column_type, column_binding);
+		auto expr = make_uniq<BoundColumnRefExpression>(Identifier(column_name), column_type, column_binding);
 		return std::move(expr);
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
@@ -226,6 +226,11 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	}
 	if (!get.function.late_materialization) {
 		// this function does not support late materialization
+		return false;
+	}
+	if (get.extra_info.sample_options && !get.extra_info.sample_options->is_percentage) {
+		// we should not apply late materialization when row-count sampling is pushed down
+		// the sample scan is already fast and creating a semi-join would duplicate the full table scan
 		return false;
 	}
 	if (!get.function.get_row_id_columns) {

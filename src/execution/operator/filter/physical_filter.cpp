@@ -63,7 +63,7 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 
 InsertionOrderPreservingMap<string> PhysicalFilter::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["__expression__"] = expression->GetName();
+	result["__expression__"] = expression->GetName().GetIdentifierName();
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }

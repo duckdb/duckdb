@@ -24,6 +24,32 @@
 
 namespace duckdb {
 
+static bool PlanReturnsExactlyOneRow(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		auto &aggr = op.Cast<LogicalAggregate>();
+		return aggr.groups.empty() && aggr.grouping_sets.empty() && aggr.grouping_functions.empty();
+	}
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+		return true;
+	case LogicalOperatorType::LOGICAL_LIMIT: {
+		auto &limit = op.Cast<LogicalLimit>();
+		if (limit.limit_val.Type() != LimitNodeType::CONSTANT_VALUE || limit.limit_val.GetConstantValue() != 1) {
+			return false;
+		}
+		if (limit.offset_val.Type() != LimitNodeType::UNSET &&
+		    (limit.offset_val.Type() != LimitNodeType::CONSTANT_VALUE || limit.offset_val.GetConstantValue() != 0)) {
+			return false;
+		}
+		return op.children.size() == 1 && PlanReturnsExactlyOneRow(*op.children[0]);
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		return op.children.size() == 1 && PlanReturnsExactlyOneRow(*op.children[0]);
+	default:
+		return false;
+	}
+}
+
 static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubqueryExpression &expr,
                                                        unique_ptr<LogicalOperator> &root,
                                                        unique_ptr<LogicalOperator> plan) {
@@ -71,7 +97,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// we replace the original subquery with a ColumnRefExpression referring to the result of the projection (either
 		// TRUE or FALSE)
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), LogicalType::BOOLEAN,
+		return make_uniq<BoundColumnRefExpression>(Identifier(expr.GetName()), LogicalType::BOOLEAN,
 		                                           ColumnBinding(projection_index, ProjectionIndex(0)));
 	}
 	case SubqueryType::SCALAR: {
@@ -79,6 +105,11 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// figure out the table index of the bound table of the entry which we want to return
 		auto bindings = plan->GetColumnBindings();
 		D_ASSERT(bindings.size() == 1);
+		if (expr.GetReturnType().id() != LogicalTypeId::SQLNULL && PlanReturnsExactlyOneRow(*plan)) {
+			auto result = make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(), bindings[0]);
+			root = LogicalCrossProduct::Create(std::move(root), std::move(plan));
+			return std::move(result);
+		}
 		auto table_idx = bindings[0].table_index;
 
 		bool error_on_multiple_rows = Settings::Get<ScalarSubqueryErrorOnMultipleRowsSetting>(binder.context);
@@ -149,7 +180,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// we replace the original subquery with a BoundColumnRefExpression referring to the first result of the
 		// aggregation
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(),
+		return make_uniq<BoundColumnRefExpression>(Identifier(expr.GetName()), expr.GetReturnType(),
 		                                           ColumnBinding(aggr_index, ProjectionIndex(0)));
 	}
 	default: {
@@ -214,7 +245,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		root = std::move(join);
 
 		// we replace the original subquery with a BoundColumnRefExpression referring to the mark column
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(),
+		return make_uniq<BoundColumnRefExpression>(Identifier(expr.GetName()), expr.GetReturnType(),
 		                                           ColumnBinding(mark_index, ProjectionIndex(0)));
 	}
 	}
@@ -312,7 +343,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->AddChild(std::move(plan));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the data element returned by the join
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(), plan_column);
+		return make_uniq<BoundColumnRefExpression>(Identifier(expr.GetName()), expr.GetReturnType(), plan_column);
 	}
 	case SubqueryType::EXISTS: {
 		// correlated EXISTS query
@@ -327,7 +358,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->AddChild(std::move(plan));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(),
+		return make_uniq<BoundColumnRefExpression>(Identifier(expr.GetName()), expr.GetReturnType(),
 		                                           ColumnBinding(mark_index, ProjectionIndex(0)));
 	}
 	default: {
@@ -365,7 +396,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->AddChild(std::move(dependent_join));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(),
+		return make_uniq<BoundColumnRefExpression>(Identifier(expr.GetName()), expr.GetReturnType(),
 		                                           ColumnBinding(mark_index, ProjectionIndex(0)));
 	}
 	}

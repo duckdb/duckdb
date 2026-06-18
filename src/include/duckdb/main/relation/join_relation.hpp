@@ -18,13 +18,13 @@ public:
 	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right,
 	                        unique_ptr<ParsedExpression> condition, JoinType type,
 	                        JoinRefType join_ref_type = JoinRefType::REGULAR);
-	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, vector<string> using_columns,
+	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, vector<Identifier> using_columns,
 	                        JoinType type, JoinRefType join_ref_type = JoinRefType::REGULAR);
 
 	shared_ptr<Relation> left;
 	shared_ptr<Relation> right;
 	unique_ptr<ParsedExpression> condition;
-	vector<string> using_columns;
+	vector<Identifier> using_columns;
 	JoinType join_type;
 	JoinRefType join_ref_type;
 	vector<ColumnDefinition> columns;

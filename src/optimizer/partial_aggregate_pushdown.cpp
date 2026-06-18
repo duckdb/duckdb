@@ -62,10 +62,19 @@ static bool IsSupportedAggregate(const BoundAggregateExpression &expr) {
 	if (expr.IsDistinct() || expr.GetFilter() || expr.GetOrderBys()) {
 		return false;
 	}
+	if (expr.StateExportMode() != AggregateStateExportMode::NONE) {
+		// the aggregate already exports its state - we cannot push it down again (and finalizing the
+		// re-exported state would not round-trip back to the original return type)
+		return false;
+	}
 	if (expr.GetChildren().size() != 1) {
 		return false;
 	}
 	if (!expr.Function().HasGetStateTypeCallback()) {
+		return false;
+	}
+	if (expr.Function().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
+		// pushing down a partial aggregate changes the order in which values are combined
 		return false;
 	}
 	return true;
@@ -290,7 +299,7 @@ static bool BindPushdownAggregates(ClientContext &context, LogicalAggregate &agg
 		auto aggregate_copy = unique_ptr_cast<Expression, BoundAggregateExpression>(aggr.expressions[i]->Copy());
 		auto lower_aggregate = ExportAggregateFunction::Bind(std::move(aggregate_copy));
 		auto lower_type = lower_aggregate->GetReturnType();
-		if (lower_type.id() != LogicalTypeId::AGGREGATE_STATE) {
+		if (!lower_type.IsAggregateState()) {
 			return false;
 		}
 
@@ -298,7 +307,7 @@ static bool BindPushdownAggregates(ClientContext &context, LogicalAggregate &agg
 		auto lower_binding = ColumnBinding(lower_aggregate_index, ProjectionIndex(i));
 		arguments.push_back(make_uniq<BoundColumnRefExpression>(lower_type, lower_binding));
 		auto upper_aggregate = function_binder.BindAggregateFunction(combine_function, std::move(arguments));
-		if (upper_aggregate->GetReturnType().id() != LogicalTypeId::AGGREGATE_STATE) {
+		if (!upper_aggregate->GetReturnType().IsAggregateState()) {
 			return false;
 		}
 		lower_aggregates.push_back(std::move(lower_aggregate));

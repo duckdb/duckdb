@@ -52,7 +52,7 @@ string InsertQueryNode::ToString() const {
 	if (values_list) {
 		D_ASSERT(!default_values);
 		auto saved_alias = values_list->alias;
-		values_list->alias = string();
+		values_list->alias = Identifier(string());
 		result += values_list->ToString();
 		values_list->alias = saved_alias;
 	} else if (select_statement) {
@@ -70,7 +70,7 @@ string InsertQueryNode::ToString() const {
 			result += "(";
 			auto &cols = conflict_info.indexed_columns;
 			for (auto it = cols.begin(); it != cols.end();) {
-				result += StringUtil::Lower(*it);
+				result += StringUtil::Lower(it->GetIdentifierName());
 				if (++it != cols.end()) {
 					result += ", ";
 				}
@@ -95,7 +95,7 @@ string InsertQueryNode::ToString() const {
 				if (i) {
 					result += ", ";
 				}
-				result += StringUtil::Lower(column) + " = " + expr->ToString();
+				result += StringUtil::Lower(column.GetIdentifierName()) + " = " + expr->ToString();
 			}
 			// (optional) where clause
 			if (set_info.condition) {

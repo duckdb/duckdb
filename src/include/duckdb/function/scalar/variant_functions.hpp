@@ -15,6 +15,16 @@
 
 namespace duckdb {
 
+struct VariantArrayLengthFun {
+	static constexpr const char *Name = "variant_array_length";
+	static constexpr const char *Parameters = "input_variant::VARIANT\001input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
+	static constexpr const char *Description = "Returns the number of elements in the variant, or `0` if not an array.\001Returns the number of elements in the array at the specified path in the variant, or `0` if not an array.\001Returns the number of elements in the array for each specified path in the variant, or `0` if not an array.";
+	static constexpr const char *Example = "variant_array_length(['duck', 'goose']::VARIANT)\001variant_array_length({'a': ['duck', 'goose']}::VARIANT, 'a')\001variant_array_length({'a': 1, 'b': ['duck', 'goose']}::VARIANT, ['a', 'b'])";
+	static constexpr const char *Categories = "variant\001variant\001variant";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct VariantExistsFun {
 	static constexpr const char *Name = "variant_exists";
 	static constexpr const char *Parameters = "input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
@@ -40,6 +50,16 @@ struct VariantNormalizeFun {
 	static constexpr const char *Parameters = "input_variant";
 	static constexpr const char *Description = "Normalizes the `input_variant` to a canonical representation.";
 	static constexpr const char *Example = "variant_normalize({'b': [1,2,3], 'a': 42})::VARIANT)";
+	static constexpr const char *Categories = "variant";
+
+	static ScalarFunction GetFunction();
+};
+
+struct VariantComparatorFun {
+	static constexpr const char *Name = "variant_comparator";
+	static constexpr const char *Parameters = "input_variant";
+	static constexpr const char *Description = "Returns a binary sort key that orders `input_variant` according to the logical ordering of VARIANT values (used internally for comparison and ordering).";
+	static constexpr const char *Example = "variant_comparator({'a': 1, 'b': 2}::VARIANT)";
 	static constexpr const char *Categories = "variant";
 
 	static ScalarFunction GetFunction();

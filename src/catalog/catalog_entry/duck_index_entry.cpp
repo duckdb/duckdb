@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const string &index_name_p)
+IndexDataTableInfo::IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const Identifier &index_name_p)
     : info(std::move(info_p)), index_name(index_name_p) {
 }
 
@@ -44,11 +44,11 @@ unique_ptr<CatalogEntry> DuckIndexEntry::Copy(ClientContext &context) const {
 	return std::move(result);
 }
 
-string DuckIndexEntry::GetSchemaName() const {
+Identifier DuckIndexEntry::GetSchemaName() const {
 	return GetDataTableInfo().GetSchemaName();
 }
 
-string DuckIndexEntry::GetTableName() const {
+Identifier DuckIndexEntry::GetTableName() const {
 	return GetDataTableInfo().GetTableName();
 }
 

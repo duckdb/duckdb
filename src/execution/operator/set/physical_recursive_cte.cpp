@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-PhysicalRecursiveCTE::PhysicalRecursiveCTE(PhysicalPlan &physical_plan, string ctename, TableIndex table_index,
+PhysicalRecursiveCTE::PhysicalRecursiveCTE(PhysicalPlan &physical_plan, Identifier ctename, TableIndex table_index,
                                            vector<LogicalType> types, bool union_all, PhysicalOperator &top,
                                            PhysicalOperator &bottom, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
@@ -229,7 +229,6 @@ static void ScatterChunk(DataChunk &output_chunk, DataChunk &input_chunk, const 
 	for (auto &group_idx : idx_set) {
 		output_chunk.data[group_idx].Reference(input_chunk.data[chunk_index++]);
 	}
-	output_chunk.SetChildCardinality(input_chunk.size());
 }
 
 SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -391,7 +390,7 @@ vector<const_reference<PhysicalOperator>> PhysicalRecursiveCTE::GetSources() con
 
 InsertionOrderPreservingMap<string> PhysicalRecursiveCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["CTE Name"] = ctename;
+	result["CTE Name"] = ctename.GetIdentifierName();
 	result["Table Index"] = StringUtil::Format("%llu", table_index.index);
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;

@@ -19,7 +19,7 @@ static bool IsDirectFilterColumnRef(const Expression &expr) {
 	       expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
 }
 
-static void GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, string &alias) {
+static void GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, Identifier &alias) {
 	if (expr->GetExpressionType() == ExpressionType::BOUND_REF) {
 		auto &bound_ref = expr->Cast<BoundReferenceExpression>();
 		index = bound_ref.Index();
@@ -37,7 +37,7 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 	// get physical storage index of the filter
 	// since it is a table filter, every storage index is the same
 	idx_t physical_index = DConstants::INVALID_INDEX;
-	string column_alias;
+	Identifier column_alias;
 	GetColumnIndex(expr_filter.expr, physical_index, column_alias);
 	D_ASSERT(physical_index != DConstants::INVALID_INDEX);
 

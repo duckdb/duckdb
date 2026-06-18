@@ -18,6 +18,12 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 	// this should never happen if the binder below is sane
 	D_ASSERT(args.ColumnCount() == StructType::GetChildTypes(info.stype).size());
 #endif
+	if (args.ColumnCount() == 0) {
+		// empty struct: no children to reference, the value is a single non-null constant
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, false);
+		return;
+	}
 	bool all_const = true;
 	auto &child_entries = StructVector::GetEntries(result);
 	idx_t children_size = 0;
@@ -42,12 +48,10 @@ template <bool IS_STRUCT_PACK>
 static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	case_insensitive_set_t name_collision_set;
+	identifier_set_t name_collision_set;
 
 	// collect names and deconflict, construct return type
-	if (arguments.empty()) {
-		throw InvalidInputException("Can't pack nothing into a struct");
-	}
+	// note: zero arguments is allowed, producing an empty struct
 	child_list_t<LogicalType> struct_children;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &child = arguments[i];
@@ -56,13 +60,13 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 			if (child->GetAlias().empty()) {
 				throw BinderException("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
 			}
-			alias = child->GetAlias();
-			if (name_collision_set.find(alias) != name_collision_set.end()) {
+			alias = child->GetAlias().GetIdentifierName();
+			if (name_collision_set.find(Identifier(alias)) != name_collision_set.end()) {
 				throw BinderException("Duplicate struct entry name \"%s\"", alias);
 			}
-			name_collision_set.insert(alias);
+			name_collision_set.insert(Identifier(alias));
 		}
-		struct_children.push_back(make_pair(alias, arguments[i]->GetReturnType()));
+		struct_children.emplace_back(make_pair(alias, arguments[i]->GetReturnType()));
 	}
 
 	// this is more for completeness reasons

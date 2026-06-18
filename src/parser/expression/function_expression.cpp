@@ -20,7 +20,8 @@ bool IsLambdaParameterReference(const ParsedExpression &expr, const string &para
 		return false;
 	}
 	auto &column_ref = expr.Cast<ColumnRefExpression>();
-	return !column_ref.IsQualified() && StringUtil::CIEquals(column_ref.GetColumnName(), parameter_name);
+	return !column_ref.IsQualified() &&
+	       StringUtil::CIEquals(column_ref.GetColumnName().GetIdentifierName(), parameter_name);
 }
 
 bool GetSingleLambdaParameterName(const LambdaExpression &lambda_expr, string &parameter_name) {
@@ -33,7 +34,7 @@ bool GetSingleLambdaParameterName(const LambdaExpression &lambda_expr, string &p
 	if (parameter_ref.IsQualified()) {
 		return false;
 	}
-	parameter_name = parameter_ref.GetColumnName();
+	parameter_name = parameter_ref.GetColumnName().GetIdentifierName();
 	return true;
 }
 
@@ -86,13 +87,14 @@ unique_ptr<ParsedExpression> TryGetLegacySimpleCaseExpression(const FunctionExpr
 FunctionExpression::FunctionExpression() : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION) {
 }
 
-FunctionExpression::FunctionExpression(string catalog, string schema, const string &function_name,
+FunctionExpression::FunctionExpression(Identifier catalog, Identifier schema, const Identifier &function_name,
                                        vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
                                        bool distinct, bool is_operator, bool export_state_p)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), catalog(std::move(catalog)),
-      schema(std::move(schema)), function_name(StringUtil::Lower(function_name)), is_operator(is_operator),
-      distinct(distinct), filter(std::move(filter)), order_bys(std::move(order_bys_p)), export_state(export_state_p) {
+      schema(std::move(schema)), function_name(StringUtil::Lower(function_name.GetIdentifierName())),
+      is_operator(is_operator), distinct(distinct), filter(std::move(filter)), order_bys(std::move(order_bys_p)),
+      export_state(export_state_p) {
 	arguments.reserve(children_p.size());
 	for (auto &child : children_p) {
 		arguments.emplace_back(std::move(child));
@@ -103,32 +105,33 @@ FunctionExpression::FunctionExpression(string catalog, string schema, const stri
 	}
 }
 
-FunctionExpression::FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children_p,
+FunctionExpression::FunctionExpression(const Identifier &function_name, vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys,
                                        bool distinct, bool is_operator, bool export_state_p)
-    : FunctionExpression(INVALID_CATALOG, INVALID_SCHEMA, function_name, std::move(children_p), std::move(filter),
-                         std::move(order_bys), distinct, is_operator, export_state_p) {
+    : FunctionExpression(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), function_name,
+                         std::move(children_p), std::move(filter), std::move(order_bys), distinct, is_operator,
+                         export_state_p) {
 }
 
-FunctionExpression::FunctionExpression(string catalog_name, string schema_name, const string &function_name,
+FunctionExpression::FunctionExpression(Identifier catalog_name, Identifier schema_name, const Identifier &function_name,
                                        vector<FunctionArgument> children, unique_ptr<ParsedExpression> filter,
                                        unique_ptr<OrderModifier> order_bys_p, bool distinct, bool is_operator,
                                        bool export_state)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), catalog(std::move(catalog_name)),
-      schema(std::move(schema_name)), function_name(StringUtil::Lower(function_name)), is_operator(is_operator),
-      arguments(std::move(children)), distinct(distinct), filter(std::move(filter)), order_bys(std::move(order_bys_p)),
-      export_state(export_state) {
+      schema(std::move(schema_name)), function_name(StringUtil::Lower(function_name.GetIdentifierName())),
+      is_operator(is_operator), arguments(std::move(children)), distinct(distinct), filter(std::move(filter)),
+      order_bys(std::move(order_bys_p)), export_state(export_state) {
 	D_ASSERT(!function_name.empty());
 	if (!order_bys) {
 		this->order_bys = make_uniq<OrderModifier>();
 	}
 }
 
-FunctionExpression::FunctionExpression(const string &function_name, vector<FunctionArgument> children,
+FunctionExpression::FunctionExpression(const Identifier &function_name, vector<FunctionArgument> children,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys,
                                        bool distinct, bool is_operator, bool export_state)
-    : FunctionExpression(INVALID_CATALOG, INVALID_SCHEMA, function_name, std::move(children), std::move(filter),
-                         std::move(order_bys), distinct, is_operator, export_state) {
+    : FunctionExpression(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), function_name, std::move(children),
+                         std::move(filter), std::move(order_bys), distinct, is_operator, export_state) {
 }
 
 string FunctionExpression::ToString() const {
@@ -136,13 +139,15 @@ string FunctionExpression::ToString() const {
 		// built-in operator
 		D_ASSERT(!distinct);
 		if (arguments.size() == 1) {
-			if (StringUtil::Contains(function_name, "__postfix")) {
-				return "((" + arguments[0].ToString() + ")" + StringUtil::Replace(function_name, "__postfix", "") + ")";
+			if (StringUtil::Contains(function_name.GetIdentifierName(), "__postfix")) {
+				return "((" + arguments[0].ToString() + ")" +
+				       StringUtil::Replace(function_name.GetIdentifierName(), "__postfix", "") + ")";
 			}
-			return function_name + "(" + arguments[0].ToString() + ")";
+			return function_name.GetIdentifierName() + "(" + arguments[0].ToString() + ")";
 		}
 		if (arguments.size() == 2) {
-			return StringUtil::Format("(%s %s %s)", arguments[0].ToString(), function_name, arguments[1].ToString());
+			return StringUtil::Format("(%s %s %s)", arguments[0].ToString(), function_name.GetIdentifierName(),
+			                          arguments[1].ToString());
 		}
 	}
 	// standard function call
@@ -217,8 +222,8 @@ void FunctionExpression::Serialize(Serializer &serializer) const {
 	}
 
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
-	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
+	serializer.WritePropertyWithDefault<Identifier>(200, "function_name", function_name);
+	serializer.WritePropertyWithDefault<Identifier>(201, "schema", schema);
 
 	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		// Legacy serialization.
@@ -236,7 +241,7 @@ void FunctionExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(205, "distinct", distinct);
 	serializer.WritePropertyWithDefault<bool>(206, "is_operator", is_operator);
 	serializer.WritePropertyWithDefault<bool>(207, "export_state", export_state);
-	serializer.WritePropertyWithDefault<string>(208, "catalog", catalog);
+	serializer.WritePropertyWithDefault<Identifier>(208, "catalog", catalog);
 
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<vector<FunctionArgument>>(209, "arguments", arguments);
@@ -245,8 +250,8 @@ void FunctionExpression::Serialize(Serializer &serializer) const {
 
 unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
-	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->function_name);
-	deserializer.ReadPropertyWithDefault<string>(201, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "function_name", result->function_name);
+	deserializer.ReadPropertyWithDefault<Identifier>(201, "schema", result->schema);
 
 	// Legacy children deserialization
 	vector<unique_ptr<ParsedExpression>> children;
@@ -255,7 +260,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deser
 		result->arguments.reserve(children.size());
 		for (auto &child : children) {
 			auto alias = child->GetAlias();
-			result->arguments.emplace_back(std::move(alias), std::move(child));
+			result->arguments.emplace_back(alias, std::move(child));
 		}
 
 		// Mark this function expression as a legacy function call, so that the binder can handle it accordingly.
@@ -268,7 +273,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<bool>(205, "distinct", result->distinct);
 	deserializer.ReadPropertyWithDefault<bool>(206, "is_operator", result->is_operator);
 	deserializer.ReadPropertyWithDefault<bool>(207, "export_state", result->export_state);
-	deserializer.ReadPropertyWithDefault<string>(208, "catalog", result->catalog);
+	deserializer.ReadPropertyWithDefault<Identifier>(208, "catalog", result->catalog);
 
 	// New children deserialization
 	if (children.empty()) {
