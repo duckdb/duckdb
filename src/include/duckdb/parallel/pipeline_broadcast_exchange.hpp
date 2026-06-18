@@ -12,8 +12,10 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
+#include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/execution/partition_info.hpp"
 #include "duckdb/execution/progress_data.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 
@@ -26,6 +28,7 @@ class PipelineExecutor;
 class PhysicalOperator;
 
 enum class PipelineBroadcastExchangeCompletionMode : uint8_t { STOP_WHEN_UNCONSUMED, RUN_TO_COMPLETION };
+enum class PipelineBroadcastExchangeOrderMode : uint8_t { UNORDERED, SEQUENTIAL, BATCH_INDEX };
 enum class PipelineBroadcastExchangeLocalMode : uint8_t { DIRECT_ONLY, BUFFERED };
 enum class PipelineBroadcastExchangeDirectPushState : uint8_t { NOT_STARTED, RESUMING, ACTIVE, FINISHED };
 enum class PipelineBroadcastExchangeConsumerMode : uint8_t { UNRESOLVED, BUFFERED, DIRECT, MATERIALIZED };
@@ -66,13 +69,23 @@ class PipelineBroadcastExchange {
 
 public:
 	PipelineBroadcastExchange(ClientContext &context, vector<LogicalType> types_p,
-	                          PipelineBroadcastExchangeCompletionMode completion_mode_p);
+	                          PipelineBroadcastExchangeCompletionMode completion_mode_p,
+	                          OrderPreservationType source_order_p, bool use_batch_index_p);
 
 	const vector<LogicalType> &Types() const {
 		return types;
 	}
 	bool RunToCompletion() const {
 		return completion_mode == PipelineBroadcastExchangeCompletionMode::RUN_TO_COMPLETION;
+	}
+	bool PreservesOrder() const {
+		return order_mode != PipelineBroadcastExchangeOrderMode::UNORDERED;
+	}
+	bool SupportsBatchIndex() const {
+		return order_mode == PipelineBroadcastExchangeOrderMode::BATCH_INDEX;
+	}
+	OrderPreservationType SourceOrder() const {
+		return source_order;
 	}
 
 	unique_ptr<PipelineBroadcastExchangeLocalState> GetLocalState(ClientContext &context) const;
@@ -86,15 +99,17 @@ public:
 	void SetLogOperator(const PhysicalOperator &op);
 
 	SinkResultType Push(DataChunk &chunk, PipelineBroadcastExchangeLocalState &lstate,
-	                    const InterruptState &interrupt_state);
+	                    const SourcePartitionInfo &partition_info, const InterruptState &interrupt_state);
+	SinkNextBatchType NextBatch(const SourcePartitionInfo &partition_info, const InterruptState &interrupt_state);
 	SinkCombineResultType FinishLocal(PipelineBroadcastExchangeLocalState &lstate,
+	                                  const SourcePartitionInfo &partition_info,
 	                                  const InterruptState &interrupt_state);
 	void Finish();
 	void FinishDirectConsumers();
 	void Cancel();
 
 	SourceResultType Scan(idx_t consumer_idx, DataChunk &chunk, shared_ptr<DataChunk> &current_chunk,
-	                      const InterruptState &interrupt_state);
+	                      optional_idx &batch_index, const InterruptState &interrupt_state);
 	void UnregisterConsumer(idx_t consumer_idx);
 
 	ProgressData ScanProgress(idx_t consumer_idx, idx_t estimated_cardinality) const;
@@ -120,7 +135,7 @@ private:
 	enum class WatermarkState : uint8_t { BELOW_HIGH_WATERMARK, ABOVE_HIGH_WATERMARK };
 	enum class WriterWakeMode : uint8_t { LOW_WATERMARK, FORCE };
 	enum class AppendAdmission : uint8_t { READY, BLOCKED, UNCONSUMED, CANCELLED };
-	enum class BufferedPushState : uint8_t { NOT_REQUIRED, APPENDED, BLOCKED, UNCONSUMED, CANCELLED };
+	enum class BufferedPushState : uint8_t { NOT_REQUIRED, APPENDED, STAGED, BLOCKED, UNCONSUMED, CANCELLED };
 	enum class ExchangeLogEvent : uint8_t {
 		SPOOL_CREATED,
 		HIGH_WATERMARK_BLOCKED,
@@ -155,7 +170,9 @@ public:
 	~PipelineBroadcastExchange();
 
 private:
-	BufferedPushState Append(DataChunk &chunk, const InterruptState &interrupt_state);
+	BufferedPushState Append(DataChunk &chunk, idx_t batch_index, idx_t min_batch_index,
+	                         const InterruptState &interrupt_state);
+	BufferedPushState FlushReadyBatches(idx_t min_batch_index, const InterruptState &interrupt_state);
 	SinkResultType CompletePush(DataChunk &chunk, PipelineBroadcastExchangeLocalState &lstate,
 	                            BufferedPushState buffered_state);
 	void RecordProducedRows(idx_t count);
@@ -167,16 +184,21 @@ private:
 	PipelineBroadcastExchangeConsumerSummary GetConsumerSummaryLocked() const DUCKDB_REQUIRES(lock);
 	AppendAdmission PrepareAppendLocked(const InterruptState &interrupt_state, vector<ExchangeLogEntry> &log_entries)
 	    DUCKDB_REQUIRES(lock);
-	AppendAdmission ReserveAppendLocked(const InterruptState &interrupt_state, AppendReservation &reservation,
+	AppendAdmission ReserveAppendLocked(idx_t batch_index, const InterruptState &interrupt_state,
+	                                    AppendReservation &reservation,
 	                                    vector<ExchangeLogEntry> &log_entries) DUCKDB_REQUIRES(lock);
+	AppendAdmission PrepareStageLocked(idx_t batch_index, const InterruptState &interrupt_state,
+	                                   vector<ExchangeLogEntry> &log_entries) DUCKDB_REQUIRES(lock);
 	BufferedPushState CompleteAppendLocked(const AppendReservation &reservation, shared_ptr<DataChunk> copy,
-	                                       idx_t row_count, vector<InterruptState> &readers,
+	                                       idx_t row_count, bool record_produced_rows,
+	                                       vector<InterruptState> &readers,
 	                                       vector<InterruptState> &appenders, vector<ExchangeLogEntry> &log_entries)
 	    DUCKDB_REQUIRES(lock);
 	void AbortAppendReservation(vector<InterruptState> &readers, vector<InterruptState> &writers,
 	                            vector<InterruptState> &appenders) DUCKDB_REQUIRES(lock);
 	SourceResultType ReserveScanLocked(idx_t consumer_idx, const InterruptState &interrupt_state,
-	                                   shared_ptr<DataChunk> &next_chunk, SpoolReadReservation &spool_read,
+	                                   shared_ptr<DataChunk> &next_chunk, optional_idx &batch_index,
+	                                   SpoolReadReservation &spool_read,
 	                                   vector<InterruptState> &writers, vector<ExchangeLogEntry> &log_entries)
 	    DUCKDB_REQUIRES(lock);
 	void CompleteSpoolReadLocked(idx_t consumer_idx, const SpoolReadReservation &spool_read, DataChunk &chunk,
@@ -200,6 +222,8 @@ private:
 	ClientContext &context;
 	vector<LogicalType> types;
 	PipelineBroadcastExchangeCompletionMode completion_mode;
+	PipelineBroadcastExchangeOrderMode order_mode;
+	OrderPreservationType source_order;
 	idx_t max_threads;
 	unique_ptr<BufferState> buffer;
 

@@ -33,16 +33,19 @@ public:
 	                                                 GlobalSourceState &gstate) const override;
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
 	                                 OperatorSourceInput &input) const override;
+	OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                                       LocalSourceState &lstate,
+	                                       const OperatorPartitionInfo &partition_info) const override;
 	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 	void SourceFinished(ClientContext &context, GlobalSourceState &gstate) const override;
+	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override;
+	OrderPreservationType SourceOrder() const override;
 
 	bool IsSource() const override {
 		return true;
 	}
 
-	bool ParallelSource() const override {
-		return true;
-	}
+	bool ParallelSource() const override;
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
@@ -70,6 +73,9 @@ public:
 	Identifier ctename;
 	bool cte_body_is_dml = false;
 	CTEPipelineSelectionState pipeline_selection_state = CTEPipelineSelectionState::UNRESOLVED;
+	bool preserve_order = false;
+	bool use_batch_index = false;
+	bool parallel = true;
 
 public:
 	// Sink interface
@@ -79,6 +85,7 @@ public:
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
+	SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
 
@@ -87,11 +94,15 @@ public:
 	}
 
 	bool ParallelSink() const override {
-		return true;
+		return parallel;
+	}
+
+	OperatorPartitionInfo RequiredPartitionInfo() const override {
+		return use_batch_index ? OperatorPartitionInfo::BatchIndex() : OperatorPartitionInfo::NoPartitionInfo();
 	}
 
 	bool SinkOrderDependent() const override {
-		return false;
+		return preserve_order;
 	}
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

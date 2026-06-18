@@ -2,6 +2,7 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logger.hpp"
@@ -43,6 +44,7 @@ public:
 class CTEConsumerLocalSourceState : public LocalSourceState {
 public:
 	shared_ptr<DataChunk> current_chunk;
+	optional_idx batch_index;
 };
 
 PhysicalCTEConsumerSource::PhysicalCTEConsumerSource(PhysicalPlan &physical_plan, vector<LogicalType> types,
@@ -65,7 +67,31 @@ SourceResultType PhysicalCTEConsumerSource::GetDataInternal(ExecutionContext &co
                                                             OperatorSourceInput &input) const {
 	auto &gstate = input.global_state.Cast<CTEConsumerGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<CTEConsumerLocalSourceState>();
-	return gstate.exchange->Scan(gstate.consumer_idx, chunk, lstate.current_chunk, input.interrupt_state);
+	return gstate.exchange->Scan(gstate.consumer_idx, chunk, lstate.current_chunk, lstate.batch_index,
+	                             input.interrupt_state);
+}
+
+OperatorPartitionData PhysicalCTEConsumerSource::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+                                                                  GlobalSourceState &gstate,
+                                                                  LocalSourceState &lstate_p,
+                                                                  const OperatorPartitionInfo &partition_info) const {
+	D_ASSERT(SupportsPartitioning(partition_info));
+	auto &lstate = lstate_p.Cast<CTEConsumerLocalSourceState>();
+	D_ASSERT(lstate.batch_index.IsValid());
+	return OperatorPartitionData(lstate.batch_index.GetIndex());
+}
+
+bool PhysicalCTEConsumerSource::SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
+	return exchange->SupportsBatchIndex() && partition_info.RequiresBatchIndex() &&
+	       !partition_info.RequiresPartitionColumns();
+}
+
+OrderPreservationType PhysicalCTEConsumerSource::SourceOrder() const {
+	return exchange->SourceOrder();
+}
+
+bool PhysicalCTEConsumerSource::ParallelSource() const {
+	return !exchange->PreservesOrder();
 }
 
 ProgressData PhysicalCTEConsumerSource::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
@@ -118,6 +144,7 @@ public:
 	optional_ptr<ColumnDataCollection> working_table_ref;
 	shared_ptr<PipelineBroadcastExchange> exchange;
 	CTEExecutionMode execution_mode;
+	unique_ptr<BatchedDataCollection> ordered_data;
 
 	annotated_mutex lhs_lock;
 
@@ -130,8 +157,15 @@ private:
 			D_ASSERT(op.working_table);
 			op.working_table->Reset();
 			working_table_ref = op.working_table.get();
+			if (op.use_batch_index) {
+				ordered_data = make_uniq<BatchedDataCollection>(context, op.working_table->Types(),
+				                                                op.working_table->GetAllocatorType());
+			} else {
+				ordered_data.reset();
+			}
 		} else {
 			working_table_ref = nullptr;
+			ordered_data.reset();
 		}
 		GlobalSinkState::Reset(context);
 	}
@@ -149,15 +183,37 @@ public:
 		annotated_lock_guard<annotated_mutex> guard(lhs_lock);
 		working_table_ref->Combine(input);
 	}
+
+	void MergeBatches(BatchedDataCollection &input) {
+		annotated_lock_guard<annotated_mutex> guard(lhs_lock);
+		D_ASSERT(ordered_data);
+		ordered_data->Merge(input);
+	}
+
+	void FinalizeBatches() {
+		if (!ordered_data) {
+			return;
+		}
+		D_ASSERT(working_table_ref);
+		auto collection = ordered_data->FetchCollection();
+		working_table_ref->Combine(*collection);
+		ordered_data.reset();
+	}
 };
 
 class CTELocalState : public LocalSinkState {
 public:
-	explicit CTELocalState(ClientContext &context, const PhysicalCTE &op) : execution_mode(op.GetExecutionMode()) {
+	explicit CTELocalState(ClientContext &context, const PhysicalCTE &op)
+	    : execution_mode(op.GetExecutionMode()), use_batch_index(op.use_batch_index) {
 		if (execution_mode != CTEExecutionMode::STREAMING_FANOUT) {
 			D_ASSERT(op.working_table);
-			lhs_data = make_uniq<ColumnDataCollection>(context, op.working_table->Types());
-			lhs_data->InitializeAppend(append_state);
+			if (use_batch_index) {
+				lhs_batches = make_uniq<BatchedDataCollection>(context, op.working_table->Types(),
+				                                               op.working_table->GetAllocatorType());
+			} else {
+				lhs_data = make_uniq<ColumnDataCollection>(context, op.working_table->Types());
+				lhs_data->InitializeAppend(append_state);
+			}
 		}
 		if (execution_mode != CTEExecutionMode::MATERIALIZED) {
 			D_ASSERT(op.exchange);
@@ -167,8 +223,10 @@ public:
 
 	unique_ptr<LocalSinkState> distinct_state;
 	unique_ptr<ColumnDataCollection> lhs_data;
+	unique_ptr<BatchedDataCollection> lhs_batches;
 	ColumnDataAppendState append_state;
 	CTEExecutionMode execution_mode;
+	bool use_batch_index;
 	CTESinkExecutionState sink_execution_state = CTESinkExecutionState::ACTIVE;
 	// Combine can be retried after a blocked exchange finish.
 	CTECombineState combine_state = CTECombineState::PENDING;
@@ -176,8 +234,14 @@ public:
 
 	void Append(DataChunk &input) {
 		D_ASSERT(execution_mode != CTEExecutionMode::STREAMING_FANOUT);
-		D_ASSERT(lhs_data);
-		lhs_data->Append(append_state, input);
+		if (use_batch_index) {
+			D_ASSERT(lhs_batches);
+			D_ASSERT(partition_info.batch_index.IsValid());
+			lhs_batches->Append(input, partition_info.batch_index.GetIndex());
+		} else {
+			D_ASSERT(lhs_data);
+			lhs_data->Append(append_state, input);
+		}
 	}
 };
 
@@ -197,7 +261,7 @@ SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, Op
 	if (lstate.execution_mode != CTEExecutionMode::MATERIALIZED) {
 		D_ASSERT(gstate.exchange);
 		D_ASSERT(lstate.exchange_state);
-		result = gstate.exchange->Push(chunk, *lstate.exchange_state, input.interrupt_state);
+		result = gstate.exchange->Push(chunk, *lstate.exchange_state, lstate.partition_info, input.interrupt_state);
 		if (result == SinkResultType::BLOCKED) {
 			if (lstate.sink_execution_state != CTESinkExecutionState::BLOCKED) {
 				DUCKDB_LOG(context.client, PhysicalOperatorLogType, *this, "PhysicalCTE", "ExchangeBlocked",
@@ -223,11 +287,21 @@ SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, Op
 	return result;
 }
 
+SinkNextBatchType PhysicalCTE::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const {
+	auto &gstate = input.global_state.Cast<CTEGlobalState>();
+	auto &lstate = input.local_state.Cast<CTELocalState>();
+	if (lstate.execution_mode == CTEExecutionMode::MATERIALIZED) {
+		return SinkNextBatchType::READY;
+	}
+	D_ASSERT(gstate.exchange);
+	return gstate.exchange->NextBatch(lstate.partition_info, input.interrupt_state);
+}
+
 SinkCombineResultType PhysicalCTE::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &lstate = input.local_state.Cast<CTELocalState>();
 	if (lstate.execution_mode != CTEExecutionMode::MATERIALIZED) {
 		D_ASSERT(lstate.exchange_state);
-		auto result = exchange->FinishLocal(*lstate.exchange_state, input.interrupt_state);
+		auto result = exchange->FinishLocal(*lstate.exchange_state, lstate.partition_info, input.interrupt_state);
 		if (result == SinkCombineResultType::BLOCKED) {
 			return result;
 		}
@@ -235,8 +309,13 @@ SinkCombineResultType PhysicalCTE::Combine(ExecutionContext &context, OperatorSi
 	if (lstate.execution_mode != CTEExecutionMode::STREAMING_FANOUT &&
 	    lstate.combine_state == CTECombineState::PENDING) {
 		auto &gstate = input.global_state.Cast<CTEGlobalState>();
-		D_ASSERT(lstate.lhs_data);
-		gstate.MergeIT(*lstate.lhs_data);
+		if (lstate.use_batch_index) {
+			D_ASSERT(lstate.lhs_batches);
+			gstate.MergeBatches(*lstate.lhs_batches);
+		} else {
+			D_ASSERT(lstate.lhs_data);
+			gstate.MergeIT(*lstate.lhs_data);
+		}
 		lstate.combine_state = CTECombineState::COMBINED;
 	}
 
@@ -245,8 +324,9 @@ SinkCombineResultType PhysicalCTE::Combine(ExecutionContext &context, OperatorSi
 
 SinkFinalizeType PhysicalCTE::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                        OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<CTEGlobalState>();
+	gstate.FinalizeBatches();
 	if (exchange && UseStreamingExchange()) {
-		auto &gstate = input.global_state.Cast<CTEGlobalState>();
 		gstate.exchange->Finish();
 		gstate.exchange->FinishDirectConsumers();
 		DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalCTE", "ProducerFinished",
@@ -267,6 +347,11 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 		exchange->SetLogOperator(*this);
 		// Prepared plans rebuild pipelines while keeping the physical CTE and consumer indexes.
 		exchange->ResetConsumerRegistrations();
+	}
+
+	if (meta_pipeline.HasRecursiveCTE() && use_batch_index) {
+		use_batch_index = false;
+		parallel = false;
 	}
 
 	auto &state = meta_pipeline.GetState();

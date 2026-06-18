@@ -81,6 +81,7 @@ public:
 	unordered_map<TableIndex, shared_ptr<ColumnDataCollection>> recurring_cte_tables;
 	//! Materialized CTE ids must be collected.
 	unordered_map<TableIndex, vector<const_reference<PhysicalOperator>>> materialized_ctes;
+	unordered_map<TableIndex, OrderPreservationType> materialized_cte_orders;
 	//! The index for duplicate eliminated joins.
 	idx_t delim_index = 0;
 	//! Tracks whether we are planning the recursive member of a recursive CTE.

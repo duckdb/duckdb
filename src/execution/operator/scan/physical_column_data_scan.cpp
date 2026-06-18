@@ -4,13 +4,21 @@
 #include "duckdb/logging/logger.hpp"
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
+
+static constexpr idx_t COLUMN_DATA_SCAN_BATCH_SIZE = STANDARD_VECTOR_SIZE * 50ULL;
+
+static idx_t ColumnDataScanBatchCount(idx_t count, idx_t batch_size) {
+	return MaxValue<idx_t>(count / batch_size + (count % batch_size != 0), 1);
+}
 
 PhysicalColumnDataScan::PhysicalColumnDataScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                                PhysicalOperatorType op_type, idx_t estimated_cardinality,
@@ -28,8 +36,10 @@ PhysicalColumnDataScan::PhysicalColumnDataScan(PhysicalPlan &physical_plan, vect
 
 class PhysicalColumnDataGlobalScanState : public GlobalSourceState {
 public:
-	explicit PhysicalColumnDataGlobalScanState(const ColumnDataCollection &collection)
-	    : max_threads(MaxValue<idx_t>(collection.ChunkCount(), 1)) {
+	PhysicalColumnDataGlobalScanState(ClientContext &context, const ColumnDataCollection &collection)
+	    : batch_size(ClientConfig::GetConfig(context).verify_parallelism ? STANDARD_VECTOR_SIZE
+	                                                                     : COLUMN_DATA_SCAN_BATCH_SIZE),
+	      max_threads(ColumnDataScanBatchCount(collection.Count(), batch_size)) {
 		collection.InitializeScan(global_scan_state);
 	}
 
@@ -40,19 +50,59 @@ public:
 public:
 	ColumnDataParallelScanState global_scan_state;
 
+	const idx_t batch_size;
 	const idx_t max_threads;
+	idx_t next_batch_index = 0;
+};
+
+struct ColumnDataScanEntry {
+	ColumnDataScanEntry(idx_t chunk_index_p, idx_t segment_index_p, idx_t row_index_p)
+	    : chunk_index(chunk_index_p), segment_index(segment_index_p), row_index(row_index_p) {
+	}
+
+	idx_t chunk_index;
+	idx_t segment_index;
+	idx_t row_index;
 };
 
 class PhysicalColumnDataLocalScanState : public LocalSourceState {
 public:
+	bool AssignTask(const ColumnDataCollection &collection, PhysicalColumnDataGlobalScanState &gstate) {
+		entries.clear();
+		entry_index = 0;
+		batch_index = DConstants::INVALID_INDEX;
+
+		idx_t task_count = 0;
+		lock_guard<mutex> l(gstate.global_scan_state.lock);
+		while (task_count < gstate.batch_size) {
+			idx_t chunk_index;
+			idx_t segment_index;
+			idx_t row_index;
+			if (!collection.NextScanIndex(gstate.global_scan_state.scan_state, chunk_index, segment_index, row_index)) {
+				break;
+			}
+			entries.emplace_back(chunk_index, segment_index, row_index);
+			task_count += collection.GetSegments()[segment_index]->chunk_data[chunk_index].count;
+		}
+
+		if (entries.empty()) {
+			return false;
+		}
+		batch_index = gstate.next_batch_index++;
+		return true;
+	}
+
 	ColumnDataLocalScanState local_scan_state;
+	vector<ColumnDataScanEntry> entries;
+	idx_t entry_index = 0;
+	idx_t batch_index = DConstants::INVALID_INDEX;
 };
 
 unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(ClientContext &context) const {
 	if (!collection) {
 		return make_uniq<GlobalSourceState>();
 	}
-	return make_uniq<PhysicalColumnDataGlobalScanState>(*collection);
+	return make_uniq<PhysicalColumnDataGlobalScanState>(context, *collection);
 }
 
 unique_ptr<LocalSourceState> PhysicalColumnDataScan::GetLocalSourceState(ExecutionContext &,
@@ -64,8 +114,33 @@ SourceResultType PhysicalColumnDataScan::GetDataInternal(ExecutionContext &conte
                                                          OperatorSourceInput &input) const {
 	auto &gstate = input.global_state.Cast<PhysicalColumnDataGlobalScanState>();
 	auto &lstate = input.local_state.Cast<PhysicalColumnDataLocalScanState>();
-	collection->Scan(gstate.global_scan_state, lstate.local_scan_state, chunk);
-	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+	if (lstate.entry_index >= lstate.entries.size() && !lstate.AssignTask(*collection, gstate)) {
+		chunk.Reset();
+		return SourceResultType::FINISHED;
+	}
+
+	auto &entry = lstate.entries[lstate.entry_index++];
+	collection->ScanAtIndex(gstate.global_scan_state, lstate.local_scan_state, chunk, entry.chunk_index,
+	                        entry.segment_index, entry.row_index);
+	return SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+bool PhysicalColumnDataScan::SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
+	if (partition_info.RequiresPartitionColumns()) {
+		return false;
+	}
+	if (!partition_info.RequiresBatchIndex()) {
+		return false;
+	}
+	return type == PhysicalOperatorType::COLUMN_DATA_SCAN || type == PhysicalOperatorType::CTE_SCAN;
+}
+
+OperatorPartitionData PhysicalColumnDataScan::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+                                                               GlobalSourceState &gstate, LocalSourceState &lstate_p,
+                                                               const OperatorPartitionInfo &partition_info) const {
+	D_ASSERT(SupportsPartitioning(partition_info));
+	auto &lstate = lstate_p.Cast<PhysicalColumnDataLocalScanState>();
+	return OperatorPartitionData(lstate.batch_index);
 }
 
 ProgressData PhysicalColumnDataScan::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {

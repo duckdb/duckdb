@@ -40,15 +40,25 @@ public:
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
 	                                 OperatorSourceInput &input) const override;
 	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
+	OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                                       LocalSourceState &lstate,
+	                                       const OperatorPartitionInfo &partition_info) const override;
 
 	bool IsSource() const override {
 		return true;
+	}
+	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override;
+
+	OrderPreservationType SourceOrder() const override {
+		return source_order;
 	}
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	bool ParallelSource() const override {
 		return true;
 	}
+
+	OrderPreservationType source_order = OrderPreservationType::INSERTION_ORDER;
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
