@@ -2,10 +2,9 @@
 # description: Test EXPORT_STATE for ordered (ORDER BY) aggregates - the sorted aggregate wrapper finalizes one group at a time at increasing offsets
 # group: [aggregate_state_export]
 
-# ordered aggregate finalize is only deterministic single-threaded - with multiple threads the combine order of the
-# thread-local states is arbitrary (relevant for small vector sizes, where even small inputs span many chunks)
-statement ok
-SET threads=1;
+# Unlike a plain list(x), an ordered list(x ORDER BY y) is deterministic regardless of the thread count: the sorted
+# aggregate buffers every row of a group and sorts them at finalize, so the combine order of the thread-local states
+# does not affect the result. Every case below orders on a total order (distinct sort keys) so there are no ties.
 
 # the reported case: list ordered by a different column, grouped (this used to assert offset == 0)
 statement ok
@@ -40,11 +39,18 @@ SELECT finalize(list(i ORDER BY i) EXPORT_STATE) FROM (VALUES (1), (3), (2)) t(i
 ----
 [1, 2, 3]
 
-# the exported state (before finalize) is still the ordered list itself
+# the exported state is the buffer of values (with the sort key), kept in insertion order - it is sorted at finalize.
+# here the sort key equals the argument, so the buffer reuses a single column v0
 query I
 SELECT list(i ORDER BY i DESC) EXPORT_STATE FROM (VALUES (1), (3), (2)) t(i);
 ----
-[3, 2, 1]
+[{'v0': 1}, {'v0': 3}, {'v0': 2}]
+
+# the sort key is buffered alongside the argument when it is a different expression (here v0 = i, v1 = the sort key)
+query I
+SELECT list(i ORDER BY i % 2, i) EXPORT_STATE FROM (VALUES (1), (3), (2)) t(i);
+----
+[{'v0': 1, 'v1': 1}, {'v0': 3, 'v1': 1}, {'v0': 2, 'v1': 0}]
 
 # NULLS ordering is preserved
 query I
@@ -63,6 +69,27 @@ SELECT finalize(list(i ORDER BY i) EXPORT_STATE) FROM (SELECT 1 AS i WHERE false
 ----
 NULL
 
+# ordering by the (small-range) group column: the statistics optimizer narrows grp's type after the exported state
+# type is fixed - the buffered sort key must be cast back to its declared type (regression: this crashed with a
+# vector type mismatch). grp is buffered as INTEGER even though it fits in TINYINT
+statement ok
+CREATE TABLE grp_ints(grp INTEGER, i INTEGER);
+
+statement ok
+INSERT INTO grp_ints VALUES (1, 10), (2, 15), (1, 30), (2, 20);
+
+query II
+SELECT grp, first(i ORDER BY grp, i DESC) EXPORT_STATE FROM grp_ints GROUP BY grp ORDER BY grp;
+----
+1	[{'v0': 10, 'v1': 1}, {'v0': 30, 'v1': 1}]
+2	[{'v0': 15, 'v1': 2}, {'v0': 20, 'v1': 2}]
+
+query II
+SELECT grp, finalize(first(i ORDER BY grp, i DESC) EXPORT_STATE) FROM grp_ints GROUP BY grp ORDER BY grp;
+----
+1	30
+2	20
+
 # string_agg ordered, grouped
 query II
 SELECT g, finalize(string_agg(v, ',' ORDER BY v) EXPORT_STATE)
@@ -70,6 +97,49 @@ FROM (VALUES (0, 'b'), (0, 'a'), (0, 'c'), (1, 'y'), (1, 'x')) t(g, v) GROUP BY 
 ----
 0	a,b,c
 1	x,y
+
+# other order-dependent aggregates with a struct/optional state (first/last/any_value) ordered + grouped
+query IIII
+SELECT g, finalize(first(v ORDER BY v) EXPORT_STATE), finalize(last(v ORDER BY v) EXPORT_STATE),
+       finalize(any_value(v ORDER BY v DESC) EXPORT_STATE)
+FROM (VALUES (0, 30), (0, 10), (0, 20), (1, 5), (1, 9)) t(g, v) GROUP BY g ORDER BY g;
+----
+0	10	30	30
+1	5	9	9
+
+# arg_max ordered + grouped
+query II
+SELECT g, finalize(arg_max(v, v ORDER BY v) EXPORT_STATE)
+FROM (VALUES (0, 30), (0, 10), (0, 20), (1, 5), (1, 9)) t(g, v) GROUP BY g ORDER BY g;
+----
+0	30
+1	9
+
+# aggregates with an explicit export callback (approx_top_k / approx_quantile) keep their ORDER BY (they are
+# order-dependent by default), so they are finalized one group at a time through the sorted wrapper - the export
+# callback must honor the non-zero offset. Compare exported+finalized against the direct ordered aggregate.
+statement ok
+CREATE TABLE approx_t AS SELECT (range % 8)::TINYINT AS g, range AS v FROM range(4000);
+
+query I
+SELECT count(*) FROM (
+    SELECT g, list_sort(approx_top_k(v, 5 ORDER BY v)) AS direct FROM approx_t GROUP BY g
+) d JOIN (
+    SELECT g, list_sort(finalize(approx_top_k(v, 5 ORDER BY v) EXPORT_STATE)) AS exported FROM approx_t GROUP BY g
+) e USING (g)
+WHERE d.direct IS DISTINCT FROM e.exported;
+----
+0
+
+query I
+SELECT count(*) FROM (
+    SELECT g, approx_quantile(v, 0.5 ORDER BY v) AS direct FROM approx_t GROUP BY g
+) d JOIN (
+    SELECT g, finalize(approx_quantile(v, 0.5 ORDER BY v) EXPORT_STATE) AS exported FROM approx_t GROUP BY g
+) e USING (g)
+WHERE d.direct IS DISTINCT FROM e.exported;
+----
+0
 
 # many groups via the regular hash aggregate - ordered export must match the direct ordered aggregate
 statement ok
@@ -124,21 +194,93 @@ WHERE finalize(os.l) IS DISTINCT FROM d.direct;
 ----
 0
 
-# combine two ordered exported states (combine concatenates the two states - compare as multisets)
+# combine of two separately-exported ordered states must MERGE the orderings (not just concatenate the two states):
+# the values are interleaved by the sort key across both partitions. Splitting by x is irrelevant to ORDER BY y.
 query I
-SELECT list_sort(finalize(combine(
-    list(i ORDER BY i) EXPORT_STATE,
-    (SELECT list(j ORDER BY j) EXPORT_STATE FROM (VALUES (3), (4)) s(j))
-))) FROM (VALUES (1), (2)) t(i);
+SELECT finalize(combine(
+    (SELECT list(x ORDER BY y) EXPORT_STATE FROM (VALUES (1, 10), (2, 30)) t(x, y)),
+    (SELECT list(x ORDER BY y) EXPORT_STATE FROM (VALUES (3, 20), (4, 40)) t(x, y))
+));
 ----
-[1, 2, 3, 4]
+[1, 3, 2, 4]
 
-# combine_aggr across groups of ordered states
+# string_agg combine_aggr - the reported case: the result is globally ordered by the sort key regardless of how the
+# input was partitioned across the two states (this used to ignore the ORDER BY and just concatenate)
 query I
-SELECT list_sort(finalize(combine_aggr(s))) FROM (
+SELECT finalize(combine_aggr(state)) FROM (
+    SELECT string_agg(v, ' ' ORDER BY i) EXPORT_STATE AS state FROM (VALUES ('c', 2), ('d', 2)) t(v, i)
+    UNION ALL
+    SELECT string_agg(v, ' ' ORDER BY i) EXPORT_STATE AS state FROM (VALUES ('a', 1), ('b', 1)) t(v, i)
+);
+----
+a b c d
+
+# combine of two ordered states equals the direct ordered aggregate over the union, across many random partitions
+statement ok
+CREATE TABLE parts AS SELECT (range * 2654435761) % 1000 AS x, ((range * 40503) % 97) AS y, range % 2 AS part
+FROM range(4000);
+
+query I
+SELECT count(*) FROM (
+    SELECT finalize(combine(a.s, b.s)) AS combined FROM
+        (SELECT list(x ORDER BY y, x) EXPORT_STATE AS s FROM parts WHERE part = 0) a,
+        (SELECT list(x ORDER BY y, x) EXPORT_STATE AS s FROM parts WHERE part = 1) b
+) c, (SELECT list(x ORDER BY y, x) AS direct FROM parts) d
+WHERE c.combined IS DISTINCT FROM d.direct;
+----
+0
+
+# combine_aggr across groups of ordered states, order preserved
+query I
+SELECT finalize(combine_aggr(s)) FROM (
     SELECT list(v ORDER BY v) EXPORT_STATE AS s FROM (VALUES (2), (1)) t(v)
     UNION ALL
     SELECT list(v ORDER BY v) EXPORT_STATE AS s FROM (VALUES (4), (3)) t(v)
 ) t;
 ----
 [1, 2, 3, 4]
+
+# to_aggregate_state reconstructs an ordered aggregate state from a hand-built buffer of values: the 5th argument is
+# the ORDER BY spec as a list of {column, order} structs (column = the buffered struct column the key sorts on)
+query I
+SELECT finalize(to_aggregate_state(
+    [{'v0': 'b', 'v1': 2}, {'v0': 'a', 'v1': 1}, {'v0': 'c', 'v1': 3}],
+    'string_agg', ['VARCHAR', 'VARCHAR'], [NULL, ' '],
+    [{'column': 1, 'order': 'ASC'}]
+));
+----
+a b c
+
+# the modifier string controls order and null placement; the constant separator is supplied as the 4th argument
+query I
+SELECT finalize(to_aggregate_state(
+    [{'v0': 'b', 'v1': 2}, {'v0': 'a', 'v1': 1}, {'v0': 'c', 'v1': 3}],
+    'string_agg', ['VARCHAR', 'VARCHAR'], [NULL, '|'],
+    [{'column': 1, 'order': 'DESC NULLS LAST'}]
+));
+----
+c|b|a
+
+# a state exported from an ordered aggregate round-trips back through to_aggregate_state
+query I
+SELECT finalize(to_aggregate_state(
+    (SELECT list(x ORDER BY y) EXPORT_STATE FROM (VALUES (10, 1), (30, 3), (20, 2)) t(x, y))::STRUCT(v0 INTEGER, v1 INTEGER)[],
+    'list', ['INTEGER'], [NULL], [{'column': 1, 'order': 'ASC'}]
+));
+----
+[10, 20, 30]
+
+# combine of two hand-built ordered states merges the orderings
+query I
+SELECT finalize(combine(
+    to_aggregate_state([{'v0': 1, 'v1': 10}, {'v0': 2, 'v1': 30}], 'list', ['INTEGER'], [NULL], [{'column': 1, 'order': 'ASC'}]),
+    to_aggregate_state([{'v0': 3, 'v1': 20}, {'v0': 4, 'v1': 40}], 'list', ['INTEGER'], [NULL], [{'column': 1, 'order': 'ASC'}])
+));
+----
+[1, 3, 2, 4]
+
+# the ORDER BY argument must reference a valid column
+statement error
+SELECT to_aggregate_state([{'v0': 1, 'v1': 10}], 'list', ['INTEGER'], [NULL], [{'column': 5, 'order': 'ASC'}]);
+----
+<REGEX>:.*out of range.*

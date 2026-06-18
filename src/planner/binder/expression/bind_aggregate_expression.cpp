@@ -323,10 +323,12 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		error.Throw();
 	}
 
+	// attach the ORDER BY before binding the state export: an ordered aggregate exports its buffer of values, so its
+	// exported AGGREGATE_STATE type depends on the ORDER BY keys (see ExportAggregateFunction::Bind)
+	aggregate->GetOrderBysMutable() = std::move(order_bys);
 	if (aggr.ExportState()) {
 		aggregate = ExportAggregateFunction::Bind(std::move(aggregate));
 	}
-	aggregate->GetOrderBysMutable() = std::move(order_bys);
 
 	// check for all the aggregates if this aggregate already exists
 	ProjectionIndex aggr_index;
