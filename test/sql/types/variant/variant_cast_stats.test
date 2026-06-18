@@ -46,13 +46,41 @@ FROM (SELECT stats(TRY_CAST(n AS VARIANT)) s FROM t LIMIT 1);
 ----
 SHREDDED	BIGINT	true	false
 
-# ------------------------------ Nested sources are not shredded into a single bucket ------------------------------
+# ------------------------------ Nested sources shred recursively ------------------------------
 
 statement ok
-CREATE TABLE l AS SELECT [range] AS c FROM range(10);
+CREATE TABLE obj AS SELECT {'a': range, 'b': 'x' || range} AS o, [range, range + 100] AS l FROM range(50);
 
+# a STRUCT cast keeps a typed bucket per field
+query III
+SELECT s.shredding_state, s.fully_shredded.a.type, s.fully_shredded.b.type
+FROM (SELECT stats(o::VARIANT) s FROM obj LIMIT 1);
+----
+SHREDDED	BIGINT	VARCHAR
+
+# extracting a field from the casted struct propagates that field's bounds
+query III
+SELECT s.fully_shredded.type, s.fully_shredded.stats.min, s.fully_shredded.stats.max
+FROM (SELECT stats((o::VARIANT).a) s FROM obj LIMIT 1);
+----
+BIGINT	0	49
+
+query III
+SELECT s.fully_shredded.type, s.fully_shredded.stats.min, s.fully_shredded.stats.max
+FROM (SELECT stats((o::VARIANT).b) s FROM obj LIMIT 1);
+----
+VARCHAR	x0	x9
+
+# a LIST cast shreds the element type - extracting an element propagates the child bounds
+query III
+SELECT s.fully_shredded.type, s.fully_shredded.stats.min, s.fully_shredded.stats.max
+FROM (SELECT stats((l::VARIANT)[1]) s FROM obj LIMIT 1);
+----
+BIGINT	0	149
+
+# MAP can not be represented as a single shredding
 query I
-SELECT s.shredding_state FROM (SELECT stats([n]::VARIANT) s FROM t LIMIT 1);
+SELECT s.shredding_state FROM (SELECT stats(MAP {'k': n}::VARIANT) s FROM t LIMIT 1);
 ----
 INCONSISTENT
 
@@ -77,3 +105,14 @@ query I
 SELECT count(*) FROM big WHERE m::VARIANT > 90::BIGINT::VARIANT;
 ----
 9
+
+# pruning through a nested field extract - the filter is provably empty
+query I
+SELECT count(*) FROM obj WHERE (o::VARIANT).a::BIGINT = 9999;
+----
+0
+
+query I
+SELECT count(*) FROM obj WHERE (o::VARIANT).a::BIGINT = 25;
+----
+1

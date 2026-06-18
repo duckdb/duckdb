@@ -218,23 +218,6 @@ static unique_ptr<BaseStatistics> StatisticsPropagateVariant(const BaseStatistic
 	return StatisticsPropagator::TryPropagateCast(typed_stats, structured_type, target);
 }
 
-static unique_ptr<BaseStatistics> StatisticsPropagateToVariant(const BaseStatistics &input, const LogicalType &source) {
-	if (source.IsNested() || source.id() == LogicalTypeId::VARIANT) {
-		// only propagate primitive types - the variant stores them in a single shredded bucket
-		return nullptr;
-	}
-	if (source.id() == LogicalTypeId::ENUM) {
-		// an ENUM is not stored as an ENUM in the variant, so its typed stats don't carry over
-		return nullptr;
-	}
-	// the cast stores every value in a single fully-shredded primitive bucket - the input stats are the typed stats
-	auto result = VariantStats::CreateShredded(source);
-	VariantStats::SetShreddedStats(result, input);
-	// the cast preserves NULLs exactly, so the variant validity matches the input validity
-	result.CopyBase(input);
-	return result.ToUnique();
-}
-
 unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStatistics &stats,
                                                                   const LogicalType &source,
                                                                   const LogicalType &target) {
@@ -242,7 +225,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStat
 		return StatisticsPropagateVariant(stats, target);
 	}
 	if (target.id() == LogicalTypeId::VARIANT) {
-		return StatisticsPropagateToVariant(stats, source);
+		// the cast shreds every value into a single bucket - mirror the (possibly nested) source as typed stats
+		return VariantStats::StatisticsPropagateToVariant(source, stats);
 	}
 	if (!CanPropagateCast(source, target)) {
 		return nullptr;
