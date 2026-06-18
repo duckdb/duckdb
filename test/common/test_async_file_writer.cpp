@@ -861,6 +861,48 @@ TEST_CASE("AsyncFileWriter does not eagerly schedule tiny remote tails after one
 	fs.RemoveFile(path);
 }
 
+TEST_CASE("AsyncFileWriter close force-drains remote sequential tail after submitted write", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	SequentialExplicitOffsetWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_remote_sequential_close_tail.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string large(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD + 17, 'x');
+	string tail(1024, 't');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
+	REQUIRE(fs.WaitForBlockedWrites(1));
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(tail));
+
+	std::atomic<bool> close_started(false);
+	std::exception_ptr close_error;
+	std::thread close_thread([&]() {
+		close_started.store(true);
+		try {
+			writer.Close();
+		} catch (...) {
+			close_error = std::current_exception();
+		}
+	});
+
+	while (!close_started.load()) {
+		std::this_thread::yield();
+	}
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	fs.ReleaseWrites();
+	close_thread.join();
+	if (close_error) {
+		std::rethrow_exception(close_error);
+	}
+
+	REQUIRE(ReadFile(path) == large + tail);
+	fs.RemoveFile(path);
+}
+
 TEST_CASE("AsyncFileWriter remote queued drain task covers newly registered tiny tail", "[async_file_writer]") {
 	TestQueuedDrainTaskCoversNewTinyTail(false, "async_file_writer_remote_queued_large_then_tiny.tmp");
 }

@@ -459,6 +459,8 @@ private:
 	idx_t submitted_requests = 0;
 	//! Nested batch depth. While non-zero, async draining and backpressure are delayed.
 	idx_t batch_depth = 0;
+	//! Whether completion-driven refills should ignore the normal first-task threshold.
+	bool force_completion_refill = false;
 	//! Next logical offset expected by RegisterWrite. Enforces v1 contiguous-registration semantics.
 	idx_t next_registration_offset = 0;
 	//! Set after Close() has drained the queue. Further write registration is rejected.
