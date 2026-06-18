@@ -127,8 +127,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 					}
 				}
 				if (!found_projection) {
-					projection_ids.push_back(entry.first);
-					column_id_filter = projection_ids.size() - 1;
+					if (projection_ids.empty()) {
+						// Identity mapping: column is already in output at position entry.first
+						column_id_filter = entry.first;
+					} else {
+						projection_ids.push_back(entry.first);
+						column_id_filter = projection_ids.size() - 1;
+					}
 				}
 				auto column = make_uniq<BoundReferenceExpression>(column_type, column_id_filter);
 				select_list.push_back(entry.second->ToExpression(*column));
@@ -141,13 +146,26 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 
 		if (!select_list.empty()) {
 			vector<LogicalType> filter_types;
-			for (auto &c : projection_ids) {
-				auto column_id = column_ids[c].GetPrimaryIndex();
-				if (IsVirtualColumn(column_id)) {
-					auto &column = virtual_columns.at(column_id);
-					filter_types.push_back(column.type);
-				} else {
-					filter_types.push_back(op.returned_types[column_id]);
+			if (projection_ids.empty()) {
+				// Identity mapping: scan outputs all column_ids, filter passes them all through
+				for (auto &col_id : column_ids) {
+					auto primary_id = col_id.GetPrimaryIndex();
+					if (IsVirtualColumn(primary_id)) {
+						auto &column = virtual_columns.at(primary_id);
+						filter_types.push_back(column.type);
+					} else {
+						filter_types.push_back(op.returned_types[primary_id]);
+					}
+				}
+			} else {
+				for (auto &c : projection_ids) {
+					auto column_id = column_ids[c].GetPrimaryIndex();
+					if (IsVirtualColumn(column_id)) {
+						auto &column = virtual_columns.at(column_id);
+						filter_types.push_back(column.type);
+					} else {
+						filter_types.push_back(op.returned_types[column_id]);
+					}
 				}
 			}
 			filter = Make<PhysicalFilter>(filter_types, std::move(select_list), op.estimated_cardinality);

@@ -1,0 +1,55 @@
+# name: test/sql/filter/inet_filter_projection.test
+# description: Regression test for IN+INET PhysicalProjection crash (plan_get.cpp identity-mapping bug)
+# group: [filter]
+
+require inet
+
+statement ok
+CREATE TABLE t_inet AS
+SELECT '1.2.3.4'::inet AS a, 'hello'::varchar AS b
+UNION ALL
+SELECT '5.6.7.8'::inet AS a, 'world'::varchar AS b;
+
+# Multi-column projection + IN on INET — this triggered a crash in plan_get.cpp
+# where empty projection_ids (identity mapping) was not respected.
+query II
+SELECT a, b FROM t_inet WHERE a IN ('1.2.3.4'::inet);
+----
+1.2.3.4	hello
+
+# Three-column projection (exercises the column_ids > 2 path)
+statement ok
+CREATE TABLE t_inet2 AS
+SELECT a, b, 42::int AS c FROM t_inet;
+
+query III
+SELECT a, b, c FROM t_inet2 WHERE a IN ('1.2.3.4'::inet);
+----
+1.2.3.4	hello	42
+
+# Multi-value IN with multi-column projection
+query II
+SELECT a, b FROM t_inet WHERE a IN ('1.2.3.4'::inet, '5.6.7.8'::inet);
+----
+1.2.3.4	hello
+5.6.7.8	world
+
+# Mixed equality + IN on same column
+query II
+SELECT a, b FROM t_inet WHERE a = '1.2.3.4'::inet OR a IN ('5.6.7.8'::inet);
+----
+1.2.3.4	hello
+5.6.7.8	world
+
+# IN on non-INET column (ensures no regression for standard types)
+query II
+SELECT a, b FROM t_inet WHERE b IN ('hello');
+----
+1.2.3.4	hello
+
+# Cleanup
+statement ok
+DROP TABLE t_inet;
+
+statement ok
+DROP TABLE t_inet2;

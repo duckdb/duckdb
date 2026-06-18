@@ -558,6 +558,11 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 
+	if (!TypeSupportsConstantFilter(type)) {
+		// type does not support constant filters - do not push down IN
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
 	//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 	// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
 	vector<Value> in_list;
