@@ -15,9 +15,9 @@
 
 namespace duckdb {
 
-static ErrorData ErrorDataFromExceptionPtr(std::exception_ptr error_ptr) {
+static ErrorData ErrorDataFromExceptionPtr(const std::exception_ptr &error_ptr) {
 	try {
-		std::rethrow_exception(std::move(error_ptr));
+		std::rethrow_exception(error_ptr);
 	} catch (const std::exception &ex) {
 		return ErrorData(ex);
 	} catch (...) { // LCOV_EXCL_START
@@ -1259,6 +1259,7 @@ void ManagedAsyncWriteStreamQueue::CompleteSubmittedWrite(idx_t offset, idx_t si
                                                           optional_ptr<const ErrorData> error) {
 	(void)offset;
 	bool refill = false;
+	auto refill_policy = SchedulePolicy::THRESHOLD;
 	{
 		lock_guard<mutex> guard(lock);
 		D_ASSERT(submitted_requests > 0);
@@ -1266,9 +1267,12 @@ void ManagedAsyncWriteStreamQueue::CompleteSubmittedWrite(idx_t offset, idx_t si
 		D_ASSERT(submitted_bytes >= size);
 		submitted_bytes -= size;
 		refill = !error && !closed && batch_depth == 0 && !pending_writes.empty();
+		if (force_completion_refill) {
+			refill_policy = SchedulePolicy::FORCE;
+		}
 	}
 	if (refill) {
-		SchedulePendingWritesInternal();
+		SchedulePendingWritesInternal(refill_policy);
 	}
 }
 
@@ -1338,9 +1342,14 @@ void ManagedAsyncWriteStreamQueue::WaitAll(BatchDrainMode batch_drain_mode) {
 		lock_guard<mutex> guard(lock);
 		batch_depth = previous_batch_depth;
 	};
+	auto set_force_completion_refill = [&](bool enabled) {
+		lock_guard<mutex> guard(lock);
+		force_completion_refill = enabled;
+	};
 
 	try {
 		open_batch_for_drain();
+		set_force_completion_refill(true);
 		write_queue->UpdateMemoryState(ManagedAsyncWriteQueue::MemoryUpdateMode::FORCE);
 		while (true) {
 			if (!write_queue->HasError()) {
@@ -1355,13 +1364,16 @@ void ManagedAsyncWriteStreamQueue::WaitAll(BatchDrainMode batch_drain_mode) {
 	} catch (...) {
 		try {
 			open_batch_for_drain();
+			set_force_completion_refill(true);
 			write_queue->WaitAll();
 		} catch (...) {
 		}
+		set_force_completion_refill(false);
 		restore_batch();
 		throw;
 	}
 
+	set_force_completion_refill(false);
 	restore_batch();
 	RethrowTaskError();
 }
