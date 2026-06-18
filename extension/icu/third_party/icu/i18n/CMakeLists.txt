@@ -90,6 +90,34 @@ add_library(
   windtfmt.cpp
   winnmfmt.cpp
   wintzimpl.cpp
+  anytrans.cpp
+  brktrans.cpp
+  casetrn.cpp
+  cpdtrans.cpp
+  esctrn.cpp
+  funcrepl.cpp
+  name2uni.cpp
+  nortrans.cpp
+  nultrans.cpp
+  quant.cpp
+  rbt.cpp
+  rbt_data.cpp
+  rbt_pars.cpp
+  rbt_rule.cpp
+  rbt_set.cpp
+  remtrans.cpp
+  strmatch.cpp
+  strrepl.cpp
+  titletrn.cpp
+  tolowtrn.cpp
+  toupptrn.cpp
+  translit.cpp
+  transreg.cpp
+  tridpars.cpp
+  uni2name.cpp
+  unesctrn.cpp
+  utrans.cpp
+  sharedbreakiterator.cpp
 )
 add_library_unity(
   duckdb_icu_i18n_unity

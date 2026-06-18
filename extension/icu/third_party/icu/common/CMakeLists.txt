@@ -30,6 +30,27 @@ add_library(
   utrie2_builder.cpp
   uvector.cpp
   wintz.cpp
+  brkeng.cpp
+  brkiter.cpp
+  dictbe.cpp
+  dictionarydata.cpp
+  filteredbrk.cpp
+  rbbi.cpp
+  rbbi_cache.cpp
+  rbbidata.cpp
+  rbbinode.cpp
+  rbbirb.cpp
+  rbbiscan.cpp
+  rbbisetb.cpp
+  rbbistbl.cpp
+  rbbitblb.cpp
+  ubrk.cpp
+  locutil.cpp
+  lstmbe.cpp
+  mlbe.cpp
+  ucasemap_titlecase_brkiter.cpp
+  unistr_titlecase_brkiter.cpp
+  ustr_titlecase_brkiter.cpp
 )
 add_library_unity(
   duckdb_icu_common_unity
