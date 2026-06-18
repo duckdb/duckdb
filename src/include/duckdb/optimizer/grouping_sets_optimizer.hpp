@@ -26,6 +26,7 @@ public:
 
 private:
 	bool TryRewriteGroupingSets(unique_ptr<LogicalOperator> &op);
+	bool TryExpandGroupingSets(unique_ptr<LogicalOperator> &op);
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 private:

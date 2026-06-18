@@ -185,3 +185,141 @@ ORDER BY g;
 1	NULL
 2	NULL
 3	NULL
+
+# GROUPING() with a regular GROUP BY is constant after rewrite
+query III
+SELECT GROUPING(g), g, count(DISTINCT x)
+FROM distinct_rewrite_nulls
+GROUP BY g
+ORDER BY g NULLS FIRST;
+----
+0	NULL	0
+0	1	1
+0	2	1
+
+# DISTINCT aggregate state export is finalized over the deduplicated rows
+query II
+SELECT finalize(sum(DISTINCT x) EXPORT_STATE),
+       finalize(count(DISTINCT x) EXPORT_STATE)
+FROM distinct_rewrite_nulls;
+----
+9	2
+
+statement ok
+CREATE TABLE distinct_rewrite_grouping_sets(course VARCHAR, type VARCHAR, value INTEGER);
+
+statement ok
+INSERT INTO distinct_rewrite_grouping_sets VALUES
+	('CS', 'B', 1),
+	('CS', 'P', 1),
+	('CS', 'P', 2),
+	('Math', 'M', 2),
+	('Math', 'M', 2),
+	('Math', NULL, 3);
+
+# grouping sets with distinct aggregates are expanded before the distinct rewrite
+query TTIIII
+SELECT course, type, sum(DISTINCT value), count(DISTINCT value), GROUPING(course), GROUPING(type)
+FROM distinct_rewrite_grouping_sets
+GROUP BY CUBE(course, type)
+ORDER BY GROUPING(course), GROUPING(type), course, type NULLS FIRST;
+----
+CS	B	1	1	0	0
+CS	P	3	2	0	0
+Math	NULL	3	1	0	0
+Math	M	2	1	0	0
+CS	NULL	3	2	0	1
+Math	NULL	5	2	0	1
+NULL	NULL	3	1	1	0
+NULL	B	1	1	1	0
+NULL	M	2	1	1	0
+NULL	P	3	2	1	0
+NULL	NULL	6	3	1	1
+
+# state-export distinct aggregates also go through the grouping-set expansion
+query TTIII
+SELECT course, type, finalize(sum(DISTINCT value) EXPORT_STATE), GROUPING(course), GROUPING(type)
+FROM distinct_rewrite_grouping_sets
+GROUP BY CUBE(course, type)
+ORDER BY GROUPING(course), GROUPING(type), course, type NULLS FIRST;
+----
+CS	B	1	0	0
+CS	P	3	0	0
+Math	NULL	3	0	0
+Math	M	2	0	0
+CS	NULL	3	0	1
+Math	NULL	5	0	1
+NULL	NULL	3	1	0
+NULL	B	1	1	0
+NULL	M	2	1	0
+NULL	P	3	1	0
+NULL	NULL	6	1	1
+
+statement ok
+PRAGMA disable_verification
+
+statement ok
+CREATE SEQUENCE distinct_rewrite_seq_child START 1;
+
+# volatile DISTINCT arguments are staged before distinct-set matching
+query II
+SELECT count(DISTINCT nextval('distinct_rewrite_seq_child')),
+       sum(DISTINCT nextval('distinct_rewrite_seq_child'))
+FROM range(4);
+----
+4	26
+
+query I
+SELECT currval('distinct_rewrite_seq_child');
+----
+8
+
+statement ok
+CREATE SEQUENCE distinct_rewrite_seq_filter START 1;
+
+# volatile FILTER expressions are staged before branch fan-out
+query II
+SELECT count(DISTINCT i) FILTER (WHERE nextval('distinct_rewrite_seq_filter') % 2 = 0),
+       sum(i)
+FROM range(5) tbl(i);
+----
+2	10
+
+query I
+SELECT currval('distinct_rewrite_seq_filter');
+----
+5
+
+statement ok
+CREATE SEQUENCE distinct_rewrite_seq_filtered_arg START 1;
+
+# volatile arguments are evaluated even when a non-volatile FILTER rejects every row
+query I
+SELECT count(DISTINCT nextval('distinct_rewrite_seq_filtered_arg')) FILTER (WHERE false)
+FROM range(4);
+----
+0
+
+query I
+SELECT currval('distinct_rewrite_seq_filtered_arg');
+----
+4
+
+statement ok
+CREATE SEQUENCE distinct_rewrite_seq_grouping_sets START 1;
+
+# grouping-set expansion stages volatile DISTINCT inputs before UNION fan-out
+query III
+SELECT g, count(DISTINCT nextval('distinct_rewrite_seq_grouping_sets')), GROUPING(g)
+FROM (VALUES (1), (2), (1)) tbl(g)
+GROUP BY CUBE(g)
+ORDER BY GROUPING(g), g;
+----
+1	2	0
+2	1	0
+NULL	3	1
+
+query I
+SELECT currval('distinct_rewrite_seq_grouping_sets');
+----
+3
