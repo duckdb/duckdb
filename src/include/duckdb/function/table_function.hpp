@@ -355,7 +355,7 @@ typedef void (*table_function_serialize_t)(Serializer &serializer, const optiona
 typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &deserializer, TableFunction &function);
 
 typedef bool (*table_function_projection_expression_pushdown_t)(ClientContext &context,
-                                                                TableFunctionProjectionExpressionInput &input);
+                                                                const TableFunctionProjectionExpressionInput &input);
 typedef TablePartitionInfo (*table_function_get_partition_info_t)(ClientContext &context,
                                                                   TableFunctionPartitionInput &input);
 

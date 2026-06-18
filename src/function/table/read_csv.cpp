@@ -141,11 +141,22 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 	// return bind_data;
 }
 
+static bool PushdownProjectionExpression(ClientContext &context, const TableFunctionProjectionExpressionInput &input) {
+	if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
+		return false;
+	}
+	auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
+	const auto &cast = input.expr.Cast<BoundCastExpression>();
+	bind_data.types[input.proj_index] = cast.GetReturnType();
+	bind_data.columns[input.proj_index].type = cast.GetReturnType();
+	return true;
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
 	MultiFileFunction<CSVMultiFileInfo> read_csv("read_csv");
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.projection_expression_pushdown = MultiFileFunction<CSVMultiFileInfo>::PushdownProjectionExpression;
+	read_csv.projection_expression_pushdown = PushdownProjectionExpression;
 	ReadCSVAddNamedParameters(read_csv);
 	return static_cast<TableFunction>(read_csv);
 }

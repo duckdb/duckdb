@@ -123,9 +123,6 @@ unique_ptr<Expression> CastReplaceVisitor::VisitReplace(BoundCastExpression &exp
 	}
 
 	const auto &bound_column = expr.Child().Cast<BoundColumnRefExpression>();
-	if (bound_column.Depth() > 0) {
-		throw InternalException("BoundColumnRef with non-zero depth");
-	}
 
 	const auto replace_it = replace.find(bound_column.Binding().table_index);
 	if (replace_it == replace.end()) {
@@ -198,8 +195,10 @@ unique_ptr<LogicalOperator> TypePushdown::Optimize(unique_ptr<LogicalOperator> o
 			}
 
 			const ProjectionIndex column_idx {i};
-			get.returned_types[projection_idx] = it->second.GetReturnType();
-			get_replace[column_idx] = it->second.GetReturnType();
+            const LogicalType& return_type = it->second.GetReturnType();
+			get.returned_types[projection_idx] = return_type;
+			//get.types[column_idx] = return_type;
+			get_replace[column_idx] = return_type;
 		}
 	}
 
