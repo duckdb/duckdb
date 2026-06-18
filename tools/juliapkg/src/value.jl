@@ -27,7 +27,7 @@ function getvalue(val::Value, ::Type{T}) where {T <: String}
     return result
 end
 function getvalue(val::Value, ::Type{T}) where {T}
-    throw(NotImplementedException("Unsupported type for getvalue"))
+    return throw(NotImplementedException("Unsupported type for getvalue"))
 end
 
 create_value(val::T) where {T <: Bool} = Value(duckdb_create_bool(val))
@@ -57,5 +57,5 @@ function create_value(val::AbstractVector{T}) where {T}
     return Value(duckdb_create_list_value(type.handle, map(x -> x.handle, values), length(values)))
 end
 function create_value(val::T) where {T}
-    throw(NotImplementedException("Unsupported type for getvalue"))
+    return throw(NotImplementedException("Unsupported type for getvalue"))
 end

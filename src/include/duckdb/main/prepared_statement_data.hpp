@@ -53,8 +53,10 @@ public:
 	void CheckParameterCount(idx_t parameter_count);
 	//! Whether or not the prepared statement data requires the query to rebound for the given parameters
 	bool RequireRebind(ClientContext &context, optional_ptr<identifier_map_t<BoundParameterData>> values);
+	//! Fill in missing parameter values from user variables
+	void PopulateMissingParameterValues(ClientContext &context, identifier_map_t<BoundParameterData> &values) const;
 	//! Bind a set of values to the prepared statement data
-	DUCKDB_API void Bind(identifier_map_t<BoundParameterData> values);
+	DUCKDB_API void Bind(ClientContext &context, const identifier_map_t<BoundParameterData> &values);
 	//! Get the expected SQL Type of the bound parameter
 	DUCKDB_API LogicalType GetType(const Identifier &identifier);
 	//! Try to get the expected SQL Type of the bound parameter

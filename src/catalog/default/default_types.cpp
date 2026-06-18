@@ -260,13 +260,9 @@ LogicalType BindArrayType(BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindStructType(BindLogicalTypeInput &input) {
 	auto &arguments = input.modifiers;
-
-	if (arguments.empty()) {
-		throw BinderException("STRUCT type requires at least one child type");
-	}
-
 	auto all_name = true;
 	auto all_anon = true;
+
 	for (auto &arg : arguments) {
 		if (arg.HasName()) {
 			all_anon = false;

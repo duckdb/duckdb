@@ -246,10 +246,6 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(ClientContext &context, Arrow
 	} else if (format == "+s") {
 		child_list_t<LogicalType> child_types;
 		vector<shared_ptr<ArrowType>> children;
-		if (schema.n_children == 0) {
-			throw InvalidInputException(
-			    "Attempted to convert a STRUCT with no fields to DuckDB which is not supported");
-		}
 		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(schema.n_children); type_idx++) {
 			children.emplace_back(GetArrowLogicalType(context, *schema.children[type_idx]));
 			child_types.emplace_back(schema.children[type_idx]->name, children.back()->GetDuckType());

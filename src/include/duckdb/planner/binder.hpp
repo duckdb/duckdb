@@ -82,6 +82,7 @@ class IndexVector;
 
 enum class BindingMode : uint8_t {
 	STANDARD_BINDING,
+	PREPARE,
 	EXTRACT_NAMES,
 	EXTRACT_REPLACEMENT_SCANS,
 	EXTRACT_QUALIFIED_NAMES
@@ -472,6 +473,16 @@ private:
 	BoundStatement ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 	                              const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
 	                              const vector<const_reference<TriggerCatalogEntry>> &after_triggers);
+	unique_ptr<BoundStatement> TryExpandRowTriggers(QueryNode &node,
+	                                                vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                                TableCatalogEntry &table, TriggerEventType event_type);
+	BoundStatement ExpandRowTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                 const TableCatalogEntry &table,
+	                                 const vector<const_reference<TriggerCatalogEntry>> &triggers);
+	//! Registers NEW as a generic binding so child binders resolve NEW.col at depth=1. The returned binder is
+	//! pushed onto GetActiveBinders(). the caller must keep it alive until the matching pop_back().
+	unique_ptr<ExpressionBinder> SetupNewRowScope(TableIndex table_index, const vector<Identifier> &col_names,
+	                                              const vector<LogicalType> &col_types);
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 	BoundStatement BindNode(MergeQueryNode &node);

@@ -154,7 +154,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"CatalogReservedSchemaTypeName <- CatalogQualification ReservedSchemaQualification ReservedTypeName\n"
 	"SchemaReservedTypeName <- SchemaQualification ReservedTypeName\n"
 	"TypeModifiers <- Parens(List(Expression)?)\n"
-	"RowType <- RowOrStruct ColIdTypeList\n"
+	"RowType <- RowOrStruct ColIdTypeList?\n"
 	"SetofType <- 'SETOF' Type\n"
 	"UnionType <- 'UNION' ColIdTypeList\n"
 	"ColIdTypeList <- Parens(List(ColIdType))\n"
