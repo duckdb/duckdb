@@ -37,6 +37,11 @@ public:
 	void Stop();
 	//! Wake the scheduler so it re-scans the catalog (call after CREATE/ALTER/DROP changes a schedule).
 	void Notify();
+	//! Remove any tracked features from a detached catalog and wake the scheduler if the heap must be rebuilt.
+	void RemoveCatalog(const string &catalog_name);
+	//! Returns the in-memory next refresh timestamp for a scheduled feature, if it is currently tracked.
+	bool GetNextRefreshAt(const string &catalog_name, const string &schema_name, const string &feature_name,
+	                      timestamp_t &result);
 
 private:
 	struct ScheduledFeature {
@@ -54,6 +59,8 @@ private:
 			return a.next_refresh_at > b.next_refresh_at; // min-heap: soonest at top
 		}
 	};
+
+	static string MakeKey(const string &catalog_name, const string &schema_name, const string &feature_name);
 
 #ifndef DUCKDB_NO_THREADS
 	using FeatureHeap = std::priority_queue<ScheduledFeature, vector<ScheduledFeature>, FeatureCmp>;

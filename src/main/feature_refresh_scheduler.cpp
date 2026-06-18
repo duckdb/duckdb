@@ -5,8 +5,11 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/common/sql_identifier.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -64,6 +67,48 @@ void FeatureRefreshScheduler::Notify() {
 #endif
 }
 
+void FeatureRefreshScheduler::RemoveCatalog(const string &catalog_name) {
+#ifndef DUCKDB_NO_THREADS
+	auto prefix = catalog_name + ".";
+	bool removed = false;
+	{
+		lock_guard<std::mutex> lock(mtx);
+		for (auto entry = known_next_refresh.begin(); entry != known_next_refresh.end();) {
+			if (StringUtil::StartsWith(entry->first, prefix)) {
+				entry = known_next_refresh.erase(entry);
+				removed = true;
+			} else {
+				entry++;
+			}
+		}
+	}
+	if (removed) {
+		heap_dirty.store(true);
+		cv.notify_all();
+	}
+#endif
+}
+
+bool FeatureRefreshScheduler::GetNextRefreshAt(const string &catalog_name, const string &schema_name,
+                                               const string &feature_name, timestamp_t &result) {
+#ifndef DUCKDB_NO_THREADS
+	lock_guard<std::mutex> lock(mtx);
+	auto entry = known_next_refresh.find(MakeKey(catalog_name, schema_name, feature_name));
+	if (entry == known_next_refresh.end()) {
+		return false;
+	}
+	result = entry->second;
+	return true;
+#else
+	return false;
+#endif
+}
+
+string FeatureRefreshScheduler::MakeKey(const string &catalog_name, const string &schema_name,
+                                        const string &feature_name) {
+	return catalog_name + "." + schema_name + "." + feature_name;
+}
+
 int64_t FeatureRefreshScheduler::IntervalToMicros(const interval_t &interval) {
 	// 1 month ≈ 30 days — good enough for scheduling purposes.
 	return interval.micros + static_cast<int64_t>(interval.days) * Interval::MICROS_PER_DAY +
@@ -87,6 +132,9 @@ void FeatureRefreshScheduler::RebuildHeap(FeatureHeap &heap) {
 		for (auto &schema_ref : schemas) {
 			schema_ref.get().Scan(*con.context, CatalogType::FEATURE_ENTRY, [&](CatalogEntry &raw_entry) {
 				auto &feat = raw_entry.Cast<FeatureCatalogEntry>();
+				if (feat.catalog.GetAttached().IsReadOnly()) {
+					return;
+				}
 				if (!feat.has_schedule || !feat.schedule_enabled) {
 					return;
 				}
@@ -95,14 +143,21 @@ void FeatureRefreshScheduler::RebuildHeap(FeatureHeap &heap) {
 					return;
 				}
 
-				string key = feat.catalog.GetName() + "." + feat.schema.name + "." + feat.name;
+				string key = MakeKey(feat.catalog.GetName(), feat.schema.name, feat.name);
 
 				timestamp_t next_at;
-				auto it = known_next_refresh.find(key);
-				if (it != known_next_refresh.end()) {
+				bool has_known_next;
+				{
+					lock_guard<std::mutex> lock(mtx);
+					auto it = known_next_refresh.find(key);
+					has_known_next = it != known_next_refresh.end();
+					if (has_known_next) {
+						next_at = it->second;
+					}
+				}
+				if (has_known_next) {
 					// Preserve the existing in-memory schedule so ALTER/NOTIFY rebuilds don't
 					// reset timers that are already running.
-					next_at = it->second;
 				} else {
 					// New feature: derive from last_refresh_timestamp + interval. Add per-feature
 					// startup jitter — capped at 10% of the interval (max 30 s) — to spread out
@@ -133,7 +188,10 @@ void FeatureRefreshScheduler::RebuildHeap(FeatureHeap &heap) {
 			});
 		}
 
-		known_next_refresh = std::move(new_known);
+		{
+			lock_guard<std::mutex> lock(mtx);
+			known_next_refresh = std::move(new_known);
+		}
 		con.Commit();
 	} catch (std::exception &) {
 		// Catalog scan failed (DB shutting down, etc.) — leave heap empty; the loop will retry or exit.
@@ -181,14 +239,21 @@ void FeatureRefreshScheduler::Run() {
 
 			try {
 				Connection con(db);
-				auto result = con.Query("SELECT * FROM refresh_feature('" + feat.feature_name + "')");
+				auto use_result = con.Query("USE " + SQLIdentifier(feat.catalog_name) + "." + SQLIdentifier(feat.schema_name));
+				if (use_result->HasError()) {
+					throw Exception(ExceptionType::IO, use_result->GetError());
+				}
+				auto result = con.Query("SELECT * FROM refresh_feature(" + SQLString(feat.feature_name) + ")");
 				if (result->HasError()) {
 					throw Exception(ExceptionType::IO, result->GetError());
 				}
 				feat.next_refresh_at = Interval::Add(now, feat.schedule_interval);
 			} catch (CatalogException &) {
 				// Feature was dropped — remove it from the scheduler entirely.
-				known_next_refresh.erase(feat.key);
+				{
+					lock_guard<std::mutex> lock(mtx);
+					known_next_refresh.erase(feat.key);
+				}
 				continue;
 			} catch (std::exception &) {
 				// Transient error — back off for min(interval, 5 minutes) before retrying.
@@ -197,7 +262,10 @@ void FeatureRefreshScheduler::Run() {
 				feat.next_refresh_at = timestamp_t(now.value + backoff_us);
 			}
 
-			known_next_refresh[feat.key] = feat.next_refresh_at;
+			{
+				lock_guard<std::mutex> lock(mtx);
+				known_next_refresh[feat.key] = feat.next_refresh_at;
+			}
 			heap.push(feat);
 		}
 	}

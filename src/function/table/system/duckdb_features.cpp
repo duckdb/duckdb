@@ -5,6 +5,8 @@
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/feature_refresh_scheduler.hpp"
 
 namespace duckdb {
 
@@ -63,6 +65,9 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 	names.emplace_back("schedule_enabled");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
+	names.emplace_back("next_refresh_at");
+	return_types.emplace_back(LogicalType::TIMESTAMP);
+
 	return nullptr;
 }
 
@@ -111,6 +116,8 @@ static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &d
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &feat = data.entries[data.offset++].get();
+		auto scheduler = DatabaseInstance::GetDatabase(context).GetFeatureRefreshScheduler();
+		timestamp_t next_refresh_at;
 
 		// database_name
 		output.data[0].Append(Value(feat.catalog.GetName()));
@@ -143,6 +150,13 @@ static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &d
 		                                         : Value(LogicalType::INTERVAL));
 		// schedule_enabled (false when no schedule is attached)
 		output.data[14].Append(Value::BOOLEAN(feat.has_schedule && feat.schedule_enabled));
+		// next_refresh_at (NULL when the scheduler is not tracking this feature)
+		if (scheduler && scheduler->GetNextRefreshAt(feat.catalog.GetName(), feat.schema.name, feat.name,
+		                                            next_refresh_at)) {
+			output.data[15].Append(Value::TIMESTAMP(next_refresh_at));
+		} else {
+			output.data[15].Append(Value(LogicalType::TIMESTAMP));
+		}
 
 		count++;
 	}

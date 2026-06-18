@@ -96,6 +96,7 @@ public:
 	//! CREATE FEATURE). Safe to call before the scheduler thread is started and is a no-op if the scheduler
 	//! does not exist (e.g. READ_ONLY or no-threads builds).
 	void NotifyFeatureRefreshScheduler();
+	FeatureRefreshScheduler *GetFeatureRefreshScheduler();
 
 private:
 	void Initialize(const char *path, DBConfig *config);
