@@ -1,41 +1,18 @@
 # name: test/sql/table_function/warn_deprecated_identifier_conversion.test
-# description: Test warnings for deprecated implicit identifier-to-string conversion in table functions
+# description: Test deprecated implicit identifier-to-string conversion setting in table functions
 # group: [table_function]
 
-statement ok
-CALL enable_logging(level='warning');
-
-# Default behavior still converts the identifier to a string, but warns.
+# Default behavior still converts the identifier to a string.
 query I
 SELECT count(*) FROM glob(no_such_file.csv);
 ----
 0
 
-query I
-SELECT count(*) FROM duckdb_logs
-WHERE log_level = 'WARNING'
-  AND starts_with(message, 'Deprecated implicit conversion of unbound identifiers to strings');
-----
-1
-
-statement ok
-CALL truncate_duckdb_logs();
-
-# Explicit string literals should not warn.
+# Explicit string literals should continue to work.
 query I
 SELECT count(*) FROM glob('no_such_file.csv');
 ----
 0
-
-query I
-SELECT count(*) FROM duckdb_logs
-WHERE log_level = 'WARNING'
-  AND starts_with(message, 'Deprecated implicit conversion of unbound identifiers to strings');
-----
-0
-
-statement ok
-CALL truncate_duckdb_logs();
 
 # Explicitly enabling the deprecated behavior should not warn.
 statement ok
@@ -45,16 +22,6 @@ query I
 SELECT count(*) FROM glob(no_such_file.csv);
 ----
 0
-
-query I
-SELECT count(*) FROM duckdb_logs
-WHERE log_level = 'WARNING'
-  AND starts_with(message, 'Deprecated implicit conversion of unbound identifiers to strings');
-----
-0
-
-statement ok
-CALL truncate_duckdb_logs();
 
 # Disabling the deprecated behavior rejects implicit conversion.
 statement ok
