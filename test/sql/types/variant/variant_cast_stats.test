@@ -1,0 +1,79 @@
+# name: test/sql/types/variant/variant_cast_stats.test
+# description: statistics propagation for casts to VARIANT
+# group: [variant]
+
+# ------------------------------ Cast from a primitive (INTEGER) ------------------------------
+
+statement ok
+CREATE TABLE t AS SELECT range n FROM range(10);
+
+# the cast stores every value in a single fully-shredded bucket - the typed min/max carry over
+query IIIII
+SELECT s.shredding_state, s.fully_shredded.type, s.fully_shredded.stats.min, s.fully_shredded.stats.max,
+       s.fully_shredded.stats.has_null
+FROM (SELECT stats(n::VARIANT) s FROM t LIMIT 1);
+----
+SHREDDED	BIGINT	0	9	false
+
+# ------------------------------ Cast from VARCHAR ------------------------------
+
+statement ok
+CREATE TABLE s AS SELECT 'val_' || range AS v FROM range(10);
+
+query IIIII
+SELECT s.shredding_state, s.fully_shredded.type, s.fully_shredded.stats.min, s.fully_shredded.stats.max,
+       s.fully_shredded.stats.has_null
+FROM (SELECT stats(v::VARIANT) s FROM s LIMIT 1);
+----
+SHREDDED	VARCHAR	val_0	val_9	false
+
+# ------------------------------ NULLs are propagated ------------------------------
+
+statement ok
+CREATE TABLE nn AS SELECT CASE WHEN range % 2 = 0 THEN range END AS c FROM range(10);
+
+# a nullable source propagates NULLs to both the top-level variant and the typed bucket
+query IIII
+SELECT s.shredding_state, s.fully_shredded.type, s.has_null, s.fully_shredded.stats.has_null
+FROM (SELECT stats(c::VARIANT) s FROM nn LIMIT 1);
+----
+SHREDDED	BIGINT	true	true
+
+# a TRY_CAST can always introduce NULLs at the top level, even over a non-nullable source
+query IIII
+SELECT s.shredding_state, s.fully_shredded.type, s.has_null, s.fully_shredded.stats.has_null
+FROM (SELECT stats(TRY_CAST(n AS VARIANT)) s FROM t LIMIT 1);
+----
+SHREDDED	BIGINT	true	false
+
+# ------------------------------ Nested sources are not shredded into a single bucket ------------------------------
+
+statement ok
+CREATE TABLE l AS SELECT [range] AS c FROM range(10);
+
+query I
+SELECT s.shredding_state FROM (SELECT stats([n]::VARIANT) s FROM t LIMIT 1);
+----
+INCONSISTENT
+
+# ------------------------------ The derived bounds are correct (pruning) ------------------------------
+
+statement ok
+CREATE TABLE big AS SELECT range m FROM range(100);
+
+# values inside the range still match
+query I
+SELECT count(*) FROM big WHERE m::VARIANT = 50::BIGINT::VARIANT;
+----
+1
+
+# a value outside the bucket range matches nothing
+query I
+SELECT count(*) FROM big WHERE m::VARIANT = 5000::BIGINT::VARIANT;
+----
+0
+
+query I
+SELECT count(*) FROM big WHERE m::VARIANT > 90::BIGINT::VARIANT;
+----
+9
