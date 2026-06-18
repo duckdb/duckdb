@@ -6,6 +6,10 @@ add_library(duckdb_nanoarrow_c OBJECT
 target_include_directories(duckdb_nanoarrow_c
                            PRIVATE ${PROJECT_SOURCE_DIR}/third_party/nanoarrow)
 disable_target_warnings(duckdb_nanoarrow_c)
+if(NOT WIN32)
+  target_compile_definitions(duckdb_nanoarrow_c PRIVATE "NANOARROW_DLL=")
+  target_compile_options(duckdb_nanoarrow_c PRIVATE -fvisibility=hidden)
+endif()
 
 add_library_unity(duckdb_adbc_nanoarrow OBJECT single_batch_array_stream.cpp)
 

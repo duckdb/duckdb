@@ -742,6 +742,7 @@ include_directories(third_party/jaro_winkler)
 include_directories(third_party/vergesort)
 include_directories(third_party/yyjson/include)
 include_directories(third_party/zstd/include)
+include_directories(third_party/nanoarrow)
 
 # todo only regenerate ub file if one of the input files changed hack alert
 function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
