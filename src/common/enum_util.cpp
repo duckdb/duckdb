@@ -71,6 +71,7 @@
 #include "duckdb/common/enums/storage_block_prefetch.hpp"
 #include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb/common/enums/subquery_type.hpp"
+#include "duckdb/common/enums/table_function_identifier_conversion.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
 #include "duckdb/common/enums/task_scheduler_type.hpp"
 #include "duckdb/common/enums/thread_pin_mode.hpp"
@@ -5532,6 +5533,25 @@ const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
 	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 12, "TableFilterType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTableFunctionIdentifierConversionValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TableFunctionIdentifierConversion::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(TableFunctionIdentifierConversion::ENABLE_IMPLICIT_STRING), "ENABLE_IMPLICIT_STRING" },
+		{ static_cast<uint32_t>(TableFunctionIdentifierConversion::DISABLE_IMPLICIT_STRING), "DISABLE_IMPLICIT_STRING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TableFunctionIdentifierConversion>(TableFunctionIdentifierConversion value) {
+	return StringUtil::EnumToString(GetTableFunctionIdentifierConversionValues(), 3, "TableFunctionIdentifierConversion", static_cast<uint32_t>(value));
+}
+
+template<>
+TableFunctionIdentifierConversion EnumUtil::FromString<TableFunctionIdentifierConversion>(const char *value) {
+	return static_cast<TableFunctionIdentifierConversion>(StringUtil::StringToEnum(GetTableFunctionIdentifierConversionValues(), 3, "TableFunctionIdentifierConversion", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTableFunctionParallelismValues() {
