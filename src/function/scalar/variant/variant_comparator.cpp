@@ -492,7 +492,7 @@ void CreateVariantComparator(const Vector &input, idx_t count, Vector &result) {
 	//! reused growable buffer - the key is encoded once and then copied into the result vector
 	string buffer;
 	for (idx_t r = 0; r < count; r++) {
-		auto root = variant.GetValue(r);
+		auto root = variant[r];
 		// a VARIANT is only NULL at the root via a genuine SQL NULL (never a VARIANT_NULL value)
 		if (root.IsNull()) {
 			// propagate NULL so that NULL = NULL stays NULL and ORDER BY ... NULLS FIRST/LAST is honored

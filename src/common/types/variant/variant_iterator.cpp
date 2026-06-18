@@ -417,10 +417,10 @@ VariantArrayIterator VariantNode::GetArrayChildren() const {
 // VariantArrayIterator
 //===--------------------------------------------------------------------===//
 VariantArrayIterator::VariantArrayIterator(const VariantNode &array)
-    : state(array.state), row(array.row), shredded(array.kind == VariantNode::Kind::SHREDDED) {
+    : state(*array.state), row(array.row), shredded(array.kind == VariantNode::Kind::SHREDDED) {
 	if (!shredded) {
-		auto nested =
-		    DecodeNestedData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, array.value_index));
+		auto &unshredded = state.get().unshredded;
+		auto nested = DecodeNestedData(unshredded.GetBlob(row), unshredded.GetByteOffset(row, array.value_index));
 		base = nested.children_idx;
 		length = nested.child_count;
 		return;
@@ -435,20 +435,21 @@ VariantArrayIterator::VariantArrayIterator(const VariantNode &array)
 }
 
 VariantNode VariantArrayIterator::operator[](idx_t i) const {
+	auto &state_ref = state.get();
 	if (shredded) {
-		return VariantNode::ResolveShredded(*state, *element_node, base + i, row);
+		return VariantNode::ResolveShredded(state_ref, *element_node, base + i, row);
 	}
-	return VariantNode::MakeUnshredded(*state, row, state->unshredded.GetValuesIndex(row, base + i));
+	return VariantNode::MakeUnshredded(state_ref, row, state_ref.unshredded.GetValuesIndex(row, base + i));
 }
 
 //===--------------------------------------------------------------------===//
 // VariantObjectIterator
 //===--------------------------------------------------------------------===//
 VariantObjectIterator::VariantObjectIterator(const VariantNode &object, VariantIterationOrder order)
-    : state(object.state), row(object.row), order(order), shredded(object.kind == VariantNode::Kind::SHREDDED) {
+    : state(*object.state), row(object.row), order(order), shredded(object.kind == VariantNode::Kind::SHREDDED) {
+	auto &unshredded = state.get().unshredded;
 	if (!shredded) {
-		auto nested =
-		    DecodeNestedData(state->unshredded.GetBlob(row), state->unshredded.GetByteOffset(row, object.value_index));
+		auto nested = DecodeNestedData(unshredded.GetBlob(row), unshredded.GetByteOffset(row, object.value_index));
 		base = nested.children_idx;
 		raw_count = nested.child_count;
 	} else {
@@ -459,8 +460,7 @@ VariantObjectIterator::VariantObjectIterator(const VariantNode &object, VariantI
 		raw_count = typed_field_count;
 		if (object.overlay_value_index != 0) {
 			auto overlay_value_index = object.overlay_value_index - 1;
-			auto nested = DecodeNestedData(state->unshredded.GetBlob(row),
-			                               state->unshredded.GetByteOffset(row, overlay_value_index));
+			auto nested = DecodeNestedData(unshredded.GetBlob(row), unshredded.GetByteOffset(row, overlay_value_index));
 			overlay_base = nested.children_idx;
 			raw_count += nested.child_count;
 		}
@@ -484,26 +484,27 @@ VariantObjectIterator::VariantObjectIterator(const VariantNode &object, VariantI
 }
 
 VariantObjectEntry VariantObjectIterator::RawEntry(idx_t raw_pos) const {
+	auto &state_ref = state.get();
+	auto &unshredded = state_ref.unshredded;
 	if (!shredded) {
 		auto child_idx = base + raw_pos;
-		auto key_idx = state->unshredded.GetKeysIndex(row, child_idx);
-		auto value_idx = state->unshredded.GetValuesIndex(row, child_idx);
-		return VariantObjectEntry {state->unshredded.GetKey(row, key_idx),
-		                           VariantNode::MakeUnshredded(*state, row, value_idx)};
+		auto key_idx = unshredded.GetKeysIndex(row, child_idx);
+		auto value_idx = unshredded.GetValuesIndex(row, child_idx);
+		return VariantObjectEntry {unshredded.GetKey(row, key_idx),
+		                           VariantNode::MakeUnshredded(state_ref, row, value_idx)};
 	}
 	if (raw_pos < typed_field_count) {
 		//! A shredded (typed) field - struct fields preserve the (logical) index of the parent
 		auto &name = StructType::GetChildTypes(content->logical_type)[raw_pos].first;
 		return VariantObjectEntry {
 		    string_t(name.c_str(), NumericCast<uint32_t>(name.size())),
-		    VariantNode::ResolveShredded(*state, content->children[raw_pos], shredded_index, row)};
+		    VariantNode::ResolveShredded(state_ref, content->children[raw_pos], shredded_index, row)};
 	}
 	//! A leftover field from the overlay (unshredded) object
 	auto child_idx = overlay_base + (raw_pos - typed_field_count);
-	auto key_idx = state->unshredded.GetKeysIndex(row, child_idx);
-	auto value_idx = state->unshredded.GetValuesIndex(row, child_idx);
-	return VariantObjectEntry {state->unshredded.GetKey(row, key_idx),
-	                           VariantNode::MakeUnshredded(*state, row, value_idx)};
+	auto key_idx = unshredded.GetKeysIndex(row, child_idx);
+	auto value_idx = unshredded.GetValuesIndex(row, child_idx);
+	return VariantObjectEntry {unshredded.GetKey(row, key_idx), VariantNode::MakeUnshredded(state_ref, row, value_idx)};
 }
 
 void VariantObjectIterator::Iterator::Load() {

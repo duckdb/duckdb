@@ -183,7 +183,8 @@ private:
 	static VariantNode MakeMissing(const VariantIterator &state);
 
 private:
-	const VariantIterator *state;
+	//! The owning iterator this value lives in (null only for a default-constructed cursor)
+	optional_ptr<const VariantIterator> state;
 	Kind kind;
 
 	//! The row this value belongs to (used for the unshredded component / overlay lookups)
@@ -244,7 +245,8 @@ public:
 	}
 
 private:
-	const VariantIterator *state;
+	//! The owning iterator this array's elements live in (always non-null for a real ARRAY node)
+	reference<const VariantIterator> state;
 	idx_t row;
 	idx_t length;
 	bool shredded;
@@ -316,7 +318,8 @@ private:
 	}
 
 private:
-	const VariantIterator *state;
+	//! The owning iterator this object's values live in (always non-null for a real OBJECT node)
+	reference<const VariantIterator> state;
 	idx_t row;
 	VariantIterationOrder order;
 	bool shredded;
@@ -340,7 +343,7 @@ private:
 };
 
 //! Specialization of VectorIterator for VectorVariantType.
-//! Iterates over a VARIANT vector, handing out a VariantNode cursor per row via GetValue(row).
+//! Iterates over a VARIANT vector, handing out a VariantNode cursor per row via operator[].
 //! The cursors point back into the owned VariantIterator, so this iterator must outlive them.
 template <>
 class VectorIterator<VectorVariantType> {
@@ -350,15 +353,12 @@ public:
 
 public:
 	//! Returns a cursor pointing at the root VARIANT value of the given row
-	VariantNode GetValue(idx_t row) const {
+	VariantNode operator[](idx_t row) const {
 		return state.Root(row);
 	}
 	//! Whether the row is a valid (non-NULL) variant
 	bool RowIsValid(idx_t row) const {
 		return state.RowIsValid(row);
-	}
-	VariantNode operator[](idx_t row) const {
-		return state.Root(row);
 	}
 	idx_t size() const {
 		return count;
@@ -369,7 +369,7 @@ public:
 		Iterator(const VectorIterator &parent, idx_t index) : parent(parent), index(index) {
 		}
 		VariantNode operator*() const {
-			return parent.GetValue(index);
+			return parent[index];
 		}
 		Iterator &operator++() { // NOLINT: match stl API
 			++index;
