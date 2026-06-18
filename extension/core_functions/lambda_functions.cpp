@@ -463,6 +463,14 @@ unique_ptr<BaseStatistics> LambdaFunctions::ListLambdaStats(ClientContext &conte
 		ref_stats[bind_data.element_ref_index] = ListStats::GetChildStats(child_stats[0]).ToUnique();
 	}
 
+	// inside the lambda body a captured value is evaluated once per list element, so its (cardinality-dependent)
+	// total string length no longer holds; clear it to avoid seeding an understated total into the body
+	for (auto &ref_stat : ref_stats) {
+		if (ref_stat) {
+			ref_stat->ResetTotalStringLength();
+		}
+	}
+
 	input.propagator->PropagateLambdaStatistics(bind_data.lambda_expr, ref_stats);
 	// we do not derive a result statistic for the lambda function itself
 	return nullptr;

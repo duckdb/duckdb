@@ -176,6 +176,27 @@ void BaseStatistics::Merge(const BaseStatistics &other, StatsMergeType merge_typ
 	}
 }
 
+void BaseStatistics::ResetTotalStringLength() {
+	switch (GetStatsType()) {
+	case StatisticsType::STRING_STATS:
+		StringStats::ResetTotalStringLength(*this);
+		break;
+	case StatisticsType::LIST_STATS:
+		ListStats::GetChildStats(*this).ResetTotalStringLength();
+		break;
+	case StatisticsType::ARRAY_STATS:
+		ArrayStats::GetChildStats(*this).ResetTotalStringLength();
+		break;
+	case StatisticsType::STRUCT_STATS:
+		for (idx_t i = 0; i < StructType::GetChildCount(GetType()); i++) {
+			StructStats::GetChildStats(*this, i).ResetTotalStringLength();
+		}
+		break;
+	default:
+		break;
+	}
+}
+
 idx_t BaseStatistics::GetDistinctCount() {
 	return distinct_count;
 }

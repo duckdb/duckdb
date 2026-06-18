@@ -122,6 +122,11 @@ public:
 
 	void Merge(const BaseStatistics &other, StatsMergeType merge_type = StatsMergeType::MERGE_STATS);
 
+	//! Recursively resets the (summed) total string length of any nested string statistics. The total string length
+	//! is cardinality-dependent, so it must be cleared when reusing statistics at a different cardinality (e.g. when
+	//! seeding a lambda body, where captured values are replicated per list element).
+	void ResetTotalStringLength();
+
 	void Copy(const BaseStatistics &other);
 
 	unique_ptr<BaseStatistics> PushdownExtract(const StorageIndex &index) const;
