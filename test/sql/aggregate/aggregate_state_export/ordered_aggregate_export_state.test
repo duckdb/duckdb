@@ -246,7 +246,7 @@ query I
 SELECT finalize(to_aggregate_state(
     [{'v0': 'b', 'v1': 2}, {'v0': 'a', 'v1': 1}, {'v0': 'c', 'v1': 3}],
     'string_agg', ['VARCHAR', 'VARCHAR'], [NULL, ' '],
-    [{'column': 1, 'order': 'ASC'}]
+    [{'column': 1, 'order': 'ASC NULLS LAST'}]
 ));
 ----
 a b c
@@ -265,7 +265,7 @@ c|b|a
 query I
 SELECT finalize(to_aggregate_state(
     (SELECT list(x ORDER BY y) EXPORT_STATE FROM (VALUES (10, 1), (30, 3), (20, 2)) t(x, y))::STRUCT(v0 INTEGER, v1 INTEGER)[],
-    'list', ['INTEGER'], [NULL], [{'column': 1, 'order': 'ASC'}]
+    'list', ['INTEGER'], [NULL], [{'column': 1, 'order': 'ASC NULLS LAST'}]
 ));
 ----
 [10, 20, 30]
@@ -273,14 +273,14 @@ SELECT finalize(to_aggregate_state(
 # combine of two hand-built ordered states merges the orderings
 query I
 SELECT finalize(combine(
-    to_aggregate_state([{'v0': 1, 'v1': 10}, {'v0': 2, 'v1': 30}], 'list', ['INTEGER'], [NULL], [{'column': 1, 'order': 'ASC'}]),
-    to_aggregate_state([{'v0': 3, 'v1': 20}, {'v0': 4, 'v1': 40}], 'list', ['INTEGER'], [NULL], [{'column': 1, 'order': 'ASC'}])
+    to_aggregate_state([{'v0': 1, 'v1': 10}, {'v0': 2, 'v1': 30}], 'list', ['INTEGER'], [NULL], [{'column': 1, 'order': 'ASC NULLS LAST'}]),
+    to_aggregate_state([{'v0': 3, 'v1': 20}, {'v0': 4, 'v1': 40}], 'list', ['INTEGER'], [NULL], [{'column': 1, 'order': 'ASC NULLS LAST'}])
 ));
 ----
 [1, 3, 2, 4]
 
 # the ORDER BY argument must reference a valid column
 statement error
-SELECT to_aggregate_state([{'v0': 1, 'v1': 10}], 'list', ['INTEGER'], [NULL], [{'column': 5, 'order': 'ASC'}]);
+SELECT to_aggregate_state([{'v0': 1, 'v1': 10}], 'list', ['INTEGER'], [NULL], [{'column': 5, 'order': 'ASC NULLS LAST'}]);
 ----
 <REGEX>:.*out of range.*
