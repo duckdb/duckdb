@@ -1,4 +1,5 @@
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/function/table_function.hpp"
 
 #include "duckdb/common/printer.hpp"
@@ -340,10 +341,8 @@ enum class CachingPhysicalOperatorExecuteMode : uint8_t {
 	RETURN_CACHED
 };
 
-static CachingPhysicalOperatorExecuteMode SelectExecutionMode(const DataChunk &chunk,
-                                                              const OperatorResultType child_result,
-                                                              CachingOperatorState &state,
-                                                              ClientContext &client_context) {
+static CachingPhysicalOperatorExecuteMode
+SelectExecutionMode(const DataChunk &chunk, const OperatorResultType child_result, CachingOperatorState &state) {
 	if (state.can_cache_chunk == OperatorCachingMode::NONE) {
 		return CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
 	}
@@ -378,12 +377,7 @@ static CachingPhysicalOperatorExecuteMode SelectExecutionMode(const DataChunk &c
 		return CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
 	} else if (chunk.size() <= CachingPhysicalOperator::CACHE_THRESHOLD && !needs_continuation_chunk) {
 		// We have filtered out a significant amount of tuples
-
-		if (!state.cached_chunk) {
-			// Initialize cached_chunk
-			state.cached_chunk = make_uniq<DataChunk>();
-			state.cached_chunk->Initialize(Allocator::Get(client_context), chunk.GetTypes());
-		}
+		// The cache is materialised lazily by AppendToCache on first use
 
 		if (has_space_for_chunk_in_cache) {
 			// We can just append, do and return empty chunk
@@ -422,6 +416,119 @@ static CachingPhysicalOperatorExecuteMode SelectExecutionMode(const DataChunk &c
 	return CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
 }
 
+static bool ChunkHasPipelineGlobalDict(const DataChunk &chunk) {
+	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
+		if (DictionaryVector::IsPipelineGlobal(chunk.data[col_idx])) {
+			return true;
+		}
+	}
+	return false;
+}
+
+//! Switch the empty cache to dictionary mode: pin each pipeline-global dict column's upstream entry, allocate its
+//! sel accumulator, and make its flat cache slot a zero-width placeholder so dict and flat columns stay
+//! row-aligned. A column's dict/flat tag is frozen here; correctness then relies on the producer never falling
+//! back to flat (enforced by the throw in AppendToCache).
+static void SeedDictCache(CachingOperatorState &state, DataChunk &source, ClientContext &client_context) {
+	const idx_t col_count = source.ColumnCount();
+	state.dict_columns.clear();
+	state.dict_columns.resize(col_count);
+	auto flat_initialize = vector<bool>(col_count, true);
+	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
+		if (!DictionaryVector::IsPipelineGlobal(source.data[col_idx])) {
+			continue;
+		}
+		auto &slot = state.dict_columns[col_idx];
+		slot.entry = source.data[col_idx].BufferMutable().Cast<DictionaryBuffer>().GetEntryPtr();
+		slot.accumulated_sel.Initialize(STANDARD_VECTOR_SIZE);
+		flat_initialize[col_idx] = false;
+	}
+	// dict columns become zero-width placeholders in cached_chunk; the dict lives in the accumulator
+	state.cached_chunk->Destroy();
+	state.cached_chunk->Initialize(Allocator::Get(client_context), source.GetTypes(), flat_initialize);
+	// With every column a zero-width placeholder there is no flat vector to derive a cardinality from, so set the
+	// count explicitly before AppendToCache reads cache.size().
+	state.cached_chunk->SetChildCardinality(0);
+	state.dict_cache_active = true;
+}
+
+//! Append source into the cache (created lazily). On the first append into an empty cache, detect
+//! pipeline-global dict columns; those concatenate their selection indices instead of flattening.
+static void AppendToCache(CachingOperatorState &state, DataChunk &source, ClientContext &client_context) {
+	if (!state.cached_chunk) {
+		state.cached_chunk = make_uniq<DataChunk>();
+		state.cached_chunk->Initialize(Allocator::Get(client_context), source.GetTypes());
+	}
+	auto &cache = *state.cached_chunk;
+	if (cache.size() == 0 && !state.dict_cache_active && ChunkHasPipelineGlobalDict(source)) {
+		SeedDictCache(state, source, client_context);
+	}
+	if (!state.dict_cache_active) {
+		// no dict columns: plain flat append
+		cache.Append(source);
+		return;
+	}
+	const idx_t base = cache.size();
+	const idx_t added = source.size();
+	// accumulated_sel is sized STANDARD_VECTOR_SIZE and the caching state machine guarantees base + added stays
+	// within it. Index accumulation has no overrun guard of its own (unlike the flat Append), so assert it.
+	D_ASSERT(base + added <= STANDARD_VECTOR_SIZE);
+	for (idx_t col_idx = 0; col_idx < cache.ColumnCount(); col_idx++) {
+		auto &slot = state.dict_columns[col_idx];
+		if (slot.entry) {
+			// dict column: every later chunk must be the same pipeline-global dictionary. Throw (not D_ASSERT)
+			// because the Cast below is UB on a non-dict vector in release, accumulating foreign bytes as indices.
+			auto &source_col = source.data[col_idx];
+			if (source_col.GetVectorType() != VectorType::DICTIONARY_VECTOR ||
+			    DictionaryVector::DictionaryId(source_col).empty() || !DictionaryVector::IsPipelineGlobal(source_col)) {
+				throw InternalException("dict-surviving cache: column %llu received a non-pipeline-global "
+				                        "chunk after being seeded for dictionary caching",
+				                        static_cast<uint64_t>(col_idx));
+			}
+			// An id mismatch past the encoding check is a producer bug (never user-triggerable), so assert.
+			D_ASSERT(source_col.Buffer().Cast<DictionaryBuffer>().GetEntry().id == slot.entry->id);
+			const auto &source_sel = DictionaryVector::SelVector(source_col);
+			for (idx_t row = 0; row < added; row++) {
+				slot.accumulated_sel.set_index(base + row, source_sel.get_index(row));
+			}
+		} else {
+			// flat column: append per column. The D_ASSERT catches a refactor that routes a dict placeholder here.
+			D_ASSERT(!slot.entry);
+			FlatVector::SetSize(cache.data[col_idx], base);
+			cache.data[col_idx].Append(source.data[col_idx], added, VectorAppendMode::ERROR_ON_NO_SPACE);
+		}
+	}
+	// dict columns are null-buffer placeholders, flat columns already sized; only sets the cardinality
+	cache.SetChildCardinality(base + added);
+}
+
+//! After moving the cache into chunk, re-wrap each dict column as a DICTIONARY_VECTOR over the
+//! pinned upstream entry, carrying its id and pipeline_global flag through unchanged.
+static void RewrapDictColumns(CachingOperatorState &state, DataChunk &chunk, idx_t count) {
+	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
+		auto &slot = state.dict_columns[col_idx];
+		if (!slot.entry) {
+			continue;
+		}
+		chunk.data[col_idx].Dictionary(slot.entry, slot.accumulated_sel, count);
+	}
+}
+
+//! Move the cache into chunk (reconstructing dict columns) and re-initialize an empty cache for the next
+//! batch. With no dict columns this is the plain flat flush.
+static void FlushCacheToChunk(CachingOperatorState &state, DataChunk &chunk, ClientContext &client_context) {
+	if (!state.dict_cache_active) {
+		chunk.Move(*state.cached_chunk);
+		state.cached_chunk->Initialize(Allocator::Get(client_context), chunk.GetTypes());
+		return;
+	}
+	const idx_t count = state.cached_chunk->size();
+	chunk.Move(*state.cached_chunk);
+	RewrapDictColumns(state, chunk, count);
+	state.cached_chunk->Initialize(Allocator::Get(client_context), chunk.GetTypes());
+	state.ResetDictCache();
+}
+
 OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                     GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = state_p.Cast<CachingOperatorState>();
@@ -452,33 +559,32 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 		}
 	}
 
-	const auto execution_mode = SelectExecutionMode(chunk, child_result, state, context.client);
+	const auto execution_mode = SelectExecutionMode(chunk, child_result, state);
 
+	// Appends and flushes MUST route through AppendToCache / FlushCacheToChunk: a raw Append flattens a zero-width
+	// dict placeholder and a raw flush drops the dict. (The continuation case below Moves a fresh chunk in -- a
+	// full replacement, not an append -- so raw dict columns pass through verbatim.)
 	switch (execution_mode) {
 	case CachingPhysicalOperatorExecuteMode::RETURN_CACHED_APPEND_CHUNK: {
 		auto tmp = make_uniq<DataChunk>();
 		tmp->Move(chunk);
-		chunk.Move(*state.cached_chunk);
-		state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
-		state.cached_chunk->Append(*tmp);
+		FlushCacheToChunk(state, chunk, context.client);
+		AppendToCache(state, *tmp, context.client);
 		break;
 	}
 	case CachingPhysicalOperatorExecuteMode::RETURN_CACHED_PLUS_CHUNK:
-		state.cached_chunk->Append(chunk);
-		chunk.Move(*state.cached_chunk);
-		state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
+		AppendToCache(state, chunk, context.client);
+		FlushCacheToChunk(state, chunk, context.client);
 		break;
 	case CachingPhysicalOperatorExecuteMode::RETURN_CACHED:
 		D_ASSERT(chunk.size() == 0);
-		chunk.Move(*state.cached_chunk);
-		state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
+		FlushCacheToChunk(state, chunk, context.client);
 		break;
 	case CachingPhysicalOperatorExecuteMode::RETURN_CACHED_THEN_CHUNK_VIA_CONTINUATION: {
 		// Swap chunk and *state.cached_chunk
 		auto tmp = make_uniq<DataChunk>();
 		tmp->Move(chunk);
-		chunk.Move(*state.cached_chunk);
-		state.cached_chunk->Initialize(Allocator::Get(context.client), chunk.GetTypes());
+		FlushCacheToChunk(state, chunk, context.client);
 		state.cached_chunk->Move(*tmp);
 
 		// Now chunk holds what was in (*state.cached_chunk), and it's returned directly
@@ -488,7 +594,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	}
 	case CachingPhysicalOperatorExecuteMode::APPEND_CHUNK: {
-		state.cached_chunk->Append(chunk);
+		AppendToCache(state, chunk, context.client);
 		chunk.Reset();
 		break;
 	}
@@ -504,7 +610,13 @@ OperatorFinalizeResultType CachingPhysicalOperator::FinalExecute(ExecutionContex
                                                                  OperatorState &state_p) const {
 	auto &state = state_p.Cast<CachingOperatorState>();
 	if (state.cached_chunk) {
+		const idx_t count = state.cached_chunk->size();
+		const bool dict_cache_active = state.dict_cache_active;
 		chunk.Move(*state.cached_chunk);
+		if (dict_cache_active) {
+			RewrapDictColumns(state, chunk, count);
+			state.ResetDictCache();
+		}
 		state.cached_chunk.reset();
 	}
 	return OperatorFinalizeResultType::FINISHED;
