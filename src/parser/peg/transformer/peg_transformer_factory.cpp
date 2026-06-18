@@ -111,7 +111,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
 	PEGTransformerState transformer_state(tokens);
 	PEGTransformer transformer(transformer_allocator, transformer_state, sql_transform_functions, parser.rules,
-	                           enum_mappings, options);
+	                           options);
 
 	return ExtractAndTransformStatement(transformer, tokens, stmt_opt.GetResult(), terminator_offset);
 }
@@ -130,10 +130,6 @@ void PEGTransformerFactory::RegisterCommon() {
 	REGISTER_TRANSFORM(TransformIntervalToIntervalAsType);
 }
 
-void PEGTransformerFactory::RegisterCreateMacro() {
-	// create_macro.gram
-}
-
 void PEGTransformerFactory::RegisterCreateTable() {
 	// create_table.gram
 	REGISTER_TRANSFORM(TransformColLabelOrString);
@@ -145,9 +141,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformExpression);
 	REGISTER_TRANSFORM(TransformPrefixExpression);
 	REGISTER_TRANSFORM(TransformOverClause);
-}
-
-void PEGTransformerFactory::RegisterConnect() {
 }
 
 void PEGTransformerFactory::RegisterPivot() {
@@ -181,38 +174,16 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("ExplainOptionName", &TransformIdentifierOrKeyword);
 }
 
-void PEGTransformerFactory::RegisterEnums() {
-	RegisterEnum<CatalogType>("MaterializedViewEntry", CatalogType::VIEW_ENTRY);
-
-	RegisterEnum<string>("MinusPrefixOperator", "-");
-	RegisterEnum<string>("PlusPrefixOperator", "+");
-	RegisterEnum<string>("TildePrefixOperator", "~");
-
-	RegisterEnum<WindowExcludeMode>("ExcludeCurrentRow", WindowExcludeMode::CURRENT_ROW);
-	RegisterEnum<WindowExcludeMode>("ExcludeGroup", WindowExcludeMode::GROUP);
-	RegisterEnum<WindowExcludeMode>("ExcludeTies", WindowExcludeMode::TIES);
-	RegisterEnum<WindowExcludeMode>("ExcludeNoOthers", WindowExcludeMode::NO_OTHER);
-
-	RegisterEnum<bool>("SubqueryAny", true);
-	RegisterEnum<bool>("SubqueryAll", false);
-
-	RegisterEnum<bool>("IncludeNulls", true);
-	RegisterEnum<bool>("ExcludeNulls", false);
-}
-
 PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterGenerated();
 	REGISTER_TRANSFORM(TransformStatement);
 	RegisterComment();
 	RegisterCommon();
-	RegisterCreateMacro();
 	RegisterCreateTable();
 	RegisterExpression();
-	RegisterConnect();
 	RegisterPivot();
 	RegisterSelect();
 	RegisterKeywordsAndIdentifiers();
-	RegisterEnums();
 }
 
 vector<reference<ParseResult>> PEGTransformerFactory::ExtractParseResultsFromList(ParseResult &parse_result) {
