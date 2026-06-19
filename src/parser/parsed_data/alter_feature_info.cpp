@@ -40,6 +40,9 @@ unique_ptr<AlterInfo> AlterFeatureInfo::Copy() const {
 
 string AlterFeatureInfo::ToString() const {
 	string result = "ALTER FEATURE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += "IF EXISTS ";
+	}
 	result += SQLIdentifier::ToString(name);
 	switch (alter_feature_type) {
 	case AlterFeatureType::SET_SCHEDULE:

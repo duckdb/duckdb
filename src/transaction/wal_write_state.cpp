@@ -54,17 +54,12 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
 		log.WriteCreateTrigger(parent.Cast<TriggerCatalogEntry>());
 		break;
-	case CatalogType::FEATURE_ENTRY:
-		// Features only support a version-bump ALTER, which carries the full new state — so a CREATE
-		// record (with the updated current_version) is written for both CREATE and ALTER.
-		D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
-		log.WriteCreateFeature(parent.Cast<FeatureCatalogEntry>());
-		break;
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::VIEW_ENTRY:
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::SEQUENCE_ENTRY:
 	case CatalogType::TYPE_ENTRY:
+	case CatalogType::FEATURE_ENTRY:
 	case CatalogType::MACRO_ENTRY:
 	case CatalogType::TABLE_MACRO_ENTRY:
 		if (entry.type == CatalogType::RENAMED_ENTRY || entry.type == parent.type) {
@@ -102,6 +97,9 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			case CatalogType::TYPE_ENTRY:
 				// CREATE TYPE statement
 				log.WriteCreateType(parent.Cast<TypeCatalogEntry>());
+				break;
+			case CatalogType::FEATURE_ENTRY:
+				log.WriteCreateFeature(parent.Cast<FeatureCatalogEntry>());
 				break;
 			case CatalogType::MACRO_ENTRY:
 				log.WriteCreateMacro(parent.Cast<ScalarMacroCatalogEntry>());
