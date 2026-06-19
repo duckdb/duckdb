@@ -319,6 +319,17 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
 	D_ASSERT(wal.get());
 
+	// Drain any deferred (group commit) commits that are still flushing the checkpoint WAL before we move/replace it.
+	// A batch-wait sync leader holds a shared_ptr to this WAL and may push its buffer (under the WAL flush_lock, NOT
+	// the WAL lock) up to group_commit_delay microseconds after releasing the WAL lock. If we reset and move the file
+	// out from under it, that flush races the freshly-reopened main WAL writing to the same path - producing a torn
+	// entry and a corrupt WAL on replay. New pending commits cannot register while we hold the WAL lock; this mirrors
+	// the drain in WALStartCheckpoint.
+	auto &transaction_manager = db.GetTransactionManager();
+	if (transaction_manager.IsDuckTransactionManager()) {
+		transaction_manager.Cast<DuckTransactionManager>().WaitForPendingCommits();
+	}
+
 	// "wal" points to the checkpoint WAL
 	// first check if the checkpoint WAL has been written to
 	auto &fs = FileSystem::Get(db);
