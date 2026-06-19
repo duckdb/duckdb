@@ -271,7 +271,8 @@ static void ExecuteStructEqualsOrNotEquals(const Vector &left, const Vector &rig
 }
 
 void VectorOperations::Equals(const Vector &left, const Vector &right, Vector &result) {
-	if (left.GetType().InternalType() == PhysicalType::STRUCT && right.GetType().InternalType() == PhysicalType::STRUCT) {
+	if (left.GetType().InternalType() == PhysicalType::STRUCT &&
+	    right.GetType().InternalType() == PhysicalType::STRUCT) {
 		ExecuteStructEqualsOrNotEquals(left, right, result, false);
 		return;
 	}
@@ -281,7 +282,8 @@ void VectorOperations::Equals(const Vector &left, const Vector &right, Vector &r
 }
 
 void VectorOperations::NotEquals(const Vector &left, const Vector &right, Vector &result) {
-	if (left.GetType().InternalType() == PhysicalType::STRUCT && right.GetType().InternalType() == PhysicalType::STRUCT) {
+	if (left.GetType().InternalType() == PhysicalType::STRUCT &&
+	    right.GetType().InternalType() == PhysicalType::STRUCT) {
 		ExecuteStructEqualsOrNotEquals(left, right, result, true);
 		return;
 	}
