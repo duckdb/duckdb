@@ -42,7 +42,6 @@ int main() {
 		}
 		printf("\n");
 	}
-	// duckdb_print_result(result);
 cleanup:
 	duckdb_destroy_result(&result);
 	duckdb_disconnect(&con);
