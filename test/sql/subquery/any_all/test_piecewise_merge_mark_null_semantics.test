@@ -1,0 +1,31 @@
+# name: test/sql/subquery/any_all/test_piecewise_merge_mark_null_semantics.test
+# description: Coverage for piecewise merge MARK joins with NULLs in scalar range ANY predicates
+# group: [any_all]
+
+statement ok
+SET nested_loop_join_threshold=1
+
+statement ok
+SET merge_join_threshold=1
+
+query II
+SELECT i, i < ANY(SELECT j FROM (VALUES (1), (2), (NULL)) rhs(j))
+FROM (VALUES (0), (1), (2), (3), (NULL)) lhs(i)
+ORDER BY i NULLS LAST
+----
+0	true
+1	true
+2	NULL
+3	NULL
+NULL	NULL
+
+query II
+SELECT i, i >= ANY(SELECT j FROM (VALUES (10), (11), (NULL)) rhs(j))
+FROM (VALUES (5), (10), (11), (12), (NULL)) lhs(i)
+ORDER BY i NULLS LAST
+----
+5	NULL
+10	true
+11	true
+12	true
+NULL	NULL

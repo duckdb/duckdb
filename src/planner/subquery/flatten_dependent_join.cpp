@@ -6,11 +6,14 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -20,6 +23,13 @@
 #include <algorithm>
 
 namespace duckdb {
+
+static bool TypeIsUnnamedStruct(const LogicalType &type) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		return false;
+	}
+	return StructType::IsUnnamed(type);
+}
 
 static bool HasCTEAccessor(LogicalOperator &op, TableIndex table_index) {
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
@@ -350,6 +360,31 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownChild(unique_ptr<LogicalOpe
 
 void FlattenDependentJoins::AddAnyJoinConditions(LogicalDependentJoin &op,
                                                  const vector<ColumnBinding> &plan_columns) const {
+	if (op.expression_children.size() == 1 && op.child_types.size() > 1 &&
+	    TypeIsUnnamedStruct(op.expression_children[0]->GetReturnType())) {
+		vector<unique_ptr<Expression>> struct_children;
+		struct_children.reserve(op.child_types.size());
+		for (idx_t i = 0; i < op.child_types.size(); i++) {
+			auto &child_type = op.child_types[i];
+			auto &compare_type = op.child_targets[i];
+			auto right_expr = BoundCastExpression::AddDefaultCastToType(
+			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[i]), compare_type);
+			struct_children.push_back(std::move(right_expr));
+		}
+
+		FunctionBinder function_binder(binder);
+		auto struct_expr = function_binder.BindScalarFunction(RowFun::GetFunction(), std::move(struct_children));
+
+		auto left_expr = std::move(op.expression_children[0]);
+		JoinCondition compare_cond(std::move(left_expr), std::move(struct_expr), op.comparison_type);
+		ExpressionBinder::PushCollation(binder.context, compare_cond.LeftReference(),
+		                                compare_cond.GetLHS().GetReturnType());
+		ExpressionBinder::PushCollation(binder.context, compare_cond.RightReference(),
+		                                compare_cond.GetRHS().GetReturnType());
+		op.conditions.push_back(std::move(compare_cond));
+		return;
+	}
+
 	// add the actual condition based on the ANY/ALL predicate
 	for (idx_t child_idx = 0; child_idx < op.expression_children.size(); child_idx++) {
 		auto left_expr = std::move(op.expression_children[child_idx]);
