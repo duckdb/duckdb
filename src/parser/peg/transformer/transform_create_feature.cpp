@@ -6,8 +6,55 @@
 #include "duckdb/parser/statement/call_statement.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
+
+static int64_t ParsePositiveIntegerScheduleCount(const string &number) {
+	if (number.empty() || number[0] == '-') {
+		throw ParserException("Refresh schedule shorthand count must be a positive integer");
+	}
+	idx_t start = number[0] == '+' ? 1 : 0;
+	if (start >= number.size() || number.find_first_not_of("0123456789", start) != string::npos) {
+		throw ParserException("Refresh schedule shorthand count must be a positive integer");
+	}
+	int64_t result;
+	try {
+		result = std::stoll(number);
+	} catch (std::exception &) {
+		throw ParserException("Refresh schedule shorthand count is out of range");
+	}
+	if (result <= 0) {
+		throw ParserException("Refresh schedule interval must be positive");
+	}
+	return result;
+}
+
+static interval_t ParseIntervalSchedule(const string &interval_str, const string &context) {
+	interval_t schedule_interval {0, 0, 0};
+	string error_message;
+	if (!Interval::FromCString(interval_str.c_str(), interval_str.size(), schedule_interval, &error_message, false)) {
+		throw ParserException("Invalid interval in %s clause: %s", context, error_message);
+	}
+	if (schedule_interval.months == 0 && schedule_interval.days == 0 && schedule_interval.micros <= 0) {
+		throw ParserException("Refresh schedule interval must be positive");
+	}
+	return schedule_interval;
+}
+
+static int32_t ScheduleCountToDays(int64_t count) {
+	if (count > NumericLimits<int32_t>::Maximum()) {
+		throw ParserException("Refresh schedule shorthand count is out of range");
+	}
+	return static_cast<int32_t>(count);
+}
+
+static int64_t ScheduleCountToMicros(int64_t count, int64_t micros_per_unit) {
+	if (count > NumericLimits<int64_t>::Maximum() / micros_per_unit) {
+		throw ParserException("Refresh schedule shorthand count is out of range");
+	}
+	return count * micros_per_unit;
+}
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PEGTransformer &transformer,
                                                                               ParseResult &parse_result) {
@@ -53,17 +100,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	interval_t schedule_interval {0, 0, 0};
 	auto &schedule_opt = list_pr.Child<OptionalParseResult>(12);
 	if (schedule_opt.HasResult()) {
-		// FeatureScheduleClause <- 'EVERY' 'INTERVAL' StringLiteral
-		auto &clause = schedule_opt.GetResult().Cast<ListParseResult>();
-		auto interval_str = clause.Child<StringLiteralParseResult>(2).result;
-		string error_message;
-		if (!Interval::FromCString(interval_str.c_str(), interval_str.size(), schedule_interval, &error_message,
-		                           false)) {
-			throw ParserException("Invalid interval in EVERY clause: %s", error_message);
-		}
-		if (schedule_interval.months == 0 && schedule_interval.days == 0 && schedule_interval.micros <= 0) {
-			throw ParserException("Refresh schedule interval must be positive");
-		}
+		schedule_interval = transformer.Transform<interval_t>(schedule_opt.GetResult());
 		has_schedule = true;
 	}
 	// index 13: FeatureRetainClause? (default: 1)
@@ -94,6 +131,37 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	info->query = std::move(query);
 	result->info = std::move(info);
 	return result;
+}
+
+interval_t PEGTransformerFactory::TransformFeatureScheduleClause(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	// FeatureScheduleClause <- FeatureScheduleIntervalClause / FeatureScheduleShorthandClause
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice = list_pr.Child<ChoiceParseResult>(0).GetResult();
+	auto &clause = choice.Cast<ListParseResult>();
+	if (StringUtil::CIEquals(choice.name, "FeatureScheduleIntervalClause")) {
+		return ParseIntervalSchedule(clause.Child<StringLiteralParseResult>(2).result, "EVERY");
+	}
+
+	if (!StringUtil::CIEquals(choice.name, "FeatureScheduleShorthandClause")) {
+		throw InternalException("Unsupported feature schedule clause");
+	}
+
+	auto count = ParsePositiveIntegerScheduleCount(clause.Child<NumberParseResult>(1).number);
+	auto &unit = clause.Child<ListParseResult>(2).Child<ChoiceParseResult>(0).GetResult();
+	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitDay") ||
+	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitDays")) {
+		return interval_t {0, ScheduleCountToDays(count), 0};
+	}
+	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitHour") ||
+	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitHours")) {
+		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_HOUR)};
+	}
+	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitMinute") ||
+	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitMinutes")) {
+		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_MINUTE)};
+	}
+	throw InternalException("Unsupported feature schedule unit");
 }
 
 FeatureGranularity PEGTransformerFactory::TransformFeatureGranularity(PEGTransformer &transformer,

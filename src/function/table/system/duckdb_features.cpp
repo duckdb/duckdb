@@ -151,8 +151,8 @@ static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &d
 		// schedule_enabled (false when no schedule is attached)
 		output.data[14].Append(Value::BOOLEAN(feat.has_schedule && feat.schedule_enabled));
 		// next_refresh_at (NULL when the scheduler is not tracking this feature)
-		if (scheduler && scheduler->GetNextRefreshAt(feat.catalog.GetName(), feat.schema.name, feat.name,
-		                                            next_refresh_at)) {
+		if (scheduler &&
+		    scheduler->GetNextRefreshAt(feat.catalog.GetName(), feat.schema.name, feat.name, next_refresh_at)) {
 			output.data[15].Append(Value::TIMESTAMP(next_refresh_at));
 		} else {
 			output.data[15].Append(Value(LogicalType::TIMESTAMP));

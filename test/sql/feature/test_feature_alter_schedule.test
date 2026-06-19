@@ -88,12 +88,33 @@ SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_
 02:00:00	true
 
 # ============================================================
+# SET SCHEDULE accepts EVERY <n> <unit> shorthand
+# ============================================================
+statement ok
+ALTER FEATURE f SET SCHEDULE EVERY 45 MINUTES;
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'f';
+----
+00:45:00	true
+
+# ============================================================
 # Non-positive interval is rejected
 # ============================================================
 statement error
 ALTER FEATURE f SET SCHEDULE EVERY INTERVAL '0 seconds';
 ----
 <REGEX>:.*interval must be positive.*
+
+statement error
+ALTER FEATURE f SET SCHEDULE EVERY 0 MINUTES;
+----
+<REGEX>:.*interval must be positive.*
+
+statement error
+ALTER FEATURE f SET SCHEDULE EVERY 1.5 HOURS;
+----
+<REGEX>:.*positive integer.*
 
 # ============================================================
 # IF EXISTS on a missing feature is a no-op
@@ -118,7 +139,7 @@ restart
 query II
 SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'f';
 ----
-02:00:00	false
+00:45:00	false
 
 # ============================================================
 # And survive a checkpoint + restart

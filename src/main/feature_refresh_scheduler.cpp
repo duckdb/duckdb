@@ -239,7 +239,8 @@ void FeatureRefreshScheduler::Run() {
 
 			try {
 				Connection con(db);
-				auto use_result = con.Query("USE " + SQLIdentifier(feat.catalog_name) + "." + SQLIdentifier(feat.schema_name));
+				auto use_result =
+				    con.Query("USE " + SQLIdentifier(feat.catalog_name) + "." + SQLIdentifier(feat.schema_name));
 				if (use_result->HasError()) {
 					throw Exception(ExceptionType::IO, use_result->GetError());
 				}

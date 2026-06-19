@@ -79,6 +79,28 @@ SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_
 00:30:00	true
 
 # ============================================================
+# Schedule shorthand normalizes to the same interval metadata
+# ============================================================
+statement ok
+CREATE FEATURE shorthand_hours ON hits
+    ENTITY UserID
+    TIMESTAMP EventTime
+    GRANULARITY HOUR
+    WINDOW 24
+    EVERY 2 HOURS
+    AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'shorthand_hours';
+----
+02:00:00	true
+
+query I
+SELECT sql FROM duckdb_features() WHERE feature_name = 'shorthand_hours';
+----
+<REGEX>:.*EVERY INTERVAL '02:00:00'.*
+
+# ============================================================
 # Validation: non-positive interval is rejected
 # ============================================================
 statement error
@@ -89,6 +111,24 @@ CREATE FEATURE bad_sched ON hits
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
 ----
 <REGEX>:.*interval must be positive.*
+
+statement error
+CREATE FEATURE bad_shorthand_zero ON hits
+    ENTITY UserID
+    TIMESTAMP EventTime
+    EVERY 0 HOURS
+    AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
+----
+<REGEX>:.*interval must be positive.*
+
+statement error
+CREATE FEATURE bad_shorthand_decimal ON hits
+    ENTITY UserID
+    TIMESTAMP EventTime
+    EVERY 1.5 HOURS
+    AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
+----
+<REGEX>:.*positive integer.*
 
 # ============================================================
 # A scheduled feature still refreshes normally (no scheduler yet)

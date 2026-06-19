@@ -379,6 +379,7 @@ void PEGTransformerFactory::RegisterCreateTrigger() {
 
 void PEGTransformerFactory::RegisterCreateFeature() {
 	REGISTER_TRANSFORM(TransformCreateFeatureStmt);
+	REGISTER_TRANSFORM(TransformFeatureScheduleClause);
 	REGISTER_TRANSFORM(TransformFeatureGranularity);
 	REGISTER_TRANSFORM(TransformFeatureRefreshMode);
 	REGISTER_TRANSFORM(TransformRefreshFeatureStatement);

@@ -49,6 +49,6 @@ AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifi
 
 AlterFeatureStmt <- 'FEATURE' IfExists? IdentifierOrStringLiteral AlterFeatureOptions
 AlterFeatureOptions <- AlterFeatureSetSchedule / AlterFeatureEnableSchedule / AlterFeatureDisableSchedule
-AlterFeatureSetSchedule <- 'SET' 'SCHEDULE' 'EVERY' 'INTERVAL' StringLiteral
+AlterFeatureSetSchedule <- 'SET' 'SCHEDULE' FeatureScheduleClause
 AlterFeatureEnableSchedule <- 'ENABLE' 'SCHEDULE'
 AlterFeatureDisableSchedule <- 'DISABLE' 'SCHEDULE'

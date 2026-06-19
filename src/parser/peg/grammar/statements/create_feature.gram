@@ -3,8 +3,18 @@ CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' Ident
 FeatureGranularityClause <- 'GRANULARITY' FeatureGranularity
 FeatureWindowClause <- 'WINDOW' NumberLiteral
 FeatureRefreshClause <- 'REFRESH' FeatureRefreshMode
-FeatureScheduleClause <- 'EVERY' 'INTERVAL' StringLiteral
+FeatureScheduleClause <- FeatureScheduleIntervalClause / FeatureScheduleShorthandClause
+FeatureScheduleIntervalClause <- 'EVERY' 'INTERVAL' StringLiteral
+FeatureScheduleShorthandClause <- 'EVERY' NumberLiteral FeatureScheduleUnit
 FeatureRetainClause <- 'RETAIN' NumberLiteral
+
+FeatureScheduleUnit <- FeatureScheduleUnitDays / FeatureScheduleUnitDay / FeatureScheduleUnitHours / FeatureScheduleUnitHour / FeatureScheduleUnitMinutes / FeatureScheduleUnitMinute
+FeatureScheduleUnitDay <- 'DAY'
+FeatureScheduleUnitDays <- 'DAYS'
+FeatureScheduleUnitHour <- 'HOUR'
+FeatureScheduleUnitHours <- 'HOURS'
+FeatureScheduleUnitMinute <- 'MINUTE'
+FeatureScheduleUnitMinutes <- 'MINUTES'
 
 FeatureGranularity <- FeatureGranularityDay / FeatureGranularityHour / FeatureGranularityMinute
 FeatureGranularityDay <- 'DAY'

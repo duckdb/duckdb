@@ -97,17 +97,9 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterFeatureOptions(PEGTra
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterFeatureSetSchedule(PEGTransformer &transformer,
                                                                               ParseResult &parse_result) {
-	// AlterFeatureSetSchedule <- 'SET' 'SCHEDULE' 'EVERY' 'INTERVAL' StringLiteral
+	// AlterFeatureSetSchedule <- 'SET' 'SCHEDULE' FeatureScheduleClause
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto interval_str = list_pr.Child<StringLiteralParseResult>(4).result;
-	interval_t schedule_interval {0, 0, 0};
-	string error_message;
-	if (!Interval::FromCString(interval_str.c_str(), interval_str.size(), schedule_interval, &error_message, false)) {
-		throw ParserException("Invalid interval in SET SCHEDULE clause: %s", error_message);
-	}
-	if (schedule_interval.months == 0 && schedule_interval.days == 0 && schedule_interval.micros <= 0) {
-		throw ParserException("Refresh schedule interval must be positive");
-	}
+	auto schedule_interval = transformer.Transform<interval_t>(list_pr.Child<ListParseResult>(2));
 	return make_uniq<AlterFeatureInfo>(AlterEntryData(), AlterFeatureType::SET_SCHEDULE, schedule_interval);
 }
 
