@@ -182,6 +182,36 @@ FROM (VALUES (3, [3]), (1, [1, 2]), (2, NULL)) t(k, l);
 ----
 [[1, 2], NULL, [3]]
 
+# the buffered argument is itself a nested type - the buffer struct holds the LIST value alongside the sort key
+query I
+SELECT list(l ORDER BY k) EXPORT_STATE FROM (VALUES ([3, 3], 3), ([1], 1), ([2], 2)) t(l, k);
+----
+[{'v0': [3, 3], 'v1': 3}, {'v0': [1], 'v1': 1}, {'v0': [2], 'v1': 2}]
+
+# ordering by a nested (LIST) sort key
+query I
+SELECT finalize(list(x ORDER BY k) EXPORT_STATE) FROM (VALUES (1, [2]), (2, [1]), (3, [1, 5])) t(x, k);
+----
+[2, 3, 1]
+
+# ordering by a STRUCT, with a STRUCT argument, combined across partitions
+query I
+SELECT finalize(combine(
+    (SELECT list(s ORDER BY s) EXPORT_STATE FROM (VALUES ({'a': 1, 'b': 'x'}), ({'a': 3, 'b': 'z'})) t(s)),
+    (SELECT list(s ORDER BY s) EXPORT_STATE FROM (VALUES ({'a': 2, 'b': 'y'}), ({'a': 4, 'b': 'w'})) t(s))
+));
+----
+[{'a': 1, 'b': x}, {'a': 2, 'b': y}, {'a': 3, 'b': z}, {'a': 4, 'b': w}]
+
+# nested types round-trip through to_aggregate_state
+query I
+SELECT finalize(to_aggregate_state(
+    [{'v0': [3, 3], 'v1': 3}, {'v0': [1], 'v1': 1}, {'v0': [2], 'v1': 2}],
+    'list', ['INTEGER[]'], [NULL], [{'column': 1, 'order': 'ASC NULLS LAST'}]
+));
+----
+[[1], [2], [3, 3]]
+
 # we can persist the ordered state and finalize later
 statement ok
 CREATE TABLE ordered_state AS SELECT g, list(v ORDER BY v) EXPORT_STATE l FROM narrow GROUP BY g;

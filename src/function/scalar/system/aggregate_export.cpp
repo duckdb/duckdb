@@ -334,8 +334,7 @@ static void SerializeState(const BoundAggregateFunction &aggr, optional_ptr<Func
                            const AggregateStateLayout &layout, Vector &states, idx_t count, Vector &result,
                            ArenaAllocator &allocator, idx_t offset) {
 	if (aggr.HasExportAggregateStateCallback()) {
-		// the aggregate explicitly serializes its own states (the callback writes the count rows at [offset, offset +
-		// count))
+		// the aggregate explicitly serializes its own states, writing the count rows at [offset, offset + count)
 		AggregateFinalizeInputData aggr_input_data(aggr, bind_data, allocator);
 		aggr.GetExportAggregateStateCallback()(states, aggr_input_data, result, count, offset);
 		return;
@@ -631,14 +630,13 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 		// a plain (non-ordered) aggregate state
 		return inner;
 	}
-	// an ordered aggregate state: the value is the buffer (LIST<buffered_struct>) and the ORDER BY spec is stored in
-	// the extension info - reconstruct the sorted aggregate wrapper around the (re-bound) inner aggregate so that
-	// finalize sorts the buffered values and runs the inner aggregate, and combine concatenates buffers
+	// an ordered aggregate state: the value is the buffer (LIST<buffered_struct>) - reconstruct the sorted wrapper
+	// around the inner aggregate so finalize sorts the buffer and combine concatenates buffers
 	const auto buffer_struct = ListType::GetChildType(arg_return_type);
 	const idx_t column_count = StructType::GetChildTypes(buffer_struct).size();
 	vector<SortedAggregateStateOrder> orders;
 	ParseOrderBys(order_entry->second, column_count, orders);
-	// the leading buffered columns are the inner aggregate's bound arguments (after any constant-parameter erasure)
+	// the leading buffered columns are the inner aggregate's bound arguments (post constant-erasure)
 	const idx_t argument_count = inner->aggr.GetArguments().size();
 
 	auto reconstructed = FunctionBinder::BindSortedAggregateState(context, inner->aggr, std::move(inner->bind_data),
@@ -864,8 +862,8 @@ LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_functio
 	return state_layout;
 }
 
-// constructs the AGGREGATE_STATE type for an ordered aggregate - the exported state is the buffer of values
-// (a LIST<buffered_struct>), with the inner aggregate's signature and the ORDER BY spec stored in the extension info
+// constructs the AGGREGATE_STATE type for an ordered aggregate - the state is the buffer of values
+// (LIST<buffered_struct>), with the inner signature and the ORDER BY spec stored in the extension info
 LogicalType CreateSortedAggregateStateType(const BoundAggregateFunction &inner_function,
                                            optional_ptr<FunctionData> inner_bind_data, const LogicalType &buffer_struct,
                                            const vector<SortedAggregateStateOrder> &orders) {
@@ -873,9 +871,7 @@ LogicalType CreateSortedAggregateStateType(const BoundAggregateFunction &inner_f
 	state_layout.SetAlias("AGGREGATE_STATE");
 	auto ext_info = make_uniq<ExtensionTypeInfo>();
 	EncodeStateParameters(*ext_info, inner_function, inner_function.GetStateType(inner_bind_data));
-	// encode the ORDER BY: per key, the buffered column it sorts on and the modifier string. The number of leading
-	// argument columns is not stored - it is the re-bound inner aggregate's bound arity (see
-	// BindAggregateStateInternal)
+	// per key: the buffered column it sorts on and the modifier string (the argument count is re-derived on re-bind)
 	vector<Value> order_values;
 	for (auto &order : orders) {
 		child_list_t<Value> children;
@@ -1023,9 +1019,7 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 	}
 
 	if (arguments.size() > 4) {
-		// an ordered aggregate state: the value is the buffer of values (LIST<buffered_struct>) and the fifth argument
-		// describes the ORDER BY keys. The number of buffered argument columns is the inner aggregate's bound arity;
-		// any further buffered columns are appended sort keys.
+		// an ordered aggregate state: the value is the buffer (LIST<buffered_struct>), the fifth argument the ORDER BY
 		auto &state_type = arguments[0]->GetReturnType();
 		if (state_type.id() != LogicalTypeId::LIST ||
 		    ListType::GetChildType(state_type).id() != LogicalTypeId::STRUCT) {
@@ -1094,12 +1088,11 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	D_ASSERT(bound_function.HasStateFinalizeCallback());
 	D_ASSERT(child_aggregate->Function().GetReturnType().id() != LogicalTypeId::INVALID);
 	if (child_aggregate->GetOrderBys() && !child_aggregate->GetOrderBys()->orders.empty()) {
-		// ordered aggregate: the exported state is the buffer of values (LIST<buffered_struct>) plus the ORDER BY spec.
-		// The sorted aggregate wrapper (built later, at physical planning) serializes/combines that buffer; here we
-		// only fix the exported AGGREGATE_STATE type so it is known to downstream binding (e.g. finalize/combine).
+		// ordered aggregate: export the buffer of values. The sorted wrapper is built later (physical planning); here
+		// we only fix the AGGREGATE_STATE type so downstream binding (finalize/combine) sees it
 		LogicalType buffer_struct;
 		vector<SortedAggregateStateOrder> orders;
-		idx_t argument_count; // unused here - the buffered arg count is re-derived from the inner aggregate on re-bind
+		idx_t argument_count; // re-derived from the inner aggregate on re-bind
 		FunctionBinder::GetSortedAggregateStateLayout(*child_aggregate, buffer_struct, orders, argument_count);
 		SetStateExport(*child_aggregate, CreateSortedAggregateStateType(
 		                                     bound_function, child_aggregate->BindInfo().get(), buffer_struct, orders));
