@@ -119,7 +119,7 @@ bool DuckTransactionManager::HasOtherTransactions(DuckTransaction &transaction) 
 }
 
 DuckTransactionManager::CheckpointDecision
-DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &lock,
+DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<CheckpointLockKey> &lock,
                                       const UndoBufferProperties &undo_properties) {
 	if (db.IsSystem()) {
 		return CheckpointDecision("system transaction");
@@ -208,7 +208,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		}
 	}
 
-	unique_ptr<StorageLockKey> lock;
+	unique_ptr<CheckpointLockKey> lock;
 	if (!force) {
 		// not a force checkpoint
 		// try to get the checkpoint lock
@@ -238,15 +238,15 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 	storage_manager.CreateCheckpoint(context, options);
 }
 
-unique_ptr<StorageLockKey> DuckTransactionManager::SharedCheckpointLock() {
+unique_ptr<CheckpointLockKey> DuckTransactionManager::SharedCheckpointLock() {
 	return checkpoint_lock.GetSharedLock();
 }
 
-unique_ptr<StorageLockKey> DuckTransactionManager::TryUpgradeCheckpointLock(StorageLockKey &lock) {
-	return checkpoint_lock.TryUpgradeCheckpointLock(lock);
+unique_ptr<CheckpointLockKey> DuckTransactionManager::TryUpgradeCheckpointLock(CheckpointLockKey &lock) {
+	return checkpoint_lock.TryUpgrade(lock);
 }
 
-unique_ptr<StorageLockKey> DuckTransactionManager::TryGetCheckpointLock() {
+unique_ptr<CheckpointLockKey> DuckTransactionManager::TryGetCheckpointLock() {
 	return checkpoint_lock.TryGetExclusiveLock();
 }
 
@@ -294,7 +294,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	}
 
 	// check if we can checkpoint
-	unique_ptr<StorageLockKey> lock;
+	unique_ptr<CheckpointLockKey> lock;
 	auto undo_properties = transaction.GetUndoProperties();
 	auto checkpoint_decision = CanCheckpoint(transaction, lock, undo_properties);
 	ErrorData error;
@@ -428,7 +428,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to
 	// checkpoint
 	if (checkpoint_decision.can_checkpoint) {
-		if (!lock || lock->GetType() != StorageLockType::EXCLUSIVE) {
+		if (!lock || lock->GetType() != CheckpointLockType::EXCLUSIVE) {
 			throw InternalException("Checkpointing requires an exclusive lock to be held");
 		}
 		// we can unlock the transaction lock while checkpointing

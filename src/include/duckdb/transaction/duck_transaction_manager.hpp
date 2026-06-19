@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/transaction/checkpoint_lock.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/common/queue.hpp"
@@ -68,10 +69,10 @@ public:
 	}
 
 	//! Obtains a shared lock to the checkpoint lock
-	unique_ptr<StorageLockKey> SharedCheckpointLock();
+	unique_ptr<CheckpointLockKey> SharedCheckpointLock();
 	//! Try to obtain an exclusive checkpoint lock
-	unique_ptr<StorageLockKey> TryGetCheckpointLock();
-	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock);
+	unique_ptr<CheckpointLockKey> TryGetCheckpointLock();
+	unique_ptr<CheckpointLockKey> TryUpgradeCheckpointLock(CheckpointLockKey &lock);
 	unique_ptr<StorageLockKey> SharedVacuumLock();
 	unique_ptr<StorageLockKey> TryGetVacuumLock();
 
@@ -102,7 +103,7 @@ private:
 	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction, bool store_transaction) noexcept;
 
 	//! Whether or not we can checkpoint
-	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,
+	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<CheckpointLockKey> &checkpoint_lock,
 	                                 const UndoBufferProperties &properties);
 	//! Get the checkpoint type of an automatic checkpoint
 	CheckpointDecision GetCheckpointType(DuckTransaction &transaction, const UndoBufferProperties &undo_properties);
@@ -130,7 +131,7 @@ private:
 	//! The lock used for transaction operations
 	mutex transaction_lock;
 	//! The checkpoint lock
-	StorageLock checkpoint_lock;
+	CheckpointLockCoordinator checkpoint_lock;
 	//! The vacuum lock - necessary to start vacuum operations
 	StorageLock vacuum_lock;
 	//! Lock necessary to start transactions only - used by FORCE CHECKPOINT to prevent new transactions from starting

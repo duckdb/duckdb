@@ -1,72 +1,39 @@
 #include "duckdb/storage/storage_lock.hpp"
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/thread_annotation/thread_annotation.hpp"
+
+#include <shared_mutex>
 
 namespace duckdb {
 
 struct StorageLockInternals : enable_shared_from_this<StorageLockInternals> {
 public:
-	StorageLockInternals() : read_count(0) {
-	}
-
-	mutex exclusive_lock;
-	atomic<idx_t> read_count;
+	std::shared_mutex lock;
 
 public:
 	unique_ptr<StorageLockKey> GetExclusiveLock() DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
-		exclusive_lock.lock();
-		while (read_count != 0) {
-		}
+		lock.lock();
 		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::EXCLUSIVE);
 	}
 
 	unique_ptr<StorageLockKey> GetSharedLock() {
-		exclusive_lock.lock();
-		read_count++;
-		exclusive_lock.unlock();
+		lock.lock_shared();
 		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::SHARED);
 	}
 
 	unique_ptr<StorageLockKey> TryGetExclusiveLock() DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
-		if (!exclusive_lock.try_lock()) {
-			// could not lock mutex
+		if (!lock.try_lock()) {
 			return nullptr;
 		}
-		if (read_count != 0) {
-			// there are active readers - cannot get exclusive lock
-			exclusive_lock.unlock();
-			return nullptr;
-		}
-		// success!
-		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::EXCLUSIVE);
-	}
-
-	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
-		if (lock.GetType() != StorageLockType::SHARED) {
-			throw InternalException("StorageLock::TryUpgradeLock called on an exclusive lock");
-		}
-		if (!exclusive_lock.try_lock()) {
-			// could not lock mutex
-			return nullptr;
-		}
-		if (read_count != 1) {
-			// other shared locks are active: failed to upgrade
-			D_ASSERT(read_count != 0);
-			exclusive_lock.unlock();
-			return nullptr;
-		}
-		// no other shared locks active: success!
 		return make_uniq<StorageLockKey>(shared_from_this(), StorageLockType::EXCLUSIVE);
 	}
 
 	void ReleaseExclusiveLock() DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
-		exclusive_lock.unlock();
+		lock.unlock();
 	}
 	void ReleaseSharedLock() {
-		read_count--;
+		lock.unlock_shared();
 	}
 };
 
@@ -98,10 +65,6 @@ unique_ptr<StorageLockKey> StorageLock::TryGetExclusiveLock() {
 
 unique_ptr<StorageLockKey> StorageLock::GetSharedLock() {
 	return internals->GetSharedLock();
-}
-
-unique_ptr<StorageLockKey> StorageLock::TryUpgradeCheckpointLock(StorageLockKey &lock) {
-	return internals->TryUpgradeCheckpointLock(lock);
 }
 
 } // namespace duckdb

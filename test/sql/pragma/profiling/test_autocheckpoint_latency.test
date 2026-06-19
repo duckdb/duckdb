@@ -87,5 +87,29 @@ FROM '{TEST_DIR}/acp_after.json';
 ----
 true	true	true	true
 
+# Force WAL skipping for an auto-checkpoint with a sufficiently large transaction.
+statement ok
+SET auto_checkpoint_skip_wal_threshold=0;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/acp_skip_wal.json';
+
+statement ok
+INSERT INTO acp_db.tbl SELECT range::INTEGER FROM range(100000);
+
+statement ok
+PRAGMA disable_profiling;
+
+query II
+SELECT
+    CASE WHEN storage.checkpoint_latency > 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN json_extract(to_json(storage), '$.write_to_wal_latency') IS NULL THEN 'true' ELSE 'false' END
+FROM '{TEST_DIR}/acp_skip_wal.json';
+----
+true	true
+
 statement ok
 DETACH acp_db;
