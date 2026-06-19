@@ -13,6 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "sqllogic_command.hpp"
 #include "test_config.hpp"
+#include <istream>
 
 namespace duckdb {
 
@@ -89,6 +90,7 @@ public:
 
 public:
 	void ExecuteFile(string script);
+	void ExecuteStream(std::istream &input, const string &source_name);
 	virtual void LoadDatabase(string dbpath, bool load_extensions);
 
 	string ReplaceKeywords(string input);
@@ -111,6 +113,7 @@ public:
 	Value GetVariableReplacement(const string &token_name, string &variable_name);
 
 private:
+	void ExecuteInternal(SQLLogicParser &parser, const string &script);
 	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);
 	void ConfigureDefaultInMemoryTemporaryDirectory(const string &script);
 	static void AddSkipReason(const string &reason);
