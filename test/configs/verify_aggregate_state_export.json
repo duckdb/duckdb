@@ -11,6 +11,7 @@
         "test/optimizer/eager_aggregate_execution_parquet.test",
         "test/optimizer/partial_aggregate_precomputation.test",
         "test/optimizer/test_aggregate_function_rewrite.test",
+        "test/optimizer/ordered_aggregate.test",
         "test/sql/copy/parquet/parquet_glob_cache.test",
         "test/sql/optimizer/expression/test_common_aggregate.test",
         "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test"
