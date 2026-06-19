@@ -8,6 +8,7 @@
 
 #pragma once
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -62,6 +63,10 @@ using Projections = unordered_map<TableIndex, LogicalProjection &>;
 struct CastCollect final : LogicalOperatorVisitor {
 	Analyses &analyses;
 	const Projections &projections;
+	// Casts that are direct outputs of a clean projection over a GET. Only these
+	// start a pushdown candidate; a nested cast may push down a different value.
+	// See test/sql/copy/csv/auto/test_large_integer_detection.test
+	unordered_set<const Expression *> top_level_casts;
 
 	CastCollect(Analyses &analyses, const Projections &projections);
 	void VisitOperator(LogicalOperator &op) override;

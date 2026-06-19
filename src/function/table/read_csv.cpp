@@ -145,10 +145,24 @@ static bool PushdownProjectionExpression(ClientContext &context, const TableFunc
 	if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
 		return false;
 	}
-	auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
 	const auto &cast = input.expr.Cast<BoundCastExpression>();
-	bind_data.types[input.proj_index] = cast.GetReturnType();
-	bind_data.columns[input.proj_index].type = cast.GetReturnType();
+	const auto &target_type = cast.GetReturnType();
+	auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
+	// Hive-partition and filename columns are produced from the file path by
+	// separate finalize expressions, not parsed from the file. Retyping them
+	// here would desync those expressions, so leave the cast in place.
+	// See test/sql/copy/csv/csv_hive.test
+	for (const auto &partition : bind_data.reader_bind.hive_partitioning_indexes) {
+		if (partition.index == input.proj_index) {
+			return false;
+		}
+	}
+	if (bind_data.reader_bind.filename_idx.IsValid() &&
+	    bind_data.reader_bind.filename_idx.GetIndex() == input.proj_index) {
+		return false;
+	}
+	bind_data.types[input.proj_index] = target_type;
+	bind_data.columns[input.proj_index].type = target_type;
 	return true;
 }
 
