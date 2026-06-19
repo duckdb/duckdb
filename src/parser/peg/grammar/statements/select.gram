@@ -100,7 +100,7 @@ TimestampAtUnit <- 'TIMESTAMP'
 
 JoinClause <- JoinByClause / RegularJoinClause / JoinWithoutOnClause
 RegularJoinClause <- Asof? JoinType? 'JOIN' TableRef JoinQualifier
-JoinByClause <- 'JOIN' 'BY' ColLabel TableRef JoinQualifier
+JoinByClause <- 'JOIN' 'BY' Parens('TYPE' ColLabel) TableRef JoinQualifier
 Asof <- 'ASOF'
 JoinWithoutOnClause <- JoinPrefix 'JOIN' TableRef
 JoinQualifier <- OnClause / UsingClause

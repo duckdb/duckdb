@@ -1369,7 +1369,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"TimestampAtUnit <- 'TIMESTAMP'\n"
 	"JoinClause <- JoinByClause / RegularJoinClause / JoinWithoutOnClause\n"
 	"RegularJoinClause <- Asof? JoinType? 'JOIN' TableRef JoinQualifier\n"
-	"JoinByClause <- 'JOIN' 'BY' ColLabel TableRef JoinQualifier\n"
+	"JoinByClause <- 'JOIN' 'BY' Parens('TYPE' ColLabel) TableRef JoinQualifier\n"
 	"Asof <- 'ASOF'\n"
 	"JoinWithoutOnClause <- JoinPrefix 'JOIN' TableRef\n"
 	"JoinQualifier <- OnClause / UsingClause\n"

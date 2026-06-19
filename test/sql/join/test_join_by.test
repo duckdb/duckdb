@@ -1,5 +1,5 @@
 # name: test/sql/join/test_join_by.test
-# description: Test the JOIN BY <type> syntax that exposes DuckDB's internal join types
+# description: Test the JOIN BY (TYPE <type>) syntax that exposes DuckDB's internal join types
 # group: [join]
 
 statement ok
@@ -14,9 +14,9 @@ CREATE TABLE t2(b INTEGER);
 statement ok
 INSERT INTO t2 VALUES (2), (3), (NULL);
 
-# JOIN BY mark projects the left side plus a named boolean marker column __mark_join_marker
+# JOIN BY (TYPE mark) projects the left side plus a named boolean marker column __mark_join_marker
 query II
-SELECT a, __mark_join_marker FROM t1 JOIN BY mark t2 ON (a = b) ORDER BY a NULLS LAST;
+SELECT a, __mark_join_marker FROM t1 JOIN BY (TYPE mark) t2 ON (a = b) ORDER BY a NULLS LAST;
 ----
 1	NULL
 2	true
@@ -32,55 +32,55 @@ SELECT a, a IN (SELECT b FROM t2) FROM t1 ORDER BY a NULLS LAST;
 3	true
 NULL	NULL
 
-# JOIN BY semi behaves like a SEMI join
+# JOIN BY (TYPE semi) behaves like a SEMI join
 query I
-SELECT a FROM t1 JOIN BY semi t2 ON (a = b) ORDER BY a NULLS LAST;
+SELECT a FROM t1 JOIN BY (TYPE semi) t2 ON (a = b) ORDER BY a NULLS LAST;
 ----
 2
 3
 
-# JOIN BY anti behaves like an ANTI join
+# JOIN BY (TYPE anti) behaves like an ANTI join
 query I
-SELECT a FROM t1 JOIN BY anti t2 ON (a = b) ORDER BY a NULLS LAST;
+SELECT a FROM t1 JOIN BY (TYPE anti) t2 ON (a = b) ORDER BY a NULLS LAST;
 ----
 1
 NULL
 
-# JOIN BY single returns at most one match per left row (LEFT-OUTER-like)
+# JOIN BY (TYPE single) returns at most one match per left row (LEFT-OUTER-like)
 query II
-SELECT a, b FROM t1 JOIN BY single t2 ON (a = b) ORDER BY a NULLS LAST;
+SELECT a, b FROM t1 JOIN BY (TYPE single) t2 ON (a = b) ORDER BY a NULLS LAST;
 ----
 1	NULL
 2	2
 3	3
 NULL	NULL
 
-# JOIN BY inner / left / full resolve to the regular join types
+# JOIN BY (TYPE inner) / left / full resolve to the regular join types
 query I
-SELECT count(*) FROM t1 JOIN BY inner t2 ON (a = b);
+SELECT count(*) FROM t1 JOIN BY (TYPE inner) t2 ON (a = b);
 ----
 2
 
 query I
-SELECT count(*) FROM t1 JOIN BY left t2 ON (a = b);
+SELECT count(*) FROM t1 JOIN BY (TYPE left) t2 ON (a = b);
 ----
 4
 
 query I
-SELECT count(*) FROM t1 JOIN BY full t2 ON (a = b);
+SELECT count(*) FROM t1 JOIN BY (TYPE full) t2 ON (a = b);
 ----
 5
 
 # the join type name is case-insensitive
 query I
-SELECT a FROM t1 JOIN BY SeMi t2 ON (a = b) ORDER BY a NULLS LAST;
+SELECT a FROM t1 JOIN BY (TYPE SeMi) t2 ON (a = b) ORDER BY a NULLS LAST;
 ----
 2
 3
 
 # an optional _join suffix is accepted, so mark_join == mark
 query II
-SELECT a, __mark_join_marker FROM t1 JOIN BY mark_join t2 ON (a = b) ORDER BY a NULLS LAST;
+SELECT a, __mark_join_marker FROM t1 JOIN BY (TYPE mark_join) t2 ON (a = b) ORDER BY a NULLS LAST;
 ----
 1	NULL
 2	true
@@ -89,19 +89,19 @@ NULL	NULL
 
 # the USING form works as well
 query I
-SELECT count(*) FROM t1 JOIN BY semi (SELECT b AS a FROM t2) USING (a);
+SELECT count(*) FROM t1 JOIN BY (TYPE semi) (SELECT b AS a FROM t2) USING (a);
 ----
 2
 
 # an unknown join type name is an error
 statement error
-SELECT * FROM t1 JOIN BY bogus t2 ON (a = b);
+SELECT * FROM t1 JOIN BY (TYPE bogus) t2 ON (a = b);
 ----
 <REGEX>:.*bogus.*
 
 # the INVALID enum value is rejected with a clear parser error
 statement error
-SELECT * FROM t1 JOIN BY invalid t2 ON (a = b);
+SELECT * FROM t1 JOIN BY (TYPE invalid) t2 ON (a = b);
 ----
 <REGEX>:.*not a valid join type.*
 

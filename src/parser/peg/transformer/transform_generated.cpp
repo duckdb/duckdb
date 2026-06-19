@@ -8717,7 +8717,8 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRegularJoinClau
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformJoinByClauseInternal(PEGTransformer &transformer,
                                                                                       ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto col_label = transformer.Transform<string>(list_pr.GetChild(2));
+	auto col_label =
+	    transformer.Transform<string>(ExtractResultFromParens(list_pr.GetChild(2)).Cast<ListParseResult>().GetChild(1));
 	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(3));
 	auto join_qualifier = transformer.Transform<JoinQualifier>(list_pr.GetChild(4));
 	auto result = TransformJoinByClause(transformer, col_label, std::move(table_ref), std::move(join_qualifier));
