@@ -3,6 +3,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
@@ -45,6 +46,9 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(ClientContext &context) const {
+	if (!collection) {
+		return make_uniq<GlobalSourceState>();
+	}
 	return make_uniq<PhysicalColumnDataGlobalScanState>(*collection);
 }
 
@@ -59,6 +63,21 @@ SourceResultType PhysicalColumnDataScan::GetDataInternal(ExecutionContext &conte
 	auto &lstate = input.local_state.Cast<PhysicalColumnDataLocalScanState>();
 	collection->Scan(gstate.global_scan_state, lstate.local_scan_state, chunk);
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+ProgressData PhysicalColumnDataScan::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	if (!collection) {
+		ProgressData progress;
+		progress.SetInvalid();
+		return progress;
+	}
+	auto &state = gstate.Cast<PhysicalColumnDataGlobalScanState>();
+	lock_guard<mutex> guard(state.global_scan_state.lock);
+	auto total = MaxValue<idx_t>(collection->Count(), 1);
+	ProgressData progress;
+	progress.done = double(MinValue<idx_t>(state.global_scan_state.scan_state.next_row_index, total));
+	progress.total = double(total);
+	return progress;
 }
 
 //===--------------------------------------------------------------------===//
@@ -84,6 +103,28 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		return;
 	}
 	case PhysicalOperatorType::CTE_SCAN: {
+		auto fanout_entry = state.cte_fanout_dependencies.find(*this);
+		if (fanout_entry != state.cte_fanout_dependencies.end()) {
+			auto &cte = fanout_entry->second.cte.get().Cast<PhysicalCTE>();
+			if (cte.TryRegisterFanoutPipeline(current)) {
+				auto producer = fanout_entry->second.producer.get().shared_from_this();
+				auto current_pipeline = current.shared_from_this();
+				current.SetExternalInput();
+				current.AddDependency(producer);
+				fanout_entry->second.producer.get().AddDataflowDependency(current_pipeline);
+				state.SetPipelineSource(current, *this);
+				cte_direct_fanout = true;
+				return;
+			}
+		}
+		if (cte_source) {
+			auto entry = state.cte_dependencies.find(*this);
+			D_ASSERT(entry != state.cte_dependencies.end());
+			auto cte_dependency = entry->second.get().shared_from_this();
+			current.AddDataflowDependency(cte_dependency);
+			state.SetPipelineSource(current, *cte_source);
+			return;
+		}
 		auto entry = state.cte_dependencies.find(*this);
 		D_ASSERT(entry != state.cte_dependencies.end());
 		// this chunk scan introduces a dependency to the current pipeline
@@ -122,6 +163,14 @@ InsertionOrderPreservingMap<string> PhysicalColumnDataScan::ParamsToString() con
 	case PhysicalOperatorType::CTE_SCAN:
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
 		result["CTE Index"] = StringUtil::Format("%llu", cte_index.index);
+		if (cte_direct_fanout) {
+			result["CTE Mode"] = "DIRECT_FANOUT";
+		} else if (cte_source) {
+			result["CTE Mode"] = "PIPELINE_EXCHANGE";
+			if (cte_exchange_consumer.IsValid()) {
+				result["Consumer"] = StringUtil::Format("%llu", cte_exchange_consumer.GetIndex());
+			}
+		}
 		break;
 	}
 	default:

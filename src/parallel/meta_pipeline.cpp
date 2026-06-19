@@ -97,13 +97,16 @@ void MetaPipeline::Ready() const {
 	}
 }
 
-MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, MetaPipelineType type) {
+MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op, MetaPipelineType type,
+                                                    bool add_dependency) {
 	children.push_back(make_shared_ptr<MetaPipeline>(executor, state, &op, type));
 	auto &child_meta_pipeline = *children.back().get();
 	// store the parent
 	child_meta_pipeline.parent = &current;
-	// child MetaPipeline must finish completely before this MetaPipeline can start
-	current.AddDependency(child_meta_pipeline.GetBasePipeline());
+	if (add_dependency) {
+		// child MetaPipeline must finish completely before this MetaPipeline can start
+		current.AddDependency(child_meta_pipeline.GetBasePipeline());
+	}
 	// child meta pipeline is part of the recursive CTE too
 	child_meta_pipeline.recursive_cte = recursive_cte;
 	return child_meta_pipeline;
@@ -155,7 +158,7 @@ static bool PipelineExceedsThreadCount(Pipeline &pipeline, const idx_t thread_co
 }
 
 void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies,
-                                            const MetaPipeline &last_child, bool force) {
+                                            const MetaPipeline &last_child, bool force, bool skip_dataflow_pipelines) {
 	if (recursive_cte) {
 		return; // let's not burn our fingers on this for now
 	}
@@ -179,6 +182,9 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 	const auto thread_count = TaskScheduler::GetScheduler(executor.context).NumberOfThreads();
 	for (; it != child_meta_pipelines.end(); it++) {
 		for (auto &pipeline : it->get()->pipelines) {
+			if (skip_dataflow_pipelines && pipeline->HasDataflowDependencies()) {
+				continue;
+			}
 			if (!force && !PipelineExceedsThreadCount(*pipeline, thread_count)) {
 				continue;
 			}
@@ -228,6 +234,7 @@ Pipeline &MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matter
 
 	// 'union_pipeline' inherits ALL dependencies of 'current' (within this MetaPipeline, and across MetaPipelines)
 	union_pipeline.dependencies = current.dependencies;
+	union_pipeline.dataflow_dependencies = current.dataflow_dependencies;
 	auto it = pipeline_dependencies.find(current);
 	if (it != pipeline_dependencies.end()) {
 		pipeline_dependencies[union_pipeline] = it->second;

@@ -190,9 +190,32 @@ bool Pipeline::IsOrderDependent() const {
 	return false;
 }
 
+void Pipeline::SetExternalInput() {
+	external_input = true;
+}
+
+bool Pipeline::CanUseExternalInput() const {
+	if (!sink || !sink->ParallelSink() || sink->SinkOrderDependent()) {
+		return false;
+	}
+	if (sink->RequiredPartitionInfo().AnyRequired()) {
+		return false;
+	}
+	for (auto &op_ref : operators) {
+		if (!op_ref.get().ParallelOperator()) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void Pipeline::Schedule(shared_ptr<Event> &event) {
 	D_ASSERT(ready);
 	D_ASSERT(sink);
+	if (external_input) {
+		D_ASSERT(initialized);
+		return;
+	}
 	Reset();
 	if (!ScheduleParallel(event)) {
 		// could not parallelize this pipeline: push a sequential task instead
@@ -307,6 +330,20 @@ void Pipeline::ResetSource(bool force) {
 	}
 }
 
+void Pipeline::PrepareExternalInput() {
+	if (!external_input) {
+		throw InternalException("PrepareExternalInput called for a pipeline that is not externally fed");
+	}
+	if (initialized) {
+		return;
+	}
+	lock_guard<mutex> guard(external_input_lock);
+	if (initialized) {
+		return;
+	}
+	Reset();
+}
+
 void Pipeline::Ready() {
 	if (ready) {
 		return;
@@ -318,6 +355,12 @@ void Pipeline::Ready() {
 void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 	D_ASSERT(pipeline);
 	dependencies.push_back(weak_ptr<Pipeline>(pipeline));
+	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
+}
+
+void Pipeline::AddDataflowDependency(shared_ptr<Pipeline> &pipeline) {
+	D_ASSERT(pipeline);
+	dataflow_dependencies.push_back(weak_ptr<Pipeline>(pipeline));
 	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
 }
 

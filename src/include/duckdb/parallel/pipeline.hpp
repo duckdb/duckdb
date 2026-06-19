@@ -45,6 +45,14 @@ public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 };
 
+struct CTEFanoutPipelineDependency {
+	CTEFanoutPipelineDependency(Pipeline &producer_p, PhysicalOperator &cte_p) : producer(producer_p), cte(cte_p) {
+	}
+
+	reference<Pipeline> producer;
+	reference<PhysicalOperator> cte;
+};
+
 class PipelineBuildState {
 public:
 	//! How much to increment batch indexes when multiple pipelines share the same source
@@ -55,6 +63,8 @@ public:
 	reference_map_t<const PhysicalOperator, reference<Pipeline>> delim_join_dependencies;
 	//! Materialized CTE scan dependencies
 	reference_map_t<const PhysicalOperator, reference<Pipeline>> cte_dependencies;
+	//! Direct fanout materialized CTE scan dependencies
+	reference_map_t<const PhysicalOperator, CTEFanoutPipelineDependency> cte_fanout_dependencies;
 
 public:
 	void SetPipelineSource(Pipeline &pipeline, PhysicalOperator &op);
@@ -86,7 +96,14 @@ public:
 	ClientContext &GetClientContext();
 
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
+	void AddDataflowDependency(shared_ptr<Pipeline> &pipeline);
 	vector<weak_ptr<Pipeline>> GetDependencies() const;
+	const vector<weak_ptr<Pipeline>> &GetDataflowDependencies() const {
+		return dataflow_dependencies;
+	}
+	bool HasDataflowDependencies() const {
+		return !dataflow_dependencies.empty();
+	}
 
 	void Ready();
 	void Reset();
@@ -94,6 +111,7 @@ public:
 	void ResetSinkForReschedule();
 	void ResetForReschedule(bool reset_sink);
 	void ResetSource(bool force);
+	void PrepareExternalInput();
 	void ClearSource();
 	void Schedule(shared_ptr<Event> &event);
 	void PrepareFinalize();
@@ -124,6 +142,12 @@ public:
 
 	//! Returns whether any of the operators in the pipeline care about preserving order
 	bool IsOrderDependent() const;
+	//! Marks this pipeline as fed by another pipeline instead of by its own source task
+	void SetExternalInput();
+	bool IsExternalInput() const {
+		return external_input;
+	}
+	bool CanUseExternalInput() const;
 
 	//! Registers a new batch index for a pipeline executor - returns the current minimum batch index
 	idx_t RegisterNewBatchIndex();
@@ -150,9 +174,15 @@ private:
 	vector<weak_ptr<Pipeline>> parents;
 	//! The dependencies of this pipeline
 	vector<weak_ptr<Pipeline>> dependencies;
+	//! Pipelines that must be initialized before this pipeline can consume their dataflow output
+	vector<weak_ptr<Pipeline>> dataflow_dependencies;
 
 	//! The base batch index of this pipeline
 	idx_t base_batch_index = 0;
+	//! Whether this pipeline is executed by an external producer instead of scheduled source tasks
+	bool external_input = false;
+	//! Lock for one-time external input initialization
+	mutex external_input_lock;
 	//! Lock for accessing the set of batch indexes
 	mutex batch_lock;
 	//! The set of batch indexes that are currently being processed

@@ -28,9 +28,12 @@ public:
 
 	//! (optionally owned) column data collection to scan
 	optionally_owned_ptr<ColumnDataCollection> collection;
+	optional_ptr<PhysicalOperator> cte_source;
 
 	TableIndex cte_index;
 	optional_idx delim_index;
+	optional_idx cte_exchange_consumer;
+	bool cte_direct_fanout = false;
 
 public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
@@ -38,6 +41,7 @@ public:
 	                                                 GlobalSourceState &gstate) const override;
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
 	                                 OperatorSourceInput &input) const override;
+	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 
 	bool IsSource() const override {
 		return true;

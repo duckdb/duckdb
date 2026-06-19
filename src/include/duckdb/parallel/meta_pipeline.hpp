@@ -69,7 +69,7 @@ public:
 	//! If 'force' is true, dependencies are added regardless of pipeline/thread count
 	//! (required for DML CTEs where ordering is mandatory, not just a performance hint).
 	void AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies, const MetaPipeline &last_child,
-	                              bool force = false);
+	                              bool force = false, bool skip_dataflow_pipelines = false);
 	//! Make sure that the given pipeline has its own PipelineFinishEvent (e.g., for IEJoin - double Finalize)
 	void AddFinishEvent(Pipeline &pipeline);
 	//! Whether the pipeline needs its own PipelineFinishEvent
@@ -94,7 +94,8 @@ public:
 	void CreateChildPipeline(Pipeline &current, PhysicalOperator &op, Pipeline &last_pipeline);
 	//! Create a MetaPipeline child that 'current' depends on
 	MetaPipeline &CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op,
-	                                      MetaPipelineType type = MetaPipelineType::REGULAR);
+	                                      MetaPipelineType type = MetaPipelineType::REGULAR,
+	                                      bool add_dependency = true);
 
 private:
 	//! The executor for all MetaPipelines in the query plan

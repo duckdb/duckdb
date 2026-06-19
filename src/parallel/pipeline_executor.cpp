@@ -64,6 +64,8 @@ void PipelineExecutor::Reset() {
 	remaining_sink_chunk = false;
 	next_batch_blocked = false;
 	finished_processing_idx = -1;
+	source_profiling_finalized = false;
+	source_finished_notified = false;
 	should_flush_current_idx = true;
 	while (!in_process_operators.empty()) {
 		in_process_operators.pop();
@@ -352,6 +354,89 @@ PipelineExecuteResult PipelineExecutor::Execute() {
 	return Execute(NumericLimits<idx_t>::Maximum());
 }
 
+PipelineExecuteResult PipelineExecutor::PushExternal(DataChunk &input) {
+	D_ASSERT(pipeline.sink);
+	D_ASSERT(pipeline.IsExternalInput());
+	if (IsFinished()) {
+		return PipelineExecuteResult::FINISHED;
+	}
+
+	ExecutionBudget chunk_budget(NumericLimits<idx_t>::Maximum());
+	while (true) {
+		context.client.InterruptCheck();
+
+		OperatorResultType result;
+		if (remaining_sink_chunk) {
+			result = ExecutePushInternal(final_chunk, chunk_budget);
+			if (result == OperatorResultType::BLOCKED) {
+				remaining_sink_chunk = true;
+				return PipelineExecuteResult::INTERRUPTED;
+			}
+			remaining_sink_chunk = false;
+			if (result == OperatorResultType::FINISHED) {
+				return PipelineExecuteResult::FINISHED;
+			}
+			if (in_process_operators.empty()) {
+				return PipelineExecuteResult::NOT_FINISHED;
+			}
+			continue;
+		}
+
+		result = ExecutePushInternal(input, chunk_budget);
+		if (result == OperatorResultType::BLOCKED) {
+			remaining_sink_chunk = true;
+			return PipelineExecuteResult::INTERRUPTED;
+		}
+		if (result == OperatorResultType::FINISHED) {
+			D_ASSERT(in_process_operators.empty());
+			return PipelineExecuteResult::FINISHED;
+		}
+		if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
+			continue;
+		}
+		return PipelineExecuteResult::NOT_FINISHED;
+	}
+}
+
+PipelineExecuteResult PipelineExecutor::FinishExternal() {
+	D_ASSERT(pipeline.sink);
+	D_ASSERT(pipeline.IsExternalInput());
+	if (finalized) {
+		return PipelineExecuteResult::FINISHED;
+	}
+
+	ExecutionBudget chunk_budget(NumericLimits<idx_t>::Maximum());
+	if (remaining_sink_chunk) {
+		auto result = ExecutePushInternal(final_chunk, chunk_budget);
+		if (result == OperatorResultType::BLOCKED) {
+			remaining_sink_chunk = true;
+			return PipelineExecuteResult::INTERRUPTED;
+		}
+		remaining_sink_chunk = false;
+		if (result == OperatorResultType::FINISHED) {
+			exhausted_pipeline = true;
+		}
+	}
+
+	exhausted_source = true;
+	exhausted_pipeline = true;
+	if (!done_flushing) {
+		auto flush_completed = TryFlushCachingOperators(chunk_budget);
+		if (!flush_completed) {
+			if (remaining_sink_chunk) {
+				return PipelineExecuteResult::INTERRUPTED;
+			}
+			return PipelineExecuteResult::NOT_FINISHED;
+		}
+		done_flushing = true;
+	}
+	return PushFinalize();
+}
+
+bool PipelineExecutor::IsFinishedProcessing() const {
+	return IsFinished();
+}
+
 void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
 	finished_processing_idx = operator_idx < 0 ? NumericLimits<int32_t>::Maximum() : operator_idx;
 	in_process_operators = stack<idx_t>();
@@ -368,7 +453,15 @@ void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
 	}
 }
 
-bool PipelineExecutor::IsFinished() {
+void PipelineExecutor::NotifySourceFinished() {
+	if (source_finished_notified || !pipeline.GetSource() || !pipeline.source_state) {
+		return;
+	}
+	source_finished_notified = true;
+	pipeline.source->SourceFinished(context.client, *pipeline.source_state);
+}
+
+bool PipelineExecutor::IsFinished() const {
 	return finished_processing_idx >= 0;
 }
 
@@ -452,6 +545,7 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 	}
 
 	finalized = true;
+	NotifySourceFinished();
 
 	// If source was not exhausted (e.g. LIMIT stopped the pipeline), collect exact metrics now
 	if (!source_profiling_finalized && local_source_state) {
@@ -612,6 +706,7 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 	D_ASSERT(res != SourceResultType::BLOCKED || result.size() == 0);
 	if (res == SourceResultType::FINISHED) {
 		// final call into the source - finish source execution
+		NotifySourceFinished();
 		context.thread.profiler.FinishSource(*pipeline.source_state, *local_source_state);
 		source_profiling_finalized = true;
 	}

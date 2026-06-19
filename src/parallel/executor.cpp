@@ -202,6 +202,16 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 			auto &dep_entry = event_map_entry->second;
 			entry.second.pipeline_event.AddDependency(dep_entry.pipeline_complete_event);
 		}
+		for (auto &dependency : pipeline.dataflow_dependencies) {
+			auto dep = dependency.lock();
+			D_ASSERT(dep);
+			auto event_map_entry = event_map.find(*dep);
+			if (event_map_entry == event_map.end()) {
+				continue;
+			}
+			auto &dep_entry = event_map_entry->second;
+			entry.second.pipeline_event.AddDependency(dep_entry.pipeline_initialize_event);
+		}
 	}
 
 	// set the dependencies for pipeline event
@@ -686,6 +696,20 @@ void Executor::PushError(ErrorData exception) {
 	error_manager.PushError(std::move(exception));
 	// interrupt execution of any other pipelines that belong to this executor
 	context.interrupt_state = ClientInterruptState::INTERRUPTED;
+	for (auto &pipeline : pipelines) {
+		if (pipeline->source_state && pipeline->GetSource()) {
+			pipeline->GetSource()->SourceFinished(context, *pipeline->source_state);
+			annotated_lock_guard<annotated_mutex> guard(pipeline->source_state->lock);
+			pipeline->source_state->PreventBlocking();
+			pipeline->source_state->UnblockTasks();
+		}
+		auto sink = pipeline->GetSink();
+		if (sink && sink->sink_state) {
+			annotated_lock_guard<annotated_mutex> guard(sink->sink_state->lock);
+			sink->sink_state->PreventBlocking();
+			sink->sink_state->UnblockTasks();
+		}
+	}
 }
 
 bool Executor::HasError() {

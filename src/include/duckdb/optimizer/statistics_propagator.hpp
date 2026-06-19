@@ -63,6 +63,8 @@ private:
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalLimit &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOrder &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalWindow &op, unique_ptr<LogicalOperator> &node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalMaterializedCTE &op, unique_ptr<LogicalOperator> &node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalCTERef &op, unique_ptr<LogicalOperator> &node_ptr);
 
 	unique_ptr<NodeStatistics> PropagateChildren(LogicalOperator &node, unique_ptr<LogicalOperator> &node_ptr);
 
@@ -131,6 +133,12 @@ private:
 	optional_ptr<LogicalOperator> root;
 	//! The map of ColumnBinding -> statistics for the various nodes
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
+	struct CTEStatistics {
+		vector<unique_ptr<BaseStatistics>> column_stats;
+		unique_ptr<NodeStatistics> node_stats;
+	};
+	//! Statistics for materialized CTE definitions, keyed by their definition table index
+	unordered_map<TableIndex, CTEStatistics> cte_statistics_map;
 	//! Node stats for the current node
 	unique_ptr<NodeStatistics> node_stats;
 };
