@@ -76,11 +76,12 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 	// because row comparison is lexicographic, not element-wise
 	// e.g. (0, 0) < (1, 0) is TRUE (first element comparison wins)
 	// but if we split into separate conditions: 0 < 1 AND 0 < 0, this becomes FALSE
-	// Only equality and not-equal can be safely split into multiple conditions
-	if (comparison_type != ExpressionType::COMPARE_EQUAL && comparison_type != ExpressionType::COMPARE_NOTEQUAL &&
-	    comparison_type != ExpressionType::COMPARE_DISTINCT_FROM &&
+	// Only comparisons whose row semantics are element-wise can be safely split.
+	// Row-valued <> is not element-wise under SQL three-valued logic:
+	// e.g. (1, 2) <> (1, NULL) yields NULL, not FALSE.
+	if (comparison_type != ExpressionType::COMPARE_EQUAL && comparison_type != ExpressionType::COMPARE_DISTINCT_FROM &&
 	    comparison_type != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-		// For ordered comparisons, keep the struct intact
+		// Keep the struct intact for row-valued comparisons with non-element-wise semantics.
 		return;
 	}
 	for (auto &row_child : function.GetChildrenMutable()) {
