@@ -275,6 +275,14 @@ transaction_t DuckTransactionManager::GetCommitTimestamp() {
 	return current_start_timestamp++;
 }
 
+void DuckTransactionManager::RetireAfterCheckpoint(shared_ptr<void> retired_object) {
+	if (!retired_object) {
+		return;
+	}
+	lock_guard<mutex> l(retired_lock);
+	retired_after_checkpoint.push_back(std::move(retired_object));
+}
+
 void DuckTransactionManager::CleanupTransactions() {
 	lock_guard<mutex> c_lock(cleanup_lock);
 	while (true) {
@@ -283,7 +291,7 @@ void DuckTransactionManager::CleanupTransactions() {
 			lock_guard<mutex> q_lock(cleanup_queue_lock);
 			if (cleanup_queue.empty()) {
 				// all transactions have been cleaned up - done
-				return;
+				break;
 			}
 			top_cleanup_info = std::move(cleanup_queue.front());
 			cleanup_queue.pop();
@@ -291,6 +299,18 @@ void DuckTransactionManager::CleanupTransactions() {
 		if (top_cleanup_info) {
 			top_cleanup_info->Cleanup();
 		}
+	}
+	// The cleanup queue is now drained. If the database is quiescent (no active transactions) all undo buffers have
+	// been cleaned up, so no UpdateInfo can reference a row group that a checkpoint retired - it is safe to free them.
+	// Active transactions have a start_time below TRANSACTION_ID_START; lowest_active_start reaching
+	// TRANSACTION_ID_START (its idle value) therefore means there are no active transactions.
+	if (lowest_active_start.load() >= TRANSACTION_ID_START) {
+		vector<shared_ptr<void>> to_free;
+		{
+			lock_guard<mutex> l(retired_lock);
+			to_free.swap(retired_after_checkpoint);
+		}
+		// drop the references outside the lock
 	}
 }
 

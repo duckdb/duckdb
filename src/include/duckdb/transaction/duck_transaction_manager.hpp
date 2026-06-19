@@ -78,6 +78,13 @@ public:
 	unique_ptr<StorageLockKey> SharedVacuumLock();
 	unique_ptr<StorageLockKey> TryGetVacuumLock();
 
+	//! Keep an object (a row group whose updates a checkpoint replaced) alive until no transaction can still
+	//! reference it through its undo buffer. A committed transaction's undo holds a raw pointer to the row group's
+	//! UpdateSegment (UpdateInfo::segment); the checkpoint frees the old row group, so cleanup of that undo would
+	//! otherwise dereference freed memory. The retained object is released once the database becomes quiescent
+	//! (no active transactions), at which point all undo has been cleaned up.
+	void RetireAfterCheckpoint(shared_ptr<void> retired_object);
+
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
 	DUCKDB_API idx_t GetCatalogVersion(Transaction &transaction);
 
@@ -181,6 +188,11 @@ private:
 	//! Number of DDL operations currently waiting in BlockPendingCommits. While non-zero, new commits
 	//! cannot register as pending and fall back to the synchronous commit path.
 	idx_t catalog_gate_waiters = 0;
+
+	//! Row groups retired by a checkpoint, kept alive until the database is quiescent so that undo buffers can no
+	//! longer reference their UpdateSegments (see RetireAfterCheckpoint).
+	mutex retired_lock;
+	vector<shared_ptr<void>> retired_after_checkpoint;
 
 	//! Only one cleanup can be active at any time.
 	mutex cleanup_lock;

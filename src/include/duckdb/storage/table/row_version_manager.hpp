@@ -38,7 +38,9 @@ public:
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info);
 
-	vector<MetaBlockPointer> Checkpoint(RowGroupWriter &writer);
+	//! Checkpoint the version info. `row_count` is the row group's row count; it is used to size the last (partial)
+	//! vector so a partially-filled vector is never written as an (un-appendable) ChunkConstantInfo.
+	vector<MetaBlockPointer> Checkpoint(RowGroupWriter &writer, idx_t row_count);
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
 	bool HasUnserializedChanges();

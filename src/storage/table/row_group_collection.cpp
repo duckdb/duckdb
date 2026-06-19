@@ -18,6 +18,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
@@ -1778,7 +1779,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				vector<MetaBlockPointer> extra_metadata_block_pointers = row_group.GetExtraMetadataBlockPointers();
 				metadata_manager.ClearModifiedBlocks(extra_metadata_block_pointers);
 				auto row_group_writer = checkpoint_state.writer.GetRowGroupWriter(row_group);
-				row_group.CheckpointDeletes(*row_group_writer);
+				row_group.CheckpointDeletes(*row_group_writer, row_group.count);
 			}
 			writer.WriteUnchangedTable(metadata_pointer, metadata_pointers, total_rows.load(), next_row_id.load());
 			// copy over existing stats into the global stats
@@ -1799,6 +1800,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	auto base_row_id = row_groups->GetBaseRowId();
 	auto can_persist_rowid_gaps = writer.CanPersistRowIdGaps();
 	unordered_set<idx_t> columns_with_incomplete_stats;
+	// Row groups that this checkpoint rewrites and that still have in-memory updates must be kept alive after they are
+	// replaced: a committed transaction's undo holds a raw pointer to their UpdateSegment (see RetireAfterCheckpoint).
+	vector<shared_ptr<RowGroup>> retired_row_groups;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 		auto entry = checkpoint_state.GetSegment(segment_idx);
 		if (!entry) {
@@ -1847,6 +1851,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 					reuse_column[column_idx] = !row_group_write_data.states[column_idx];
 				}
 			}
+		}
+		// if the row group is being replaced by a freshly checkpointed one and it still has in-memory updates, keep the
+		// old one alive until the database is quiescent - undo buffers reference its UpdateSegment by raw pointer
+		if (row_group_write_data.result_row_group && existing_row_group.HasUpdates()) {
+			retired_row_groups.push_back(entry->ReferenceNode());
 		}
 		auto new_row_group = std::move(row_group_write_data.result_row_group);
 		if (!new_row_group) {
@@ -2047,6 +2056,14 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	next_row_id = new_next_row_id;
 	D_ASSERT(next_row_id.load() >= total_rows.load());
 	SetRowGroups(std::move(new_row_groups));
+	// the old row groups are no longer in the collection; hand the ones that still have referenced updates to the
+	// transaction manager so they are freed only once no undo buffer can reference their UpdateSegments anymore
+	if (!retired_row_groups.empty()) {
+		auto &transaction_manager = GetAttached().GetTransactionManager().Cast<DuckTransactionManager>();
+		for (auto &retired : retired_row_groups) {
+			transaction_manager.RetireAfterCheckpoint(std::move(retired));
+		}
+	}
 	Verify();
 	// Rebuild indexes if:
 	// 1) can_rebuild_indexes is set (it is set when the vacuum_rebuild_indexes

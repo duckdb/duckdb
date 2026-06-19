@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/index/index_pointer.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
 class RowGroup;
@@ -49,7 +50,9 @@ public:
 
 	virtual bool HasDeletes(transaction_t transaction_id = MAX_TRANSACTION_ID) const = 0;
 
-	virtual void Write(WriteStream &writer, transaction_t transaction_id) const;
+	//! Write the version info for this vector. `count` is the number of rows this vector holds (the last vector of a
+	//! row group may be partial); a partial vector is never written as an (un-appendable) ChunkConstantInfo.
+	virtual void Write(WriteStream &writer, transaction_t transaction_id, idx_t count = STANDARD_VECTOR_SIZE) const;
 	static unique_ptr<ChunkInfo> Read(FixedSizeAllocator &allocator, ReadStream &reader);
 
 public:
@@ -89,7 +92,7 @@ public:
 
 	bool HasDeletes(transaction_t transaction_id = MAX_TRANSACTION_ID) const override;
 
-	void Write(WriteStream &writer, transaction_t transaction_id) const override;
+	void Write(WriteStream &writer, transaction_t transaction_id, idx_t count = STANDARD_VECTOR_SIZE) const override;
 	static unique_ptr<ChunkInfo> Read(ReadStream &reader);
 
 private:
@@ -127,7 +130,7 @@ public:
 	bool HasConstantInsertionId() const;
 	transaction_t ConstantInsertId() const;
 
-	void Write(WriteStream &writer, transaction_t transaction_id) const override;
+	void Write(WriteStream &writer, transaction_t transaction_id, idx_t count = STANDARD_VECTOR_SIZE) const override;
 	static unique_ptr<ChunkInfo> Read(FixedSizeAllocator &allocator, ReadStream &reader);
 
 private:

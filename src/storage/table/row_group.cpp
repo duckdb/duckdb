@@ -1408,6 +1408,19 @@ idx_t RowGroup::GetVisibleRowCount(TransactionData transaction) {
 	return vinfo->GetRowCount(transaction, count);
 }
 
+bool RowGroup::HasUpdates() const {
+	for (idx_t c = 0; c < GetColumnCount(); c++) {
+		// unloaded columns cannot have in-memory updates; checking them would force a load
+		if (!ColumnIsLoaded(c)) {
+			continue;
+		}
+		if (columns[c] && columns[c]->HasUpdates()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool RowGroup::HasUnloadedDeletes() const {
 	if (deletes_pointers.empty()) {
 		// no stored deletes at all
@@ -1635,7 +1648,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.has_per_column_metadata_blocks = has_per_column_metadata_blocks;
 		row_group_pointer.per_column_metadata_blocks = per_column_metadata_blocks;
 		if (metadata_manager) {
-			row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
+			row_group_pointer.deletes_pointers = CheckpointDeletes(writer, count);
 
 			vector<MetaBlockPointer> metadata_block_pointers_to_be_cleared;
 			if (has_per_column_metadata_blocks) {
@@ -1769,7 +1782,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	}
 
 	if (metadata_manager) {
-		row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
+		row_group_pointer.deletes_pointers = CheckpointDeletes(writer, count);
 		metadata_manager->ClearModifiedBlocks(reused_column_blocks);
 	}
 
@@ -1827,7 +1840,7 @@ PersistentRowGroupData RowGroup::SerializeRowGroupInfo(idx_t row_group_start) co
 	return result;
 }
 
-vector<MetaBlockPointer> RowGroup::CheckpointDeletes(RowGroupWriter &writer) {
+vector<MetaBlockPointer> RowGroup::CheckpointDeletes(RowGroupWriter &writer, idx_t row_count) {
 	if (HasUnloadedDeletes()) {
 		// deletes were not loaded so they cannot be changed
 		// re-use them as-is
@@ -1840,7 +1853,7 @@ vector<MetaBlockPointer> RowGroup::CheckpointDeletes(RowGroupWriter &writer) {
 		// no version information: write nothing
 		return vector<MetaBlockPointer>();
 	}
-	return vinfo->Checkpoint(writer);
+	return vinfo->Checkpoint(writer, row_count);
 }
 
 void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer, bool supports_per_column_writes) {
