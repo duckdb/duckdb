@@ -17,6 +17,7 @@
 
 namespace duckdb {
 class CheckpointLock;
+class CheckpointLockKey;
 class CommitDropState;
 class DuckTableEntry;
 class RowGroupCollection;
@@ -93,7 +94,7 @@ public:
 		return true;
 	}
 
-	unique_ptr<StorageLockKey> TryGetCheckpointLock();
+	unique_ptr<CheckpointLockKey> TryGetCheckpointLock();
 
 	//! Get a shared lock on a table
 	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
@@ -109,7 +110,7 @@ private:
 	//! The set of uncommitted appends for the transaction
 	unique_ptr<LocalStorage> storage;
 	//! Lock that prevents checkpoints from starting
-	unique_ptr<StorageLockKey> checkpoint_lock;
+	unique_ptr<CheckpointLockKey> checkpoint_lock;
 	//! Lock that prevents vacuums from starting
 	unique_ptr<StorageLockKey> vacuum_lock;
 	//! Lock for accessing sequence_usage

@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_transaction
   OBJECT
+  checkpoint_lock.cpp
   duck_transaction_manager.cpp
   duck_transaction.cpp
   meta_transaction.cpp
