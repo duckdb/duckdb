@@ -223,6 +223,39 @@ TEST_CASE("PROBE cancel a streaming producer parked on a full buffer", "[api][.]
 	}
 }
 
+TEST_CASE("Interrupt is observed by PendingQueryResult::ExecuteTask", "[api]") {
+	DuckDB db;
+	Connection con(db);
+
+	// Single thread + tiny streaming buffer make the parked-collector RESULT_READY state reachable fast.
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	REQUIRE_NO_FAIL(con.Query("SET streaming_buffer_size='16KB'"));
+
+	auto pending = con.PendingQuery("SELECT * FROM range(10000000)", true);
+	REQUIRE(!pending->HasError());
+
+	PendingExecutionResult state = PendingExecutionResult::RESULT_NOT_READY;
+	for (idx_t i = 0; i < 1000000; i++) {
+		state = pending->ExecuteTask();
+		if (state == PendingExecutionResult::RESULT_READY || state == PendingExecutionResult::EXECUTION_ERROR) {
+			break;
+		}
+	}
+	REQUIRE(state == PendingExecutionResult::RESULT_READY);
+
+	con.Interrupt();
+
+	// Without the fix the parked collector keeps reporting RESULT_READY and the interrupt is never seen.
+	bool saw_error = false;
+	for (idx_t j = 0; j < 1000; j++) {
+		if (pending->ExecuteTask() == PendingExecutionResult::EXECUTION_ERROR) {
+			saw_error = true;
+			break;
+		}
+	}
+	REQUIRE(saw_error);
+}
+
 static void parallel_pending_query(Connection *conn, bool *correct, size_t threadnr) {
 	correct[threadnr] = true;
 	for (size_t i = 0; i < 100; i++) {
