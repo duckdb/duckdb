@@ -9,20 +9,6 @@
 
 namespace duckdb {
 
-static optional_ptr<const BoundColumnRefExpression> GetProjectionColumnRef(const Expression &expression) {
-	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		return expression.Cast<BoundColumnRefExpression>();
-	}
-	if (expression.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
-		return nullptr;
-	}
-	auto &cast = expression.Cast<BoundCastExpression>();
-	if (cast.IsTryCast() || cast.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-		return nullptr;
-	}
-	return cast.Child().Cast<BoundColumnRefExpression>();
-}
-
 // Optionally push a PROJECTION operator
 unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(const vector<LogicalType> &source_types,
                                                                const vector<LogicalType> &target_types,
