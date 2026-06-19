@@ -342,6 +342,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	// Mark this entry as being created by this transaction
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
+	// Preserve the oid across the alter: an altered entry is the same logical object as before
+	value->oid = entry->oid;
 
 	if (!StringUtil::CIEquals(value->name, entry->name)) {
 		if (!RenameEntryInternal(transaction, *entry, value->name, alter_info, read_lock)) {
