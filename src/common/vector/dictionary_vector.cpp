@@ -167,10 +167,10 @@ buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const Log
 	return entry;
 }
 
-buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusablePipelineGlobalDictionary(const LogicalType &type,
-                                                                                     const idx_t &size) {
+buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableGlobalDictionary(const LogicalType &type,
+                                                                             const idx_t &size) {
 	auto entry = CreateReusableDictionary(type, size);
-	entry->pipeline_global = true;
+	entry->global_dictionary = true;
 	return entry;
 }
 

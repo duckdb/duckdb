@@ -1,5 +1,5 @@
 # name: test/sql/join/hash_join/hash_join_dict_surviving.test
-# description: Test the dict-surviving hash join - a pipeline-global build-side DICTIONARY_VECTOR is stored as a narrow row-store index and re-emitted at probe time
+# description: Test the dict-surviving hash join - a global dictionary build-side DICTIONARY_VECTOR is stored as a narrow row-store index and re-emitted at probe time
 # group: [hash_join]
 
 # force multi-threaded build so thread-local dictionaries reconcile through Merge
@@ -376,7 +376,7 @@ NATION_2	400
 NATION_3	400
 NATION_4	400
 
-# storage dict not admitted: a per-row-group DICTIONARY_VECTOR is not pipeline-global
+# storage dict not admitted: a per-row-group DICTIONARY_VECTOR is not a global dictionary
 statement ok
 SET disabled_optimizers='join_order,build_side_probe_side'
 
@@ -416,7 +416,7 @@ PRAGMA force_compression='auto'
 statement ok
 SET disabled_optimizers='join_order'
 
-# small-build dictionary emission produces a pipeline-global dictionary the next join narrows
+# small-build dictionary emission produces a global dictionary the next join narrows
 statement ok
 CREATE TABLE dim AS SELECT 'KEY_' || i AS d_key, 'LABEL_' || (i % 5) AS d_label FROM range(100) t(i)
 

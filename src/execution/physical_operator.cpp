@@ -416,16 +416,16 @@ SelectExecutionMode(const DataChunk &chunk, const OperatorResultType child_resul
 	return CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
 }
 
-static bool ChunkHasPipelineGlobalDict(const DataChunk &chunk) {
+static bool ChunkHasGlobalDictionary(const DataChunk &chunk) {
 	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
-		if (DictionaryVector::IsPipelineGlobal(chunk.data[col_idx])) {
+		if (DictionaryVector::IsGlobalDictionary(chunk.data[col_idx])) {
 			return true;
 		}
 	}
 	return false;
 }
 
-//! Switch the empty cache to dictionary mode: pin each pipeline-global dict column's upstream entry, allocate its
+//! Switch the empty cache to dictionary mode: pin each global dictionary column's upstream entry, allocate its
 //! sel accumulator, and make its flat cache slot a zero-width placeholder so dict and flat columns stay
 //! row-aligned. A column's dict/flat tag is frozen here; correctness then relies on the producer never falling
 //! back to flat (enforced by the throw in AppendToCache).
@@ -435,7 +435,7 @@ static void SeedDictCache(CachingOperatorState &state, DataChunk &source, Client
 	state.dict_columns.resize(col_count);
 	auto flat_initialize = vector<bool>(col_count, true);
 	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
-		if (!DictionaryVector::IsPipelineGlobal(source.data[col_idx])) {
+		if (!DictionaryVector::IsGlobalDictionary(source.data[col_idx])) {
 			continue;
 		}
 		auto &slot = state.dict_columns[col_idx];
@@ -453,14 +453,14 @@ static void SeedDictCache(CachingOperatorState &state, DataChunk &source, Client
 }
 
 //! Append source into the cache (created lazily). On the first append into an empty cache, detect
-//! pipeline-global dict columns; those concatenate their selection indices instead of flattening.
+//! global dictionary columns; those concatenate their selection indices instead of flattening.
 static void AppendToCache(CachingOperatorState &state, DataChunk &source, ClientContext &client_context) {
 	if (!state.cached_chunk) {
 		state.cached_chunk = make_uniq<DataChunk>();
 		state.cached_chunk->Initialize(Allocator::Get(client_context), source.GetTypes());
 	}
 	auto &cache = *state.cached_chunk;
-	if (cache.size() == 0 && !state.dict_cache_active && ChunkHasPipelineGlobalDict(source)) {
+	if (cache.size() == 0 && !state.dict_cache_active && ChunkHasGlobalDictionary(source)) {
 		SeedDictCache(state, source, client_context);
 	}
 	if (!state.dict_cache_active) {
@@ -476,12 +476,13 @@ static void AppendToCache(CachingOperatorState &state, DataChunk &source, Client
 	for (idx_t col_idx = 0; col_idx < cache.ColumnCount(); col_idx++) {
 		auto &slot = state.dict_columns[col_idx];
 		if (slot.entry) {
-			// dict column: every later chunk must be the same pipeline-global dictionary. Throw (not D_ASSERT)
+			// dict column: every later chunk must be the same global dictionary. Throw (not D_ASSERT)
 			// because the Cast below is UB on a non-dict vector in release, accumulating foreign bytes as indices.
 			auto &source_col = source.data[col_idx];
 			if (source_col.GetVectorType() != VectorType::DICTIONARY_VECTOR ||
-			    DictionaryVector::DictionaryId(source_col).empty() || !DictionaryVector::IsPipelineGlobal(source_col)) {
-				throw InternalException("dict-surviving cache: column %llu received a non-pipeline-global "
+			    DictionaryVector::DictionaryId(source_col).empty() ||
+			    !DictionaryVector::IsGlobalDictionary(source_col)) {
+				throw InternalException("dict-surviving cache: column %llu received a non-global-dictionary "
 				                        "chunk after being seeded for dictionary caching",
 				                        static_cast<uint64_t>(col_idx));
 			}
@@ -503,7 +504,7 @@ static void AppendToCache(CachingOperatorState &state, DataChunk &source, Client
 }
 
 //! After moving the cache into chunk, re-wrap each dict column as a DICTIONARY_VECTOR over the
-//! pinned upstream entry, carrying its id and pipeline_global flag through unchanged.
+//! pinned upstream entry, carrying its id and global_dictionary flag through unchanged.
 static void RewrapDictColumns(CachingOperatorState &state, DataChunk &chunk, idx_t count) {
 	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
 		auto &slot = state.dict_columns[col_idx];

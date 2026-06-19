@@ -595,7 +595,7 @@ static bool CanUseDictSurvivingJoin(const PhysicalHashJoin &op, const JoinHashTa
 		return false;
 	}
 	// OUTER fills unmatched-probe rows with CONSTANT_NULL (NextLeftJoin), mixing dict chunks with flat fill chunks;
-	// admitting it would re-emit a falsely pipeline-global dictionary a downstream consumer cannot trust.
+	// admitting it would re-emit a falsely global dictionary a downstream consumer cannot trust.
 	if (ht.join_type == JoinType::OUTER) {
 		return false;
 	}

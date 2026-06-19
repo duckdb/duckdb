@@ -23,8 +23,8 @@ public:
 	//! Optional id to uniquely identify re-occurring dictionaries
 	string id;
 	//! True iff the producer wraps this same entry in every output chunk for its lifetime (stable id, no flat
-	//! fall-through). Set only via CreateReusablePipelineGlobalDictionary.
-	bool pipeline_global = false;
+	//! fall-through), making it a global dictionary. Set only via CreateReusableGlobalDictionary.
+	bool global_dictionary = false;
 	//! For caching the hashes of a child buffer (mutable: cache is logically const)
 	mutable mutex cached_hashes_lock;
 	mutable unique_ptr<Vector> cached_hashes;
@@ -155,14 +155,13 @@ struct DictionaryVector {
 	}
 	static buffer_ptr<DictionaryEntry> CreateReusableDictionary(const LogicalType &type, const idx_t &size);
 	//! Mint a reusable dictionary entry whose lifetime spans the entire producing operator instance
-	static buffer_ptr<DictionaryEntry> CreateReusablePipelineGlobalDictionary(const LogicalType &type,
-	                                                                          const idx_t &size);
-	//! True iff vector is a DICTIONARY_VECTOR whose entry is pipeline-global
-	static inline bool IsPipelineGlobal(const Vector &vector) {
+	static buffer_ptr<DictionaryEntry> CreateReusableGlobalDictionary(const LogicalType &type, const idx_t &size);
+	//! True iff vector is a DICTIONARY_VECTOR whose entry is a global dictionary
+	static inline bool IsGlobalDictionary(const Vector &vector) {
 		if (vector.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
 			return false;
 		}
-		return vector.Buffer().Cast<DictionaryBuffer>().GetEntry().pipeline_global;
+		return vector.Buffer().Cast<DictionaryBuffer>().GetEntry().global_dictionary;
 	}
 	static const Vector &GetCachedHashes(const Vector &input);
 };

@@ -165,7 +165,7 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 
 	sink_collection->Combine(*other.sink_collection);
 
-	// Reconcile per-column pinned dictionary entries. For pipeline-global producers every thread pins the
+	// Reconcile per-column pinned dictionary entries. For global dictionary producers every thread pins the
 	// same buffer_ptr, so this is normally a no-op or a "take theirs" adoption.
 	if (dict_registry.size() < other.dict_registry.size()) {
 		dict_registry.resize(other.dict_registry.size(), nullptr);
@@ -479,7 +479,7 @@ uint8_t JoinHashTable::GetDictSurvivingIndexWidth(idx_t build_col_idx, const Vec
 	if (incoming.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
 		return 0;
 	}
-	if (!DictionaryVector::IsPipelineGlobal(incoming)) {
+	if (!DictionaryVector::IsGlobalDictionary(incoming)) {
 		return 0;
 	}
 	// an empty/invalid dictionary keeps native width
@@ -543,9 +543,9 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 			// Slot was narrowed on the first chunk; no fallback for a non-dict later chunk. Throw, not D_ASSERT:
 			// the Cast<DictionaryBuffer> below is UB in release on a non-dict vector, scattering foreign bytes.
 			if (incoming.GetVectorType() != VectorType::DICTIONARY_VECTOR ||
-			    DictionaryVector::DictionaryId(incoming).empty() || !DictionaryVector::IsPipelineGlobal(incoming)) {
+			    DictionaryVector::DictionaryId(incoming).empty() || !DictionaryVector::IsGlobalDictionary(incoming)) {
 				throw InternalException("dict-surviving join: narrowed column %llu received a "
-				                        "non-pipeline-global chunk; build pipeline is not single-source",
+				                        "non-global-dictionary chunk; build pipeline is not single-source",
 				                        static_cast<uint64_t>(i));
 			}
 			// Pin the dictionary on the first chunk; enforce id continuity on subsequent chunks
@@ -559,7 +559,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 				// producer that grows the child past it fails loudly instead of truncating in the UnsafeNumericCast.
 				D_ASSERT(child_count <= (idx_t(1) << (8 * index_width)));
 				auto owned_entry =
-				    DictionaryVector::CreateReusablePipelineGlobalDictionary(upstream_child.GetType(), child_count);
+				    DictionaryVector::CreateReusableGlobalDictionary(upstream_child.GetType(), child_count);
 				if (child_count > 0) {
 					VectorOperations::Copy(upstream_child, owned_entry->data, child_count, 0, 0);
 				}
@@ -2679,16 +2679,15 @@ void JoinHashTable::BuildDictionaryArrays(const PhysicalHashJoin &op) {
 	const auto row_ptrs = FlatVector::GetData<data_ptr_t>(row_pointer_vector);
 
 	// LEFT / OUTER joins fill unmatched probe rows with a constant-NULL vector (NextLeftJoin), so they do not
-	// wrap this entry on every chunk; it is only pipeline-global when every chunk goes through EmitDictVectors.
+	// wrap this entry on every chunk; it is only a global dictionary when every chunk goes through EmitDictVectors.
 	const bool dict_on_every_chunk = join_type != JoinType::LEFT && join_type != JoinType::OUTER;
 
 	// gather RHS output columns into columnar dictionary arrays
 	const auto &sel = *FlatVector::IncrementalSelectionVector();
 	for (idx_t col_idx = 0; col_idx < op.rhs_output_columns.col_types.size(); col_idx++) {
 		const auto &type = op.rhs_output_columns.col_types[col_idx];
-		auto dict_entry = dict_on_every_chunk
-		                      ? DictionaryVector::CreateReusablePipelineGlobalDictionary(type, build_count)
-		                      : DictionaryVector::CreateReusableDictionary(type, build_count);
+		auto dict_entry = dict_on_every_chunk ? DictionaryVector::CreateReusableGlobalDictionary(type, build_count)
+		                                      : DictionaryVector::CreateReusableDictionary(type, build_count);
 		const auto output_col_idx = output_columns[col_idx];
 		collection.Gather(row_pointer_vector, sel, build_count, output_col_idx, dict_entry->data, sel, nullptr);
 		dict_arrays.emplace_back(std::move(dict_entry));

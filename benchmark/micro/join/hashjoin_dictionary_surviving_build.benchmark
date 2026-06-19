@@ -1,11 +1,11 @@
 # name: benchmark/micro/join/hashjoin_dictionary_surviving_build.benchmark
-# description: Pipeline-global dictionary surviving across three chained hash joins into a GROUP BY: a low-cardinality VARCHAR payload stays dict-encoded instead of materialising the full string at each build
+# description: Global dictionary surviving across three chained hash joins into a GROUP BY: a low-cardinality VARCHAR payload stays dict-encoded instead of materialising the full string at each build
 # group: [join]
 
 name Hash Join Dictionary Surviving Build
 group join
 
-# Measures the dict-surviving path: a small build emits a pipeline-global dictionary kept dict-encoded
+# Measures the dict-surviving path: a small build emits a global dictionary kept dict-encoded
 # across two large downstream join builds and the GROUP BY, versus materialising the full string per
 # build row. Each probe is larger than its build (3M -> 6M -> 12M rows) so the dictionary-carrying side
 # stays on the build of joins 2 and 3 and the aggregate input is large. Single thread and fixed join

@@ -138,7 +138,7 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable() {
 	const auto build_size = perfect_join_statistics.build_range + 1;
 	for (const auto &type : join.rhs_output_columns.col_types) {
 		// PHJ keeps each entry alive for the operator's lifetime and wraps it in every emitted chunk
-		perfect_hash_table.emplace_back(DictionaryVector::CreateReusablePipelineGlobalDictionary(type, build_size));
+		perfect_hash_table.emplace_back(DictionaryVector::CreateReusableGlobalDictionary(type, build_size));
 	}
 
 	// and for duplicate_checking
