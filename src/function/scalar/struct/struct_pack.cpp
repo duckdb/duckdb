@@ -18,6 +18,12 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 	// this should never happen if the binder below is sane
 	D_ASSERT(args.ColumnCount() == StructType::GetChildTypes(info.stype).size());
 #endif
+	if (args.ColumnCount() == 0) {
+		// empty struct: no children to reference, the value is a single non-null constant
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, false);
+		return;
+	}
 	bool all_const = true;
 	auto &child_entries = StructVector::GetEntries(result);
 	idx_t children_size = 0;
@@ -45,9 +51,7 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 	identifier_set_t name_collision_set;
 
 	// collect names and deconflict, construct return type
-	if (arguments.empty()) {
-		throw InvalidInputException("Can't pack nothing into a struct");
-	}
+	// note: zero arguments is allowed, producing an empty struct
 	child_list_t<LogicalType> struct_children;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &child = arguments[i];

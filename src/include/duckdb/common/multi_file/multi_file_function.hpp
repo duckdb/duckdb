@@ -415,7 +415,8 @@ public:
 			if (cast_entry != reader.cast_map.end()) {
 				intermediate_chunk_types.push_back(cast_entry->second);
 			} else if (expr_entry != reader.expression_map.end()) {
-				intermediate_chunk_types.push_back(expr_entry->second->GetReturnType());
+				auto &expression = expr_entry->second.expression;
+				intermediate_chunk_types.push_back(expression->GetReturnType());
 			} else if (local_id.IsRowIdColumn()) {
 				//! FIXME: should this generically check for all virtual columns??
 				intermediate_chunk_types.push_back(LogicalType::ROW_TYPE);
@@ -677,14 +678,16 @@ public:
 
 		do {
 			auto &scan_chunk = data.scan_chunk;
-			scan_chunk.Reset();
+			if (data.scan_blocked) {
+				data.scan_blocked = false;
+			} else {
+				scan_chunk.Reset();
+			}
 
 			auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
 
 			if (res.GetResultType() == AsyncResultType::BLOCKED) {
-				if (scan_chunk.size() != 0) {
-					throw InternalException("Unexpected behaviour from Scan, no rows should be returned");
-				}
+				data.scan_blocked = true;
 				switch (data_p.results_execution_mode) {
 				case AsyncResultsExecutionMode::TASK_EXECUTOR:
 					data_p.async_result = std::move(res);
@@ -694,7 +697,7 @@ public:
 					if (res.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
 						throw InternalException("Unexpected behaviour from ExecuteTasksSynchronously");
 					}
-					// scan_chunk.size() is 0, see check above, and result is HAVE_MORE_OUTPUT, we need to loop again
+					// no completed output yet, loop again to resume the Scan
 					continue;
 				}
 			}

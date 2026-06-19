@@ -36,6 +36,16 @@ static optional_idx FindBindingIndex(const vector<ColumnBinding> &bindings, cons
 	return NumericCast<idx_t>(entry - bindings.begin());
 }
 
+static idx_t CountUniqueBindings(const vector<ColumnBinding> &bindings) {
+	vector<ColumnBinding> unique_bindings;
+	for (auto &binding : bindings) {
+		if (!FindBindingIndex(unique_bindings, binding).IsValid()) {
+			unique_bindings.push_back(binding);
+		}
+	}
+	return unique_bindings.size();
+}
+
 static idx_t CountCTERefs(LogicalOperator &op, TableIndex cte_index) {
 	idx_t result = 0;
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF && op.Cast<LogicalCTERef>().cte_index == cte_index) {
@@ -454,10 +464,12 @@ bool UnnestRewriter::RewriteInlineCTEDedupCandidate(unique_ptr<LogicalOperator> 
 	for (idx_t binding_idx = 0; binding_idx < dedup_bindings.size(); binding_idx++) {
 		domain_ref_replacer.replacement_bindings.emplace_back(dedup_bindings[binding_idx], delim_columns[binding_idx]);
 	}
-	LogicalOperatorVisitor::EnumerateExpressions(
-	    topmost_op, [&](unique_ptr<Expression> *expr) { domain_ref_replacer.VisitExpression(expr); });
+	domain_ref_replacer.VisitOperator(topmost_op);
 	overwritten_tbl_idx = dedup_bindings[0].table_index;
-	distinct_unnest_count = dedup_bindings.size();
+	// Inline CTE dedup inputs can contain repeated source columns, e.g. table-in-out UNNEST can project an input
+	// column and carry it again as a delimiter column. The RHS projection path only has the unique delimiter
+	// columns at its tail.
+	distinct_unnest_count = CountUniqueBindings(delim_columns);
 
 	unnest.children[0] = std::move(domain_cte.children[0]);
 	if (path_to_unnest.empty()) {
@@ -720,31 +732,21 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique
 	// update all bindings coming from the LHS to RHS bindings
 	D_ASSERT(topmost_op.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto &top_proj = topmost_op.children[0]->Cast<LogicalProjection>();
+	vector<ColumnBinding> source_lhs_bindings;
+	source_lhs_bindings.reserve(lhs_bindings.size());
 	for (idx_t i = 0; i < lhs_bindings.size(); i++) {
-		ReplaceBinding replace_binding(lhs_bindings[i].binding,
-		                               ColumnBinding(top_proj.table_index, ProjectionIndex(i)));
-		updater.replace_bindings.push_back(replace_binding);
+		source_lhs_bindings.push_back(lhs_bindings[i].binding);
 	}
-
-	// temporarily remove the BOUND_UNNESTs and the child of the LOGICAL_UNNEST from the plan
-	D_ASSERT(curr_op.get()->type == LogicalOperatorType::LOGICAL_UNNEST);
-	auto &unnest = curr_op.get()->Cast<LogicalUnnest>();
-	vector<unique_ptr<Expression>> temp_bound_unnests;
-	for (auto &temp_bound_unnest : unnest.expressions) {
-		temp_bound_unnests.push_back(std::move(temp_bound_unnest));
+	// References above the RHS projection path should point at the LHS columns exposed by the top projection.
+	// Expressions inside the path itself still need to bind against their child; those are repaired below as each
+	// projection gets the LHS columns prepended.
+	ColumnBindingReplacer lhs_replacer;
+	lhs_replacer.stop_operator = topmost_op.children[0];
+	for (idx_t i = 0; i < lhs_bindings.size(); i++) {
+		lhs_replacer.replacement_bindings.emplace_back(
+		    lhs_bindings[i].binding, ColumnBinding(top_proj.table_index, ProjectionIndex(i)), lhs_bindings[i].type);
 	}
-	D_ASSERT(unnest.children.size() == 1);
-	auto temp_unnest_child = std::move(unnest.children[0]);
-	unnest.expressions.clear();
-	unnest.children.clear();
-	// update the bindings of the plan
-	updater.VisitOperator(*plan);
-	updater.replace_bindings.clear();
-	// add the children again
-	for (auto &temp_bound_unnest : temp_bound_unnests) {
-		unnest.expressions.push_back(std::move(temp_bound_unnest));
-	}
-	unnest.children.push_back(std::move(temp_unnest_child));
+	lhs_replacer.VisitOperator(*plan);
 
 	// add the LHS expressions to each LOGICAL_PROJECTION
 	for (idx_t i = path_to_unnest.size(); i > 0; i--) {
@@ -754,6 +756,18 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique
 		// temporarily store the existing expressions
 		auto existing_expressions = std::move(proj.expressions);
 		proj.expressions.clear();
+
+		ColumnBindingReplacer child_lhs_replacer;
+		for (idx_t expr_idx = 0; expr_idx < lhs_bindings.size(); expr_idx++) {
+			if (source_lhs_bindings[expr_idx] == lhs_bindings[expr_idx].binding) {
+				continue;
+			}
+			child_lhs_replacer.replacement_bindings.emplace_back(
+			    source_lhs_bindings[expr_idx], lhs_bindings[expr_idx].binding, lhs_bindings[expr_idx].type);
+		}
+		for (auto &expr : existing_expressions) {
+			child_lhs_replacer.VisitExpression(&expr);
+		}
 
 		// add the new expressions
 		for (idx_t expr_idx = 0; expr_idx < lhs_bindings.size(); expr_idx++) {

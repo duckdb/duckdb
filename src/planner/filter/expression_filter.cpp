@@ -19,11 +19,13 @@
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/storage/statistics/variant_stats.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
 
 namespace duckdb {
@@ -275,6 +277,66 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(optional_ptr<ClientC
 	}
 }
 
+static bool TryGetVariantComparisonStatsType(const LogicalType &typed_type, const LogicalType &constant_type,
+                                             LogicalType &comparison_type) {
+	if (typed_type == constant_type) {
+		comparison_type = typed_type;
+		return true;
+	}
+	if (!typed_type.IsIntegral() || !constant_type.IsIntegral()) {
+		return false;
+	}
+	if (!LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(typed_type, constant_type, comparison_type)) {
+		return false;
+	}
+	return comparison_type.IsIntegral();
+}
+
+static optional_ptr<const BaseStatistics>
+TryPrepareVariantComparisonStats(const BaseStatistics &stats, Value &constant,
+                                 vector<unique_ptr<BaseStatistics>> &owned_stats) {
+	if (stats.GetType().id() != LogicalTypeId::VARIANT) {
+		return constant.type().id() == LogicalTypeId::VARIANT ? nullptr : &stats;
+	}
+	if (!VariantStats::IsShredded(stats)) {
+		return nullptr;
+	}
+	auto &shredded_stats = VariantStats::GetShreddedStats(stats);
+	if (!VariantShreddedStats::IsFullyShredded(shredded_stats)) {
+		return nullptr;
+	}
+	auto &typed_stats = VariantStats::GetTypedStats(shredded_stats);
+	auto &typed_type = typed_stats.GetType();
+	if (typed_type.IsNested() || typed_type.id() == LogicalTypeId::VARIANT) {
+		return nullptr;
+	}
+
+	if (constant.type().id() == LogicalTypeId::VARIANT) {
+		constant = VariantValue::GetValue(constant);
+	}
+	if (constant.IsNull()) {
+		return nullptr;
+	}
+
+	LogicalType comparison_type;
+	if (!TryGetVariantComparisonStatsType(typed_type, constant.type(), comparison_type)) {
+		return nullptr;
+	}
+	if (!constant.DefaultTryCastAs(comparison_type)) {
+		return nullptr;
+	}
+	if (typed_type == comparison_type) {
+		return &typed_stats;
+	}
+
+	auto cast_stats = StatisticsPropagator::TryPropagateCast(typed_stats, typed_type, comparison_type);
+	if (!cast_stats) {
+		return nullptr;
+	}
+	owned_stats.push_back(std::move(cast_stats));
+	return owned_stats.back().get();
+}
+
 static FilterPropagateResult CheckComparisonStatistics(optional_ptr<ClientContext> context_p,
                                                        const BoundFunctionExpression &comp_expr,
                                                        const BaseStatistics &stats) {
@@ -301,11 +363,24 @@ static FilterPropagateResult CheckComparisonStatistics(optional_ptr<ClientContex
 	if (constant.IsNull()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	auto comparison_constant = constant;
+	const bool variant_comparison = filter_stats->GetType().id() == LogicalTypeId::VARIANT ||
+	                                comparison_constant.type().id() == LogicalTypeId::VARIANT;
+	if (variant_comparison) {
+		filter_stats = TryPrepareVariantComparisonStats(*filter_stats, comparison_constant, owned_stats);
+		if (!filter_stats) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+	}
 	if (!filter_stats->CanHaveNoNull()) {
+		if (variant_comparison) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
 		return comparison_type == ExpressionType::COMPARE_DISTINCT_FROM ? FilterPropagateResult::FILTER_ALWAYS_TRUE
 		                                                                : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	auto result = CheckZonemapAgainstConstants(*filter_stats, comparison_type, array_ptr<const Value>(&constant, 1));
+	auto result =
+	    CheckZonemapAgainstConstants(*filter_stats, comparison_type, array_ptr<const Value>(&comparison_constant, 1));
 	if (filter_stats->CanHaveNull()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

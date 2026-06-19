@@ -13,9 +13,6 @@ statement ok
 SET threads=1
 
 statement ok
-SET prefetch_all_parquet_files=true
-
-statement ok
 COPY (SELECT range AS i FROM range(100000)) TO '{TEST_DIR}/async_pool.parquet' (ROW_GROUP_SIZE 10000)
 
 statement ok

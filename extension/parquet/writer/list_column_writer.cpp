@@ -157,6 +157,11 @@ void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t c
 	GetChildWriter().Write(*state.child_state, child_list, child_length);
 }
 
+void ListColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
+	auto &state = state_p.Cast<ListColumnWriterState>();
+	GetChildWriter().PrepareWrite(*state.child_state);
+}
+
 void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 	GetChildWriter().FinalizeWrite(*state.child_state);

@@ -1,0 +1,89 @@
+# name: test/sql/copy/async_file_lifecycle.test
+# description: test async COPY file open/finalize lifecycle paths
+# group: [copy]
+
+require parquet
+
+statement ok
+SET threads=4;
+
+statement ok
+SET async_threads=2;
+
+statement ok
+SET GLOBAL debug_local_file_system_delay_ms=1;
+
+statement ok
+CREATE TABLE lifecycle AS
+SELECT i, i % 3 AS p, repeat('x', 10) AS payload
+FROM range(0, 4096) t(i);
+
+query II
+COPY lifecycle TO '{TEST_DIR}/async_lifecycle_single.parquet' (FORMAT PARQUET, RETURN_FILES);
+----
+4096	<REGEX>:.*async_lifecycle_single.parquet.*
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/async_lifecycle_single.parquet');
+----
+4096
+
+query IIIIIII
+COPY lifecycle TO '{TEST_DIR}/async_lifecycle_stats.parquet' (FORMAT PARQUET, RETURN_STATS);
+----
+<REGEX>:.*async_lifecycle_stats.parquet	4096	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:.*	NULL	<REGEX>:.*
+
+statement ok
+COPY lifecycle TO '{TEST_DIR}/async_lifecycle_tmp.parquet' (FORMAT PARQUET, USE_TMP_FILE TRUE);
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/async_lifecycle_tmp.parquet');
+----
+4096
+
+statement ok
+COPY lifecycle TO '{TEST_DIR}/async_lifecycle_rotate'
+(FORMAT PARQUET, ROW_GROUP_SIZE 1024, ROW_GROUPS_PER_FILE 1);
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/async_lifecycle_rotate/*.parquet');
+----
+4096
+
+query I
+SELECT count(*) > 1 FROM glob('{TEST_DIR}/async_lifecycle_rotate/*.parquet');
+----
+true
+
+statement ok
+COPY lifecycle TO '{TEST_DIR}/async_lifecycle_per_thread' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/async_lifecycle_per_thread/*.parquet');
+----
+4096
+
+statement ok
+SET partitioned_write_max_open_files=2;
+
+statement ok
+COPY lifecycle TO '{TEST_DIR}/async_lifecycle_partitioned' (FORMAT PARQUET, PARTITION_BY (p));
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/async_lifecycle_partitioned/**/*.parquet', hive_partitioning=true);
+----
+4096
+
+statement ok
+SET async_threads=0;
+
+statement ok
+COPY lifecycle TO '{TEST_DIR}/async_lifecycle_sync.parquet' (FORMAT PARQUET);
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/async_lifecycle_sync.parquet');
+----
+4096
+
+statement ok
+SET GLOBAL debug_local_file_system_delay_ms=0;

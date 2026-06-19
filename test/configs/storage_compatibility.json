@@ -162,7 +162,8 @@
         "test/sql/aggregate/aggregates/test_covar_export_state.test",
         "test/sql/aggregate/aggregates/test_combine_aggr.test",
         "test/sql/aggregate/aggregate_state_export/test_covar_export_state.test",
-        "test/sql/aggregate/aggregate_state_export/test_state_export_opaque.test"
+        "test/sql/aggregate/aggregate_state_export/test_state_export_opaque.test",
+        "test/sql/types/struct/empty_struct.test"
       ]
     },
     {
@@ -205,6 +206,29 @@
         "test/sql/trigger/create_trigger_wal.test",
         "test/sql/trigger/drop_trigger.test",
         "test/sql/trigger/drop_trigger_wal.test"
+      ]
+    },
+    {
+      "reason": "test_all_types() require latest storage",
+      "paths": [
+        "test/sql/aggregate/aggregates/arg_min_max_all_types.test_slow",
+        "test/sql/aggregate/aggregates/arg_min_max_n_all_types.test_slow",
+        "test/sql/aggregate/aggregates/arg_min_max_nulls_last_all_types.test_slow",
+        "test/sql/aggregate/aggregates/first_test_all_types.test_slow",
+        "test/sql/aggregate/aggregates/histogram_test_all_types.test_slow",
+        "test/sql/aggregate/aggregates/mode_test_all_types.test_slow",
+        "test/sql/aggregate/aggregates/quantile_test_all_types.test_slow",
+        "test/sql/function/list/aggregates/minmax_all_types.test_slow",
+        "test/sql/function/list/list_resize_types.test_slow",
+        "test/sql/function/list/list_reverse.test_slow",
+        "test/sql/function/list/list_reverse_all_types.test_slow",
+        "test/sql/function/list/list_select.test_slow",
+        "test/sql/join/pushdown/pushdown_many_columns.test_slow",
+        "test/sql/json/table/test_json_table_in_out.test_slow",
+        "test/sql/json/test_json_copy.test_slow",
+        "test/sql/types/list/list_extract_types.test_slow",
+        "test/sql/types/test_all_types.test_slow",
+        "test/sql/window/test_streaming_lead_lag.test_slow"
       ]
     }
   ]

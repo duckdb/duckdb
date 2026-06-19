@@ -14,7 +14,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/primitive_dictionary.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
@@ -29,6 +29,47 @@ using duckdb_parquet::PageType;
 
 constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE;
 constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
+
+class ParquetPagePayloadBuffer : public AsyncWriteBuffer {
+public:
+	ParquetPagePayloadBuffer(idx_t size_p, unique_ptr<MemoryStream> temp_writer_p, AllocatedData compressed_buf_p)
+	    : size(size_p), temp_writer(std::move(temp_writer_p)), compressed_buf(std::move(compressed_buf_p)) {
+		D_ASSERT(temp_writer || compressed_buf.IsSet());
+	}
+
+	data_ptr_t Ptr() override {
+		if (compressed_buf.IsSet()) {
+			return compressed_buf.get();
+		}
+		D_ASSERT(temp_writer);
+		return temp_writer->GetData();
+	}
+
+	idx_t Size() const override {
+		return size;
+	}
+
+private:
+	idx_t size;
+	unique_ptr<MemoryStream> temp_writer;
+	AllocatedData compressed_buf;
+};
+
+static PageWriteInformation CreateDictionaryPageWriteInformation(idx_t uncompressed_size, idx_t row_count) {
+	PageWriteInformation write_info;
+	auto &hdr = write_info.page_header;
+	hdr.uncompressed_page_size = UnsafeNumericCast<int32_t>(uncompressed_size);
+	hdr.type = PageType::DICTIONARY_PAGE;
+	hdr.__isset.dictionary_page_header = true;
+
+	hdr.dictionary_page_header.encoding = Encoding::PLAIN;
+	hdr.dictionary_page_header.is_sorted = false;
+	hdr.dictionary_page_header.num_values = UnsafeNumericCast<int32_t>(row_count);
+
+	write_info.write_count = 0;
+	write_info.max_write_count = 0;
+	return write_info;
+}
 
 PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
                                              vector<Identifier> schema_path)
@@ -376,22 +417,38 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	}
 }
 
+void PrimitiveColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
+	auto &state = state_p.Cast<PrimitiveColumnWriterState>();
+
+	// Flush the last page and materialize any dictionary page before the row-group flush path.
+	FlushPage(state);
+	if (HasDictionary(state)) {
+		FlushDictionary(state, state.stats_state.get());
+	}
+
+	for (auto &write_info : state.write_info) {
+		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
+		D_ASSERT(!write_info.prepared_header);
+		D_ASSERT(!write_info.prepared_payload);
+
+		write_info.prepared_header = writer.PrepareWrite(write_info.page_header);
+		auto payload_buffer = make_uniq<ParquetPagePayloadBuffer>(
+		    write_info.compressed_size, std::move(write_info.temp_writer), std::move(write_info.compressed_buf));
+		write_info.prepared_payload = writer.PrepareWriteData(std::move(payload_buffer));
+	}
+}
+
 void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<PrimitiveColumnWriterState>();
 	auto &column_chunk = state.row_group.columns[state.col_idx];
 
-	// flush the last page (if any remains)
-	FlushPage(state);
-
 	auto &column_writer = writer.GetWriter();
 	auto start_offset = column_writer.GetTotalWritten();
-	// flush the dictionary
 	if (HasDictionary(state)) {
 		column_chunk.meta_data.statistics.distinct_count = UnsafeNumericCast<int64_t>(DictionarySize(state));
 		column_chunk.meta_data.statistics.__isset.distinct_count = true;
 		column_chunk.meta_data.dictionary_page_offset = UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten());
 		column_chunk.meta_data.__isset.dictionary_page_offset = true;
-		FlushDictionary(state, state.stats_state.get());
 	}
 
 	// record the start position of the pages for this column
@@ -407,12 +464,13 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 			column_chunk.meta_data.data_page_offset = UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten());
 		}
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
-		auto header_start_offset = column_writer.GetTotalWritten();
-		writer.Write(write_info.page_header);
+		D_ASSERT(write_info.prepared_header);
+		D_ASSERT(write_info.prepared_payload);
 		// total uncompressed size in the column chunk includes the header size (!)
-		total_uncompressed_size += column_writer.GetTotalWritten() - header_start_offset;
+		total_uncompressed_size += write_info.prepared_header->Size();
 		total_uncompressed_size += write_info.page_header.uncompressed_page_size;
-		writer.WriteData(write_info.compressed_data, write_info.compressed_size);
+		writer.WriteData(std::move(write_info.prepared_header));
+		writer.WriteData(std::move(write_info.prepared_payload));
 	}
 	column_chunk.meta_data.total_compressed_size =
 	    UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten() - start_offset);
@@ -439,31 +497,40 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, u
 	D_ASSERT(temp_writer);
 	D_ASSERT(temp_writer->GetPosition() > 0);
 
-	// write the dictionary page header
-	PageWriteInformation write_info;
-	// set up the header
-	auto &hdr = write_info.page_header;
-	hdr.uncompressed_page_size = UnsafeNumericCast<int32_t>(temp_writer->GetPosition());
-	hdr.type = PageType::DICTIONARY_PAGE;
-	hdr.__isset.dictionary_page_header = true;
-
-	hdr.dictionary_page_header.encoding = Encoding::PLAIN;
-	hdr.dictionary_page_header.is_sorted = false;
-	hdr.dictionary_page_header.num_values = UnsafeNumericCast<int32_t>(row_count);
-
+	auto write_info = CreateDictionaryPageWriteInformation(temp_writer->GetPosition(), row_count);
 	write_info.temp_writer = std::move(temp_writer);
-	write_info.write_count = 0;
-	write_info.max_write_count = 0;
 
 	// compress the contents of the dictionary page
 	CompressPage(*write_info.temp_writer, write_info.compressed_size, write_info.compressed_data,
 	             write_info.compressed_buf);
-	hdr.compressed_page_size = UnsafeNumericCast<int32_t>(write_info.compressed_size);
+	write_info.page_header.compressed_page_size = UnsafeNumericCast<int32_t>(write_info.compressed_size);
 
 	if (write_info.compressed_buf.IsSet()) {
 		// if the data has been compressed, we no longer need the uncompressed data
 		D_ASSERT(write_info.compressed_buf.get() == write_info.compressed_data);
 		write_info.temp_writer.reset();
+	}
+
+	// insert the dictionary page as the first page to write for this column
+	state.write_info.insert(state.write_info.begin(), std::move(write_info));
+}
+
+void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state,
+                                            PrimitiveDictionaryTargetData target_data, idx_t row_count) {
+	D_ASSERT(target_data.data.IsSet());
+	D_ASSERT(target_data.size > 0);
+
+	auto write_info = CreateDictionaryPageWriteInformation(target_data.size, row_count);
+
+	// compress the contents of the dictionary page
+	MemoryStream temp_writer(target_data.data.get(), target_data.data.GetSize());
+	temp_writer.SetPosition(target_data.size);
+	CompressPage(temp_writer, write_info.compressed_size, write_info.compressed_data, write_info.compressed_buf);
+	write_info.page_header.compressed_page_size = UnsafeNumericCast<int32_t>(write_info.compressed_size);
+
+	if (!write_info.compressed_buf.IsSet()) {
+		D_ASSERT(write_info.compressed_data == target_data.data.get());
+		write_info.compressed_buf = std::move(target_data.data);
 	}
 
 	// insert the dictionary page as the first page to write for this column

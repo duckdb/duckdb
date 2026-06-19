@@ -4,30 +4,36 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformVacuumStatement(PEGTransformer &transformer,
-                                                                         const VacuumOptions &vacuum_options,
-                                                                         AnalyzeTarget analyze_target) {
-	auto result = make_uniq<VacuumStatement>(vacuum_options);
-	if (analyze_target.ref) {
-		result->info->columns = analyze_target.columns;
-		result->info->ref = std::move(analyze_target.ref);
+                                                                         const optional<VacuumOptions> &vacuum_options,
+                                                                         optional<AnalyzeTarget> analyze_target) {
+	VacuumOptions options;
+	if (vacuum_options) {
+		options = *vacuum_options;
+	}
+	auto result = make_uniq<VacuumStatement>(options);
+	if (analyze_target && analyze_target->ref) {
+		result->info->columns = analyze_target->columns;
+		result->info->ref = std::move(analyze_target->ref);
 		result->info->has_table = true;
 	}
 	return std::move(result);
 }
 
-VacuumOptions PEGTransformerFactory::TransformVacuumLegacyOptions(PEGTransformer &transformer, const string &opt_full,
-                                                                  const string &opt_freeze, const string &opt_verbose,
-                                                                  const string &opt_analyze) {
+VacuumOptions PEGTransformerFactory::TransformVacuumLegacyOptions(PEGTransformer &transformer,
+                                                                  const optional<string> &opt_full,
+                                                                  const optional<string> &opt_freeze,
+                                                                  const optional<string> &opt_verbose,
+                                                                  const optional<string> &opt_analyze) {
 	VacuumOptions options;
 	options.vacuum = true;
-	options.analyze = !opt_analyze.empty();
-	if (!opt_full.empty()) {
+	options.analyze = opt_analyze.has_value();
+	if (opt_full) {
 		throw NotImplementedException("FULL is not yet implemented");
 	}
-	if (!opt_freeze.empty()) {
+	if (opt_freeze) {
 		throw NotImplementedException("FREEZE is not yet implemented");
 	}
-	if (!opt_verbose.empty()) {
+	if (opt_verbose) {
 		throw NotImplementedException("VERBOSE is not yet implemented");
 	}
 	return options;

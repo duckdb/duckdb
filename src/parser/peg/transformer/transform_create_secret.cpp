@@ -14,16 +14,16 @@ Value PEGTransformerFactory::GetConstantExpressionValue(unique_ptr<ParsedExpress
 }
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(
-    PEGTransformer &transformer, const bool &if_not_exists, const Identifier &secret_name,
-    const Identifier &secret_storage_specifier, const vector<GenericCopyOption> &generic_copy_option_list) {
+    PEGTransformer &transformer, const optional<bool> &if_not_exists, const optional<Identifier> &secret_name,
+    const optional<Identifier> &secret_storage_specifier, const vector<GenericCopyOption> &generic_copy_option_list) {
 	auto result = make_uniq<CreateStatement>();
 	auto on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	auto info = make_uniq<CreateSecretInfo>(on_conflict, SecretPersistType::DEFAULT);
-	if (!secret_name.empty()) {
-		info->name = secret_name;
+	if (secret_name) {
+		info->name = *secret_name;
 	}
-	if (!secret_storage_specifier.empty()) {
-		info->storage_type = Identifier(StringUtil::Lower(secret_storage_specifier.GetIdentifierName()));
+	if (secret_storage_specifier) {
+		info->storage_type = Identifier(StringUtil::Lower(secret_storage_specifier->GetIdentifierName()));
 	}
 	for (const auto &option : generic_copy_option_list) {
 		auto lower_name = StringUtil::Lower(option.name.GetIdentifierName());

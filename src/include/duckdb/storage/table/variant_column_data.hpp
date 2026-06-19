@@ -78,6 +78,10 @@ public:
 	void Verify(RowGroup &parent) override;
 
 	static void ShredVariantData(const Vector &input, Vector &output, idx_t count);
+	//! Debug/verification helper: shred a (top-level) VARIANT vector in place, deriving the shredding
+	//! schema from the first value (so inconsistent values become partially shredded). No-op if the
+	//! vector is already shredded or the first value yields no shreddable type.
+	static void DebugShred(Vector &variant, idx_t count);
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
 	void SetChildData(vector<shared_ptr<ColumnData>> child_data);
