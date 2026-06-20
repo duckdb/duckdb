@@ -379,7 +379,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		if (result->type == JoinType::MARK) {
 			auto mark_join_idx = GenerateTableIndex();
 			string mark_join_alias = "__internal_mark_join_ref" + to_string(mark_join_idx.index);
-			bind_context.AddGenericBinding(mark_join_idx, Identifier(mark_join_alias), {"__mark_index_column"},
+			bind_context.AddGenericBinding(mark_join_idx, Identifier(mark_join_alias), {"__mark_join_marker"},
 			                               {LogicalType::BOOLEAN});
 			result->mark_index = mark_join_idx;
 		}

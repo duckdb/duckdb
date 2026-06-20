@@ -534,6 +534,7 @@ TableRef:
     - JoinOrPivot
     - JoinClause
     - RegularJoinClause
+    - JoinByClause
     - JoinWithoutOnClause
     - TableUnpivotClause
     - TableUnpivotClauseBody
