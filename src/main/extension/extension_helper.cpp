@@ -911,6 +911,29 @@ vector<string> ExtensionHelper::GetVerificationKeys(DatabaseInstance &db, const 
 	return keys;
 }
 
+string ExtensionHelper::GetRepositoryUrlTemplate(DatabaseInstance &db, const string &repository_url) {
+	if (repository_url.empty()) {
+		return "";
+	}
+	auto &secret_manager = SecretManager::Get(db);
+	auto transaction = CatalogTransaction::GetSystemTransaction(db);
+	SecretMatch match;
+	try {
+		match = secret_manager.LookupSecret(transaction, repository_url, "extension_repository");
+	} catch (...) {
+		return "";
+	}
+	if (!match.HasMatch()) {
+		return "";
+	}
+	auto &kv_secret = dynamic_cast<const KeyValueSecret &>(match.GetSecret());
+	Value url_template;
+	if (kv_secret.TryGetValue("url_template", url_template) && !url_template.IsNull()) {
+		return url_template.ToString();
+	}
+	return "";
+}
+
 string ExtensionHelper::TryGetRepositoryUrlFromSecret(ClientContext &context, const string &secret_name) {
 	auto &secret_manager = SecretManager::Get(context);
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);

@@ -521,7 +521,15 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
                                                               const string &local_extension_path,
                                                               ExtensionInstallOptions &options,
                                                               optional_ptr<ClientContext> context) {
-	string url_template = ExtensionHelper::ExtensionUrlTemplate(db, *options.repository, options.version);
+	// A named custom repository may advertise its own install-path layout (url_template), relative to the
+	// repository base url; otherwise use DuckDB's default layout.
+	string custom_template;
+	if (options.custom_repository) {
+		custom_template = ExtensionHelper::GetRepositoryUrlTemplate(db, options.repository->path);
+	}
+	string url_template = custom_template.empty()
+	                          ? ExtensionHelper::ExtensionUrlTemplate(db, *options.repository, options.version)
+	                          : options.repository->path + custom_template;
 	string generated_url = ExtensionHelper::ExtensionFinalizeUrlTemplate(url_template, extension_name);
 
 	// Special handling for the built-in http repositories: avoid using regular filesystem (no httpfs dependency).

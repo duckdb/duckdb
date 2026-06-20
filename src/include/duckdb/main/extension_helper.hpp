@@ -159,6 +159,9 @@ public:
 	static vector<string> GetRepositoryKeys(DatabaseInstance &db, const string &repository_url);
 	//! Resolve a registered extension_repository secret by name to its repository url, or "" if none.
 	static string TryGetRepositoryUrlFromSecret(ClientContext &context, const string &secret_name);
+	//! Look up the install-path url_template advertised by a registered extension_repository secret for the
+	//! origin (relative to the repository base url). Returns "" if none.
+	static string GetRepositoryUrlTemplate(DatabaseInstance &db, const string &repository_url);
 	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 

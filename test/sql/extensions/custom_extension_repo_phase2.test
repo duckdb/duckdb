@@ -1,0 +1,55 @@
+# name: test/sql/extensions/custom_extension_repo_phase2.test
+# description: Phase 2 - duckdb_extension_repositories() listing and duckdb_register_extension_repo() guards
+# group: [extensions]
+
+statement ok
+SET allow_custom_extension_repositories=true
+
+# no extension repositories registered yet
+query I
+SELECT count(*) FROM duckdb_extension_repositories()
+----
+0
+
+statement ok
+CREATE SECRET myrepo (
+    TYPE extension_repository,
+    URL 'https://ext.example.com',
+    SIGNING_KEY 'dummy-public-key',
+    KEY_ID 'k1',
+    VALID_TO '2027-01-01'
+)
+
+# listed with its fields
+query IIII
+SELECT name, url, key_id, valid_to FROM duckdb_extension_repositories()
+----
+myrepo	https://ext.example.com	k1	2027-01-01
+
+# the fingerprint is a SHA256 hex of the signing key ("SHA256:" + 64 hex chars)
+query I
+SELECT key_fingerprint LIKE 'SHA256:%' AND length(key_fingerprint) = 71 FROM duckdb_extension_repositories() WHERE name='myrepo'
+----
+true
+
+# register requires the opt-in gate
+statement ok
+SET allow_custom_extension_repositories=false
+
+statement error
+CALL duckdb_register_extension_repo('r', 'https://ext.example.com')
+----
+requires SET allow_custom_extension_repositories=true
+
+statement ok
+SET allow_custom_extension_repositories=true
+
+# registering against a non-existent local discovery document fails while fetching it
+# (proves the function resolves + tries to read the .well-known document)
+statement error
+CALL duckdb_register_extension_repo('r2', '/tmp/duckdb_no_such_repo_xyz')
+----
+discovery document
+
+statement ok
+DROP SECRET myrepo
