@@ -354,7 +354,7 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateFinalizeInputData &, Vect
 	}
 	// reserve space in the list vector
 	ListVector::Reserve(result, old_len + new_entries);
-	auto list_entries = FlatVector::Writer<list_entry_t>(result, offset + count, offset);
+	auto list_entries = FlatVector::Writer<list_entry_t>(result, count, offset);
 	auto &child_data = ListVector::GetChildMutable(result);
 
 	idx_t current_offset = old_len;
@@ -404,7 +404,6 @@ AggregateStateLayout ApproxTopKGetStateType(AggregateLayoutInput &input) {
 template <class OP = HistogramGenericFunctor>
 void ApproxTopKExportState(Vector &state_vector, AggregateFinalizeInputData &aggr_input_data, Vector &result,
                            idx_t count, idx_t offset) {
-	D_ASSERT(offset == 0);
 	auto states = state_vector.Values<ApproxTopKState *>();
 
 	auto &mask = FlatVector::ValidityMutable(result);
@@ -420,23 +419,24 @@ void ApproxTopKExportState(Vector &state_vector, AggregateFinalizeInputData &agg
 	idx_t total_values = ListVector::GetListSize(value_lists);
 	idx_t total_filters = ListVector::GetListSize(filter_lists);
 	for (idx_t i = 0; i < count; i++) {
+		const idx_t row = offset + i;
 		auto state_ptr = states[i].GetValue()->state;
-		value_entries[i].offset = total_values;
-		filter_entries[i].offset = total_filters;
+		value_entries[row].offset = total_values;
+		filter_entries[row].offset = total_filters;
 		if (!state_ptr || state_ptr->values.empty()) {
 			// no values have been added to this state - export NULL (children of a NULL struct must also be NULL)
-			mask.SetInvalid(i);
-			k_validity.SetInvalid(i);
-			value_validity.SetInvalid(i);
-			filter_validity.SetInvalid(i);
-			value_entries[i].length = 0;
-			filter_entries[i].length = 0;
-			k_data[i] = 0;
+			mask.SetInvalid(row);
+			k_validity.SetInvalid(row);
+			value_validity.SetInvalid(row);
+			filter_validity.SetInvalid(row);
+			value_entries[row].length = 0;
+			filter_entries[row].length = 0;
+			k_data[row] = 0;
 			continue;
 		}
-		k_data[i] = state_ptr->k;
-		value_entries[i].length = state_ptr->values.size();
-		filter_entries[i].length = state_ptr->filter.size();
+		k_data[row] = state_ptr->k;
+		value_entries[row].length = state_ptr->values.size();
+		filter_entries[row].length = state_ptr->filter.size();
 		total_values += state_ptr->values.size();
 		total_filters += state_ptr->filter.size();
 	}
@@ -449,13 +449,14 @@ void ApproxTopKExportState(Vector &state_vector, AggregateFinalizeInputData &agg
 	auto count_data = FlatVector::GetDataMutable<uint64_t>(value_fields[1]);
 	auto filter_data = FlatVector::GetDataMutable<uint64_t>(ListVector::GetChildMutable(filter_lists));
 	for (idx_t i = 0; i < count; i++) {
+		const idx_t row = offset + i;
 		auto state_ptr = states[i].GetValue()->state;
 		if (!state_ptr || state_ptr->values.empty()) {
 			continue;
 		}
 		auto &state = *state_ptr;
 		// write the values (in descending count order) - decoding them back to the input type
-		idx_t value_offset = value_entries[i].offset;
+		idx_t value_offset = value_entries[row].offset;
 		for (auto &val_ref : state.values) {
 			auto &val = val_ref.get();
 			OP::template HistogramFinalize<string_t>(val.str_val.str, value_child, value_offset);
@@ -463,15 +464,15 @@ void ApproxTopKExportState(Vector &state_vector, AggregateFinalizeInputData &agg
 			value_offset++;
 		}
 		for (idx_t filter_idx = 0; filter_idx < state.filter.size(); filter_idx++) {
-			filter_data[filter_entries[i].offset + filter_idx] = state.filter[filter_idx];
+			filter_data[filter_entries[row].offset + filter_idx] = state.filter[filter_idx];
 		}
 	}
 	ListVector::SetListSize(value_lists, total_values);
 	ListVector::SetListSize(filter_lists, total_filters);
-	FlatVector::SetSize(fields[0], count);
-	FlatVector::SetSize(value_lists, count);
-	FlatVector::SetSize(filter_lists, count);
-	FlatVector::SetSize(result, count);
+	FlatVector::SetSize(fields[0], offset + count);
+	FlatVector::SetSize(value_lists, offset + count);
+	FlatVector::SetSize(filter_lists, offset + count);
+	FlatVector::SetSize(result, offset + count);
 }
 
 template <class OP = HistogramGenericFunctor>
