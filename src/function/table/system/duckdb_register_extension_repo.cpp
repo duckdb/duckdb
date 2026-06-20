@@ -12,18 +12,19 @@
 namespace duckdb {
 
 struct RegisterExtensionRepoBindData : public FunctionData {
-	RegisterExtensionRepoBindData(string repo_name_p, string repo_url_p)
-	    : repo_name(std::move(repo_name_p)), repo_url(std::move(repo_url_p)) {
+	RegisterExtensionRepoBindData(string repo_name_p, string repo_url_p, bool persist_p)
+	    : repo_name(std::move(repo_name_p)), repo_url(std::move(repo_url_p)), persist(persist_p) {
 	}
 	string repo_name;
 	string repo_url;
+	bool persist;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<RegisterExtensionRepoBindData>(repo_name, repo_url);
+		return make_uniq<RegisterExtensionRepoBindData>(repo_name, repo_url, persist);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<RegisterExtensionRepoBindData>();
-		return repo_name == other.repo_name && repo_url == other.repo_url;
+		return repo_name == other.repo_name && repo_url == other.repo_url && persist == other.persist;
 	}
 };
 
@@ -41,6 +42,12 @@ static unique_ptr<FunctionData> RegisterExtensionRepoBind(ClientContext &context
 	auto repo_name = input.inputs[0].GetValue<string>();
 	auto repo_url = input.inputs[1].GetValue<string>();
 
+	bool persist = false;
+	auto persist_entry = input.named_parameters.find("persist");
+	if (persist_entry != input.named_parameters.end() && !persist_entry->second.IsNull()) {
+		persist = BooleanValue::Get(persist_entry->second);
+	}
+
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("url");
@@ -52,7 +59,7 @@ static unique_ptr<FunctionData> RegisterExtensionRepoBind(ClientContext &context
 	names.emplace_back("valid_to");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	return make_uniq<RegisterExtensionRepoBindData>(std::move(repo_name), std::move(repo_url));
+	return make_uniq<RegisterExtensionRepoBindData>(std::move(repo_name), std::move(repo_url), persist);
 }
 
 static unique_ptr<GlobalTableFunctionState> RegisterExtensionRepoInit(ClientContext &context,
@@ -110,7 +117,7 @@ static void RegisterExtensionRepoFunction(ClientContext &context, TableFunctionI
 		secret_input.options["url_template"] = Value(discovery.url_template);
 	}
 	secret_input.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
-	secret_input.persist_type = SecretPersistType::DEFAULT;
+	secret_input.persist_type = bind_data.persist ? SecretPersistType::PERSISTENT : SecretPersistType::DEFAULT;
 
 	auto &secret_manager = SecretManager::Get(context);
 	secret_manager.CreateSecret(context, secret_input);
@@ -126,8 +133,10 @@ static void RegisterExtensionRepoFunction(ClientContext &context, TableFunctionI
 }
 
 void DuckDBRegisterExtensionRepoFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_register_extension_repo", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                              RegisterExtensionRepoFunction, RegisterExtensionRepoBind, RegisterExtensionRepoInit));
+	TableFunction fun("duckdb_register_extension_repo", {LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                  RegisterExtensionRepoFunction, RegisterExtensionRepoBind, RegisterExtensionRepoInit);
+	fun.named_parameters["persist"] = LogicalType::BOOLEAN;
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb
