@@ -6,7 +6,7 @@
 
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/variant_column_reader.hpp"
-#include "reader/variant/variant_shredded_conversion.hpp"
+#include "reader/variant/parquet_variant_iterator.hpp"
 #include "column_reader.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
@@ -15,7 +15,6 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
@@ -119,7 +118,6 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 		    "The Variant column did not contain the same amount of values for 'metadata' and 'value'");
 	}
 
-	vector<VariantValue> intermediate;
 	if (typed_value_reader) {
 		ColumnReaderInput child_input(num_values, define_out, repeat_out);
 		auto typed_values = typed_value_reader->Read(child_input, group_entries[1]);
@@ -128,9 +126,7 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 			    "The shredded Variant column did not contain the same amount of values for 'typed_value' and 'value'");
 		}
 	}
-	intermediate =
-	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values);
-	VariantValue::ToVARIANT(intermediate, result);
+	ParquetVariantConversion::Convert(metadata_intermediate, intermediate_group, result, num_values);
 
 	read_count = value_values;
 	return read_count.GetIndex();
