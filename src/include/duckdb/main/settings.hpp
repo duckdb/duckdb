@@ -171,6 +171,17 @@ struct AllowCommunityExtensionsSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct AllowCustomExtensionRepositoriesSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "allow_custom_extension_repositories";
+	static constexpr const char *Description =
+	    "Allow verifying extensions against per-origin custom repository signing keys";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct AllowExtensionsMetadataMismatchSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "allow_extensions_metadata_mismatch";

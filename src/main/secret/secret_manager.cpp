@@ -65,9 +65,15 @@ void SecretManager::Initialize(DatabaseInstance &db) {
 	for (auto &type : CreateHTTPSecretFunctions::GetDefaultSecretTypes()) {
 		RegisterSecretTypeInternal(type);
 	}
+	for (auto &type : CreateExtensionRepositorySecretFunctions::GetDefaultSecretTypes()) {
+		RegisterSecretTypeInternal(type);
+	}
 
 	// Register default functions
 	for (auto &function : CreateHTTPSecretFunctions::GetDefaultSecretFunctions()) {
+		RegisterSecretFunctionInternal(function, OnCreateConflict::ERROR_ON_CONFLICT);
+	}
+	for (auto &function : CreateExtensionRepositorySecretFunctions::GetDefaultSecretFunctions()) {
 		RegisterSecretFunctionInternal(function, OnCreateConflict::ERROR_ON_CONFLICT);
 	}
 }

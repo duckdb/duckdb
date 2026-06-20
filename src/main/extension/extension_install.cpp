@@ -220,11 +220,16 @@ static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, con
 	return in_buffer;
 }
 
-static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs, const string &path, void *data,
-                                     idx_t data_size, DBConfig &config) {
+static void WriteExtensionFileToDisk(DatabaseInstance &db, QueryContext &query_context, FileSystem &fs,
+                                     const string &path, void *data, idx_t data_size,
+                                     const string &trusted_repository_url) {
+	auto &config = db.config;
 	if (!Settings::Get<AllowUnsignedExtensionsSetting>(config)) {
+		// trusted_repository_url is non-empty only for named custom repositories; it scopes the per-origin
+		// signing key to additionally trust. Literal-URL/built-in installs pass "" and stay strict.
 		const bool signature_valid = ExtensionHelper::CheckExtensionBufferSignature(
-		    static_cast<char *>(data), data_size, Settings::Get<AllowCommunityExtensionsSetting>(config));
+		    db, static_cast<char *>(data), data_size, trusted_repository_url,
+		    Settings::Get<AllowCommunityExtensionsSetting>(config));
 		if (!signature_valid) {
 			throw IOException("Attempting to install an extension file that doesn't have a valid signature, see "
 			                  "https://duckdb.org/docs/current/operations_manual/securing_duckdb/securing_extensions");
@@ -297,9 +302,9 @@ static void CheckExtensionMetadataOnInstall(DatabaseInstance &db, void *in_buffe
 //   1. Crash after extension removal: extension is now uninstalled, metadata file still present
 //   2. Crash after metadata removal: extension is now uninstalled, extension dir is clean
 //   3. Crash after extension move: extension is now uninstalled, new metadata file present
-static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, const string &temp_path,
-                                const string &local_extension_path, void *in_buffer, idx_t file_size,
-                                ExtensionInstallInfo &info, DBConfig &config) {
+static void WriteExtensionFiles(DatabaseInstance &db, QueryContext &query_context, FileSystem &fs,
+                                const string &temp_path, const string &local_extension_path, void *in_buffer,
+                                idx_t file_size, ExtensionInstallInfo &info, const string &trusted_repository_url) {
 	// temp_path ends with '.duckdb_extension'
 	if (!StringUtil::EndsWith(temp_path, ".duckdb_extension")) {
 		throw InternalException("Extension install temp_path of '%s' is not valid, should end in '.duckdb_extension'",
@@ -314,7 +319,7 @@ static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, con
 	}
 
 	// Write extension to tmp file
-	WriteExtensionFileToDisk(query_context, fs, temp_path, in_buffer, file_size, config);
+	WriteExtensionFileToDisk(db, query_context, fs, temp_path, in_buffer, file_size, trusted_repository_url);
 	// When this exit, signature has already being checked (if enabled by config)
 
 	// Write metadata to tmp file
@@ -398,8 +403,11 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 	}
 
 	QueryContext query_context(context);
-	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, extension_decompressed,
-	                    extension_decompressed_size, info, db.config);
+	// Only a named custom repository (resolved from an extension_repository secret) may have its pinned key
+	// trusted at install time; literal-URL and built-in installs stay strict (empty origin).
+	string trusted_repository_url = options.custom_repository ? info.repository_url : string();
+	WriteExtensionFiles(db, query_context, fs, temp_path, local_extension_path, extension_decompressed,
+	                    extension_decompressed_size, info, trusted_repository_url);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
@@ -500,8 +508,9 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 
 	QueryContext query_context(context);
 	auto fs = FileSystem::CreateLocal();
-	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, extension_data, extension_size, info,
-	                    db.config);
+	string trusted_repository_url = options.custom_repository ? info.repository_url : string();
+	WriteExtensionFiles(db, query_context, *fs, temp_path, local_extension_path, extension_data, extension_size, info,
+	                    trusted_repository_url);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
@@ -515,8 +524,10 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 	string url_template = ExtensionHelper::ExtensionUrlTemplate(db, *options.repository, options.version);
 	string generated_url = ExtensionHelper::ExtensionFinalizeUrlTemplate(url_template, extension_name);
 
-	// Special handling for http repository: avoid using regular filesystem (note: the filesystem is not used here)
-	if (HTTPUtil::IsHTTPProtocol(options.repository->path)) {
+	// Special handling for the built-in http repositories: avoid using regular filesystem (no httpfs dependency).
+	// Named custom repositories (resolved from an extension_repository secret) instead go through the FileSystem
+	// for every protocol, so access secrets (s3/http/azure) are resolved by scope automatically.
+	if (HTTPUtil::IsHTTPProtocol(options.repository->path) && !options.custom_repository) {
 		if (db.ExtensionIsLoaded("httpfs")) {
 			HTTPUtil::BumpToSecureProtocol(generated_url);
 		}

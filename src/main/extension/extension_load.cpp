@@ -347,9 +347,8 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(FileHandle &hand
 	return ParseExtensionMetaData(metadata_segment.data());
 }
 
-static bool CheckKnownSignatures(const string &two_level_hash, const string &signature,
-                                 const bool allow_community_extensions) {
-	for (auto &key : ExtensionHelper::GetPublicKeys(allow_community_extensions)) {
+static bool CheckKnownSignatures(const string &two_level_hash, const string &signature, const vector<string> &keys) {
+	for (auto &key : keys) {
 		if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, signature, two_level_hash)) {
 			return true;
 		}
@@ -358,7 +357,8 @@ static bool CheckKnownSignatures(const string &two_level_hash, const string &sig
 	return false;
 }
 
-bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
+bool ExtensionHelper::CheckExtensionSignature(DatabaseInstance &db, FileHandle &handle,
+                                              ParsedExtensionMetaData &parsed_metadata, const string &repository_url,
                                               const bool allow_community_extensions) {
 	auto signature_offset = handle.GetFileSize() - ParsedExtensionMetaData::SIGNATURE_SIZE;
 
@@ -373,10 +373,12 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 	// TODO maybe we should do a stream read / hash update here
 	handle.Read((void *)parsed_metadata.signature.data(), parsed_metadata.signature.size(), signature_offset);
 
-	return CheckKnownSignatures(resulting_hash, parsed_metadata.signature, allow_community_extensions);
+	auto keys = GetVerificationKeys(db, repository_url, allow_community_extensions);
+	return CheckKnownSignatures(resulting_hash, parsed_metadata.signature, keys);
 }
 
-bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t buffer_length, const string &signature,
+bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t buffer_length,
+                                                    const string &signature, const string &repository_url,
                                                     const bool allow_community_extensions) {
 	vector<string> hash_chunks;
 	vector<idx_t> splits;
@@ -386,15 +388,18 @@ bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t bu
 
 	const string resulting_hash = ComputeFinalHash(hash_chunks);
 
-	return CheckKnownSignatures(resulting_hash, signature, allow_community_extensions);
+	auto keys = GetVerificationKeys(db, repository_url, allow_community_extensions);
+	return CheckKnownSignatures(resulting_hash, signature, keys);
 }
 
-bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t total_buffer_length,
+bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t total_buffer_length,
+                                                    const string &repository_url,
                                                     const bool allow_community_extensions) {
 	auto signature_offset = total_buffer_length - ParsedExtensionMetaData::SIGNATURE_SIZE;
 	string signature = std::string(buffer + signature_offset, ParsedExtensionMetaData::SIGNATURE_SIZE);
 
-	return CheckExtensionBufferSignature(buffer, signature_offset, signature, allow_community_extensions);
+	return CheckExtensionBufferSignature(db, buffer, signature_offset, signature, repository_url,
+	                                     allow_community_extensions);
 }
 
 bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
@@ -517,11 +522,22 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		metadata_mismatch_error = StringUtil::Format("Failed to load '%s', %s", extension, metadata_mismatch_error);
 	}
 
+	// Read the install origin from the .info sidecar before verifying, so the signature can be checked
+	// against the repository's pinned signing key (in addition to the core/community keys).
+	string repository_url;
+	if (!direct_load) {
+		auto info_file_name = filename + ".info";
+		auto origin_info =
+		    ExtensionInstallInfo::TryReadInfoFile(fs, info_file_name, StringUtil::Lower(fs.ExtractBaseName(filename)));
+		repository_url = origin_info->repository_url;
+	}
+
 	if (!Settings::Get<AllowUnsignedExtensionsSetting>(db)) {
 		bool signature_valid;
 		if (parsed_metadata.AppearsValid()) {
 			bool allow_community_extensions = Settings::Get<AllowCommunityExtensionsSetting>(db);
-			signature_valid = CheckExtensionSignature(*handle, parsed_metadata, allow_community_extensions);
+			signature_valid =
+			    CheckExtensionSignature(db, *handle, parsed_metadata, repository_url, allow_community_extensions);
 		} else {
 			signature_valid = false;
 		}

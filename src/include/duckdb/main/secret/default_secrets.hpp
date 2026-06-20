@@ -33,4 +33,19 @@ protected:
 	static unique_ptr<BaseSecret> CreateHTTPSecretFromEnv(ClientContext &context, CreateSecretInput &input);
 };
 
+//! The 'extension_repository' secret pins the trust anchor (signing key) for a self-hosted extension
+//! repository. The signing key is a public key, so nothing here is sensitive/redacted.
+struct CreateExtensionRepositorySecretFunctions {
+public:
+	//! Get the extension_repository secret type
+	static vector<SecretType> GetDefaultSecretTypes();
+	//! Get the extension_repository secret functions
+	static vector<CreateSecretFunction> GetDefaultSecretFunctions();
+
+protected:
+	//! extension_repository secret CONFIG provider
+	static unique_ptr<BaseSecret> CreateExtensionRepositorySecretFromConfig(ClientContext &context,
+	                                                                        CreateSecretInput &input);
+};
+
 } // namespace duckdb

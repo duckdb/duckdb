@@ -53,6 +53,13 @@
         ]
     },
     {
+        "name": "allow_custom_extension_repositories",
+        "description": "Allow verifying extensions against per-origin custom repository signing keys",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "allow_extensions_metadata_mismatch",
         "description": "Allow to load extensions with not compatible metadata",
         "type": "BOOLEAN",

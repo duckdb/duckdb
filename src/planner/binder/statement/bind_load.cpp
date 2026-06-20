@@ -2,6 +2,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -11,9 +12,13 @@ BoundStatement Binder::Bind(LoadStatement &stmt) {
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
 
-	// Ensure the repository exists if it's an alias
+	// Ensure the repository exists if it's an alias - either a built-in alias or a registered
+	// extension_repository secret with that name.
 	if (!stmt.info->repository.empty() && stmt.info->repo_is_alias) {
 		auto repository_url = ExtensionRepository::TryGetRepositoryUrl(stmt.info->repository);
+		if (repository_url.empty()) {
+			repository_url = ExtensionHelper::TryGetRepositoryUrlFromSecret(context, stmt.info->repository);
+		}
 		if (repository_url.empty()) {
 			throw BinderException("'%s' is not a known repository name. Are you trying to query from a repository by "
 			                      "path? Use single quotes: `FROM '%s'`",
