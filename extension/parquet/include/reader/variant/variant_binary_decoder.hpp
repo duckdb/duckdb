@@ -5,15 +5,10 @@
 #include <string>
 
 #include "duckdb/common/types/string_type.hpp"
-#include "duckdb/common/types/value.hpp"
-#include "duckdb/common/types/variant_value.hpp"
-#include "yyjson.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/vector.hpp"
-
-using namespace duckdb_yyjson;
 
 namespace duckdb {
 
@@ -119,39 +114,6 @@ public:
 	uint32_t field_id_size;
 	//! Whether the number of elements is encoded in 1 byte (false) or 4 bytes (true)
 	bool is_large;
-};
-
-struct VariantDecodeResult {
-public:
-	VariantDecodeResult() = default;
-	~VariantDecodeResult() {
-		if (doc) {
-			yyjson_mut_doc_free(doc);
-		}
-		if (data) {
-			free(data);
-		}
-	}
-
-public:
-	yyjson_mut_doc *doc = nullptr;
-	char *data = nullptr;
-};
-
-class VariantBinaryDecoder {
-public:
-	VariantBinaryDecoder() = delete;
-
-public:
-	static VariantValue Decode(const VariantMetadata &metadata, const_data_ptr_t data);
-
-public:
-	static VariantValue PrimitiveTypeDecode(const VariantValueMetadata &value_metadata, const_data_ptr_t data);
-	static VariantValue ShortStringDecode(const VariantValueMetadata &value_metadata, const_data_ptr_t data);
-	static VariantValue ObjectDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
-	                                 const_data_ptr_t data);
-	static VariantValue ArrayDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
-	                                const_data_ptr_t data);
 };
 
 } // namespace duckdb

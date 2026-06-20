@@ -447,16 +447,10 @@ auto CollectObjectChildren(const NODE &it) {
 }
 
 //! Traverse a VariantNode-like cursor 'it' (any type exposing the node concept) into the builder.
-//! A node may shortcut a whole subtree by returning a materialized VariantValue from AsValue().
 template <class NODE>
 void EmitIterator(const NODE &it, VariantBuilder &builder) {
 	if (it.IsNull() || it.IsMissing()) {
 		builder.EmitNull();
-		return;
-	}
-	auto value = it.AsValue();
-	if (value) {
-		builder.EmitVariantValue(*value);
 		return;
 	}
 

@@ -19,7 +19,6 @@ namespace duckdb {
 
 class Vector;
 struct UnifiedVectorFormat;
-struct VariantValue;
 
 //! The order in which the children of an OBJECT are iterated
 enum class VariantIterationOrder {
@@ -151,12 +150,6 @@ public:
 	}
 	bool IsMissing() const {
 		return kind == Kind::MISSING;
-	}
-
-	//! A node may shortcut a whole subtree by exposing it as a materialized VariantValue (used by the
-	//! parquet reader for binary-encoded fallbacks). The canonical VariantNode never does this.
-	optional_ptr<const VariantValue> AsValue() const {
-		return nullptr;
 	}
 
 	//! The logical type of the value the cursor points at

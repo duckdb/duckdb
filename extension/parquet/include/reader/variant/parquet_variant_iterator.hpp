@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/types/variant_value.hpp"
+#include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/common/vector/unified_vector_format.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -53,12 +53,13 @@ class ParquetVariantIterator;
 class ParquetObjectIterator;
 class ParquetArrayIterator;
 
-//! A lightweight cursor pointing at a single logical Parquet VARIANT value. A node is either a position
-//! in the shredded tree (OBJECT / ARRAY), or a materialized VariantValue (VALUE) for binary-encoded
-//! fallbacks and shredded leaves - those are emitted through VariantBuilder::EmitVariantValue.
+//! A lightweight cursor pointing at a single logical Parquet VARIANT value. A value is either SHREDDED
+//! (a position in a typed vector tree) or BINARY (a Spark variant-encoded value at a byte offset in a
+//! 'value' blob). Both expose the same node concept, so the shared EmitIterator traverses them uniformly
+//! and emits the correct VariantLogicalType - no value is ever materialized as a whole VariantValue.
 class ParquetVariantNode {
 public:
-	enum class Kind : uint8_t { NULL_VALUE, MISSING, OBJECT, ARRAY, VALUE };
+	enum class Kind : uint8_t { NULL_VALUE, MISSING, SHREDDED, BINARY };
 
 public:
 	ParquetVariantNode() : kind(Kind::NULL_VALUE) {
@@ -71,26 +72,22 @@ public:
 	static ParquetVariantNode MakeMissing() {
 		return ParquetVariantNode(Kind::MISSING);
 	}
-	static ParquetVariantNode MakeValue(const VariantValue *value) {
-		ParquetVariantNode result(Kind::VALUE);
-		result.value = value;
-		return result;
-	}
-	static ParquetVariantNode MakeObject(const ParquetVariantIterator &state, const ShreddedGroupView &view,
-	                                     idx_t index, const VariantValue *overlay) {
-		ParquetVariantNode result(Kind::OBJECT);
+	//! A position in the shredded (typed) tree. 'overlay' is the binary OBJECT holding the leftover fields
+	//! of a partially-shredded object (or null when fully shredded / not an object).
+	static ParquetVariantNode MakeShredded(const ParquetVariantIterator &state, const ShreddedGroupView &view,
+	                                       idx_t index, const_data_ptr_t overlay = nullptr) {
+		ParquetVariantNode result(Kind::SHREDDED);
 		result.state = &state;
 		result.view = &view;
 		result.index = index;
-		result.overlay = overlay;
+		result.binary = overlay;
 		return result;
 	}
-	static ParquetVariantNode MakeArray(const ParquetVariantIterator &state, const ShreddedGroupView &view,
-	                                    idx_t index) {
-		ParquetVariantNode result(Kind::ARRAY);
+	//! A Spark variant-encoded value starting at 'data' (its header byte)
+	static ParquetVariantNode MakeBinary(const ParquetVariantIterator &state, const_data_ptr_t data) {
+		ParquetVariantNode result(Kind::BINARY);
 		result.state = &state;
-		result.view = &view;
-		result.index = index;
+		result.binary = data;
 		return result;
 	}
 
@@ -101,34 +98,11 @@ public:
 	bool IsMissing() const {
 		return kind == Kind::MISSING;
 	}
-	//! Non-null for VALUE nodes: the whole subtree is emitted via VariantBuilder::EmitVariantValue
-	optional_ptr<const VariantValue> AsValue() const {
-		return kind == Kind::VALUE ? value : nullptr;
-	}
-	VariantLogicalType GetTypeId() const {
-		switch (kind) {
-		case Kind::OBJECT:
-			return VariantLogicalType::OBJECT;
-		case Kind::ARRAY:
-			return VariantLogicalType::ARRAY;
-		case Kind::NULL_VALUE:
-			return VariantLogicalType::VARIANT_NULL;
-		default:
-			throw InternalException("ParquetVariantNode::GetTypeId on a VALUE/MISSING node");
-		}
-	}
 
-	//! Primitive accessors are unreachable: every primitive/leaf is resolved to a VALUE node
-	string_t GetString() const {
-		throw InternalException("ParquetVariantNode::GetString - primitives are emitted as VALUE nodes");
-	}
-	VariantDecimalData GetDecimal() const {
-		throw InternalException("ParquetVariantNode::GetDecimal - primitives are emitted as VALUE nodes");
-	}
-	const_data_ptr_t GetDataPointer() const {
-		throw InternalException("ParquetVariantNode::GetDataPointer - primitives are emitted as VALUE nodes");
-	}
-
+	VariantLogicalType GetTypeId() const;
+	string_t GetString() const;
+	VariantDecimalData GetDecimal() const;
+	const_data_ptr_t GetDataPointer() const;
 	ParquetObjectIterator GetObjectChildren(VariantIterationOrder order) const;
 	ParquetArrayIterator GetArrayChildren() const;
 
@@ -138,14 +112,13 @@ private:
 
 private:
 	Kind kind;
-	//! VALUE: the materialized value
-	const VariantValue *value = nullptr;
-	//! OBJECT / ARRAY: the shredded position
 	optional_ptr<const ParquetVariantIterator> state;
+	//! SHREDDED: the shredded position
 	optional_ptr<const ShreddedGroupView> view;
 	idx_t index = 0;
-	//! OBJECT: the (decoded) partial-shredding overlay object (or null when fully shredded)
-	const VariantValue *overlay = nullptr;
+	//! SHREDDED OBJECT: the (binary) overlay object holding leftover fields, or null.
+	//! BINARY: the value's start (header byte).
+	const_data_ptr_t binary = nullptr;
 };
 
 //! A single (key, value) entry of an OBJECT
@@ -154,12 +127,16 @@ struct ParquetObjectEntry {
 	ParquetVariantNode value;
 };
 
-//! Iterates the (key, value) children of a shredded OBJECT: the typed struct fields merged with the
-//! leftover (overlay) object's fields, deduplicated (typed fields win) and sorted lexicographically.
+//! Iterates the (key, value) children of an OBJECT: for a shredded object, the typed struct fields merged
+//! with the leftover (binary overlay) fields - deduplicated (typed fields win) and sorted lexicographically;
+//! for a binary object, the encoded fields.
 class ParquetObjectIterator {
 public:
+	//! Shredded object (typed fields + optional binary overlay)
 	ParquetObjectIterator(const ParquetVariantIterator &state, const ShreddedGroupView &view, idx_t index,
-	                      const VariantValue *overlay);
+	                      const_data_ptr_t overlay);
+	//! Binary object
+	ParquetObjectIterator(const ParquetVariantIterator &state, const VariantMetadata &metadata, const_data_ptr_t data);
 
 public:
 	const ParquetObjectEntry *begin() const { // NOLINT: match stl API
@@ -170,13 +147,19 @@ public:
 	}
 
 private:
+	void Finalize();
+
+private:
 	vector<ParquetObjectEntry> ordered_entries;
 };
 
-//! Iterates the element values of a shredded ARRAY. Random-access: a child cursor is resolved on demand.
+//! Iterates the element values of an ARRAY (shredded list or binary array). Random-access.
 class ParquetArrayIterator {
 public:
+	//! Shredded array
 	ParquetArrayIterator(const ParquetVariantIterator &state, const ShreddedGroupView &view, idx_t index);
+	//! Binary array
+	ParquetArrayIterator(const ParquetVariantIterator &state, const VariantMetadata &metadata, const_data_ptr_t data);
 
 public:
 	idx_t size() const {
@@ -186,21 +169,29 @@ public:
 
 private:
 	reference<const ParquetVariantIterator> state;
-	//! the element (group) sub-view
-	reference<const ShreddedGroupView> element;
-	idx_t base;
+	bool shredded;
 	idx_t length;
+
+	//! SHREDDED: the element (group) sub-view + the list offset of the elements
+	optional_ptr<const ShreddedGroupView> element;
+	idx_t base = 0;
+
+	//! BINARY: where to read each element's value offset, and the values base
+	const_data_ptr_t field_offsets = nullptr;
+	const_data_ptr_t values = nullptr;
+	uint32_t field_offset_size = 0;
 };
 
 //! Iterates a shredded Parquet VARIANT column (metadata + group), handing out ParquetVariantNode cursors
-//! per row. The decoded (binary) VariantValues a row needs are owned by a per-row arena so the cursors
-//! that point into them stay valid for the duration of that row's emit.
+//! per row. Binary (Spark-encoded) values are read directly from the 'value' blobs; the only per-row
+//! materialization is a small byte arena for the handful of leaf payloads that need a representation
+//! change (BINARY->base64, UUID byte order, binary DECIMAL re-encoding).
 class ParquetVariantIterator {
 public:
 	ParquetVariantIterator(Vector &metadata, Vector &group);
 
 public:
-	//! Reset the per-row state (arena + lazily-decoded metadata) for a new row
+	//! Reset the per-row state (byte arena + lazily-decoded metadata) for a new row
 	void BeginRow(idx_t row);
 	//! Resolve the root value of 'row' (a missing root is promoted to a SQL NULL)
 	ParquetVariantNode Root(idx_t row) const;
@@ -209,10 +200,10 @@ public:
 
 	//! The (lazily-decoded) Variant metadata of the current row
 	const VariantMetadata &GetMetadata() const;
-	//! Decode the binary 'value' of 'view' at flat position 'value_index' into a VariantValue
-	VariantValue DecodeBinary(const ShreddedGroupView &view, idx_t value_index) const;
-	//! Own a decoded VariantValue for the duration of the current row, returning a stable pointer to it
-	const VariantValue *ArenaAdd(VariantValue value) const;
+	//! Own 'size' bytes for the duration of the current row, returning a stable pointer to a copy
+	const_data_ptr_t StoreBytes(const_data_ptr_t data, idx_t size) const;
+	//! Own a string for the duration of the current row, returning a stable string_t view of it
+	string_t StoreString(string str) const;
 
 private:
 	ShreddedGroupView root_view;
@@ -222,7 +213,7 @@ private:
 
 	idx_t current_row = 0;
 	mutable unique_ptr<VariantMetadata> current_metadata;
-	mutable vector<unique_ptr<VariantValue>> arena;
+	mutable vector<unique_ptr<string>> byte_arena;
 };
 
 //! BuildVariant source wrapping a ParquetVariantIterator (mirrors VariantIteratorSource in core)
