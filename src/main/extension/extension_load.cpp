@@ -522,14 +522,14 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		metadata_mismatch_error = StringUtil::Format("Failed to load '%s', %s", extension, metadata_mismatch_error);
 	}
 
-	// Read the install origin from the .info sidecar before verifying, so the signature can be checked
-	// against the repository's pinned signing key (in addition to the core/community keys).
+	// Read the .info sidecar once, before verifying, so the signature can be checked against the
+	// repository's pinned signing key (in addition to the core/community keys).
 	string repository_url;
 	if (!direct_load) {
 		auto info_file_name = filename + ".info";
-		auto origin_info =
+		result.install_info =
 		    ExtensionInstallInfo::TryReadInfoFile(fs, info_file_name, StringUtil::Lower(fs.ExtractBaseName(filename)));
-		repository_url = origin_info->repository_url;
+		repository_url = result.install_info->repository_url;
 	}
 
 	if (!Settings::Get<AllowUnsignedExtensionsSetting>(db)) {
@@ -595,10 +595,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	result.abi_type = parsed_metadata.abi_type;
 
 	if (!direct_load) {
-		auto info_file_name = filename + ".info";
-
-		result.install_info = ExtensionInstallInfo::TryReadInfoFile(fs, info_file_name, lowercase_extension_name);
-
+		// result.install_info was already read above (before signature verification)
 		if (result.install_info->mode == ExtensionInstallMode::UNKNOWN) {
 			// The info file was missing, we just set the version, since we have it from the parsed footer
 			result.install_info->version = parsed_metadata.extension_version;

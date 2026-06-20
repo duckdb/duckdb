@@ -871,10 +871,11 @@ const vector<string> ExtensionHelper::GetPublicKeys(bool allow_community_extensi
 	return keys;
 }
 
-vector<string> ExtensionHelper::GetRepositoryKeys(DatabaseInstance &db, const string &repository_url) {
-	vector<string> keys;
+// Look up the extension_repository secret matching an origin (by scope) and read a single field.
+static bool TryGetRepositorySecretValue(DatabaseInstance &db, const string &repository_url, const char *field,
+                                        Value &result) {
 	if (repository_url.empty()) {
-		return keys;
+		return false;
 	}
 	auto &secret_manager = SecretManager::Get(db);
 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
@@ -882,14 +883,22 @@ vector<string> ExtensionHelper::GetRepositoryKeys(DatabaseInstance &db, const st
 	try {
 		match = secret_manager.LookupSecret(transaction, repository_url, "extension_repository");
 	} catch (...) {
-		return keys;
+		return false;
 	}
 	if (!match.HasMatch()) {
-		return keys;
+		return false;
 	}
-	auto &kv_secret = dynamic_cast<const KeyValueSecret &>(match.GetSecret());
+	auto kv_secret = dynamic_cast<const KeyValueSecret *>(&match.GetSecret());
+	if (!kv_secret) {
+		return false;
+	}
+	return kv_secret->TryGetValue(field, result) && !result.IsNull();
+}
+
+vector<string> ExtensionHelper::GetRepositoryKeys(DatabaseInstance &db, const string &repository_url) {
+	vector<string> keys;
 	Value signing_key;
-	if (kv_secret.TryGetValue("signing_key", signing_key) && !signing_key.IsNull()) {
+	if (TryGetRepositorySecretValue(db, repository_url, "signing_key", signing_key)) {
 		keys.push_back(signing_key.ToString());
 	}
 	return keys;
@@ -912,23 +921,8 @@ vector<string> ExtensionHelper::GetVerificationKeys(DatabaseInstance &db, const 
 }
 
 string ExtensionHelper::GetRepositoryUrlTemplate(DatabaseInstance &db, const string &repository_url) {
-	if (repository_url.empty()) {
-		return "";
-	}
-	auto &secret_manager = SecretManager::Get(db);
-	auto transaction = CatalogTransaction::GetSystemTransaction(db);
-	SecretMatch match;
-	try {
-		match = secret_manager.LookupSecret(transaction, repository_url, "extension_repository");
-	} catch (...) {
-		return "";
-	}
-	if (!match.HasMatch()) {
-		return "";
-	}
-	auto &kv_secret = dynamic_cast<const KeyValueSecret &>(match.GetSecret());
 	Value url_template;
-	if (kv_secret.TryGetValue("url_template", url_template) && !url_template.IsNull()) {
+	if (TryGetRepositorySecretValue(db, repository_url, "url_template", url_template)) {
 		return url_template.ToString();
 	}
 	return "";
@@ -946,9 +940,12 @@ string ExtensionHelper::TryGetRepositoryUrlFromSecret(ClientContext &context, co
 	if (!entry || !entry->secret || entry->secret->GetType() != "extension_repository") {
 		return "";
 	}
-	auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*entry->secret);
+	auto kv_secret = dynamic_cast<const KeyValueSecret *>(entry->secret.get());
+	if (!kv_secret) {
+		return "";
+	}
 	Value url_value;
-	if (kv_secret.TryGetValue("url", url_value) && !url_value.IsNull()) {
+	if (kv_secret->TryGetValue("url", url_value) && !url_value.IsNull()) {
 		return url_value.ToString();
 	}
 	return "";

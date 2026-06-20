@@ -28,15 +28,10 @@ string ExtensionRepositoryDiscovery::NormalizeDiscoveryUrl(const string &url) {
 
 string ExtensionRepositoryDiscovery::KeyFingerprint(const string &public_key) {
 	auto hash = duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(public_key);
-	static const char *HEX = "0123456789abcdef";
-	string hex;
-	hex.reserve(hash.size() * 2);
-	for (auto c : hash) {
-		auto byte = static_cast<uint8_t>(c);
-		hex += HEX[byte >> 4];
-		hex += HEX[byte & 0x0F];
-	}
-	return "SHA256:" + hex;
+	char hex[duckdb_mbedtls::MbedTlsWrapper::SHA256_HASH_LENGTH_TEXT];
+	duckdb_mbedtls::MbedTlsWrapper::ToBase16(hash.data(), hex,
+	                                         duckdb_mbedtls::MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
+	return "SHA256:" + string(hex, duckdb_mbedtls::MbedTlsWrapper::SHA256_HASH_LENGTH_TEXT);
 }
 
 ExtensionRepositoryDiscovery ExtensionRepositoryDiscovery::Parse(const string &json_content, const string &source) {
@@ -146,7 +141,7 @@ ExtensionRepositoryDiscovery ExtensionRepositoryDiscovery::FetchAndParse(ClientC
 
 	string content;
 	content.resize(NumericCast<idx_t>(file_size));
-	handle->Read(const_cast<char *>(content.data()), NumericCast<idx_t>(file_size), 0);
+	handle->Read(content.data(), NumericCast<idx_t>(file_size), 0);
 
 	return Parse(content, discovery_url);
 }

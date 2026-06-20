@@ -122,14 +122,12 @@ static void RegisterExtensionRepoFunction(ClientContext &context, TableFunctionI
 	auto &secret_manager = SecretManager::Get(context);
 	secret_manager.CreateSecret(context, secret_input);
 
-	// 4. Report the pinned key(s) (the explicit TOFU moment)
-	for (auto &sk : discovery.signing_keys) {
-		output.data[0].Append(Value(bind_data.repo_name));
-		output.data[1].Append(Value(base_url));
-		output.data[2].Append(sk.kid.empty() ? Value(LogicalType::VARCHAR) : Value(sk.kid));
-		output.data[3].Append(Value(ExtensionRepositoryDiscovery::KeyFingerprint(sk.public_key)));
-		output.data[4].Append(sk.valid_to.empty() ? Value(LogicalType::VARCHAR) : Value(sk.valid_to));
-	}
+	// 4. Report the pinned key (the explicit TOFU moment). Only the primary key is pinned for now.
+	output.data[0].Append(Value(bind_data.repo_name));
+	output.data[1].Append(Value(base_url));
+	output.data[2].Append(primary_key.kid.empty() ? Value(LogicalType::VARCHAR) : Value(primary_key.kid));
+	output.data[3].Append(Value(ExtensionRepositoryDiscovery::KeyFingerprint(primary_key.public_key)));
+	output.data[4].Append(primary_key.valid_to.empty() ? Value(LogicalType::VARCHAR) : Value(primary_key.valid_to));
 }
 
 void DuckDBRegisterExtensionRepoFun::RegisterFunction(BuiltinFunctions &set) {
