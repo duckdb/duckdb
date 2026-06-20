@@ -60,7 +60,7 @@ DETACH attach_transaction
 ----
 database not found
 
-# DETACH is forbidden while the current transaction has outstanding work on the database
+# DETACH inside a transaction succeeds; the DETACH itself is not rolled back
 statement ok
 BEGIN TRANSACTION
 
@@ -70,10 +70,8 @@ ATTACH '{TEST_DIR}/attach_transaction.db'
 statement ok
 INSERT INTO attach_transaction.integers VALUES (84)
 
-statement error
+statement ok
 DETACH attach_transaction
-----
-Cannot detach database "attach_transaction"
 
 statement ok
 ROLLBACK
@@ -87,7 +85,7 @@ SELECT * FROM attach_transaction.integers
 ----
 42
 
-# the supported workflow is to COMMIT first, then DETACH
+# the supported workflows
 statement ok
 BEGIN TRANSACTION
 
@@ -109,3 +107,27 @@ SELECT * FROM attach_transaction.integers ORDER BY 1
 ----
 42
 84
+
+# DETACH inside a transaction, then COMMIT: data persists
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO attach_transaction.integers VALUES (168)
+
+statement ok
+DETACH attach_transaction
+
+statement ok
+COMMIT
+
+# verify data was committed
+statement ok
+ATTACH '{TEST_DIR}/attach_transaction.db'
+
+query I
+SELECT * FROM attach_transaction.integers ORDER BY 1
+----
+42
+84
+168
