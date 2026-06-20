@@ -32,6 +32,11 @@ select json_type('NaN')
 DOUBLE
 
 query T
+select json_type('[10, 20, 30]'::JSON, 0)
+----
+UBIGINT
+
+query T
 select json_type('null')
 ----
 NULL

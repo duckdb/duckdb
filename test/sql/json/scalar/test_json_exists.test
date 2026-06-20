@@ -10,6 +10,16 @@ SELECT json_exists('{"duck": null}', '$.duck')
 true
 
 query I
+SELECT json_exists('[1, 2, 3]'::JSON, 0)
+----
+true
+
+query I
+SELECT json_exists('[1, 2, 3]'::JSON, 3)
+----
+false
+
+query I
 with path AS (
     SELECT '$.duck' p
 )
