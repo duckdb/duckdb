@@ -5,9 +5,9 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "reader/uuid_column_reader.hpp"
@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
+#include <type_traits>
 
 namespace duckdb {
 
@@ -86,24 +87,58 @@ struct BinaryArrayReader {
 		values = field_offsets + (NumericCast<idx_t>(count + 1) * field_offset_size);
 	}
 
-	const_data_ptr_t Element(idx_t i) const {
-		auto offset = ReadVarLE(field_offset_size, field_offsets + (i * field_offset_size));
-		return values + offset;
-	}
-
 	const_data_ptr_t field_offsets;
 	const_data_ptr_t values;
 	uint32_t field_offset_size;
 	idx_t count;
 };
 
-//! The VariantLogicalType of a (valid) shredded leaf at 'typed_idx'. Mirrors the writer's type mapping;
-//! note Parquet emits BINARY as a base64 VARCHAR (matching its JSON-serialization choice).
-VariantLogicalType ShreddedLeafTypeId(const ShreddedGroupView &view, idx_t typed_idx) {
+//! Type-erased leaf reader backed by a VectorIterator<T>
+template <class T>
+struct TypedLeafReader : ShreddedLeafReader {
+	explicit TypedLeafReader(const Vector &vec) : values(vec) {
+	}
+	bool IsValid(idx_t index) const override {
+		return values[index].IsValid();
+	}
+	const_data_ptr_t Pointer(idx_t index) const override {
+		return const_data_ptr_cast(&values[index].GetValueUnsafe());
+	}
+
+	VectorIterator<T> values;
+};
+
+unique_ptr<ShreddedLeafReader> MakeLeafReader(const Vector &vec) {
+	switch (vec.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+		return make_uniq<TypedLeafReader<bool>>(vec);
+	case PhysicalType::INT8:
+		return make_uniq<TypedLeafReader<int8_t>>(vec);
+	case PhysicalType::INT16:
+		return make_uniq<TypedLeafReader<int16_t>>(vec);
+	case PhysicalType::INT32:
+		return make_uniq<TypedLeafReader<int32_t>>(vec);
+	case PhysicalType::INT64:
+		return make_uniq<TypedLeafReader<int64_t>>(vec);
+	case PhysicalType::INT128:
+		return make_uniq<TypedLeafReader<hugeint_t>>(vec);
+	case PhysicalType::FLOAT:
+		return make_uniq<TypedLeafReader<float>>(vec);
+	case PhysicalType::DOUBLE:
+		return make_uniq<TypedLeafReader<double>>(vec);
+	case PhysicalType::VARCHAR:
+		return make_uniq<TypedLeafReader<string_t>>(vec);
+	default:
+		throw NotImplementedException("Variant shredding on type: '%s' is not implemented", vec.GetType().ToString());
+	}
+}
+
+//! The VariantLogicalType of a (valid) shredded leaf at logical position 'index'. Mirrors the writer's
+//! type mapping; note Parquet emits BINARY as a base64 VARCHAR (matching its JSON-serialization choice).
+VariantLogicalType ShreddedLeafTypeId(const ShreddedGroupView &view, idx_t index) {
 	switch (view.typed_type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return UnifiedVectorFormat::GetData<bool>(view.typed_format)[typed_idx] ? VariantLogicalType::BOOL_TRUE
-		                                                                        : VariantLogicalType::BOOL_FALSE;
+		return Load<bool>(view.leaf->Pointer(index)) ? VariantLogicalType::BOOL_TRUE : VariantLogicalType::BOOL_FALSE;
 	case LogicalTypeId::TINYINT:
 		return VariantLogicalType::INT8;
 	case LogicalTypeId::SMALLINT:
@@ -205,21 +240,9 @@ VariantLogicalType BinaryTypeId(const_data_ptr_t data) {
 	}
 }
 
-//! The physical storage type of a DECIMAL of the given width (matches VariantDecimalData::GetPhysicalType)
-PhysicalType DecimalPhysicalType(uint32_t width) {
-	if (width > DecimalWidth<int64_t>::max) {
-		return PhysicalType::INT128;
-	} else if (width > DecimalWidth<int32_t>::max) {
-		return PhysicalType::INT64;
-	} else if (width > DecimalWidth<int16_t>::max) {
-		return PhysicalType::INT32;
-	}
-	return PhysicalType::INT16;
-}
-
 //! The implied precision of a decimal value: floor(log10(val)) + 1
 template <class T>
-uint8_t ComputeDecimalWidth(T value) {
+uint32_t ComputeDecimalWidth(T value) {
 	if (value == 0) {
 		return 1;
 	}
@@ -227,26 +250,64 @@ uint8_t ComputeDecimalWidth(T value) {
 	if (abs_val < 0) {
 		abs_val = -abs_val;
 	}
-	return static_cast<uint8_t>(floor(log10(static_cast<double>(abs_val))) + 1);
+	return static_cast<uint32_t>(floor(log10(static_cast<double>(abs_val))) + 1);
 }
 
-//! Re-encode a decimal 'value' at the physical type implied by 'width' and own it in the row's arena
-VariantDecimalData ArenaDecimal(const ParquetVariantIterator &state, uint8_t width, uint8_t scale, int64_t value) {
-	switch (DecimalPhysicalType(width)) {
-	case PhysicalType::INT16: {
-		auto narrowed = NumericCast<int16_t>(value);
-		return VariantDecimalData(width, scale, state.StoreBytes(const_data_ptr_cast(&narrowed), sizeof(int16_t)));
+//! Whether T is a physical storage type a DECIMAL value can be re-encoded into
+template <class T>
+struct IsDecimalStorage : std::false_type {};
+template <>
+struct IsDecimalStorage<int16_t> : std::true_type {};
+template <>
+struct IsDecimalStorage<int32_t> : std::true_type {};
+template <>
+struct IsDecimalStorage<int64_t> : std::true_type {};
+template <>
+struct IsDecimalStorage<hugeint_t> : std::true_type {};
+
+template <class T, class SRC>
+T CastDecimalValue(SRC value) {
+	if constexpr (std::is_same<T, hugeint_t>::value) {
+		return hugeint_t(value);
+	} else if constexpr (std::is_same<SRC, hugeint_t>::value) {
+		//! Only reachable for DECIMAL16, which always re-encodes to hugeint (the branch above)
+		return Hugeint::Cast<T>(value);
+	} else {
+		return NumericCast<T>(value);
 	}
-	case PhysicalType::INT32: {
-		auto narrowed = NumericCast<int32_t>(value);
-		return VariantDecimalData(width, scale, state.StoreBytes(const_data_ptr_cast(&narrowed), sizeof(int32_t)));
+}
+
+//! Read the (Parquet UUID-ordered) value as T. UUID is always read as hugeint_t.
+template <class T>
+T ReadBinaryUUID(const_data_ptr_t payload) {
+	if constexpr (std::is_same<T, hugeint_t>::value) {
+		return UUIDValueConversion::ReadParquetUUID(payload);
+	} else {
+		throw InternalException("Variant UUID must be read as hugeint_t");
 	}
-	case PhysicalType::INT64:
-		return VariantDecimalData(width, scale, state.StoreBytes(const_data_ptr_cast(&value), sizeof(int64_t)));
-	default: {
-		hugeint_t widened(value);
-		return VariantDecimalData(width, scale, state.StoreBytes(const_data_ptr_cast(&widened), sizeof(hugeint_t)));
-	}
+}
+
+//! Read the decimal value (re-encoded as T = the physical type implied by the width). 'payload' points at
+//! the scale byte. T must be one of int16/int32/int64/hugeint (see VariantDecimalPhysicalType).
+template <class T>
+T ReadBinaryDecimalValue(VariantPrimitiveType primitive_type, const_data_ptr_t payload) {
+	if constexpr (IsDecimalStorage<T>::value) {
+		auto value_data = payload + sizeof(uint8_t); // skip the scale byte
+		switch (primitive_type) {
+		case VariantPrimitiveType::DECIMAL4:
+			return CastDecimalValue<T>(Load<int32_t>(value_data));
+		case VariantPrimitiveType::DECIMAL8:
+			return CastDecimalValue<T>(Load<int64_t>(value_data));
+		default: {
+			D_ASSERT(primitive_type == VariantPrimitiveType::DECIMAL16);
+			hugeint_t value;
+			value.lower = Load<uint64_t>(value_data);
+			value.upper = Load<int64_t>(value_data + sizeof(uint64_t));
+			return CastDecimalValue<T>(value);
+		}
+		}
+	} else {
+		throw InternalException("Variant DECIMAL must be read as int16/int32/int64/hugeint");
 	}
 }
 
@@ -278,8 +339,7 @@ void ShreddedGroupView::Build(Vector &group) {
 		throw InvalidInputException("Required column 'value' not found in Variant group");
 	}
 
-	value_vec->ToUnifiedFormat(value_format);
-	value_data = UnifiedVectorFormat::GetData<string_t>(value_format);
+	value = make_uniq<VectorIterator<string_t>>(*value_vec);
 
 	if (!typed_vec) {
 		has_typed_value = false;
@@ -287,11 +347,11 @@ void ShreddedGroupView::Build(Vector &group) {
 	}
 	has_typed_value = true;
 	typed_type = typed_vec->GetType();
-	typed_vec->ToUnifiedFormat(typed_format);
 
 	switch (typed_type.id()) {
 	case LogicalTypeId::STRUCT: {
 		kind = ParquetGroupKind::OBJECT;
+		typed_validity = make_uniq<VectorValidityIterator>(*typed_vec);
 		auto &fields_meta = StructType::GetChildTypes(typed_type);
 		auto &field_entries = StructVector::GetEntries(*typed_vec);
 		for (idx_t i = 0; i < field_entries.size(); i++) {
@@ -304,13 +364,14 @@ void ShreddedGroupView::Build(Vector &group) {
 	}
 	case LogicalTypeId::LIST: {
 		kind = ParquetGroupKind::ARRAY;
-		list_data = UnifiedVectorFormat::GetData<list_entry_t>(typed_format);
+		list = make_uniq<VectorIterator<list_entry_t>>(*typed_vec);
 		element = make_uniq<ShreddedGroupView>();
 		element->Build(ListVector::GetChildMutable(*typed_vec));
 		break;
 	}
 	default:
 		kind = ParquetGroupKind::LEAF;
+		leaf = MakeLeafReader(*typed_vec);
 		break;
 	}
 }
@@ -318,47 +379,48 @@ void ShreddedGroupView::Build(Vector &group) {
 //===--------------------------------------------------------------------===//
 // ParquetVariantIterator
 //===--------------------------------------------------------------------===//
-ParquetVariantIterator::ParquetVariantIterator(Vector &metadata, Vector &group) {
-	metadata.ToUnifiedFormat(metadata_format);
-	metadata_data = UnifiedVectorFormat::GetData<string_t>(metadata_format);
+ParquetVariantIterator::ParquetVariantIterator(Vector &metadata_vec, Vector &group) : metadata(metadata_vec) {
 	root_view.Build(group);
 }
 
 void ParquetVariantIterator::BeginRow(idx_t row) {
 	current_row = row;
 	current_metadata.reset();
-	byte_arena.clear();
 }
 
 const VariantMetadata &ParquetVariantIterator::GetMetadata() const {
 	if (!current_metadata) {
-		auto &blob = metadata_data[metadata_format.sel->get_index(current_row)];
-		current_metadata = make_uniq<VariantMetadata>(blob);
+		current_metadata = make_uniq<VariantMetadata>(metadata[current_row].GetValueUnsafe());
 	}
 	return *current_metadata;
 }
 
-const_data_ptr_t ParquetVariantIterator::StoreBytes(const_data_ptr_t data, idx_t size) const {
-	byte_arena.push_back(make_uniq<string>(const_char_ptr_cast(data), size));
-	return const_data_ptr_cast(byte_arena.back()->data());
-}
-
-string_t ParquetVariantIterator::StoreString(string str) const {
-	byte_arena.push_back(make_uniq<string>(std::move(str)));
-	auto &owned = *byte_arena.back();
-	return string_t(owned.data(), NumericCast<uint32_t>(owned.size()));
+string_t ParquetVariantIterator::EncodeBase64(string_t blob) const {
+	base64_scratch = Blob::ToBase64(blob);
+	return string_t(base64_scratch.data(), NumericCast<uint32_t>(base64_scratch.size()));
 }
 
 ParquetVariantNode ParquetVariantIterator::ResolveGroup(const ShreddedGroupView &view, idx_t index) const {
 	if (view.has_typed_value) {
-		auto typed_idx = view.typed_format.sel->get_index(index);
-		if (view.typed_format.validity.RowIsValid(typed_idx)) {
+		bool typed_valid = false;
+		switch (view.kind) {
+		case ParquetGroupKind::LEAF:
+			typed_valid = view.leaf->IsValid(index);
+			break;
+		case ParquetGroupKind::ARRAY:
+			typed_valid = (*view.list)[index].IsValid();
+			break;
+		case ParquetGroupKind::OBJECT:
+			typed_valid = view.typed_validity->IsValid(index);
+			break;
+		}
+		if (typed_valid) {
 			if (view.kind == ParquetGroupKind::OBJECT) {
 				//! (Partially) shredded object - the binary 'value', if present, holds the leftover fields
 				const_data_ptr_t overlay = nullptr;
-				auto value_idx = view.value_format.sel->get_index(index);
-				if (view.value_format.validity.RowIsValid(value_idx)) {
-					auto overlay_data = const_data_ptr_cast(view.value_data[value_idx].GetData());
+				auto value_entry = (*view.value)[index];
+				if (value_entry.IsValid()) {
+					auto overlay_data = const_data_ptr_cast(value_entry.GetValueUnsafe().GetData());
 					if (VariantValueMetadata::FromHeaderByte(overlay_data[0]).basic_type != VariantBasicType::OBJECT) {
 						throw InvalidInputException(
 						    "Partially shredded objects have to encode Object Variants in the 'value'");
@@ -373,9 +435,9 @@ ParquetVariantNode ParquetVariantIterator::ResolveGroup(const ShreddedGroupView 
 	}
 
 	//! No (valid) shredded value - fall back to the binary 'value'
-	auto value_idx = view.value_format.sel->get_index(index);
-	if (view.value_format.validity.RowIsValid(value_idx)) {
-		auto data = const_data_ptr_cast(view.value_data[value_idx].GetData());
+	auto value_entry = (*view.value)[index];
+	if (value_entry.IsValid()) {
+		auto data = const_data_ptr_cast(value_entry.GetValueUnsafe().GetData());
 		if (view.has_typed_value && view.kind == ParquetGroupKind::OBJECT &&
 		    VariantValueMetadata::FromHeaderByte(data[0]).basic_type == VariantBasicType::OBJECT) {
 			throw InvalidInputException(
@@ -406,7 +468,7 @@ VariantLogicalType ParquetVariantNode::GetTypeId() const {
 		case ParquetGroupKind::ARRAY:
 			return VariantLogicalType::ARRAY;
 		default:
-			return ShreddedLeafTypeId(*view, view->typed_format.sel->get_index(index));
+			return ShreddedLeafTypeId(*view, index);
 		}
 	case Kind::BINARY:
 		return BinaryTypeId(binary);
@@ -415,30 +477,32 @@ VariantLogicalType ParquetVariantNode::GetTypeId() const {
 	}
 }
 
-const_data_ptr_t ParquetVariantNode::GetDataPointer() const {
+template <class T>
+T ParquetVariantNode::GetData() const {
 	if (kind == Kind::SHREDDED) {
-		auto typed_idx = view->typed_format.sel->get_index(index);
-		auto type_size = GetTypeIdSize(view->typed_format.physical_type);
-		return view->typed_format.data + (typed_idx * type_size);
+		return Load<T>(view->leaf->Pointer(index));
 	}
 	D_ASSERT(kind == Kind::BINARY);
 	auto value_metadata = VariantValueMetadata::FromHeaderByte(binary[0]);
 	auto payload = binary + 1;
-	if (value_metadata.primitive_type == VariantPrimitiveType::UUID) {
-		//! The Parquet UUID byte order differs from the canonical (hugeint) layout - materialize it
-		auto uuid = UUIDValueConversion::ReadParquetUUID(payload);
-		return state->StoreBytes(const_data_ptr_cast(&uuid), sizeof(hugeint_t));
+	switch (value_metadata.primitive_type) {
+	case VariantPrimitiveType::UUID:
+		return ReadBinaryUUID<T>(payload);
+	case VariantPrimitiveType::DECIMAL4:
+	case VariantPrimitiveType::DECIMAL8:
+	case VariantPrimitiveType::DECIMAL16:
+		return ReadBinaryDecimalValue<T>(value_metadata.primitive_type, payload);
+	default:
+		//! Fixed-width primitives are stored in the canonical little-endian layout
+		return Load<T>(payload);
 	}
-	//! Fixed-width primitives are already stored in the canonical little-endian layout
-	return payload;
 }
 
 string_t ParquetVariantNode::GetString() const {
 	if (kind == Kind::SHREDDED) {
-		auto typed_idx = view->typed_format.sel->get_index(index);
-		auto str = UnifiedVectorFormat::GetData<string_t>(view->typed_format)[typed_idx];
+		auto str = Load<string_t>(view->leaf->Pointer(index));
 		if (view->typed_type.id() == LogicalTypeId::BLOB) {
-			return state->StoreString(Blob::ToBase64(str));
+			return state->EncodeBase64(str);
 		}
 		if (!Utf8Proc::IsValid(str.GetData(), str.GetSize())) {
 			throw InternalException("Can't decode Variant string, it isn't valid UTF8");
@@ -459,7 +523,7 @@ string_t ParquetVariantNode::GetString() const {
 	auto string_data = const_char_ptr_cast(payload + sizeof(uint32_t));
 	if (value_metadata.primitive_type == VariantPrimitiveType::BINARY) {
 		//! Follow the JSON serialization guide by converting BINARY to base64
-		return state->StoreString(Blob::ToBase64(string_t(string_data, size)));
+		return state->EncodeBase64(string_t(string_data, size));
 	}
 	if (!Utf8Proc::IsValid(string_data, size)) {
 		throw InternalException("Can't decode Variant string, it isn't valid UTF8");
@@ -467,40 +531,26 @@ string_t ParquetVariantNode::GetString() const {
 	return string_t(string_data, size);
 }
 
-VariantDecimalData ParquetVariantNode::GetDecimal() const {
+VariantDecimalProperties ParquetVariantNode::GetDecimalProperties() const {
 	if (kind == Kind::SHREDDED) {
 		uint8_t width;
 		uint8_t scale;
 		view->typed_type.GetDecimalProperties(width, scale);
-		auto typed_idx = view->typed_format.sel->get_index(index);
-		auto type_size = GetTypeIdSize(view->typed_format.physical_type);
-		return VariantDecimalData(width, scale, view->typed_format.data + (typed_idx * type_size));
+		return VariantDecimalProperties(width, scale);
 	}
 	D_ASSERT(kind == Kind::BINARY);
 	auto value_metadata = VariantValueMetadata::FromHeaderByte(binary[0]);
 	auto payload = binary + 1;
 	uint8_t scale = Load<uint8_t>(payload);
 	auto value_data = payload + sizeof(uint8_t);
-
-	//! The binary value stores the integer at the encoded width (4/8/16 bytes); the canonical layout
-	//! stores it at the physical type implied by the (computed) precision, so re-encode it into the arena.
 	switch (value_metadata.primitive_type) {
-	case VariantPrimitiveType::DECIMAL4: {
-		int64_t value = Load<int32_t>(value_data);
-		return ArenaDecimal(*state, ComputeDecimalWidth<int64_t>(value), scale, value);
-	}
-	case VariantPrimitiveType::DECIMAL8: {
-		int64_t value = Load<int64_t>(value_data);
-		return ArenaDecimal(*state, ComputeDecimalWidth<int64_t>(value), scale, value);
-	}
-	default: {
+	case VariantPrimitiveType::DECIMAL4:
+		return VariantDecimalProperties(ComputeDecimalWidth<int32_t>(Load<int32_t>(value_data)), scale);
+	case VariantPrimitiveType::DECIMAL8:
+		return VariantDecimalProperties(ComputeDecimalWidth<int64_t>(Load<int64_t>(value_data)), scale);
+	default:
 		D_ASSERT(value_metadata.primitive_type == VariantPrimitiveType::DECIMAL16);
-		hugeint_t value;
-		value.lower = Load<uint64_t>(value_data);
-		value.upper = Load<int64_t>(value_data + sizeof(uint64_t));
-		return VariantDecimalData(DecimalWidth<hugeint_t>::max, scale,
-		                          state->StoreBytes(const_data_ptr_cast(&value), sizeof(hugeint_t)));
-	}
+		return VariantDecimalProperties(DecimalWidth<hugeint_t>::max, scale);
 	}
 }
 
@@ -573,7 +623,7 @@ ParquetObjectIterator::ParquetObjectIterator(const ParquetVariantIterator &state
 ParquetArrayIterator::ParquetArrayIterator(const ParquetVariantIterator &state, const ShreddedGroupView &view,
                                            idx_t index)
     : state(state), shredded(true), element(view.element.get()) {
-	auto &entry = view.list_data[view.typed_format.sel->get_index(index)];
+	auto entry = (*view.list)[index].GetValueUnsafe();
 	base = entry.offset;
 	length = entry.length;
 }

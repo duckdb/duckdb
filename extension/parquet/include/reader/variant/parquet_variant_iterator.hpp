@@ -10,7 +10,7 @@
 
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
-#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/helper.hpp"
@@ -20,30 +20,39 @@ namespace duckdb {
 
 struct VariantBuilder;
 
+//! Type-erased reader over a shredded leaf vector, backed by a VectorIterator<T>. Exposes the validity
+//! and a pointer to the (canonical, little-endian) payload of the element at a logical position.
+struct ShreddedLeafReader {
+	virtual ~ShreddedLeafReader() = default;
+	virtual bool IsValid(idx_t index) const = 0;
+	virtual const_data_ptr_t Pointer(idx_t index) const = 0;
+};
+
 //! A "group" in the Parquet shredded VARIANT layout: STRUCT(value BLOB, [typed_value <T>]).
-//! The recursive view normalizes (flattens) the regular typed vectors of the group tree once, so each
-//! layer can be navigated by index during the (per-row) single-pass conversion.
+//! The recursive view builds the (type-specific) VectorIterators of the group tree once, so each layer
+//! can be navigated by index during the (per-row) single-pass conversion.
 enum class ParquetGroupKind : uint8_t { LEAF, OBJECT, ARRAY };
 
 struct ShreddedGroupView {
 	//! 'value' (the binary-encoded fallback / overlay)
-	UnifiedVectorFormat value_format;
-	const string_t *value_data = nullptr;
+	unique_ptr<VectorIterator<string_t>> value;
 
 	//! Whether the group has a 'typed_value' (a shredded representation)
 	bool has_typed_value = false;
 	ParquetGroupKind kind = ParquetGroupKind::LEAF;
-	//! 'typed_value' (validity + data: the primitive for LEAF, list_entry_t for ARRAY, struct for OBJECT)
-	UnifiedVectorFormat typed_format;
 	LogicalType typed_type;
 
-	//! OBJECT: the field names + their (group) sub-views
-	vector<string> field_names;
-	vector<unique_ptr<ShreddedGroupView>> fields;
+	//! LEAF: the typed primitive reader
+	unique_ptr<ShreddedLeafReader> leaf;
 
 	//! ARRAY: the list entries + the element (group) sub-view
-	const list_entry_t *list_data = nullptr;
+	unique_ptr<VectorIterator<list_entry_t>> list;
 	unique_ptr<ShreddedGroupView> element;
+
+	//! OBJECT: the struct's validity + the field names + their (group) sub-views
+	unique_ptr<VectorValidityIterator> typed_validity;
+	vector<string> field_names;
+	vector<unique_ptr<ShreddedGroupView>> fields;
 
 	//! Build the view recursively from a group Vector
 	void Build(Vector &group);
@@ -56,7 +65,7 @@ class ParquetArrayIterator;
 //! A lightweight cursor pointing at a single logical Parquet VARIANT value. A value is either SHREDDED
 //! (a position in a typed vector tree) or BINARY (a Spark variant-encoded value at a byte offset in a
 //! 'value' blob). Both expose the same node concept, so the shared EmitIterator traverses them uniformly
-//! and emits the correct VariantLogicalType - no value is ever materialized as a whole VariantValue.
+//! and emits the correct VariantLogicalType.
 class ParquetVariantNode {
 public:
 	enum class Kind : uint8_t { NULL_VALUE, MISSING, SHREDDED, BINARY };
@@ -100,9 +109,11 @@ public:
 	}
 
 	VariantLogicalType GetTypeId() const;
+	//! Returns the fixed-width primitive payload (loaded / re-encoded as T)
+	template <class T>
+	T GetData() const;
 	string_t GetString() const;
-	VariantDecimalData GetDecimal() const;
-	const_data_ptr_t GetDataPointer() const;
+	VariantDecimalProperties GetDecimalProperties() const;
 	ParquetObjectIterator GetObjectChildren(VariantIterationOrder order) const;
 	ParquetArrayIterator GetArrayChildren() const;
 
@@ -183,15 +194,15 @@ private:
 };
 
 //! Iterates a shredded Parquet VARIANT column (metadata + group), handing out ParquetVariantNode cursors
-//! per row. Binary (Spark-encoded) values are read directly from the 'value' blobs; the only per-row
-//! materialization is a small byte arena for the handful of leaf payloads that need a representation
-//! change (BINARY->base64, UUID byte order, binary DECIMAL re-encoding).
+//! per row. Binary (Spark-encoded) values are read directly from the 'value' blobs; fixed-width payloads
+//! are fetched by value (no materialization). The only scratch buffer is for base64-encoded strings, which
+//! the (depth-first) emit consumes immediately, so a single reused buffer suffices.
 class ParquetVariantIterator {
 public:
 	ParquetVariantIterator(Vector &metadata, Vector &group);
 
 public:
-	//! Reset the per-row state (byte arena + lazily-decoded metadata) for a new row
+	//! Reset the per-row state (lazily-decoded metadata) for a new row
 	void BeginRow(idx_t row);
 	//! Resolve the root value of 'row' (a missing root is promoted to a SQL NULL)
 	ParquetVariantNode Root(idx_t row) const;
@@ -200,20 +211,18 @@ public:
 
 	//! The (lazily-decoded) Variant metadata of the current row
 	const VariantMetadata &GetMetadata() const;
-	//! Own 'size' bytes for the duration of the current row, returning a stable pointer to a copy
-	const_data_ptr_t StoreBytes(const_data_ptr_t data, idx_t size) const;
-	//! Own a string for the duration of the current row, returning a stable string_t view of it
-	string_t StoreString(string str) const;
+	//! Base64-encode 'blob' into the row's scratch buffer, returning a string_t that is valid until the
+	//! next call (the emit copies it out immediately)
+	string_t EncodeBase64(string_t blob) const;
 
 private:
 	ShreddedGroupView root_view;
 
-	UnifiedVectorFormat metadata_format;
-	const string_t *metadata_data;
+	VectorIterator<string_t> metadata;
 
 	idx_t current_row = 0;
 	mutable unique_ptr<VariantMetadata> current_metadata;
-	mutable vector<unique_ptr<string>> byte_arena;
+	mutable string base64_scratch;
 };
 
 //! BuildVariant source wrapping a ParquetVariantIterator (mirrors VariantIteratorSource in core)

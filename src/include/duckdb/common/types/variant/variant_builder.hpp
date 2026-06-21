@@ -26,9 +26,7 @@
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
-#include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/limits.hpp"
@@ -73,79 +71,16 @@ inline uint32_t VariantBuilderGetOrCreateIndex(OrderedOwningStringMap<uint32_t> 
 	return dictionary.emplace(std::make_pair(key, unsorted_idx)).first->second;
 }
 
-//! The (fixed) blob payload size of a fixed-width primitive VariantLogicalType
-inline idx_t VariantFixedPayloadSize(VariantLogicalType type_id) {
-	switch (type_id) {
-	case VariantLogicalType::VARIANT_NULL:
-	case VariantLogicalType::BOOL_TRUE:
-	case VariantLogicalType::BOOL_FALSE:
-		return 0;
-	case VariantLogicalType::INT8:
-		return sizeof(int8_t);
-	case VariantLogicalType::INT16:
-		return sizeof(int16_t);
-	case VariantLogicalType::INT32:
-		return sizeof(int32_t);
-	case VariantLogicalType::INT64:
-		return sizeof(int64_t);
-	case VariantLogicalType::INT128:
-		return sizeof(hugeint_t);
-	case VariantLogicalType::UINT8:
-		return sizeof(uint8_t);
-	case VariantLogicalType::UINT16:
-		return sizeof(uint16_t);
-	case VariantLogicalType::UINT32:
-		return sizeof(uint32_t);
-	case VariantLogicalType::UINT64:
-		return sizeof(uint64_t);
-	case VariantLogicalType::UINT128:
-		return sizeof(uhugeint_t);
-	case VariantLogicalType::FLOAT:
-		return sizeof(float);
-	case VariantLogicalType::DOUBLE:
-		return sizeof(double);
-	case VariantLogicalType::UUID:
-		return sizeof(hugeint_t);
-	case VariantLogicalType::DATE:
-		return sizeof(date_t);
-	case VariantLogicalType::TIME_MICROS:
-		return sizeof(dtime_t);
-	case VariantLogicalType::TIME_NANOS:
-		return sizeof(dtime_ns_t);
-	case VariantLogicalType::TIME_MICROS_TZ:
-		return sizeof(dtime_tz_t);
-	case VariantLogicalType::TIMESTAMP_SEC:
-		return sizeof(timestamp_sec_t);
-	case VariantLogicalType::TIMESTAMP_MILIS:
-		return sizeof(timestamp_ms_t);
-	case VariantLogicalType::TIMESTAMP_MICROS:
-		return sizeof(timestamp_t);
-	case VariantLogicalType::TIMESTAMP_NANOS:
-		return sizeof(timestamp_ns_t);
-	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
-		return sizeof(timestamp_tz_t);
-	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
-		return sizeof(timestamp_tz_ns_t);
-	case VariantLogicalType::INTERVAL:
-		return sizeof(interval_t);
-	default:
-		throw InternalException("Unexpected VariantLogicalType (%d) when building a VARIANT",
-		                        static_cast<int>(type_id));
+//! The physical storage type of a DECIMAL of the given width (matches VariantDecimalData::GetPhysicalType)
+inline PhysicalType VariantDecimalPhysicalType(uint32_t width) {
+	if (width > DecimalWidth<int64_t>::max) {
+		return PhysicalType::INT128;
+	} else if (width > DecimalWidth<int32_t>::max) {
+		return PhysicalType::INT64;
+	} else if (width > DecimalWidth<int16_t>::max) {
+		return PhysicalType::INT32;
 	}
-}
-
-//! Whether 'type_id' is encoded as a (length-prefixed) string in the blob
-inline bool VariantIsStringType(VariantLogicalType type_id) {
-	switch (type_id) {
-	case VariantLogicalType::VARCHAR:
-	case VariantLogicalType::BLOB:
-	case VariantLogicalType::BIGNUM:
-	case VariantLogicalType::BITSTRING:
-	case VariantLogicalType::GEOMETRY:
-		return true;
-	default:
-		return false;
-	}
+	return PhysicalType::INT16;
 }
 
 //! Accumulates the canonical representation of a single chunk while traversing the source once.
@@ -429,6 +364,126 @@ struct VariantBuilder {
 			throw InternalException("VariantValueType not handled");
 		}
 	}
+
+	//! Emit a primitive value sourced from a VariantNode-like cursor. The fixed-width payload is fetched by
+	//! value via 'it.GetData<T>()' (chosen by 'type_id'); strings via 'it.GetString()'; decimals via
+	//! 'it.GetDecimalProperties()' followed by 'it.GetData<T>()' at the physical type implied by the width.
+	template <class NODE>
+	void EmitPrimitiveNode(const NODE &it, VariantLogicalType type_id) {
+		auto byte_offset = NumericCast<uint32_t>(blob.size());
+		type_ids.push_back(static_cast<uint8_t>(type_id));
+		byte_offsets.push_back(byte_offset);
+		switch (type_id) {
+		case VariantLogicalType::VARIANT_NULL:
+		case VariantLogicalType::BOOL_TRUE:
+		case VariantLogicalType::BOOL_FALSE:
+			break;
+		case VariantLogicalType::INT8:
+			VariantBuilderAppendFixed(blob, it.template GetData<int8_t>());
+			break;
+		case VariantLogicalType::INT16:
+			VariantBuilderAppendFixed(blob, it.template GetData<int16_t>());
+			break;
+		case VariantLogicalType::INT32:
+			VariantBuilderAppendFixed(blob, it.template GetData<int32_t>());
+			break;
+		case VariantLogicalType::INT64:
+			VariantBuilderAppendFixed(blob, it.template GetData<int64_t>());
+			break;
+		case VariantLogicalType::INT128:
+			VariantBuilderAppendFixed(blob, it.template GetData<hugeint_t>());
+			break;
+		case VariantLogicalType::UINT8:
+			VariantBuilderAppendFixed(blob, it.template GetData<uint8_t>());
+			break;
+		case VariantLogicalType::UINT16:
+			VariantBuilderAppendFixed(blob, it.template GetData<uint16_t>());
+			break;
+		case VariantLogicalType::UINT32:
+			VariantBuilderAppendFixed(blob, it.template GetData<uint32_t>());
+			break;
+		case VariantLogicalType::UINT64:
+			VariantBuilderAppendFixed(blob, it.template GetData<uint64_t>());
+			break;
+		case VariantLogicalType::UINT128:
+			VariantBuilderAppendFixed(blob, it.template GetData<uhugeint_t>());
+			break;
+		case VariantLogicalType::FLOAT:
+			VariantBuilderAppendFixed(blob, it.template GetData<float>());
+			break;
+		case VariantLogicalType::DOUBLE:
+			VariantBuilderAppendFixed(blob, it.template GetData<double>());
+			break;
+		case VariantLogicalType::UUID:
+			VariantBuilderAppendFixed(blob, it.template GetData<hugeint_t>());
+			break;
+		case VariantLogicalType::DATE:
+			VariantBuilderAppendFixed(blob, it.template GetData<date_t>());
+			break;
+		case VariantLogicalType::TIME_MICROS:
+			VariantBuilderAppendFixed(blob, it.template GetData<dtime_t>());
+			break;
+		case VariantLogicalType::TIME_NANOS:
+			VariantBuilderAppendFixed(blob, it.template GetData<dtime_ns_t>());
+			break;
+		case VariantLogicalType::TIME_MICROS_TZ:
+			VariantBuilderAppendFixed(blob, it.template GetData<dtime_tz_t>());
+			break;
+		case VariantLogicalType::TIMESTAMP_SEC:
+			VariantBuilderAppendFixed(blob, it.template GetData<timestamp_sec_t>());
+			break;
+		case VariantLogicalType::TIMESTAMP_MILIS:
+			VariantBuilderAppendFixed(blob, it.template GetData<timestamp_ms_t>());
+			break;
+		case VariantLogicalType::TIMESTAMP_MICROS:
+			VariantBuilderAppendFixed(blob, it.template GetData<timestamp_t>());
+			break;
+		case VariantLogicalType::TIMESTAMP_NANOS:
+			VariantBuilderAppendFixed(blob, it.template GetData<timestamp_ns_t>());
+			break;
+		case VariantLogicalType::TIMESTAMP_MICROS_TZ:
+			VariantBuilderAppendFixed(blob, it.template GetData<timestamp_tz_t>());
+			break;
+		case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+			VariantBuilderAppendFixed(blob, it.template GetData<timestamp_tz_ns_t>());
+			break;
+		case VariantLogicalType::INTERVAL:
+			VariantBuilderAppendFixed(blob, it.template GetData<interval_t>());
+			break;
+		case VariantLogicalType::DECIMAL: {
+			auto properties = it.GetDecimalProperties();
+			VariantBuilderAppendVarint(blob, properties.width);
+			VariantBuilderAppendVarint(blob, properties.scale);
+			switch (VariantDecimalPhysicalType(properties.width)) {
+			case PhysicalType::INT16:
+				VariantBuilderAppendFixed(blob, it.template GetData<int16_t>());
+				break;
+			case PhysicalType::INT32:
+				VariantBuilderAppendFixed(blob, it.template GetData<int32_t>());
+				break;
+			case PhysicalType::INT64:
+				VariantBuilderAppendFixed(blob, it.template GetData<int64_t>());
+				break;
+			default:
+				VariantBuilderAppendFixed(blob, it.template GetData<hugeint_t>());
+				break;
+			}
+			break;
+		}
+		case VariantLogicalType::VARCHAR:
+		case VariantLogicalType::BLOB:
+		case VariantLogicalType::BIGNUM:
+		case VariantLogicalType::BITSTRING:
+		case VariantLogicalType::GEOMETRY: {
+			auto str = it.GetString();
+			VariantBuilderAppendVarint(blob, NumericCast<uint32_t>(str.GetSize()));
+			VariantBuilderAppendBytes(blob, const_data_ptr_cast(str.GetData()), str.GetSize());
+			break;
+		}
+		default:
+			throw InternalException("EmitPrimitiveNode: unhandled VariantLogicalType (%d)", static_cast<int>(type_id));
+		}
+	}
 };
 
 //===--------------------------------------------------------------------===//
@@ -468,32 +523,9 @@ void EmitIterator(const NODE &it, VariantBuilder &builder) {
 		builder.EmitArray(array.size(), [&](idx_t i) { EmitIterator(array[i], builder); });
 		break;
 	}
-	case VariantLogicalType::DECIMAL: {
-		auto decimal = it.GetDecimal();
-		auto byte_offset = NumericCast<uint32_t>(builder.blob.size());
-		builder.type_ids.push_back(static_cast<uint8_t>(VariantLogicalType::DECIMAL));
-		builder.byte_offsets.push_back(byte_offset);
-		VariantBuilderAppendVarint(builder.blob, decimal.width);
-		VariantBuilderAppendVarint(builder.blob, decimal.scale);
-		VariantBuilderAppendBytes(builder.blob, decimal.value_ptr, GetTypeIdSize(decimal.GetPhysicalType()));
+	default:
+		builder.EmitPrimitiveNode(it, type_id);
 		break;
-	}
-	default: {
-		auto byte_offset = NumericCast<uint32_t>(builder.blob.size());
-		builder.type_ids.push_back(static_cast<uint8_t>(type_id));
-		builder.byte_offsets.push_back(byte_offset);
-		if (VariantIsStringType(type_id)) {
-			auto str = it.GetString();
-			VariantBuilderAppendVarint(builder.blob, NumericCast<uint32_t>(str.GetSize()));
-			VariantBuilderAppendBytes(builder.blob, const_data_ptr_cast(str.GetData()), str.GetSize());
-		} else {
-			auto size = VariantFixedPayloadSize(type_id);
-			if (size) {
-				VariantBuilderAppendBytes(builder.blob, it.GetDataPointer(), size);
-			}
-		}
-		break;
-	}
 	}
 }
 
