@@ -1,0 +1,679 @@
+diff --git a/src/delta_macros.cpp b/src/delta_macros.cpp
+index c18f81d..0d43aba 100644
+--- a/src/delta_macros.cpp
++++ b/src/delta_macros.cpp
+@@ -78,9 +78,7 @@ void DeltaMacros::RegisterTableMacro(ExtensionLoader &loader, const string &name
+ static DefaultMacro delta_macros[] = {
+     {DEFAULT_SCHEMA,
+      "parse_delta_filter_logline",
+-     {"x", nullptr},
+-     {{nullptr, nullptr}},
+-     "x::STRUCT(path VARCHAR, type VARCHAR, filters_before VARCHAR[], filters_after VARCHAR[], files_before BIGINT, "
++     "(x) AS x::STRUCT(path VARCHAR, type VARCHAR, filters_before VARCHAR[], filters_after VARCHAR[], files_before BIGINT, "
+      "files_after BIGINT)"},
+ };
+ 
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+index 48fdb79..e528279 100644
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -4,9 +4,16 @@
+ #include <list>
+ 
+ #include "delta_log_types.hpp"
++#include "functions/delta_scan/delta_multi_file_list.hpp"
+ #include "duckdb/common/operator/decimal_cast_operators.hpp"
+ 
+ #include "duckdb.hpp"
++#include "duckdb/planner/expression/bound_columnref_expression.hpp"
++#include "duckdb/planner/expression/bound_comparison_expression.hpp"
++#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
++#include "duckdb/planner/expression/bound_constant_expression.hpp"
++#include "duckdb/planner/expression/bound_function_expression.hpp"
++#include "duckdb/planner/expression/bound_operator_expression.hpp"
+ #include "duckdb/common/extension_type_info.hpp"
+ #include "duckdb/common/types/decimal.hpp"
+ #include "duckdb/main/database.hpp"
+@@ -40,7 +47,7 @@ ffi::EngineExpressionVisitor ExpressionVisitor::CreateVisitor(ExpressionVisitor
+ 	ffi::EngineExpressionVisitor visitor;
+ 
+ 	visitor.data = &state;
+-	visitor.make_field_list = (uintptr_t(*)(void *, uintptr_t)) & MakeFieldList;
++	visitor.make_field_list = (uintptr_t (*)(void *, uintptr_t))&MakeFieldList;
+ 
+ 	// Templated primitive functions
+ 	visitor.visit_literal_bool = VisitPrimitiveLiteralBool;
+@@ -279,7 +286,7 @@ void ExpressionVisitor::VisitStructLiteral(void *state, uintptr_t sibling_list_i
+ 	}
+ 
+ 	for (idx_t i = 0; i < children_keys->size(); i++) {
+-		(*children_values)[i]->alias = (*children_keys)[i]->ToString();
++		(*children_values)[i]->SetAlias((*children_keys)[i]->ToString());
+ 	}
+ 
+ 	unique_ptr<ParsedExpression> expression = make_uniq<FunctionExpression>("struct_pack", std::move(*children_values));
+@@ -331,8 +338,8 @@ void ExpressionVisitor::VisitLiteralMap(void *state, uintptr_t sibling_list_id,
+ 			    ErrorData("DuckDB only supports parsing Map literals from delta kernel that consist for constants!");
+ 			return;
+ 		}
+-		key_values.push_back(key_field->Cast<ConstantExpression>().value);
+-		key_type = key_field->Cast<ConstantExpression>().value.type();
++		key_values.push_back(key_field->Cast<ConstantExpression>().GetValue());
++		key_type = key_field->Cast<ConstantExpression>().GetValue().type();
+ 	}
+ 
+ 	vector<Value> value_values;
+@@ -343,8 +350,8 @@ void ExpressionVisitor::VisitLiteralMap(void *state, uintptr_t sibling_list_id,
+ 			    ErrorData("DuckDB only supports parsing Map literals from delta kernel that consist for constants!");
+ 			return;
+ 		}
+-		value_values.push_back(value_field->Cast<ConstantExpression>().value);
+-		value_type = value_field->Cast<ConstantExpression>().value.type();
++		value_values.push_back(value_field->Cast<ConstantExpression>().GetValue());
++		value_type = value_field->Cast<ConstantExpression>().GetValue().type();
+ 	}
+ 
+ 	unique_ptr<ParsedExpression> expression =
+@@ -540,19 +547,15 @@ ffi::EngineSchemaVisitor SchemaVisitor::CreateSchemaVisitor(SchemaVisitor &state
+ 	ffi::EngineSchemaVisitor visitor;
+ 
+ 	visitor.data = &state;
+-	visitor.make_field_list = (uintptr_t(*)(void *, uintptr_t)) & MakeFieldList;
+-	visitor.visit_struct =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata, uintptr_t)) &
+-	    VisitStruct;
+-	visitor.visit_array =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata, uintptr_t)) &
+-	    VisitArray;
+-	visitor.visit_map =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata, uintptr_t)) &
+-	    VisitMap;
+-	visitor.visit_decimal =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata, uint8_t, uint8_t)) &
+-	    VisitDecimal;
++	visitor.make_field_list = (uintptr_t (*)(void *, uintptr_t))&MakeFieldList;
++	visitor.visit_struct = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata,
++	                                 uintptr_t))&VisitStruct;
++	visitor.visit_array = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata,
++	                                uintptr_t))&VisitArray;
++	visitor.visit_map = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata,
++	                              uintptr_t))&VisitMap;
++	visitor.visit_decimal = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata,
++	                                  uint8_t, uint8_t))&VisitDecimal;
+ 	visitor.visit_string = VisitSimpleType<LogicalType::VARCHAR>();
+ 	visitor.visit_long = VisitSimpleType<LogicalType::BIGINT>();
+ 	visitor.visit_integer = VisitSimpleType<LogicalType::INTEGER>();
+@@ -923,8 +926,9 @@ KernelUtils::UnpackTransformExpression(const vector<unique_ptr<ParsedExpression>
+ 	}
+ 
+ 	const auto &root_expression = parsed_expression.get(0);
+-	if (root_expression->type != ExpressionType::FUNCTION) {
+-		throw IOException("Unexpected type of root expression returned by delta kernel: %d", root_expression->type);
++	if (root_expression->GetExpressionType() != ExpressionType::FUNCTION) {
++		throw IOException("Unexpected type of root expression returned by delta kernel: %d",
++		                  root_expression->GetExpressionType());
+ 	}
+ 
+ 	if (root_expression->Cast<FunctionExpression>().function_name != "delta_kernel_transform_expression") {
+@@ -936,13 +940,13 @@ KernelUtils::UnpackTransformExpression(const vector<unique_ptr<ParsedExpression>
+ }
+ 
+ PredicateVisitor::PredicateVisitor(const vector<DeltaMultiFileColumnDefinition> &columns,
+-                                   optional_ptr<const TableFilterSet> filters) {
++                                   optional_ptr<const TableFilterSet> filters) {
+ 	predicate = this;
+-	visitor = (uintptr_t(*)(void *, ffi::KernelExpressionVisitorState *)) & VisitPredicate;
++	visitor = (uintptr_t (*)(void *, ffi::KernelExpressionVisitorState *))&VisitPredicate;
+ 
+ 	if (filters) {
+-		for (auto &filter : filters->filters) {
+-			column_filters[columns[filter.first].name] = filter.second.get();
++		for (auto &filter : filters->filters) {
++			column_filters[columns[filter.first].name] = filter.second.get();
+ 		}
+ 	}
+ }
+@@ -978,8 +982,8 @@ uintptr_t PredicateVisitor::VisitPredicate(PredicateVisitor *predicate, ffi::Ker
+ 	return ffi::visit_predicate_and(state, &eit);
+ }
+ 
+-uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const ConstantFilter &filter,
+-                                                ffi::KernelExpressionVisitorState *state) {
++uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, ExpressionType comparison_type,
++                                                const Value &value, ffi::KernelExpressionVisitorState *state) {
+ 	auto maybe_left =
+ 	    ffi::visit_expression_column(state, KernelUtils::ToDeltaString(col_name), DuckDBEngineError::AllocateError);
+ 
+@@ -991,7 +995,6 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
+ 	}
+ 
+ 	uintptr_t right = ~0;
+-	auto &value = filter.constant;
+ 	switch (value.type().id()) {
+ 	case LogicalType::BIGINT:
+ 		right = visit_expression_literal_long(state, BigIntValue::Get(value));
+@@ -1071,7 +1074,7 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
+ 	}
+ 
+ 	// TODO support other comparison types?
+-	switch (filter.comparison_type) {
++	switch (comparison_type) {
+ 	case ExpressionType::COMPARE_LESSTHAN:
+ 		return visit_predicate_lt(state, left, right);
+ 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+@@ -1097,20 +1100,14 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
+ 	}
+ }
+ 
+-uintptr_t PredicateVisitor::VisitAndFilter(const string &col_name, const ConjunctionAndFilter &filter,
+-                                           ffi::KernelExpressionVisitorState *state) {
+-	auto it = filter.child_filters.begin();
+-	auto end = filter.child_filters.end();
+-	auto get_next = [this, col_name, state, &it, &end]() -> uintptr_t {
+-		if (it == end) {
+-			return 0;
+-		}
+-		auto &child_filter = *it++;
+-
+-		return VisitFilter(col_name, *child_filter, state);
+-	};
+-	auto eit = EngineIteratorFromCallable(get_next);
+-	return visit_predicate_and(state, &eit);
++static bool IsSupportedFilterSubject(const Expression &expr) {
++	switch (expr.GetExpressionClass()) {
++	case ExpressionClass::BOUND_REF:
++	case ExpressionClass::BOUND_COLUMN_REF:
++		return true;
++	default:
++		return false;
++	}
+ }
+ 
+ uintptr_t PredicateVisitor::VisitIsNull(const string &col_name, ffi::KernelExpressionVisitorState *state) {
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+index 4ce9e20..6d5328f 100644
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -369,7 +369,7 @@ static unordered_map<idx_t, Value> FindPartitionValues(ParsedExpression &transfo
+ 			if (transform_op_child->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
+ 				auto name =
+ 				    transform_op_child->Cast<ComparisonExpression>().left->Cast<ColumnRefExpression>().GetName();
+-				auto value = transform_op_child->Cast<ComparisonExpression>().right->Cast<ConstantExpression>().value;
++				auto value = transform_op_child->Cast<ComparisonExpression>().right->Cast<ConstantExpression>().GetValue();
+ 
+ 				if (name == "is_replace") {
+ 					is_replace = value.GetValue<bool>();
+@@ -382,7 +382,7 @@ static unordered_map<idx_t, Value> FindPartitionValues(ParsedExpression &transfo
+ 					                        name);
+ 				}
+ 			} else if (transform_op_child->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+-				values.push_back(transform_op_child->Cast<ConstantExpression>().value);
++				values.push_back(transform_op_child->Cast<ConstantExpression>().GetValue());
+ 			} else {
+ 				throw NotImplementedException(
+ 				    "Unexpected expression for delta_transform_op returned by delta kernel: %s",
+@@ -812,20 +812,24 @@ void DeltaMultiFileList::EnsureScanInitialized() const {
+ }
+ 
+ unique_ptr<DeltaMultiFileList> DeltaMultiFileList::PushdownInternal(ClientContext &context,
+-                                                                    TableFilterSet &new_filters) const {
++                                                                    TableFilterSet &new_filters,
++                                                                    vector<column_t> column_indexes) const {
+ 	auto filtered_list = make_uniq<DeltaMultiFileList>(context, paths[0].path, version);
+ 
+-	TableFilterSet result_filter_set;
++	DeltaTableFilters result_filter_set;
+ 
+ 	// Add pre-existing filters
+-	for (auto &entry : table_filters.filters) {
+-		result_filter_set.PushFilter(ColumnIndex(entry.first), entry.second->Copy());
++	for (auto &entry : table_filters) {
++		result_filter_set.PushFilter(entry.first, entry.second->Copy());
+ 	}
+ 
+ 	// Add new filters
+-	for (auto &entry : new_filters.filters) {
+-		if (entry.first < global_columns.size()) {
+-			result_filter_set.PushFilter(ColumnIndex(entry.first), entry.second->Copy());
++	for (auto &entry : new_filters) {
++		auto &column_id = column_indexes[entry.GetIndex()];
++		if (column_id < global_columns.size()) {
++			auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(),
++			                                                    "DeltaMultiFileList::PushdownInternal");
++			result_filter_set.PushFilter(column_id, filter.Copy());
+ 		}
+ 	}
+ 
+@@ -874,11 +878,11 @@ unique_ptr<MultiFileList> DeltaMultiFileList::ComplexFilterPushdown(ClientContex
+ 
+ 	vector<FilterPushdownResult> pushdown_results;
+ 	auto filter_set = combiner.GenerateTableScanFilters(info.column_indexes, pushdown_results);
+-	if (filter_set.filters.empty()) {
++	if (!filter_set.HasFilters()) {
+ 		return nullptr;
+ 	}
+ 
+-	auto filtered_list = PushdownInternal(context, filter_set);
++	auto filtered_list = PushdownInternal(context, filter_set, info.column_ids);
+ 
+ 	ReportFilterPushdown(context, *filtered_list, info.column_ids, "constant", info);
+ 
+@@ -941,24 +945,24 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
+ 
+ 	// Report the new filters
+ 	vector<Value> old_filters_value_list;
+-	for (auto &f : table_filters.filters) {
+-		auto &column_index = f.first;
+-		auto &filter = f.second;
+-		if (column_index < global_columns.size()) {
+-			auto &col_name = global_columns[column_index].name;
+-			old_filters_value_list.push_back(filter->ToString(col_name));
++	for (auto &entry : table_filters) {
++		auto &filter = *entry.second;
++		auto column_id = entry.first;
++		if (column_id < global_columns.size()) {
++			auto &col_name = global_columns[column_id].name;
++			old_filters_value_list.push_back(filter.ToString(col_name));
+ 		}
+ 	}
+ 	auto old_filters_value = Value::LIST(LogicalType::VARCHAR, old_filters_value_list);
+ 
+ 	// Report the new filters
+ 	vector<Value> filters_value_list;
+-	for (auto &f : new_list.table_filters.filters) {
+-		auto &column_index = f.first;
+-		auto &filter = f.second;
+-		if (column_index < global_columns.size()) {
+-			auto &col_name = global_columns[column_index].name;
+-			filters_value_list.push_back(filter->ToString(col_name));
++	for (auto &entry : new_list.table_filters) {
++		auto column_id = entry.first;
++		auto &filter = *entry.second;
++		if (column_id < global_columns.size()) {
++			auto &col_name = global_columns[column_id].name;
++			filters_value_list.push_back(filter.ToString(col_name));
+ 		}
+ 	}
+ 	auto filters_value = Value::LIST(LogicalType::VARCHAR, filters_value_list);
+@@ -995,24 +999,26 @@ DeltaMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFil
+ 		return nullptr;
+ 	}
+ 
+-	if (filters.filters.empty()) {
++	if (!filters.HasFilters()) {
+ 		return nullptr;
+ 	}
+ 
+ 	TableFilterSet filters_copy;
+-	for (auto &filter : filters.filters) {
+-		auto column_id = column_ids[filter.first];
+-		auto previously_pushed_down_filter = this->table_filters.filters.find(column_id);
+-		if (previously_pushed_down_filter != this->table_filters.filters.end() &&
+-		    filter.second->Equals(*previously_pushed_down_filter->second)) {
++	for (auto &entry : filters) {
++		auto proj_id = entry.GetIndex();
++		auto &filter =
++		    ExpressionFilter::GetExpressionFilter(entry.Filter(), "DeltaMultiFileList::DynamicFilterPushdown");
++		auto column_id = column_ids[proj_id];
++		auto previously_pushed_down_filter = table_filters.TryGetFilterByColumnIndex(column_id);
++		if (previously_pushed_down_filter && filter.Equals(*previously_pushed_down_filter)) {
+ 			// Skip filters that we already have pushed down
+ 			continue;
+ 		}
+-		filters_copy.PushFilter(ColumnIndex(column_id), filter.second->Copy());
++		filters_copy.PushFilter(proj_id, filter.Copy());
+ 	}
+ 
+-	if (!filters_copy.filters.empty()) {
+-		auto new_snap = PushdownInternal(context, filters_copy);
++	if (filters_copy.HasFilters()) {
++		auto new_snap = PushdownInternal(context, filters_copy, column_ids);
+ 		ReportFilterPushdown(context, *new_snap, column_ids, "dynamic", nullptr);
+ 		return std::move(new_snap);
+ 	}
+diff --git a/src/include/delta_utils.hpp b/src/include/delta_utils.hpp
+index 9059803..9918484 100644
+--- a/src/include/delta_utils.hpp
++++ b/src/include/delta_utils.hpp
+@@ -4,8 +4,11 @@
+ #define DEFINE_DEFAULT_ENGINE_BASE 1
+ #include "delta_kernel_ffi.hpp"
+ #include "duckdb/common/enum_util.hpp"
+-#include "duckdb/planner/filter/conjunction_filter.hpp"
+-#include "duckdb/planner/filter/constant_filter.hpp"
++#include "duckdb/planner/filter/expression_filter.hpp"
++#include "duckdb/planner/filter/table_filter_functions.hpp"
++#include "duckdb/planner/filter/conjunction_filter.hpp"
++#include "duckdb/planner/filter/constant_filter.hpp"
++#include "duckdb/planner/filter/struct_filter.hpp"
+ #include "duckdb/planner/expression.hpp"
+ #include "duckdb/parser/expression/constant_expression.hpp"
+ #include "duckdb/common/multi_file/multi_file_data.hpp"
+@@ -473,14 +473,14 @@
+ 
+ 	static uintptr_t VisitPredicate(PredicateVisitor *predicate, ffi::KernelExpressionVisitorState *state);
+ 
+-	uintptr_t VisitConstantFilter(const string &col_name, const ConstantFilter &filter,
+-	                              ffi::KernelExpressionVisitorState *state);
+-	uintptr_t VisitAndFilter(const string &col_name, const ConjunctionAndFilter &filter,
++	uintptr_t VisitConstantFilter(const string &col_name, ExpressionType comparison_type,
++	                              const Value &value, ffi::KernelExpressionVisitorState *state);
++	uintptr_t VisitAndFilter(const string &col_name, const LegacyConjunctionAndFilter &filter,
+ 	                         ffi::KernelExpressionVisitorState *state);
+ 
+ 	uintptr_t VisitIsNull(const string &col_name, ffi::KernelExpressionVisitorState *state);
+ 	uintptr_t VisitIsNotNull(const string &col_name, ffi::KernelExpressionVisitorState *state);
+-	uintptr_t VisitStructExtractFilter(const string &col_name, const StructFilter &filter,
++	uintptr_t VisitStructExtractFilter(const string &col_name, const LegacyStructFilter &filter,
+ 	                                   ffi::KernelExpressionVisitorState *state);
+ 
+ 	uintptr_t VisitFilter(const string &col_name, const TableFilter &filter, ffi::KernelExpressionVisitorState *state);
+diff --git a/src/include/functions/delta_scan/delta_multi_file_list.hpp b/src/include/functions/delta_scan/delta_multi_file_list.hpp
+index 003887c..4cf3f9b 100644
+--- a/src/include/functions/delta_scan/delta_multi_file_list.hpp
++++ b/src/include/functions/delta_scan/delta_multi_file_list.hpp
+@@ -16,6 +16,7 @@
+ #include "duckdb/common/multi_file/multi_file_data.hpp"
+ #include "duckdb/common/multi_file/multi_file_list.hpp"
+ #include "duckdb/parser/constraints/not_null_constraint.hpp"
++#include "duckdb/planner/filter/expression_filter.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -42,6 +43,41 @@ struct DeltaFileMetaData {
+ 	unique_ptr<vector<unique_ptr<ParsedExpression>>> transform_expression;
+ };
+ 
++struct DeltaTableFilters {
++	using filter_set_t = unordered_map<idx_t, unique_ptr<ExpressionFilter>>;
++	using iterator = filter_set_t::iterator;
++	using const_iterator = filter_set_t::const_iterator;
++public:
++	bool HasFilters() const {
++		return !table_filters.empty();
++	}
++	void PushFilter(column_t column_idx, unique_ptr<ExpressionFilter> table_filter) {
++		table_filters[column_idx] = std::move(table_filter);
++	}
++	optional_ptr<const ExpressionFilter> TryGetFilterByColumnIndex(column_t column_idx) const {
++		auto entry = table_filters.find(column_idx);
++		if (entry == table_filters.end()) {
++			return nullptr;
++		}
++		return entry->second.get();
++	}
++
++	iterator begin() { // NOLINT: match stl API
++		return table_filters.begin();
++	}
++	iterator end() { // NOLINT: match stl API
++		return table_filters.end();
++	}
++	const_iterator begin() const { // NOLINT: match stl API
++		return table_filters.begin();
++	}
++	const_iterator end() const { // NOLINT: match stl API
++		return table_filters.end();
++	}
++private:
++	filter_set_t table_filters;
++};
++
+ // Constraint only for internal delta extension use
+ // Todo: refactor to use duckdb constraint classes, updating the DuckDB side NotNullConstraint
+ class NestedNotNullConstraint {
+@@ -75,7 +111,7 @@ public:
+ 	                                                const vector<column_t> &column_ids,
+ 	                                                TableFilterSet &filters) const override;
+ 
+-	unique_ptr<DeltaMultiFileList> PushdownInternal(ClientContext &context, TableFilterSet &new_filters) const;
++	unique_ptr<DeltaMultiFileList> PushdownInternal(ClientContext &context, TableFilterSet &new_filters, vector<column_t> column_indexes) const;
+ 
+ 	vector<OpenFileInfo> GetAllFiles() const override;
+ 	FileExpandResult GetExpandResult() const override;
+@@ -148,7 +184,7 @@ protected:
+ 	mutable vector<unique_ptr<DeltaFileMetaData>> metadata;
+ 
+ 	mutable vector<OpenFileInfo> resolved_files;
+-	mutable TableFilterSet table_filters;
++	mutable DeltaTableFilters table_filters;
+ 
+ 	mutable vector<NestedNotNullConstraint> not_null_constraints;
+ 	mutable bool has_null_constraints_in_arrays = false;
+diff --git a/src/storage/delta_insert.cpp b/src/storage/delta_insert.cpp
+index f48d9b3..22507a2 100644
+--- a/src/storage/delta_insert.cpp
++++ b/src/storage/delta_insert.cpp
+@@ -394,7 +394,6 @@ PhysicalOperator &DeltaCatalog::PlanInsert(ClientContext &context, PhysicalPlanG
+ 	physical_copy_ref.file_extension = "parquet";
+ 	physical_copy_ref.overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE;
+ 	physical_copy_ref.per_thread_output = false;
+-	physical_copy_ref.rotate = false;
+ 	physical_copy_ref.return_type = CopyFunctionReturnType::WRITTEN_FILE_STATISTICS;
+ 	physical_copy_ref.write_partition_columns = true;
+ 	physical_copy_ref.children.push_back(*plan);
+diff --git a/src/storage/delta_schema_entry.cpp b/src/storage/delta_schema_entry.cpp
+index b2a18a5..e618457 100644
+--- a/src/storage/delta_schema_entry.cpp
++++ b/src/storage/delta_schema_entry.cpp
+@@ -42,7 +42,7 @@ optional_ptr<CatalogEntry> DeltaSchemaEntry::CreateFunction(CatalogTransaction t
+ }
+ 
+ void DeltaUnqualifyColumnRef(ParsedExpression &expr) {
+-	if (expr.type == ExpressionType::COLUMN_REF) {
++	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
+ 		auto &colref = expr.Cast<ColumnRefExpression>();
+ 		auto name = std::move(colref.column_names.back());
+ 		colref.column_names = {std::move(name)};
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -1100,6 +1100,22 @@ static bool IsSupportedFilterSubject(const Expression &expr) {
+ 	}
+ }
+ 
++uintptr_t PredicateVisitor::VisitAndFilter(const string &col_name, const LegacyConjunctionAndFilter &filter,
++	                                       ffi::KernelExpressionVisitorState *state) {
++	auto it = filter.child_filters.begin();
++	auto end = filter.child_filters.end();
++	auto get_next = [this, col_name, state, &it, &end]() -> uintptr_t {
++		if (it == end) {
++			return 0;
++		}
++		auto &child_filter = *it++;
++
++		return VisitFilter(col_name, *child_filter, state);
++	};
++	auto eit = EngineIteratorFromCallable(get_next);
++	return visit_predicate_and(state, &eit);
++}
++
+ uintptr_t PredicateVisitor::VisitIsNull(const string &col_name, ffi::KernelExpressionVisitorState *state) {
+ 	auto maybe_inner =
+ 	    ffi::visit_expression_column(state, KernelUtils::ToDeltaString(col_name), DuckDBEngineError::AllocateError);
+@@ -1130,20 +1146,20 @@ uintptr_t PredicateVisitor::VisitIsNotNull(const string &col_name, ffi::KernelE
+ 	return ffi::visit_predicate_not(state, VisitIsNull(col_name, state));
+ }
+ 
+-uintptr_t PredicateVisitor::VisitStructExtractFilter(const string &col_name, const StructFilter &filter,
++uintptr_t PredicateVisitor::VisitStructExtractFilter(const string &col_name, const LegacyStructFilter &filter,
+                                                      ffi::KernelExpressionVisitorState *state) {
+ 	// Build the full dot-separated path by recursing through nested StructFilters.
+ 	// E.g. col "i" with StructFilter{child_name="a", child_filter=StructFilter{child_name="b", leaf}}
+ 	// becomes "i.a.b". visit_expression_column splits on "." to construct the kernel ColumnName.
+ 	string full_path = col_name + "." + filter.child_name;
+ 	const TableFilter *child = filter.child_filter.get();
+-	while (child->filter_type == TableFilterType::STRUCT_EXTRACT) {
+-		const auto &nested = static_cast<const StructFilter &>(*child);
++	while (child->filter_type == TableFilterType::LEGACY_STRUCT_EXTRACT) {
++		const auto &nested = static_cast<const LegacyStructFilter &>(*child);
+ 		full_path += "." + nested.child_name;
+ 		child = nested.child_filter.get();
+ 	}
+ 	return VisitFilter(full_path, *child, state);
+ }
+ 
+ uintptr_t PredicateVisitor::VisitFilter(const string &col_name, const TableFilter &filter,
+                                         ffi::KernelExpressionVisitorState *state) {
+ 	switch (filter.filter_type) {
+-	case TableFilterType::CONSTANT_COMPARISON:
+-		return VisitConstantFilter(col_name, static_cast<const ConstantFilter &>(filter), state);
+-	case TableFilterType::CONJUNCTION_AND:
+-		return VisitAndFilter(col_name, static_cast<const ConjunctionAndFilter &>(filter), state);
+-	case TableFilterType::IS_NULL:
++	case TableFilterType::LEGACY_CONSTANT_COMPARISON: {
++		auto &constant_filter = static_cast<const LegacyConstantFilter &>(filter);
++		return VisitConstantFilter(col_name, constant_filter.comparison_type, constant_filter.constant, state);
++	}
++	case TableFilterType::LEGACY_CONJUNCTION_AND:
++		return VisitAndFilter(col_name, static_cast<const LegacyConjunctionAndFilter &>(filter), state);
++	case TableFilterType::LEGACY_IS_NULL:
+ 		return VisitIsNull(col_name, state);
+-	case TableFilterType::IS_NOT_NULL:
++	case TableFilterType::LEGACY_IS_NOT_NULL:
+ 		return VisitIsNotNull(col_name, state);
+-	case TableFilterType::STRUCT_EXTRACT:
+-		return VisitStructExtractFilter(col_name, static_cast<const StructFilter &>(filter), state);
++	case TableFilterType::LEGACY_STRUCT_EXTRACT:
++		return VisitStructExtractFilter(col_name, static_cast<const LegacyStructFilter &>(filter), state);
+ 	// TODO: implement once kernel can do arbitrary expressions
+ 	case TableFilterType::EXPRESSION_FILTER:
+ 	// TODO: implement once kernel adds support for IN filters / arbitrary expressions
+-	case TableFilterType::IN_FILTER:
++	case TableFilterType::LEGACY_IN_FILTER:
+ 	// TODO: figure out if this is ever useful
+-	case TableFilterType::DYNAMIC_FILTER:
++	case TableFilterType::LEGACY_DYNAMIC_FILTER:
+ 	// TODO: can we even push these down?
+-	case TableFilterType::CONJUNCTION_OR:
+-	case TableFilterType::OPTIONAL_FILTER:
++	case TableFilterType::LEGACY_CONJUNCTION_OR:
++	case TableFilterType::LEGACY_OPTIONAL_FILTER:
+ 	default:
+ 		return ~0;
+ 	}
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -1161,25 +1161,27 @@
+ uintptr_t PredicateVisitor::VisitFilter(const string &col_name, const TableFilter &filter,
+                                         ffi::KernelExpressionVisitorState *state) {
+ 	switch (filter.filter_type) {
+-	case TableFilterType::CONSTANT_COMPARISON:
+-		return VisitConstantFilter(col_name, static_cast<const ConstantFilter &>(filter), state);
+-	case TableFilterType::CONJUNCTION_AND:
+-		return VisitAndFilter(col_name, static_cast<const ConjunctionAndFilter &>(filter), state);
+-	case TableFilterType::IS_NULL:
++	case TableFilterType::LEGACY_CONSTANT_COMPARISON: {
++		auto &constant_filter = static_cast<const LegacyConstantFilter &>(filter);
++		return VisitConstantFilter(col_name, constant_filter.comparison_type, constant_filter.constant, state);
++	}
++	case TableFilterType::LEGACY_CONJUNCTION_AND:
++		return VisitAndFilter(col_name, static_cast<const LegacyConjunctionAndFilter &>(filter), state);
++	case TableFilterType::LEGACY_IS_NULL:
+ 		return VisitIsNull(col_name, state);
+-	case TableFilterType::IS_NOT_NULL:
++	case TableFilterType::LEGACY_IS_NOT_NULL:
+ 		return VisitIsNotNull(col_name, state);
+-	case TableFilterType::STRUCT_EXTRACT:
+-		return VisitStructExtractFilter(col_name, static_cast<const StructFilter &>(filter), state);
++	case TableFilterType::LEGACY_STRUCT_EXTRACT:
++		return VisitStructExtractFilter(col_name, static_cast<const LegacyStructFilter &>(filter), state);
+ 	// TODO: implement once kernel can do arbitrary expressions
+ 	case TableFilterType::EXPRESSION_FILTER:
+ 	// TODO: implement once kernel adds support for IN filters / arbitrary expressions
+-	case TableFilterType::IN_FILTER:
++	case TableFilterType::LEGACY_IN_FILTER:
+ 	// TODO: figure out if this is ever useful
+-	case TableFilterType::DYNAMIC_FILTER:
++	case TableFilterType::LEGACY_DYNAMIC_FILTER:
+ 	// TODO: can we even push these down?
+-	case TableFilterType::CONJUNCTION_OR:
+-	case TableFilterType::OPTIONAL_FILTER:
++	case TableFilterType::LEGACY_CONJUNCTION_OR:
++	case TableFilterType::LEGACY_OPTIONAL_FILTER:
+ 	default:
+ 		return ~0;
+ 	}
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -747,7 +747,11 @@
+ 	auto snapshot_ref = snapshot->GetLockingRef();
+ 
+ 	// Create Scan
+-	PredicateVisitor visitor(global_columns, &table_filters);
++	TableFilterSet local_filters;
++	for (auto &entry : table_filters) {
++		local_filters.PushFilter(ColumnIndex(entry.first), entry.second->Copy());
++	}
++	PredicateVisitor visitor(global_columns, &local_filters);
+ 	scan = TryUnpackKernelResult(ffi::scan(snapshot_ref.GetPtr(), extern_engine.get(), &visitor, nullptr));
+ 
+ 	if (visitor.error_data.HasError()) {
+diff --git a/src/include/delta_utils.hpp b/src/include/delta_utils.hpp
+--- a/src/include/delta_utils.hpp
++++ b/src/include/delta_utils.hpp
+@@ -472,7 +472,7 @@
+ 	ErrorData error_data;
+ 
+ private:
+-	unordered_map<string, TableFilter *> column_filters;
++	unordered_map<string, const TableFilter *> column_filters;
+ 
+ 	static uintptr_t VisitPredicate(PredicateVisitor *predicate, ffi::KernelExpressionVisitorState *state);
+ 
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -945,8 +945,8 @@
+ 	visitor = (uintptr_t (*)(void *, ffi::KernelExpressionVisitorState *))&VisitPredicate;
+ 
+ 	if (filters) {
+-		for (auto &filter : filters->filters) {
+-			column_filters[columns[filter.first].name] = filter.second.get();
++		for (auto &entry : *filters) {
++			column_filters[columns[entry.GetIndex()].name] = &entry.Filter();
+ 		}
+ 	}
+ }
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -749,7 +749,7 @@
+ 	// Create Scan
+ 	TableFilterSet local_filters;
+ 	for (auto &entry : table_filters) {
+-		local_filters.PushFilter(ColumnIndex(entry.first), entry.second->Copy());
++		local_filters.PushFilter(ProjectionIndex(entry.first), entry.second->Copy());
+ 	}
+ 	PredicateVisitor visitor(global_columns, &local_filters);
+ 	scan = TryUnpackKernelResult(ffi::scan(snapshot_ref.GetPtr(), extern_engine.get(), &visitor, nullptr));
+diff --git a/src/storage/delta_transaction.cpp b/src/storage/delta_transaction.cpp
+--- a/src/storage/delta_transaction.cpp
++++ b/src/storage/delta_transaction.cpp
+@@ -60,11 +60,6 @@
+ public:
+ 	void Append(Value commit_info_map) {
+ 		idx_t current_size = buffer.size();
+-		idx_t current_capacity = buffer.GetCapacity();
+-
+-		if (current_size == current_capacity) {
+-			buffer.SetCapacity(2 * current_capacity);
+-		}
+ 
+ 		buffer.SetValue(0, current_size, commit_info_map);
+ 		buffer.SetCardinality(current_size + 1);
+@@ -251,12 +246,7 @@
+ 
+ 	void Append(const string &path, Value partition_values, const DeltaDataFile &file) {
+ 		idx_t current_size = buffer->size();
+-		idx_t current_capacity = buffer->GetCapacity();
+ 
+-		if (current_size == current_capacity) {
+-			buffer->SetCapacity(2 * current_capacity);
+-		}
+-
+ 		auto stats = CreateStatsValue(file, true);
+ 
+ 		buffer->SetValue(0, current_size, path);
