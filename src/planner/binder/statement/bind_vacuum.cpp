@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/statement/vacuum_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -29,6 +30,13 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 	auto &table = *table_ptr;
 	vacuum.SetTable(table);
 
+	// Bind columns against the name the table ref was bound under, not the
+	// catalog entry's name: for facade tables the resolved entry is the hidden
+	// store table (a different, qualified name), so table.name would not match
+	// the binding alias.
+	auto &base_ref = info.ref->Cast<BaseTableRef>();
+	auto &binding_name = info.ref->alias.empty() ? base_ref.table_name : info.ref->alias;
+
 	vector<unique_ptr<Expression>> select_list;
 	auto &columns = info.columns;
 	if (columns.empty()) {
@@ -57,7 +65,7 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 			    col.GetName());
 		}
 		non_generated_column_names.push_back(col_name);
-		ColumnRefExpression colref(col_name, table.name);
+		ColumnRefExpression colref(col_name, binding_name);
 		auto result = bind_context.BindColumn(colref, 0);
 		if (result.HasError()) {
 			result.error.Throw();
