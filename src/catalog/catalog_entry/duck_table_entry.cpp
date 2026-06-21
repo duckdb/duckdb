@@ -1327,6 +1327,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 		}
 		table_info.constraints.push_back(info.constraint->Copy());
 
+	} else if (info.constraint->type == ConstraintType::CHECK) {
+		// The recreate below verifies the CHECK against existing rows (see
+		// RowGroupCollection::VerifyNewConstraint), matching SET NOT NULL.
+		table_info.constraints.push_back(info.constraint->Copy());
+
 	} else {
 		throw InternalException("unsupported constraint type in ALTER TABLE statement");
 	}

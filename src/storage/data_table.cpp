@@ -826,7 +826,7 @@ void DataTable::VerifyDeleteForeignKeyConstraint(optional_ptr<LocalTableStorage>
 }
 
 void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint) {
-	if (constraint.type != ConstraintType::NOT_NULL) {
+	if (constraint.type != ConstraintType::NOT_NULL && constraint.type != ConstraintType::CHECK) {
 		throw NotImplementedException("FIXME: ALTER COLUMN with such constraint is not supported yet");
 	}
 

@@ -11,6 +11,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -2116,6 +2117,45 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTable &parent,
                                              const BoundConstraint &constraint) {
 	if (total_rows == 0) {
+		return;
+	}
+
+	if (constraint.type == ConstraintType::CHECK) {
+		// Scan every column so the bound CHECK expression's column references line up with the
+		// chunk, then evaluate it over the existing rows -- the validation SET NOT NULL performs,
+		// generalized to CHECK so ALTER TABLE ... ADD CHECK rejects pre-existing violators.
+		auto &check = constraint.Cast<BoundCheckConstraint>();
+		auto &client = *context.GetClientContext();
+
+		vector<StorageIndex> column_ids;
+		for (idx_t i = 0; i < types.size(); i++) {
+			column_ids.emplace_back(i);
+		}
+		DataChunk scan_chunk;
+		scan_chunk.Initialize(GetAllocator(), types);
+
+		CreateIndexScanState state;
+		auto scan_type = TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED;
+		state.Initialize(column_ids, nullptr);
+		InitializeScan(context, state.table_state, column_ids, nullptr);
+		InitializeCreateIndexScan(state);
+
+		ExpressionExecutor executor(client, *check.expression);
+		Vector result(LogicalType::INTEGER);
+		while (true) {
+			scan_chunk.Reset();
+			state.table_state.Scan(scan_chunk, scan_type, state.segment_lock);
+			if (scan_chunk.size() == 0) {
+				break;
+			}
+			executor.ExecuteExpression(scan_chunk, result);
+			for (auto entry : result.Values<int32_t>()) {
+				if (entry.IsValid() && entry.GetValue() == 0) {
+					throw ConstraintException("CHECK constraint failed on table %s with expression CHECK(%s)",
+					                          info->GetTableName(), check.expression->ToString());
+				}
+			}
+		}
 		return;
 	}
 
