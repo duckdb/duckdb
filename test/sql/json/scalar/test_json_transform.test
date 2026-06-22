@@ -544,3 +544,14 @@ select json_transform('{"test": ["a","b"]}', '{"test": "test_enum[2]"}')
 
 statement ok
 DROP TYPE test_enum;
+
+# object keys containing an embedded NUL byte must not be truncated
+query T
+select to_json(json_transform('{"a\u0000b":1}', '{"a\u0000b":"INTEGER"}'))
+----
+{"a\u0000b":1}
+
+query T
+select to_json(json_transform_strict('{"a\u0000b":1}', '{"a\u0000b":"INTEGER"}'))
+----
+{"a\u0000b":1}

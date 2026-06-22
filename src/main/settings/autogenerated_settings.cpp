@@ -38,6 +38,9 @@ Value AccessModeSetting::GetSetting(const ClientContext &context) {
 // Allow Parser Override Extension
 //===----------------------------------------------------------------------===//
 void AllowParserOverrideExtensionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("allow_parser_override_extension setting cannot be NULL");
+	}
 	EnumUtil::FromString<AllowParserOverride>(StringValue::Get(parameter));
 }
 
@@ -45,6 +48,9 @@ void AllowParserOverrideExtensionSetting::OnSet(SettingCallbackInfo &info, Value
 // Arrow Output Version
 //===----------------------------------------------------------------------===//
 void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("arrow_output_version setting cannot be NULL");
+	}
 	EnumUtil::FromString<ArrowFormatVersion>(StringValue::Get(parameter));
 }
 
@@ -74,6 +80,9 @@ Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {
 // Debug Checkpoint Abort
 //===----------------------------------------------------------------------===//
 void DebugCheckpointAbortSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_checkpoint_abort setting cannot be NULL");
+	}
 	EnumUtil::FromString<CheckpointAbort>(StringValue::Get(parameter));
 }
 
@@ -98,6 +107,9 @@ Value DebugOrderVerificationSetting::GetSetting(const ClientContext &context) {
 // Debug Physical Table Scan Execution Strategy
 //===----------------------------------------------------------------------===//
 void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_physical_table_scan_execution_strategy setting cannot be NULL");
+	}
 	EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(StringValue::Get(parameter));
 }
 
@@ -112,6 +124,9 @@ void DebugVerifyStatementSetting::OnSet(SettingCallbackInfo &info, Value &parame
 // Debug Verify Vector
 //===----------------------------------------------------------------------===//
 void DebugVerifyVectorSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_verify_vector setting cannot be NULL");
+	}
 	EnumUtil::FromString<DebugVectorVerification>(StringValue::Get(parameter));
 }
 
@@ -119,6 +134,9 @@ void DebugVerifyVectorSetting::OnSet(SettingCallbackInfo &info, Value &parameter
 // Debug Window Mode
 //===----------------------------------------------------------------------===//
 void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_window_mode setting cannot be NULL");
+	}
 	EnumUtil::FromString<WindowAggregationMode>(StringValue::Get(parameter));
 }
 
@@ -140,6 +158,9 @@ void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 // Deprecated Using Key Syntax
 //===----------------------------------------------------------------------===//
 void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("deprecated_using_key_syntax setting cannot be NULL");
+	}
 	EnumUtil::FromString<DeprecatedUsingKeySyntax>(StringValue::Get(parameter));
 }
 
@@ -177,6 +198,9 @@ Value EnableProgressBarSetting::GetSetting(const ClientContext &context) {
 // Explain Output
 //===----------------------------------------------------------------------===//
 void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("explain_output setting cannot be NULL");
+	}
 	EnumUtil::FromString<ExplainOutputType>(StringValue::Get(parameter));
 }
 
@@ -184,6 +208,9 @@ void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 // Force Bitpacking Mode
 //===----------------------------------------------------------------------===//
 void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("force_bitpacking_mode setting cannot be NULL");
+	}
 	EnumUtil::FromString<BitpackingMode>(StringValue::Get(parameter));
 }
 
@@ -199,6 +226,9 @@ Value HTTPProxySetting::GetSetting(const ClientContext &context) {
 // Lambda Syntax
 //===----------------------------------------------------------------------===//
 void LambdaSyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("lambda_syntax setting cannot be NULL");
+	}
 	EnumUtil::FromString<LambdaSyntax>(StringValue::Get(parameter));
 }
 
@@ -206,6 +236,9 @@ void LambdaSyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 // Pin Threads
 //===----------------------------------------------------------------------===//
 void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("pin_threads setting cannot be NULL");
+	}
 	EnumUtil::FromString<ThreadPinMode>(StringValue::Get(parameter));
 }
 
@@ -213,6 +246,9 @@ void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 // Storage Block Prefetch
 //===----------------------------------------------------------------------===//
 void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("storage_block_prefetch setting cannot be NULL");
+	}
 	EnumUtil::FromString<StorageBlockPrefetch>(StringValue::Get(parameter));
 }
 
@@ -227,6 +263,9 @@ void TableFunctionIdentifierConversionSetting::OnSet(SettingCallbackInfo &info, 
 // Validate External File Cache
 //===----------------------------------------------------------------------===//
 void ValidateExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("validate_external_file_cache setting cannot be NULL");
+	}
 	EnumUtil::FromString<CacheValidationMode>(StringValue::Get(parameter));
 }
 
