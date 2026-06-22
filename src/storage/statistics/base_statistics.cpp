@@ -12,7 +12,8 @@
 
 namespace duckdb {
 
-BaseStatistics::BaseStatistics() : type(LogicalType::INVALID) {
+BaseStatistics::BaseStatistics() : type(LogicalType::INVALID), has_null(false), has_no_null(false), distinct_count(0) {
+	memset(&stats_union, 0, sizeof(stats_union));
 }
 
 BaseStatistics::BaseStatistics(LogicalType type) {
@@ -20,7 +21,10 @@ BaseStatistics::BaseStatistics(LogicalType type) {
 }
 
 void BaseStatistics::Construct(BaseStatistics &stats, LogicalType type) {
+	stats.has_null = false;
+	stats.has_no_null = false;
 	stats.distinct_count = 0;
+	memset(&stats.stats_union, 0, sizeof(stats.stats_union));
 	stats.type = std::move(type);
 	switch (GetStatsType(stats.type)) {
 	case StatisticsType::LIST_STATS:

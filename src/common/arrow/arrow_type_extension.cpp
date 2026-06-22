@@ -351,6 +351,9 @@ struct ArrowBignum {
 
 struct ArrowBool8 {
 	static void ArrowToDuck(ClientContext &context, Vector &source, Vector &result, idx_t count) {
+		// The caller (ColumnArrowToDuckDB) always builds a flat storage vector for the
+		// extension's internal type, so reading it flat is safe.
+		D_ASSERT(source.GetVectorType() == VectorType::FLAT_VECTOR);
 		auto source_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(source));
 		auto result_ptr = reinterpret_cast<bool *>(FlatVector::GetData(result));
 		for (idx_t i = 0; i < count; i++) {
@@ -358,14 +361,20 @@ struct ArrowBool8 {
 		}
 	}
 	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
+		// The source may be dictionary/constant/sliced (container appenders hand us such
+		// children), so resolve every row through the selection vector. The result is flat,
+		// so its validity is keyed by the logical row index.
 		UnifiedVectorFormat format;
 		source.ToUnifiedFormat(count, format);
-		FlatVector::SetValidity(result, format.validity);
-		auto source_ptr = reinterpret_cast<bool *>(format.data);
-		auto result_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(result));
+		auto source_ptr = UnifiedVectorFormat::GetData<bool>(format);
+		auto result_ptr = FlatVector::GetData<int8_t>(result);
+		auto &result_validity = FlatVector::Validity(result);
 		for (idx_t i = 0; i < count; i++) {
-			if (format.validity.RowIsValid(i)) {
-				result_ptr[i] = static_cast<int8_t>(source_ptr[i]);
+			auto source_idx = format.sel->get_index(i);
+			if (format.validity.RowIsValid(source_idx)) {
+				result_ptr[i] = static_cast<int8_t>(source_ptr[source_idx]);
+			} else {
+				result_validity.SetInvalid(i);
 			}
 		}
 	}
