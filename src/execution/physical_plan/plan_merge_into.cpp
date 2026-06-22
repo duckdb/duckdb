@@ -7,6 +7,8 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_merge_into.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 
@@ -75,6 +77,23 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 					// push reference
 					new_expressions.push_back(std::move(action.expressions[mapped_index]));
 				}
+			}
+			// The merge runs all expressions in a single ExpressionExecutor over the
+			// (non-storage-ordered) merge input chunk, so a STORED-generated expression's
+			// BoundReferenceExpression(storage_idx) leaves would read the wrong input
+			// positions. Inline each leaf with the pass-1 expression for that storage
+			// column, making the generated expression self-contained against the merge
+			// input chunk. CheckBinder already expanded any generated-on-generated
+			// dependency, so every leaf addresses a non-generated column.
+			for (auto &col : op.table.GetColumns().Physical()) {
+				if (col.Category() != TableColumnType::GENERATED_STORED) {
+					continue;
+				}
+				ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
+				    new_expressions[col.StorageOid()],
+				    [&](BoundReferenceExpression &ref, unique_ptr<Expression> &child) {
+					    child = new_expressions[ref.index]->Copy();
+				    });
 			}
 			action.expressions = std::move(new_expressions);
 		}
