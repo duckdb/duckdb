@@ -11,6 +11,7 @@
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/helper.hpp"
@@ -19,14 +20,6 @@
 namespace duckdb {
 
 struct VariantBuilder;
-
-//! Type-erased reader over a shredded leaf vector, backed by a VectorIterator<T>. Exposes the validity
-//! and a pointer to the (canonical, little-endian) payload of the element at a logical position.
-struct ShreddedLeafReader {
-	virtual ~ShreddedLeafReader() = default;
-	virtual bool IsValid(idx_t index) const = 0;
-	virtual const_data_ptr_t Pointer(idx_t index) const = 0;
-};
 
 //! A "group" in the Parquet shredded VARIANT layout: STRUCT(value BLOB, [typed_value <T>]).
 //! The recursive view builds the (type-specific) VectorIterators of the group tree once, so each layer
@@ -42,8 +35,8 @@ struct ShreddedGroupView {
 	ParquetGroupKind kind = ParquetGroupKind::LEAF;
 	LogicalType typed_type;
 
-	//! LEAF: the typed primitive reader
-	unique_ptr<ShreddedLeafReader> leaf;
+	//! LEAF: the typed primitive values (type-erased; read typed via GetData<T> where T is known)
+	UnifiedVectorFormat leaf_format;
 
 	//! ARRAY: the list entries + the element (group) sub-view
 	unique_ptr<VectorIterator<list_entry_t>> list;

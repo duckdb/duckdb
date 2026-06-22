@@ -93,52 +93,15 @@ struct BinaryArrayReader {
 	idx_t count;
 };
 
-//! Type-erased leaf reader backed by a VectorIterator<T>
-template <class T>
-struct TypedLeafReader : ShreddedLeafReader {
-	explicit TypedLeafReader(const Vector &vec) : values(vec) {
-	}
-	bool IsValid(idx_t index) const override {
-		return values[index].IsValid();
-	}
-	const_data_ptr_t Pointer(idx_t index) const override {
-		return const_data_ptr_cast(&values[index].GetValueUnsafe());
-	}
-
-	VectorIterator<T> values;
-};
-
-unique_ptr<ShreddedLeafReader> MakeLeafReader(const Vector &vec) {
-	switch (vec.GetType().InternalType()) {
-	case PhysicalType::BOOL:
-		return make_uniq<TypedLeafReader<bool>>(vec);
-	case PhysicalType::INT8:
-		return make_uniq<TypedLeafReader<int8_t>>(vec);
-	case PhysicalType::INT16:
-		return make_uniq<TypedLeafReader<int16_t>>(vec);
-	case PhysicalType::INT32:
-		return make_uniq<TypedLeafReader<int32_t>>(vec);
-	case PhysicalType::INT64:
-		return make_uniq<TypedLeafReader<int64_t>>(vec);
-	case PhysicalType::INT128:
-		return make_uniq<TypedLeafReader<hugeint_t>>(vec);
-	case PhysicalType::FLOAT:
-		return make_uniq<TypedLeafReader<float>>(vec);
-	case PhysicalType::DOUBLE:
-		return make_uniq<TypedLeafReader<double>>(vec);
-	case PhysicalType::VARCHAR:
-		return make_uniq<TypedLeafReader<string_t>>(vec);
-	default:
-		throw NotImplementedException("Variant shredding on type: '%s' is not implemented", vec.GetType().ToString());
-	}
-}
-
 //! The VariantLogicalType of a (valid) shredded leaf at logical position 'index'. Mirrors the writer's
 //! type mapping; note Parquet emits BINARY as a base64 VARCHAR (matching its JSON-serialization choice).
 VariantLogicalType ShreddedLeafTypeId(const ShreddedGroupView &view, idx_t index) {
 	switch (view.typed_type.id()) {
-	case LogicalTypeId::BOOLEAN:
-		return Load<bool>(view.leaf->Pointer(index)) ? VariantLogicalType::BOOL_TRUE : VariantLogicalType::BOOL_FALSE;
+	case LogicalTypeId::BOOLEAN: {
+		auto leaf_index = view.leaf_format.sel->get_index(index);
+		return UnifiedVectorFormat::GetData<bool>(view.leaf_format)[leaf_index] ? VariantLogicalType::BOOL_TRUE
+		                                                                        : VariantLogicalType::BOOL_FALSE;
+	}
 	case LogicalTypeId::TINYINT:
 		return VariantLogicalType::INT8;
 	case LogicalTypeId::SMALLINT:
@@ -371,7 +334,7 @@ void ShreddedGroupView::Build(Vector &group) {
 	}
 	default:
 		kind = ParquetGroupKind::LEAF;
-		leaf = MakeLeafReader(*typed_vec);
+		typed_vec->ToUnifiedFormat(leaf_format);
 		break;
 	}
 }
@@ -405,7 +368,7 @@ ParquetVariantNode ParquetVariantIterator::ResolveGroup(const ShreddedGroupView 
 		bool typed_valid = false;
 		switch (view.kind) {
 		case ParquetGroupKind::LEAF:
-			typed_valid = view.leaf->IsValid(index);
+			typed_valid = view.leaf_format.validity.RowIsValid(view.leaf_format.sel->get_index(index));
 			break;
 		case ParquetGroupKind::ARRAY:
 			typed_valid = (*view.list)[index].IsValid();
@@ -480,7 +443,7 @@ VariantLogicalType ParquetVariantNode::GetTypeId() const {
 template <class T>
 T ParquetVariantNode::GetData() const {
 	if (kind == Kind::SHREDDED) {
-		return Load<T>(view->leaf->Pointer(index));
+		return UnifiedVectorFormat::GetData<T>(view->leaf_format)[view->leaf_format.sel->get_index(index)];
 	}
 	D_ASSERT(kind == Kind::BINARY);
 	auto value_metadata = VariantValueMetadata::FromHeaderByte(binary[0]);
@@ -500,7 +463,7 @@ T ParquetVariantNode::GetData() const {
 
 string_t ParquetVariantNode::GetString() const {
 	if (kind == Kind::SHREDDED) {
-		auto str = Load<string_t>(view->leaf->Pointer(index));
+		auto str = UnifiedVectorFormat::GetData<string_t>(view->leaf_format)[view->leaf_format.sel->get_index(index)];
 		if (view->typed_type.id() == LogicalTypeId::BLOB) {
 			return state->EncodeBase64(str);
 		}
