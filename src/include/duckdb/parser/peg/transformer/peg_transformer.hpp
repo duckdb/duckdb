@@ -3349,6 +3349,10 @@ public:
 	                                                       const optional<JoinType> &join_type,
 	                                                       unique_ptr<TableRef> table_ref,
 	                                                       JoinQualifier join_qualifier);
+	static unique_ptr<TransformResultValue> TransformJoinByClauseInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformJoinByClause(PEGTransformer &transformer, const string &col_label,
+	                                                  unique_ptr<TableRef> table_ref, JoinQualifier join_qualifier);
 	static unique_ptr<TransformResultValue> TransformAsofInternal(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 	static bool TransformAsof(PEGTransformer &transformer);

@@ -1,3 +1,5 @@
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/peg/ast/distinct_clause.hpp"
 #include "duckdb/parser/peg/ast/join_prefix.hpp"
 #include "duckdb/parser/peg/ast/join_qualifier.hpp"
@@ -512,6 +514,31 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformRegularJoinClause(PEGTransf
 		result->ref_type = JoinRefType::ASOF;
 	}
 	result->type = join_type.value_or(JoinType::INNER);
+	result->right = std::move(table_ref);
+	if (join_qualifier.on_clause) {
+		result->condition = std::move(join_qualifier.on_clause);
+	} else if (!join_qualifier.using_columns.empty()) {
+		result->using_columns = std::move(join_qualifier.using_columns);
+	} else {
+		throw InternalException("Invalid join qualifier found.");
+	}
+	return std::move(result);
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformJoinByClause(PEGTransformer &transformer, const string &col_label,
+                                                                  unique_ptr<TableRef> table_ref,
+                                                                  JoinQualifier join_qualifier) {
+	auto result = make_uniq<JoinRef>();
+	// resolve the join type name against the JoinType enum (case-insensitive); accept an optional `_join` suffix,
+	// so e.g. `mark` and `mark_join` are equivalent. EnumUtil::FromString throws on an unknown name.
+	auto type_name = col_label;
+	if (StringUtil::EndsWith(StringUtil::Lower(type_name), "_join")) {
+		type_name = type_name.substr(0, type_name.size() - 5);
+	}
+	result->type = EnumUtil::FromString<JoinType>(type_name);
+	if (result->type == JoinType::INVALID) {
+		throw ParserException("\"%s\" is not a valid join type for JOIN BY", col_label);
+	}
 	result->right = std::move(table_ref);
 	if (join_qualifier.on_clause) {
 		result->condition = std::move(join_qualifier.on_clause);
