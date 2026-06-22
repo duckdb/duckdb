@@ -58,7 +58,7 @@ end
 end
 
 function ErrorReplacementScan(info)
-    throw("replacement scan eek")
+    return throw("replacement scan eek")
 end
 
 @testset "Test error replacement scans" begin

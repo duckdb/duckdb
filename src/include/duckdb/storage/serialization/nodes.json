@@ -223,6 +223,12 @@
         "id": 104,
         "name": "repeatable",
         "type": "bool"
+      },
+      {
+        "id": 105,
+        "name": "sample_rate",
+        "type": "double",
+        "default": -1.0
       }
     ],
     "constructor": ["seed"]

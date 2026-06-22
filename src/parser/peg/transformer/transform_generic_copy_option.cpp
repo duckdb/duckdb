@@ -77,17 +77,17 @@ static unique_ptr<ParsedExpression> CreateExpressionRowFunction(vector<OrderByNo
 	return CreateRowFunction(std::move(children));
 }
 
-GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer,
-                                                                    const Identifier &copy_option_name,
-                                                                    GenericCopyOptionValue generic_copy_option_value) {
+GenericCopyOption
+PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer, const Identifier &copy_option_name,
+                                                  optional<GenericCopyOptionValue> generic_copy_option_value) {
 	GenericCopyOption copy_option;
 	copy_option.name = Identifier(StringUtil::Lower(copy_option_name.GetIdentifierName()));
-	if (!generic_copy_option_value.has_value) {
+	if (!generic_copy_option_value || !generic_copy_option_value->has_value) {
 		return copy_option;
 	}
 
-	if (generic_copy_option_value.is_order_list) {
-		auto &orders = generic_copy_option_value.order_list;
+	if (generic_copy_option_value->is_order_list) {
+		auto &orders = generic_copy_option_value->order_list;
 		bool has_order_modifier = false;
 		for (auto &order : orders) {
 			if (order.type != OrderType::ORDER_DEFAULT || order.null_order != OrderByNullType::ORDER_DEFAULT) {
@@ -103,10 +103,10 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 		} else if (orders.size() == 1) {
 			SetGenericCopyOptionExpression(copy_option, std::move(orders[0].expression));
 		} else {
-			copy_option.expression = CreateExpressionRowFunction(generic_copy_option_value.order_list);
+			copy_option.expression = CreateExpressionRowFunction(generic_copy_option_value->order_list);
 		}
 	} else {
-		SetGenericCopyOptionExpression(copy_option, std::move(generic_copy_option_value.expression));
+		SetGenericCopyOptionExpression(copy_option, std::move(generic_copy_option_value->expression));
 	}
 	return copy_option;
 }

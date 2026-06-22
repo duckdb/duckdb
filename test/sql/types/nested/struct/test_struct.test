@@ -137,9 +137,17 @@ SELECT STRUCT_EXTRACT(STRUCT_EXTRACT(STRUCT_PACK(a := STRUCT_PACK(x := 'asdf', y
 asdf
 
 
-statement error
+# STRUCT_PACK() with no arguments produces an empty struct
+query I
 SELECT STRUCT_PACK() FROM struct_data
 ----
+{}
+{}
+{}
+{}
+{}
+{}
+{}
 
 statement error
 SELECT STRUCT_PACK(e+1) FROM struct_data

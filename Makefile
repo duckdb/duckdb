@@ -526,7 +526,6 @@ TEST_CONFIGS := \
 	test/configs/disable_caching_operators.json \
 	test/configs/wal_verification.json \
 	test/configs/vacuum_rebuild_indexes_force_storage.json \
-	test/configs/prefetch_all_parquet_files.json \
 	test/configs/verification_projection.json \
 	test/configs/verify_column_bindings.json \
 	test/configs/no_local_filesystem.json \
@@ -541,7 +540,8 @@ TEST_CONFIGS := \
 	test/configs/v1_storage_block_size_16kB.json \
 	test/configs/force_storage_mmap.json \
 	test/configs/verify_aggregate_state_export.json \
-	test/configs/verify_functions.json
+	test/configs/verify_functions.json \
+	test/configs/shredded_vector.json
 
 test_configs:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg))
@@ -745,7 +745,7 @@ tidy-check-diff:
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
 	cd ../../ && \
-	git diff origin/${GIT_BASE_BRANCH} . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' | $(PYTHON) scripts/clang-tidy-diff.py -path build/tidy -quiet -j $(CI_CPU_COUNT) ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
+	git diff origin/${GIT_BASE_BRANCH} . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' ':(exclude)examples/embedded-c' | $(PYTHON) scripts/clang-tidy-diff.py -path build/tidy -quiet -j $(CI_CPU_COUNT) ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
 
 tidy-fix:
 	mkdir -p ./build/tidy && \

@@ -19,6 +19,8 @@ struct yyjson_mut_val;
 
 namespace duckdb {
 
+class VariantIterator;
+
 enum class VariantValueType : uint8_t { PRIMITIVE, OBJECT, ARRAY, MISSING };
 
 struct VariantValue {
@@ -49,6 +51,9 @@ public:
 		return VariantValue(Value(LogicalType::SQLNULL));
 	}
 
+	//! Convert a (non-null) VARIANT-typed Value back to a plain Value
+	static Value GetValue(const Value &variant_val);
+
 public:
 	void AddChild(const string &key, VariantValue &&val);
 	void AddItem(VariantValue &&val);
@@ -63,6 +68,9 @@ public:
 public:
 	duckdb_yyjson::yyjson_mut_val *ToJSON(ClientContext &context, duckdb_yyjson::yyjson_mut_doc *doc) const;
 	static void ToVARIANT(vector<VariantValue> &input, Vector &result);
+	//! Build a canonical (unshredded) VARIANT vector by traversing a variant directly through a
+	//! VariantIterator - avoids materializing the intermediate vector<VariantValue> tree
+	static void ToVARIANT(const VariantIterator &state, idx_t count, Vector &result);
 
 public:
 	VariantValueType value_type;

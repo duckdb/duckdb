@@ -175,6 +175,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	dsdgen_func.named_parameters["catalog"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
+	dsdgen_func.call_return_type = StatementReturnType::NOTHING;
 
 	loader.RegisterFunction(dsdgen_func);
 

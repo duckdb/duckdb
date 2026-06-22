@@ -19,6 +19,7 @@
 namespace duckdb {
 
 struct GlobalFileState;
+struct FileStateHandle;
 struct BoundOrderByNode;
 
 struct CopyToFileInfo {
@@ -50,16 +51,15 @@ public:
 
 	bool Rotate() const;
 
-	void PrepareAndFlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
-	                          unique_ptr<GlobalFileState> &file_state_ptr,
-	                          const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+	void PrepareAndFlushBatch(ClientContext &context, GlobalSinkState &gstate_p, FileStateHandle &file_state,
+	                          const std::function<void(FileStateHandle &)> &create_file_state_fun,
 	                          unique_ptr<ColumnDataCollection> batch) const;
 	pair<const CopyFunctionBatchAnalyzer, unique_ptr<PreparedBatchData>>
-	PrepareBatch(ClientContext &context, GlobalSinkState &gstate_p, unique_ptr<GlobalFileState> &file_state_ptr,
-	             const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+	PrepareBatch(ClientContext &context, GlobalSinkState &gstate_p, FileStateHandle &file_state,
+	             const std::function<void(FileStateHandle &)> &create_file_state_fun,
 	             unique_ptr<ColumnDataCollection> batch) const;
-	void FlushBatch(ClientContext &context, GlobalSinkState &gstate_p, unique_ptr<GlobalFileState> &file_state_ptr,
-	                const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+	void FlushBatch(ClientContext &context, GlobalSinkState &gstate_p, FileStateHandle &file_state,
+	                const std::function<void(FileStateHandle &)> &create_file_state_fun,
 	                const CopyFunctionBatchAnalyzer &batch_analyzer,
 	                unique_ptr<PreparedBatchData> prepared_batch) const;
 

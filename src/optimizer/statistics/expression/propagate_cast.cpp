@@ -224,6 +224,10 @@ unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStat
 	if (source.id() == LogicalTypeId::VARIANT) {
 		return StatisticsPropagateVariant(stats, target);
 	}
+	if (target.id() == LogicalTypeId::VARIANT) {
+		// the cast shreds every value into a single bucket - mirror the (possibly nested) source as typed stats
+		return VariantStats::StatisticsPropagateToVariant(source, stats);
+	}
 	if (!CanPropagateCast(source, target)) {
 		return nullptr;
 	}

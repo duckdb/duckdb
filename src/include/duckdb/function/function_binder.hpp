@@ -14,10 +14,18 @@
 #include "duckdb/function/window_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/enums/order_type.hpp"
 
 namespace duckdb {
 
 class WindowFunctionCatalogEntry;
+
+//! One ORDER BY key of an exported ordered aggregate state: the buffered struct column it sorts on and the modifiers.
+struct SortedAggregateStateOrder {
+	idx_t column;
+	OrderType order_type;
+	OrderByNullType null_order;
+};
 
 //! The FunctionBinder class is responsible for binding functions
 class FunctionBinder {
@@ -138,6 +146,21 @@ public:
 	                                           const vector<unique_ptr<Expression>> &groups,
 	                                           optional_ptr<vector<GroupingSet>> grouping_sets);
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr);
+
+	//! Computes the exported buffer layout of an ordered aggregate: the struct of buffered columns (arguments first,
+	//! then any appended sort keys), the per-key column + modifiers, and the number of leading argument columns.
+	//! Mirrors the matching done by the sorted aggregate bind data so the export type matches the runtime buffer.
+	DUCKDB_API static void GetSortedAggregateStateLayout(const BoundAggregateExpression &expr,
+	                                                     LogicalType &buffer_struct,
+	                                                     vector<SortedAggregateStateOrder> &orders,
+	                                                     idx_t &argument_count);
+	//! Reconstructs a sorted aggregate wrapper from an exported buffer state so finalize/combine operate on the buffer:
+	//! finalize sorts by the keys and runs the (already re-bound) inner aggregate, combine concatenates buffers.
+	//! Returns the wrapper function and its bind data.
+	DUCKDB_API static pair<AggregateFunction, unique_ptr<FunctionData>>
+	BindSortedAggregateState(ClientContext &context, const BoundAggregateFunction &inner_function,
+	                         unique_ptr<FunctionData> inner_bind_info, const LogicalType &buffer_struct,
+	                         const vector<SortedAggregateStateOrder> &orders, idx_t argument_count);
 
 	DUCKDB_API unique_ptr<BoundWindowExpression>
 	BindWindowFunction(const WindowFunction &function, vector<unique_ptr<Expression>> children,
