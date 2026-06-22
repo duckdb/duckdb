@@ -1,0 +1,200 @@
+# name: test/sql/function/string/test_ilike_escape_constant_pattern.test
+# description: ILIKE / NOT ILIKE ... ESCAPE with a constant pattern over many rows - exercises the case-folded matcher fast path (escape no-op) and the escape-aware fallback
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# Unicode-possible data so the constant-pattern ILIKE ... ESCAPE takes the case-folding path.
+statement ok
+CREATE TABLE t(id INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO t VALUES
+    (1, 'café Hello World'),
+    (2, 'DuckDB is FAST'),
+    (3, 'the quick brown fox'),
+    (4, 'STRAßE'),
+    (5, 'Æther WAVE'),
+    (6, 'café déjà vu'),
+    (7, NULL),
+    (8, ''),
+    (9, '100% done'),
+    (10, 'under_score here');
+
+# === escape char ('\') NOT present in pattern => escape is a no-op => SIMD matcher path ===
+
+# single-segment contains, case-insensitive
+query I
+SELECT id FROM t WHERE s ILIKE '%hello%' ESCAPE '\' ORDER BY id
+----
+1
+
+query I
+SELECT id FROM t WHERE s ILIKE '%BROWN FOX%' ESCAPE '\' ORDER BY id
+----
+3
+
+# no-match (dominant case)
+query I
+SELECT id FROM t WHERE s ILIKE '%zznotfound%' ESCAPE '\' ORDER BY id
+----
+
+# prefix / suffix / exact
+query I
+SELECT id FROM t WHERE s ILIKE 'duckdb%' ESCAPE '\' ORDER BY id
+----
+2
+
+query I
+SELECT id FROM t WHERE s ILIKE '%fast' ESCAPE '\' ORDER BY id
+----
+2
+
+query I
+SELECT id FROM t WHERE s ILIKE 'the quick brown fox' ESCAPE '\' ORDER BY id
+----
+3
+
+# unicode case folding; ß must NOT fold to ss
+query I
+SELECT id FROM t WHERE s ILIKE '%æther%' ESCAPE '\' ORDER BY id
+----
+5
+
+query I
+SELECT id FROM t WHERE s ILIKE '%DÉJÀ%' ESCAPE '\' ORDER BY id
+----
+6
+
+query I
+SELECT id FROM t WHERE s ILIKE '%strasse%' ESCAPE '\' ORDER BY id
+----
+
+query I
+SELECT id FROM t WHERE s ILIKE '%straße%' ESCAPE '\' ORDER BY id
+----
+4
+
+# without escape semantics, % and _ are wildcards
+query I
+SELECT id FROM t WHERE s ILIKE '%100%done%' ESCAPE '\' ORDER BY id
+----
+9
+
+# === escape char ('\') ACTIVE in pattern => matcher disabled, escape-aware fallback ===
+
+# '\%' is a literal percent sign
+query I
+SELECT id FROM t WHERE s ILIKE '%\%%' ESCAPE '\' ORDER BY id
+----
+9
+
+# '\_' is a literal underscore
+query I
+SELECT id FROM t WHERE s ILIKE '%\_%' ESCAPE '\' ORDER BY id
+----
+10
+
+# literal percent, case-insensitive contains with surrounding wildcards
+query I
+SELECT id FROM t WHERE s ILIKE '%100\% DONE%' ESCAPE '\' ORDER BY id
+----
+9
+
+# a different (non-backslash) escape char that IS present in the pattern
+query I
+SELECT id FROM t WHERE s ILIKE '%100x%%' ESCAPE 'x' ORDER BY id
+----
+9
+
+# === NOT ILIKE ... ESCAPE (constant pattern) ===
+
+# rows with no 'a'/'A' (empty string matches NOT; NULL excluded)
+query I
+SELECT id FROM t WHERE s NOT ILIKE '%a%' ESCAPE '\' ORDER BY id
+----
+3
+8
+9
+10
+
+# === edge cases ===
+
+# only-percent pattern matches every non-null row
+query I
+SELECT id FROM t WHERE s ILIKE '%' ESCAPE '\' ORDER BY id
+----
+1
+2
+3
+4
+5
+6
+8
+9
+10
+
+# empty pattern matches only the empty string
+query I
+SELECT id FROM t WHERE s ILIKE '' ESCAPE '\' ORDER BY id
+----
+8
+
+# empty escape string == no escape char; % stays a wildcard
+query I
+SELECT id FROM t WHERE s ILIKE '%hello%' ESCAPE '' ORDER BY id
+----
+1
+
+# NULL pattern => no matches
+query I
+SELECT id FROM t WHERE s ILIKE NULL ESCAPE '\' ORDER BY id
+----
+
+# === parameterized (runtime-constant) pattern, like the production query ===
+statement ok
+PREPARE p AS SELECT id FROM t WHERE s ILIKE '%' || ? || '%' ESCAPE '\' ORDER BY id
+
+query I
+EXECUTE p('hello')
+----
+1
+
+query I
+EXECUTE p('CAFÉ')
+----
+1
+6
+
+query I
+EXECUTE p('zznotfound')
+----
+
+# === non-constant pattern/escape => generic ternary fallback ===
+statement ok
+CREATE TABLE pats(id INTEGER, s VARCHAR, pat VARCHAR);
+
+statement ok
+INSERT INTO pats VALUES
+    (1, 'café Hello', '%HELLO%'),
+    (2, 'DuckDB', '%duck%'),
+    (3, '50% off', '%\%%'),
+    (4, 'fox', '%cat%');
+
+query I
+SELECT id FROM pats WHERE s ILIKE pat ESCAPE '\' ORDER BY id
+----
+1
+2
+3
+
+# multiple ESCAPE-bearing predicates AND/OR combined (shape of the production query)
+query I
+SELECT id FROM t
+WHERE (s ILIKE '%café%' ESCAPE '\' AND s ILIKE '%hello%' ESCAPE '\')
+   OR (s ILIKE '%duck%' ESCAPE '\' AND s ILIKE '%fast%' ESCAPE '\')
+ORDER BY id
+----
+1
+2
