@@ -24,14 +24,13 @@ public:
 	PartialBlockManager &GetPartialBlockManager() const {
 		return partial_block_manager;
 	}
-	void ReserveBoundIndexes(idx_t count);
-	void AddUnboundIndex(const IndexStorageInfo &storage_info);
+	void AddUnboundIndex(shared_ptr<const IndexStorageInfo> info);
 	void AddBoundIndex(IndexStorageInfo storage_info, unique_ptr<BoundIndex> index);
-	unique_ptr<BoundIndex> TakeBoundIndex(idx_t index) {
-		D_ASSERT(index < indexes.size());
-		return std::move(indexes[index]);
+	unique_ptr<BoundIndex> TakeBoundIndex(const idx_t index) {
+		D_ASSERT(index < result.size());
+		return std::move(result[index].shadow_index);
 	}
-	IndexSerializationResult &GetResult() {
+	vector<CheckpointedIndex> &GetResult() {
 		return result;
 	}
 	virtual void FlushPartialBlocks() = 0;
@@ -41,9 +40,7 @@ protected:
 	PartialBlockManager &partial_block_manager;
 	StorageVersion storage_version;
 
-	IndexSerializationResult result;
-
-	vector<unique_ptr<BoundIndex>> indexes;
+	vector<CheckpointedIndex> result;
 };
 
 class SingleFileIndexWriter : public TableIndexWriter {

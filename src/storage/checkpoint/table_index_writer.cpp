@@ -10,20 +10,12 @@ TableIndexWriter::TableIndexWriter(PartialBlockManager &partial_block_manager, S
 TableIndexWriter::~TableIndexWriter() {
 }
 
-void TableIndexWriter::ReserveBoundIndexes(idx_t count) {
-	result.bound_infos.reserve(count);
-	indexes.reserve(count);
+void TableIndexWriter::AddUnboundIndex(shared_ptr<const IndexStorageInfo> info) {
+	result.push_back({std::move(info), nullptr});
 }
 
-void TableIndexWriter::AddUnboundIndex(const IndexStorageInfo &storage_info) {
-	result.ordered_infos.push_back(storage_info);
-}
-
-void TableIndexWriter::AddBoundIndex(IndexStorageInfo storage_info, unique_ptr<BoundIndex> index) {
-	result.bound_infos.push_back(std::move(storage_info));
-	result.ordered_infos.push_back(result.bound_infos.back());
-
-	indexes.push_back(std::move(index));
+void TableIndexWriter::AddBoundIndex(IndexStorageInfo info, unique_ptr<BoundIndex> index) {
+	result.push_back({make_shared_ptr<const IndexStorageInfo>(std::move(info)), std::move(index)});
 }
 
 SingleFileIndexWriter::SingleFileIndexWriter(PartialBlockManager &partial_block_manager, StorageVersion version)

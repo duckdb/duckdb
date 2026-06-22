@@ -92,7 +92,7 @@ public:
 	void CheckPoint(TableIndexWriter &writer);
 
 public:
-	static void Serialize(IndexSerializationResult &result, Serializer &serializer);
+	static void Serialize(vector<CheckpointedIndex> &result, Serializer &serializer);
 	//! Initialize an index_chunk from a table.
 	static void InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
 	                                 vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info);

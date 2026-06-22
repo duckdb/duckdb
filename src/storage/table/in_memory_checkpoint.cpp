@@ -96,7 +96,7 @@ void InMemoryTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
 }
 
 void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
-                                            RowGroupCollection &collection, IndexSerializationResult &result,
+                                            RowGroupCollection &collection, vector<CheckpointedIndex> &result,
                                             Serializer &serializer) {
 	// nop: no need to write anything
 }

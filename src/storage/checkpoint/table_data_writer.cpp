@@ -101,7 +101,7 @@ void SingleFileTableDataWriter::FlushPartialBlocks() {
 }
 
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
-                                              RowGroupCollection &collection, IndexSerializationResult &result,
+                                              RowGroupCollection &collection, vector<CheckpointedIndex> &result,
                                               Serializer &serializer) {
 	MetaBlockPointer pointer;
 	idx_t total_rows;

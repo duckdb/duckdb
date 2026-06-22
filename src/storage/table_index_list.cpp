@@ -314,30 +314,23 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 void TableIndexList::CheckPoint(TableIndexWriter &writer) {
 	lock_guard<mutex> lock(index_entries_lock);
 
-	idx_t bound_count = 0;
-	for (const auto &entry : index_entries) {
-		if (entry->index->IsBound()) {
-			bound_count++;
-		}
-	}
-
-	writer.ReserveBoundIndexes(bound_count);
-
 	for (const auto &entry : index_entries) {
 		entry->index->Checkpoint(writer);
 	}
 
 	writer.FlushPartialBlocks();
 
-	idx_t bound_index_idx = 0;
+	idx_t index_idx = 0;
 	for (const auto &entry : index_entries) {
 		lock_guard<mutex> guard(entry->lock);
 
-		if (!entry->index->IsBound()) {
+		auto shadow_index = writer.TakeBoundIndex(index_idx++);
+		if (!shadow_index) {
+			D_ASSERT(!entry->index->IsBound());
 			continue;
 		}
-
-		entry->index = writer.TakeBoundIndex(bound_index_idx++);
+		D_ASSERT(entry->index->IsBound());
+		entry->index = std::move(shadow_index);
 	}
 }
 
@@ -383,12 +376,12 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 	}
 }
 
-void TableIndexList::Serialize(IndexSerializationResult &result, Serializer &serializer) {
+void TableIndexList::Serialize(vector<CheckpointedIndex> &result, Serializer &serializer) {
 	// write empty block pointers for forwards compatibility
 	const vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
-	serializer.WriteList(104, "index_storage_infos", result.ordered_infos.size(),
-	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(result.ordered_infos[i].get()); });
+	serializer.WriteList(104, "index_storage_infos", result.size(),
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(*result[i].storage_info); });
 }
 
 void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,

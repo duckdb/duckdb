@@ -1836,8 +1836,8 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	}
 	// checkpoint all indexes
 	if (!writer.CheckpointIndexes()) {
-		IndexSerializationResult result;
-		writer.FinalizeTable(global_stats, *info, *row_groups, result, serializer);
+		vector<CheckpointedIndex> vec;
+		writer.FinalizeTable(global_stats, *info, *row_groups, vec, serializer);
 		row_groups->SetStats(global_stats);
 		return;
 	}

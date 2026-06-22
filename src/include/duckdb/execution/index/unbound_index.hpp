@@ -64,7 +64,8 @@ private:
 	//! The CreateInfo of the index.
 	unique_ptr<CreateInfo> create_info;
 	//! The serialized storage information of the index.
-	IndexStorageInfo storage_info;
+	//! This information is owned solely by the unbound index, except during checkpointing.
+	shared_ptr<const IndexStorageInfo> storage_info;
 
 	//! Buffered for index operations during WAL replay. They are replayed upon index binding.
 	BufferedIndexReplays buffered_replays;
@@ -98,6 +99,9 @@ public:
 		return create_info->Cast<CreateIndexInfo>();
 	}
 	const IndexStorageInfo &GetStorageInfo() const {
+		return *storage_info;
+	}
+	const shared_ptr<const IndexStorageInfo> &GetStorageInfoPtr() const {
 		return storage_info;
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetParsedExpressions() const {

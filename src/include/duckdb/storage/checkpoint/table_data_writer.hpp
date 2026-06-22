@@ -36,7 +36,7 @@ public:
 	virtual void WriteUnchangedTable(MetaBlockPointer pointer, const vector<MetaBlockPointer> &metadata_pointers,
 	                                 idx_t total_rows, idx_t next_row_id) = 0;
 	virtual void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
-	                           IndexSerializationResult &result, Serializer &serializer) = 0;
+	                           vector<CheckpointedIndex> &result, Serializer &serializer) = 0;
 
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) = 0;
 	virtual unique_ptr<TableIndexWriter> GetTableIndexWriter(StorageVersion version) = 0;
@@ -98,7 +98,7 @@ public:
 	void WriteUnchangedTable(MetaBlockPointer pointer, const vector<MetaBlockPointer> &metadata_pointers,
 	                         idx_t total_rows, idx_t next_row_id) override;
 	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
-	                   IndexSerializationResult &result, Serializer &serializer) override;
+	                   vector<CheckpointedIndex> &result, Serializer &serializer) override;
 
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 	unique_ptr<TableIndexWriter> GetTableIndexWriter(StorageVersion version) override;
