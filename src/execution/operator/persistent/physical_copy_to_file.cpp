@@ -288,6 +288,19 @@ public:
 	shared_ptr<FileStateOpenJob> open_job;
 };
 
+struct PartitionFileRequest {
+	PartitionFileRequest(PartitionFileOpenRequest open_request_p, vector<FileStateHandle> files_to_finalize_p)
+	    : open_request(std::move(open_request_p)), files_to_finalize(std::move(files_to_finalize_p)) {
+	}
+
+	shared_ptr<FileStateOpenJob> OpenJob() const {
+		return open_request.open_job;
+	}
+
+	PartitionFileOpenRequest open_request;
+	vector<FileStateHandle> files_to_finalize;
+};
+
 template <class FUNC>
 class CopyFileLifecycleTask;
 
@@ -429,8 +442,7 @@ public:
 	unique_ptr<GlobalFileState> InitializeFileState(PendingFileState pending_file_state) DUCKDB_EXCLUDES(lock);
 	void RegisterPrepareGlobalStateLocked(GlobalFileState &file_state) DUCKDB_REQUIRES(lock);
 	void ScheduleFileStateOpen(PendingFileStateOpen pending_file_state_open) DUCKDB_EXCLUDES(lock);
-	void SchedulePartitionFileStateOpen(PendingFileStateOpen pending_file_state_open, PartitionDirectory directory,
-	                                    idx_t offset) DUCKDB_EXCLUDES(lock);
+	void SchedulePartitionFileStateOpen(PartitionFileOpenRequest request) DUCKDB_EXCLUDES(lock);
 	void RequestFileState(FileStateHandle &file_state, string output_path = string(),
 	                      optional_ptr<const vector<Value>> partition_values = nullptr) DUCKDB_EXCLUDES(lock);
 	GlobalFileState &EnsureFileStateReady(FileStateHandle &file_state,
@@ -1289,7 +1301,6 @@ public:
 	    DUCKDB_EXCLUDES(copy_gstate.lock);
 	void FinalizeActiveWrites() DUCKDB_EXCLUDES(copy_gstate.lock);
 	void FinalizeFileStates(vector<FileStateHandle> files_to_finalize) DUCKDB_EXCLUDES(copy_gstate.lock);
-	PartitionDirectory BuildPartitionDirectory(string path, const vector<Value> &values);
 
 private:
 	unique_ptr<const SortStrategy> ConstructSortStrategy() const;
@@ -1346,6 +1357,31 @@ public:
 
 	//! Delayed below-threshold partitions
 	DelayedPartitionBuffers delayed_partition_buffers;
+};
+
+//===--------------------------------------------------------------------===//
+// Partition File Request Builder Declarations
+//===--------------------------------------------------------------------===//
+class PartitionFileRequestBuilder {
+public:
+	PartitionFileRequestBuilder(PartitionedCopy &partitioned_copy_p, FileStateHandle &file_state_p,
+	                            const vector<Value> &values_p, FileCreationReason reason_p)
+	    : partitioned_copy(partitioned_copy_p), file_state(file_state_p), values(values_p), reason(reason_p) {
+	}
+
+public:
+	optional<PartitionFileRequest> Build();
+	vector<FileStateHandle> TakeFilesToFinalize();
+
+private:
+	PartitionDirectory BuildDirectory(string path) const;
+
+private:
+	PartitionedCopy &partitioned_copy;
+	FileStateHandle &file_state;
+	const vector<Value> &values;
+	FileCreationReason reason;
+	PartitionFileStateReservation reservation;
 };
 
 //===--------------------------------------------------------------------===//
@@ -2857,6 +2893,59 @@ unique_ptr<ColumnDataCollection> PartitionedCopy::ProjectToWriteColumns(unique_p
 }
 
 //===--------------------------------------------------------------------===//
+// Partition File Request Builder
+//===--------------------------------------------------------------------===//
+optional<PartitionFileRequest> PartitionFileRequestBuilder::Build() {
+	auto reservation_lock = partitioned_copy.partition_writes.LockForReservation();
+	annotated_lock_guard<annotated_mutex> global_guard(partitioned_copy.copy_gstate.lock);
+	if (file_state) {
+		return nullopt;
+	}
+
+	reservation = partitioned_copy.partition_writes.ReserveFileState(reservation_lock, values, reason);
+
+	auto &op = partitioned_copy.op;
+	auto &context = partitioned_copy.context;
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto directory = BuildDirectory(op.GetTrimmedPath(context, op.file_path));
+	auto full_path = op.filename_pattern.CreateFilename(fs, directory.path, op.file_extension, reservation.offset);
+	auto pending_file_state_open =
+	    partitioned_copy.copy_gstate.CreatePartitionFileStateOpenLocked(file_state, std::move(full_path), values);
+	D_ASSERT(pending_file_state_open);
+
+	PartitionFileOpenRequest open_request(std::move(pending_file_state_open), std::move(directory), reservation.offset);
+	return PartitionFileRequest(std::move(open_request), std::move(reservation.files_to_finalize));
+}
+
+vector<FileStateHandle> PartitionFileRequestBuilder::TakeFilesToFinalize() {
+	return std::move(reservation.files_to_finalize);
+}
+
+PartitionDirectory PartitionFileRequestBuilder::BuildDirectory(string path) const {
+	auto &fs = FileSystem::GetFileSystem(partitioned_copy.context);
+	PartitionDirectory result;
+	result.path = std::move(path);
+	result.directories.push_back(result.path);
+	if (partitioned_copy.op.hive_file_pattern) {
+		for (idx_t i = 0; i < partitioned_copy.op.partition_columns.size(); i++) {
+			const auto &partition_col_name = partitioned_copy.op.names[partitioned_copy.op.partition_columns[i]];
+			const auto &partition_value = values[i];
+			string p_dir;
+			p_dir += HivePartitioning::Escape(partition_col_name.GetIdentifierName());
+			p_dir += "=";
+			if (partition_value.IsNull()) {
+				p_dir += "__HIVE_DEFAULT_PARTITION__";
+			} else {
+				p_dir += HivePartitioning::Escape(partition_value.ToString());
+			}
+			result.path = fs.JoinPath(result.path, p_dir);
+			result.directories.push_back(result.path);
+		}
+	}
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // Partitioned Write Helpers
 //===--------------------------------------------------------------------===//
 unique_ptr<PartitionedCopyBatch> PartitionedCopy::PreparePartitionBatch(const vector<Value> &values,
@@ -2962,40 +3051,26 @@ void PartitionedCopy::FlushPartitionCollection(ExecutionContext &execution_conte
 
 void PartitionedCopy::RequestPartitionFileState(FileStateHandle &file_state, const vector<Value> &values,
                                                 FileCreationReason reason) {
-	PartitionFileStateReservation reservation;
-	PendingFileStateOpen pending_file_state_open;
-	PartitionDirectory directory;
+	PartitionFileRequestBuilder builder(*this, file_state, values, reason);
+	optional<PartitionFileRequest> request;
 	try {
-		auto reservation_lock = partition_writes.LockForReservation();
-		{
-			annotated_lock_guard<annotated_mutex> global_guard(copy_gstate.lock);
-			if (file_state) {
-				return;
-			}
-			reservation = partition_writes.ReserveFileState(reservation_lock, values, reason);
-
-			auto &fs = FileSystem::GetFileSystem(context);
-			directory = BuildPartitionDirectory(op.GetTrimmedPath(context, op.file_path), values);
-			auto full_path =
-			    op.filename_pattern.CreateFilename(fs, directory.path, op.file_extension, reservation.offset);
-			pending_file_state_open =
-			    copy_gstate.CreatePartitionFileStateOpenLocked(file_state, std::move(full_path), values);
-			D_ASSERT(pending_file_state_open);
-		}
+		request = builder.Build();
 	} catch (...) {
 		auto error = std::current_exception();
 		try {
-			FinalizeFileStates(std::move(reservation.files_to_finalize));
+			FinalizeFileStates(builder.TakeFilesToFinalize());
 		} catch (...) {
 		}
 		std::rethrow_exception(error);
 	}
+	if (!request) {
+		return;
+	}
 
-	auto open_job = pending_file_state_open.open_job;
+	auto open_job = request->OpenJob();
 	try {
-		FinalizeFileStates(std::move(reservation.files_to_finalize));
-		copy_gstate.SchedulePartitionFileStateOpen(std::move(pending_file_state_open), std::move(directory),
-		                                           reservation.offset);
+		FinalizeFileStates(std::move(request->files_to_finalize));
+		copy_gstate.SchedulePartitionFileStateOpen(std::move(request->open_request));
 	} catch (...) {
 		if (open_job && !open_job->IsFinished()) {
 			open_job->CompleteException(std::current_exception());
@@ -3078,30 +3153,6 @@ void PartitionedCopy::FinalizeFileStates(vector<FileStateHandle> files_to_finali
 			copy_gstate.FinalizeFileState(std::move(file_state));
 		}
 	}
-}
-
-PartitionDirectory PartitionedCopy::BuildPartitionDirectory(string path, const vector<Value> &values) {
-	auto &fs = FileSystem::GetFileSystem(context);
-	PartitionDirectory result;
-	result.path = std::move(path);
-	result.directories.push_back(result.path);
-	if (op.hive_file_pattern) {
-		for (idx_t i = 0; i < op.partition_columns.size(); i++) {
-			const auto &partition_col_name = op.names[op.partition_columns[i]];
-			const auto &partition_value = values[i];
-			string p_dir;
-			p_dir += HivePartitioning::Escape(partition_col_name.GetIdentifierName());
-			p_dir += "=";
-			if (partition_value.IsNull()) {
-				p_dir += "__HIVE_DEFAULT_PARTITION__";
-			} else {
-				p_dir += HivePartitioning::Escape(partition_value.ToString());
-			}
-			result.path = fs.JoinPath(result.path, p_dir);
-			result.directories.push_back(result.path);
-		}
-	}
-	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -3224,11 +3275,9 @@ void CopyToFileGlobalState::ScheduleFileStateOpen(PendingFileStateOpen pending_f
 	}
 }
 
-void CopyToFileGlobalState::SchedulePartitionFileStateOpen(PendingFileStateOpen pending_file_state_open,
-                                                           PartitionDirectory directory, idx_t offset) {
-	D_ASSERT(pending_file_state_open);
-	PartitionFileOpenRequest request(std::move(pending_file_state_open), std::move(directory), offset);
+void CopyToFileGlobalState::SchedulePartitionFileStateOpen(PartitionFileOpenRequest request) {
 	auto open_job = request.open_job;
+	D_ASSERT(open_job);
 	try {
 		lifecycle_executor.Schedule(open_job, CopyFileLifecycleWaitMode::INTERRUPTIBLE,
 		                            [this, request = std::move(request)]() mutable { request.Run(*this); });
