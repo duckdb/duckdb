@@ -407,6 +407,7 @@ public:
 	void RegisterSelect();
 	void RegisterKeywordsAndIdentifiers();
 	void RegisterGenerated();
+	void RegisterGeneratedTrampoline();
 
 	template <class FUNC>
 	void Register(const string &rule_name, FUNC function) {
@@ -3874,8 +3875,11 @@ public:
 	//===--------------------------------------------------------------------===//
 
 private:
+	const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &GetTransformFunctions(ParserOptions &options);
+
 	PEGParser parser;
 	case_insensitive_map_t<PEGTransformer::AnyTransformFunction> sql_transform_functions;
+	case_insensitive_map_t<PEGTransformer::AnyTransformFunction> trampoline_transform_functions;
 };
 
 } // namespace duckdb

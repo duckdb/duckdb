@@ -110,8 +110,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
 	PEGTransformerState transformer_state(tokens);
-	PEGTransformer transformer(transformer_allocator, transformer_state, sql_transform_functions, parser.rules,
-	                           options);
+	auto &transform_functions = GetTransformFunctions(options);
+	PEGTransformer transformer(transformer_allocator, transformer_state, transform_functions, parser.rules, options);
 
 	return ExtractAndTransformStatement(transformer, tokens, stmt_opt.GetResult(), terminator_offset);
 }
@@ -176,6 +176,7 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 
 PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterGenerated();
+	RegisterGeneratedTrampoline();
 	REGISTER_TRANSFORM(TransformStatement);
 	RegisterComment();
 	RegisterCommon();
@@ -184,6 +185,17 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterPivot();
 	RegisterSelect();
 	RegisterKeywordsAndIdentifiers();
+}
+
+void PEGTransformerFactory::RegisterGeneratedTrampoline() {
+}
+
+const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &
+PEGTransformerFactory::GetTransformFunctions(ParserOptions &options) {
+	if (options.transformer_trampoline_style) {
+		return trampoline_transform_functions;
+	}
+	return sql_transform_functions;
 }
 
 vector<reference<ParseResult>> PEGTransformerFactory::ExtractParseResultsFromList(ParseResult &parse_result) {
