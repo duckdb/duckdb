@@ -2001,6 +2001,15 @@ const LogicalType &UnionValue::GetType(const Value &value) {
 	return UnionType::GetMemberType(value.type(), UnionValue::GetTag(value));
 }
 
+Value VariantValue::GetValue(const Value &variant_val) {
+	D_ASSERT(variant_val.type().id() == LogicalTypeId::VARIANT && !variant_val.IsNull());
+	Vector tmp(variant_val, count_t(1));
+	RecursiveUnifiedVectorFormat format;
+	Vector::RecursiveToUnifiedFormat(tmp, format);
+	UnifiedVariantVectorData vector_data(format);
+	return VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
+}
+
 hugeint_t IntegralValue::Get(const Value &value) {
 	switch (value.type().InternalType()) {
 	case PhysicalType::INT8:

@@ -13,7 +13,6 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
-#include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/common/serializer/varint.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -334,35 +333,6 @@ struct VariantBuilder {
 		}
 		type_ids.push_back(static_cast<uint8_t>(variant_type));
 		byte_offsets.push_back(byte_offset);
-	}
-
-	//! Emit a whole VariantValue subtree (a decoded / materialized variant value)
-	void EmitVariantValue(const VariantValue &value) {
-		switch (value.value_type) {
-		case VariantValueType::OBJECT: {
-			auto &children = value.ObjectChildren();
-			//! The children map is ordered by key, gather pointers for indexed access
-			vector<const std::pair<const string, VariantValue> *> entries;
-			entries.reserve(children.size());
-			for (auto &entry : children) {
-				entries.push_back(&entry);
-			}
-			EmitObject(
-			    entries.size(), [&](idx_t i) { return string_t(entries[i]->first); },
-			    [&](idx_t i) { EmitVariantValue(entries[i]->second); });
-			break;
-		}
-		case VariantValueType::ARRAY: {
-			auto &items = value.ArrayItems();
-			EmitArray(items.size(), [&](idx_t i) { EmitVariantValue(items[i]); });
-			break;
-		}
-		case VariantValueType::PRIMITIVE:
-			EmitPrimitive(value.primitive_value, NumericCast<uint32_t>(blob.size()));
-			break;
-		default:
-			throw InternalException("VariantValueType not handled");
-		}
 	}
 
 	//! Emit a primitive value sourced from a VariantNode-like cursor. The fixed-width payload is fetched by

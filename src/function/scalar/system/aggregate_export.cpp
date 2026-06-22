@@ -3,7 +3,6 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/list_segment.hpp"
-#include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"

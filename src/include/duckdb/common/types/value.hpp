@@ -485,6 +485,11 @@ struct TypeValue {
 	DUCKDB_API static LogicalType GetType(const Value &value);
 };
 
+struct VariantValue {
+	//! Convert a (non-null) VARIANT-typed Value back to a plain Value
+	DUCKDB_API static Value GetValue(const Value &variant_val);
+};
+
 //! Return the internal integral value for any type that is stored as an integral value internally
 //! This can be used on values of type integer, uinteger, but also date, timestamp, decimal, etc
 struct IntegralValue {

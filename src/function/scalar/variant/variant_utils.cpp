@@ -11,6 +11,7 @@
 #include "duckdb/function/variant/variant_value_convert.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/common/types/variant/variant_builder.hpp"
 
 namespace duckdb {
 
@@ -435,6 +436,37 @@ bool VariantUtils::VariantSupportsType(const LogicalType &type) {
 	default:
 		return false;
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// ToVariant sources
+//===--------------------------------------------------------------------===//
+// The single-pass build machinery (VariantBuilder / EmitIterator / BuildVariant) lives in
+// variant_builder.hpp so it can be shared with the parquet reader. A "source" just implements
+// 'bool Emit(idx_t row, VariantBuilder &builder)' (returning whether the row is a SQL NULL).
+namespace {
+
+struct VariantIteratorSource {
+	explicit VariantIteratorSource(const VariantIterator &state) : state(state) {
+	}
+	bool Emit(idx_t row, VariantBuilder &builder) const {
+		auto root = state.Root(row);
+		//! Root() resolves a missing/absent root to a SQL NULL
+		if (root.IsNull()) {
+			return true;
+		}
+		EmitIterator(root, builder);
+		return false;
+	}
+
+	const VariantIterator &state;
+};
+
+} // namespace
+
+void VariantUtils::ToVariant(const VariantIterator &state, idx_t count, Vector &result) {
+	VariantIteratorSource source(state);
+	BuildVariant(source, count, result);
 }
 
 } // namespace duckdb
