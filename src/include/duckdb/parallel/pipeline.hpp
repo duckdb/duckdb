@@ -45,14 +45,6 @@ public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 };
 
-struct CTEFanoutPipelineDependency {
-	CTEFanoutPipelineDependency(Pipeline &producer_p, PhysicalOperator &cte_p) : producer(producer_p), cte(cte_p) {
-	}
-
-	reference<Pipeline> producer;
-	reference<PhysicalOperator> cte;
-};
-
 class PipelineBuildState {
 public:
 	//! How much to increment batch indexes when multiple pipelines share the same source
@@ -63,8 +55,6 @@ public:
 	reference_map_t<const PhysicalOperator, reference<Pipeline>> delim_join_dependencies;
 	//! Materialized CTE scan dependencies
 	reference_map_t<const PhysicalOperator, reference<Pipeline>> cte_dependencies;
-	//! Direct fanout materialized CTE scan dependencies
-	reference_map_t<const PhysicalOperator, CTEFanoutPipelineDependency> cte_fanout_dependencies;
 
 public:
 	void SetPipelineSource(Pipeline &pipeline, PhysicalOperator &op);
@@ -97,6 +87,7 @@ public:
 
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
 	void AddDataflowDependency(shared_ptr<Pipeline> &pipeline);
+	void AddExternalFinishDependency(shared_ptr<Pipeline> &pipeline);
 	vector<weak_ptr<Pipeline>> GetDependencies() const;
 	const vector<weak_ptr<Pipeline>> &GetDataflowDependencies() const {
 		return dataflow_dependencies;
@@ -142,7 +133,7 @@ public:
 
 	//! Returns whether any of the operators in the pipeline care about preserving order
 	bool IsOrderDependent() const;
-	//! Marks this pipeline as fed by another pipeline instead of by its own source task
+	//! Marks this pipeline as fed externally instead of by scheduled source tasks
 	void SetExternalInput();
 	bool IsExternalInput() const {
 		return external_input;
@@ -176,6 +167,8 @@ private:
 	vector<weak_ptr<Pipeline>> dependencies;
 	//! Pipelines that must be initialized before this pipeline can consume their dataflow output
 	vector<weak_ptr<Pipeline>> dataflow_dependencies;
+	//! Pipelines that must run before this externally fed pipeline can finish its sink
+	vector<weak_ptr<Pipeline>> external_finish_dependencies;
 
 	//! The base batch index of this pipeline
 	idx_t base_batch_index = 0;

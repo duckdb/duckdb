@@ -38,6 +38,9 @@ public:
 	bool HasDependencies() const {
 		return total_dependencies != 0;
 	}
+	bool HasTasks() const {
+		return total_tasks != 0;
+	}
 	const vector<reference<Event>> &GetParentsVerification() const;
 
 	void CompleteDependency();

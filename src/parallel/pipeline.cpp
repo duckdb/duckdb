@@ -194,6 +194,18 @@ void Pipeline::SetExternalInput() {
 	external_input = true;
 }
 
+static bool CanUseExternalInputOperator(const PhysicalOperator &op) {
+	switch (op.type) {
+	case PhysicalOperatorType::FILTER:
+	case PhysicalOperatorType::PROJECTION:
+	case PhysicalOperatorType::STREAMING_LIMIT:
+	case PhysicalOperatorType::VERIFY_VECTOR:
+		return true;
+	default:
+		return false;
+	}
+}
+
 bool Pipeline::CanUseExternalInput() const {
 	if (!sink || !sink->ParallelSink() || sink->SinkOrderDependent()) {
 		return false;
@@ -202,7 +214,14 @@ bool Pipeline::CanUseExternalInput() const {
 		return false;
 	}
 	for (auto &op_ref : operators) {
-		if (!op_ref.get().ParallelOperator()) {
+		auto &op = op_ref.get();
+		if (!CanUseExternalInputOperator(op)) {
+			return false;
+		}
+		if (!op.ParallelOperator()) {
+			return false;
+		}
+		if (op.OperatorOrder() == OrderPreservationType::FIXED_ORDER) {
 			return false;
 		}
 	}
@@ -213,7 +232,6 @@ void Pipeline::Schedule(shared_ptr<Event> &event) {
 	D_ASSERT(ready);
 	D_ASSERT(sink);
 	if (external_input) {
-		D_ASSERT(initialized);
 		return;
 	}
 	Reset();
@@ -361,6 +379,12 @@ void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 void Pipeline::AddDataflowDependency(shared_ptr<Pipeline> &pipeline) {
 	D_ASSERT(pipeline);
 	dataflow_dependencies.push_back(weak_ptr<Pipeline>(pipeline));
+	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
+}
+
+void Pipeline::AddExternalFinishDependency(shared_ptr<Pipeline> &pipeline) {
+	D_ASSERT(pipeline);
+	external_finish_dependencies.push_back(weak_ptr<Pipeline>(pipeline));
 	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
 }
 

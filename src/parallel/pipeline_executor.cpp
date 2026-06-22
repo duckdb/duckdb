@@ -62,6 +62,7 @@ void PipelineExecutor::Reset() {
 	started_flushing = false;
 	done_flushing = false;
 	remaining_sink_chunk = false;
+	sink_has_input = false;
 	next_batch_blocked = false;
 	finished_processing_idx = -1;
 	source_profiling_finalized = false;
@@ -491,6 +492,7 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, Execu
 		}
 		auto &sink_chunk = final_chunk;
 		if (sink_chunk.size() > 0) {
+			sink_has_input = true;
 			StartOperator(*pipeline.sink);
 			D_ASSERT(pipeline.sink);
 			D_ASSERT(pipeline.sink->sink_state);

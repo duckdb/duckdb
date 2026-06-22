@@ -103,24 +103,25 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		return;
 	}
 	case PhysicalOperatorType::CTE_SCAN: {
-		auto fanout_entry = state.cte_fanout_dependencies.find(*this);
-		if (fanout_entry != state.cte_fanout_dependencies.end()) {
-			auto &cte = fanout_entry->second.cte.get().Cast<PhysicalCTE>();
-			if (cte.TryRegisterFanoutPipeline(current)) {
-				auto producer = fanout_entry->second.producer.get().shared_from_this();
-				auto current_pipeline = current.shared_from_this();
-				current.SetExternalInput();
-				current.AddDependency(producer);
-				fanout_entry->second.producer.get().AddDataflowDependency(current_pipeline);
-				state.SetPipelineSource(current, *this);
-				cte_direct_fanout = true;
-				return;
-			}
-		}
 		if (cte_source) {
 			auto entry = state.cte_dependencies.find(*this);
 			D_ASSERT(entry != state.cte_dependencies.end());
 			auto cte_dependency = entry->second.get().shared_from_this();
+			auto cte_sink = state.GetPipelineSink(*cte_dependency);
+			D_ASSERT(cte_sink);
+			D_ASSERT(cte_sink->type == PhysicalOperatorType::CTE);
+			auto &cte = cte_sink->Cast<PhysicalCTE>();
+			auto &source = cte_source->Cast<PhysicalCTEConsumerSource>();
+			if (cte.TryRegisterFanoutPipeline(current, source.consumer_idx)) {
+				auto current_pipeline = current.shared_from_this();
+				current.SetExternalInput();
+				current.AddExternalFinishDependency(cte_dependency);
+				cte_dependency->AddDataflowDependency(current_pipeline);
+				cte_direct_fanout = true;
+				source.direct_fanout = true;
+				state.SetPipelineSource(current, *cte_source);
+				return;
+			}
 			current.AddDataflowDependency(cte_dependency);
 			state.SetPipelineSource(current, *cte_source);
 			return;
@@ -166,7 +167,7 @@ InsertionOrderPreservingMap<string> PhysicalColumnDataScan::ParamsToString() con
 		if (cte_direct_fanout) {
 			result["CTE Mode"] = "DIRECT_FANOUT";
 		} else if (cte_source) {
-			result["CTE Mode"] = "PIPELINE_EXCHANGE";
+			result["CTE Mode"] = "STREAMING_FANOUT";
 			if (cte_exchange_consumer.IsValid()) {
 				result["Consumer"] = StringUtil::Format("%llu", cte_exchange_consumer.GetIndex());
 			}

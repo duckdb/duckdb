@@ -93,6 +93,10 @@ public:
 	void PrepareForExecution();
 	//! Whether this executor stopped consuming input early
 	bool IsFinishedProcessing() const;
+	//! Whether this executor has submitted at least one chunk to its sink
+	bool HasSinkInput() const {
+		return sink_has_input;
+	}
 
 private:
 	//! The pipeline to process
@@ -143,6 +147,8 @@ private:
 
 	//! This flag is set when the pipeline gets interrupted by the Sink -> the final_chunk should be re-sink-ed.
 	bool remaining_sink_chunk = false;
+	//! Whether a non-empty chunk has been submitted to the sink
+	bool sink_has_input = false;
 
 	//! This flag is set when the pipeline gets interrupted by NextBatch -> NextBatch should be called again and the
 	//! source_chunk should be sent through the pipeline

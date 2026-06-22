@@ -1,7 +1,6 @@
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
@@ -42,60 +41,6 @@ static bool RequiresResetForReuse(const vector<LogicalType> &types) {
 		}
 	}
 	return false;
-}
-
-static bool CanDirectFanoutCTE(const PhysicalOperator &op, TableIndex table_index,
-                               optional_ptr<const PhysicalOperator> current_sink, bool sink_from_rhs,
-                               bool path_parallel, bool &found) {
-	if (op.type == PhysicalOperatorType::CTE_SCAN) {
-		auto &scan = op.Cast<PhysicalColumnDataScan>();
-		if (scan.cte_index != table_index) {
-			return true;
-		}
-		found = true;
-		if (!sink_from_rhs || !current_sink || !path_parallel) {
-			return false;
-		}
-		auto &sink = *current_sink;
-		if (!sink.ParallelSink()) {
-			return false;
-		}
-		return !sink.RequiredPartitionInfo().AnyRequired();
-	}
-
-	auto children = op.GetChildren();
-	if (children.empty()) {
-		return true;
-	}
-	if (op.IsSink()) {
-		if (children.size() == 1) {
-			return CanDirectFanoutCTE(children[0].get(), table_index, &op, true, true, found);
-		}
-		if (children.size() == 2) {
-			if (!CanDirectFanoutCTE(children[1].get(), table_index, &op, true, true, found)) {
-				return false;
-			}
-			return CanDirectFanoutCTE(children[0].get(), table_index, current_sink, sink_from_rhs, false, found);
-		}
-		return false;
-	}
-	if (children.size() != 1) {
-		for (auto &child : children) {
-			if (!CanDirectFanoutCTE(child.get(), table_index, current_sink, sink_from_rhs, path_parallel, found)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	return CanDirectFanoutCTE(children[0].get(), table_index, current_sink, sink_from_rhs, path_parallel, found);
-}
-
-static bool CanDirectFanoutCTE(const PhysicalOperator &op, TableIndex table_index) {
-	bool found = false;
-	if (!CanDirectFanoutCTE(op, table_index, nullptr, false, true, found)) {
-		return false;
-	}
-	return found;
 }
 
 struct CTEExchangeData::ChunkPool : public enable_shared_from_this<CTEExchangeData::ChunkPool> {
@@ -177,6 +122,27 @@ idx_t CTEExchangeData::RegisterConsumer() {
 	return consumers.size() - 1;
 }
 
+void CTEExchangeData::MarkDirectConsumer(idx_t consumer_idx) {
+	lock_guard<mutex> guard(lock);
+	D_ASSERT(consumer_idx < consumers.size());
+	auto &consumer = consumers[consumer_idx];
+	if (consumer.direct) {
+		return;
+	}
+	consumer.direct = true;
+	if (consumer.active) {
+		D_ASSERT(active_consumers > 0);
+		active_consumers--;
+	}
+	consumer.active = false;
+	consumer.position = base_position;
+	consumer.detached = false;
+	consumer.backlog.clear();
+	consumer.backlog_base_position = base_position;
+	consumer.backlog_next_position = base_position;
+	consumer.backlog_bytes = 0;
+}
+
 void CTEExchangeData::Reset() {
 	vector<InterruptState> readers;
 	vector<InterruptState> writers;
@@ -187,14 +153,17 @@ void CTEExchangeData::Reset() {
 		next_position = 0;
 		buffered_bytes = 0;
 		produced_rows = 0;
-		consumer_progress = 0;
+		direct_consumer_progress = false;
 		producer_finished = false;
 		cancelled = false;
-		active_consumers = consumers.size();
+		active_consumers = 0;
 		for (auto &consumer : consumers) {
 			consumer.position = base_position;
 			consumer.rows_read = 0;
-			consumer.active = true;
+			consumer.active = !consumer.direct;
+			if (consumer.active) {
+				active_consumers++;
+			}
 			consumer.detached = false;
 			consumer.backlog.clear();
 			consumer.backlog_base_position = base_position;
@@ -257,25 +226,14 @@ SinkResultType CTEExchangeData::Append(DataChunk &chunk, const InterruptState &i
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-idx_t CTEExchangeData::ConsumerProgress() const {
+void CTEExchangeData::RecordDirectConsumerProgress() {
 	lock_guard<mutex> guard(lock);
-	return consumer_progress;
+	direct_consumer_progress = true;
 }
 
-SinkResultType CTEExchangeData::WaitForConsumers(const InterruptState &interrupt_state, idx_t observed_progress) {
+void CTEExchangeData::RecordProducedRows(idx_t count) {
 	lock_guard<mutex> guard(lock);
-	if (cancelled || ShouldStopProducerLocked()) {
-		return SinkResultType::FINISHED;
-	}
-	if (consumer_progress != observed_progress) {
-		return SinkResultType::NEED_MORE_INPUT;
-	}
-	DetachLaggingConsumersLocked();
-	if (!ShouldThrottleProducerLocked()) {
-		return SinkResultType::NEED_MORE_INPUT;
-	}
-	blocked_writers.push_back(interrupt_state);
-	return SinkResultType::BLOCKED;
+	produced_rows += count;
 }
 
 void CTEExchangeData::Finish() {
@@ -338,12 +296,10 @@ SourceResultType CTEExchangeData::Scan(idx_t consumer_idx, DataChunk &chunk, sha
 			consumer.active = false;
 			D_ASSERT(active_consumers > 0);
 			active_consumers--;
-			consumer_progress++;
 			RetireChunksLocked();
 			WakeWritersLocked(writers, true);
 			result = SourceResultType::FINISHED;
 		} else {
-			consumer_progress++;
 			WakeWritersLocked(writers, true);
 			blocked_readers.push_back(interrupt_state);
 			result = SourceResultType::BLOCKED;
@@ -378,7 +334,6 @@ void CTEExchangeData::UnregisterConsumer(idx_t consumer_idx) {
 		consumer.backlog_bytes = 0;
 		D_ASSERT(active_consumers > 0);
 		active_consumers--;
-		consumer_progress++;
 		RetireChunksLocked();
 		WakeReadersLocked(readers);
 		WakeWritersLocked(writers, true);
@@ -440,6 +395,11 @@ idx_t CTEExchangeData::MaxThreads() const {
 	return MaxValue<idx_t>(max_threads, 1);
 }
 
+bool CTEExchangeData::HasBufferedConsumers() const {
+	lock_guard<mutex> guard(lock);
+	return active_consumers > 0;
+}
+
 shared_ptr<DataChunk> CTEExchangeData::CopyChunk(DataChunk &chunk) {
 	return chunk_pool->Acquire(chunk);
 }
@@ -470,7 +430,7 @@ void CTEExchangeData::DetachLaggingConsumersLocked() {
 		return;
 	}
 
-	bool has_progressed_consumer = false;
+	bool has_progressed_consumer = direct_consumer_progress;
 	bool has_lagging_consumer = false;
 	for (auto &consumer : consumers) {
 		if (!consumer.active || consumer.detached) {
@@ -628,7 +588,7 @@ void PhysicalCTEConsumerSource::SourceFinished(ClientContext &context, GlobalSou
 InsertionOrderPreservingMap<string> PhysicalCTEConsumerSource::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Index"] = StringUtil::Format("%llu", cte_index.index);
-	result["CTE Mode"] = "PIPELINE_EXCHANGE";
+	result["CTE Mode"] = direct_fanout ? "DIRECT_FANOUT" : "STREAMING_FANOUT";
 	result["Consumer"] = StringUtil::Format("%llu", consumer_idx);
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
@@ -696,12 +656,10 @@ public:
 		if (materialized_mode) {
 			lhs_data.InitializeAppend(append_state);
 		}
-		if (op.direct_fanout) {
-			for (auto &pipeline_ref : op.fanout_pipelines) {
-				auto &pipeline = pipeline_ref.get();
-				pipeline.PrepareExternalInput();
-				fanout_executors.push_back(make_uniq<PipelineExecutor>(context, pipeline));
-			}
+		for (auto &pipeline_ref : op.fanout_pipelines) {
+			auto &pipeline = pipeline_ref.get();
+			pipeline.PrepareExternalInput();
+			fanout_executors.push_back(make_uniq<PipelineExecutor>(context, pipeline));
 		}
 	}
 
@@ -709,16 +667,21 @@ public:
 	ColumnDataCollection lhs_data;
 	ColumnDataAppendState append_state;
 	bool materialized_mode;
-	bool waiting_for_consumers = false;
-	idx_t observed_progress = 0;
 	vector<unique_ptr<PipelineExecutor>> fanout_executors;
 	bool waiting_for_fanout = false;
 	idx_t fanout_idx = 0;
 	idx_t fanout_finalize_idx = 0;
+	bool fanout_done_for_chunk = false;
+	bool fanout_all_finished_for_chunk = false;
 
 	void Append(DataChunk &input) {
 		D_ASSERT(materialized_mode);
 		lhs_data.Append(append_state, input);
+	}
+
+	void ResetFanoutChunk() {
+		fanout_done_for_chunk = false;
+		fanout_all_finished_for_chunk = false;
 	}
 };
 
@@ -731,34 +694,43 @@ unique_ptr<LocalSinkState> PhysicalCTE::GetLocalSinkState(ExecutionContext &cont
 	return std::move(state);
 }
 
-static SinkResultType SinkFanout(DataChunk &chunk, CTELocalState &lstate) {
+static SinkResultType SinkFanout(DataChunk &chunk, CTELocalState &lstate, const InterruptState &interrupt_state,
+                                 bool &all_finished) {
 	if (!lstate.waiting_for_fanout) {
 		lstate.fanout_idx = 0;
 	}
 	lstate.waiting_for_fanout = false;
 	for (; lstate.fanout_idx < lstate.fanout_executors.size(); lstate.fanout_idx++) {
 		auto &executor = *lstate.fanout_executors[lstate.fanout_idx];
+		executor.SetInterruptState(interrupt_state);
 		if (executor.IsFinishedProcessing()) {
 			continue;
 		}
 		auto result = executor.PushExternal(chunk);
 		if (result == PipelineExecuteResult::INTERRUPTED) {
 			lstate.waiting_for_fanout = true;
+			all_finished = false;
 			return SinkResultType::BLOCKED;
 		}
 	}
 
+	all_finished = true;
 	for (auto &executor : lstate.fanout_executors) {
 		if (!executor->IsFinishedProcessing()) {
-			return SinkResultType::NEED_MORE_INPUT;
+			all_finished = false;
+			break;
 		}
 	}
-	return SinkResultType::FINISHED;
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
-static SinkCombineResultType CombineFanout(CTELocalState &lstate) {
+static SinkCombineResultType CombineFanout(CTELocalState &lstate, const InterruptState &interrupt_state) {
 	for (; lstate.fanout_finalize_idx < lstate.fanout_executors.size(); lstate.fanout_finalize_idx++) {
 		auto &executor = *lstate.fanout_executors[lstate.fanout_finalize_idx];
+		if (!executor.HasSinkInput()) {
+			continue;
+		}
+		executor.SetInterruptState(interrupt_state);
 		auto result = PipelineExecuteResult::NOT_FINISHED;
 		while (result == PipelineExecuteResult::NOT_FINISHED) {
 			result = executor.FinishExternal();
@@ -773,31 +745,48 @@ static SinkCombineResultType CombineFanout(CTELocalState &lstate) {
 SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<CTEGlobalState>();
 	auto &lstate = input.local_state.Cast<CTELocalState>();
-	if (direct_fanout) {
-		return SinkFanout(chunk, lstate);
-	}
 	if (exchange) {
 		D_ASSERT(gstate.exchange);
-		if (lstate.waiting_for_consumers) {
-			auto result = gstate.exchange->WaitForConsumers(input.interrupt_state, lstate.observed_progress);
-			if (result == SinkResultType::BLOCKED) {
-				return result;
+		bool all_direct_finished = lstate.fanout_all_finished_for_chunk;
+		bool rows_recorded = false;
+		if (!lstate.fanout_done_for_chunk && !lstate.fanout_executors.empty()) {
+			auto fanout_result = SinkFanout(chunk, lstate, input.interrupt_state, all_direct_finished);
+			if (fanout_result == SinkResultType::BLOCKED) {
+				return SinkResultType::BLOCKED;
 			}
-			lstate.waiting_for_consumers = false;
-			return result == SinkResultType::FINISHED ? SinkResultType::FINISHED : SinkResultType::NEED_MORE_INPUT;
+			lstate.fanout_done_for_chunk = true;
+			lstate.fanout_all_finished_for_chunk = all_direct_finished;
+			gstate.exchange->RecordDirectConsumerProgress();
 		}
-		auto observed_progress = gstate.exchange->ConsumerProgress();
-		auto append_result = gstate.exchange->Append(chunk, input.interrupt_state);
-		if (append_result != SinkResultType::NEED_MORE_INPUT) {
-			return append_result;
+
+		auto has_buffered_consumers = gstate.exchange->HasBufferedConsumers();
+		if (has_buffered_consumers) {
+			auto append_result = gstate.exchange->Append(chunk, input.interrupt_state);
+			if (append_result == SinkResultType::BLOCKED) {
+				return SinkResultType::BLOCKED;
+			}
+			if (append_result == SinkResultType::FINISHED) {
+				if (!rows_recorded) {
+					gstate.exchange->RecordProducedRows(chunk.size());
+					rows_recorded = true;
+				}
+				lstate.ResetFanoutChunk();
+				if (!cte_body_is_dml && (lstate.fanout_executors.empty() || all_direct_finished)) {
+					return SinkResultType::FINISHED;
+				}
+				return SinkResultType::NEED_MORE_INPUT;
+			}
+			rows_recorded = true;
 		}
-		auto wait_result = gstate.exchange->WaitForConsumers(input.interrupt_state, observed_progress);
-		if (wait_result == SinkResultType::BLOCKED) {
-			lstate.observed_progress = observed_progress;
-			lstate.waiting_for_consumers = true;
-			return SinkResultType::BLOCKED;
+
+		if (!rows_recorded) {
+			gstate.exchange->RecordProducedRows(chunk.size());
 		}
-		return wait_result == SinkResultType::FINISHED ? SinkResultType::FINISHED : SinkResultType::NEED_MORE_INPUT;
+		lstate.ResetFanoutChunk();
+		if (!cte_body_is_dml && !has_buffered_consumers && (lstate.fanout_executors.empty() || all_direct_finished)) {
+			return SinkResultType::FINISHED;
+		}
+		return SinkResultType::NEED_MORE_INPUT;
 	}
 	lstate.lhs_data.Append(lstate.append_state, chunk);
 
@@ -806,8 +795,11 @@ SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, Op
 
 SinkCombineResultType PhysicalCTE::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &lstate = input.local_state.Cast<CTELocalState>();
-	if (direct_fanout) {
-		return CombineFanout(lstate);
+	if (!lstate.fanout_executors.empty()) {
+		auto fanout_result = CombineFanout(lstate, input.interrupt_state);
+		if (fanout_result == SinkCombineResultType::BLOCKED) {
+			return SinkCombineResultType::BLOCKED;
+		}
 	}
 	if (exchange) {
 		return SinkCombineResultType::FINISHED;
@@ -820,7 +812,7 @@ SinkCombineResultType PhysicalCTE::Combine(ExecutionContext &context, OperatorSi
 
 SinkFinalizeType PhysicalCTE::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                        OperatorSinkFinalizeInput &input) const {
-	if (exchange && !direct_fanout) {
+	if (exchange) {
 		auto &gstate = input.global_state.Cast<CTEGlobalState>();
 		gstate.exchange->Finish();
 	}
@@ -840,15 +832,9 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	auto &child_meta_pipeline =
 	    meta_pipeline.CreateChildMetaPipeline(current, *this, MetaPipelineType::REGULAR, !exchange);
 	child_meta_pipeline.Build(children[0]);
-	direct_fanout = exchange && !exchange->RunToCompletion() && CanDirectFanoutCTE(children[1], table_index);
-	fanout_disabled = false;
 
 	for (auto &cte_scan : cte_scans) {
 		state.cte_dependencies.insert(make_pair(cte_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
-		if (direct_fanout) {
-			state.cte_fanout_dependencies.insert(
-			    make_pair(cte_scan, CTEFanoutPipelineDependency(*child_meta_pipeline.GetBasePipeline(), *this)));
-		}
 	}
 
 	// If the CTE body is a DML statement (INSERT/UPDATE/DELETE/MERGE INTO), all MetaPipelines
@@ -876,18 +862,11 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	}
 }
 
-bool PhysicalCTE::TryRegisterFanoutPipeline(Pipeline &pipeline) {
-	if (!direct_fanout || fanout_disabled) {
+bool PhysicalCTE::TryRegisterFanoutPipeline(Pipeline &pipeline, idx_t consumer_idx) {
+	if (!exchange || !pipeline.CanUseExternalInput()) {
 		return false;
 	}
-	if (!pipeline.CanUseExternalInput()) {
-		if (!fanout_pipelines.empty()) {
-			throw InternalException("CTE direct fanout cannot mix direct and exchange consumers yet");
-		}
-		direct_fanout = false;
-		fanout_disabled = true;
-		return false;
-	}
+	exchange->MarkDirectConsumer(consumer_idx);
 	fanout_pipelines.push_back(pipeline);
 	return true;
 }
@@ -900,11 +879,18 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename.GetIdentifierName();
 	result["Table Index"] = StringUtil::Format("%llu", table_index.index);
-	result["Execution Mode"] = direct_fanout ? "DIRECT_FANOUT" : (exchange ? "PIPELINE_EXCHANGE" : "MATERIALIZED");
-	if (exchange && exchange->RunToCompletion() && !direct_fanout) {
+	result["Execution Mode"] = exchange ? "STREAMING_FANOUT" : "MATERIALIZED";
+	if (exchange && exchange->RunToCompletion()) {
 		result["Run To Completion"] = "true";
 	}
-	if (exchange && !direct_fanout) {
+	if (exchange) {
+		if (fanout_pipelines.empty()) {
+			result["Fanout Mode"] = "BUFFERED";
+		} else if (fanout_pipelines.size() == cte_scans.size()) {
+			result["Fanout Mode"] = "DIRECT";
+		} else {
+			result["Fanout Mode"] = "MIXED";
+		}
 		result["Chunk Storage"] = "POOLED";
 	}
 	SetEstimatedCardinality(result, estimated_cardinality);
@@ -914,9 +900,6 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 ProgressData PhysicalCTE::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
                                           const ProgressData source_progress) const {
 	auto &state = gstate.Cast<CTEGlobalState>();
-	if (direct_fanout) {
-		return source_progress;
-	}
 	if (state.exchange) {
 		return state.exchange->SinkProgress(source_progress, estimated_cardinality);
 	}

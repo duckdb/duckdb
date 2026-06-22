@@ -14,8 +14,8 @@
 
 namespace duckdb {
 
-class RecursiveCTEState;
 class Pipeline;
+class RecursiveCTEState;
 
 class CTEExchangeData {
 public:
@@ -29,10 +29,11 @@ public:
 	}
 
 	idx_t RegisterConsumer();
+	void MarkDirectConsumer(idx_t consumer_idx);
 	void Reset();
 	SinkResultType Append(DataChunk &chunk, const InterruptState &interrupt_state);
-	idx_t ConsumerProgress() const;
-	SinkResultType WaitForConsumers(const InterruptState &interrupt_state, idx_t observed_progress);
+	void RecordDirectConsumerProgress();
+	void RecordProducedRows(idx_t count);
 	void Finish();
 	void Cancel();
 	SourceResultType Scan(idx_t consumer_idx, DataChunk &chunk, shared_ptr<DataChunk> &current_chunk,
@@ -41,6 +42,7 @@ public:
 	ProgressData ScanProgress(idx_t consumer_idx, idx_t estimated_cardinality) const;
 	ProgressData SinkProgress(const ProgressData &source_progress, idx_t estimated_cardinality) const;
 	idx_t MaxThreads() const;
+	bool HasBufferedConsumers() const;
 
 private:
 	struct ChunkPool;
@@ -54,6 +56,7 @@ private:
 		idx_t position = 0;
 		idx_t rows_read = 0;
 		bool active = true;
+		bool direct = false;
 		bool detached = false;
 		deque<BufferedChunk> backlog;
 		idx_t backlog_base_position = 0;
@@ -94,7 +97,7 @@ private:
 	idx_t active_consumers = 0;
 	idx_t buffered_bytes = 0;
 	idx_t produced_rows = 0;
-	idx_t consumer_progress = 0;
+	bool direct_consumer_progress = false;
 	bool producer_finished = false;
 	bool cancelled = false;
 };
@@ -129,6 +132,7 @@ public:
 	TableIndex cte_index;
 	shared_ptr<CTEExchangeData> exchange;
 	idx_t consumer_idx;
+	bool direct_fanout = false;
 };
 
 class PhysicalCTE : public PhysicalOperator {
@@ -149,8 +153,6 @@ public:
 	TableIndex table_index;
 	Identifier ctename;
 	bool cte_body_is_dml = false;
-	bool direct_fanout = false;
-	bool fanout_disabled = false;
 
 public:
 	// Sink interface
@@ -182,7 +184,7 @@ public:
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
-	bool TryRegisterFanoutPipeline(Pipeline &pipeline);
+	bool TryRegisterFanoutPipeline(Pipeline &pipeline, idx_t consumer_idx);
 
 	vector<const_reference<PhysicalOperator>> GetSources() const override;
 };

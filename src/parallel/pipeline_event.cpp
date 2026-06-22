@@ -11,7 +11,7 @@ void PipelineEvent::Schedule() {
 	auto &executor = pipeline->executor;
 	try {
 		pipeline->Schedule(event);
-		D_ASSERT(total_tasks > 0);
+		D_ASSERT(total_tasks > 0 || pipeline->IsExternalInput());
 	} catch (std::exception &ex) {
 		executor.PushError(ErrorData(ex));
 	} catch (...) { // LCOV_EXCL_START

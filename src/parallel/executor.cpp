@@ -212,6 +212,16 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 			auto &dep_entry = event_map_entry->second;
 			entry.second.pipeline_event.AddDependency(dep_entry.pipeline_initialize_event);
 		}
+		for (auto &dependency : pipeline.external_finish_dependencies) {
+			auto dep = dependency.lock();
+			D_ASSERT(dep);
+			auto event_map_entry = event_map.find(*dep);
+			if (event_map_entry == event_map.end()) {
+				continue;
+			}
+			auto &dep_entry = event_map_entry->second;
+			entry.second.pipeline_prepare_finish_event.AddDependency(dep_entry.pipeline_event);
+		}
 	}
 
 	// set the dependencies for pipeline event
@@ -275,6 +285,9 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	for (auto &event : events) {
 		if (!event->HasDependencies()) {
 			event->Schedule();
+			if (!event->HasTasks() && !event->IsFinished()) {
+				event->Finish();
+			}
 		}
 	}
 }

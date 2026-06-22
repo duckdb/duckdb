@@ -235,6 +235,7 @@ Pipeline &MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matter
 	// 'union_pipeline' inherits ALL dependencies of 'current' (within this MetaPipeline, and across MetaPipelines)
 	union_pipeline.dependencies = current.dependencies;
 	union_pipeline.dataflow_dependencies = current.dataflow_dependencies;
+	union_pipeline.external_finish_dependencies = current.external_finish_dependencies;
 	auto it = pipeline_dependencies.find(current);
 	if (it != pipeline_dependencies.end()) {
 		pipeline_dependencies[union_pipeline] = it->second;
