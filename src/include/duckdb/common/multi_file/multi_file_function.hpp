@@ -662,6 +662,26 @@ public:
 		return partition_data;
 	}
 
+
+	static bool HandleBlocked(TableFunctionInput &data_p, MultiFileLocalState &data, AsyncResult &res) {
+		D_ASSERT(res.GetResultType() == AsyncResultType::BLOCKED);
+		data.scan_blocked = true;
+		switch (data_p.results_execution_mode) {
+		case AsyncResultsExecutionMode::TASK_EXECUTOR:
+			data_p.async_result = std::move(res);
+			return true;
+		case AsyncResultsExecutionMode::SYNCHRONOUS:
+			// run the I/O inline, then loop again to resume
+			res.ExecuteTasksSynchronously();
+			if (res.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
+				throw InternalException("Unexpected behaviour from ExecuteTasksSynchronously");
+			}
+			return false;
+		default:
+			throw InternalException("Unexpected AsyncResultsExecutionMode in MultiFileScan");
+		}
+	}
+
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
 			data_p.async_result = SourceResultType::FINISHED;
@@ -687,19 +707,10 @@ public:
 			auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
 
 			if (res.GetResultType() == AsyncResultType::BLOCKED) {
-				data.scan_blocked = true;
-				switch (data_p.results_execution_mode) {
-				case AsyncResultsExecutionMode::TASK_EXECUTOR:
-					data_p.async_result = std::move(res);
+				if (HandleBlocked(data_p, data, res)) {
 					return;
-				case AsyncResultsExecutionMode::SYNCHRONOUS:
-					res.ExecuteTasksSynchronously();
-					if (res.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
-						throw InternalException("Unexpected behaviour from ExecuteTasksSynchronously");
-					}
-					// no completed output yet, loop again to resume the Scan
-					continue;
 				}
+				continue;
 			}
 
 			output.SetChildCardinality(scan_chunk.size());
