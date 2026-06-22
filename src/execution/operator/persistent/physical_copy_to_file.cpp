@@ -277,6 +277,7 @@ public:
 	void Schedule(shared_ptr<CopyFileLifecycleJob> job, FUNC &&task);
 	void WaitForJob(CopyFileLifecycleJob &job);
 	void WaitAll();
+	void WorkOnTaskOrYield();
 	void FinishTask();
 	void PushError(const std::exception_ptr &error);
 
@@ -353,9 +354,7 @@ void CopyFileLifecycleExecutor::Schedule(shared_ptr<CopyFileLifecycleJob> job, F
 void CopyFileLifecycleExecutor::WaitForJob(CopyFileLifecycleJob &job) {
 	while (!job.IsFinished()) {
 		context.InterruptCheck();
-		if (!WorkOnTask()) {
-			TaskScheduler::YieldThread();
-		}
+		WorkOnTaskOrYield();
 	}
 	job.Rethrow();
 }
@@ -390,12 +389,16 @@ bool CopyFileLifecycleExecutor::WorkOnTask(bool throw_error) {
 	return true;
 }
 
+void CopyFileLifecycleExecutor::WorkOnTaskOrYield() {
+	if (!WorkOnTask()) {
+		TaskScheduler::YieldThread();
+	}
+}
+
 void CopyFileLifecycleExecutor::WaitForTaskSlot() {
 	while (pending_tasks >= max_pending_tasks) {
 		context.InterruptCheck();
-		if (!WorkOnTask()) {
-			TaskScheduler::YieldThread();
-		}
+		WorkOnTaskOrYield();
 	}
 }
 
@@ -3301,14 +3304,14 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 		annotated_unique_lock<annotated_mutex> global_guard(gstate.lock);
 		if (!file_state) {
 			global_guard.unlock();
-			TaskScheduler::YieldThread();
+			gstate.lifecycle_executor.WorkOnTaskOrYield();
 			continue;
 		}
 
 		auto ready_file_state = file_state.GetFileStatePtr();
 		if (!ready_file_state) {
 			global_guard.unlock();
-			TaskScheduler::YieldThread();
+			gstate.lifecycle_executor.WorkOnTaskOrYield();
 			continue;
 		}
 		annotated_unique_lock<annotated_mutex> file_guard(ready_file_state->lock);
