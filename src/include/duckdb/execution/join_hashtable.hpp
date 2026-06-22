@@ -627,6 +627,9 @@ public:
 private:
 	//! True iff the residual predicate (if any) reads build payload column build_col_idx from its row slot
 	bool ColumnReferencedByResidual(idx_t build_col_idx) const;
+	//! Validate the incoming dict chunk and pin a self-owned copy of its dictionary into dict_registry on the first
+	//! chunk; on later chunks assert id continuity. Called per narrowed column from Build.
+	void PinDictSurvivingColumn(idx_t build_col_idx, const Vector &incoming, uint8_t index_width);
 
 private:
 	//! The current number of radix bits used to partition

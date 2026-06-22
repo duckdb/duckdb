@@ -439,12 +439,44 @@ static void ScatterDictIndices(const SelectionVector &dict_sel, idx_t count, con
 	}
 }
 
+//! Dispatch on the chosen index width (1/2/4 B) to the matching templated ScatterDictIndices
+static void ScatterDictIndices(uint8_t index_width, const SelectionVector &dict_sel, idx_t count, Allocator &allocator,
+                               vector<AllocatedData> &buffers, vector<Vector> &vectors) {
+	switch (index_width) {
+	case sizeof(uint8_t):
+		ScatterDictIndices<uint8_t>(dict_sel, count, LogicalType::UTINYINT, allocator, buffers, vectors);
+		break;
+	case sizeof(uint16_t):
+		ScatterDictIndices<uint16_t>(dict_sel, count, LogicalType::USMALLINT, allocator, buffers, vectors);
+		break;
+	default:
+		ScatterDictIndices<uint32_t>(dict_sel, count, LogicalType::UINTEGER, allocator, buffers, vectors);
+		break;
+	}
+}
+
 //! Load the per-match dict index (width INDEX_T) from each matched row's slot at col_offset into build_sel_vec
 template <class INDEX_T>
 static void LoadDictIndices(const data_ptr_t *ptrs, const SelectionVector &ptr_sel, idx_t count, idx_t col_offset,
                             SelectionVector &build_sel_vec) {
 	for (idx_t i = 0; i < count; i++) {
 		build_sel_vec.set_index(i, Load<INDEX_T>(ptrs[ptr_sel.get_index(i)] + col_offset));
+	}
+}
+
+//! Dispatch on the chosen index width (1/2/4 B) to the matching templated LoadDictIndices
+static void LoadDictIndices(uint8_t index_width, const data_ptr_t *ptrs, const SelectionVector &ptr_sel, idx_t count,
+                            idx_t col_offset, SelectionVector &build_sel_vec) {
+	switch (index_width) {
+	case sizeof(uint8_t):
+		LoadDictIndices<uint8_t>(ptrs, ptr_sel, count, col_offset, build_sel_vec);
+		break;
+	case sizeof(uint16_t):
+		LoadDictIndices<uint16_t>(ptrs, ptr_sel, count, col_offset, build_sel_vec);
+		break;
+	default:
+		LoadDictIndices<uint32_t>(ptrs, ptr_sel, count, col_offset, build_sel_vec);
+		break;
 	}
 }
 
@@ -496,6 +528,36 @@ uint8_t JoinHashTable::GetDictSurvivingIndexWidth(idx_t build_col_idx, const Vec
 	return index_width;
 }
 
+void JoinHashTable::PinDictSurvivingColumn(idx_t build_col_idx, const Vector &incoming, uint8_t index_width) {
+	// Slot was narrowed on the first chunk; there is no fallback for a non-dict later chunk. Throw, not D_ASSERT:
+	// the Cast<DictionaryBuffer> below is UB in release on a non-dict vector, scattering foreign bytes as indices.
+	if (incoming.GetVectorType() != VectorType::DICTIONARY_VECTOR || DictionaryVector::DictionaryId(incoming).empty() ||
+	    !DictionaryVector::IsGlobalDictionary(incoming)) {
+		throw InternalException("dict-surviving join: narrowed column %llu received a "
+		                        "non-global-dictionary chunk; build pipeline is not single-source",
+		                        static_cast<uint64_t>(build_col_idx));
+	}
+	const auto &entry = incoming.Buffer().Cast<DictionaryBuffer>().GetEntry();
+	if (dict_registry[build_col_idx]) {
+		// Subsequent chunks wrap the same entry, so ids match by construction; a mismatch is a producer bug.
+		D_ASSERT(dict_registry[build_col_idx]->id == entry.id);
+		return;
+	}
+	// The upstream child is a zero-copy gather: its long strings point into the producer's row-store heap, recycled
+	// before we gather on probe. Deep-copy into a self-owned entry so it outlives them.
+	const auto &upstream_child = entry.data;
+	const auto child_count = upstream_child.size();
+	// child_count fits index_width by construction (publisher sized the width to this dict). Assert so a producer
+	// that grows the child past it fails loudly instead of truncating in the UnsafeNumericCast.
+	D_ASSERT(child_count <= (idx_t(1) << (8 * index_width)));
+	auto owned_entry = DictionaryVector::CreateReusableGlobalDictionary(upstream_child.GetType(), child_count);
+	if (child_count > 0) {
+		VectorOperations::Copy(upstream_child, owned_entry->data, child_count, 0, 0);
+	}
+	owned_entry->id = entry.id;
+	dict_registry[build_col_idx] = std::move(owned_entry);
+}
+
 void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &payload) {
 	D_ASSERT(!finalized);
 	D_ASSERT(keys.size() == payload.size());
@@ -539,56 +601,15 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	for (idx_t i = 0; i < payload.ColumnCount(); i++) {
 		auto &incoming = payload.data[i];
 		const uint8_t index_width = i < dict_index_width.size() ? dict_index_width[i] : 0;
-		if (index_width != 0) {
-			// Slot was narrowed on the first chunk; no fallback for a non-dict later chunk. Throw, not D_ASSERT:
-			// the Cast<DictionaryBuffer> below is UB in release on a non-dict vector, scattering foreign bytes.
-			if (incoming.GetVectorType() != VectorType::DICTIONARY_VECTOR ||
-			    DictionaryVector::DictionaryId(incoming).empty() || !DictionaryVector::IsGlobalDictionary(incoming)) {
-				throw InternalException("dict-surviving join: narrowed column %llu received a "
-				                        "non-global-dictionary chunk; build pipeline is not single-source",
-				                        static_cast<uint64_t>(i));
-			}
-			// Pin the dictionary on the first chunk; enforce id continuity on subsequent chunks
-			auto entry_ptr = incoming.BufferMutable().Cast<DictionaryBuffer>().GetEntryPtr();
-			if (!dict_registry[i]) {
-				// The upstream child is a zero-copy gather: its long strings point into the producer's row-store
-				// heap, recycled before we gather on probe. Deep-copy into a self-owned entry so it outlives them.
-				const auto &upstream_child = entry_ptr->data;
-				const auto child_count = upstream_child.size();
-				// child_count fits index_width by construction (publisher sized the width to this dict). Assert so a
-				// producer that grows the child past it fails loudly instead of truncating in the UnsafeNumericCast.
-				D_ASSERT(child_count <= (idx_t(1) << (8 * index_width)));
-				auto owned_entry =
-				    DictionaryVector::CreateReusableGlobalDictionary(upstream_child.GetType(), child_count);
-				if (child_count > 0) {
-					VectorOperations::Copy(upstream_child, owned_entry->data, child_count, 0, 0);
-				}
-				owned_entry->id = entry_ptr->id;
-				dict_registry[i] = std::move(owned_entry);
-			} else {
-				// Subsequent chunks wrap the same entry, so ids match by construction; a mismatch is a producer bug.
-				D_ASSERT(dict_registry[i]->id == entry_ptr->id);
-			}
-			const auto &dict_sel = DictionaryVector::SelVector(incoming);
-			auto &index_allocator = buffer_manager.GetBufferAllocator();
-			switch (index_width) {
-			case sizeof(uint8_t):
-				ScatterDictIndices<uint8_t>(dict_sel, payload.size(), LogicalType::UTINYINT, index_allocator,
-				                            dict_idx_buffers, dict_idx_vectors);
-				break;
-			case sizeof(uint16_t):
-				ScatterDictIndices<uint16_t>(dict_sel, payload.size(), LogicalType::USMALLINT, index_allocator,
-				                             dict_idx_buffers, dict_idx_vectors);
-				break;
-			default:
-				ScatterDictIndices<uint32_t>(dict_sel, payload.size(), LogicalType::UINTEGER, index_allocator,
-				                             dict_idx_buffers, dict_idx_vectors);
-				break;
-			}
-			source_chunk.data[col_offset + i].Reference(dict_idx_vectors.back());
-		} else {
+		if (index_width == 0) {
 			source_chunk.data[col_offset + i].Reference(incoming);
+			continue;
 		}
+		// Narrowed column: pin the dictionary, then scatter its sel indices at the chosen width in place of the value.
+		PinDictSurvivingColumn(i, incoming, index_width);
+		ScatterDictIndices(index_width, DictionaryVector::SelVector(incoming), payload.size(),
+		                   buffer_manager.GetBufferAllocator(), dict_idx_buffers, dict_idx_vectors);
+		source_chunk.data[col_offset + i].Reference(dict_idx_vectors.back());
 	}
 	col_offset += payload.ColumnCount();
 	if (PropagatesBuildSide(join_type)) {
@@ -1615,17 +1636,7 @@ void JoinHashTable::GatherRHS(Vector &row_ptrs, const SelectionVector &ptr_sel, 
 				const auto col_offset = offsets[output_col_idx];
 				// Read the dict index at the width chosen at layout-publication time
 				const uint8_t index_width = payload_idx < dict_index_width.size() ? dict_index_width[payload_idx] : 0;
-				switch (index_width) {
-				case sizeof(uint8_t):
-					LoadDictIndices<uint8_t>(ptrs, ptr_sel, count, col_offset, build_sel_vec);
-					break;
-				case sizeof(uint16_t):
-					LoadDictIndices<uint16_t>(ptrs, ptr_sel, count, col_offset, build_sel_vec);
-					break;
-				default:
-					LoadDictIndices<uint32_t>(ptrs, ptr_sel, count, col_offset, build_sel_vec);
-					break;
-				}
+				LoadDictIndices(index_width, ptrs, ptr_sel, count, col_offset, build_sel_vec);
 				vector.Dictionary(dict_registry[payload_idx], build_sel_vec, count);
 				continue;
 			}
