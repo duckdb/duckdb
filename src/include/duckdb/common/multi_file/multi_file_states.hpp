@@ -13,7 +13,6 @@
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/parallel/async_result.hpp"
 
 namespace duckdb {
 struct MultiFileReaderInterface;
@@ -185,6 +184,9 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	}
 };
 
+//! Phase of the per-thread multi-file scan: schedule the claimed batch's I/O, then decode it
+enum class MultiFileScanPhase : uint8_t { SCHEDULE, DECODE };
+
 struct MultiFileLocalState : public LocalTableFunctionState {
 public:
 	explicit MultiFileLocalState(ClientContext &context) : executor(context) {
@@ -201,8 +203,8 @@ public:
 	DataChunk scan_chunk;
 	//! Whether the last Scan call returned BLOCKED
 	bool scan_blocked = false;
-	//! The I/O scheduled for the current batch by ScheduleIO
-	AsyncResult scheduled_io;
+	//! Whether the current batch still needs its I/O scheduled (SCHEDULE) or is ready to decode (DECODE)
+	MultiFileScanPhase phase = MultiFileScanPhase::SCHEDULE;
 	//! The executor to transform scan_chunk into the final result with FinalizeChunk
 	ExpressionExecutor executor;
 	//! Number of rows scanned by this thread (for profiling)

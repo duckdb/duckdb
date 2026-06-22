@@ -480,11 +480,8 @@ public:
 					if (old_file_index != scan_data.file_index) {
 						InitializeFileScanState(context, current_reader_data, scan_data, gstate.projection_ids);
 					}
-					// schedule I/O while holding the parallel lock, so each unit is scheduled once (This is important
-					// for read-ahead)
-					parallel_lock.lock();
-					scan_data.scheduled_io =
-					    scan_data.reader->ScheduleIO(context, *gstate.global_state, *scan_data.local_state);
+					// the claimed batch's I/O is prefetched by the SCHEDULE phase of MultiFileScan before it decodes
+					scan_data.phase = MultiFileScanPhase::SCHEDULE;
 					return true;
 				} else {
 					// Set state to the next file
@@ -534,10 +531,7 @@ public:
 		if (!TryInitializeNextBatch(context.client, bind_data, *result, gstate)) {
 			return nullptr;
 		}
-		// fixme: I'm not sure about this yet
-		if (result->scheduled_io.GetResultType() == AsyncResultType::BLOCKED) {
-			result->scheduled_io.ExecuteTasksSynchronously();
-		}
+		// the first batch starts in the SCHEDULE phase; its I/O is prefetched on the first MultiFileScan call
 		return std::move(result);
 	}
 
@@ -695,6 +689,76 @@ public:
 		}
 	}
 
+	//! Emit the current output to the caller, or signal the loop to continue when there is nothing to emit yet.
+	//! Returns true if MultiFileScan should return, false if it should continue its loop.
+	static bool YieldOutput(TableFunctionInput &data_p, DataChunk &output) {
+		if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+			return false;
+		}
+		data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+		return true;
+	}
+
+	//! SCHEDULE phase: prefetch the claimed batch's I/O, then transition to DECODE.
+	//! Returns true if MultiFileScan should return to its caller, false if it should continue its loop.
+	static bool Schedule(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
+	                     MultiFileGlobalState &gstate) {
+		auto scheduled = data.reader->ScheduleIO(context, *gstate.global_state, *data.local_state);
+		// move to DECODE before surfacing a block, so the resume decodes instead of re-scheduling
+		data.phase = MultiFileScanPhase::DECODE;
+		if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
+			return HandleBlocked(data_p, data, scheduled, /*preserve_chunk=*/false);
+		}
+		return false;
+	}
+
+	static bool Decode(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
+	                   MultiFileGlobalState &gstate, MultiFileBindData &bind_data, DataChunk &output) {
+		auto &scan_chunk = data.scan_chunk;
+		if (data.scan_blocked) {
+			data.scan_blocked = false;
+		} else {
+			scan_chunk.Reset();
+		}
+
+		auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
+
+		if (res.GetResultType() == AsyncResultType::BLOCKED) {
+			// blocked mid-decode: resume into the same scan_chunk once the I/O completes
+			return HandleBlocked(data_p, data, res, /*preserve_chunk=*/true);
+		}
+
+		output.SetChildCardinality(scan_chunk.size());
+
+		if (scan_chunk.size() > 0) {
+			data.rows_scanned += scan_chunk.size();
+			bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data, scan_chunk,
+			                                           output, data.executor, gstate.multi_file_reader_state);
+			output.SetChildCardinality(output.size());
+		}
+		if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
+			// More chunks left on this batch, lets keep going
+			return YieldOutput(data_p, output);
+		}
+
+		if (res.GetResultType() != AsyncResultType::FINISHED) {
+			throw InternalException("Unexpected result in MultiFileScan, must be FINISHED, is %s",
+			                        EnumUtil::ToChars(res.GetResultType()));
+		}
+
+		// We are done with this batch
+		if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
+			if (output.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+				gstate.finished = true;
+				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+			} else {
+				data_p.async_result = SourceResultType::FINISHED;
+			}
+			return true;
+		}
+		return YieldOutput(data_p, output);
+	}
+
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
 			data_p.async_result = SourceResultType::FINISHED;
@@ -710,67 +774,20 @@ public:
 		}
 
 		do {
-			auto &scan_chunk = data.scan_chunk;
-			if (data.scan_blocked) {
-				data.scan_blocked = false;
-			} else {
-				scan_chunk.Reset();
-			}
-
-			auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
-
-			if (res.GetResultType() == AsyncResultType::BLOCKED) {
-				// this is a block mid-decode we need resume into the same scan_chunk once the I/O completes
-				if (HandleBlocked(data_p, data, res, true)) {
+			switch (data.phase) {
+			case MultiFileScanPhase::SCHEDULE:
+				if (Schedule(context, data_p, data, gstate)) {
 					return;
 				}
-				continue;
-			}
-
-			output.SetChildCardinality(scan_chunk.size());
-
-			if (scan_chunk.size() > 0) {
-				data.rows_scanned += scan_chunk.size();
-				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,
-				                                           scan_chunk, output, data.executor,
-				                                           gstate.multi_file_reader_state);
-				output.SetChildCardinality(output.size());
-			}
-			if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
-				// Loop back to the same block
-				if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
-					continue;
+				break;
+			case MultiFileScanPhase::DECODE:
+				if (Decode(context, data_p, data, gstate, bind_data, output)) {
+					return;
 				}
-				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
-				return;
+				break;
+			default:
+				throw InternalException("Unexpected MultiFileScanPhase in MultiFileScan");
 			}
-
-			if (res.GetResultType() != AsyncResultType::FINISHED) {
-				throw InternalException("Unexpected result in MultiFileScan, must be FINISHED, is %s",
-				                        EnumUtil::ToChars(res.GetResultType()));
-			}
-
-			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
-				if (output.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
-					gstate.finished = true;
-					data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
-				} else {
-					data_p.async_result = SourceResultType::FINISHED;
-				}
-			} else {
-				if (data.scheduled_io.GetResultType() == AsyncResultType::BLOCKED) {
-					// prefetch the new batch's I/O before decoding it
-					if (HandleBlocked(data_p, data, data.scheduled_io, false)) {
-						return;
-					}
-					continue;
-				}
-				if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
-					continue;
-				}
-				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
-			}
-			return;
 		} while (true);
 	}
 
