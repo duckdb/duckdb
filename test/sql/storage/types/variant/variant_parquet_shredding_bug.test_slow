@@ -1,4 +1,4 @@
-# name: test/sql/storage/types/variant/variant_parquet_shredding_bug.test
+# name: test/sql/storage/types/variant/variant_parquet_shredding_bug.test_slow
 # group: [variant]
 
 require json
