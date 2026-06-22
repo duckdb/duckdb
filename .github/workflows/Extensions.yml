@@ -176,7 +176,7 @@ jobs:
             exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
             opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
             extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
-            extra_toolchains: unixodbc
+            extra_toolchains: unixodbc;parser_tools
           - name: Rust-based Extensions
             artifact_prefix: rust-based-extensions
             exclude_archs: ${{ needs.load-extension-configs.outputs.rust_based_extensions_exclude_archs }}
