@@ -27,6 +27,7 @@
 namespace duckdb {
 
 class DataTable;
+class DuckTableEntry;
 struct CreateTriggerInfo;
 
 struct RenameColumnInfo;
@@ -86,6 +87,10 @@ public:
 	DUCKDB_API const ColumnList &GetColumns() const;
 	//! Returns the underlying storage of the table
 	virtual DataTable &GetStorage();
+	//! Returns the DuckTableEntry whose storage backs this table. A catalog that
+	//! delegates storage to a hidden table (e.g. a facade) overrides this so the
+	//! physical insert/update/delete/merge operators target the real table.
+	virtual DuckTableEntry &GetStorageTableEntry(ClientContext &context);
 
 	//! Returns a list of the constraints of the table
 	DUCKDB_API const vector<unique_ptr<Constraint>> &GetConstraints() const;

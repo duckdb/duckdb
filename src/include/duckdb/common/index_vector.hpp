@@ -43,6 +43,10 @@ public:
 		internal_vector.reserve(size);
 	}
 
+	void clear() { // NOLINT: match stl API
+		internal_vector.clear();
+	}
+
 	typename vector<T>::iterator begin() { // NOLINT: match stl API
 		return internal_vector.begin();
 	}
