@@ -3305,9 +3305,14 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 			continue;
 		}
 
-		auto &ready_file_state = file_state.GetFileState();
-		annotated_unique_lock<annotated_mutex> file_guard(ready_file_state.lock);
-		if (PhysicalCopyRotateNow(*this, ready_file_state)) {
+		auto ready_file_state = file_state.GetFileStatePtr();
+		if (!ready_file_state) {
+			global_guard.unlock();
+			TaskScheduler::YieldThread();
+			continue;
+		}
+		annotated_unique_lock<annotated_mutex> file_guard(ready_file_state->lock);
+		if (PhysicalCopyRotateNow(*this, *ready_file_state)) {
 			// Global state must be rotated. Move to local scope, create an new one, and immediately release global lock
 			auto owned_file_state = std::move(file_state);
 			file_guard.unlock();
@@ -3319,17 +3324,17 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 			gstate.FinalizeFileState(std::move(owned_file_state));
 		} else {
 			global_guard.unlock();
-			ready_file_state.num_batches++;
+			ready_file_state->num_batches++;
 
 			DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalCopyToFile", "FlushBatch",
-			           {{"file", ready_file_state.path},
+			           {{"file", ready_file_state->path},
 			            {"rows", to_string(batch_analyzer.current_batch_size)},
 			            {"size", to_string(batch_analyzer.current_batch_size_bytes)},
 			            {"reason", EnumUtil::ToString(batch_analyzer.ToReason())}});
 			if (UsesLegacyCopyBatchAPI(function)) {
-				FlushLegacyCopyBatch(context, function, *bind_data, *ready_file_state.data, *prepared_batch);
+				FlushLegacyCopyBatch(context, function, *bind_data, *ready_file_state->data, *prepared_batch);
 			} else {
-				function.flush_batch(context, *bind_data, *ready_file_state.data, *prepared_batch);
+				function.flush_batch(context, *bind_data, *ready_file_state->data, *prepared_batch);
 			}
 			break;
 		}
