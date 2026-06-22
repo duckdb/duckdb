@@ -738,7 +738,8 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	bool invalidate_transaction = true;
 	try {
 		// Surface a pending interrupt even when this thread runs no task that reaches InterruptCheck.
-		if (!dry_run && interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED) {
+		// IsInterrupted() rather than InterruptCheck(): we must not enforce query_deadline here.
+		if (!dry_run && IsInterrupted()) {
 			throw InterruptException();
 		}
 		auto query_result = active_query->executor->ExecuteTask(dry_run);
