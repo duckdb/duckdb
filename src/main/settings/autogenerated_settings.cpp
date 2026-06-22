@@ -58,6 +58,9 @@ void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &paramete
 // Checkpoint On Detach
 //===----------------------------------------------------------------------===//
 void CheckpointOnDetachSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("checkpoint_on_detach setting cannot be NULL");
+	}
 	EnumUtil::FromString<CheckpointOnDetach>(StringValue::Get(parameter));
 }
 
@@ -117,6 +120,9 @@ void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &
 // Debug Verify Statement
 //===----------------------------------------------------------------------===//
 void DebugVerifyStatementSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_verify_statement setting cannot be NULL");
+	}
 	EnumUtil::FromString<DebugStatementVerification>(StringValue::Get(parameter));
 }
 
@@ -144,6 +150,9 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 // Default Io Mode
 //===----------------------------------------------------------------------===//
 void DefaultIoModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("default_io_mode setting cannot be NULL");
+	}
 	EnumUtil::FromString<FileIOMode>(StringValue::Get(parameter));
 }
 
@@ -151,6 +160,9 @@ void DefaultIoModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 // Default Transaction Invalidation Policy
 //===----------------------------------------------------------------------===//
 void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("default_transaction_invalidation_policy setting cannot be NULL");
+	}
 	EnumUtil::FromString<TransactionInvalidationPolicy>(StringValue::Get(parameter));
 }
 
@@ -168,6 +180,9 @@ void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &pa
 // Dialect Compatibility Mode
 //===----------------------------------------------------------------------===//
 void DialectCompatibilityModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("dialect_compatibility_mode setting cannot be NULL");
+	}
 	EnumUtil::FromString<DialectCompatibilityMode>(StringValue::Get(parameter));
 }
 
@@ -256,6 +271,9 @@ void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parame
 // Table Function Identifier Conversion
 //===----------------------------------------------------------------------===//
 void TableFunctionIdentifierConversionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("table_function_identifier_conversion setting cannot be NULL");
+	}
 	EnumUtil::FromString<TableFunctionIdentifierConversion>(StringValue::Get(parameter));
 }
 

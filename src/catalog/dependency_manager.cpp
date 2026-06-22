@@ -280,8 +280,9 @@ void DependencyManager::CreateDependencies(CatalogTransaction transaction, const
 
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.Set()) {
-		DependencyInfo info {/*dependent = */ DependencyDependent {GetLookupProperties(object), dependency_flags},
-		                     /*subject = */ DependencySubject {dependency.entry, DependencySubjectFlags(), optional_idx()}};
+		DependencyInfo info {
+		    /*dependent = */ DependencyDependent {GetLookupProperties(object), dependency_flags},
+		    /*subject = */ DependencySubject {dependency.entry, DependencySubjectFlags(), optional_idx()}};
 		CreateDependency(transaction, info);
 	}
 }
