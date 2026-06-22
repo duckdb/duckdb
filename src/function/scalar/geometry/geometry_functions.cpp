@@ -4,6 +4,8 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
 
@@ -11,8 +13,62 @@ static void FromWKBFunction(DataChunk &input, ExpressionState &state, Vector &re
 	Geometry::FromBinary(input.data[0], result, input.size(), true);
 }
 
+static auto FromWKBStats(ClientContext &context, FunctionStatisticsInput &input) -> unique_ptr<BaseStatistics> {
+	const auto &child_stats = input.child_stats[0];
+
+	// Start from fully unknown geometry stats and copy over the validity (null-ness) of the input.
+	auto result = GeometryStats::CreateUnknown(input.expr.GetReturnType());
+	result.CopyValidity(child_stats);
+
+	if (!StringStats::HasMinMax(child_stats)) {
+		// No min/max available, we can't say anything about the types
+		return result.ToUnique();
+	}
+
+	// The lexicographically smallest and largest WKB blobs. Any prefix shared by both is shared by every row,
+	// so if the first 5 bytes (byte order + type meta) match, all rows have the exact same geometry type and ZM flags.
+	const auto min_blob = StringStats::Min(child_stats);
+	const auto max_blob = StringStats::Max(child_stats);
+
+	constexpr idx_t WKB_HEADER_SIZE = sizeof(uint8_t) + sizeof(uint32_t);
+	if (min_blob.size() < WKB_HEADER_SIZE || max_blob.size() < WKB_HEADER_SIZE) {
+		return result.ToUnique();
+	}
+	if (memcmp(min_blob.data(), max_blob.data(), WKB_HEADER_SIZE) != 0) {
+		// The headers differ, so multiple geometry types may be present
+		return result.ToUnique();
+	}
+
+	// Now parse the 5-byte WKB header (byte order + type meta) into a geometry/vertex type.
+	const auto header = const_data_ptr_cast(min_blob.data());
+	const auto le = Load<uint8_t>(header);
+
+	auto meta = Load<uint32_t>(header + sizeof(uint8_t));
+	if (!le) {
+		meta = BSwap(meta);
+	}
+
+	const auto type_id = (meta & 0x0000FFFF) % 1000;
+	const auto flag_id = (meta & 0x0000FFFF) / 1000;
+	if (type_id < 1 || type_id > 7 || flag_id > 3) {
+		// Unsupported or invalid geometry type, we can't say anything about the types
+		return result.ToUnique();
+	}
+	const auto geom_type = static_cast<GeometryType>(type_id);
+	const auto vert_type = static_cast<VertexType>(flag_id);
+
+	// All rows share this single geometry type. The extent and emptiness can't be inferred
+	// from the truncated string stats, so those remain unknown.
+	auto &types = GeometryStats::GetTypes(result);
+	types = GeometryTypeSet::Empty();
+	types.Add(geom_type, vert_type);
+
+	return result.ToUnique();
+}
+
 ScalarFunction StGeomfromwkbFun::GetFunction() {
 	ScalarFunction function({LogicalType::BLOB}, LogicalType::GEOMETRY(), FromWKBFunction);
+	function.SetStatisticsCallback(FromWKBStats);
 	return function;
 }
 
