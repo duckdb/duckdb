@@ -284,6 +284,11 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const string &old_n
 	if (AttachedDatabase::NameIsReserved(new_name)) {
 		throw BinderException("Database name \"%s\" cannot be used because it is a reserved name", new_name);
 	}
+	if (StringUtil::CIEquals(GetDefaultDatabase(context), old_name)) {
+		// Renaming the connected database (e.g. the serenedb facade catalog) would
+		// leave every session routing to a name that no longer exists. Match PG.
+		throw BinderException("current database cannot be renamed");
+	}
 
 	shared_ptr<AttachedDatabase> attached_db;
 	{
