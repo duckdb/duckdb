@@ -108,6 +108,19 @@ SELECT id FROM t WHERE s ILIKE '%100x%%' ESCAPE 'x' ORDER BY id
 ----
 9
 
+# === escape char NOT active but pattern has '_' wildcard => matcher disabled, escape-aware fallback with a
+#     non-zero escape char (LikeOperatorFunction with HAS_ESCAPE), matching ===
+query I
+SELECT id FROM t WHERE s ILIKE '%c_fé%' ESCAPE '\' ORDER BY id
+----
+1
+6
+
+# same path, no match
+query I
+SELECT id FROM t WHERE s ILIKE '%c_zzz%' ESCAPE '\' ORDER BY id
+----
+
 # === NOT ILIKE ... ESCAPE (constant pattern) ===
 
 # rows with no 'a'/'A' (empty string matches NOT; NULL excluded)
@@ -152,6 +165,16 @@ query I
 SELECT id FROM t WHERE s ILIKE NULL ESCAPE '\' ORDER BY id
 ----
 
+# NULL escape => result is NULL (no matches), and scalar form is NULL
+query I
+SELECT id FROM t WHERE s ILIKE '%hello%' ESCAPE NULL ORDER BY id
+----
+
+query T
+SELECT 'abc' ILIKE '%a%' ESCAPE NULL
+----
+NULL
+
 # === parameterized (runtime-constant) pattern, like the production query ===
 statement ok
 PREPARE p AS SELECT id FROM t WHERE s ILIKE '%' || ? || '%' ESCAPE '\' ORDER BY id
@@ -195,6 +218,23 @@ SELECT id FROM t
 WHERE (s ILIKE '%café%' ESCAPE '\' AND s ILIKE '%hello%' ESCAPE '\')
    OR (s ILIKE '%duck%' ESCAPE '\' AND s ILIKE '%fast%' ESCAPE '\')
 ORDER BY id
+----
+1
+2
+
+# === non-constant escape (per-row escape column) => generic ternary fallback ===
+statement ok
+CREATE TABLE esc_t(id INTEGER, s VARCHAR, pat VARCHAR, esc VARCHAR);
+
+statement ok
+INSERT INTO esc_t VALUES
+    (1, 'café x', '%c_fé%', '\'),
+    (2, '50% off', '%50\% off%', '\'),
+    (3, 'fox', '%cat%', '#'),
+    (4, 'a#%b', '%a#%%', '#');
+
+query I
+SELECT id FROM esc_t WHERE s ILIKE pat ESCAPE esc ORDER BY id
 ----
 1
 2
