@@ -40,6 +40,37 @@ struct AsyncWriteConfig {
 	static constexpr idx_t DRAIN_TASK_BYTE_BUDGET = 16ULL * 1024ULL * 1024ULL;
 };
 
+//! Shared TemporaryMemoryManager reservation governor for the managed async queues.
+//! Encapsulates the coarse-growth reservation heuristic and backpressure budget so the positional write
+//! queue and the generic task queue bound their queued/in-flight backlog through identical memory logic.
+class ManagedAsyncMemoryGovernor {
+public:
+	explicit ManagedAsyncMemoryGovernor(ClientContext &client_context);
+
+	ManagedAsyncMemoryGovernor(const ManagedAsyncMemoryGovernor &) = delete;
+	ManagedAsyncMemoryGovernor &operator=(const ManagedAsyncMemoryGovernor &) = delete;
+
+	//! Whether a TemporaryMemoryState reservation is tracking this queue's backlog.
+	bool IsActive() const;
+	//! Grow the reservation coarsely until it covers current_pending_bytes; released only on Release().
+	void UpdateReservation(idx_t current_pending_bytes);
+	//! Current async backlog budget after applying the fixed cap, or 0 when memory is too tight to retain a backlog.
+	idx_t BackpressureBudget() const;
+	//! Release the reservation; further UpdateReservation calls may grow it again.
+	void Release();
+
+private:
+	ClientContext &client_context;
+	//! Temporary memory reservation state used to limit queued async data. Absent when draining synchronously.
+	unique_ptr<TemporaryMemoryState> memory_state;
+	//! Last remaining-size request sent to TemporaryMemoryManager. Grows monotonically until Release().
+	idx_t memory_request_bytes = 0;
+	//! Minimum TemporaryMemoryManager reservation while work is outstanding.
+	idx_t min_pending_bytes = 0;
+	//! Hard cap over the TemporaryMemoryState reservation.
+	idx_t max_pending_bytes = 0;
+};
+
 //! Owned payload that can be handed to an async write queue.
 class AsyncWritePayload {
 public:
@@ -299,16 +330,10 @@ private:
 
 	//! Low-level positional request scheduler.
 	unique_ptr<AsyncWriteQueue> write_queue;
-	//! Temporary memory reservation state used to limit queued async write data.
-	unique_ptr<TemporaryMemoryState> memory_state;
-	//! Last remaining-size request sent to TemporaryMemoryManager. Grows monotonically until close.
-	idx_t memory_request_bytes = 0;
+	//! Shared TemporaryMemoryManager reservation governor bounding queued async write data.
+	ManagedAsyncMemoryGovernor memory_governor;
 	//! Maximum number of submitted/running drain requests for this queue.
 	idx_t max_active_drain_tasks = 1;
-	//! Minimum TemporaryMemoryManager reservation while writes are outstanding.
-	idx_t min_pending_bytes = 0;
-	//! Hard cap over the TemporaryMemoryState reservation.
-	idx_t max_pending_bytes = 0;
 	//! Maximum bytes one managed async request should submit before yielding scheduler capacity.
 	idx_t drain_task_byte_budget = AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET;
 
