@@ -310,6 +310,7 @@ void ShreddedGroupView::Build(Vector &group) {
 	}
 	has_typed_value = true;
 	typed_type = typed_vec->GetType();
+	typed_value_vec = typed_vec;
 
 	switch (typed_type.id()) {
 	case LogicalTypeId::STRUCT: {
@@ -610,30 +611,8 @@ ParquetVariantNode ParquetArrayIterator::operator[](idx_t i) const {
 	return ParquetVariantNode::MakeBinary(state.get(), values + offset);
 }
 
-//===--------------------------------------------------------------------===//
-// ParquetVariantIteratorSource
-//===--------------------------------------------------------------------===//
-bool ParquetVariantIteratorSource::Emit(idx_t row, VariantBuilder &builder) {
-	iterator.BeginRow(row);
-	auto root = iterator.Root(row);
-	if (root.IsNull()) {
-		return true;
-	}
-	//! A root that resolves to a (variant) NULL is a genuine SQL NULL row
-	if (root.GetTypeId() == VariantLogicalType::VARIANT_NULL) {
-		return true;
-	}
-	EmitIterator(root, builder);
-	return false;
-}
-
-//===--------------------------------------------------------------------===//
-// ParquetVariantConversion
-//===--------------------------------------------------------------------===//
-void ParquetVariantConversion::Convert(Vector &metadata, Vector &group, Vector &result, idx_t count) {
-	ParquetVariantIterator iterator(metadata, group);
-	ParquetVariantIteratorSource source(iterator);
-	BuildVariant(source, count, result);
+void ParquetVariantIterator::EmitBinary(const_data_ptr_t data, VariantBuilder &builder) const {
+	EmitIterator(ParquetVariantNode::MakeBinary(*this, data), builder);
 }
 
 } // namespace duckdb

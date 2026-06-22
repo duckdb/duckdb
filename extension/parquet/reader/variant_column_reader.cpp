@@ -126,7 +126,10 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 			    "The shredded Variant column did not contain the same amount of values for 'typed_value' and 'value'");
 		}
 	}
-	ParquetVariantConversion::Convert(metadata_intermediate, intermediate_group, result, num_values);
+	//! Convert into DuckDB's shredded VARIANT format, referencing the Parquet typed_value columns directly.
+	//! When there is no 'typed_value' (purely binary data), everything becomes a leftover in the unshredded
+	//! component.
+	ParquetVariantConversion::ConvertToShredded(metadata_intermediate, intermediate_group, result, num_values);
 
 	read_count = value_values;
 	return read_count.GetIndex();
