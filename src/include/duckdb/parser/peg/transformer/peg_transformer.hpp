@@ -85,6 +85,90 @@ struct PEGTransformerState {
 	idx_t token_index;
 };
 
+class PEGTransformer;
+class TransformStack;
+struct TransformStackFrame;
+
+using transform_frame_function_t = void (*)(PEGTransformer &transformer, TransformStack &stack,
+                                            TransformStackFrame &frame);
+using transform_frame_finalize_t = unique_ptr<TransformResultValue> (*)(PEGTransformer &transformer,
+                                                                        TransformStack &stack,
+                                                                        TransformStackFrame &frame);
+using transform_frame_index_t = idx_t;
+
+enum class TransformFrameState : uint8_t { INITIALIZE, WAITING };
+
+struct TransformFrameOps {
+	const char *name;
+	transform_frame_function_t initialize;
+	transform_frame_finalize_t finalize;
+};
+
+struct TransformStackFrame {
+	TransformStackFrame(transform_frame_index_t frame_index, ParseResult &parse_result, const TransformFrameOps &ops,
+	                    transform_frame_index_t parent, idx_t parent_slot);
+
+	void ReserveChildSlots(idx_t count);
+	void SetChildResult(idx_t slot, unique_ptr<TransformResultValue> result);
+
+	template <class T>
+	T TakeResult(idx_t slot) {
+		if (slot >= child_results.size() || !child_results[slot]) {
+			throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
+		}
+		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(child_results[slot].get());
+		if (!typed_result) {
+			throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
+			                        ops.name);
+		}
+		auto result = std::move(typed_result->value);
+		child_results[slot].reset();
+		return result;
+	}
+
+	transform_frame_index_t frame_index;
+	ParseResult &parse_result;
+	const TransformFrameOps &ops;
+	transform_frame_index_t parent;
+	idx_t parent_slot;
+	TransformFrameState state = TransformFrameState::INITIALIZE;
+	vector<unique_ptr<TransformResultValue>> child_results;
+};
+
+class TransformStack {
+public:
+	explicit TransformStack(PEGTransformer &transformer);
+
+	transform_frame_index_t PushFrame(ParseResult &parse_result, const TransformFrameOps &ops,
+	                                  transform_frame_index_t parent, idx_t parent_slot);
+
+	template <class T>
+	T Execute(ParseResult &parse_result, const TransformFrameOps &ops) {
+		auto base_result = ExecuteInternal(parse_result, ops);
+		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(base_result.get());
+		if (!typed_result) {
+			throw InternalException("Unexpected trampoline transformer result type for root rule '%s'", ops.name);
+		}
+		return std::move(typed_result->value);
+	}
+
+	TransformStackFrame &GetFrame(transform_frame_index_t frame_index);
+	const TransformStackFrame &GetFrame(transform_frame_index_t frame_index) const;
+
+	string FormatFrame(transform_frame_index_t frame_index) const;
+	string FormatParentChain(transform_frame_index_t frame_index) const;
+	string FormatStack() const;
+
+private:
+	unique_ptr<TransformResultValue> ExecuteInternal(ParseResult &parse_result, const TransformFrameOps &ops);
+	void DeliverResult(TransformStackFrame &frame, unique_ptr<TransformResultValue> result);
+
+private:
+	PEGTransformer &transformer;
+	vector<unique_ptr<TransformStackFrame>> frames;
+	vector<transform_frame_index_t> frame_stack;
+};
+
 class PEGTransformer {
 public:
 	using AnyTransformFunction = std::function<unique_ptr<TransformResultValue>(PEGTransformer &, ParseResult &)>;
