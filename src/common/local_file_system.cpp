@@ -553,7 +553,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 
 	TryAcquireFileLock(*this, fd, path, flags);
 
-	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags, db);
+	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags, FileOpener::TryGetDatabase(opener));
 	if (opener) {
 		file_handle->TryAddLogger(*opener);
 		DUCKDB_LOG_FILE_SYSTEM_OPEN((*file_handle));
