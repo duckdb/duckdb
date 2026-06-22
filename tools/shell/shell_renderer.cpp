@@ -1722,7 +1722,8 @@ public:
 		return SuccessState::SUCCESS;
 	}
 	bool RequireMaterializedResult() const override {
-		return true;
+		// mode trash discards the result
+		return false;
 	}
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
 		// mode trash never uses the pager
