@@ -136,7 +136,7 @@ static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result
 namespace {
 
 static inline string_t GetString(yyjson_val *val) {
-	return string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
+	return string_t(unsafe_yyjson_get_str(val), NumericCast<uint32_t>(unsafe_yyjson_get_len(val)));
 }
 
 } // namespace

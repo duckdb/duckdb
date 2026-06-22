@@ -371,7 +371,7 @@ string PivotRef::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(groups[i].GetIdentifierName());
+			result += SQLIdentifier(groups[i].GetIdentifierName());
 		}
 	}
 	result += ")";
