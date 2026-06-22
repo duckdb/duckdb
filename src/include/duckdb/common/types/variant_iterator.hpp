@@ -103,6 +103,9 @@ class VariantNode;
 class VariantIterator {
 public:
 	explicit VariantIterator(const Vector &variant);
+	//! Build directly from the separate unshredded + shredded components (the STRUCT(unshredded, shredded)
+	//! intermediate produced during unshredding, which is not itself a SHREDDED_VECTOR)
+	VariantIterator(const Vector &unshredded, const Vector &shredded);
 
 public:
 	//! Whether the row is a (SQL) NULL variant

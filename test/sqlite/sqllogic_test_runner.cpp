@@ -688,6 +688,24 @@ void SQLLogicTestRunner::ConfigureDefaultInMemoryTemporaryDirectory(const string
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
+	SQLLogicParser parser;
+	bool success = parser.OpenFile(script);
+	if (!success) {
+		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
+	}
+	ExecuteInternal(parser, script);
+}
+
+void SQLLogicTestRunner::ExecuteStream(std::istream &input, const string &source_name) {
+	SQLLogicParser parser;
+	bool success = parser.OpenStream(input, source_name);
+	if (!success) {
+		FAIL("Could not read sqllogictest stream '" + source_name + "'");
+	}
+	ExecuteInternal(parser, source_name);
+}
+
+void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &script) {
 	auto &test_config = TestConfiguration::Get();
 	if (test_config.ShouldSkipTest(script)) {
 		SkipTest("config skip_tests");
@@ -695,7 +713,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	}
 
 	file_name = script;
-	SQLLogicParser parser;
 	idx_t skip_level = 0;
 	bool test_expr_executed = false;
 	bool file_tags_expr_seen = false;
@@ -726,12 +743,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 	// initialize the database with the default dbpath
 	LoadDatabase(dbpath, true);
-
-	// open the file and parse it
-	bool success = parser.OpenFile(script);
-	if (!success) {
-		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
-	}
 
 	if (StringUtil::EndsWith(script, ".test_slow")) {
 		file_tags.emplace_back("slow");

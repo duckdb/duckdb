@@ -2,6 +2,8 @@
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/original/std/sstream.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/checked_integer.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -10,8 +12,12 @@ namespace duckdb {
 
 #ifndef DUCKDB_NO_THREADS
 void ThreadUtil::SleepMs(idx_t sleep_ms, optional_ptr<ClientContext> context) {
+	using checked_int64_t = CheckedInteger<int64_t, InvalidInputException>;
 	auto target_time = Timestamp::GetCurrentTimestamp();
-	target_time.value += static_cast<int64_t>(sleep_ms) * Interval::MICROS_PER_MSEC;
+	checked_int64_t sleep_duration(sleep_ms);
+	auto sleep_micros = sleep_duration * Interval::MICROS_PER_MSEC;
+	checked_int64_t target_value(target_time.value);
+	target_time.value = (target_value + sleep_micros).GetValue();
 	static constexpr idx_t DEFAULT_SLEEP_INTERVAL_MS = 100;
 
 	while (true) {

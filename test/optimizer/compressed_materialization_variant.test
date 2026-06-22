@@ -1,0 +1,215 @@
+# name: test/optimizer/compressed_materialization_variant.test
+# description: Compressed materialization of VARIANT columns that are fully shredded on a primitive type
+# group: [optimizer]
+
+load {TEST_DIR}/compressed_materialization_variant.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+# variant shredded on INTEGER (with a NULL mixed in)
+statement ok
+CREATE TABLE tv AS
+SELECT CASE WHEN range % 5 = 4 THEN NULL ELSE (range % 10)::INT END::VARIANT AS v,
+       range AS payload
+FROM range(100);
+
+# variant shredded on VARCHAR (short strings, can be chained with string compression)
+statement ok
+CREATE TABLE ts AS
+SELECT ('str' || (range % 10))::VARCHAR::VARIANT AS v,
+       range AS payload
+FROM range(100);
+
+# variant shredded on DATE
+statement ok
+CREATE TABLE td AS
+SELECT (DATE '2020-01-01' + INTERVAL (range % 10) DAY)::DATE::VARIANT AS v,
+       range AS payload
+FROM range(100);
+
+# variant with mixed types (only partially shredded - should not be compressed, but must remain correct)
+statement ok
+CREATE TABLE tm AS
+SELECT CASE WHEN range % 10 = 9 THEN 'str'::VARCHAR::VARIANT ELSE (range % 10)::INT::VARIANT END AS v,
+       range AS payload
+FROM range(100);
+
+statement ok
+CHECKPOINT;
+
+# the shredding statistics are loaded on restart
+restart
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+# sorting a variant payload column compresses it to the shredded type (and back)
+query II
+EXPLAIN (FORMAT yaml) SELECT v FROM tv ORDER BY payload
+----
+logical_opt	<REGEX>:.*__internal_compress_integral.*
+
+query II
+EXPLAIN (FORMAT yaml) SELECT v FROM tv ORDER BY payload
+----
+logical_opt	<REGEX>:.*AS VARIANT.*
+
+query I
+SELECT v FROM tv ORDER BY payload LIMIT 6
+----
+0
+1
+2
+3
+NULL
+5
+
+# grouping by a variant column compresses the group key
+query II
+EXPLAIN (FORMAT yaml) SELECT count(*) FROM tv GROUP BY v
+----
+logical_opt	<REGEX>:.*(__internal_compress_integral|AS INTEGER).*
+
+query III
+SELECT v, count(*), sum(payload) FROM tv GROUP BY v ORDER BY ALL
+----
+0	10	450
+1	10	460
+2	10	470
+3	10	480
+5	10	500
+6	10	510
+7	10	520
+8	10	530
+NULL	20	1030
+
+# DISTINCT on a variant column
+query I
+SELECT DISTINCT v FROM tv ORDER BY ALL
+----
+0
+1
+2
+3
+5
+6
+7
+8
+NULL
+
+# string-shredded variants chain with string compression
+query II
+EXPLAIN (FORMAT yaml) SELECT v FROM ts ORDER BY payload
+----
+logical_opt	<REGEX>:.*__internal_compress_string.*
+
+query I
+SELECT v FROM ts ORDER BY payload LIMIT 3
+----
+str0
+str1
+str2
+
+query II
+SELECT v, count(*) FROM ts GROUP BY v ORDER BY ALL
+----
+str0	10
+str1	10
+str2	10
+str3	10
+str4	10
+str5	10
+str6	10
+str7	10
+str8	10
+str9	10
+
+# date-shredded variants are compressed with a plain cast
+query II
+EXPLAIN (FORMAT yaml) SELECT v FROM td ORDER BY payload
+----
+logical_opt	<REGEX>:.*AS DATE.*
+
+query I
+SELECT v FROM td ORDER BY payload LIMIT 3
+----
+2020-01-01
+2020-01-02
+2020-01-03
+
+query II
+SELECT v, count(*) FROM td GROUP BY v ORDER BY ALL
+----
+2020-01-01	10
+2020-01-02	10
+2020-01-03	10
+2020-01-04	10
+2020-01-05	10
+2020-01-06	10
+2020-01-07	10
+2020-01-08	10
+2020-01-09	10
+2020-01-10	10
+
+# partially shredded variants must not be compressed
+query II
+EXPLAIN (FORMAT yaml) SELECT v FROM tm ORDER BY payload
+----
+logical_opt	<!REGEX>:.*(__internal_compress|AS VARIANT).*
+
+query I
+SELECT v FROM tm ORDER BY payload LIMIT 3
+----
+0
+1
+2
+
+query II
+SELECT v, count(*) FROM tm GROUP BY v ORDER BY ALL
+----
+0	10
+1	10
+2	10
+3	10
+4	10
+5	10
+6	10
+7	10
+8	10
+str	10
+
+# sorting BY the variant column itself must not change the produced order
+# (the variant binary representation does not order like the shredded type)
+query I
+SELECT v FROM tv WHERE v IS NOT NULL ORDER BY v, payload LIMIT 4
+----
+0
+0
+0
+0
+
+# variant typeof survives the roundtrip
+query II
+SELECT variant_typeof(v), count(*) FROM tv GROUP BY ALL ORDER BY ALL
+----
+INT32	80
+VARIANT_NULL	20
+
+# joining on payload while materializing variant build columns
+query III
+SELECT t1.payload, t1.v, t2.v
+FROM tv t1
+JOIN tv t2 USING (payload)
+ORDER BY t1.payload
+LIMIT 3
+----
+0	0	0
+1	1	1
+2	2	2

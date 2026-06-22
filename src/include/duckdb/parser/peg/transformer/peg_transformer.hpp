@@ -2,7 +2,6 @@
 
 #include "duckdb/parser/peg/ast/unpivot_name_values.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
-#include "duckdb/parser/peg/transformer/transform_enum_result.hpp"
 #include "duckdb/parser/peg/transformer/transform_result.hpp"
 #include "duckdb/parser/peg/ast/add_column_entry.hpp"
 #include "duckdb/parser/peg/ast/column_constraint_entry.hpp"
@@ -92,11 +91,9 @@ public:
 
 	PEGTransformer(ArenaAllocator &allocator, PEGTransformerState &state,
 	               const case_insensitive_map_t<AnyTransformFunction> &transform_functions,
-	               const case_insensitive_map_t<PEGRule> &grammar_rules,
-	               const case_insensitive_map_t<unique_ptr<TransformEnumValue>> &enum_mappings,
-	               ParserOptions &options_p)
+	               const case_insensitive_map_t<PEGRule> &grammar_rules, ParserOptions &options_p)
 	    : allocator(allocator), state(state), grammar_rules(grammar_rules), transform_functions(transform_functions),
-	      enum_mappings(enum_mappings), options(options_p) {
+	      options(options_p) {
 	}
 
 public:
@@ -141,23 +138,6 @@ public:
 	T Transform(ListParseResult &parse_result, idx_t child_index) {
 		auto &child_parse_result = parse_result.GetChild(child_index);
 		return Transform<T>(child_parse_result);
-	}
-
-	template <typename T>
-	T TransformEnum(ParseResult &parse_result) {
-		auto enum_rule_name = parse_result.name;
-
-		auto rule_value = enum_mappings.find(enum_rule_name);
-		if (rule_value == enum_mappings.end()) {
-			throw ParserException("Enum transform failed: could not find mapping for '%s'", enum_rule_name);
-		}
-
-		auto *typed_enum_ptr = dynamic_cast<TypedTransformEnumResult<T> *>(rule_value->second.get());
-		if (!typed_enum_ptr) {
-			throw InternalException("Enum mapping for rule '%s' has an unexpected type.", enum_rule_name);
-		}
-
-		return typed_enum_ptr->value;
 	}
 
 	template <typename T>
@@ -216,7 +196,6 @@ public:
 	PEGTransformerState &state;
 	const case_insensitive_map_t<PEGRule> &grammar_rules;
 	const case_insensitive_map_t<AnyTransformFunction> &transform_functions;
-	const case_insensitive_map_t<unique_ptr<TransformEnumValue>> &enum_mappings;
 	identifier_map_t<idx_t> named_parameter_map;
 	idx_t prepared_statement_parameter_index = 0;
 	PreparedParamType last_param_type = PreparedParamType::INVALID;
@@ -338,25 +317,12 @@ public:
 	// Registration methods
 	void RegisterComment();
 	void RegisterCommon();
-	void RegisterCreateMacro();
 	void RegisterCreateTable();
 	void RegisterExpression();
-	void RegisterConnect();
 	void RegisterPivot();
 	void RegisterSelect();
 	void RegisterKeywordsAndIdentifiers();
-	void RegisterEnums();
 	void RegisterGenerated();
-
-private:
-	template <typename T>
-	void RegisterEnum(const string &rule_name, T value) {
-		auto existing_rule = enum_mappings.find(rule_name);
-		if (existing_rule != enum_mappings.end()) {
-			throw InternalException("EnumRule %s already exists", rule_name);
-		}
-		enum_mappings[rule_name] = make_uniq<TypedTransformEnumResult<T>>(value);
-	}
 
 	template <class FUNC>
 	void Register(const string &rule_name, FUNC function) {
@@ -3383,6 +3349,10 @@ private:
 	                                                       const optional<JoinType> &join_type,
 	                                                       unique_ptr<TableRef> table_ref,
 	                                                       JoinQualifier join_qualifier);
+	static unique_ptr<TransformResultValue> TransformJoinByClauseInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformJoinByClause(PEGTransformer &transformer, const string &col_label,
+	                                                  unique_ptr<TableRef> table_ref, JoinQualifier join_qualifier);
 	static unique_ptr<TransformResultValue> TransformAsofInternal(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 	static bool TransformAsof(PEGTransformer &transformer);
@@ -3822,7 +3792,6 @@ private:
 private:
 	PEGParser parser;
 	case_insensitive_map_t<PEGTransformer::AnyTransformFunction> sql_transform_functions;
-	case_insensitive_map_t<unique_ptr<TransformEnumValue>> enum_mappings;
 };
 
 } // namespace duckdb

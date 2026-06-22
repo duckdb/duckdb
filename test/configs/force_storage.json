@@ -79,7 +79,8 @@
         "test/sql/aggregate/aggregate_state_export/first_last_export_state.test",
         "test/sql/aggregate/aggregate_state_export/list_export_state.test",
         "test/sql/aggregate/aggregate_state_export/approx_top_k_export_state.test",
-        "test/sql/aggregate/aggregate_state_export/approx_quantile_export_state.test"
+        "test/sql/aggregate/aggregate_state_export/approx_quantile_export_state.test",
+        "test/sql/aggregate/aggregate_state_export/ordered_aggregate_export_state.test"
       ]
     },
     {
