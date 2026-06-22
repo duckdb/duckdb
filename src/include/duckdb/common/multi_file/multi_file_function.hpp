@@ -667,10 +667,10 @@ public:
 
 
 	static bool HandleBlocked(TableFunctionInput &data_p, MultiFileLocalState &data, AsyncResult &res,
-	                          bool preserve_chunk) {
+	                                bool preserve_chunk) {
 		D_ASSERT(res.GetResultType() == AsyncResultType::BLOCKED);
 		if (preserve_chunk) {
-			// We need to preserve the chunk if the blocks happens mid-decode (e.g., parquet filter prefetching)
+			// We need to preserve the chunk if the block happens mid-decode (e.g., parquet filter prefetching)
 			data.scan_blocked = true;
 		}
 		switch (data_p.results_execution_mode) {
@@ -690,8 +690,7 @@ public:
 	}
 
 	//! Emit the current output to the caller, or signal the loop to continue when there is nothing to emit yet.
-	//! Returns true if MultiFileScan should return, false if it should continue its loop.
-	static bool YieldOutput(TableFunctionInput &data_p, DataChunk &output) {
+	static bool EmitOutput(TableFunctionInput &data_p, DataChunk &output) {
 		if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
 			return false;
 		}
@@ -700,9 +699,8 @@ public:
 	}
 
 	//! SCHEDULE phase: prefetch the claimed batch's I/O, then transition to DECODE.
-	//! Returns true if MultiFileScan should return to its caller, false if it should continue its loop.
-	static bool Schedule(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
-	                     MultiFileGlobalState &gstate) {
+	static bool SchedulePhase(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
+	                                MultiFileGlobalState &gstate) {
 		auto scheduled = data.reader->ScheduleIO(context, *gstate.global_state, *data.local_state);
 		// move to DECODE before surfacing a block, so the resume decodes instead of re-scheduling
 		data.phase = MultiFileScanPhase::DECODE;
@@ -712,8 +710,9 @@ public:
 		return false;
 	}
 
-	static bool Decode(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
-	                   MultiFileGlobalState &gstate, MultiFileBindData &bind_data, DataChunk &output) {
+	//! DECODE phase: pull one chunk from the current reader; claim the next batch once this one is exhausted.
+	static bool DecodePhase(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
+	                              MultiFileGlobalState &gstate, MultiFileBindData &bind_data, DataChunk &output) {
 		auto &scan_chunk = data.scan_chunk;
 		if (data.scan_blocked) {
 			data.scan_blocked = false;
@@ -738,7 +737,7 @@ public:
 		}
 		if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
 			// More chunks left on this batch, lets keep going
-			return YieldOutput(data_p, output);
+			return EmitOutput(data_p, output);
 		}
 
 		if (res.GetResultType() != AsyncResultType::FINISHED) {
@@ -756,7 +755,7 @@ public:
 			}
 			return true;
 		}
-		return YieldOutput(data_p, output);
+		return EmitOutput(data_p, output);
 	}
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -776,12 +775,12 @@ public:
 		do {
 			switch (data.phase) {
 			case MultiFileScanPhase::SCHEDULE:
-				if (Schedule(context, data_p, data, gstate)) {
+				if (SchedulePhase(context, data_p, data, gstate)) {
 					return;
 				}
 				break;
 			case MultiFileScanPhase::DECODE:
-				if (Decode(context, data_p, data, gstate, bind_data, output)) {
+				if (DecodePhase(context, data_p, data, gstate, bind_data, output)) {
 					return;
 				}
 				break;

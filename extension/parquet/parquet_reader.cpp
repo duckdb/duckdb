@@ -1720,7 +1720,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		return SourceResultType::FINISHED;
 	case ParquetScanState::SCHEDULE:
 		result.Reset();
-		return Schedule(context, state, result);
+		return ScheduleNextGroup(context, state);
 	case ParquetScanState::PROCESS:
 		result.Reset();
 		return Process(state, result, log_prefetch);
@@ -1736,7 +1736,7 @@ void ParquetReader::PrepareGroupIO(ClientContext &context, ParquetReaderScanStat
 	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
 	state.current_group++;
 	state.offset_in_group = 0;
-	state.scheduled_strategy = ParquetPrefetchStrategy::NONE;
+	state.group_prefetch_strategy = ParquetPrefetchStrategy::NONE;
 
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
 	trans.ClearPrefetch();
@@ -1819,26 +1819,24 @@ void ParquetReader::PrepareGroupIO(ClientContext &context, ParquetReaderScanStat
 					strategy = ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
 				}
 			}
-			state.scheduled_strategy = strategy;
+			state.group_prefetch_strategy = strategy;
 			if (log_prefetch) {
 				state.prefetch_metrics.logger.accepted_column_gap = trans.GetAcceptedColumnGap();
 			}
 		}
 	}
-
-	// a skipped row group has no rows to decode, so we loop back to schedule the next one
-	state.scan_state = row_group_skipped ? ParquetScanState::SCHEDULE : ParquetScanState::PROCESS;
+	state.scan_state = ParquetScanState::PROCESS;
 }
 
 AsyncResult ParquetReader::CollectGroupIOTasks(ParquetReaderScanState &state) {
-	if (state.scheduled_strategy == ParquetPrefetchStrategy::NONE) {
+	if (state.group_prefetch_strategy == ParquetPrefetchStrategy::NONE) {
 		// nothing to prefetch (prefetch disabled, row group skipped, or broken-offset fallback)
 		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
 	auto read_head_count = trans.GetReadHeads().size();
 	vector<unique_ptr<AsyncTask>> io_tasks;
-	switch (state.scheduled_strategy) {
+	switch (state.group_prefetch_strategy) {
 	case ParquetPrefetchStrategy::PREFETCH_FILTERS:
 		// schedule only the filter columns' I/O, they are last in our list
 		io_tasks = CollectIOTasks(trans, state.file_handle, read_head_count - state.filter_head_count, read_head_count);
@@ -1857,12 +1855,11 @@ AsyncResult ParquetReader::CollectGroupIOTasks(ParquetReaderScanState &state) {
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
+AsyncResult ParquetReader::ScheduleNextGroup(ClientContext &context, ParquetReaderScanState &state) {
 	PrepareGroupIO(context, state);
 	if (state.scan_state == ParquetScanState::FINISHED) {
 		return SourceResultType::FINISHED;
 	}
-	result.Reset();
 	return CollectGroupIOTasks(state);
 }
 
