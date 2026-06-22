@@ -628,6 +628,35 @@ static bool RequiresCollationPropagation(const LogicalType &type) {
 	return type.id() == LogicalTypeId::VARCHAR && !type.HasAlias();
 }
 
+//! Recursively extracts the collation of a (possibly nested) type, e.g. the element collation of a LIST(VARCHAR).
+static string ExtractCollationFromType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::VARCHAR:
+		return RequiresCollationPropagation(type) ? StringType::GetCollation(type) : string();
+	case LogicalTypeId::LIST:
+		return ExtractCollationFromType(ListType::GetChildType(type));
+	case LogicalTypeId::ARRAY:
+		return ExtractCollationFromType(ArrayType::GetChildType(type));
+	default:
+		return string();
+	}
+}
+
+//! Returns a copy of the type with the collation applied to every (nested) VARCHAR leaf.
+static LogicalType ApplyCollationToType(const LogicalType &type, const LogicalType &collation_type) {
+	switch (type.id()) {
+	case LogicalTypeId::VARCHAR:
+		return RequiresCollationPropagation(type) ? collation_type : type;
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(ApplyCollationToType(ListType::GetChildType(type), collation_type));
+	case LogicalTypeId::ARRAY:
+		return LogicalType::ARRAY(ApplyCollationToType(ArrayType::GetChildType(type), collation_type),
+		                          ArrayType::GetSize(type));
+	default:
+		return type;
+	}
+}
+
 static string ExtractCollation(const vector<unique_ptr<Expression>> &children) {
 	string collation;
 	for (auto &arg : children) {
@@ -636,6 +665,20 @@ static string ExtractCollation(const vector<unique_ptr<Expression>> &children) {
 			continue;
 		}
 		auto child_collation = StringType::GetCollation(arg->GetReturnType());
+		if (collation.empty()) {
+			collation = child_collation;
+		} else if (!child_collation.empty() && collation != child_collation) {
+			throw BinderException("Cannot combine types with different collation!");
+		}
+	}
+	return collation;
+}
+
+//! Like ExtractCollation, but also considers the collation of nested (LIST/ARRAY) VARCHAR elements.
+static string ExtractNestedCollation(const vector<unique_ptr<Expression>> &children) {
+	string collation;
+	for (auto &arg : children) {
+		auto child_collation = ExtractCollationFromType(arg->GetReturnType());
 		if (collation.empty()) {
 			collation = child_collation;
 		} else if (!child_collation.empty() && collation != child_collation) {
@@ -663,7 +706,7 @@ static void PropagateCollations(ClientContext &, BoundSimpleFunction &bound_func
 
 static void PushCollations(ClientContext &context, BoundSimpleFunction &bound_function,
                            vector<unique_ptr<Expression>> &children, CollationType type) {
-	auto collation = ExtractCollation(children);
+	auto collation = ExtractNestedCollation(children);
 	if (collation.empty()) {
 		// no collation to push
 		return;
@@ -675,12 +718,14 @@ static void PushCollations(ClientContext &context, BoundSimpleFunction &bound_fu
 	}
 	// push collations to the children
 	for (auto &arg : children) {
+		// apply the collation to the (possibly nested) varchar leaves of the argument type
+		auto collated_type = ApplyCollationToType(arg->GetReturnType(), collation_type);
 		if (RequiresCollationPropagation(arg->GetReturnType())) {
 			// if this is a varchar type - propagate the collation
 			arg->SetReturnType(collation_type);
 		}
 		// now push the actual collation handling
-		ExpressionBinder::PushCollation(context, arg, arg->GetReturnType(), type);
+		ExpressionBinder::PushCollation(context, arg, collated_type, type);
 	}
 }
 
