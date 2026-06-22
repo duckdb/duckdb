@@ -1935,6 +1935,16 @@ struct TrackedMetricsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct TransformerTrampolineStyleSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "transformer_trampoline_style";
+	static constexpr const char *Description = "Use the experimental trampoline-style parser transformer";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct UsernameSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "username";

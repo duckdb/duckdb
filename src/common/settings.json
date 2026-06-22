@@ -1319,6 +1319,13 @@
         "custom_implementation": true
     },
     {
+        "name": "transformer_trampoline_style",
+        "description": "Use the experimental trampoline-style parser transformer",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "username",
         "description": "The username to use. Ignored for legacy compatibility.",
         "type": "VARCHAR",
