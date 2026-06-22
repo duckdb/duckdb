@@ -268,6 +268,17 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(PEGTransformer &tr
 				throw ParserException("Cannot define a default value twice");
 			}
 			new_column.default_value = std::move(constraint.expression);
+		} else if (constraint.constraint_name == "NotNullConstraint" ||
+		           constraint.constraint_name == "UniqueConstraint" ||
+		           constraint.constraint_name == "PrimaryKeyConstraint" ||
+		           constraint.constraint_name == "ForeignKeyConstraint" ||
+		           constraint.constraint_name == "CheckConstraint") {
+			// ALTER TABLE ... ADD COLUMN with an inline constraint other than
+			// DEFAULT is not supported (we would otherwise silently drop it). Add
+			// the column, then use ALTER TABLE to add the constraint (e.g. ALTER
+			// COLUMN ... SET NOT NULL, ADD PRIMARY KEY/UNIQUE, ADD CHECK).
+			throw ParserException("Adding a column with a constraint other than DEFAULT is not supported; add the "
+			                      "column first, then ALTER TABLE to add the constraint");
 		}
 	}
 	return new_column;
