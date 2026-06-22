@@ -219,6 +219,10 @@ static void ApplyLocalFileSystemDelay(optional_ptr<DatabaseInstance> db) {
 #endif
 }
 
+static void ApplyLocalFileSystemDelay(optional_ptr<FileOpener> opener) {
+	ApplyLocalFileSystemDelay(FileOpener::TryGetDatabase(opener));
+}
+
 struct UnixFileHandle : public FileHandle {
 public:
 	UnixFileHandle(FileSystem &file_system, string path, int fd, FileOpenFlags flags, optional_ptr<DatabaseInstance> db)
@@ -520,8 +524,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 
 	// Open the file
-	auto db = FileOpener::TryGetDatabase(opener);
-	ApplyLocalFileSystemDelay(db);
+	ApplyLocalFileSystemDelay(opener);
 	int fd = open(path.c_str(), open_flags, filesec);
 
 	if (fd == -1) {
@@ -723,6 +726,8 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 }
 
 bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
+	ApplyLocalFileSystemDelay(opener);
+
 	if (!directory.empty()) {
 		auto normalized_dir = ExpandPath(directory, opener);
 		if (access(normalized_dir.c_str(), 0) == 0) {
@@ -739,6 +744,8 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	struct stat st;
+
+	ApplyLocalFileSystemDelay(opener);
 
 	auto normalized_dir = ExpandPath(directory, opener);
 	if (stat(normalized_dir.c_str(), &st) != 0) {
