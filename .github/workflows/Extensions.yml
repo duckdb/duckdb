@@ -274,7 +274,9 @@ jobs:
 
           rm -rf /tmp/repository_signed_validation
           make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/repository_generation
-          ./scripts/verify-extension-signing.sh /tmp/repository_signed_validation "$public_key_file"
+          make verify-extension-signing \
+            SIGNED_EXTENSIONS_DIR=/tmp/repository_signed_validation \
+            EXTENSION_SIGNING_PUBLIC_KEY_FILE="$public_key_file"
 
       - name: Deploy extensions
         shell: bash
