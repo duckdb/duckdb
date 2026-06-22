@@ -867,6 +867,7 @@ public:
 	optional<PartitionedCopyTask> TryNextBatchTask() DUCKDB_REQUIRES(lock);
 	optional<PartitionedCopyTask> TryNextPrepareTask() DUCKDB_REQUIRES(lock);
 	optional<PartitionedCopyTask> TryNextFlushTask() DUCKDB_REQUIRES(lock);
+	bool PreparedBatchesReady() const DUCKDB_REQUIRES(lock);
 
 	void Sort(ExecutionContext &context, GlobalSinkState &sink, InterruptState &interrupt,
 	          const PartitionedCopyTask &task);
@@ -1206,7 +1207,7 @@ bool PartitionedCopyHashGroup::TryPrepareNextStage() {
 		}
 		return false;
 	case PartitionedCopyStage::PREPARE:
-		if (prepared == count) {
+		if (prepared == count && PreparedBatchesReady()) {
 			CompletePreparedBatchStates();
 			stage = PartitionedCopyStage::FLUSH;
 			return true;
@@ -1396,6 +1397,31 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextFlushTask() {
 	task.thread_idx = flush_partition_idx++;
 
 	return task;
+}
+
+bool PartitionedCopyHashGroup::PreparedBatchesReady() const {
+	for (auto &batch_state_ptr : batch_states) {
+		if (!batch_state_ptr) {
+			return false;
+		}
+		auto &batch_state = *batch_state_ptr;
+		if (batch_state.mode == PartitionedCopyBatchMode::DELAYED) {
+			continue;
+		}
+		if (batch_state.mode != PartitionedCopyBatchMode::PREPARING &&
+		    batch_state.mode != PartitionedCopyBatchMode::PREPARED) {
+			return false;
+		}
+		if (!batch_state.write_info || batch_state.batches.size() < batch_state.collections.size()) {
+			return false;
+		}
+		for (idx_t batch_idx = 0; batch_idx < batch_state.collections.size(); batch_idx++) {
+			if (!batch_state.batches[batch_idx]) {
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
 void PartitionedCopyHashGroup::Sort(ExecutionContext &execution_context, GlobalSinkState &sink,
@@ -2345,7 +2371,9 @@ void PartitionedCopy::FlushPreparedPartitionRun(const vector<Value> &values, Par
 	WithSerializedPartitionWriteRun(write_info, [&]() {
 		EnsureFreshPartitionFileForSortedRun(write_info, values);
 		for (auto &batch : batches) {
-			D_ASSERT(batch);
+			if (!batch) {
+				throw InternalException("Partitioned COPY reached FLUSH with a missing prepared batch");
+			}
 			EnsureFreshPartitionFileForRotation(write_info, values);
 			FlushPreparedPartitionBatch(values, write_info, std::move(batch));
 		}
