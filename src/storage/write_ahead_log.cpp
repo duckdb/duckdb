@@ -78,6 +78,9 @@ idx_t WriteAheadLog::GetTotalWritten() const {
 	if (!Initialized()) {
 		return 0;
 	}
+	// serialize against the group commit sync leader's buffer push (writer->Flush() under flush_lock), which mutates
+	// the same offset/total_written fields this read sums
+	lock_guard<mutex> flush_guard(flush_lock);
 	return writer->GetTotalWritten();
 }
 

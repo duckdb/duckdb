@@ -168,7 +168,8 @@ protected:
 	//! Serializes pushes of the in-memory WAL buffer to the OS against writes into it (entry appends, flush
 	//! markers), truncation, header writes, and updates of written_offset - see LockFlush(). Distinct from the
 	//! storage manager WAL lock so the sync leader's batched push does not deadlock pending-commit drains.
-	mutex flush_lock;
+	//! mutable so the const GetTotalWritten() reader can serialize against the sync leader's buffer push.
+	mutable mutex flush_lock;
 
 	//! Group commit state.
 	//! Offsets are logical byte counters (BufferedFileWriter::GetTotalWritten), they increase monotonically
