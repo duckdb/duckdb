@@ -603,6 +603,18 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 		break;
 	}
 
+	// A flushed/reset dict column can leave the reused output chunk holding a DICTIONARY_VECTOR over a null cache
+	// slot that Reset cannot flatten; on an empty result that desyncs the chunk, so flatten stale columns to flat.
+	if (chunk.size() == 0) {
+		for (auto &vector : chunk.data) {
+			const auto vector_type = vector.GetVectorType();
+			if (vector_type != VectorType::FLAT_VECTOR && vector_type != VectorType::CONSTANT_VECTOR) {
+				vector.Initialize();
+			}
+		}
+	}
+
+
 	return child_result;
 }
 
