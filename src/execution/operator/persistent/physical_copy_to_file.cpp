@@ -149,6 +149,19 @@ public:
 //===--------------------------------------------------------------------===//
 // Copy File Lifecycle
 //===--------------------------------------------------------------------===//
+enum class CopyFileLifecycleWaitMode : uint8_t { INTERRUPTIBLE, DRAIN };
+
+static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_t finalize, FunctionData &bind_data,
+                                       unique_ptr<GlobalFileState> state) {
+	if (!finalize) {
+		throw InternalException("COPY file lifecycle finalize requires a finalize callback");
+	}
+	if (!state || !state->data) {
+		throw InternalException("COPY file lifecycle finalize reached an empty file state");
+	}
+	finalize(context, bind_data, *state->data);
+}
+
 struct PendingFileState {
 	string output_path;
 	optional_ptr<CopyToFileInfo> written_file_info;
@@ -274,16 +287,16 @@ public:
 
 public:
 	template <class FUNC>
-	void Schedule(shared_ptr<CopyFileLifecycleJob> job, FUNC &&task);
-	void WaitForJob(CopyFileLifecycleJob &job);
-	void WaitAll();
+	void Schedule(shared_ptr<CopyFileLifecycleJob> job, CopyFileLifecycleWaitMode mode, FUNC &&task);
+	void WaitForJob(CopyFileLifecycleJob &job, CopyFileLifecycleWaitMode mode);
+	void WaitAll(CopyFileLifecycleWaitMode mode);
 	void WorkOnTaskOrYield();
 	void FinishTask();
 	void PushError(const std::exception_ptr &error);
 
 private:
 	bool WorkOnTask(bool throw_error = true);
-	void WaitForTaskSlot();
+	void WaitForTaskSlot(CopyFileLifecycleWaitMode mode);
 	void ThrowError();
 
 private:
@@ -296,6 +309,30 @@ private:
 	std::exception_ptr error;
 };
 
+class CopyFileLifecycleTaskFinishGuard {
+public:
+	CopyFileLifecycleTaskFinishGuard(TaskExecutor &executor_p, CopyFileLifecycleExecutor &lifecycle_p)
+	    : executor(executor_p), lifecycle(lifecycle_p) {
+	}
+
+	~CopyFileLifecycleTaskFinishGuard() {
+		Finish();
+	}
+
+	void Finish() {
+		if (!finished) {
+			lifecycle.FinishTask();
+			executor.FinishTask();
+			finished = true;
+		}
+	}
+
+private:
+	TaskExecutor &executor;
+	CopyFileLifecycleExecutor &lifecycle;
+	bool finished = false;
+};
+
 template <class FUNC>
 class CopyFileLifecycleTask : public Task {
 public:
@@ -306,6 +343,7 @@ public:
 
 public:
 	TaskExecutionResult Execute(TaskExecutionMode mode) override {
+		CopyFileLifecycleTaskFinishGuard finish_guard(executor, lifecycle);
 		try {
 			task();
 			if (!job->IsFinished()) {
@@ -316,8 +354,6 @@ public:
 			job->CompleteException(error);
 			lifecycle.PushError(error);
 		}
-		lifecycle.FinishTask();
-		executor.FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
@@ -333,8 +369,9 @@ private:
 };
 
 template <class FUNC>
-void CopyFileLifecycleExecutor::Schedule(shared_ptr<CopyFileLifecycleJob> job, FUNC &&task) {
-	WaitForTaskSlot();
+void CopyFileLifecycleExecutor::Schedule(shared_ptr<CopyFileLifecycleJob> job, CopyFileLifecycleWaitMode mode,
+                                         FUNC &&task) {
+	WaitForTaskSlot(mode);
 	auto job_ref = job;
 	++pending_tasks;
 	try {
@@ -345,22 +382,32 @@ void CopyFileLifecycleExecutor::Schedule(shared_ptr<CopyFileLifecycleJob> job, F
 		throw;
 	}
 	if (async_threads == 0) {
-		WaitForJob(*job_ref);
+		WaitForJob(*job_ref, mode);
 	} else {
 		WorkOnTask(false);
 	}
 }
 
-void CopyFileLifecycleExecutor::WaitForJob(CopyFileLifecycleJob &job) {
+void CopyFileLifecycleExecutor::WaitForJob(CopyFileLifecycleJob &job, CopyFileLifecycleWaitMode mode) {
 	while (!job.IsFinished()) {
-		context.InterruptCheck();
+		if (mode == CopyFileLifecycleWaitMode::INTERRUPTIBLE) {
+			context.InterruptCheck();
+		}
 		WorkOnTaskOrYield();
 	}
 	job.Rethrow();
 }
 
-void CopyFileLifecycleExecutor::WaitAll() {
-	executor.WorkOnTasks();
+void CopyFileLifecycleExecutor::WaitAll(CopyFileLifecycleWaitMode mode) {
+	if (mode == CopyFileLifecycleWaitMode::DRAIN) {
+		executor.WorkOnTasks();
+		ThrowError();
+		return;
+	}
+	while (pending_tasks.load(std::memory_order_relaxed) > 0) {
+		context.InterruptCheck();
+		WorkOnTaskOrYield();
+	}
 	ThrowError();
 }
 
@@ -395,9 +442,11 @@ void CopyFileLifecycleExecutor::WorkOnTaskOrYield() {
 	}
 }
 
-void CopyFileLifecycleExecutor::WaitForTaskSlot() {
+void CopyFileLifecycleExecutor::WaitForTaskSlot(CopyFileLifecycleWaitMode mode) {
 	while (pending_tasks >= max_pending_tasks) {
-		context.InterruptCheck();
+		if (mode == CopyFileLifecycleWaitMode::INTERRUPTIBLE) {
+			context.InterruptCheck();
+		}
 		WorkOnTaskOrYield();
 	}
 }
@@ -2795,7 +2844,7 @@ void CopyToFileGlobalState::ScheduleFileStateOpen(PendingFileStateOpen pending_f
 	auto open_job = pending_file_state_open.open_job;
 	try {
 		lifecycle_executor.Schedule(
-		    open_job,
+		    open_job, CopyFileLifecycleWaitMode::INTERRUPTIBLE,
 		    [this, open_job, pending_file_state = std::move(pending_file_state_open.pending_file_state)]() mutable {
 			    open_job->Complete(InitializeFileState(std::move(pending_file_state)));
 		    });
@@ -2834,7 +2883,7 @@ CopyToFileGlobalState::EnsureFileStateReady(FileStateHandle &file_state,
 			create_file_state_fun(file_state);
 			continue;
 		}
-		lifecycle_executor.WaitForJob(*open_job);
+		lifecycle_executor.WaitForJob(*open_job, CopyFileLifecycleWaitMode::INTERRUPTIBLE);
 		{
 			annotated_lock_guard<annotated_mutex> guard(lock);
 			if (file_state.open_job == open_job) {
@@ -2870,7 +2919,7 @@ void CopyToFileGlobalState::FinalizeFileState(FileStateHandle file_state) {
 	if (!file_state) {
 		return;
 	}
-	lifecycle_executor.WaitForJob(*file_state.open_job);
+	lifecycle_executor.WaitForJob(*file_state.open_job, CopyFileLifecycleWaitMode::DRAIN);
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		file_state = FinalizeFileStateLocked(std::move(file_state));
@@ -2879,17 +2928,19 @@ void CopyToFileGlobalState::FinalizeFileState(FileStateHandle file_state) {
 		auto finalize_job = make_shared_ptr<CopyFileLifecycleJob>();
 		auto state = file_state.TakeFileState();
 		auto state_holder = make_shared_ptr<unique_ptr<GlobalFileState>>(std::move(state));
+		auto finalize = op.function.copy_to_finalize;
+		auto &context_ref = context;
+		auto &bind_data = *op.bind_data;
 		try {
-			lifecycle_executor.Schedule(finalize_job, [this, finalize_job, state_holder]() mutable {
-				auto state = std::move(*state_holder);
-				op.function.copy_to_finalize(context, *op.bind_data, *state->data);
-				finalize_job->Complete();
-			});
+			lifecycle_executor.Schedule(finalize_job, CopyFileLifecycleWaitMode::DRAIN,
+			                            [finalize, &context_ref, &bind_data, state_holder]() mutable {
+				                            FinalizeLifecycleFileState(context_ref, finalize, bind_data,
+				                                                       std::move(*state_holder));
+			                            });
 		} catch (...) {
 			if (!finalize_job->IsFinished() && state_holder && *state_holder) {
 				try {
-					auto state = std::move(*state_holder);
-					op.function.copy_to_finalize(context, *op.bind_data, *state->data);
+					FinalizeLifecycleFileState(context_ref, finalize, bind_data, std::move(*state_holder));
 				} catch (...) {
 				}
 			}
@@ -2918,7 +2969,7 @@ void CopyToFileGlobalState::TryFinalizeOwnedFileState() {
 }
 
 void CopyToFileGlobalState::WaitForLifecycleTasks() {
-	lifecycle_executor.WaitAll();
+	lifecycle_executor.WaitAll(CopyFileLifecycleWaitMode::DRAIN);
 }
 
 //===--------------------------------------------------------------------===//
