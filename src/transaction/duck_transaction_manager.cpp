@@ -341,11 +341,6 @@ void DuckTransactionManager::FinishPendingCommit(transaction_t publish_seq) {
 	publish_cv.notify_all();
 }
 
-void DuckTransactionManager::WaitForPendingCommits() {
-	std::unique_lock<mutex> guard(publish_lock);
-	publish_cv.wait(guard, [&]() { return pending_commit_publishes.empty(); });
-}
-
 unique_lock<mutex> DuckTransactionManager::BlockPendingCommits() {
 	unique_lock<mutex> guard(publish_lock);
 	// while we wait, new commits cannot register as pending (they fall back to the synchronous path) -
@@ -556,10 +551,10 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// deferred (group) commit: capture the WAL; the offset we must sync to is the one our flush marker returned
 		// from CommitToWAL (flush_marker_offset), threaded through explicitly rather than re-read from the WAL - so
 		// the durability target is exactly our marker and does not depend on no other commit having appended since.
-		// the shared_ptr keeps the WAL alive across the fsync (defensive: the shared WAL lock we hold already
-		// prevents a concurrent checkpoint from swapping it out)
+		// We hold the WAL lock SHARED here, which prevents a concurrent checkpoint (EXCLUSIVE) from swapping the WAL
+		// out from under us, so a plain pointer to the current WAL is safe across the fsync below.
 		D_ASSERT(held_wal_lock);
-		auto sync_wal = db.GetStorageManager().GetWALShared();
+		auto sync_wal = db.GetStorageManager().GetWAL();
 		idx_t sync_target = flush_marker_offset;
 
 		// release the transaction lock so other transactions can start/commit while we wait for the fsync, and their

@@ -92,11 +92,6 @@ public:
 	                      idx_t extra_data_size = 0);
 	void PushAttach(Transaction &transaction_p, AttachedDatabase &db);
 
-	//! Wait until all commits that have written their WAL flush marker have been published (made visible).
-	//! Used by checkpoints and catalog-changing commits to ensure no commit is "in between" WAL durability and
-	//! visibility. The caller must hold the WAL lock (so no new pending commits can register) and must NOT hold
-	//! the transaction lock (pending commits need it to publish).
-	void WaitForPendingCommits();
 	//! Wait until no pending (unpublished) commits exist, then return while holding the publish lock - blocking
 	//! new deferred commits from registering until the returned lock is released. Used by DDL (ALTER/DROP) to
 	//! attach a new catalog version: a deferred commit validates against the catalog before writing its WAL flush

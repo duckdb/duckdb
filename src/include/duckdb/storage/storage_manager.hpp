@@ -96,10 +96,6 @@ public:
 	void IncrementWALEntriesCount();
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
 	optional_ptr<WriteAheadLog> GetWAL();
-	//! Gets a shared reference to the WAL that keeps it alive even if a concurrent checkpoint swaps the WAL.
-	//! Used for group commit: a committer must be able to finish WriteAheadLog::SyncUpTo after releasing the WAL
-	//! lock. Must be called while holding the WAL lock.
-	shared_ptr<WriteAheadLog> GetWALShared();
 	//! Write that we started a checkpoint to the WAL if there is one - returns whether or not there is a WAL
 	bool WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
 	                        ActiveCheckpointWrapper &active_checkpoint);
@@ -193,9 +189,9 @@ protected:
 	string path;
 	//! The WAL path
 	string wal_path;
-	//! The WriteAheadLog of the storage manager.
-	//! Held as shared_ptr because committing transactions can hold a reference across a concurrent WAL swap
-	//! (see GetWALShared).
+	//! The WriteAheadLog of the storage manager. Held as shared_ptr so the checkpoint can swap it (wal.reset() +
+	//! re-instantiate) while the old object is dropped; committers hold the WAL lock SHARED across their fsync, so a
+	//! swap (which needs the lock EXCLUSIVE) cannot race an in-flight commit.
 	shared_ptr<WriteAheadLog> wal;
 	//! Read-write lock controlling access to the WAL. Group-commit data writes take it SHARED (they can run
 	//! concurrently and only need the WAL structure to be stable); checkpoints and catalog-changing commits take it

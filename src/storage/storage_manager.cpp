@@ -214,13 +214,6 @@ optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	return wal.get();
 }
 
-shared_ptr<WriteAheadLog> StorageManager::GetWALShared() {
-	if (InMemory() || read_only || !load_complete) {
-		return nullptr;
-	}
-	return wal;
-}
-
 // comparison used to see whether the storage version is compatible
 bool StorageManager::TargetAtLeastVersion(StorageVersion target_version, idx_t storage_version) {
 	if (storage_version < static_cast<idx_t>(target_version)) {
