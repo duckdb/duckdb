@@ -425,15 +425,12 @@ static bool ChunkHasGlobalDictionary(const DataChunk &chunk) {
 	return false;
 }
 
-//! Switch the empty cache to dictionary mode: pin each global dictionary column's upstream entry, allocate its
-//! sel accumulator, and make its flat cache slot a zero-width placeholder so dict and flat columns stay
-//! row-aligned. A column's dict/flat tag is frozen here; correctness then relies on the producer never falling
-//! back to flat (enforced by the throw in AppendToCache).
-static void SeedDictCache(CachingOperatorState &state, DataChunk &source, ClientContext &client_context) {
+//! Switch the empty cache to dictionary mode: pin each global dictionary column's upstream entry and allocate its
+//! sel accumulator. Columns keep a real (resettable) cache so a flushed dict column flattens on the next Reset.
+static void SeedDictCache(CachingOperatorState &state, DataChunk &source) {
 	const idx_t col_count = source.ColumnCount();
 	state.dict_columns.clear();
 	state.dict_columns.resize(col_count);
-	auto flat_initialize = vector<bool>(col_count, true);
 	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
 		if (!DictionaryVector::IsGlobalDictionary(source.data[col_idx])) {
 			continue;
@@ -441,14 +438,7 @@ static void SeedDictCache(CachingOperatorState &state, DataChunk &source, Client
 		auto &slot = state.dict_columns[col_idx];
 		slot.entry = source.data[col_idx].BufferMutable().Cast<DictionaryBuffer>().GetEntryPtr();
 		slot.accumulated_sel.Initialize(STANDARD_VECTOR_SIZE);
-		flat_initialize[col_idx] = false;
 	}
-	// dict columns become zero-width placeholders in cached_chunk; the dict lives in the accumulator
-	state.cached_chunk->Destroy();
-	state.cached_chunk->Initialize(Allocator::Get(client_context), source.GetTypes(), flat_initialize);
-	// With every column a zero-width placeholder there is no flat vector to derive a cardinality from, so set the
-	// count explicitly before AppendToCache reads cache.size().
-	state.cached_chunk->SetChildCardinality(0);
 	state.dict_cache_active = true;
 }
 
@@ -461,7 +451,7 @@ static void AppendToCache(CachingOperatorState &state, DataChunk &source, Client
 	}
 	auto &cache = *state.cached_chunk;
 	if (cache.size() == 0 && !state.dict_cache_active && ChunkHasGlobalDictionary(source)) {
-		SeedDictCache(state, source, client_context);
+		SeedDictCache(state, source);
 	}
 	if (!state.dict_cache_active) {
 		// no dict columns: plain flat append
@@ -499,7 +489,7 @@ static void AppendToCache(CachingOperatorState &state, DataChunk &source, Client
 			cache.data[col_idx].Append(source.data[col_idx], added, VectorAppendMode::ERROR_ON_NO_SPACE);
 		}
 	}
-	// dict columns are null-buffer placeholders, flat columns already sized; only sets the cardinality
+	// dict columns are rewrapped on flush, flat columns already sized; this only sets the cardinality
 	cache.SetChildCardinality(base + added);
 }
 
