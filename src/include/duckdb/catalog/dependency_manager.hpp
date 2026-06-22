@@ -29,6 +29,8 @@ struct DependencySubject {
 	CatalogEntryInfo entry;
 	//! The type of dependency this is (e.g, ownership)
 	DependencySubjectFlags flags;
+	//! The oid of the subject entry when the dependency was created
+	optional_idx oid;
 };
 
 // The entry that relies on the other entry
@@ -104,6 +106,7 @@ private:
 	bool IsSystemEntry(CatalogEntry &entry) const;
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const LogicalDependency &dependency);
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
+	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const CatalogEntryInfo &info);
 	string CollectDependents(CatalogTransaction transaction, catalog_entry_set_t &entries, CatalogEntryInfo &info);
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
 

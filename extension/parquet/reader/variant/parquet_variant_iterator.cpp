@@ -3,7 +3,6 @@
 #include "duckdb/common/types/variant/variant_builder.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/hugeint.hpp"
@@ -22,27 +21,44 @@ namespace duckdb {
 
 namespace {
 
-//! Read a little-endian unsigned integer of 'size' bytes (without advancing)
-idx_t ReadVarLE(idx_t size, const_data_ptr_t ptr) {
+//! Throw if reading 'size' bytes starting at 'ptr' would read past the end of the value buffer
+void CheckBinaryRead(const_data_ptr_t ptr, idx_t size, const_data_ptr_t end) {
+	if (ptr + size > end) {
+		throw IOException("Data corruption detected, read of length_in_bytes (%d) would exceed buffer capacity", size);
+	}
+}
+
+//! Read a little-endian unsigned integer of 'size' bytes (without advancing), bounds-checked against 'end'
+idx_t ReadVarLE(idx_t size, const_data_ptr_t ptr, const_data_ptr_t end) {
 	D_ASSERT(size <= sizeof(idx_t));
+	CheckBinaryRead(ptr, size, end);
 	idx_t result = 0;
 	memcpy(&result, ptr, size);
 	return result;
 }
 
-//! Lazy reader over a Spark variant-encoded OBJECT (the value starts at its header byte)
+//! Read a fixed-width little-endian value, bounds-checked against 'end'
+template <class T>
+T LoadChecked(const_data_ptr_t ptr, const_data_ptr_t end) {
+	CheckBinaryRead(ptr, sizeof(T), end);
+	return Load<T>(ptr);
+}
+
+//! Lazy reader over a Spark variant-encoded OBJECT (the value starts at its header byte). All structural
+//! reads are bounds-checked against 'end' (one past the end of the 'value' blob).
 struct BinaryObjectReader {
-	BinaryObjectReader(const VariantMetadata &metadata, const_data_ptr_t value_start) : metadata(metadata) {
+	BinaryObjectReader(const VariantMetadata &metadata, const_data_ptr_t value_start, const_data_ptr_t end)
+	    : metadata(metadata), end(end) {
 		auto value_metadata = VariantValueMetadata::FromHeaderByte(value_start[0]);
 		D_ASSERT(value_metadata.basic_type == VariantBasicType::OBJECT);
 		field_id_size = value_metadata.field_id_size;
 		field_offset_size = value_metadata.field_offset_size;
 		auto data = value_start + 1;
 		if (value_metadata.is_large) {
-			count = Load<uint32_t>(data);
+			count = LoadChecked<uint32_t>(data, end);
 			data += sizeof(uint32_t);
 		} else {
-			count = Load<uint8_t>(data);
+			count = LoadChecked<uint8_t>(data, end);
 			data += sizeof(uint8_t);
 		}
 		field_ids = data;
@@ -51,16 +67,23 @@ struct BinaryObjectReader {
 	}
 
 	string_t Key(idx_t i) const {
-		auto field_id = ReadVarLE(field_id_size, field_ids + (i * field_id_size));
+		auto field_id = ReadVarLE(field_id_size, field_ids + (i * field_id_size), end);
+		if (field_id >= metadata.strings.size()) {
+			throw IOException("Corrupted VARIANT 'value' buffer");
+		}
 		auto &key = metadata.strings[field_id];
 		return string_t(key.c_str(), NumericCast<uint32_t>(key.size()));
 	}
 	const_data_ptr_t Child(idx_t i) const {
-		auto offset = ReadVarLE(field_offset_size, field_offsets + (i * field_offset_size));
-		return values + offset;
+		auto offset = ReadVarLE(field_offset_size, field_offsets + (i * field_offset_size), end);
+		auto child = values + offset;
+		//! The child's header byte must be readable
+		CheckBinaryRead(child, 1, end);
+		return child;
 	}
 
 	const VariantMetadata &metadata;
+	const_data_ptr_t end;
 	const_data_ptr_t field_ids;
 	const_data_ptr_t field_offsets;
 	const_data_ptr_t values;
@@ -69,24 +92,26 @@ struct BinaryObjectReader {
 	idx_t count;
 };
 
-//! Lazy reader over a Spark variant-encoded ARRAY (the value starts at its header byte)
+//! Lazy reader over a Spark variant-encoded ARRAY (the value starts at its header byte). All structural
+//! reads are bounds-checked against 'end' (one past the end of the 'value' blob).
 struct BinaryArrayReader {
-	explicit BinaryArrayReader(const_data_ptr_t value_start) {
+	BinaryArrayReader(const_data_ptr_t value_start, const_data_ptr_t end) : end(end) {
 		auto value_metadata = VariantValueMetadata::FromHeaderByte(value_start[0]);
 		D_ASSERT(value_metadata.basic_type == VariantBasicType::ARRAY);
 		field_offset_size = value_metadata.field_offset_size;
 		auto data = value_start + 1;
 		if (value_metadata.is_large) {
-			count = Load<uint32_t>(data);
+			count = LoadChecked<uint32_t>(data, end);
 			data += sizeof(uint32_t);
 		} else {
-			count = Load<uint8_t>(data);
+			count = LoadChecked<uint8_t>(data, end);
 			data += sizeof(uint8_t);
 		}
 		field_offsets = data;
 		values = field_offsets + (NumericCast<idx_t>(count + 1) * field_offset_size);
 	}
 
+	const_data_ptr_t end;
 	const_data_ptr_t field_offsets;
 	const_data_ptr_t values;
 	uint32_t field_offset_size;
@@ -94,7 +119,8 @@ struct BinaryArrayReader {
 };
 
 //! The VariantLogicalType of a (valid) shredded leaf at logical position 'index'. Mirrors the writer's
-//! type mapping; note Parquet emits BINARY as a base64 VARCHAR (matching its JSON-serialization choice).
+//! type mapping; note BINARY is kept as a BLOB so the type is preserved (the base64 conversion happens
+//! only when serializing the VARIANT to JSON).
 VariantLogicalType ShreddedLeafTypeId(const ShreddedGroupView &view, idx_t index) {
 	switch (view.typed_type.id()) {
 	case LogicalTypeId::BOOLEAN: {
@@ -129,8 +155,7 @@ VariantLogicalType ShreddedLeafTypeId(const ShreddedGroupView &view, idx_t index
 	case LogicalTypeId::TIMESTAMP_NS:
 		return VariantLogicalType::TIMESTAMP_NANOS;
 	case LogicalTypeId::BLOB:
-		//! Parquet emits binary as base64 VARCHAR
-		return VariantLogicalType::VARCHAR;
+		return VariantLogicalType::BLOB;
 	case LogicalTypeId::VARCHAR:
 		return VariantLogicalType::VARCHAR;
 	case LogicalTypeId::UUID:
@@ -185,8 +210,8 @@ VariantLogicalType BinaryTypeId(const_data_ptr_t data) {
 	case VariantPrimitiveType::TIMESTAMP_NTZ_MICROS:
 		return VariantLogicalType::TIMESTAMP_MICROS;
 	case VariantPrimitiveType::BINARY:
-		//! Parquet emits binary as base64 VARCHAR
-		return VariantLogicalType::VARCHAR;
+		//! Keep the raw bytes as a BLOB so the type is preserved (base64 conversion happens at JSON time)
+		return VariantLogicalType::BLOB;
 	case VariantPrimitiveType::STRING:
 		return VariantLogicalType::VARCHAR;
 	case VariantPrimitiveType::TIME_NTZ_MICROS:
@@ -346,6 +371,9 @@ ParquetVariantIterator::ParquetVariantIterator(Vector &metadata_vec, Vector &gro
 	root_view.Build(group);
 }
 
+ParquetVariantIterator::ParquetVariantIterator(Vector &metadata_vec) : metadata(metadata_vec) {
+}
+
 void ParquetVariantIterator::BeginRow(idx_t row) {
 	current_row = row;
 	current_metadata.reset();
@@ -356,11 +384,6 @@ const VariantMetadata &ParquetVariantIterator::GetMetadata() const {
 		current_metadata = make_uniq<VariantMetadata>(metadata[current_row].GetValueUnsafe());
 	}
 	return *current_metadata;
-}
-
-string_t ParquetVariantIterator::EncodeBase64(string_t blob) const {
-	base64_scratch = Blob::ToBase64(blob);
-	return string_t(base64_scratch.data(), NumericCast<uint32_t>(base64_scratch.size()));
 }
 
 ParquetVariantNode ParquetVariantIterator::ResolveGroup(const ShreddedGroupView &view, idx_t index) const {
@@ -381,16 +404,20 @@ ParquetVariantNode ParquetVariantIterator::ResolveGroup(const ShreddedGroupView 
 			if (view.kind == ParquetGroupKind::OBJECT) {
 				//! (Partially) shredded object - the binary 'value', if present, holds the leftover fields
 				const_data_ptr_t overlay = nullptr;
+				const_data_ptr_t overlay_end = nullptr;
 				auto value_entry = (*view.value)[index];
 				if (value_entry.IsValid()) {
-					auto overlay_data = const_data_ptr_cast(value_entry.GetValueUnsafe().GetData());
+					auto &overlay_blob = value_entry.GetValueUnsafe();
+					auto overlay_data = const_data_ptr_cast(overlay_blob.GetData());
+					overlay_end = overlay_data + overlay_blob.GetSize();
+					CheckBinaryRead(overlay_data, 1, overlay_end);
 					if (VariantValueMetadata::FromHeaderByte(overlay_data[0]).basic_type != VariantBasicType::OBJECT) {
 						throw InvalidInputException(
 						    "Partially shredded objects have to encode Object Variants in the 'value'");
 					}
 					overlay = overlay_data;
 				}
-				return ParquetVariantNode::MakeShredded(*this, view, index, overlay);
+				return ParquetVariantNode::MakeShredded(*this, view, index, overlay, overlay_end);
 			}
 			//! LEAF or ARRAY - the binary 'value' is irrelevant (a leaf is never partially shredded)
 			return ParquetVariantNode::MakeShredded(*this, view, index);
@@ -400,13 +427,16 @@ ParquetVariantNode ParquetVariantIterator::ResolveGroup(const ShreddedGroupView 
 	//! No (valid) shredded value - fall back to the binary 'value'
 	auto value_entry = (*view.value)[index];
 	if (value_entry.IsValid()) {
-		auto data = const_data_ptr_cast(value_entry.GetValueUnsafe().GetData());
+		auto &value_blob = value_entry.GetValueUnsafe();
+		auto data = const_data_ptr_cast(value_blob.GetData());
+		auto end = data + value_blob.GetSize();
+		CheckBinaryRead(data, 1, end);
 		if (view.has_typed_value && view.kind == ParquetGroupKind::OBJECT &&
 		    VariantValueMetadata::FromHeaderByte(data[0]).basic_type == VariantBasicType::OBJECT) {
 			throw InvalidInputException(
 			    "When 'typed_value' for a shredded Object is NULL, 'value' can not contain an Object value");
 		}
-		return ParquetVariantNode::MakeBinary(*this, data);
+		return ParquetVariantNode::MakeBinary(*this, data, end);
 	}
 	return ParquetVariantNode::MakeMissing();
 }
@@ -415,6 +445,17 @@ ParquetVariantNode ParquetVariantIterator::Root(idx_t row) const {
 	auto root = ResolveGroup(root_view, row);
 	//! A root value is never "missing" - treat any such case as a SQL NULL
 	return root.IsMissing() ? ParquetVariantNode::MakeNull() : root;
+}
+
+ParquetVariantNode ParquetVariantIterator::BinaryRoot() const {
+	//! The metadata and the value share the same blob: the value bytes start right after the metadata
+	auto &variant_metadata = GetMetadata();
+	auto blob_start = const_data_ptr_cast(variant_metadata.metadata.GetData());
+	auto blob_end = blob_start + variant_metadata.metadata.GetSize();
+	auto value_start = blob_start + variant_metadata.total_size;
+	//! The value's header byte must be readable
+	CheckBinaryRead(value_start, 1, blob_end);
+	return ParquetVariantNode::MakeBinary(*this, value_start, blob_end);
 }
 
 //===--------------------------------------------------------------------===//
@@ -450,14 +491,20 @@ T ParquetVariantNode::GetData() const {
 	auto payload = binary + 1;
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::UUID:
+		CheckBinaryRead(payload, sizeof(hugeint_t), binary_end);
 		return ReadBinaryUUID<T>(payload);
 	case VariantPrimitiveType::DECIMAL4:
+		CheckBinaryRead(payload, sizeof(uint8_t) + sizeof(int32_t), binary_end);
+		return ReadBinaryDecimalValue<T>(value_metadata.primitive_type, payload);
 	case VariantPrimitiveType::DECIMAL8:
+		CheckBinaryRead(payload, sizeof(uint8_t) + sizeof(int64_t), binary_end);
+		return ReadBinaryDecimalValue<T>(value_metadata.primitive_type, payload);
 	case VariantPrimitiveType::DECIMAL16:
+		CheckBinaryRead(payload, sizeof(uint8_t) + sizeof(hugeint_t), binary_end);
 		return ReadBinaryDecimalValue<T>(value_metadata.primitive_type, payload);
 	default:
 		//! Fixed-width primitives are stored in the canonical little-endian layout
-		return Load<T>(payload);
+		return LoadChecked<T>(payload, binary_end);
 	}
 }
 
@@ -465,7 +512,8 @@ string_t ParquetVariantNode::GetString() const {
 	if (kind == Kind::SHREDDED) {
 		auto str = UnifiedVectorFormat::GetData<string_t>(view->leaf_format)[view->leaf_format.sel->get_index(index)];
 		if (view->typed_type.id() == LogicalTypeId::BLOB) {
-			return state->EncodeBase64(str);
+			//! Keep the raw bytes - the value is emitted as a BLOB (base64 conversion happens at JSON time)
+			return str;
 		}
 		if (!Utf8Proc::IsValid(str.GetData(), str.GetSize())) {
 			throw InternalException("Can't decode Variant string, it isn't valid UTF8");
@@ -477,16 +525,18 @@ string_t ParquetVariantNode::GetString() const {
 	auto payload = binary + 1;
 	if (value_metadata.basic_type == VariantBasicType::SHORT_STRING) {
 		auto string_data = const_char_ptr_cast(payload);
+		CheckBinaryRead(payload, value_metadata.string_size, binary_end);
 		if (!Utf8Proc::IsValid(string_data, value_metadata.string_size)) {
 			throw InternalException("Can't decode Variant short-string, string isn't valid UTF8");
 		}
 		return string_t(string_data, value_metadata.string_size);
 	}
-	auto size = Load<uint32_t>(payload);
+	auto size = LoadChecked<uint32_t>(payload, binary_end);
 	auto string_data = const_char_ptr_cast(payload + sizeof(uint32_t));
+	CheckBinaryRead(payload + sizeof(uint32_t), size, binary_end);
 	if (value_metadata.primitive_type == VariantPrimitiveType::BINARY) {
-		//! Follow the JSON serialization guide by converting BINARY to base64
-		return state->EncodeBase64(string_t(string_data, size));
+		//! Keep the raw bytes - the value is emitted as a BLOB (base64 conversion happens at JSON time)
+		return string_t(string_data, size);
 	}
 	if (!Utf8Proc::IsValid(string_data, size)) {
 		throw InternalException("Can't decode Variant string, it isn't valid UTF8");
@@ -504,13 +554,15 @@ VariantDecimalProperties ParquetVariantNode::GetDecimalProperties() const {
 	D_ASSERT(kind == Kind::BINARY);
 	auto value_metadata = VariantValueMetadata::FromHeaderByte(binary[0]);
 	auto payload = binary + 1;
-	uint8_t scale = Load<uint8_t>(payload);
+	uint8_t scale = LoadChecked<uint8_t>(payload, binary_end);
 	auto value_data = payload + sizeof(uint8_t);
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::DECIMAL4:
-		return VariantDecimalProperties(ComputeDecimalWidth<int32_t>(Load<int32_t>(value_data)), scale);
+		return VariantDecimalProperties(ComputeDecimalWidth<int32_t>(LoadChecked<int32_t>(value_data, binary_end)),
+		                                scale);
 	case VariantPrimitiveType::DECIMAL8:
-		return VariantDecimalProperties(ComputeDecimalWidth<int64_t>(Load<int64_t>(value_data)), scale);
+		return VariantDecimalProperties(ComputeDecimalWidth<int64_t>(LoadChecked<int64_t>(value_data, binary_end)),
+		                                scale);
 	default:
 		D_ASSERT(value_metadata.primitive_type == VariantPrimitiveType::DECIMAL16);
 		return VariantDecimalProperties(DecimalWidth<hugeint_t>::max, scale);
@@ -520,10 +572,10 @@ VariantDecimalProperties ParquetVariantNode::GetDecimalProperties() const {
 ParquetObjectIterator ParquetVariantNode::GetObjectChildren(VariantIterationOrder order) const {
 	(void)order;
 	if (kind == Kind::SHREDDED) {
-		return ParquetObjectIterator(*state, *view, index, binary);
+		return ParquetObjectIterator(*state, *view, index, binary, binary_end);
 	}
 	D_ASSERT(kind == Kind::BINARY);
-	return ParquetObjectIterator(*state, state->GetMetadata(), binary);
+	return ParquetObjectIterator(*state, state->GetMetadata(), binary, binary_end);
 }
 
 ParquetArrayIterator ParquetVariantNode::GetArrayChildren() const {
@@ -531,7 +583,7 @@ ParquetArrayIterator ParquetVariantNode::GetArrayChildren() const {
 		return ParquetArrayIterator(*state, *view, index);
 	}
 	D_ASSERT(kind == Kind::BINARY);
-	return ParquetArrayIterator(*state, state->GetMetadata(), binary);
+	return ParquetArrayIterator(*state, state->GetMetadata(), binary, binary_end);
 }
 
 //===--------------------------------------------------------------------===//
@@ -543,7 +595,7 @@ void ParquetObjectIterator::Finalize() {
 }
 
 ParquetObjectIterator::ParquetObjectIterator(const ParquetVariantIterator &state, const ShreddedGroupView &view,
-                                             idx_t index, const_data_ptr_t overlay) {
+                                             idx_t index, const_data_ptr_t overlay, const_data_ptr_t overlay_end) {
 	//! Typed (shredded) fields - skipping the ones that are missing for this row
 	std::set<string> typed_keys;
 	for (idx_t i = 0; i < view.fields.size(); i++) {
@@ -558,24 +610,25 @@ ParquetObjectIterator::ParquetObjectIterator(const ParquetVariantIterator &state
 	}
 	//! Leftover (overlay) fields from the binary 'value' - typed fields win on key collisions
 	if (overlay) {
-		BinaryObjectReader reader(state.GetMetadata(), overlay);
+		BinaryObjectReader reader(state.GetMetadata(), overlay, overlay_end);
 		for (idx_t i = 0; i < reader.count; i++) {
 			auto key = reader.Key(i);
 			if (typed_keys.count(key.GetString())) {
 				continue;
 			}
-			ordered_entries.push_back(ParquetObjectEntry {key, ParquetVariantNode::MakeBinary(state, reader.Child(i))});
+			ordered_entries.push_back(
+			    ParquetObjectEntry {key, ParquetVariantNode::MakeBinary(state, reader.Child(i), overlay_end)});
 		}
 	}
 	Finalize();
 }
 
 ParquetObjectIterator::ParquetObjectIterator(const ParquetVariantIterator &state, const VariantMetadata &metadata,
-                                             const_data_ptr_t data) {
-	BinaryObjectReader reader(metadata, data);
+                                             const_data_ptr_t data, const_data_ptr_t end) {
+	BinaryObjectReader reader(metadata, data, end);
 	for (idx_t i = 0; i < reader.count; i++) {
 		ordered_entries.push_back(
-		    ParquetObjectEntry {reader.Key(i), ParquetVariantNode::MakeBinary(state, reader.Child(i))});
+		    ParquetObjectEntry {reader.Key(i), ParquetVariantNode::MakeBinary(state, reader.Child(i), end)});
 	}
 	Finalize();
 }
@@ -592,13 +645,14 @@ ParquetArrayIterator::ParquetArrayIterator(const ParquetVariantIterator &state, 
 }
 
 ParquetArrayIterator::ParquetArrayIterator(const ParquetVariantIterator &state, const VariantMetadata &metadata,
-                                           const_data_ptr_t data)
+                                           const_data_ptr_t data, const_data_ptr_t end)
     : state(state), shredded(false) {
 	(void)metadata;
-	BinaryArrayReader reader(data);
+	BinaryArrayReader reader(data, end);
 	length = reader.count;
 	field_offsets = reader.field_offsets;
 	values = reader.values;
+	binary_end = end;
 	field_offset_size = reader.field_offset_size;
 }
 
@@ -606,8 +660,11 @@ ParquetVariantNode ParquetArrayIterator::operator[](idx_t i) const {
 	if (shredded) {
 		return state.get().ResolveGroup(*element, base + i);
 	}
-	auto offset = ReadVarLE(field_offset_size, field_offsets + (i * field_offset_size));
-	return ParquetVariantNode::MakeBinary(state.get(), values + offset);
+	auto offset = ReadVarLE(field_offset_size, field_offsets + (i * field_offset_size), binary_end);
+	auto child = values + offset;
+	//! The child's header byte must be readable
+	CheckBinaryRead(child, 1, binary_end);
+	return ParquetVariantNode::MakeBinary(state.get(), child, binary_end);
 }
 
 //===--------------------------------------------------------------------===//
@@ -634,6 +691,46 @@ void ParquetVariantConversion::Convert(Vector &metadata, Vector &group, Vector &
 	ParquetVariantIterator iterator(metadata, group);
 	ParquetVariantIteratorSource source(iterator);
 	BuildVariant(source, count, result);
+}
+
+namespace {
+
+//! BuildVariant source over binary Variant blobs (each row being the metadata followed by the value)
+struct ParquetBinaryVariantSource {
+	ParquetBinaryVariantSource(ParquetVariantIterator &iterator, Vector &blob) : iterator(iterator) {
+		blob.ToUnifiedFormat(blob_format);
+	}
+
+	bool Emit(idx_t row, VariantBuilder &builder) {
+		if (!blob_format.validity.RowIsValid(blob_format.sel->get_index(row))) {
+			return true;
+		}
+		iterator.BeginRow(row);
+		EmitIterator(iterator.BinaryRoot(), builder);
+		return false;
+	}
+
+	ParquetVariantIterator &iterator;
+	UnifiedVectorFormat blob_format;
+};
+
+} // namespace
+
+void ParquetVariantConversion::ConvertBinary(Vector &metadata_and_value, Vector &result, idx_t count) {
+	ParquetVariantIterator iterator(metadata_and_value);
+	ParquetBinaryVariantSource source(iterator, metadata_and_value);
+	BuildVariant(source, count, result);
+}
+
+static void VariantBytesToVariantFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	ParquetVariantConversion::ConvertBinary(input.data[0], result, input.size());
+}
+
+ScalarFunction ParquetVariantConversion::GetBytesToVariantFunction() {
+	ScalarFunction function("variant_bytes_to_variant", {LogicalType::BLOB}, LogicalType::VARIANT(),
+	                        VariantBytesToVariantFunction);
+	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	return function;
 }
 
 } // namespace duckdb

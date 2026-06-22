@@ -1,0 +1,9 @@
+# name: test/parquet/variant/variant_malicious.test
+# group: [variant]
+
+require parquet
+
+statement error
+SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/variant_malicious.parquet');
+----
+IO Error: Data corruption detected, read of length_in_bytes (1) would exceed buffer capacity
