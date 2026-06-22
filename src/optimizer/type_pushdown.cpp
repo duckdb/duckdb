@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/type_pushdown.hpp"
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/typedefs.hpp"
@@ -227,7 +228,10 @@ unique_ptr<Expression> CastReplace::VisitReplace(BoundColumnRefExpression &expr,
 		const idx_t storage_index = analysis.get.GetColumnIds()[column_index].GetPrimaryIndex();
 		const LogicalType return_type = analysis.get.returned_types[storage_index];
 		expr.SetReturnType(return_type);
-		if (projection != nullptr) {
+		// LogicalProjection types are resolved by calling
+		// LogicalProjection::ResolveTypes, so we need to check whether types in
+		// projection have been resolved, and updated them only if needed.
+		if (projection != nullptr && !projection->types.empty()) {
 			projection->types[column_index] = return_type;
 		}
 	}
@@ -254,7 +258,8 @@ unique_ptr<Expression> CastReplace::VisitReplace(BoundCastExpression &expr, uniq
 	const idx_t storage_index = analysis.get.GetColumnIds()[column_index].GetPrimaryIndex();
 	const LogicalType return_type = analysis.get.returned_types[storage_index];
 	bound_col_base->SetReturnType(return_type);
-	if (projection != nullptr) {
+	// Same as in CastReplace::VisitReplace(BoundColumnRefExpression)
+	if (projection != nullptr && !projection->types.empty()) {
 		projection->types[column_index] = return_type;
 	}
 	return std::move(bound_col_base);
