@@ -190,6 +190,8 @@ private:
 
 	bool TryGetMaxThreads(idx_t &max_threads);
 	bool ScheduleParallel(shared_ptr<Event> &event);
+	bool ContainsJoin() const;
+	bool DownstreamPipelinesContainJoin(unordered_set<const Pipeline *> &visited) const;
 };
 
 } // namespace duckdb

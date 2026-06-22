@@ -220,6 +220,7 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 				continue;
 			}
 			auto &dep_entry = event_map_entry->second;
+			entry.second.pipeline_event.AddDependency(dep_entry.pipeline_event);
 			entry.second.pipeline_prepare_finish_event.AddDependency(dep_entry.pipeline_event);
 		}
 	}

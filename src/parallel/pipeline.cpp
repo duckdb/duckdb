@@ -206,8 +206,77 @@ static bool CanUseExternalInputOperator(const PhysicalOperator &op) {
 	}
 }
 
+static bool CanUseExternalInputSink(const PhysicalOperator &op) {
+	switch (op.type) {
+	case PhysicalOperatorType::UNGROUPED_AGGREGATE:
+	case PhysicalOperatorType::HASH_GROUP_BY:
+	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool IsJoinOperatorType(PhysicalOperatorType type) {
+	switch (type) {
+	case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
+	case PhysicalOperatorType::NESTED_LOOP_JOIN:
+	case PhysicalOperatorType::HASH_JOIN:
+	case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
+	case PhysicalOperatorType::IE_JOIN:
+	case PhysicalOperatorType::LEFT_DELIM_JOIN:
+	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
+	case PhysicalOperatorType::POSITIONAL_JOIN:
+	case PhysicalOperatorType::ASOF_JOIN:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool Pipeline::ContainsJoin() const {
+	if (source && IsJoinOperatorType(source->type)) {
+		return true;
+	}
+	if (sink && IsJoinOperatorType(sink->type)) {
+		return true;
+	}
+	for (auto &op_ref : operators) {
+		if (IsJoinOperatorType(op_ref.get().type)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool Pipeline::DownstreamPipelinesContainJoin(unordered_set<const Pipeline *> &visited) const {
+	for (auto &parent_ref : parents) {
+		auto parent = parent_ref.lock();
+		if (!parent) {
+			continue;
+		}
+		if (!visited.insert(parent.get()).second) {
+			continue;
+		}
+		if (parent->ContainsJoin()) {
+			return true;
+		}
+		if (parent->DownstreamPipelinesContainJoin(visited)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool Pipeline::CanUseExternalInput() const {
 	if (!sink || !sink->ParallelSink() || sink->SinkOrderDependent()) {
+		return false;
+	}
+	if (!CanUseExternalInputSink(*sink)) {
+		return false;
+	}
+	unordered_set<const Pipeline *> visited;
+	if (DownstreamPipelinesContainJoin(visited)) {
 		return false;
 	}
 	if (sink->RequiredPartitionInfo().AnyRequired()) {

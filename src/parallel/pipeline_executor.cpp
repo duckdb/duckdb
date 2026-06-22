@@ -482,10 +482,15 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, Execu
 		// Note: if input is the final_chunk, we don't do any executing, the chunk just needs to be sinked
 		if (&input != &final_chunk) {
 			final_chunk.Reset();
-			// Execute and put the result into 'final_chunk'
-			result = Execute(input, final_chunk, initial_idx);
-			if (result == OperatorResultType::FINISHED) {
-				return OperatorResultType::FINISHED;
+			if (pipeline.operators.empty()) {
+				final_chunk.Reference(input);
+				result = OperatorResultType::NEED_MORE_INPUT;
+			} else {
+				// Execute and put the result into 'final_chunk'
+				result = Execute(input, final_chunk, initial_idx);
+				if (result == OperatorResultType::FINISHED) {
+					return OperatorResultType::FINISHED;
+				}
 			}
 		} else {
 			result = OperatorResultType::NEED_MORE_INPUT;
