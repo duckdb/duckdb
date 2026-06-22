@@ -1,5 +1,5 @@
 # name: test/optimizer/compressed_materialization_geometry.test
-# description: Compressed materialization of GEOMETRY columns that only contain non-empty POINT-XY values
+# description: Compressed materialization of GEOMETRY columns that only contain POINT-XY values
 # group: [optimizer]
 
 # A persisted (post-v1.5.0) database so the precise geometry statistics are computed and loaded
@@ -30,13 +30,14 @@ SELECT ('POINT Z(' || (range % 5) || ' ' || (range % 5) || ' ' || (range % 5) ||
        range AS payload
 FROM range(50);
 
-# Contains an empty POINT -> must NOT be compressed (the requirement is non-empty points)
+# POINT-XY values with empty points mixed in -> still compressible: an empty point is stored as a
+# single XY vertex with NaN coordinates, so the WKB blob is still exactly 21 bytes
 statement ok
-CREATE TABLE emptypt AS
-SELECT CASE WHEN range % 20 = 0 THEN 'POINT EMPTY'::GEOMETRY
-            ELSE ('POINT(' || (range % 5) || ' ' || (range % 5) || ')')::GEOMETRY END AS g,
+CREATE TABLE emptymix AS
+SELECT CASE WHEN range % 5 = 0 THEN 'POINT EMPTY'::GEOMETRY
+            ELSE ('POINT(' || (range % 3) || ' ' || (range % 2) || ')')::GEOMETRY END AS g,
        range AS payload
-FROM range(100);
+FROM range(20);
 
 statement ok
 CHECKPOINT
@@ -58,7 +59,7 @@ EXPLAIN (FORMAT yaml) SELECT g FROM pts ORDER BY payload
 ----
 logical_opt	<REGEX>:.*__internal_decompress_geometry_point.*
 
-# The mixed / XYZ / empty-point columns must NOT be compressed
+# The mixed / XYZ columns must NOT be compressed
 query II
 EXPLAIN (FORMAT yaml) SELECT g FROM mixed ORDER BY payload
 ----
@@ -69,10 +70,16 @@ EXPLAIN (FORMAT yaml) SELECT g FROM xyz ORDER BY payload
 ----
 logical_opt	<!REGEX>:.*__internal_compress_geometry_point.*
 
+# The POINT-XY column with empty points mixed in IS compressed (and decompressed) just the same
 query II
-EXPLAIN (FORMAT yaml) SELECT g FROM emptypt ORDER BY payload
+EXPLAIN (FORMAT yaml) SELECT g FROM emptymix ORDER BY payload
 ----
-logical_opt	<!REGEX>:.*__internal_compress_geometry_point.*
+logical_opt	<REGEX>:.*__internal_compress_geometry_point.*
+
+query II
+EXPLAIN (FORMAT yaml) SELECT g FROM emptymix ORDER BY payload
+----
+logical_opt	<REGEX>:.*__internal_decompress_geometry_point.*
 
 # Roundtrip: ordering by the (compressed) payload returns the exact geometries
 query I
@@ -128,6 +135,53 @@ SELECT count(*) FROM pts a JOIN pts b USING (g)
 ----
 30
 
+# Empty points roundtrip through the compressed payload unchanged
+query I
+SELECT g::VARCHAR FROM emptymix ORDER BY payload
+----
+POINT EMPTY
+POINT (1 1)
+POINT (2 0)
+POINT (0 1)
+POINT (1 0)
+POINT EMPTY
+POINT (0 0)
+POINT (1 1)
+POINT (2 0)
+POINT (0 1)
+POINT EMPTY
+POINT (2 1)
+POINT (0 0)
+POINT (1 1)
+POINT (2 0)
+POINT EMPTY
+POINT (1 0)
+POINT (2 1)
+POINT (0 0)
+POINT (1 1)
+
+# Empty points group, count distinct, and self-join correctly (empty == empty)
+query II
+SELECT g::VARCHAR, count(*) FROM emptymix GROUP BY g ORDER BY g::VARCHAR
+----
+POINT (0 0)	3
+POINT (0 1)	2
+POINT (1 0)	2
+POINT (1 1)	4
+POINT (2 0)	3
+POINT (2 1)	2
+POINT EMPTY	4
+
+query I
+SELECT count(DISTINCT g) FROM emptymix
+----
+7
+
+query I
+SELECT count(*) FROM emptymix a JOIN emptymix b USING (g)
+----
+62
+
 # Order-preservation: ORDER BY on the geometry itself must match the uncompressed byte order.
 # (The compression is order-preserving, so the plan that compresses the sort key produces the
 #  same result as the plan that does not.)
@@ -152,6 +206,31 @@ POINT (1 0)
 POINT (1 2)
 POINT (1 2)
 POINT (1 1)
+
+# Empty points are order-preserving too (their NaN coordinates sort after every finite point)
+query I
+SELECT g::VARCHAR FROM emptymix ORDER BY g, payload
+----
+POINT (0 0)
+POINT (0 0)
+POINT (0 0)
+POINT (0 1)
+POINT (0 1)
+POINT (2 0)
+POINT (2 0)
+POINT (2 0)
+POINT (2 1)
+POINT (2 1)
+POINT (1 0)
+POINT (1 0)
+POINT (1 1)
+POINT (1 1)
+POINT (1 1)
+POINT (1 1)
+POINT EMPTY
+POINT EMPTY
+POINT EMPTY
+POINT EMPTY
 
 statement ok
 SET disabled_optimizers = 'compressed_materialization'
@@ -178,3 +257,27 @@ POINT (1 0)
 POINT (1 2)
 POINT (1 2)
 POINT (1 1)
+
+query I
+SELECT g::VARCHAR FROM emptymix ORDER BY g, payload
+----
+POINT (0 0)
+POINT (0 0)
+POINT (0 0)
+POINT (0 1)
+POINT (0 1)
+POINT (2 0)
+POINT (2 0)
+POINT (2 0)
+POINT (2 1)
+POINT (2 1)
+POINT (1 0)
+POINT (1 0)
+POINT (1 1)
+POINT (1 1)
+POINT (1 1)
+POINT (1 1)
+POINT EMPTY
+POINT EMPTY
+POINT EMPTY
+POINT EMPTY

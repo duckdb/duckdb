@@ -101,7 +101,7 @@ struct CMHelper {
 	                                   unique_ptr<BaseStatistics> &typed_stats);
 
 	//! Whether all (non-null) values are non-empty POINTs with XY vertices (so they fit in a UHUGEINT)
-	static bool GeometryIsAllNonEmptyPointXY(const BaseStatistics &stats);
+	static bool GeometryIsAllPointXY(const BaseStatistics &stats);
 };
 
 //===--------------------------------------------------------------------===//
@@ -757,19 +757,16 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 	return CMHelper::CreateStringFunctionCompress(std::move(input), cast_type, std::move(compress_stats));
 }
 
-bool CMHelper::GeometryIsAllNonEmptyPointXY(const BaseStatistics &stats) {
+bool CMHelper::GeometryIsAllPointXY(const BaseStatistics &stats) {
 	if (stats.GetType().id() != LogicalTypeId::GEOMETRY) {
 		return false;
 	}
 	if (stats.GetStatsType() != StatisticsType::GEOMETRY_STATS) {
 		return false;
 	}
-	// Only POINT-XY geometries are present (and at least one is)
+	// Only POINT-XY geometries are present (and at least one is). Empty points are fine: they are stored as a
+	// single XY vertex with NaN coordinates, so the WKB blob is always exactly 21 bytes.
 	if (!GeometryStats::GetTypes(stats).HasOnly(GeometryType::POINT, VertexType::XY)) {
-		return false;
-	}
-	// No empty points: every value is a single XY vertex, so the WKB blob is always exactly 21 bytes
-	if (GeometryStats::GetFlags(stats).HasEmptyGeometry()) {
 		return false;
 	}
 	return true;
@@ -777,8 +774,8 @@ bool CMHelper::GeometryIsAllNonEmptyPointXY(const BaseStatistics &stats) {
 
 unique_ptr<CompressExpression> CompressedMaterialization::GetGeometryCompress(unique_ptr<Expression> input,
                                                                               const BaseStatistics &stats) {
-	if (!CMHelper::GeometryIsAllNonEmptyPointXY(stats)) {
-		// We can only pack non-empty POINT-XY geometries into a UHUGEINT
+	if (!CMHelper::GeometryIsAllPointXY(stats)) {
+		// We can only pack POINT-XY geometries into a UHUGEINT
 		return nullptr;
 	}
 
