@@ -1,0 +1,89 @@
+# name: test/sql/storage/compression/dict_fsst/dict_fsst.test_slow
+# group: [dict_fsst]
+
+statement ok
+pragma force_compression='dict_fsst';
+
+# ---- For small strings we should trigger DICT_FSST encoding ----
+
+# Create database with 16KB blocks
+statement ok
+ATTACH '__TEST_DIR__/dict_fsst_control.db' AS db (BLOCK_SIZE 16384, STORAGE_VERSION 'v1.4.0');
+
+# Create rows which are compressible using DICT_FSST
+statement ok
+CREATE TABLE db.control AS SELECT i, 'duck:goose token token duck:goose' || lpad((i % 128)::VARCHAR, 6, '0') || 'duck:goose token-token duck:goose' AS s FROM range(0, 5000) t(i);
+
+statement ok
+CHECKPOINT db;
+
+# Check the chosen compression
+query I
+SELECT count(*) > 0 FROM pragma_storage_info('db.control') WHERE column_name = 's' AND segment_type = 'VARCHAR' AND compression = 'DICT_FSST' AND segment_info LIKE 'DICT_FSST:%';
+----
+true
+
+statement ok
+DETACH db;
+
+# ---- When we encounter a string which fits only plain (no FSST) in a block, disable FSST mode in DICT_FSST ----
+
+statement ok
+ATTACH '__TEST_DIR__/dict_fsst_test_13991.db' AS db (BLOCK_SIZE 16384, STORAGE_VERSION 'v1.4.0');
+
+statement ok
+CREATE TABLE db.base AS SELECT i, 'duck:goose token token duck:goose' || lpad((i % 128)::VARCHAR, 6, '0') || 'duck:goose token-token duck:goose' AS s FROM range(0, 5000) t(i);
+
+# Create unusually long row which does not have an easily compressible structure
+statement ok
+CREATE TABLE db.long_tail AS SELECT 2000 AS i, substr(string_agg(md5(j::VARCHAR), ''), 1, 13991) AS s FROM range(0, 800) x(j);
+
+# Join the two tables into one (long row last)
+statement ok
+CREATE TABLE db.t AS SELECT s FROM db.base UNION ALL SELECT s FROM db.long_tail;
+
+statement ok
+CHECKPOINT db;
+
+query I
+SELECT count(*) > 0 FROM pragma_storage_info('db.t') WHERE column_name = 's' AND segment_type = 'VARCHAR' AND compression = 'DICT_FSST' AND segment_info LIKE 'DICTIONARY:%';
+----
+true
+
+query I
+SELECT count(*) > 0 FROM pragma_storage_info('db.t') WHERE column_name = 's' AND segment_type = 'VARCHAR' AND compression = 'DICT_FSST' AND segment_info LIKE 'DICT_FSST:%';
+----
+false
+
+query I
+SELECT count(*) > 0 FROM pragma_storage_info('db.t') WHERE column_name = 's' AND segment_type = 'VARCHAR' AND compression = 'DICT_FSST' AND segment_info LIKE 'FSST_ONLY:%';
+----
+false
+
+statement ok
+DETACH db;
+
+# ---- When we encounter a string which never fits in a DICT_FSST segment, disable DICT_FSST entirely ----
+
+statement ok
+ATTACH '__TEST_DIR__/dict_fsst_test_16383.db' AS db (BLOCK_SIZE 16384, STORAGE_VERSION 'v1.4.0');
+
+statement ok
+CREATE TABLE db.base AS SELECT i, 'duck:goose token token duck:goose' || lpad((i % 128)::VARCHAR, 6, '0') || 'duck:goose token-token duck:goose' AS s FROM range(0, 5000) t(i);
+
+statement ok
+CREATE TABLE db.long_tail AS SELECT 2000 AS i, substr(string_agg(md5(j::VARCHAR), ''), 1, 16383) AS s FROM range(0, 800) x(j);
+
+statement ok
+CREATE TABLE db.t AS SELECT s FROM db.base UNION ALL SELECT s FROM db.long_tail;
+
+statement ok
+CHECKPOINT db;
+
+query I
+SELECT count(*) > 0 FROM pragma_storage_info('db.t') WHERE column_name = 's' AND segment_type = 'VARCHAR' AND compression = 'DICT_FSST';
+----
+false
+
+statement ok
+DETACH db;
