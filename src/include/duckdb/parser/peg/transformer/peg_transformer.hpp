@@ -398,6 +398,40 @@ public:
 	                                                               const string &column_name,
 	                                                               unique_ptr<ParsedExpression> expression);
 
+	//===--------------------------------------------------------------------===//
+	// START GENERATED TRAMPOLINE RULES
+	//===--------------------------------------------------------------------===//
+	static void InitializeUseStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeUseStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeUseTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeUseTargetTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSchemaNameAsUseTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeSchemaNameAsUseTargetTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
+	static void InitializeCatalogNameAsUseTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                       TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeCatalogNameAsUseTargetTrampoline(PEGTransformer &transformer,
+	                                                                                 TransformStack &stack,
+	                                                                                 TransformStackFrame &frame);
+	static void InitializeUseTargetCatalogSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                       TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeUseTargetCatalogSchemaTrampoline(PEGTransformer &transformer,
+	                                                                                 TransformStack &stack,
+	                                                                                 TransformStackFrame &frame);
+	static void InitializeDotIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDotIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	//===--------------------------------------------------------------------===//
+	// END GENERATED TRAMPOLINE RULES
+	//===--------------------------------------------------------------------===//
+
 	// Registration methods
 	void RegisterComment();
 	void RegisterCommon();
@@ -425,6 +459,9 @@ public:
 	PEGTransformerFactory(const PEGTransformerFactory &) = delete;
 
 	static unique_ptr<SQLStatement> TransformStatement(PEGTransformer &, ParseResult &list);
+	static unique_ptr<TransformResultValue> TransformStatementTrampolineInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static const case_insensitive_map_t<const TransformFrameOps *> &GeneratedTrampolineOps();
 
 	// comment.gram
 	static Value TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result);

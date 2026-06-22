@@ -28,6 +28,30 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	return result;
 }
 
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformStatementTrampolineInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	auto &ops_map = GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw NotImplementedException("No trampoline transformer for statement rule '%s'", choice_result.name);
+	}
+
+	TransformStack stack(transformer);
+	auto result = stack.Execute<unique_ptr<SQLStatement>>(choice_result, *ops_entry->second);
+	if (!transformer.named_parameter_map.empty()) {
+		result->named_param_map = transformer.named_parameter_map;
+	}
+	result->has_anonymous_parameters = transformer.has_anonymous_parameters;
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::RegisterGeneratedTrampoline() {
+	trampoline_transform_functions["Statement"] = &PEGTransformerFactory::TransformStatementTrampolineInternal;
+}
+
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
                                                              const vector<MatcherToken> &tokens, ParseResult &stmt_pr,
                                                              optional_idx terminator_offset) {
@@ -185,9 +209,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterPivot();
 	RegisterSelect();
 	RegisterKeywordsAndIdentifiers();
-}
-
-void PEGTransformerFactory::RegisterGeneratedTrampoline() {
 }
 
 const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &
