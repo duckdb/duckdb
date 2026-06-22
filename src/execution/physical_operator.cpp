@@ -614,7 +614,6 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 		}
 	}
 
-
 	return child_result;
 }
 
