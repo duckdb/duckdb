@@ -13,6 +13,7 @@
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parallel/async_result.hpp"
 
 namespace duckdb {
 struct MultiFileReaderInterface;
@@ -200,6 +201,8 @@ public:
 	DataChunk scan_chunk;
 	//! Whether the last Scan call returned BLOCKED
 	bool scan_blocked = false;
+	//! The I/O scheduled for the current batch by ScheduleIO
+	AsyncResult scheduled_io;
 	//! The executor to transform scan_chunk into the final result with FinalizeChunk
 	ExpressionExecutor executor;
 	//! Number of rows scanned by this thread (for profiling)

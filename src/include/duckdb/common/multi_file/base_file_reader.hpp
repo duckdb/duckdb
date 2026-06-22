@@ -95,7 +95,11 @@ public:
 	                               LocalTableFunctionState &lstate) = 0;
 	//! Prepare a scan - called after TryInitializeScan succeeds - this is done without any lock held
 	virtual void PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
-	//! Scan a chunk from the read state
+	//! Schedule (the I/O for the unit prepared by PrepareScan. We return BLOCKED for the async I/O tasks
+	//!  or HAVE_MORE_OUTPUT when there is nothing to prefetch.
+	DUCKDB_API virtual AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
+	                                          LocalTableFunctionState &lstate);
+	//! Scan a chunk from the read state - decodes the I/O scheduled by ScheduleIO, done without any lock held
 	virtual AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 	                         LocalTableFunctionState &local_state, DataChunk &chunk) = 0;
 	//! Finish scanning a given file
