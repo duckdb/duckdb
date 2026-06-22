@@ -20,6 +20,25 @@ class CommitDropState;
 struct AddConstraintInfo;
 struct CreateTriggerInfo;
 
+// Result of computing a nested-STRUCT field DDL (ADD/DROP/RENAME FIELD): the
+// column's new full type and the remap_struct USING expression that rewrites
+// existing data. Used by DuckTableEntry::AddField/RemoveField/RenameField; also
+// callable directly so an external catalog can produce the same ALTER COLUMN
+// TYPE USING form instead of reimplementing the (subtle, by-name) struct remap.
+struct StructFieldRemap {
+	LogicalType new_type;
+	unique_ptr<ParsedExpression> remap_expression;
+};
+
+//! Build the (new_type, remap_struct(...)) pair for ADD FIELD on column_path.
+StructFieldRemap BuildAddFieldRemap(const LogicalType &column_type, const string &column_name,
+                                    const vector<string> &column_path, const ColumnDefinition &new_field);
+//! Build the pair for DROP FIELD on column_path.
+StructFieldRemap BuildRemoveFieldRemap(const LogicalType &column_type, const vector<string> &column_path);
+//! Build the pair for RENAME FIELD on column_path -> new_name.
+StructFieldRemap BuildRenameFieldRemap(const LogicalType &column_type, const vector<string> &column_path,
+                                       const string &new_name);
+
 //! A table catalog entry
 class DuckTableEntry : public TableCatalogEntry {
 public:
