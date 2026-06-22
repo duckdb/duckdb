@@ -148,21 +148,8 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
-// Copy File Lifecycle
+// Copy File State Helpers
 //===--------------------------------------------------------------------===//
-enum class CopyFileLifecycleWaitMode : uint8_t { INTERRUPTIBLE, DRAIN };
-
-static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_t finalize, FunctionData &bind_data,
-                                       unique_ptr<GlobalFileState> state) {
-	if (!finalize) {
-		throw InternalException("COPY file lifecycle finalize requires a finalize callback");
-	}
-	if (!state || !state->data) {
-		throw InternalException("COPY file lifecycle finalize reached an empty file state");
-	}
-	finalize(context, bind_data, *state->data);
-}
-
 struct PendingFileState {
 	string output_path;
 	optional_ptr<CopyToFileInfo> written_file_info;
@@ -229,6 +216,22 @@ private:
 	vector<string> created_files;
 	vector<unique_ptr<CopyToFileInfo>> written_files;
 };
+
+//===--------------------------------------------------------------------===//
+// Copy File Lifecycle
+//===--------------------------------------------------------------------===//
+enum class CopyFileLifecycleWaitMode : uint8_t { INTERRUPTIBLE, DRAIN };
+
+static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_t finalize, FunctionData &bind_data,
+                                       unique_ptr<GlobalFileState> state) {
+	if (!finalize) {
+		throw InternalException("COPY file lifecycle finalize requires a finalize callback");
+	}
+	if (!state || !state->data) {
+		throw InternalException("COPY file lifecycle finalize reached an empty file state");
+	}
+	finalize(context, bind_data, *state->data);
+}
 
 class CopyFileLifecycleJob {
 public:
@@ -542,6 +545,9 @@ void CopyFileLifecycleExecutor::ThrowError() {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Copy File State Helpers
+//===--------------------------------------------------------------------===//
 void CopyDirectoryManager::EnsureDirectory(FileSystem &fs, const string &dir_path) {
 	bool created_entry = false;
 	{
@@ -3509,6 +3515,9 @@ static void FlushLegacyCopyBatch(ClientContext &context, const CopyFunction &fun
 	function.copy_to_combine(execution_context, bind_data, gstate, *local_state);
 }
 
+//===--------------------------------------------------------------------===//
+// Batch Interface
+//===--------------------------------------------------------------------===//
 pair<const CopyFunctionBatchAnalyzer, unique_ptr<PreparedBatchData>>
 PhysicalCopyToFile::PrepareBatch(ClientContext &context, GlobalSinkState &gstate_p, FileStateHandle &file_state,
                                  const std::function<void(FileStateHandle &)> &create_file_state_fun,
