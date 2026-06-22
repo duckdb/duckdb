@@ -28,8 +28,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	return result;
 }
 
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::TransformStatementTrampolineInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatementTrampoline(PEGTransformer &transformer,
+                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto &choice_result = choice_pr.GetResult();
@@ -45,6 +45,12 @@ PEGTransformerFactory::TransformStatementTrampolineInternal(PEGTransformer &tran
 		result->named_param_map = transformer.named_parameter_map;
 	}
 	result->has_anonymous_parameters = transformer.has_anonymous_parameters;
+	return result;
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformStatementTrampolineInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto result = TransformStatementTrampoline(transformer, parse_result);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 

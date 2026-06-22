@@ -459,6 +459,8 @@ public:
 	PEGTransformerFactory(const PEGTransformerFactory &) = delete;
 
 	static unique_ptr<SQLStatement> TransformStatement(PEGTransformer &, ParseResult &list);
+	static unique_ptr<SQLStatement> TransformStatementTrampoline(PEGTransformer &transformer,
+	                                                             ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformStatementTrampolineInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static const case_insensitive_map_t<const TransformFrameOps *> &GeneratedTrampolineOps();
