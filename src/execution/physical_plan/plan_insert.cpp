@@ -8,6 +8,7 @@
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/settings.hpp"
 
@@ -77,10 +78,19 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveDefaultsProjection(LogicalInsert
 	if (op.column_index_map.empty()) {
 		throw InternalException("No defaults to push");
 	}
-	// columns specified by the user, push a projection
+	// Pass 1 (storage order): non-generated columns get the user value (mapped) or
+	// their default (unmapped); STORED-generated columns get a placeholder that is
+	// computed in pass 2 below.
 	vector<LogicalType> types;
 	vector<unique_ptr<Expression>> select_list;
+	bool has_stored_generated = false;
 	for (auto &col : op.table.GetColumns().Physical()) {
+		types.push_back(col.Type());
+		if (col.Category() == TableColumnType::GENERATED_STORED) {
+			has_stored_generated = true;
+			select_list.push_back(make_uniq<BoundConstantExpression>(Value(col.Type())));
+			continue;
+		}
 		auto storage_idx = col.StorageOid();
 		auto mapped_index = op.column_index_map[col.Physical()];
 		if (mapped_index == DConstants::INVALID_INDEX) {
@@ -90,11 +100,28 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveDefaultsProjection(LogicalInsert
 			// push reference
 			select_list.push_back(make_uniq<BoundReferenceExpression>(col.Type(), mapped_index));
 		}
-		types.push_back(col.Type());
 	}
-	auto &proj = Make<PhysicalProjection>(std::move(types), std::move(select_list), child.estimated_cardinality);
+	auto &proj = Make<PhysicalProjection>(types, std::move(select_list), child.estimated_cardinality);
 	proj.children.push_back(child);
-	return proj;
+	if (!has_stored_generated) {
+		return proj;
+	}
+	// Pass 2: evaluate STORED-generated expressions against the storage-ordered
+	// chunk produced by pass 1 (their BoundReferenceExpression leaves address
+	// dependency columns by storage position).
+	vector<unique_ptr<Expression>> generated_list;
+	for (auto &col : op.table.GetColumns().Physical()) {
+		auto storage_idx = col.StorageOid();
+		if (col.Category() == TableColumnType::GENERATED_STORED) {
+			generated_list.push_back(std::move(op.bound_defaults[storage_idx]));
+		} else {
+			generated_list.push_back(make_uniq<BoundReferenceExpression>(col.Type(), storage_idx));
+		}
+	}
+	auto &generated_proj =
+	    Make<PhysicalProjection>(std::move(types), std::move(generated_list), proj.estimated_cardinality);
+	generated_proj.children.push_back(proj);
+	return generated_proj;
 }
 
 PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op,
