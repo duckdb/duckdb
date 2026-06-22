@@ -179,6 +179,40 @@ TEST_CASE("ADBC - Select 42", "[adbc]") {
 	REQUIRE(db.QueryAndCheck("SELECT 42"));
 }
 
+TEST_CASE("ADBC - Query VARIANT", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	auto create_result = db.Query("CREATE TABLE events(id INTEGER, payload VARIANT)");
+	REQUIRE(!create_result->HasError());
+	auto insert_result = db.Query("INSERT INTO events VALUES (1, 42::VARIANT), (2, 'hello world'::VARIANT), "
+	                              "(3, [1, 2, 3]::VARIANT), (4, {'name':'Alice'}::VARIANT)");
+	REQUIRE(!insert_result->HasError());
+
+	auto &stream = db.QueryArrow("SELECT payload FROM events ORDER BY id");
+	ArrowSchema schema;
+	std::memset(&schema, 0, sizeof(schema));
+	REQUIRE(stream.get_schema(&stream, &schema) == 0);
+	REQUIRE(schema.n_children == 1);
+	REQUIRE(string(schema.children[0]->format) == "+s");
+	REQUIRE(schema.children[0]->n_children == 4);
+	REQUIRE(string(schema.children[0]->children[0]->name) == "keys");
+	REQUIRE(string(schema.children[0]->children[1]->name) == "children");
+	REQUIRE(string(schema.children[0]->children[2]->name) == "values");
+	REQUIRE(string(schema.children[0]->children[3]->name) == "data");
+	schema.release(&schema);
+
+	ArrowArray array;
+	std::memset(&array, 0, sizeof(array));
+	REQUIRE(stream.get_next(&stream, &array) == 0);
+	REQUIRE(array.release != nullptr);
+	REQUIRE(array.n_children == 1);
+	REQUIRE(array.children[0]->n_children == 4);
+	array.release(&array);
+}
+
 TEST_CASE("ADBC - non-empty query without actual statements", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
