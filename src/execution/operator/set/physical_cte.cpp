@@ -727,9 +727,6 @@ static SinkResultType SinkFanout(DataChunk &chunk, CTELocalState &lstate, const 
 static SinkCombineResultType CombineFanout(CTELocalState &lstate, const InterruptState &interrupt_state) {
 	for (; lstate.fanout_finalize_idx < lstate.fanout_executors.size(); lstate.fanout_finalize_idx++) {
 		auto &executor = *lstate.fanout_executors[lstate.fanout_finalize_idx];
-		if (!executor.HasSinkInput()) {
-			continue;
-		}
 		executor.SetInterruptState(interrupt_state);
 		auto result = PipelineExecuteResult::NOT_FINISHED;
 		while (result == PipelineExecuteResult::NOT_FINISHED) {
@@ -815,6 +812,9 @@ SinkFinalizeType PhysicalCTE::Finalize(Pipeline &pipeline, Event &event, ClientC
 	if (exchange) {
 		auto &gstate = input.global_state.Cast<CTEGlobalState>();
 		gstate.exchange->Finish();
+		for (auto &pipeline_ref : fanout_pipelines) {
+			pipeline_ref.get().CompleteExternalInput();
+		}
 	}
 	return SinkFinalizeType::READY;
 }

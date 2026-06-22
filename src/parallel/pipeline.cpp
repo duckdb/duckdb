@@ -191,7 +191,10 @@ bool Pipeline::IsOrderDependent() const {
 }
 
 void Pipeline::SetExternalInput() {
-	external_input = true;
+	input_mode = PipelineInputMode::EXTERNAL_INPUT;
+	external_input_event_scheduled = false;
+	external_input_completed = false;
+	external_input_event.reset();
 }
 
 static bool CanUseExternalInputOperator(const PhysicalOperator &op) {
@@ -217,66 +220,11 @@ static bool CanUseExternalInputSink(const PhysicalOperator &op) {
 	}
 }
 
-static bool IsJoinOperatorType(PhysicalOperatorType type) {
-	switch (type) {
-	case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
-	case PhysicalOperatorType::NESTED_LOOP_JOIN:
-	case PhysicalOperatorType::HASH_JOIN:
-	case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
-	case PhysicalOperatorType::IE_JOIN:
-	case PhysicalOperatorType::LEFT_DELIM_JOIN:
-	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
-	case PhysicalOperatorType::POSITIONAL_JOIN:
-	case PhysicalOperatorType::ASOF_JOIN:
-		return true;
-	default:
-		return false;
-	}
-}
-
-bool Pipeline::ContainsJoin() const {
-	if (source && IsJoinOperatorType(source->type)) {
-		return true;
-	}
-	if (sink && IsJoinOperatorType(sink->type)) {
-		return true;
-	}
-	for (auto &op_ref : operators) {
-		if (IsJoinOperatorType(op_ref.get().type)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-bool Pipeline::DownstreamPipelinesContainJoin(unordered_set<const Pipeline *> &visited) const {
-	for (auto &parent_ref : parents) {
-		auto parent = parent_ref.lock();
-		if (!parent) {
-			continue;
-		}
-		if (!visited.insert(parent.get()).second) {
-			continue;
-		}
-		if (parent->ContainsJoin()) {
-			return true;
-		}
-		if (parent->DownstreamPipelinesContainJoin(visited)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 bool Pipeline::CanUseExternalInput() const {
 	if (!sink || !sink->ParallelSink() || sink->SinkOrderDependent()) {
 		return false;
 	}
 	if (!CanUseExternalInputSink(*sink)) {
-		return false;
-	}
-	unordered_set<const Pipeline *> visited;
-	if (DownstreamPipelinesContainJoin(visited)) {
 		return false;
 	}
 	if (sink->RequiredPartitionInfo().AnyRequired()) {
@@ -300,7 +248,8 @@ bool Pipeline::CanUseExternalInput() const {
 void Pipeline::Schedule(shared_ptr<Event> &event) {
 	D_ASSERT(ready);
 	D_ASSERT(sink);
-	if (external_input) {
+	if (IsExternalInput()) {
+		ScheduleExternalInputEvent(event);
 		return;
 	}
 	Reset();
@@ -418,7 +367,7 @@ void Pipeline::ResetSource(bool force) {
 }
 
 void Pipeline::PrepareExternalInput() {
-	if (!external_input) {
+	if (!IsExternalInput()) {
 		throw InternalException("PrepareExternalInput called for a pipeline that is not externally fed");
 	}
 	if (initialized) {
@@ -429,6 +378,72 @@ void Pipeline::PrepareExternalInput() {
 		return;
 	}
 	Reset();
+}
+
+void Pipeline::SetExternalInputEvent(shared_ptr<Event> event) {
+	if (!IsExternalInput()) {
+		throw InternalException("SetExternalInputEvent called for a pipeline that is not externally fed");
+	}
+	if (!event) {
+		throw InternalException("SetExternalInputEvent called with a null event");
+	}
+	lock_guard<mutex> guard(external_input_lock);
+	auto existing_event = external_input_event.lock();
+	if (existing_event && existing_event.get() != event.get()) {
+		throw InternalException("External input pipeline event was registered more than once");
+	}
+	external_input_event = std::move(event);
+	external_input_event_scheduled = false;
+	external_input_completed = false;
+}
+
+void Pipeline::ScheduleExternalInputEvent(shared_ptr<Event> event) {
+	shared_ptr<Event> event_to_finish;
+	{
+		lock_guard<mutex> guard(external_input_lock);
+		if (!IsExternalInput()) {
+			throw InternalException("ScheduleExternalInputEvent called for a pipeline that is not externally fed");
+		}
+		if (!event) {
+			throw InternalException("ScheduleExternalInputEvent called with a null event");
+		}
+		auto existing_event = external_input_event.lock();
+		if (existing_event && existing_event.get() != event.get()) {
+			throw InternalException("External input pipeline event was registered more than once");
+		}
+		external_input_event = event;
+		external_input_event_scheduled = true;
+		if (external_input_completed) {
+			event_to_finish = std::move(event);
+		}
+	}
+	if (event_to_finish && !event_to_finish->IsFinished()) {
+		event_to_finish->Finish();
+	}
+}
+
+void Pipeline::CompleteExternalInput() {
+	shared_ptr<Event> event;
+	{
+		lock_guard<mutex> guard(external_input_lock);
+		if (!IsExternalInput()) {
+			throw InternalException("CompleteExternalInput called for a pipeline that is not externally fed");
+		}
+		if (external_input_completed) {
+			return;
+		}
+		event = external_input_event.lock();
+		if (!event) {
+			throw InternalException("Completing external input pipeline before its event was scheduled");
+		}
+		external_input_completed = true;
+		if (!external_input_event_scheduled) {
+			return;
+		}
+	}
+	if (!event->IsFinished()) {
+		event->Finish();
+	}
 }
 
 void Pipeline::Ready() {

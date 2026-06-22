@@ -83,6 +83,9 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 	auto base_pipeline = meta_pipeline->GetBasePipeline();
 	auto base_initialize_event = make_shared_ptr<PipelineInitializeEvent>(base_pipeline);
 	auto base_event = make_shared_ptr<PipelineEvent>(base_pipeline);
+	if (base_pipeline->IsExternalInput()) {
+		base_pipeline->SetExternalInputEvent(base_event);
+	}
 	auto base_prepare_finish_event = make_shared_ptr<PipelinePrepareFinishEvent>(base_pipeline);
 	auto base_finish_event = make_shared_ptr<PipelineFinishEvent>(base_pipeline);
 	auto base_complete_event =
@@ -110,6 +113,9 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 
 		// create events/stack for this pipeline
 		auto pipeline_event = make_shared_ptr<PipelineEvent>(pipeline);
+		if (pipeline->IsExternalInput()) {
+			pipeline->SetExternalInputEvent(pipeline_event);
+		}
 
 		auto finish_group = meta_pipeline->GetFinishGroup(*pipeline);
 		if (finish_group) {
@@ -286,7 +292,7 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	for (auto &event : events) {
 		if (!event->HasDependencies()) {
 			event->Schedule();
-			if (!event->HasTasks() && !event->IsFinished()) {
+			if (!event->HasTasks() && !event->IsFinished() && event->AutoFinishWithoutTasks()) {
 				event->Finish();
 			}
 		}

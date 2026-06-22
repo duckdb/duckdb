@@ -24,6 +24,10 @@ public:
 
 public:
 	virtual void Schedule() = 0;
+	//! Whether an event with no scheduled tasks should automatically finish after scheduling
+	virtual bool AutoFinishWithoutTasks() const {
+		return true;
+	}
 	//! Called right after the event is finished
 	virtual void FinishEvent() {
 	}

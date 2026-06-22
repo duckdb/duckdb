@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -20,9 +19,12 @@
 namespace duckdb {
 
 class Executor;
+class Event;
 class MetaPipeline;
 class PipelineExecutor;
 class Pipeline;
+
+enum class PipelineInputMode : uint8_t { SCHEDULED_SOURCE, EXTERNAL_INPUT };
 
 class PipelineTask : public ExecutorTask {
 	static constexpr const idx_t PARTIAL_CHUNK_COUNT = 50;
@@ -136,8 +138,10 @@ public:
 	//! Marks this pipeline as fed externally instead of by scheduled source tasks
 	void SetExternalInput();
 	bool IsExternalInput() const {
-		return external_input;
+		return input_mode == PipelineInputMode::EXTERNAL_INPUT;
 	}
+	void SetExternalInputEvent(shared_ptr<Event> event);
+	void CompleteExternalInput();
 	bool CanUseExternalInput() const;
 
 	//! Registers a new batch index for a pipeline executor - returns the current minimum batch index
@@ -172,8 +176,12 @@ private:
 
 	//! The base batch index of this pipeline
 	idx_t base_batch_index = 0;
-	//! Whether this pipeline is executed by an external producer instead of scheduled source tasks
-	bool external_input = false;
+	//! How this pipeline receives input chunks
+	PipelineInputMode input_mode = PipelineInputMode::SCHEDULED_SOURCE;
+	//! Event that represents execution of an externally fed pipeline
+	weak_ptr<Event> external_input_event;
+	bool external_input_event_scheduled = false;
+	bool external_input_completed = false;
 	//! Lock for one-time external input initialization
 	mutex external_input_lock;
 	//! Lock for accessing the set of batch indexes
@@ -190,8 +198,7 @@ private:
 
 	bool TryGetMaxThreads(idx_t &max_threads);
 	bool ScheduleParallel(shared_ptr<Event> &event);
-	bool ContainsJoin() const;
-	bool DownstreamPipelinesContainJoin(unordered_set<const Pipeline *> &visited) const;
+	void ScheduleExternalInputEvent(shared_ptr<Event> event);
 };
 
 } // namespace duckdb

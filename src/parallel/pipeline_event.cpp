@@ -19,6 +19,10 @@ void PipelineEvent::Schedule() {
 	} // LCOV_EXCL_STOP
 }
 
+bool PipelineEvent::AutoFinishWithoutTasks() const {
+	return !pipeline->IsExternalInput();
+}
+
 void PipelineEvent::FinishEvent() {
 }
 
