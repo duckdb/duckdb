@@ -256,19 +256,13 @@ bool StorageManager::HasWAL() const {
 
 bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
                                         ActiveCheckpointWrapper &active_checkpoint) {
-	unique_lock<mutex> guard;
+	unique_ptr<StorageLockKey> guard;
 	// Lock ordering: WAL lock -> transaction lock (in GetCheckpointTransaction)
 	if (!options.wal_lock) {
-		// not holding the WAL lock yet - grab it
-		guard = GetWALLock();
-	}
-	// Wait for commits that have written their WAL flush marker but are not yet published (group commit).
-	// The checkpoint snapshot would not include them, while the checkpoint removes their WAL entries -
-	// without waiting, such commits would be lost on restart. New pending commits cannot register while
-	// we hold the WAL lock.
-	auto &transaction_manager = db.GetTransactionManager();
-	if (transaction_manager.IsDuckTransactionManager()) {
-		transaction_manager.Cast<DuckTransactionManager>().WaitForPendingCommits();
+		// not holding the WAL lock yet - grab it exclusively. The exclusive acquisition waits for all in-flight
+		// (shared) group-commit writers to finish publishing, so any commit that wrote its flush marker to this WAL
+		// is already durable and visible by the time we proceed - this replaces the old pending-commit drain.
+		guard = GetWALLockExclusive();
 	}
 	if (active_checkpoint.HasCheckpointContext()) {
 		// While holding the WAL lock, if we have a context then start a checkpoint transaction.
@@ -316,19 +310,12 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	return true;
 }
 
-void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
+void StorageManager::WALFinishCheckpoint(StorageLockKey &) {
 	D_ASSERT(wal.get());
 
-	// Drain any deferred (group commit) commits that are still flushing the checkpoint WAL before we move/replace it.
-	// A batch-wait sync leader holds a shared_ptr to this WAL and may push its buffer (under the WAL flush_lock, NOT
-	// the WAL lock) up to group_commit_delay microseconds after releasing the WAL lock. If we reset and move the file
-	// out from under it, that flush races the freshly-reopened main WAL writing to the same path - producing a torn
-	// entry and a corrupt WAL on replay. New pending commits cannot register while we hold the WAL lock; this mirrors
-	// the drain in WALStartCheckpoint.
-	auto &transaction_manager = db.GetTransactionManager();
-	if (transaction_manager.IsDuckTransactionManager()) {
-		transaction_manager.Cast<DuckTransactionManager>().WaitForPendingCommits();
-	}
+	// The caller holds the WAL lock EXCLUSIVELY, so no group-commit writer can be flushing/syncing this WAL: the
+	// exclusive acquisition already waited for all shared holders to finish. This replaces the old explicit drain
+	// that guarded against a batch-wait sync leader racing the file move/replace below.
 
 	// "wal" points to the checkpoint WAL
 	// first check if the checkpoint WAL has been written to
@@ -358,8 +345,16 @@ void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Finish Checkpoint");
 }
 
-unique_lock<mutex> StorageManager::GetWALLock() {
-	return unique_lock<mutex>(wal_lock);
+unique_ptr<StorageLockKey> StorageManager::GetWALLockShared() {
+	return wal_lock.GetSharedLock();
+}
+
+unique_ptr<StorageLockKey> StorageManager::GetWALLockExclusive() {
+	return wal_lock.GetExclusiveLock();
+}
+
+unique_lock<mutex> StorageManager::GetWALAppendLock() {
+	return unique_lock<mutex>(wal_append_lock);
 }
 
 string StorageManager::GetWALPath(const string &suffix) {

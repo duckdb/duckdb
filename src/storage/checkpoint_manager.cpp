@@ -335,12 +335,12 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	// truncate the WAL
 	if (has_wal) {
-		unique_lock<mutex> owned_wal_lock;
-		optional_ptr<unique_lock<mutex>> wal_lock;
+		unique_ptr<StorageLockKey> owned_wal_lock;
+		optional_ptr<StorageLockKey> wal_lock;
 		if (!options.wal_lock) {
-			// not holding the WAL lock yet - grab it
-			owned_wal_lock = storage_manager.GetWALLock();
-			wal_lock = owned_wal_lock;
+			// not holding the WAL lock yet - grab it exclusively (waits for in-flight group-commit writers)
+			owned_wal_lock = storage_manager.GetWALLockExclusive();
+			wal_lock = owned_wal_lock.get();
 		} else {
 			// we already have the WAL lock - just refer to it
 			wal_lock = options.wal_lock;

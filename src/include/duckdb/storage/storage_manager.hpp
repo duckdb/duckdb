@@ -14,6 +14,7 @@
 #include "duckdb/storage/database_size.hpp"
 #include "duckdb/storage/checkpoint/checkpoint_options.hpp"
 #include "duckdb/storage/storage_options.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 
 namespace duckdb {
 class ActiveCheckpointWrapper;
@@ -103,9 +104,16 @@ public:
 	bool WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
 	                        ActiveCheckpointWrapper &active_checkpoint);
 	//! Finishes a checkpoint
-	void WALFinishCheckpoint(unique_lock<mutex> &wal_lock);
-	// Get the WAL lock
-	unique_lock<mutex> GetWALLock();
+	void WALFinishCheckpoint(StorageLockKey &wal_lock);
+	//! Get the WAL lock in shared mode (group commit data path) - many committers can hold it concurrently.
+	unique_ptr<StorageLockKey> GetWALLockShared();
+	//! Get the WAL lock in exclusive mode (checkpoints and catalog-changing commits) - waits for all shared
+	//! holders (in-flight commits) to finish, which subsumes the old pending-commit drain.
+	unique_ptr<StorageLockKey> GetWALLockExclusive();
+	//! Serializes a single committer's WAL entry+marker writes against other (shared) committers, so each
+	//! transaction's WAL entries are contiguous (the shared WAL lock alone allows them to interleave). Held only
+	//! across the entry/marker append, NOT across the fsync, so group-commit fsync batching is preserved.
+	unique_lock<mutex> GetWALAppendLock();
 
 	//! Returns the database file path
 	string GetDBPath() const {
@@ -189,8 +197,13 @@ protected:
 	//! Held as shared_ptr because committing transactions can hold a reference across a concurrent WAL swap
 	//! (see GetWALShared).
 	shared_ptr<WriteAheadLog> wal;
-	//! Mutex used to control writes to the WAL
-	mutex wal_lock;
+	//! Read-write lock controlling access to the WAL. Group-commit data writes take it SHARED (they can run
+	//! concurrently and only need the WAL structure to be stable); checkpoints and catalog-changing commits take it
+	//! EXCLUSIVE. The exclusive acquisition waits for all shared holders, which replaces the explicit
+	//! pending-commit drain that previously guarded WAL swaps / catalog version attachment.
+	StorageLock wal_lock;
+	//! Serializes WAL entry+marker appends among concurrent (shared) committers - see GetWALAppendLock().
+	mutex wal_append_lock;
 	//! Whether or not the database is opened in read-only mode
 	bool read_only;
 	//! When loading a database, we do not yet set the wal-field. Therefore, GetWriteAheadLog must
