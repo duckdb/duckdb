@@ -1720,7 +1720,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		return SourceResultType::FINISHED;
 	case ParquetScanState::SCHEDULE:
 		result.Reset();
-		return Schedule(context, state, result, log_prefetch);
+		return Schedule(context, state, result);
 	case ParquetScanState::PROCESS:
 		result.Reset();
 		return Process(state, result, log_prefetch);
@@ -1731,7 +1731,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 	}
 }
 
-void ParquetReader::PrepareGroupIO(ClientContext &context, ParquetReaderScanState &state, bool log_prefetch) {
+void ParquetReader::PrepareGroupIO(ClientContext &context, ParquetReaderScanState &state) {
+	const bool log_prefetch =
+	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
 	state.current_group++;
 	state.offset_in_group = 0;
 	state.scheduled_strategy = ParquetPrefetchStrategy::NONE;
@@ -1855,9 +1857,8 @@ AsyncResult ParquetReader::CollectGroupIOTasks(ParquetReaderScanState &state) {
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanState &state, DataChunk &result,
-                                    bool log_prefetch) {
-	PrepareGroupIO(context, state, log_prefetch);
+AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
+	PrepareGroupIO(context, state);
 	if (state.scan_state == ParquetScanState::FINISHED) {
 		return SourceResultType::FINISHED;
 	}

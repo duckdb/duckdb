@@ -336,6 +336,8 @@ public:
 	                       LocalTableFunctionState &lstate) override;
 	void PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
 	                 LocalTableFunctionState &lstate_p) override;
+	AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
+	                       LocalTableFunctionState &lstate) override;
 	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
@@ -413,11 +415,11 @@ private:
 	                                           const duckdb_parquet::RowGroup &group, bool filters_look_unselective,
 	                                           bool log_prefetch) const;
 	//! Switch to the next row group, prune it, and register its read-heads (records the chosen prefetch strategy).
-	void PrepareGroupIO(ClientContext &context, ParquetReaderScanState &state, bool log_prefetch);
+	void PrepareGroupIO(ClientContext &context, ParquetReaderScanState &state);
 	//! Turn the read-heads registered by PrepareGroupIO into async I/O tasks (BLOCKED) or HAVE_MORE_OUTPUT.
 	AsyncResult CollectGroupIOTasks(ParquetReaderScanState &state);
 	//! Switch to the next row group and schedule its I/O (prepare column buffers, prefetch the bytes).
-	AsyncResult Schedule(ClientContext &context, ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
+	AsyncResult Schedule(ClientContext &context, ParquetReaderScanState &state, DataChunk &result);
 	//! Process up to STANDARD_VECTOR_SIZE rows of the current row group into result.
 	AsyncResult Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
 	//! Process filters

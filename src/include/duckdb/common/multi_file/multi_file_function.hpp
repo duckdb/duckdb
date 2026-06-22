@@ -480,6 +480,11 @@ public:
 					if (old_file_index != scan_data.file_index) {
 						InitializeFileScanState(context, current_reader_data, scan_data, gstate.projection_ids);
 					}
+					// schedule I/O while holding the parallel lock, so each unit is scheduled once (This is important
+					// for read-ahead)
+					parallel_lock.lock();
+					scan_data.scheduled_io =
+					    scan_data.reader->ScheduleIO(context, *gstate.global_state, *scan_data.local_state);
 					return true;
 				} else {
 					// Set state to the next file
@@ -528,6 +533,10 @@ public:
 
 		if (!TryInitializeNextBatch(context.client, bind_data, *result, gstate)) {
 			return nullptr;
+		}
+		// fixme: I'm not sure about this yet
+		if (result->scheduled_io.GetResultType() == AsyncResultType::BLOCKED) {
+			result->scheduled_io.ExecuteTasksSynchronously();
 		}
 		return std::move(result);
 	}
@@ -663,9 +672,13 @@ public:
 	}
 
 
-	static bool HandleBlocked(TableFunctionInput &data_p, MultiFileLocalState &data, AsyncResult &res) {
+	static bool HandleBlocked(TableFunctionInput &data_p, MultiFileLocalState &data, AsyncResult &res,
+	                          bool preserve_chunk) {
 		D_ASSERT(res.GetResultType() == AsyncResultType::BLOCKED);
-		data.scan_blocked = true;
+		if (preserve_chunk) {
+			// We need to preserve the chunk if the blocks happens mid-decode (e.g., parquet filter prefetching)
+			data.scan_blocked = true;
+		}
 		switch (data_p.results_execution_mode) {
 		case AsyncResultsExecutionMode::TASK_EXECUTOR:
 			data_p.async_result = std::move(res);
@@ -707,7 +720,8 @@ public:
 			auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
 
 			if (res.GetResultType() == AsyncResultType::BLOCKED) {
-				if (HandleBlocked(data_p, data, res)) {
+				// this is a block mid-decode we need resume into the same scan_chunk once the I/O completes
+				if (HandleBlocked(data_p, data, res, true)) {
 					return;
 				}
 				continue;
@@ -744,6 +758,13 @@ public:
 					data_p.async_result = SourceResultType::FINISHED;
 				}
 			} else {
+				if (data.scheduled_io.GetResultType() == AsyncResultType::BLOCKED) {
+					// prefetch the new batch's I/O before decoding it
+					if (HandleBlocked(data_p, data, data.scheduled_io, false)) {
+						return;
+					}
+					continue;
+				}
 				if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
 					continue;
 				}

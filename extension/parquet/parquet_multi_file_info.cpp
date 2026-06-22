@@ -770,8 +770,18 @@ bool ParquetReader::TryInitializeScan(ClientContext &context, GlobalTableFunctio
 
 void ParquetReader::PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
                                 LocalTableFunctionState &lstate_p) {
+	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
+	lstate.scan_state.op = gstate.op;
 	InitializeScan(context, lstate.scan_state, lstate.group_indexes);
+	// prune the row group and register its read-heads off-lock; ScheduleIO collects the I/O under the parallel lock
+	PrepareGroupIO(context, lstate.scan_state);
+}
+
+AsyncResult ParquetReader::ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                      LocalTableFunctionState &lstate_p) {
+	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
+	return CollectGroupIOTasks(lstate.scan_state);
 }
 
 void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
