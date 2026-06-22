@@ -222,7 +222,8 @@ WHERE o.ok < 10
 ----
 10
 
-# external excluded: a partition rebuild cannot keep a pinned dictionary alive
+# external is supported: the in-memory dictionary and the narrow index column survive the spill/repartition,
+# so results must match the in-memory path
 statement ok
 PRAGMA debug_force_external=true
 
@@ -236,6 +237,47 @@ NATION_1	1600
 NATION_2	1600
 NATION_3	1600
 NATION_4	1600
+
+# the strings themselves must reconstruct correctly after the external rebuild (not just the row counts)
+query II
+SELECT n.n_name, o.ok
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+WHERE o.ok < 5
+ORDER BY o.ok
+----
+NATION_0	0
+NATION_1	1
+NATION_2	2
+NATION_3	3
+NATION_4	4
+
+# carry both a VARCHAR (n_name) and an INTEGER (n_region) global-dictionary payload through the external join
+query III
+SELECT n.n_name, n.n_region, COUNT(*) AS cnt
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+GROUP BY n.n_name, n.n_region ORDER BY n.n_name
+----
+NATION_0	0	1600
+NATION_1	10	1600
+NATION_2	20	1600
+NATION_3	30	1600
+NATION_4	40	1600
+
+# aggregate keyed on the surviving dictionary column (exercises the downstream per-id cache across the boundary)
+query I
+SELECT COUNT(DISTINCT n.n_name)
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+----
+5
+
+# row-level self-consistency across the external rebuild (the GROUP BY above only checks aggregates)
+query II
+SELECT n.n_name, o.ok
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+EXCEPT
+SELECT n.n_name, o.ok
+FROM nation n JOIN customer c ON n.nk = c.nk JOIN orders o ON o.ck = c.ck
+----
 
 statement ok
 PRAGMA debug_force_external=false

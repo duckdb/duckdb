@@ -574,12 +574,10 @@ static shared_ptr<TupleDataLayout> BuildJoinLayout(const vector<LogicalType> &co
 }
 
 //! Join-level gate: shape-only eligibility checks, mirroring the dict-emission path plus a PHJ exclusion
-static bool CanUseDictSurvivingJoin(const PhysicalHashJoin &op, const JoinHashTable &ht, bool external,
-                                    bool can_use_perfect_hash, bool build_side_multi_source) {
-	// external joins rebuild partitions; pinned upstream entries cannot survive the rebuild
-	if (external) {
-		return false;
-	}
+static bool CanUseDictSurvivingJoin(const PhysicalHashJoin &op, const JoinHashTable &ht, bool can_use_perfect_hash,
+                                    bool build_side_multi_source) {
+	// external is safe here: the dictionary is an in-memory self-owned copy and the index is a plain row-store
+	// column, so a spill/repartition preserves both (unlike the pointer-embedding dict-emission/compressed-probe paths)
 	// a multi-source build can deliver a later chunk flat or as a different dictionary under the
 	// already-narrowed slot, so disqualify the whole join (see BuildSideHasMultipleSources)
 	if (build_side_multi_source) {
@@ -634,7 +632,7 @@ void HashJoinGlobalSinkState::PublishLayoutIfFirst(HashJoinLocalSinkState &lstat
 	const auto &build_types = lstate.hash_table->build_types;
 	layout_gate.dict_index_width.assign(build_types.size(), 0);
 
-	if (CanUseDictSurvivingJoin(op, *lstate.hash_table, external, can_use_perfect_hash, build_side_multi_source)) {
+	if (CanUseDictSurvivingJoin(op, *lstate.hash_table, can_use_perfect_hash, build_side_multi_source)) {
 		// Per-column width decision lives on the JHT (GetDictSurvivingIndexWidth); feed it each arriving vector.
 		for (idx_t col = 0; col < build_types.size(); col++) {
 			if (col >= payload_chunk.ColumnCount()) {
