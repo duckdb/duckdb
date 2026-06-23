@@ -45,7 +45,10 @@ transform_frame_index_t TransformStack::PushFrame(ParseResult &parse_result, con
 		throw InternalException("Incomplete trampoline transformer ops for rule '%s'", ops.name);
 	}
 	auto frame_index = frames.size();
-	frames.push_back(make_uniq<TransformStackFrame>(frame_index, parse_result, ops, parent, parent_slot));
+	if (result_target && result_target->frame_index >= frame_index) {
+		throw InternalException("Invalid trampoline transformer parent frame index %llu for frame %llu",
+		                        result_target->frame_index, frame_index);
+	}
 	frames.push_back(make_uniq<TransformStackFrame>(frame_index, parse_result, ops, result_target));
 	frame_stack.push_back(frame_index);
 	return frame_index;
