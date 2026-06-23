@@ -106,6 +106,7 @@ private:
 		struct {
 			mutex lock;
 			vector<LogicalType> correlated_types;
+			bool payload_masks_nested_null = false;
 			vector<unique_ptr<Expression>> correlated_aggregates;
 			unique_ptr<GroupedAggregateHashTable> correlated_counts;
 			DataChunk group_chunk;

@@ -74,6 +74,7 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	// store residual predicate information
 	residual_info = std::move(residual_p);
 	lhs_output_in_probe = output_in_probe;
+	vector<ExpressionType> comparison_types;
 
 	for (idx_t i = 0; i < conditions.size(); ++i) {
 		auto &condition = conditions[i];
@@ -99,10 +100,11 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 		                                condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 
 		condition_types.push_back(type);
+		comparison_types.push_back(condition.GetComparisonType());
 	}
 	// at least one equality is necessary
 	D_ASSERT(!equality_types.empty());
-	mark_join_post_processor.Initialize(context, buffer_manager, join_type, conditions.size(), equality_predicates,
+	mark_join_post_processor.Initialize(context, buffer_manager, join_type, conditions.size(), comparison_types,
 	                                    condition_types);
 
 	if (join_type == JoinType::SINGLE) {
@@ -678,8 +680,7 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 		if (join_type == JoinType::MARK && keys.data[col_idx].GetType().id() == LogicalTypeId::STRUCT &&
 		    keys.data[col_idx].GetType().InternalType() == PhysicalType::STRUCT &&
 		    StructType::IsUnnamed(keys.data[col_idx].GetType()) &&
-		    (conditions[col_idx].GetComparisonType() == ExpressionType::COMPARE_EQUAL ||
-		     conditions[col_idx].GetComparisonType() == ExpressionType::COMPARE_NOTEQUAL)) {
+		    conditions[col_idx].GetComparisonType() == ExpressionType::COMPARE_EQUAL) {
 			idx_t filtered_count = 0;
 			for (idx_t i = 0; i < added_count; i++) {
 				const auto row_idx = current_sel->get_index(i);
