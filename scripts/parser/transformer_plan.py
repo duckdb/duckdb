@@ -217,6 +217,82 @@ def classify_choice_alternatives(alternatives, rule_types, excluded_rules, ident
 
 
 # ---------------------------------------------------------------------------
+# Trampoline sequence planning
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class DirectParseArg:
+    var_name: str
+    parse_expr: str
+
+
+@dataclass
+class DirectRepeatArg:
+    child_idx: int
+    rule_name: str
+    var_name: str
+
+
+@dataclass
+class StackChild:
+    child_idx: int
+    rule_name: str
+    slot_idx: int
+
+
+@dataclass
+class RepeatStackChild:
+    child_idx: int
+    rule_name: str
+    slot_start: int
+
+
+@dataclass
+class SequenceRulePlan:
+    direct_args: List[DirectParseArg]
+    direct_repeat_args: List[DirectRepeatArg]
+    stack_children: List[StackChild]
+    repeat_child: "RepeatStackChild | None"
+
+
+def plan_trampoline_sequence_rule(ast, identifier_rules):
+    direct_args = []
+    direct_repeat_args = []
+    stack_children = []
+    repeat_child = None
+    children = ast.children if isinstance(ast, SequenceNode) else [ast]
+    for child_idx, child in enumerate(children):
+        if isinstance(child, LiteralNode):
+            continue
+        if isinstance(child, ReferenceNode):
+            if child.name in identifier_rules:
+                direct_args.append(
+                    DirectParseArg(
+                        to_snake_case(child.name),
+                        f"list_pr.GetChild({child_idx}).Cast<IdentifierParseResult>().identifier",
+                    )
+                )
+            else:
+                stack_children.append(StackChild(child_idx, child.name, len(stack_children)))
+            continue
+        if isinstance(child, OptionalNode) and isinstance(child.child, RepeatNode):
+            repeat_node = child.child.child
+            if isinstance(repeat_node, ReferenceNode):
+                if repeat_node.name in identifier_rules:
+                    direct_repeat_args.append(
+                        DirectRepeatArg(child_idx, repeat_node.name, to_snake_case(repeat_node.name))
+                    )
+                    continue
+                if repeat_child is not None:
+                    raise NotImplementedError("only one repeat child is currently supported")
+                repeat_child = RepeatStackChild(child_idx, repeat_node.name, len(stack_children))
+                continue
+        raise NotImplementedError(f"unsupported semantic child shape: {type(child).__name__}")
+    return SequenceRulePlan(direct_args, direct_repeat_args, stack_children, repeat_child)
+
+
+# ---------------------------------------------------------------------------
 # Sequence-element classification
 # ---------------------------------------------------------------------------
 

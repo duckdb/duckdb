@@ -1,6 +1,5 @@
 import argparse
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -9,11 +8,9 @@ from grammar_types import load_grammar_types, load_matcher_rule_overrides
 from transformer_trampoline_config import load_transformer_trampoline_config
 from transformer_plan import (
     ChoiceNode,
-    LiteralNode,
-    OptionalNode,
     ReferenceNode,
-    RepeatNode,
     SequenceNode,
+    plan_trampoline_sequence_rule,
     to_snake_case,
     tokens_to_ast,
 )
@@ -84,41 +81,6 @@ def typed_result_expr(cpp_type, expr, by_value):
     if by_value:
         move_expr = f"std::move({expr})"
     return f"make_uniq<TypedTransformResult<{cpp_type}>>({move_expr})"
-
-
-@dataclass
-class DirectParseArg:
-    var_name: str
-    parse_expr: str
-
-
-@dataclass
-class DirectRepeatArg:
-    child_idx: int
-    rule_name: str
-    var_name: str
-
-
-@dataclass
-class StackChild:
-    child_idx: int
-    rule_name: str
-    slot_idx: int
-
-
-@dataclass
-class RepeatStackChild:
-    child_idx: int
-    rule_name: str
-    slot_start: int
-
-
-@dataclass
-class SequenceRulePlan:
-    direct_args: list[DirectParseArg]
-    direct_repeat_args: list[DirectRepeatArg]
-    stack_children: list[StackChild]
-    repeat_child: RepeatStackChild | None
 
 
 class UseGramPreviewEmitter:
@@ -201,42 +163,6 @@ class UseGramPreviewEmitter:
             return self.emit_sequence_rule(rule_name, SequenceNode([ast]))
         raise NotImplementedError(f"unsupported preview shape for {rule_name}: {type(ast).__name__}")
 
-    def plan_sequence_rule(self, ast):
-        direct_args = []
-        direct_repeat_args = []
-        stack_children = []
-        repeat_child = None
-        children = ast.children if isinstance(ast, SequenceNode) else [ast]
-        for child_idx, child in enumerate(children):
-            if isinstance(child, LiteralNode):
-                continue
-            if isinstance(child, ReferenceNode):
-                if child.name in self.identifier_rules:
-                    direct_args.append(
-                        DirectParseArg(
-                            self.identifier_var_name(child.name),
-                            f"list_pr.GetChild({child_idx}).Cast<IdentifierParseResult>().identifier",
-                        )
-                    )
-                else:
-                    stack_children.append(StackChild(child_idx, child.name, len(stack_children)))
-                continue
-            if isinstance(child, OptionalNode) and isinstance(child.child, RepeatNode):
-                repeat_node = child.child.child
-                if isinstance(repeat_node, ReferenceNode):
-                    if repeat_node.name in self.identifier_rules:
-                        direct_repeat_args.append(
-                            DirectRepeatArg(child_idx, repeat_node.name, self.identifier_var_name(repeat_node.name))
-                        )
-                        continue
-                    if repeat_node.name not in self.identifier_rules:
-                        if repeat_child is not None:
-                            raise NotImplementedError("only one repeat child is currently supported")
-                        repeat_child = RepeatStackChild(child_idx, repeat_node.name, len(stack_children))
-                        continue
-            raise NotImplementedError(f"unsupported semantic child shape: {type(child).__name__}")
-        return SequenceRulePlan(direct_args, direct_repeat_args, stack_children, repeat_child)
-
     def identifier_var_name(self, rule_name):
         return to_snake_case(rule_name)
 
@@ -272,7 +198,7 @@ class UseGramPreviewEmitter:
         return lines
 
     def emit_sequence_rule(self, rule_name, ast):
-        plan = self.plan_sequence_rule(ast)
+        plan = plan_trampoline_sequence_rule(ast, self.identifier_rules)
         cpp_type = self.cpp_type(rule_name)
         by_value = self.by_value(rule_name)
 
