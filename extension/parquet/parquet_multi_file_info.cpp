@@ -776,9 +776,8 @@ void ParquetReader::PrepareScan(ClientContext &context, GlobalTableFunctionState
 AsyncResult ParquetReader::ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate_p,
                                       LocalTableFunctionState &lstate_p) {
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
-	// prune the row group + register its read-heads, then collect the async I/O tasks - all off-lock
-	auto strategy = PrepareGroupIO(context, lstate.scan_state);
-	return CollectGroupIOTasks(lstate.scan_state, strategy);
+	auto strategy = RegisterRowGroupReads(context, lstate.scan_state);
+	return ScheduleRowGroupReads(lstate.scan_state, strategy);
 }
 
 void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {

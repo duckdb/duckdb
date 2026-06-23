@@ -411,10 +411,10 @@ private:
 	ParquetPrefetchStrategy ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
 	                                           const duckdb_parquet::RowGroup &group, bool filters_look_unselective,
 	                                           bool log_prefetch) const;
-	//! Prune the current row group and register its read-heads
-	ParquetPrefetchStrategy PrepareGroupIO(ClientContext &context, ParquetReaderScanState &state);
-	//! Turn the read-heads registered by PrepareGroupIO into async I/O tasks (BLOCKED) or HAVE_MORE_OUTPUT.
-	AsyncResult CollectGroupIOTasks(ParquetReaderScanState &state, ParquetPrefetchStrategy strategy);
+	//! Register the read-heads to fetch, and select prefetch strategy
+	ParquetPrefetchStrategy RegisterRowGroupReads(ClientContext &context, ParquetReaderScanState &state);
+	//! Build the async I/O tasks for the registered read-heads
+	AsyncResult ScheduleRowGroupReads(ParquetReaderScanState &state, ParquetPrefetchStrategy strategy);
 	//! Process up to STANDARD_VECTOR_SIZE rows of the current row group into result.
 	AsyncResult Process(ClientContext &context, ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
 	//! Log and finalize the row group's prefetch metrics

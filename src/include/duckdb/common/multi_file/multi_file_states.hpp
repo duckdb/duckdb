@@ -184,7 +184,7 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	}
 };
 
-//! Phase of the per-thread multi-file scan: schedule the claimed batch's I/O, then decode it
+//! Phase of the per-thread multi-file scan: we are either scheduling or decoding
 enum class MultiFileScanPhase : uint8_t { SCHEDULE, DECODE };
 
 struct MultiFileLocalState : public LocalTableFunctionState {
@@ -201,9 +201,9 @@ public:
 	unique_ptr<LocalTableFunctionState> local_state;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
 	DataChunk scan_chunk;
-	//! Whether the last Scan call returned BLOCKED
-	bool scan_blocked = false;
-	//! Whether the current batch still needs its I/O scheduled (SCHEDULE) or is ready to decode (DECODE)
+	//! Whether we preserve the chunk, or we reset it after finishing a process task
+	bool preserve_chunk = false;
+	//! Whether the current batch still needs its I/O scheduled or is ready to decode
 	MultiFileScanPhase phase = MultiFileScanPhase::SCHEDULE;
 	//! The executor to transform scan_chunk into the final result with FinalizeChunk
 	ExpressionExecutor executor;

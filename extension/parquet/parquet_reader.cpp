@@ -1725,7 +1725,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 	}
 }
 
-ParquetPrefetchStrategy ParquetReader::PrepareGroupIO(ClientContext &context, ParquetReaderScanState &state) {
+ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &context, ParquetReaderScanState &state) {
 	const bool log_prefetch =
 	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
 	state.offset_in_group = 0;
@@ -1810,9 +1810,9 @@ ParquetPrefetchStrategy ParquetReader::PrepareGroupIO(ClientContext &context, Pa
 	return strategy;
 }
 
-AsyncResult ParquetReader::CollectGroupIOTasks(ParquetReaderScanState &state, ParquetPrefetchStrategy strategy) {
+AsyncResult ParquetReader::ScheduleRowGroupReads(ParquetReaderScanState &state, ParquetPrefetchStrategy strategy) {
 	if (strategy == ParquetPrefetchStrategy::NONE) {
-		// nothing to prefetch (prefetch disabled, row group skipped, or broken-offset fallback)
+		// nothing to prefetch
 		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
