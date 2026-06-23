@@ -93,7 +93,7 @@ private:
 AsyncWriteQueue::AsyncWriteQueue(ClientContext &client_context_p, AsyncWriteTarget &target_p)
     : client_context(client_context_p), target(target_p) {
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
-	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
+	auto async_threads = scheduler.NumberOfAsyncThreads();
 	max_active_tasks = MaxValue<idx_t>(async_threads, 1);
 	if (async_threads == 0) {
 		return;
@@ -498,8 +498,8 @@ idx_t ManagedAsyncWriteQueue::PendingWrite::Size() const {
 ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, AsyncWriteTarget &target_p)
     : client_context(client_context_p), target(target_p) {
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
-	auto regular_threads = MaxValue<idx_t>(NumericCast<idx_t>(scheduler.NumberOfThreads()), 1);
-	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
+	auto regular_threads = MaxValue<idx_t>(scheduler.NumberOfThreads(), 1);
+	auto async_threads = scheduler.NumberOfAsyncThreads();
 	max_active_drain_tasks = MaxValue<idx_t>(async_threads, 1);
 	max_pending_bytes = AsyncWriteConfig::MAX_PENDING_BYTES_PER_THREAD * regular_threads;
 	min_pending_bytes = MinValue(max_pending_bytes, AsyncWriteConfig::MIN_PENDING_BYTES_PER_THREAD * regular_threads);
@@ -981,7 +981,7 @@ ManagedAsyncWriteStreamQueue::ManagedAsyncWriteStreamQueue(ClientContext &client
 	limit_coalesced_write_size = local_file;
 
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
-	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
+	auto async_threads = scheduler.NumberOfAsyncThreads();
 
 	// Positional writes let multiple async requests drain one logical write queue concurrently.
 	// Otherwise the stream queue keeps one sequential request active so target ordering remains correct.
