@@ -1,0 +1,186 @@
+# name: test/sql/types/geo/geometry_shred_more.test
+# description: Stress-test GEOMETRY column checkpointing across storage versions, row-group sizes and shredding modes
+# group: [geo]
+
+statement ok
+SET checkpoint_threshold='10gb';
+
+foreach storage_version v1.0.0 v1.5.0
+
+foreach rgsize 2048 8192
+
+statement ok
+ATTACH '__TEST_DIR__/geocp_${storage_version}_${rgsize}.db' AS db (ROW_GROUP_SIZE ${rgsize}, STORAGE_VERSION '${storage_version}');
+
+statement ok
+USE db;
+
+statement ok
+SET geometry_minimum_shredding_size=30000;
+
+# 1) Unshredded POINT XY spanning multiple row groups (the SPATIAL-checkpoint repro for v1.0.0)
+statement ok
+CREATE TABLE pts AS SELECT printf('POINT(%f %f)', a::DOUBLE, a::DOUBLE)::GEOMETRY AS g FROM range(10000) t(a);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM pts;
+----
+10000
+
+# `&&` bbox intersection includes the boundary -> a in 10..50 = 41
+query I
+SELECT count(*) FROM pts WHERE g && 'POLYGON((10 10, 10 50, 50 50, 50 10, 10 10))'::GEOMETRY;
+----
+41
+
+query I
+SELECT count(*) FROM pts WHERE g::VARCHAR = 'POINT (5 5)';
+----
+1
+
+# 2) Mixed geometry types (points + linestrings) -> cannot be shredded
+statement ok
+CREATE TABLE mixed AS
+    SELECT printf('POINT(%f %f)', a::DOUBLE, a::DOUBLE)::GEOMETRY AS g FROM range(5000) t(a)
+    UNION ALL
+    SELECT printf('LINESTRING(%f %f, %f %f)', a::DOUBLE, a::DOUBLE, (a + 1)::DOUBLE, (a + 1)::DOUBLE)::GEOMETRY
+    FROM range(5000) t(a);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM mixed;
+----
+10000
+
+# points a in 10..50 (41) + linestrings [a,a+1] overlapping [10,50] i.e. a in 9..50 (42) = 83
+query I
+SELECT count(*) FROM mixed WHERE g && 'POLYGON((10 10, 10 50, 50 50, 50 10, 10 10))'::GEOMETRY;
+----
+83
+
+# 3) NULLs + EMPTY geometries -> cannot be shredded (empties have no vertices)
+statement ok
+CREATE TABLE withnull AS
+    SELECT CASE WHEN a % 3 = 0 THEN NULL
+                WHEN a % 3 = 1 THEN 'POINT EMPTY'::GEOMETRY
+                ELSE printf('POINT(%f %f)', a::DOUBLE, a::DOUBLE)::GEOMETRY END AS g
+    FROM range(10000) t(a);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(g) FROM withnull;
+----
+6666
+
+# 4) Append more rows, then checkpoint again: older row groups are unchanged (no-changes branch),
+#    newer ones have changes -> exercises both branches in a single checkpoint.
+statement ok
+INSERT INTO pts SELECT printf('POINT(%f %f)', a::DOUBLE, a::DOUBLE)::GEOMETRY FROM range(10000, 20000) t(a);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM pts;
+----
+20000
+
+query I
+SELECT count(*) FROM pts WHERE g && 'POLYGON((10 10, 10 50, 50 50, 50 10, 10 10))'::GEOMETRY;
+----
+41
+
+# 5) Shredded columns: lower the threshold so each row group shreds to a specialized layout
+statement ok
+SET geometry_minimum_shredding_size=512;
+
+statement ok
+CREATE TABLE pts_shred AS SELECT printf('POINT(%f %f)', a::DOUBLE, a::DOUBLE)::GEOMETRY AS g FROM range(10000) t(a);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM pts_shred WHERE g && 'POLYGON((10 10, 10 50, 50 50, 50 10, 10 10))'::GEOMETRY;
+----
+41
+
+query I
+SELECT count(*) FROM pts_shred WHERE g::VARCHAR = 'POINT (5 5)';
+----
+1
+
+# 6) Shredding disabled entirely
+statement ok
+SET geometry_minimum_shredding_size=-1;
+
+statement ok
+CREATE TABLE pts_noshred AS SELECT printf('POINT(%f %f)', a::DOUBLE, a::DOUBLE)::GEOMETRY AS g FROM range(10000) t(a);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM pts_noshred WHERE g && 'POLYGON((10 10, 10 50, 50 50, 50 10, 10 10))'::GEOMETRY;
+----
+41
+
+# Reopen the database to exercise the load path (reading back shredded/unshredded geometry columns)
+statement ok
+USE memory;
+
+statement ok
+DETACH db;
+
+statement ok
+ATTACH '__TEST_DIR__/geocp_${storage_version}_${rgsize}.db' AS db;
+
+statement ok
+USE db;
+
+query I
+SELECT count(*) FROM pts;
+----
+20000
+
+query I
+SELECT count(*) FROM pts WHERE g && 'POLYGON((10 10, 10 50, 50 50, 50 10, 10 10))'::GEOMETRY;
+----
+41
+
+query I
+SELECT count(*) FROM mixed;
+----
+10000
+
+query I
+SELECT count(g) FROM withnull;
+----
+6666
+
+query I
+SELECT count(*) FROM pts_shred WHERE g && 'POLYGON((10 10, 10 50, 50 50, 50 10, 10 10))'::GEOMETRY;
+----
+41
+
+query I
+SELECT count(*) FROM pts_noshred WHERE g && 'POLYGON((10 10, 10 50, 50 50, 50 10, 10 10))'::GEOMETRY;
+----
+41
+
+statement ok
+USE memory;
+
+statement ok
+DETACH db;
+
+endloop
+
+endloop

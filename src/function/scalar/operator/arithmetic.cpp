@@ -96,11 +96,11 @@ static Value NumericStatsValue(const LogicalType &type, T value) {
 	D_ASSERT(type.IsNumeric());
 	switch (type.InternalType()) {
 	case PhysicalType::FLOAT:
-		return Value::FLOAT(value);
+		return Value::FLOAT(static_cast<float>(value));
 	case PhysicalType::DOUBLE:
-		return Value::DOUBLE(value);
+		return Value::DOUBLE(static_cast<double>(value));
 	default:
-		return Value::Numeric(type, value);
+		return Value::Numeric(type, static_cast<int64_t>(value));
 	}
 }
 

@@ -1197,7 +1197,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExponentiationExpre
 BinaryExpressionTail
 PEGTransformerFactory::TransformBitwiseExpressionTail(PEGTransformer &transformer, const string &bit_operator,
                                                       unique_ptr<ParsedExpression> additive_expression) {
-	return {bit_operator, std::move(additive_expression)};
+	return {bit_operator, std::move(additive_expression), optional_idx()};
 }
 
 BinaryExpressionTail
@@ -1210,12 +1210,12 @@ PEGTransformerFactory::TransformAdditiveExpressionTail(PEGTransformer &transform
 BinaryExpressionTail
 PEGTransformerFactory::TransformMultiplicativeExpressionTail(PEGTransformer &transformer, const string &factor,
                                                              unique_ptr<ParsedExpression> exponentiation_expression) {
-	return {factor, std::move(exponentiation_expression)};
+	return {factor, std::move(exponentiation_expression), optional_idx()};
 }
 
 BinaryExpressionTail PEGTransformerFactory::TransformExponentiationExpressionTail(
     PEGTransformer &transformer, const string &exponent_operator, unique_ptr<ParsedExpression> collate_expression) {
-	return {exponent_operator, std::move(collate_expression)};
+	return {exponent_operator, std::move(collate_expression), optional_idx()};
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCollateExpression(

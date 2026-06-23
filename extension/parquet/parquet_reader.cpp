@@ -986,8 +986,14 @@ MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaDat
 			result.identifier = Value::INTEGER(parent_column_schema.field_id);
 		}
 	}
-	for (auto &child : element.children) {
-		result.children.push_back(ParseColumnDefinition(file_meta_data, child));
+	// A GEOMETRY column is a leaf at the logical level - it only wraps an inner BLOB child internally so that the
+	// reader can validate/transform the WKB. Exposing that child here would make the column definition diverge from
+	// the (childless) global GEOMETRY column, breaking trivial column mapping and disabling row group pruning for
+	// spatial predicates. Treat it as a leaf.
+	if (element.schema_type != ParquetColumnSchemaType::GEOMETRY) {
+		for (auto &child : element.children) {
+			result.children.push_back(ParseColumnDefinition(file_meta_data, child));
+		}
 	}
 	return result;
 }

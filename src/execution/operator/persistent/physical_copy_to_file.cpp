@@ -3271,7 +3271,8 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 
 		// Decide which file to flush to
 		annotated_unique_lock<annotated_mutex> global_guard(gstate.lock);
-		if (!file_state) {
+		// Another thread may have rotated the file state since EnsureFileStateReady, so re-check readiness
+		if (!file_state.IsReady()) {
 			global_guard.unlock();
 			TaskScheduler::YieldThread();
 			continue;

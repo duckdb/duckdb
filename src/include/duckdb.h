@@ -504,7 +504,7 @@ typedef struct {
 } duckdb_bit;
 
 //! BIGNUMs are composed of a byte pointer, a size, and an `is_negative` bool.
-//! The absolute value of the number is stored in `data` in little endian format.
+//! The absolute value of the number is stored in `data` in big endian format.
 //! You must free `data` with `duckdb_free`.
 typedef struct {
 	uint8_t *data;

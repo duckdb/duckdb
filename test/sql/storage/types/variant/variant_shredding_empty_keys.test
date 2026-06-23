@@ -1,0 +1,38 @@
+# name: test/sql/storage/types/variant/variant_shredding_empty_keys.test
+# group: [variant]
+
+require json
+
+load {TEST_DIR}/repro_eka.db readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size=0;
+
+statement ok
+create table succeeds as SELECT '{"": 1, "x": {"y": "t"}}'::JSON::VARIANT;
+
+statement ok
+checkpoint;
+
+restart
+
+statement ok
+select * from succeeds;
+
+statement ok
+create table fails as SELECT '{"x": "hello", "": "world"}'::JSON::VARIANT AS j;
+
+restart
+
+statement ok
+CHECKPOINT
+
+query I
+select * from fails;
+----
+(world, hello)
+
+query I
+select * from succeeds;
+----
+(1, {'y': t})

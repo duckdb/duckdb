@@ -742,6 +742,24 @@ struct UnpivotEntry {
 
 void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry,
                                    vector<UnpivotEntry> &unpivot_entries) {
+	// Try to bind the entry expression as values - but only when it is composed purely of column
+	// references and constants (a column list). Entries that contain other expressions are
+	// unpivoted as expressions instead of being folded into column names.
+	if (entry.expr) {
+		vector<Identifier> column_list;
+		if (TryExtractUnpivotList(*entry.expr, column_list)) {
+			try {
+				auto expr_copy = entry.expr->Copy();
+				BindPivotInList(expr_copy, entry.values, child_binder);
+				// successfully bound as values - clear the expression
+				entry.expr = nullptr;
+			} catch (...) {
+				// ignore binder exceptions here - we fall back to expression mode
+				entry.values.clear();
+			}
+		}
+	}
+
 	if (!entry.expr) {
 		// pivot entry without an expression - generate one
 		UnpivotEntry unpivot_entry;
