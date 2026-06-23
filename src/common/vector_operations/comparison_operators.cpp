@@ -213,84 +213,13 @@ static idx_t GetComparisonCount(const Vector &left, const Vector &right, const c
 	return left_is_const ? right.size() : left.size();
 }
 
-enum class StructEqualityResult : uint8_t { FALSE_VALUE, TRUE_VALUE, NULL_VALUE };
-
-static StructEqualityResult EvaluateStructEquality(const Value &left, const Value &right) {
-	if (left.IsNull() || right.IsNull()) {
-		return StructEqualityResult::NULL_VALUE;
-	}
-	auto &left_children = StructValue::GetChildren(left);
-	auto &right_children = StructValue::GetChildren(right);
-	D_ASSERT(left_children.size() == right_children.size());
-	bool has_unknown = false;
-	for (idx_t i = 0; i < left_children.size(); i++) {
-		auto &lhs_child = left_children[i];
-		auto &rhs_child = right_children[i];
-		if (lhs_child.type().InternalType() == PhysicalType::STRUCT &&
-		    rhs_child.type().InternalType() == PhysicalType::STRUCT) {
-			auto child_result = EvaluateStructEquality(lhs_child, rhs_child);
-			if (child_result == StructEqualityResult::FALSE_VALUE) {
-				return StructEqualityResult::FALSE_VALUE;
-			}
-			has_unknown = has_unknown || child_result == StructEqualityResult::NULL_VALUE;
-			continue;
-		}
-		if (lhs_child.IsNull() || rhs_child.IsNull()) {
-			has_unknown = true;
-			continue;
-		}
-		if (!ValueOperations::NotDistinctFrom(lhs_child, rhs_child)) {
-			return StructEqualityResult::FALSE_VALUE;
-		}
-	}
-	return has_unknown ? StructEqualityResult::NULL_VALUE : StructEqualityResult::TRUE_VALUE;
-}
-
-static void ExecuteStructEqualsOrNotEquals(const Vector &left, const Vector &right, Vector &result, bool invert) {
-	const auto count = GetComparisonCount(left, right, invert ? "NotEquals" : "Equals");
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::SetSize(result, count);
-	auto result_data = FlatVector::GetDataMutable<bool>(result);
-	auto &validity = FlatVector::ValidityMutable(result);
-	validity.SetAllValid(count);
-	for (idx_t i = 0; i < count; i++) {
-		auto row_result = EvaluateStructEquality(left.GetValue(i), right.GetValue(i));
-		switch (row_result) {
-		case StructEqualityResult::TRUE_VALUE:
-			result_data[i] = !invert;
-			break;
-		case StructEqualityResult::FALSE_VALUE:
-			result_data[i] = invert;
-			break;
-		case StructEqualityResult::NULL_VALUE:
-			result_data[i] = false;
-			validity.SetInvalid(i);
-			break;
-		}
-	}
-}
-
 void VectorOperations::Equals(const Vector &left, const Vector &right, Vector &result) {
-	if (left.GetType().id() == LogicalTypeId::STRUCT && right.GetType().id() == LogicalTypeId::STRUCT &&
-	    left.GetType().InternalType() == PhysicalType::STRUCT &&
-	    right.GetType().InternalType() == PhysicalType::STRUCT && StructType::IsUnnamed(left.GetType()) &&
-	    StructType::IsUnnamed(right.GetType())) {
-		ExecuteStructEqualsOrNotEquals(left, right, result, false);
-		return;
-	}
 	if (!TryPrimitiveComparisonExecute<duckdb::Equals>(left, right, result)) {
 		ComparatorToBoolean(left, right, result, [](int8_t v) { return v == 0; });
 	}
 }
 
 void VectorOperations::NotEquals(const Vector &left, const Vector &right, Vector &result) {
-	if (left.GetType().id() == LogicalTypeId::STRUCT && right.GetType().id() == LogicalTypeId::STRUCT &&
-	    left.GetType().InternalType() == PhysicalType::STRUCT &&
-	    right.GetType().InternalType() == PhysicalType::STRUCT && StructType::IsUnnamed(left.GetType()) &&
-	    StructType::IsUnnamed(right.GetType())) {
-		ExecuteStructEqualsOrNotEquals(left, right, result, true);
-		return;
-	}
 	if (!TryPrimitiveComparisonExecute<duckdb::NotEquals>(left, right, result)) {
 		ComparatorToBoolean(left, right, result, [](int8_t v) { return v != 0; });
 	}

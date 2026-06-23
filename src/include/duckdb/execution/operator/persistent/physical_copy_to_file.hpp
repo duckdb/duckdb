@@ -86,9 +86,6 @@ public:
 	}
 
 	bool ParallelSink() const override {
-		if (Rotate() && !per_thread_output && !partition_output) {
-			return false;
-		}
 		return per_thread_output || partition_output || parallel;
 	}
 

@@ -48,10 +48,6 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
                              estimated_cardinality),
       delim_types(std::move(delim_types)) {
 	filter_pushdown = std::move(pushdown_info_p);
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
-	    op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-		mark_nulls_are_false = op.Cast<LogicalComparisonJoin>().mark_nulls_are_false;
-	}
 
 	children.push_back(left);
 	children.push_back(right);
@@ -522,7 +518,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 	auto result =
 	    make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type, initial_radix_bits,
 	                             rhs_output_columns.col_idxs, residual_info ? residual_info->Copy() : nullptr,
-	                             predicate ? predicate.get() : nullptr, lhs_output_in_probe, mark_nulls_are_false);
+	                             predicate ? predicate.get() : nullptr, lhs_output_in_probe);
 	if (ShouldPrepareBloomFilterBuild(*this)) {
 		result->PrepareBuildBloomFilter(children[1].get().estimated_cardinality);
 	}

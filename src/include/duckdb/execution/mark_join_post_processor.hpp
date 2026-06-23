@@ -34,9 +34,8 @@ public:
 	};
 
 	//! Initialize the MARK post-processing strategy for this hash table
-	void Initialize(ClientContext &context, BufferManager &buffer_manager, JoinType join_type,
-	                bool mark_nulls_are_false, idx_t condition_count, const vector<ExpressionType> &equality_predicates,
-	                const vector<LogicalType> &condition_types);
+	void Initialize(ClientContext &context, BufferManager &buffer_manager, JoinType join_type, idx_t condition_count,
+	                const vector<ExpressionType> &equality_predicates, const vector<LogicalType> &condition_types);
 	//! Initialize the correlated MARK count state
 	void InitializeCorrelatedCounts(const vector<LogicalType> &correlated_types);
 
@@ -46,8 +45,6 @@ public:
 	bool UsesNullRemainder() const;
 	//! Returns true if the condition-scan null refinement path is active
 	bool UsesConditionScan() const;
-	//! Returns true if MARK NULLs can be collapsed to FALSE
-	bool CanTreatNullAsFalse() const;
 
 	//! Register build-side key state needed for MARK post-processing
 	void SinkBuildKeys(DataChunk &keys);
@@ -100,7 +97,6 @@ private:
 	optional_ptr<ClientContext> context;
 	optional_ptr<BufferManager> buffer_manager;
 	JoinType join_type;
-	bool mark_nulls_are_false = false;
 	idx_t condition_count = 0;
 	vector<ExpressionType> equality_predicates;
 	vector<LogicalType> condition_types;

@@ -107,8 +107,6 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 		// project them using the result selection vector
 		// reference the columns of the left side from the result
 		result.Slice(left, sel, result_count);
-	} else {
-		result.SetChildCardinality(0);
 	}
 }
 
@@ -379,15 +377,6 @@ public:
 			mark_null_values_are_equal.push_back(cond.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
 			                                     cond.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 		}
-		check_nested_mark_nulls = false;
-		for (idx_t i = 0; i < condition_types.size(); i++) {
-			if (condition_types[i].InternalType() == PhysicalType::STRUCT &&
-			    (comparison_types[i] == ExpressionType::COMPARE_EQUAL ||
-			     comparison_types[i] == ExpressionType::COMPARE_NOTEQUAL)) {
-				check_nested_mark_nulls = true;
-				break;
-			}
-		}
 		auto &allocator = Allocator::Get(context);
 		left_condition.Initialize(allocator, condition_types);
 		right_condition.Initialize(allocator, condition_types);
@@ -402,7 +391,7 @@ public:
 			pred_executor.AddExpression(*op.predicate);
 			pred_matches.Initialize();
 		}
-		mark_join_post_processor.Initialize(context, BufferManager::GetBufferManager(context), op.join_type, false,
+		mark_join_post_processor.Initialize(context, BufferManager::GetBufferManager(context), op.join_type,
 		                                    conditions.size(), comparison_types, condition_types);
 		ResetState();
 	}
@@ -415,7 +404,6 @@ public:
 	MarkJoinPostProcessor mark_join_post_processor;
 	vector<bool> mark_null_values_are_equal;
 	vector<idx_t> lhs_output_columns;
-	bool check_nested_mark_nulls;
 
 	ColumnDataScanState condition_scan_state;
 	ColumnDataScanState payload_scan_state;

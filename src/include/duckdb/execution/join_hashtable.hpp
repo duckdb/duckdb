@@ -10,7 +10,6 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -227,8 +226,7 @@ public:
 	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
 	              vector<LogicalType> build_types, JoinType type, idx_t initial_radix_bits,
 	              const vector<idx_t> &output_columns, unique_ptr<ResidualPredicateInfo> residual_p,
-	              optional_ptr<Expression> predicate_ptr = nullptr, const vector<idx_t> &output_in_probe = {},
-	              bool mark_nulls_are_false = false);
+	              optional_ptr<Expression> predicate_ptr = nullptr, const vector<idx_t> &output_in_probe = {});
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -249,7 +247,6 @@ public:
 	//! Probe the HT with the given input chunk, resulting in the given result
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
-	void ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result);
 	void InitializeCorrelatedMarkJoin(const vector<LogicalType> &correlated_types);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
@@ -354,8 +351,6 @@ public:
 	Vector vfound;
 	//! The join type of the HT
 	JoinType join_type;
-	//! Whether this MARK join can collapse UNKNOWN to FALSE
-	bool mark_nulls_are_false;
 	//! Whether or not the HT has been finalized
 	bool finalized;
 	//! Whether or not any of the key elements contain NULL
@@ -444,8 +439,8 @@ private:
 
 	//! Whether or not to use a bloom filter will be determined by the operator
 	BloomFilter bloom_filter;
-	idx_t bloom_filter_init_count = 0;
 	bool should_build_bloom_filter = false;
+	idx_t bloom_filter_init_count = 0;
 
 	unique_ptr<PrefixRangeFilter> prefix_range_filter;
 	bool should_build_prefix_range_filter = false;
