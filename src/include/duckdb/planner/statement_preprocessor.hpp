@@ -19,12 +19,15 @@ class ClientContext;
 class ClientContextLock;
 class SQLStatement;
 struct PragmaInfo;
+
 //! Preprocesses parsed statements: expands pragmas, unpacks multi-statements, and wraps in transactions
 class StatementPreprocessor {
 public:
 	explicit StatementPreprocessor(ClientContext &context);
+
 	void Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
 	                CurrentTransactionState transaction_context_state);
+
 	void PreprocessInternal(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
 	                        CurrentTransactionState transaction_context_state);
 
@@ -35,5 +38,8 @@ private:
 	//! Handles a pragma statement, determines whether the statement needs reparsing, if it does, it returns the
 	//! statement(s) to replace the current one. Otherwise, it just returns back the original statement in a vector.
 	vector<unique_ptr<SQLStatement>> TryReparsePragma(unique_ptr<SQLStatement> statement) const;
+
+	//! Handles an extension statement, replacing it with generated statements if the extension preprocesses itself.
+	vector<unique_ptr<SQLStatement>> TryPreprocessExtension(unique_ptr<SQLStatement> statement) const;
 };
 } // namespace duckdb

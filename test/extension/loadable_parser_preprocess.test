@@ -1,0 +1,53 @@
+# name: test/extension/loadable_parser_preprocess.test
+# description: Try preprocessing a parser extension statement with client context
+# group: [extension]
+
+require skip_reload
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+query I
+CONTEXT PREPROCESS SUCCESS
+----
+1
+
+statement error
+CONTEXT PREPROCESS MULTI
+----
+Invalid Input Error: Parser extension preprocess functions cannot generate multi statements
+
+statement error
+CONTEXT PREPROCESS PRAGMA
+----
+Invalid Input Error: Parser extension preprocess functions cannot generate pragma statements
+
+statement error
+CONTEXT PREPROCESS TRANSACTION
+----
+Invalid Input Error: Parser extension preprocess functions cannot generate transaction statements
+
+statement error
+CONTEXT PREPROCESS EMPTY
+----
+Invalid Input Error: Parser extension preprocess functions must generate at least one statement
+
+statement error
+CONTEXT PREPROCESS NULL
+----
+Invalid Input Error: Parser extension preprocess functions cannot contain NULL statements
+
+statement error
+CONTEXT PREPROCESS RECURSE
+----
+Invalid Input Error: Parser extension preprocess functions cannot generate extension statements
+
+statement error
+CONTEXT PREPROCESS FAIL
+----
+Catalog Error: Table with name context_preprocess_missing does not exist!
+
+statement error
+SELECT * FROM context_preprocess_rollback;
+----
+Catalog Error: Table with name context_preprocess_rollback does not exist!
