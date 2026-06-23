@@ -84,20 +84,17 @@ private:
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
-	explicit ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p)
-	    : row_group_index(0), batch_index(0), op(op_p) {
+	explicit ParquetReadGlobalState(optional_ptr<const PhysicalOperator> op_p) : row_group_index(0), op(op_p) {
 	}
 	//! Index of row group within file currently up for scanning
 	idx_t row_group_index;
-	//! Batch index of the next row group to be scanned
-	idx_t batch_index;
 	//! (Optional) pointer to physical operator performing the scan
 	optional_ptr<const PhysicalOperator> op;
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
 	ParquetReaderScanState scan_state;
-	vector<idx_t> group_indexes;
+	idx_t group_index;
 };
 
 static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, ParquetOptions &options,
@@ -763,7 +760,7 @@ bool ParquetReader::TryInitializeScan(ClientContext &context, GlobalTableFunctio
 		return false;
 	}
 	// The current reader has rowgroups left to be scanned
-	lstate.group_indexes = {gstate.row_group_index};
+	lstate.group_index = gstate.row_group_index;
 	gstate.row_group_index++;
 	return true;
 }
@@ -773,15 +770,15 @@ void ParquetReader::PrepareScan(ClientContext &context, GlobalTableFunctionState
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
 	lstate.scan_state.op = gstate.op;
-	InitializeScan(context, lstate.scan_state, lstate.group_indexes);
-	// prune the row group and register its read-heads off-lock; ScheduleIO collects the I/O under the parallel lock
-	PrepareGroupIO(context, lstate.scan_state);
+	InitializeScan(context, lstate.scan_state, lstate.group_index);
 }
 
 AsyncResult ParquetReader::ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate_p,
                                       LocalTableFunctionState &lstate_p) {
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
-	return CollectGroupIOTasks(lstate.scan_state);
+	// prune the row group + register its read-heads, then collect the async I/O tasks - all off-lock
+	auto strategy = PrepareGroupIO(context, lstate.scan_state);
+	return CollectGroupIOTasks(lstate.scan_state, strategy);
 }
 
 void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
