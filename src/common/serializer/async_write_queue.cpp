@@ -568,6 +568,10 @@ void ManagedAsyncWriteQueue::DiscardExternalPendingBytes(idx_t bytes) noexcept {
 		return;
 	}
 	lock_guard<mutex> guard(lock);
+	if (closed) {
+		// a failure already cleared all external pending bytes via CancelPendingWritesAfterFailure
+		return;
+	}
 	D_ASSERT(external_pending_bytes >= bytes);
 	if (external_pending_bytes >= bytes) {
 		external_pending_bytes -= bytes;
