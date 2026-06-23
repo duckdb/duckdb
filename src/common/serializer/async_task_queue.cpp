@@ -409,7 +409,6 @@ void ManagedAsyncTaskQueue::Register(unique_ptr<AsyncTask> task, idx_t byte_size
 	}
 
 	AsyncTaskRequest request(std::move(task), byte_size);
-	AddCompletionAccounting(request);
 	{
 		lock_guard<mutex> guard(lock);
 		VerifyOpen();
@@ -466,6 +465,8 @@ bool ManagedAsyncTaskQueue::TakePendingTaskRequest(AsyncTaskRequest &request, Sc
 	pending_bytes -= request_size;
 	submitted_bytes += request_size;
 	submitted_requests++;
+	// Attach accounting only on submission, so cancelled pending tasks never carry it.
+	AddCompletionAccounting(request);
 	return true;
 }
 
@@ -558,7 +559,6 @@ void ManagedAsyncTaskQueue::VerifyDrained() const {
 }
 
 void ManagedAsyncTaskQueue::CancelPendingTasksAfterFailure(const ErrorData &error) noexcept {
-	(void)error;
 	deque<AsyncTaskRequest> tasks;
 	{
 		lock_guard<mutex> guard(lock);
@@ -573,8 +573,16 @@ void ManagedAsyncTaskQueue::CancelPendingTasksAfterFailure(const ErrorData &erro
 		closed = true;
 	}
 
+	// Pending tasks were never submitted, so they carry no accounting; only a user completion (if any) fires.
 	for (auto &request : tasks) {
+		auto request_size = request.Size();
 		request.task.reset();
+		if (request.completion) {
+			try {
+				request.completion(request_size, error);
+			} catch (...) {
+			}
+		}
 	}
 }
 
