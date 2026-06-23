@@ -38,7 +38,7 @@ WHEN NOT MATCHED THEN INSERT BY NAME
 1
 
 query II
-FROM Stock
+FROM Stock order by all
 ----
 5	10
 6	12

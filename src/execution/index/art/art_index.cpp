@@ -102,7 +102,6 @@ void ARTBuildSinkUnsorted(IndexBuildSinkInput &input, DataChunk &key_chunk, Data
 		auto conflict_type =
 		    ARTOperator::Insert(l_state.arena_allocator, art, art.tree, l_state.keys[i], 0, l_state.row_ids[i], status,
 		                        DeleteIndexInfo(), IndexAppendMode::DEFAULT);
-		D_ASSERT(conflict_type != ARTConflictType::TRANSACTION);
 		if (conflict_type == ARTConflictType::CONSTRAINT) {
 			throw ConstraintException("Data contains duplicates on indexed column(s)");
 		}

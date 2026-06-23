@@ -421,10 +421,16 @@ clean:
 
 EXTENSION_REPOSITORY_PATH ?= build/release/repository
 EXTENSION_BUCKET ?= duckdb-core-extensions
+SIGNED_EXTENSIONS_DIR ?= $(EXTENSION_REPOSITORY_PATH)
+EXTENSION_SIGNING_PUBLIC_KEY_FILE ?=
 
 .PHONY: upload-extensions
 upload-extensions:
 	CI_CPU_COUNT="$(CI_CPU_COUNT)" ./scripts/extension-upload-repository.sh "$(EXTENSION_REPOSITORY_PATH)" "$(EXTENSION_BUCKET)"
+
+.PHONY: verify-extension-signing
+verify-extension-signing:
+	CI_CPU_COUNT="$(CI_CPU_COUNT)" ./scripts/verify-extension-signing.sh "$(SIGNED_EXTENSIONS_DIR)" "$(EXTENSION_SIGNING_PUBLIC_KEY_FILE)"
 
 define cmake_build
 	mkdir -p ./$(1) && \

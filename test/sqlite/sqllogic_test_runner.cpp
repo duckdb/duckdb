@@ -1101,10 +1101,12 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 
 			auto &test_config = TestConfiguration::Get();
 			auto env_var = token.parameters[0];
-			auto test_env_result = test_config.GetTestEnv(env_var, "");
+			auto test_env_defined = test_config.HasTestEnv(env_var);
+			string env_actual_value;
 			const char *env_actual = nullptr;
-			if (!test_env_result.empty()) {
-				env_actual = test_env_result.c_str();
+			if (test_env_defined) {
+				env_actual_value = test_config.GetTestEnv(env_var, "");
+				env_actual = env_actual_value.c_str();
 			} else {
 				env_actual = std::getenv(env_var.c_str());
 			}
@@ -1134,7 +1136,7 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 				file_tags.emplace_back(StringUtil::Format("env[%s]=%s", token.parameters[0], token.parameters[1]));
 			}
 
-			if (environment_variables.count(env_var)) {
+			if (!test_env_defined && environment_variables.count(env_var)) {
 				parser.Fail(StringUtil::Format("Environment variable '%s' has already been defined", env_var));
 			}
 			environment_variables[env_var] = env_actual;

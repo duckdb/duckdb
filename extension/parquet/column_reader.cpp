@@ -351,7 +351,7 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	}
 	// some basic sanity check
 	if (page_hdr.compressed_page_size < 0 || page_hdr.uncompressed_page_size < 0) {
-		throw InvalidInputException("Failed to read file \"%s\": Page sizes can't be < 0", Reader().GetFileName());
+		throw InvalidInputException("Failed to read file \"%s\": Page sizes must be >= 0", Reader().GetFileName());
 	}
 
 	if (PageIsFilteredOut(page_hdr, filter)) {
@@ -420,12 +420,28 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		return;
 	}
 
-	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
-	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
-	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
-	if (uncompressed_bytes > page_hdr.uncompressed_page_size) {
+	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed.
+	// the page sizes are already validated >= 0 by the caller, but the level lengths are not, so guard
+	// them here. with all four i32 header fields non-negative, the sum below cannot overflow once widened
+	// to uint64_t, and the uint64_t casts in the comparisons below are safe.
+	if (page_hdr.data_page_header_v2.repetition_levels_byte_length < 0 ||
+	    page_hdr.data_page_header_v2.definition_levels_byte_length < 0) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": header inconsistency, repetition_levels_byte_length and "
+		    "definition_levels_byte_length must be >= 0",
+		    Reader().GetFileName());
+	}
+	uint64_t uncompressed_bytes = static_cast<uint64_t>(page_hdr.data_page_header_v2.repetition_levels_byte_length) +
+	                              page_hdr.data_page_header_v2.definition_levels_byte_length;
+	if (uncompressed_bytes > static_cast<uint64_t>(page_hdr.uncompressed_page_size)) {
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, uncompressed_page_size needs to be larger than "
+		    "repetition_levels_byte_length + definition_levels_byte_length",
+		    Reader().GetFileName());
+	}
+	if (static_cast<uint64_t>(page_hdr.compressed_page_size) < uncompressed_bytes) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is smaller than "
 		    "repetition_levels_byte_length + definition_levels_byte_length",
 		    Reader().GetFileName());
 	}
@@ -433,6 +449,13 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	ReadData(block->ptr, uncompressed_bytes, page_hdr.type);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
+
+	if (compressed_bytes == 0 && static_cast<uint64_t>(page_hdr.uncompressed_page_size) > uncompressed_bytes) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is too small for the "
+		    "declared value region",
+		    Reader().GetFileName());
+	}
 
 	if (compressed_bytes > 0) {
 		ResizeableBuffer compressed_buffer;
