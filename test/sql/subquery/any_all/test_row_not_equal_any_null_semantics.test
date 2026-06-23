@@ -16,3 +16,23 @@ query I
 SELECT (1, 2) <> ANY (SELECT * FROM (VALUES (NULL, 2)) t(x, y))
 ----
 NULL
+
+query I
+SELECT (1, NULL) <> ANY (SELECT * FROM (VALUES (1, 2)) t(x, y))
+----
+NULL
+
+query I
+SELECT (NULL, 2) <> ANY (SELECT * FROM (VALUES (1, 2)) t(x, y))
+----
+NULL
+
+query I
+SELECT (1, NULL) <> ANY (SELECT * FROM (VALUES (2, 2)) t(x, y))
+----
+true
+
+query I
+SELECT (1, NULL) <> ANY (SELECT * FROM (VALUES (1, 2), (2, 2)) t(x, y))
+----
+true
