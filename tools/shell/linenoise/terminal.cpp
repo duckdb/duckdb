@@ -573,7 +573,9 @@ TerminalSize Terminal::GetTerminalSize() {
 
 /* Clear the screen. Used to handle ctrl+l */
 void Terminal::ClearScreen() {
-	if (write(STDOUT_FILENO, "\x1b[H\x1b[2J", 7) <= 0) {
+	/* erase the whole screen, then home the cursor (home last so a
+	 * terminal-specific side effect of [2J cannot move it again) */
+	if (write(STDOUT_FILENO, "\x1b[2J\x1b[H", 7) <= 0) {
 		/* nothing to do, just to avoid warning. */
 	}
 }
