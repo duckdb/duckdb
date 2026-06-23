@@ -104,9 +104,16 @@ struct TransformFrameOps {
 	transform_frame_finalize_t finalize;
 };
 
+struct TransformFrameResultTarget {
+	TransformFrameResultTarget(transform_frame_index_t frame_index, idx_t slot);
+
+	const transform_frame_index_t frame_index;
+	const idx_t slot;
+};
+
 struct TransformStackFrame {
 	TransformStackFrame(transform_frame_index_t frame_index, ParseResult &parse_result, const TransformFrameOps &ops,
-	                    transform_frame_index_t parent, idx_t parent_slot);
+	                    optional<TransformFrameResultTarget> result_target);
 
 	void ReserveChildSlots(idx_t count);
 	void SetChildResult(idx_t slot, unique_ptr<TransformResultValue> result);
@@ -126,11 +133,10 @@ struct TransformStackFrame {
 		return result;
 	}
 
-	transform_frame_index_t frame_index;
+	const transform_frame_index_t frame_index;
 	ParseResult &parse_result;
 	const TransformFrameOps &ops;
-	transform_frame_index_t parent;
-	idx_t parent_slot;
+	const optional<TransformFrameResultTarget> result_target;
 	TransformFrameState state = TransformFrameState::INITIALIZE;
 	vector<unique_ptr<TransformResultValue>> child_results;
 };
@@ -140,7 +146,7 @@ public:
 	explicit TransformStack(PEGTransformer &transformer);
 
 	transform_frame_index_t PushFrame(ParseResult &parse_result, const TransformFrameOps &ops,
-	                                  transform_frame_index_t parent, idx_t parent_slot);
+	                                  optional<TransformFrameResultTarget> result_target);
 
 	template <class T>
 	T Execute(ParseResult &parse_result, const TransformFrameOps &ops) {

@@ -216,7 +216,7 @@ class UseGramPreviewEmitter:
         lines.append("\tif (ops_entry == ops_map.end()) {")
         lines.append('\t\tthrow InternalException("No trampoline ops registered for rule \'%s\'", choice_result.name);')
         lines.append("\t}")
-        lines.append("\tstack.PushFrame(choice_result, *ops_entry->second, frame.frame_index, 0);")
+        lines.append("\tstack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));")
         lines.append("}")
         lines.append("")
         lines.append(
@@ -253,7 +253,7 @@ class UseGramPreviewEmitter:
             lines.append("\t\t\tauto child_idx = i - 1;")
             lines.append(
                 f"\t\t\tstack.PushFrame(repeat_children[child_idx].get(), {ops_name(child_rule)}, "
-                f"frame.frame_index, {len(normal_children)} + child_idx);"
+                f"TransformFrameResultTarget(frame.frame_index, {len(normal_children)} + child_idx));"
             )
             lines.append("\t\t}")
             lines.append("\t} else {")
@@ -265,7 +265,7 @@ class UseGramPreviewEmitter:
             original_slot = len(normal_children) - slot_idx - 1
             lines.append(
                 f"\tstack.PushFrame(list_pr.GetChild({child_idx}), {ops_name(child_rule)}, "
-                f"frame.frame_index, {original_slot});"
+                f"TransformFrameResultTarget(frame.frame_index, {original_slot}));"
             )
         lines.append("}")
         lines.append("")

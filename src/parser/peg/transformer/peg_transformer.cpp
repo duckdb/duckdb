@@ -8,11 +8,14 @@
 
 namespace duckdb {
 
+TransformFrameResultTarget::TransformFrameResultTarget(transform_frame_index_t frame_index_p, idx_t slot_p)
+    : frame_index(frame_index_p), slot(slot_p) {
+}
+
 TransformStackFrame::TransformStackFrame(transform_frame_index_t frame_index_p, ParseResult &parse_result_p,
-                                         const TransformFrameOps &ops_p, transform_frame_index_t parent_p,
-                                         idx_t parent_slot_p)
-    : frame_index(frame_index_p), parse_result(parse_result_p), ops(ops_p), parent(parent_p),
-      parent_slot(parent_slot_p) {
+                                         const TransformFrameOps &ops_p,
+                                         optional<TransformFrameResultTarget> result_target_p)
+    : frame_index(frame_index_p), parse_result(parse_result_p), ops(ops_p), result_target(result_target_p) {
 }
 
 void TransformStackFrame::ReserveChildSlots(idx_t count) {
@@ -37,12 +40,13 @@ TransformStack::TransformStack(PEGTransformer &transformer_p) : transformer(tran
 }
 
 transform_frame_index_t TransformStack::PushFrame(ParseResult &parse_result, const TransformFrameOps &ops,
-                                                  transform_frame_index_t parent, idx_t parent_slot) {
+                                                  optional<TransformFrameResultTarget> result_target) {
 	if (!ops.initialize || !ops.finalize) {
 		throw InternalException("Incomplete trampoline transformer ops for rule '%s'", ops.name);
 	}
 	auto frame_index = frames.size();
 	frames.push_back(make_uniq<TransformStackFrame>(frame_index, parse_result, ops, parent, parent_slot));
+	frames.push_back(make_uniq<TransformStackFrame>(frame_index, parse_result, ops, result_target));
 	frame_stack.push_back(frame_index);
 	return frame_index;
 }
@@ -69,7 +73,7 @@ unique_ptr<TransformResultValue> TransformStack::ExecuteInternal(ParseResult &pa
 		throw InternalException("Cannot execute a non-empty trampoline transformer stack");
 	}
 
-	PushFrame(parse_result, ops, DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
+	PushFrame(parse_result, ops, optional<TransformFrameResultTarget>());
 	while (!frame_stack.empty()) {
 		auto frame_index = frame_stack.back();
 		auto &frame = GetFrame(frame_index);
@@ -85,7 +89,7 @@ unique_ptr<TransformResultValue> TransformStack::ExecuteInternal(ParseResult &pa
 				                        frame.ops.name);
 			}
 			frame_stack.pop_back();
-			if (frame.parent == DConstants::INVALID_INDEX) {
+			if (!frame.result_target) {
 				return result;
 			}
 			DeliverResult(frame, std::move(result));
@@ -99,8 +103,10 @@ unique_ptr<TransformResultValue> TransformStack::ExecuteInternal(ParseResult &pa
 }
 
 void TransformStack::DeliverResult(TransformStackFrame &frame, unique_ptr<TransformResultValue> result) {
-	auto &parent = GetFrame(frame.parent);
-	parent.SetChildResult(frame.parent_slot, std::move(result));
+	D_ASSERT(frame.result_target);
+	auto &target = *frame.result_target;
+	auto &parent = GetFrame(target.frame_index);
+	parent.SetChildResult(target.slot, std::move(result));
 }
 
 string TransformStack::FormatFrame(transform_frame_index_t frame_index) const {
@@ -114,23 +120,27 @@ string TransformStack::FormatFrame(transform_frame_index_t frame_index) const {
 	if (frame.parse_result.offset.IsValid()) {
 		result << " offset=" << frame.parse_result.offset.GetIndex();
 	}
-	if (frame.parent != DConstants::INVALID_INDEX) {
-		result << " parent=#" << frame.parent << " slot=" << frame.parent_slot;
+	if (frame.result_target) {
+		result << " parent=#" << frame.result_target->frame_index << " slot=" << frame.result_target->slot;
 	}
 	return result.str();
 }
 
 string TransformStack::FormatParentChain(transform_frame_index_t frame_index) const {
 	stringstream result;
-	auto current = frame_index;
+	optional_idx current(frame_index);
 	bool first = true;
-	while (current != DConstants::INVALID_INDEX) {
+	while (current.IsValid()) {
 		if (!first) {
 			result << " <- ";
 		}
-		result << FormatFrame(current);
+		result << FormatFrame(current.GetIndex());
 		first = false;
-		current = GetFrame(current).parent;
+		auto &frame = GetFrame(current.GetIndex());
+		if (!frame.result_target) {
+			break;
+		}
+		current = frame.result_target->frame_index;
 	}
 	return result.str();
 }

@@ -38,7 +38,7 @@ void PEGTransformerFactory::InitializeUseStatementTrampoline(PEGTransformer &tra
                                                              TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	frame.ReserveChildSlots(1);
-	stack.PushFrame(list_pr.GetChild(1), USE_TARGET_OPS, frame.frame_index, 0);
+	stack.PushFrame(list_pr.GetChild(1), USE_TARGET_OPS, TransformFrameResultTarget(frame.frame_index, 0));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeUseStatementTrampoline(PEGTransformer &transformer,
@@ -60,7 +60,7 @@ void PEGTransformerFactory::InitializeUseTargetTrampoline(PEGTransformer &transf
 	if (ops_entry == ops_map.end()) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
-	stack.PushFrame(choice_result, *ops_entry->second, frame.frame_index, 0);
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeUseTargetTrampoline(PEGTransformer &transformer,
@@ -111,7 +111,8 @@ void PEGTransformerFactory::InitializeUseTargetCatalogSchemaTrampoline(PEGTransf
 		frame.ReserveChildSlots(0 + repeat_children.size());
 		for (idx_t i = repeat_children.size(); i > 0; i--) {
 			auto child_idx = i - 1;
-			stack.PushFrame(repeat_children[child_idx].get(), DOT_IDENTIFIER_OPS, frame.frame_index, 0 + child_idx);
+			stack.PushFrame(repeat_children[child_idx].get(), DOT_IDENTIFIER_OPS,
+			                TransformFrameResultTarget(frame.frame_index, 0 + child_idx));
 		}
 	} else {
 		frame.ReserveChildSlots(0);
