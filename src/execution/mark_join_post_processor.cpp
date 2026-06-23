@@ -101,7 +101,11 @@ struct MarkJoinNullMatchState {
 idx_t FilterCandidatesForColumnComparison(Vector &lhs_column, Vector &rhs_column, Vector &rhs_value, idx_t rhs_row,
                                           idx_t rhs_count, const SelectionVector &candidate_sel, idx_t candidate_count,
                                           MarkJoinNullMatchState &state, SelectionVector &remaining_sel) {
-	ConstantVector::Reference(rhs_value, count_t(candidate_count), rhs_column, rhs_row, rhs_count);
+	auto rhs_scalar = rhs_column.GetValue(rhs_row);
+	if (rhs_scalar.IsNull()) {
+		rhs_scalar = Value(rhs_column.GetType());
+	}
+	ConstantVector::Reference(rhs_value, rhs_scalar, count_t(candidate_count));
 	Vector lhs_slice(lhs_column, candidate_sel, candidate_count);
 
 	state.null_mask.SetAllValid(candidate_count);
@@ -328,7 +332,11 @@ idx_t FilterCandidatesForConditionComparison(Vector &lhs_column, Vector &rhs_col
                                              idx_t rhs_count, const SelectionVector &candidate_sel,
                                              idx_t candidate_count, ExpressionType comparison_type,
                                              MarkJoinNullMatchState &state, SelectionVector &remaining_sel) {
-	ConstantVector::Reference(rhs_value, count_t(candidate_count), rhs_column, rhs_row, rhs_count);
+	auto rhs_scalar = rhs_column.GetValue(rhs_row);
+	if (rhs_scalar.IsNull()) {
+		rhs_scalar = Value(rhs_column.GetType());
+	}
+	ConstantVector::Reference(rhs_value, rhs_scalar, count_t(candidate_count));
 	Vector lhs_slice(lhs_column, candidate_sel, candidate_count);
 
 	state.null_mask.SetAllValid(candidate_count);
