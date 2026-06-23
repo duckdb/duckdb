@@ -235,10 +235,25 @@ class DirectRepeatArg:
 
 
 @dataclass
+class DirectOptionalArg:
+    child_idx: int
+    rule_name: str
+    var_name: str
+
+
+@dataclass
 class StackChild:
     child_idx: int
     rule_name: str
     slot_idx: int
+
+
+@dataclass
+class OptionalStackChild:
+    child_idx: int
+    rule_name: str
+    slot_idx: int
+    var_name: str
 
 
 @dataclass
@@ -251,45 +266,73 @@ class RepeatStackChild:
 @dataclass
 class SequenceRulePlan:
     direct_args: List[DirectParseArg]
+    direct_optional_args: List[DirectOptionalArg]
     direct_repeat_args: List[DirectRepeatArg]
     stack_children: List[StackChild]
+    optional_stack_children: List[OptionalStackChild]
     repeat_child: "RepeatStackChild | None"
+    finalize_args: List[object]
 
 
 def plan_trampoline_sequence_rule(ast, identifier_rules):
     direct_args = []
+    direct_optional_args = []
     direct_repeat_args = []
     stack_children = []
+    optional_stack_children = []
     repeat_child = None
+    finalize_args = []
+    next_slot = 0
     children = ast.children if isinstance(ast, SequenceNode) else [ast]
     for child_idx, child in enumerate(children):
         if isinstance(child, LiteralNode):
             continue
         if isinstance(child, ReferenceNode):
             if child.name in identifier_rules:
-                direct_args.append(
-                    DirectParseArg(
-                        to_snake_case(child.name),
-                        f"list_pr.GetChild({child_idx}).Cast<IdentifierParseResult>().identifier",
-                    )
+                arg = DirectParseArg(
+                    to_snake_case(child.name),
+                    f"list_pr.GetChild({child_idx}).Cast<IdentifierParseResult>().identifier",
                 )
+                direct_args.append(arg)
             else:
-                stack_children.append(StackChild(child_idx, child.name, len(stack_children)))
+                arg = StackChild(child_idx, child.name, next_slot)
+                stack_children.append(arg)
+                next_slot += 1
+            finalize_args.append(arg)
+            continue
+        if isinstance(child, OptionalNode) and isinstance(child.child, ReferenceNode):
+            if child.child.name in identifier_rules:
+                arg = DirectOptionalArg(child_idx, child.child.name, to_snake_case(child.child.name))
+                direct_optional_args.append(arg)
+            else:
+                arg = OptionalStackChild(child_idx, child.child.name, next_slot, to_snake_case(child.child.name))
+                optional_stack_children.append(arg)
+                next_slot += 1
+            finalize_args.append(arg)
             continue
         if isinstance(child, OptionalNode) and isinstance(child.child, RepeatNode):
             repeat_node = child.child.child
             if isinstance(repeat_node, ReferenceNode):
                 if repeat_node.name in identifier_rules:
-                    direct_repeat_args.append(
-                        DirectRepeatArg(child_idx, repeat_node.name, to_snake_case(repeat_node.name))
-                    )
+                    arg = DirectRepeatArg(child_idx, repeat_node.name, to_snake_case(repeat_node.name))
+                    direct_repeat_args.append(arg)
+                    finalize_args.append(arg)
                     continue
                 if repeat_child is not None:
                     raise NotImplementedError("only one repeat child is currently supported")
-                repeat_child = RepeatStackChild(child_idx, repeat_node.name, len(stack_children))
+                repeat_child = RepeatStackChild(child_idx, repeat_node.name, next_slot)
+                finalize_args.append(repeat_child)
                 continue
         raise NotImplementedError(f"unsupported semantic child shape: {type(child).__name__}")
-    return SequenceRulePlan(direct_args, direct_repeat_args, stack_children, repeat_child)
+    return SequenceRulePlan(
+        direct_args,
+        direct_optional_args,
+        direct_repeat_args,
+        stack_children,
+        optional_stack_children,
+        repeat_child,
+        finalize_args,
+    )
 
 
 # ---------------------------------------------------------------------------
