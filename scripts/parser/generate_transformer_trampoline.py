@@ -16,6 +16,7 @@ from transformer_plan import (
     RepeatStackChild,
     SequenceNode,
     StackChild,
+    literal_string_values,
     plan_trampoline_sequence_rule,
     to_snake_case,
     tokens_to_ast,
@@ -235,6 +236,8 @@ class UseGramPreviewEmitter:
         return lines
 
     def emit_rule(self, rule_name, ast):
+        if literal_string_values(ast) is not None:
+            return self.emit_syntax_only_rule(rule_name)
         if isinstance(ast, ChoiceNode):
             if self.is_manual_finalize_rule(rule_name):
                 raise NotImplementedError("manual_finalize choice rules are not currently supported")
@@ -246,6 +249,8 @@ class UseGramPreviewEmitter:
         raise NotImplementedError(f"unsupported preview shape for {rule_name}: {type(ast).__name__}")
 
     def emit_initialize_rule(self, rule_name, ast):
+        if literal_string_values(ast) is not None:
+            return self.emit_syntax_only_initialize(rule_name)
         if isinstance(ast, ChoiceNode):
             return self.emit_choice_initialize(rule_name)
         if isinstance(ast, SequenceNode):
@@ -256,6 +261,32 @@ class UseGramPreviewEmitter:
 
     def identifier_var_name(self, rule_name):
         return to_snake_case(rule_name)
+
+    def emit_syntax_only_rule(self, rule_name):
+        lines = self.emit_syntax_only_initialize(rule_name)
+        if self.is_manual_finalize_rule(rule_name):
+            return lines
+        cpp_type = self.cpp_type(rule_name)
+        by_value = self.by_value(rule_name)
+        lines.append("")
+        lines.append(
+            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"TransformStack &stack, TransformStackFrame &frame) {{"
+        )
+        lines.append(f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer);")
+        lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', by_value)};")
+        lines.append("}")
+        return lines
+
+    def emit_syntax_only_initialize(self, rule_name):
+        lines = []
+        lines.append(
+            f"void PEGTransformerFactory::{init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
+            f"TransformStackFrame &frame) {{"
+        )
+        lines.append("\tframe.ReserveChildSlots(0);")
+        lines.append("}")
+        return lines
 
     def emit_choice_rule(self, rule_name):
         lines = self.emit_choice_initialize(rule_name)
