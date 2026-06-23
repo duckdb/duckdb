@@ -1,0 +1,607 @@
+import re
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from typing import List
+
+from inline_grammar import PEGTokenType
+
+
+# ---------------------------------------------------------------------------
+# Grammar AST - mirrors the Matcher class hierarchy in matcher.cpp
+# ---------------------------------------------------------------------------
+
+
+class GrammarNode:
+    pass
+
+
+@dataclass
+class LiteralNode(GrammarNode):
+    """Keyword literal ('keyword'). Corresponds to KeywordMatcher."""
+
+    text: str
+
+
+@dataclass
+class ReferenceNode(GrammarNode):
+    """Reference to a named grammar rule. Resolved to another Matcher at build time."""
+
+    name: str
+
+
+@dataclass
+class ParensNode(GrammarNode):
+    """Parens(D) <- '(' D ')'. Anonymous ListMatcher; child[1] is D's result."""
+
+    inner: GrammarNode
+
+
+@dataclass
+class ListMacroNode(GrammarNode):
+    """List(D) <- D (',' D)* ','?. Anonymous ListMatcher."""
+
+    inner: GrammarNode
+
+
+@dataclass
+class FunctionCallNode(GrammarNode):
+    """Unknown macro call (not Parens or List). Not auto-generated."""
+
+    func_name: str
+    inner: GrammarNode
+
+
+@dataclass
+class SequenceNode(GrammarNode):
+    """Ordered sequence of matchers. Corresponds to ListMatcher."""
+
+    children: List[GrammarNode]
+
+
+@dataclass
+class ChoiceNode(GrammarNode):
+    """Ordered choice A / B / C. Corresponds to ChoiceMatcher."""
+
+    alternatives: List[GrammarNode]
+
+
+@dataclass
+class OptionalNode(GrammarNode):
+    """Optional match A?. Corresponds to OptionalMatcher."""
+
+    child: GrammarNode
+
+
+@dataclass
+class RepeatNode(GrammarNode):
+    """Repeat match A+ (one or more). A* is represented as OptionalNode(RepeatNode)."""
+
+    child: GrammarNode
+
+
+def tokens_to_ast(tokens):
+    """
+    Parse a flat PEGToken list into a GrammarNode AST tree.
+
+    Grammar of PEG rule bodies (simplified):
+      choice   = sequence ('/' sequence)*
+      sequence = term+
+      term     = atom ('?' | '*' | '+')?
+      atom     = LITERAL | REFERENCE
+                 | FUNCTION_CALL choice ')'
+                 | '(' choice ')'
+    """
+    pos = [0]
+
+    def peek():
+        return tokens[pos[0]] if pos[0] < len(tokens) else None
+
+    def consume():
+        tok = tokens[pos[0]]
+        pos[0] += 1
+        return tok
+
+    def parse_choice():
+        alts = [parse_sequence()]
+        while peek() and peek().type == PEGTokenType.OPERATOR and peek().text == "/":
+            consume()
+            alts.append(parse_sequence())
+        return ChoiceNode(alts) if len(alts) > 1 else alts[0]
+
+    def parse_sequence():
+        children = []
+        while True:
+            token = peek()
+            if token is None:
+                break
+            if token.type == PEGTokenType.OPERATOR and token.text in ("/", ")"):
+                break
+            children.append(parse_term())
+        if not children:
+            return SequenceNode([])
+        return SequenceNode(children) if len(children) > 1 else children[0]
+
+    def parse_term():
+        node = parse_atom()
+        token = peek()
+        if token and token.type == PEGTokenType.OPERATOR and token.text in ("?", "*", "+"):
+            op = consume().text
+            if op == "?":
+                return OptionalNode(node)
+            if op == "*":
+                return OptionalNode(RepeatNode(node))
+            if op == "+":
+                return RepeatNode(node)
+            raise Exception("Unknown operator '{}'".format(op))
+        return node
+
+    def parse_atom():
+        token = peek()
+        if token is None:
+            raise Exception("Unexpected end of tokens in grammar AST parse")
+        if token.type == PEGTokenType.LITERAL:
+            return LiteralNode(consume().text)
+        if token.type == PEGTokenType.REFERENCE:
+            return ReferenceNode(consume().text)
+        if token.type == PEGTokenType.FUNCTION_CALL:
+            func_name = consume().text
+            inner = parse_choice()
+            if peek() and peek().type == PEGTokenType.OPERATOR and peek().text == ")":
+                consume()
+            if func_name == "Parens":
+                return ParensNode(inner)
+            if func_name == "List":
+                return ListMacroNode(inner)
+            return FunctionCallNode(func_name, inner)
+        if token.type == PEGTokenType.OPERATOR and token.text == "(":
+            consume()
+            inner = parse_choice()
+            if peek() and peek().type == PEGTokenType.OPERATOR and peek().text == ")":
+                consume()
+            return inner
+        raise Exception(f"Unexpected token in grammar AST parse: {token}")
+
+    result = parse_choice()
+    if pos[0] < len(tokens):
+        raise Exception(f"Tokens remaining after grammar AST parse: {tokens[pos[0]:]}")
+    return result
+
+
+def rule_to_ast(rule):
+    """Convert a PEGGrammarRule (flat token list) to a GrammarNode AST."""
+    return tokens_to_ast(rule.tokens)
+
+
+def to_snake_case(name):
+    s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
+
+
+def is_pure_reference_choice(ast):
+    """True if ast is a ChoiceNode whose every alternative is a ReferenceNode."""
+    return isinstance(ast, ChoiceNode) and all(
+        isinstance(alternative, ReferenceNode) for alternative in ast.alternatives
+    )
+
+
+def literal_string_values(ast):
+    """Return literal alternatives for a string-valued literal rule, or None if the rule is not literal-only."""
+    if isinstance(ast, LiteralNode):
+        return [ast.text]
+    if isinstance(ast, ChoiceNode) and all(isinstance(alternative, LiteralNode) for alternative in ast.alternatives):
+        return [alternative.text for alternative in ast.alternatives]
+    return None
+
+
+def classify_choice_alternatives(alternatives, rule_types, excluded_rules, identifier_override_rules):
+    """
+    Split choice alternatives into semantic groups.
+    Returns (transformer_alts, identifier_alts, excluded_alts, unknown_alts).
+    """
+    transformer_alts = []
+    identifier_alts = []
+    excluded_alts = []
+    unknown_alts = []
+    for ref in alternatives:
+        assert isinstance(ref, ReferenceNode)
+        name = ref.name
+        if name in identifier_override_rules:
+            identifier_alts.append(name)
+        elif name in rule_types:
+            transformer_alts.append(name)
+        elif name in excluded_rules:
+            excluded_alts.append(name)
+        else:
+            unknown_alts.append(name)
+    return transformer_alts, identifier_alts, excluded_alts, unknown_alts
+
+
+# ---------------------------------------------------------------------------
+# Sequence-element classification
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class SeqElement:
+    """One classified position in a sequence rule."""
+
+    skip: bool
+    var_name: str = ""
+    cpp_type: str = ""
+    by_value: bool = False
+    extraction_lines: List[str] = field(default_factory=list)
+
+
+def is_by_value(rule_name, rule_types):
+    info = rule_types.get(rule_name)
+    if info is None:
+        return False
+    return info.by_value or "unique_ptr<" in info.cpp_type
+
+
+def _classify_literal():
+    return SeqElement(skip=True)
+
+
+class ExtractionKind(Enum):
+    SKIP = auto()
+    REFERENCE = auto()
+    PARENS = auto()
+    OPTIONAL = auto()
+    LIST = auto()
+    REPEAT = auto()
+    SEQUENCE = auto()
+    CHOICE = auto()
+
+
+@dataclass
+class ExtractionPlan:
+    """Recursive description of how to extract one semantic value from a ParseResult."""
+
+    kind: ExtractionKind
+    cpp_type: str = ""
+    var_name: str = ""
+    by_value: bool = False
+    default_initializer: str = ""
+    child: "ExtractionPlan | None" = None
+    child_index: int = 0
+    identifier: bool = False
+
+
+def plan_extraction(
+    node,
+    rule_types,
+    excluded_rules,
+    identifier_override_rules,
+    optional_semantic_values=False,
+):
+    """Build a recursive extraction plan. Nested sequences must collapse to one semantic value."""
+    if isinstance(node, LiteralNode):
+        return ExtractionPlan(kind=ExtractionKind.SKIP)
+    if isinstance(node, ReferenceNode):
+        if node.name in identifier_override_rules:
+            return ExtractionPlan(
+                kind=ExtractionKind.REFERENCE,
+                cpp_type="Identifier",
+                var_name=to_snake_case(node.name),
+                identifier=True,
+            )
+        if node.name in rule_types:
+            return ExtractionPlan(
+                kind=ExtractionKind.REFERENCE,
+                cpp_type=rule_types[node.name].cpp_type,
+                var_name=to_snake_case(node.name),
+                by_value=is_by_value(node.name, rule_types),
+                default_initializer=rule_types[node.name].default_initializer,
+            )
+        if node.name in excluded_rules:
+            return ExtractionPlan(kind=ExtractionKind.SKIP)
+        return None
+    if isinstance(node, ParensNode):
+        child = plan_extraction(
+            node.inner,
+            rule_types,
+            excluded_rules,
+            identifier_override_rules,
+            optional_semantic_values,
+        )
+        return _wrap_extraction(ExtractionKind.PARENS, child)
+    if isinstance(node, OptionalNode):
+        child = plan_extraction(
+            node.child,
+            rule_types,
+            excluded_rules,
+            identifier_override_rules,
+            optional_semantic_values,
+        )
+        if not optional_semantic_values:
+            return _wrap_extraction(ExtractionKind.OPTIONAL, child)
+        if child is None:
+            return None
+        if child.kind == ExtractionKind.SKIP:
+            return ExtractionPlan(kind=ExtractionKind.OPTIONAL, cpp_type="bool", var_name="has_result")
+        return ExtractionPlan(
+            kind=ExtractionKind.OPTIONAL,
+            cpp_type=f"optional<{child.cpp_type}>",
+            var_name=child.var_name,
+            by_value=child.by_value,
+            child=child,
+        )
+    if isinstance(node, (ListMacroNode, RepeatNode)):
+        child_node = node.inner if isinstance(node, ListMacroNode) else node.child
+        child = plan_extraction(
+            child_node,
+            rule_types,
+            excluded_rules,
+            identifier_override_rules,
+            optional_semantic_values,
+        )
+        if child is None or child.kind == ExtractionKind.SKIP:
+            return None
+        return ExtractionPlan(
+            kind=(ExtractionKind.LIST if isinstance(node, ListMacroNode) else ExtractionKind.REPEAT),
+            cpp_type=f"vector<{child.cpp_type}>",
+            var_name=child.var_name,
+            by_value=child.by_value,
+            child=child,
+        )
+    if isinstance(node, SequenceNode):
+        semantic = []
+        for idx, sequence_child in enumerate(node.children):
+            child = plan_extraction(
+                sequence_child,
+                rule_types,
+                excluded_rules,
+                identifier_override_rules,
+                optional_semantic_values,
+            )
+            if child is None:
+                return None
+            if child.kind != ExtractionKind.SKIP:
+                semantic.append((idx, child))
+        if not semantic:
+            return ExtractionPlan(kind=ExtractionKind.SKIP)
+        if len(semantic) != 1:
+            return None
+        child_index, child = semantic[0]
+        return ExtractionPlan(
+            kind=ExtractionKind.SEQUENCE,
+            child=child,
+            child_index=child_index,
+            **_plan_value_args(child),
+        )
+    if isinstance(node, ChoiceNode):
+        alternatives = [
+            plan_extraction(
+                alternative,
+                rule_types,
+                excluded_rules,
+                identifier_override_rules,
+                optional_semantic_values,
+            )
+            for alternative in node.alternatives
+        ]
+        if all(alternative is not None and alternative.kind == ExtractionKind.SKIP for alternative in alternatives):
+            return ExtractionPlan(kind=ExtractionKind.SKIP)
+        if any(alternative is None or alternative.kind != ExtractionKind.REFERENCE for alternative in alternatives):
+            return None
+        first = alternatives[0]
+        if any(
+            alternative.cpp_type != first.cpp_type or alternative.identifier != first.identifier
+            for alternative in alternatives[1:]
+        ):
+            return None
+        return ExtractionPlan(kind=ExtractionKind.CHOICE, child=first, **_plan_value_args(first))
+    return None
+
+
+def _plan_value_args(plan):
+    return {
+        "cpp_type": plan.cpp_type,
+        "var_name": plan.var_name,
+        "by_value": plan.by_value,
+        "default_initializer": plan.default_initializer,
+    }
+
+
+def _wrap_extraction(kind, child):
+    if child is None or child.kind == ExtractionKind.SKIP:
+        return child
+    return ExtractionPlan(kind=kind, child=child, **_plan_value_args(child))
+
+
+def _temp_name(target_name, suffix, depth):
+    depth_suffix = f"_{depth}" if depth else ""
+    return f"{target_name}_{suffix}{depth_suffix}"
+
+
+def _optional_child_temp_name(target_name, depth):
+    return _temp_name(target_name, "value", depth)
+
+
+def emit_extraction(plan, source_expr, target_name=None, indent="\t", declare=True, depth=0):
+    """Emit recursive extraction code for a plan rooted at source_expr."""
+    target_name = target_name or plan.var_name
+    if plan.kind == ExtractionKind.SKIP:
+        return []
+    if plan.kind == ExtractionKind.REFERENCE:
+        if plan.identifier:
+            value_expr = f"{source_expr}.Cast<IdentifierParseResult>().identifier"
+        else:
+            value_expr = f"transformer.Transform<{plan.cpp_type}>({source_expr})"
+        prefix = "auto " if declare else ""
+        return [f"{indent}{prefix}{target_name} = {value_expr};"]
+    if plan.kind == ExtractionKind.PARENS:
+        return emit_extraction(
+            plan.child,
+            f"ExtractResultFromParens({source_expr})",
+            target_name,
+            indent,
+            declare,
+            depth,
+        )
+    if plan.kind == ExtractionKind.SEQUENCE:
+        list_expr = f"{source_expr}.Cast<ListParseResult>()"
+        return emit_extraction(
+            plan.child,
+            f"{list_expr}.GetChild({plan.child_index})",
+            target_name,
+            indent,
+            declare,
+            depth,
+        )
+    if plan.kind == ExtractionKind.CHOICE:
+        choice_expr = f"{source_expr}.Cast<ChoiceParseResult>()"
+        return emit_extraction(
+            plan.child,
+            f"{choice_expr}.GetResult()",
+            target_name,
+            indent,
+            declare,
+            depth,
+        )
+    if plan.kind == ExtractionKind.OPTIONAL:
+        opt_name = _temp_name(target_name, "opt", depth)
+        lines = []
+        if declare:
+            lines.append(f"{indent}{plan.cpp_type} {target_name} {{}};")
+        lines.append(f"{indent}auto &{opt_name} = {source_expr}.Cast<OptionalParseResult>();")
+        if plan.child is None:
+            lines.append(f"{indent}{target_name} = {opt_name}.HasResult();")
+            return lines
+        value_name = _optional_child_temp_name(target_name, depth)
+        lines.append(f"{indent}if ({opt_name}.HasResult()) {{")
+        lines.extend(
+            emit_extraction(
+                plan.child,
+                f"{opt_name}.GetResult()",
+                value_name,
+                indent + "\t",
+                declare=True,
+                depth=depth + 1,
+            )
+        )
+        value_expr = f"std::move({value_name})" if plan.child.by_value else value_name
+        lines.append(f"{indent}\t{target_name} = {value_expr};")
+        lines.append(f"{indent}}}")
+        return lines
+    if plan.kind in (ExtractionKind.LIST, ExtractionKind.REPEAT):
+        item_name = _temp_name(target_name, "item", depth)
+        value_name = _temp_name(target_name, "value", depth)
+        lines = [f"{indent}{plan.cpp_type} {target_name};"] if declare else []
+        if plan.kind == ExtractionKind.LIST:
+            items_name = _temp_name(target_name, "items", depth)
+            lines.append(f"{indent}auto {items_name} = ExtractParseResultsFromList({source_expr});")
+            children_expr = items_name
+        else:
+            repeat_name = _temp_name(target_name, "repeat", depth)
+            lines.append(f"{indent}auto &{repeat_name} = {source_expr}.Cast<RepeatParseResult>();")
+            children_expr = f"{repeat_name}.GetChildren()"
+        lines.append(f"{indent}for (auto &{item_name} : {children_expr}) {{")
+        lines.extend(
+            emit_extraction(
+                plan.child,
+                f"{item_name}.get()",
+                value_name,
+                indent + "\t",
+                depth=depth + 1,
+            )
+        )
+        value_expr = f"std::move({value_name})" if plan.child.by_value else value_name
+        lines.append(f"{indent}\t{target_name}.push_back({value_expr});")
+        lines.append(f"{indent}}}")
+        return lines
+    raise ValueError(f"Unsupported extraction plan kind: {plan.kind}")
+
+
+def classify_sequence_element(
+    child,
+    idx,
+    rule_types,
+    excluded_rules,
+    identifier_override_rules,
+    optional_semantic_values=False,
+):
+    plan = plan_extraction(
+        child,
+        rule_types,
+        excluded_rules,
+        identifier_override_rules,
+        optional_semantic_values,
+    )
+    if plan is None:
+        return None
+    if plan.kind == ExtractionKind.SKIP:
+        return _classify_literal()
+    return SeqElement(
+        skip=False,
+        var_name=plan.var_name,
+        cpp_type=plan.cpp_type,
+        by_value=plan.by_value,
+        extraction_lines=emit_extraction(plan, f"list_pr.GetChild({idx})"),
+    )
+
+
+def classify_sequence_elements(
+    children,
+    rule_types,
+    excluded_rules,
+    identifier_override_rules,
+    optional_semantic_values=False,
+):
+    elements = []
+    seen = {}
+    for idx, child in enumerate(children):
+        elem = classify_sequence_element(
+            child,
+            idx,
+            rule_types,
+            excluded_rules,
+            identifier_override_rules,
+            optional_semantic_values,
+        )
+        if elem is None:
+            return None
+        if not elem.skip:
+            count = seen.get(elem.var_name, 0)
+            seen[elem.var_name] = count + 1
+            if count > 0:
+                old_name = elem.var_name
+                new_name = f"{old_name}_{count}"
+                elem.extraction_lines = [line.replace(old_name, new_name) for line in elem.extraction_lines]
+                if old_name == "identifier":
+                    elem.extraction_lines = [
+                        line.replace(f".{new_name}", ".identifier") for line in elem.extraction_lines
+                    ]
+                elem.var_name = new_name
+        elements.append(elem)
+    return elements
+
+
+def sequence_skip_reason(
+    children,
+    rule_types,
+    excluded_rules,
+    identifier_override_rules,
+    optional_semantic_values=False,
+):
+    for idx, child in enumerate(children):
+        if (
+            classify_sequence_element(
+                child,
+                idx,
+                rule_types,
+                excluded_rules,
+                identifier_override_rules,
+                optional_semantic_values,
+            )
+            is not None
+        ):
+            continue
+        inner = child.child if isinstance(child, OptionalNode) else child
+        if isinstance(inner, ReferenceNode):
+            name = inner.name
+            if name not in rule_types and name not in excluded_rules and name not in identifier_override_rules:
+                return f"child rule '{name}' is missing from grammar_types.yml and excluded_rules"
+        return f"cannot classify element {idx} ({type(child).__name__})"
+    return "unknown reason"

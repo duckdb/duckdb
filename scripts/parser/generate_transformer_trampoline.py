@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from inline_grammar import parse_peg_grammar
 from grammar_types import load_grammar_types, load_matcher_rule_overrides
 from transformer_trampoline_config import load_transformer_trampoline_config
-from generate_transformer import (
+from transformer_plan import (
     ChoiceNode,
     LiteralNode,
     OptionalNode,
@@ -118,7 +118,7 @@ class UseGramPreviewEmitter:
         for rule_name in self.rules:
             lines.append(
                 f"static const TransformFrameOps {ops_name(rule_name)} = "
-                f"{{\"{rule_name}\", &PEGTransformerFactory::{init_name(rule_name)}, "
+                f'{{"{rule_name}", &PEGTransformerFactory::{init_name(rule_name)}, '
                 f"&PEGTransformerFactory::{finalize_name(rule_name)}}};"
             )
         lines.append("")
@@ -149,7 +149,7 @@ class UseGramPreviewEmitter:
         )
         lines.append("\tstatic const case_insensitive_map_t<const TransformFrameOps *> result = {")
         for rule_name in self.rules:
-            lines.append(f"\t    {{\"{rule_name}\", &{ops_name(rule_name)}}},")
+            lines.append(f'\t    {{"{rule_name}", &{ops_name(rule_name)}}},')
         lines.append("\t};")
         lines.append("\treturn result;")
         lines.append("}")
@@ -186,7 +186,12 @@ class UseGramPreviewEmitter:
         for child_idx, child in enumerate(children):
             if isinstance(child, ReferenceNode) and child.name in self.identifier_rules:
                 var_name = self.identifier_var_name(child.name)
-                result.append((var_name, f"list_pr.GetChild({child_idx}).Cast<IdentifierParseResult>().identifier"))
+                result.append(
+                    (
+                        var_name,
+                        f"list_pr.GetChild({child_idx}).Cast<IdentifierParseResult>().identifier",
+                    )
+                )
         return result
 
     def identifier_var_name(self, rule_name):
@@ -214,7 +219,7 @@ class UseGramPreviewEmitter:
         lines.append("\tauto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();")
         lines.append("\tauto ops_entry = ops_map.find(choice_result.name);")
         lines.append("\tif (ops_entry == ops_map.end()) {")
-        lines.append('\t\tthrow InternalException("No trampoline ops registered for rule \'%s\'", choice_result.name);')
+        lines.append("\t\tthrow InternalException(\"No trampoline ops registered for rule '%s'\", choice_result.name);")
         lines.append("\t}")
         lines.append(
             "\tstack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));"
