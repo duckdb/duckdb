@@ -70,3 +70,16 @@ ORDER BY grp;
 ----
 1.5	3	4.5
 2	4	6
+
+# This generates a CAE inside a CTE and then projects it outside.
+query III
+SELECT
+  name,
+  MAX(SUM(n)) OVER (PARTITION BY name)          AS w1,
+  SUM(n) / MAX(SUM(n)) OVER (PARTITION BY name) AS w2
+FROM (VALUES ('a',1),('a',2),('b',3)) t(name, n)
+GROUP BY name
+ORDER BY ALL;
+----
+a	3	1.0
+b	3	1.0
