@@ -44,11 +44,11 @@ public:
 	AsyncResult &operator=(AsyncResultType t);
 	AsyncResult &operator=(AsyncResult &&) noexcept;
 	//! Schedule held async_tasks into the Executor, eventually unblocking InterruptState
-	//! needs to be called with non-emopty async_tasks and from BLOCKED state, will empty the async_tasks and transform
+	//! needs to be called with non-empty async_tasks and from BLOCKED state, will empty the async_tasks and transform
 	//! into INVALID
 	void ScheduleTasks(InterruptState &interrupt_state, Executor &executor);
 	//! Execute tasks synchronously at callsite
-	//! needs to be called with non-emopty async_tasks and from BLOCKED state, will empty the async_tasks and transform
+	//! needs to be called with non-empty async_tasks and from BLOCKED state, will empty the async_tasks and transform
 	//! into HAVE_MORE_OUTPUT
 	void ExecuteTasksSynchronously();
 
