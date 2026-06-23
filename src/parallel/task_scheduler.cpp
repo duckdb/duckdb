@@ -269,11 +269,11 @@ void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 #endif
 }
 
-int32_t TaskScheduler::NumberOfThreads() {
+idx_t TaskScheduler::NumberOfThreads() {
 	return GetPool(TaskSchedulerType::REGULAR).NumberOfThreads();
 }
 
-int32_t TaskScheduler::NumberOfAsyncThreads() {
+idx_t TaskScheduler::NumberOfAsyncThreads() {
 	return GetPool(TaskSchedulerType::ASYNC).NumberOfThreads();
 }
 
