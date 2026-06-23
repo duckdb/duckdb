@@ -20,12 +20,16 @@ public:
 
 	static TimePoint Tick();
 
-	static int64_t ElapsedNanosSince(const TimePoint &start, const TimePoint &end);
+	// Get current timestamp in milliseconds since the epoch
+	static int64_t GetCurrentMillis();
+	// Get two timepoints difference in different units
+	static int64_t ElapsedMillis(const TimePoint &start, const TimePoint &end);
+	static int64_t ElapsedMicros(const TimePoint &start, const TimePoint &end);
+	static int64_t ElapsedNanos(const TimePoint &start, const TimePoint &end);
 
+	// Get the elapsed time in milliseconds since the start timepoint in different units
 	int64_t ElapsedMillis() const;
-
 	int64_t ElapsedMicros() const;
-
 	int64_t ElapsedNanos() const;
 
 private:

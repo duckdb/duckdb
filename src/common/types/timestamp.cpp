@@ -448,17 +448,6 @@ timestamp_t Timestamp::GetCurrentTimestamp() {
 	return FromEpochMicroSeconds(epoch_micros);
 }
 
-timestamp_t Timestamp::GetMonotonicTimestamp() {
-	auto now = steady_clock::now();
-	auto micros = duration_cast<microseconds>(now.time_since_epoch()).count();
-	return timestamp_t(micros);
-}
-
-int64_t Timestamp::GetMonotonicNanoSeconds() {
-	auto now = steady_clock::now();
-	return duration_cast<nanoseconds>(now.time_since_epoch()).count();
-}
-
 timestamp_t Timestamp::FromEpochSecondsPossiblyInfinite(int64_t sec) {
 	timestamp_t input(sec);
 	if (!input.IsFinite()) {

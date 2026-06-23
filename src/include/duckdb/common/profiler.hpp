@@ -40,9 +40,9 @@ public:
 		if (!ran) {
 			return 0;
 		}
-		int64_t elapsed_nanos;
+		int64_t elapsed_nanos = 0;
 		if (finished) {
-			elapsed_nanos = TimePoint::ElapsedNanosSince(start, end);
+			elapsed_nanos = TimePoint::ElapsedNanos(start, end);
 		} else {
 			elapsed_nanos = start.ElapsedNanos();
 		}
@@ -54,10 +54,9 @@ public:
 			return 0;
 		}
 		if (finished) {
-			return static_cast<idx_t>(TimePoint::ElapsedNanosSince(start, end));
-		} else {
-			return static_cast<idx_t>(start.ElapsedNanos());
+			return static_cast<idx_t>(TimePoint::ElapsedNanos(start, end));
 		}
+		return static_cast<idx_t>(start.ElapsedNanos());
 	}
 
 private:

@@ -9,7 +9,19 @@ TimePoint TimePoint::Tick() {
 	return TimePoint(steady_clock::now());
 }
 
-int64_t TimePoint::ElapsedNanosSince(const TimePoint &start, const TimePoint &end) {
+int64_t TimePoint::GetCurrentMillis() {
+	return std::chrono::duration_cast<std::chrono::milliseconds>(steady_clock::now().time_since_epoch()).count();
+}
+
+int64_t TimePoint::ElapsedMillis(const TimePoint &start, const TimePoint &end) {
+	return std::chrono::duration_cast<std::chrono::milliseconds>(end.value - start.value).count();
+}
+
+int64_t TimePoint::ElapsedMicros(const TimePoint &start, const TimePoint &end) {
+	return std::chrono::duration_cast<std::chrono::microseconds>(end.value - start.value).count();
+}
+
+int64_t TimePoint::ElapsedNanos(const TimePoint &start, const TimePoint &end) {
 	return std::chrono::duration_cast<std::chrono::nanoseconds>(end.value - start.value).count();
 }
 

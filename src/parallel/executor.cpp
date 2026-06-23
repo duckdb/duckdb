@@ -480,7 +480,7 @@ void Executor::WaitForTask() {
 	auto begin = TimePoint::Tick();
 	std::unique_lock<mutex> l(executor_lock);
 	auto end = TimePoint::Tick();
-	auto blocked_micros = NumericCast<idx_t>(TimePoint::ElapsedNanosSince(begin, end) / 1000);
+	auto blocked_micros = NumericCast<idx_t>(TimePoint::ElapsedNanos(begin, end) / 1000);
 	if (to_be_rescheduled_tasks.empty()) {
 		blocked_thread_time += blocked_micros;
 		return;
