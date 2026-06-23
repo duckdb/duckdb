@@ -187,6 +187,11 @@ bool ComparisonPropagatesNull(ExpressionType comparison_type) {
 	}
 }
 
+bool IsUnnamedStructType(const LogicalType &type) {
+	return type.id() == LogicalTypeId::STRUCT && type.InternalType() == PhysicalType::STRUCT &&
+	       StructType::IsUnnamed(type);
+}
+
 enum class NestedEqualityResult : uint8_t { FALSE_VALUE, TRUE_VALUE, NULL_VALUE };
 
 static NestedEqualityResult EvaluateNestedEqualityForMarkJoin(const Value &left, const Value &right) {
@@ -387,6 +392,11 @@ MarkNullStrategy MarkJoinPostProcessor::ChooseStrategy() const {
 	}
 	if (!has_null_sensitive_condition) {
 		return MarkNullStrategy::NONE;
+	}
+	for (idx_t i = 0; i < equality_predicates.size() && i < condition_types.size(); i++) {
+		if (equality_predicates[i] == ExpressionType::COMPARE_NOTEQUAL && IsUnnamedStructType(condition_types[i])) {
+			return MarkNullStrategy::FULL_SCAN;
+		}
 	}
 	if (condition_count <= 1 || equality_predicates.size() != condition_count) {
 		return MarkNullStrategy::SIMPLE_HAS_NULL;
@@ -673,9 +683,6 @@ void MarkJoinPostProcessor::ProbeConditionScanRows(DataChunk &join_keys, Validit
                                                    ColumnDataCollection &rhs_condition_data,
                                                    const vector<JoinCondition> &conditions, bool has_null) {
 	D_ASSERT(UsesConditionScan());
-	if (!has_null) {
-		return;
-	}
 
 	SelectionVector unresolved_sel(STANDARD_VECTOR_SIZE);
 	idx_t unresolved_count = BuildUnresolvedSelection(found_match, mask, join_keys.size(), unresolved_sel);
