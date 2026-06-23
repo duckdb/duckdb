@@ -72,9 +72,8 @@ static idx_t SelectStructEqualsOrNotEquals(const Vector &left, const Vector &rig
 			true_count++;
 		} else {
 			if (false_sel) {
-				false_sel->set_index(false_count, result_idx);
+				false_sel->set_index(false_count++, result_idx);
 			}
-			false_count++;
 		}
 	}
 	return true_count;
@@ -213,8 +212,10 @@ static idx_t ComparatorSelectOperation(const Vector &left, const Vector &right, 
 idx_t VectorOperations::Equals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
                                idx_t count, optional_ptr<SelectionVector> true_sel,
                                optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
-	if (left.GetType().InternalType() == PhysicalType::STRUCT &&
-	    right.GetType().InternalType() == PhysicalType::STRUCT) {
+	if (left.GetType().id() == LogicalTypeId::STRUCT && right.GetType().id() == LogicalTypeId::STRUCT &&
+	    left.GetType().InternalType() == PhysicalType::STRUCT &&
+	    right.GetType().InternalType() == PhysicalType::STRUCT && StructType::IsUnnamed(left.GetType()) &&
+	    StructType::IsUnnamed(right.GetType())) {
 		return SelectStructEqualsOrNotEquals(left, right, sel, count, true_sel, false_sel, null_mask, false);
 	}
 	idx_t result;
@@ -228,8 +229,10 @@ idx_t VectorOperations::Equals(const Vector &left, const Vector &right, optional
 idx_t VectorOperations::NotEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
                                   idx_t count, optional_ptr<SelectionVector> true_sel,
                                   optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
-	if (left.GetType().InternalType() == PhysicalType::STRUCT &&
-	    right.GetType().InternalType() == PhysicalType::STRUCT) {
+	if (left.GetType().id() == LogicalTypeId::STRUCT && right.GetType().id() == LogicalTypeId::STRUCT &&
+	    left.GetType().InternalType() == PhysicalType::STRUCT &&
+	    right.GetType().InternalType() == PhysicalType::STRUCT && StructType::IsUnnamed(left.GetType()) &&
+	    StructType::IsUnnamed(right.GetType())) {
 		return SelectStructEqualsOrNotEquals(left, right, sel, count, true_sel, false_sel, null_mask, true);
 	}
 	idx_t result;
