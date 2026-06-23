@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/transaction/checkpoint_lock.hpp"
+#include "duckdb/transaction/vacuum_lock.hpp"
 
 #include <atomic>
 #include <thread>
@@ -91,4 +92,24 @@ TEST_CASE("StorageLock blocks later readers behind a waiting writer", "[storage]
 	}
 	REQUIRE(reader_acquired);
 	reader.join();
+}
+
+TEST_CASE("VacuumLockCoordinator coordinates shared and exclusive leases", "[storage]") {
+	VacuumLockCoordinator lock;
+	auto first_shared_lock = lock.GetSharedLock();
+	auto second_shared_lock = lock.GetSharedLock();
+	REQUIRE(!lock.TryGetExclusiveLock());
+
+	first_shared_lock.reset();
+	REQUIRE(!lock.TryGetExclusiveLock());
+
+	second_shared_lock.reset();
+	auto exclusive_lock = lock.TryGetExclusiveLock();
+	REQUIRE(exclusive_lock);
+	REQUIRE(exclusive_lock->GetType() == VacuumLockType::EXCLUSIVE);
+	REQUIRE(!lock.TryGetExclusiveLock());
+
+	exclusive_lock.reset();
+	auto third_shared_lock = lock.GetSharedLock();
+	REQUIRE(third_shared_lock);
 }

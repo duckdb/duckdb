@@ -23,8 +23,8 @@ class DuckTableEntry;
 class RowGroupCollection;
 class RowVersionManager;
 class DuckTransactionManager;
-class StorageLockKey;
 class StorageCommitState;
+class VacuumLockKey;
 struct DataTableInfo;
 struct UndoBufferProperties;
 
@@ -112,7 +112,7 @@ private:
 	//! Lock that prevents checkpoints from starting
 	unique_ptr<CheckpointLockKey> checkpoint_lock;
 	//! Lock that prevents vacuums from starting
-	unique_ptr<StorageLockKey> vacuum_lock;
+	unique_ptr<VacuumLockKey> vacuum_lock;
 	//! Lock for accessing sequence_usage
 	mutex sequence_lock;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
