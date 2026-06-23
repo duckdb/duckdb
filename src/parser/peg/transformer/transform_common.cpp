@@ -7,6 +7,7 @@
 #include "duckdb/common/operator/negate.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
 #include "duckdb/common/types/bignum.hpp"
+#include <absl/strings/str_replace.h>
 
 namespace duckdb {
 

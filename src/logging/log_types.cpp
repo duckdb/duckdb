@@ -9,8 +9,16 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
+
+static Value LoggableDbName(const AttachedDatabase &db) {
+	if (db.GetVisibility() == AttachVisibility::HIDDEN) {
+		return Value(Utf8Proc::RemoveInvalid(db.name.c_str(), db.name.size()));
+	}
+	return Value(db.name);
+}
 
 constexpr LogLevel DefaultLogType::LEVEL;
 constexpr LogLevel FileSystemLogType::LEVEL;
@@ -201,7 +209,7 @@ LogicalType CheckpointLogType::GetLogType() {
 string CheckpointLogType::CreateLog(const AttachedDatabase &db, DataTableInfo &table, const char *op_name,
                                     vector<Value> map_keys, vector<Value> map_values) {
 	child_list_t<Value> child_list = {
-	    {"database", db.name},
+	    {"database", LoggableDbName(db)},
 	    {"schema", table.GetSchemaName()},
 	    {"table", table.GetTableName()},
 	    {"type", op_name},
@@ -247,7 +255,7 @@ LogicalType TransactionLogType::GetLogType() {
 string TransactionLogType::ConstructLogMessage(const AttachedDatabase &db, const char *log_type,
                                                transaction_t transaction_id) {
 	child_list_t<Value> child_list = {
-	    {"database", db.name},
+	    {"database", LoggableDbName(db)},
 	    {"type", log_type},
 	    {"transaction_id", transaction_id == MAX_TRANSACTION_ID ? Value() : Value::UBIGINT(transaction_id)},
 	};
