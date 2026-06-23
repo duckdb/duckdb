@@ -89,6 +89,9 @@ true	true	true	true
 
 # Force WAL skipping for an auto-checkpoint with a sufficiently large transaction.
 statement ok
+SET wal_autocheckpoint='1KB';
+
+statement ok
 SET auto_checkpoint_skip_wal_threshold=0;
 
 statement ok
@@ -98,7 +101,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/acp_skip_wal.json';
 
 statement ok
-INSERT INTO acp_db.tbl SELECT range::INTEGER FROM range(100000);
+INSERT INTO acp_db.tbl SELECT range::INTEGER FROM range(1000000);
 
 statement ok
 PRAGMA disable_profiling;
