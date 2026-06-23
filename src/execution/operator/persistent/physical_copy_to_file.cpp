@@ -441,6 +441,8 @@ public:
 	    DUCKDB_REQUIRES(lock);
 	unique_ptr<GlobalFileState> InitializeFileState(PendingFileState pending_file_state) DUCKDB_EXCLUDES(lock);
 	void RegisterPrepareGlobalStateLocked(GlobalFileState &file_state) DUCKDB_REQUIRES(lock);
+	void ScheduleOutputDirectorySetup() DUCKDB_EXCLUDES(lock);
+	void EnsureOutputDirectoryReady() DUCKDB_EXCLUDES(lock);
 	void ScheduleFileStateOpen(PendingFileStateOpen pending_file_state_open) DUCKDB_EXCLUDES(lock);
 	void SchedulePartitionFileStateOpen(PartitionFileOpenRequest request) DUCKDB_EXCLUDES(lock);
 	void RequestFileState(FileStateHandle &file_state, string output_path = string(),
@@ -456,6 +458,7 @@ public:
 	void WaitForLifecycleTasks() DUCKDB_EXCLUDES(lock);
 
 private:
+	void PrepareOutputDirectory() DUCKDB_EXCLUDES(lock);
 	void EnsureDirectory(const string &dir_path) DUCKDB_EXCLUDES(lock);
 	void RegisterPendingFileStatePathLocked(PendingFileState &pending_file_state, string output_path)
 	    DUCKDB_REQUIRES(lock);
@@ -484,6 +487,8 @@ public:
 	FileStateHandle global_state;
 	//! Lambda to create a new global file state
 	const std::function<void(FileStateHandle &)> create_file_state_fun;
+	//! Asynchronously prepares the root output directory for directory-style COPY outputs.
+	shared_ptr<CopyFileLifecycleJob> output_directory_job;
 	CopyFileLifecycleExecutor lifecycle_executor;
 	CopyDirectoryManager directory_manager;
 	CopyOutputFileRegistry output_files;
@@ -2925,7 +2930,6 @@ PartitionDirectory PartitionFileRequestBuilder::BuildDirectory(string path) cons
 	auto &fs = FileSystem::GetFileSystem(partitioned_copy.context);
 	PartitionDirectory result;
 	result.path = std::move(path);
-	result.directories.push_back(result.path);
 	if (partitioned_copy.op.hive_file_pattern) {
 		for (idx_t i = 0; i < partitioned_copy.op.partition_columns.size(); i++) {
 			const auto &partition_col_name = partitioned_copy.op.names[partitioned_copy.op.partition_columns[i]];
@@ -3192,6 +3196,48 @@ void CopyToFileGlobalState::Initialize() {
 	initialized = true;
 }
 
+void CopyToFileGlobalState::PrepareOutputDirectory() {
+	auto &fs = FileSystem::GetFileSystem(context);
+	if (!fs.IsRemoteFile(op.file_path)) {
+		if (fs.FileExists(op.file_path)) {
+			if (op.overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
+				fs.RemoveFile(op.file_path);
+			} else {
+				throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory! Enable "
+				                  "OVERWRITE option to overwrite the file",
+				                  op.file_path);
+			}
+		}
+	}
+
+	if (!fs.DirectoryExists(op.file_path)) {
+		fs.CreateDirectory(op.file_path);
+	} else {
+		CheckDirectory(fs, op.file_path, op.overwrite_mode);
+	}
+}
+
+void CopyToFileGlobalState::ScheduleOutputDirectorySetup() {
+	D_ASSERT(!output_directory_job);
+	output_directory_job = make_shared_ptr<CopyFileLifecycleJob>();
+	try {
+		lifecycle_executor.Schedule(output_directory_job, CopyFileLifecycleWaitMode::INTERRUPTIBLE,
+		                            [this]() { PrepareOutputDirectory(); });
+	} catch (...) {
+		if (!output_directory_job->IsFinished()) {
+			output_directory_job->CompleteException(std::current_exception());
+		}
+		throw;
+	}
+}
+
+void CopyToFileGlobalState::EnsureOutputDirectoryReady() {
+	if (!output_directory_job) {
+		return;
+	}
+	lifecycle_executor.WaitForJob(*output_directory_job, CopyFileLifecycleWaitMode::INTERRUPTIBLE);
+}
+
 void CopyToFileGlobalState::EnsureDirectory(const string &dir_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	directory_manager.EnsureDirectory(fs, dir_path);
@@ -3265,6 +3311,7 @@ void CopyToFileGlobalState::ScheduleFileStateOpen(PendingFileStateOpen pending_f
 		lifecycle_executor.Schedule(
 		    open_job, CopyFileLifecycleWaitMode::INTERRUPTIBLE,
 		    [this, open_job, pending_file_state = std::move(pending_file_state_open.pending_file_state)]() mutable {
+			    EnsureOutputDirectoryReady();
 			    open_job->Complete(InitializeFileState(std::move(pending_file_state)));
 		    });
 	} catch (...) {
@@ -3290,6 +3337,7 @@ void CopyToFileGlobalState::SchedulePartitionFileStateOpen(PartitionFileOpenRequ
 }
 
 void PartitionFileOpenRequest::Run(CopyToFileGlobalState &copy_gstate) {
+	copy_gstate.EnsureOutputDirectoryReady();
 	auto &fs = FileSystem::GetFileSystem(copy_gstate.context);
 	for (auto &dir : directory.directories) {
 		copy_gstate.EnsureDirectory(dir);
@@ -3527,29 +3575,8 @@ static bool PhysicalCopyRotateNow(const PhysicalCopyToFile &op, GlobalFileState 
 //===--------------------------------------------------------------------===//
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
 	if (partition_output || per_thread_output || Rotate()) {
-		auto &fs = FileSystem::GetFileSystem(context);
-		if (!fs.IsRemoteFile(file_path)) {
-			if (fs.FileExists(file_path)) {
-				// the target file exists AND is a file (not a directory)
-				// for local files we can remove the file if OVERWRITE_OR_IGNORE is enabled
-				if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
-					fs.RemoveFile(file_path);
-				} else {
-					throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory! Enable "
-					                  "OVERWRITE option to overwrite the file",
-					                  file_path);
-				}
-			}
-		}
-
-		// what if the target exists and is a directory
-		if (!fs.DirectoryExists(file_path)) {
-			fs.CreateDirectory(file_path);
-		} else {
-			CheckDirectory(fs, file_path, overwrite_mode);
-		}
-
 		auto state = make_uniq<CopyToFileGlobalState>(*this, context);
+		state->ScheduleOutputDirectorySetup();
 		if (!partition_output && !per_thread_output && Rotate() && write_empty_file) {
 			state->RequestFileState(state->global_state);
 		}
