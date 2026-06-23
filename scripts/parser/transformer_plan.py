@@ -249,6 +249,12 @@ class DirectOptionalArg:
 
 
 @dataclass
+class DirectOptionalPresenceArg:
+    parse_expr: str
+    var_name: str
+
+
+@dataclass
 class StackChild:
     parse_expr: str
     rule_name: str
@@ -281,6 +287,7 @@ class ListStackChild:
 class SequenceRulePlan:
     direct_args: List[DirectParseArg]
     direct_optional_args: List[DirectOptionalArg]
+    direct_optional_presence_args: List[DirectOptionalPresenceArg]
     direct_repeat_args: List[DirectRepeatArg]
     direct_list_args: List[DirectListArg]
     stack_children: List[StackChild]
@@ -301,6 +308,7 @@ def _trampoline_parse_expr(child_idx, child):
 def plan_trampoline_sequence_rule(ast, identifier_rules):
     direct_args = []
     direct_optional_args = []
+    direct_optional_presence_args = []
     direct_repeat_args = []
     direct_list_args = []
     stack_children = []
@@ -341,6 +349,12 @@ def plan_trampoline_sequence_rule(ast, identifier_rules):
                 next_slot += 1
             finalize_args.append(arg)
             continue
+        if isinstance(child, OptionalNode) and literal_string_values(child.child) is not None:
+            var_name = "has_result" if len(direct_optional_presence_args) == 0 else f"has_result_{child_idx}"
+            arg = DirectOptionalPresenceArg(parse_expr, var_name)
+            direct_optional_presence_args.append(arg)
+            finalize_args.append(arg)
+            continue
         if isinstance(child, OptionalNode) and isinstance(child.child, RepeatNode):
             repeat_node = child.child.child
             if isinstance(repeat_node, ReferenceNode):
@@ -369,6 +383,7 @@ def plan_trampoline_sequence_rule(ast, identifier_rules):
     return SequenceRulePlan(
         direct_args,
         direct_optional_args,
+        direct_optional_presence_args,
         direct_repeat_args,
         direct_list_args,
         stack_children,

@@ -16,6 +16,7 @@ from transformer_plan import (
     ListStackChild,
     OptionalStackChild,
     ParensNode,
+    DirectOptionalPresenceArg,
     ReferenceNode,
     RepeatStackChild,
     SequenceNode,
@@ -356,7 +357,8 @@ class UseGramPreviewEmitter:
             f"TransformStack &stack, TransformStackFrame &frame) {{"
         )
         needs_list_pr = any(
-            isinstance(arg, (DirectParseArg, DirectOptionalArg, DirectRepeatArg, DirectListArg)) for arg in plan.finalize_args
+            isinstance(arg, (DirectParseArg, DirectOptionalArg, DirectOptionalPresenceArg, DirectRepeatArg, DirectListArg))
+            for arg in plan.finalize_args
         )
         if needs_list_pr:
             lines.append("\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
@@ -371,6 +373,11 @@ class UseGramPreviewEmitter:
                 lines.append(f"\tif ({arg.var_name}_opt.HasResult()) {{")
                 lines.append(f"\t\t{arg.var_name} = {arg.var_name}_opt.GetResult().Cast<IdentifierParseResult>().identifier;")
                 lines.append("\t}")
+                arg_names.append(arg.var_name)
+            elif isinstance(arg, DirectOptionalPresenceArg):
+                lines.append(f"\tbool {arg.var_name} {{}};")
+                lines.append(f"\tauto &{arg.var_name}_opt = {arg.parse_expr}.Cast<OptionalParseResult>();")
+                lines.append(f"\t{arg.var_name} = {arg.var_name}_opt.HasResult();")
                 arg_names.append(arg.var_name)
             elif isinstance(arg, DirectRepeatArg):
                 lines.append(f"\toptional<vector<Identifier>> {arg.var_name} {{}};")
