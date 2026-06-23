@@ -14,6 +14,7 @@ from transformer_plan import (
     DirectRepeatArg,
     ListMacroNode,
     ListStackChild,
+    OptionalListStackChild,
     OptionalStackChild,
     ParensNode,
     DirectOptionalPresenceArg,
@@ -367,6 +368,7 @@ class UseGramPreviewEmitter:
                     DirectOptionalPresenceArg,
                     DirectRepeatArg,
                     DirectListArg,
+                    OptionalListStackChild,
                     TrailingOptionalStackChild,
                 ),
             )
@@ -462,6 +464,18 @@ class UseGramPreviewEmitter:
                 lines.append(f"\t\t{var_name} = std::move({var_name}_value);")
                 lines.append("\t}")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
+            elif isinstance(arg, OptionalListStackChild):
+                var_name = arg.var_name
+                lines.append(f"\toptional<vector<{self.cpp_type(arg.rule_name)}>> {var_name} {{}};")
+                lines.append(f"\tauto &{var_name}_opt = {arg.parse_expr}.Cast<OptionalParseResult>();")
+                lines.append(f"\tif ({var_name}_opt.HasResult()) {{")
+                lines.append(f"\t\tvector<{self.cpp_type(arg.rule_name)}> {var_name}_value;")
+                lines.append(f"\t\tfor (idx_t i = {arg.slot_start}; i < frame.child_results.size(); i++) {{")
+                lines.append(f"\t\t\t{var_name}_value.push_back(frame.TakeResult<{self.cpp_type(arg.rule_name)}>(i));")
+                lines.append("\t\t}")
+                lines.append(f"\t\t{var_name} = std::move({var_name}_value);")
+                lines.append("\t}")
+                arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
             elif isinstance(arg, RequiredRepeatStackChild):
                 var_name = self.identifier_var_name(arg.rule_name)
                 lines.append(f"\tvector<{self.cpp_type(arg.rule_name)}> {var_name};")
@@ -517,7 +531,7 @@ class UseGramPreviewEmitter:
         ]
         fixed_child_slots = len(frame_children)
         trailing_optional = plan.trailing_optional_stack_child
-        dynamic_child = plan.repeat_child or plan.required_repeat_child or plan.list_child
+        dynamic_child = plan.repeat_child or plan.optional_list_child or plan.required_repeat_child or plan.list_child
         if frame_children or dynamic_child:
             lines.append("\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
         if dynamic_child:
@@ -541,6 +555,22 @@ class UseGramPreviewEmitter:
                     f"\t\tstack.PushFrame(list_items[child_idx].get(), {ops_name(list_child.rule_name)}, "
                     f"TransformFrameResultTarget(frame.frame_index, {list_child.slot_start} + child_idx));"
                 )
+                lines.append("\t}")
+            elif plan.optional_list_child:
+                list_child = plan.optional_list_child
+                lines.append(f"\tauto &list_opt = {list_child.parse_expr}.Cast<OptionalParseResult>();")
+                lines.append("\tif (list_opt.HasResult()) {")
+                lines.append("\t\tauto list_items = ExtractParseResultsFromList(list_opt.GetResult());")
+                lines.append(f"\t\tframe.ReserveChildSlots({list_child.slot_start} + list_items.size());")
+                lines.append("\t\tfor (idx_t i = list_items.size(); i > 0; i--) {")
+                lines.append("\t\t\tauto child_idx = i - 1;")
+                lines.append(
+                    f"\t\t\tstack.PushFrame(list_items[child_idx].get(), {ops_name(list_child.rule_name)}, "
+                    f"TransformFrameResultTarget(frame.frame_index, {list_child.slot_start} + child_idx));"
+                )
+                lines.append("\t\t}")
+                lines.append("\t} else {")
+                lines.append(f"\t\tframe.ReserveChildSlots({list_child.slot_start});")
                 lines.append("\t}")
             elif plan.required_repeat_child:
                 repeat_child = plan.required_repeat_child
