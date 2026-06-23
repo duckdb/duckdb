@@ -47,6 +47,7 @@
 #include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/common/enums/lambda_syntax.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/mark_null_strategy.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
@@ -3345,6 +3346,27 @@ const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value) {
 template<>
 MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value) {
 	return static_cast<MapInvalidReason>(StringUtil::StringToEnum(GetMapInvalidReasonValues(), 5, "MapInvalidReason", value));
+}
+
+const StringUtil::EnumStringLiteral *GetMarkNullStrategyValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MarkNullStrategy::NONE), "NONE" },
+		{ static_cast<uint32_t>(MarkNullStrategy::SIMPLE_HAS_NULL), "SIMPLE_HAS_NULL" },
+		{ static_cast<uint32_t>(MarkNullStrategy::CORRELATED_COUNTS), "CORRELATED_COUNTS" },
+		{ static_cast<uint32_t>(MarkNullStrategy::NULL_REMAINDER), "NULL_REMAINDER" },
+		{ static_cast<uint32_t>(MarkNullStrategy::FULL_SCAN), "FULL_SCAN" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MarkNullStrategy>(MarkNullStrategy value) {
+	return StringUtil::EnumToString(GetMarkNullStrategyValues(), 5, "MarkNullStrategy", static_cast<uint32_t>(value));
+}
+
+template<>
+MarkNullStrategy EnumUtil::FromString<MarkNullStrategy>(const char *value) {
+	return static_cast<MarkNullStrategy>(StringUtil::StringToEnum(GetMarkNullStrategyValues(), 5, "MarkNullStrategy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMemoryTagValues() {

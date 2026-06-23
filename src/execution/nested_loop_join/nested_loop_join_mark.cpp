@@ -1,9 +1,64 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"
 
 namespace duckdb {
+
+enum class NestedComparisonResult : uint8_t { FALSE_VALUE, TRUE_VALUE, NULL_VALUE };
+
+static NestedComparisonResult EvaluateNestedEqualityForMarkJoin(const Value &left, const Value &right) {
+	if (left.IsNull() || right.IsNull()) {
+		return NestedComparisonResult::NULL_VALUE;
+	}
+	if (left.type().id() == LogicalTypeId::UNION && right.type().id() == LogicalTypeId::UNION) {
+		if (UnionValue::GetTag(left) != UnionValue::GetTag(right)) {
+			return NestedComparisonResult::FALSE_VALUE;
+		}
+		return EvaluateNestedEqualityForMarkJoin(UnionValue::GetValue(left), UnionValue::GetValue(right));
+	}
+	auto &left_children = StructValue::GetChildren(left);
+	auto &right_children = StructValue::GetChildren(right);
+	D_ASSERT(left_children.size() == right_children.size());
+	bool has_unknown = false;
+	for (idx_t i = 0; i < left_children.size(); i++) {
+		auto &lhs_child = left_children[i];
+		auto &rhs_child = right_children[i];
+		if ((lhs_child.type().InternalType() == PhysicalType::STRUCT ||
+		     lhs_child.type().id() == LogicalTypeId::UNION) &&
+		    (rhs_child.type().InternalType() == PhysicalType::STRUCT ||
+		     rhs_child.type().id() == LogicalTypeId::UNION)) {
+			auto child_result = EvaluateNestedEqualityForMarkJoin(lhs_child, rhs_child);
+			if (child_result == NestedComparisonResult::FALSE_VALUE) {
+				return NestedComparisonResult::FALSE_VALUE;
+			}
+			has_unknown = has_unknown || child_result == NestedComparisonResult::NULL_VALUE;
+			continue;
+		}
+		if (lhs_child.IsNull() || rhs_child.IsNull()) {
+			has_unknown = true;
+			continue;
+		}
+		if (!ValueOperations::NotDistinctFrom(lhs_child, rhs_child)) {
+			return NestedComparisonResult::FALSE_VALUE;
+		}
+	}
+	return has_unknown ? NestedComparisonResult::NULL_VALUE : NestedComparisonResult::TRUE_VALUE;
+}
+
+static bool MatchUnnamedStructsForMarkJoin(const Vector &left, const Vector &right, idx_t left_row, idx_t right_row,
+                                           ExpressionType comparison_type) {
+	auto row_result = EvaluateNestedEqualityForMarkJoin(left.GetValue(left_row), right.GetValue(right_row));
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+		return row_result == NestedComparisonResult::TRUE_VALUE;
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return row_result == NestedComparisonResult::FALSE_VALUE;
+	default:
+		throw InternalException("Unsupported unnamed struct comparison for MARK nested loop join");
+	}
+}
 
 template <class T, class OP>
 static void TemplatedMarkJoin(const Vector &left, const Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
@@ -37,6 +92,24 @@ static void TemplatedMarkJoin(const Vector &left, const Vector &right, idx_t lco
 
 static void MarkJoinNested(const Vector &left, const Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
                            ExpressionType comparison_type) {
+	if (left.GetType().id() == LogicalTypeId::STRUCT && right.GetType().id() == LogicalTypeId::STRUCT &&
+	    left.GetType().InternalType() == PhysicalType::STRUCT &&
+	    right.GetType().InternalType() == PhysicalType::STRUCT && StructType::IsUnnamed(left.GetType()) &&
+	    StructType::IsUnnamed(right.GetType()) &&
+	    (comparison_type == ExpressionType::COMPARE_EQUAL || comparison_type == ExpressionType::COMPARE_NOTEQUAL)) {
+		for (idx_t i = 0; i < lcount; i++) {
+			if (found_match[i]) {
+				continue;
+			}
+			for (idx_t j = 0; j < rcount; j++) {
+				if (MatchUnnamedStructsForMarkJoin(left, right, i, j, comparison_type)) {
+					found_match[i] = true;
+					break;
+				}
+			}
+		}
+		return;
+	}
 	Vector left_reference(left.GetType());
 	for (idx_t i = 0; i < lcount; i++) {
 		if (found_match[i]) {

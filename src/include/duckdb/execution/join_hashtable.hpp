@@ -13,13 +13,16 @@
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/row_operations/row_matcher.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
+#include "duckdb/execution/mark_join_post_processor.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 
 namespace duckdb {
@@ -244,6 +247,7 @@ public:
 	//! Probe the HT with the given input chunk, resulting in the given result
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
+	void InitializeCorrelatedMarkJoin(const vector<LogicalType> &correlated_types);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
 
@@ -380,27 +384,13 @@ public:
 	//! Returns true iff small-build-side dictionary emission should activate
 	bool CanUseDictionaryEmission(const PhysicalHashJoin &op, bool external, idx_t probe_cardinality) const;
 
-	struct {
-		mutex mj_lock;
-		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening
-		//! ANY()/ALL() expressions
-		vector<LogicalType> correlated_types;
-		//! The aggregate expression nodes used by the HT
-		vector<unique_ptr<Expression>> correlated_aggregates;
-		//! The HT that holds the group counts for every correlated column
-		unique_ptr<GroupedAggregateHashTable> correlated_counts;
-		//! Group chunk used for aggregating into correlated_counts
-		DataChunk group_chunk;
-		//! Payload chunk used for aggregating into correlated_counts
-		DataChunk correlated_payload;
-		//! Result chunk used for aggregating into correlated_counts
-		DataChunk result_chunk;
-	} correlated_mark_join_info;
+	MarkJoinPostProcessor mark_join_post_processor;
 
 private:
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             optional_ptr<const SelectionVector> &current_sel);
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+	bool UsesCorrelatedMarkCounts() const;
 
 	//! Dictionary-aware variant of Probe. Returns false if the LHS keys are not dictionary-eligible.
 	bool TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,

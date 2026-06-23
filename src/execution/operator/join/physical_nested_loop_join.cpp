@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
+#include "duckdb/execution/mark_join_post_processor.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"
@@ -6,6 +7,24 @@
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
 
 namespace duckdb {
+
+static bool ValueContainsNestedNull(const Value &value) {
+	if (value.IsNull()) {
+		return true;
+	}
+	if (value.type().id() == LogicalTypeId::UNION) {
+		return ValueContainsNestedNull(UnionValue::GetValue(value));
+	}
+	if (value.type().InternalType() != PhysicalType::STRUCT) {
+		return false;
+	}
+	for (auto &child : StructValue::GetChildren(value)) {
+		if (ValueContainsNestedNull(child)) {
+			return true;
+		}
+	}
+	return false;
+}
 
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
                                                PhysicalOperator &left, PhysicalOperator &right,
@@ -42,6 +61,35 @@ bool PhysicalJoin::HasNullValues(DataChunk &chunk) {
 	return false;
 }
 
+static bool HasNestedStructNullValues(DataChunk &chunk) {
+	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
+		if (chunk.data[col_idx].GetType().id() != LogicalTypeId::STRUCT ||
+		    chunk.data[col_idx].GetType().InternalType() != PhysicalType::STRUCT ||
+		    !StructType::IsUnnamed(chunk.data[col_idx].GetType())) {
+			continue;
+		}
+		for (idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
+			if (ValueContainsNestedNull(chunk.data[col_idx].GetValue(row_idx))) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static bool NeedsNestedMarkNullCheck(const vector<JoinCondition> &conditions) {
+	for (auto &cond : conditions) {
+		if (cond.GetLHS().GetReturnType().id() == LogicalTypeId::STRUCT &&
+		    cond.GetLHS().GetReturnType().InternalType() == PhysicalType::STRUCT &&
+		    StructType::IsUnnamed(cond.GetLHS().GetReturnType()) &&
+		    (cond.GetComparisonType() == ExpressionType::COMPARE_EQUAL ||
+		     cond.GetComparisonType() == ExpressionType::COMPARE_NOTEQUAL)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 template <bool MATCH>
 static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
 	D_ASSERT(left.ColumnCount() == result.ColumnCount());
@@ -59,7 +107,6 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 		// project them using the result selection vector
 		// reference the columns of the left side from the result
 		result.Slice(left, sel, result_count);
-	} else {
 	}
 }
 
@@ -262,7 +309,8 @@ SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, DataChunk
 	// if we have not seen any NULL values yet, and we are performing a MARK join, check if there are NULL values in
 	// this chunk
 	if (join_type == JoinType::MARK && !gstate.has_null) {
-		if (HasNullValues(lstate.right_condition)) {
+		if (HasNullValues(lstate.right_condition) ||
+		    (NeedsNestedMarkNullCheck(conditions) && HasNestedStructNullValues(lstate.right_condition))) {
 			gstate.has_null = true;
 		}
 	}
@@ -320,20 +368,31 @@ public:
 	                            const vector<JoinCondition> &conditions)
 	    : lhs_executor(context), left_outer(IsLeftOuterJoin(op.join_type)), pred_executor(context) {
 		vector<LogicalType> condition_types;
+		vector<ExpressionType> comparison_types;
+		mark_null_values_are_equal.reserve(conditions.size());
 		for (auto &cond : conditions) {
 			lhs_executor.AddExpression(cond.GetLHS());
 			condition_types.push_back(cond.GetLHS().GetReturnType());
+			comparison_types.push_back(cond.GetComparisonType());
+			mark_null_values_are_equal.push_back(cond.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+			                                     cond.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 		}
 		auto &allocator = Allocator::Get(context);
 		left_condition.Initialize(allocator, condition_types);
 		right_condition.Initialize(allocator, condition_types);
 		right_payload.Initialize(allocator, op.children[1].get().GetTypes());
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
+		lhs_output_columns.reserve(op.children[0].get().GetTypes().size());
+		for (idx_t i = 0; i < op.children[0].get().GetTypes().size(); i++) {
+			lhs_output_columns.push_back(i);
+		}
 
 		if (op.predicate) {
 			pred_executor.AddExpression(*op.predicate);
 			pred_matches.Initialize();
 		}
+		mark_join_post_processor.Initialize(context, BufferManager::GetBufferManager(context), op.join_type,
+		                                    conditions.size(), comparison_types, condition_types);
 		ResetState();
 	}
 
@@ -342,6 +401,9 @@ public:
 	DataChunk left_condition;
 	//! The executor of the LHS condition
 	ExpressionExecutor lhs_executor;
+	MarkJoinPostProcessor mark_join_post_processor;
+	vector<bool> mark_null_values_are_equal;
+	vector<idx_t> lhs_output_columns;
 
 	ColumnDataScanState condition_scan_state;
 	ColumnDataScanState payload_scan_state;
@@ -436,7 +498,15 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 	switch (join_type) {
 	case JoinType::MARK:
 		// now construct the mark join result from the found matches
-		PhysicalJoin::ConstructMarkJoinResult(state.left_condition, input, chunk, found_match, gstate.has_null);
+		if (state.mark_join_post_processor.UsesConditionScan()) {
+			state.mark_join_post_processor.ConstructResult(state.left_condition, input, chunk,
+			                                               state.mark_null_values_are_equal, found_match,
+			                                               gstate.right_condition_data, conditions, gstate.has_null);
+		} else {
+			state.mark_join_post_processor.ConstructResult(state.left_condition, input, chunk, state.lhs_output_columns,
+			                                               state.mark_null_values_are_equal, found_match,
+			                                               gstate.has_null);
+		}
 		break;
 	case JoinType::SEMI:
 		// construct the semi join result from the found matches
