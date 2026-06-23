@@ -241,13 +241,12 @@ public:
 
 private:
 	struct PendingWrite {
-		PendingWrite(AsyncWriteRequest request, AsyncWriteCompletionCallback pending_completion);
+		explicit PendingWrite(AsyncWriteRequest request);
 
 		idx_t Size() const;
 
 		AsyncWriteRequest request;
 		idx_t size;
-		AsyncWriteCompletionCallback pending_completion;
 	};
 
 private:
@@ -276,7 +275,7 @@ private:
 	//! Move one pending positional write into a physical async request.
 	bool TakePendingWriteRequest(AsyncWriteRequest &request, SchedulePolicy policy);
 	//! Wrap a request callback so submitted-byte accounting is released before user callbacks run.
-	AsyncWriteCompletionCallback AddCompletionAccounting(AsyncWriteRequest &request);
+	void AddCompletionAccounting(AsyncWriteRequest &request);
 	//! Release byte accounting for one submitted physical request.
 	void CompleteSubmittedWrite(idx_t offset, idx_t size, optional_ptr<const ErrorData> error);
 

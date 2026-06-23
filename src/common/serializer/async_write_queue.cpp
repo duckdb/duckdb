@@ -486,9 +486,8 @@ void AsyncWriteQueue::VerifyOpen() const {
 	}
 }
 
-ManagedAsyncWriteQueue::PendingWrite::PendingWrite(AsyncWriteRequest request_p,
-                                                   AsyncWriteCompletionCallback pending_completion_p)
-    : request(std::move(request_p)), size(request.Size()), pending_completion(std::move(pending_completion_p)) {
+ManagedAsyncWriteQueue::PendingWrite::PendingWrite(AsyncWriteRequest request_p)
+    : request(std::move(request_p)), size(request.Size()) {
 }
 
 idx_t ManagedAsyncWriteQueue::PendingWrite::Size() const {
@@ -580,7 +579,6 @@ void ManagedAsyncWriteQueue::RegisterWriteInternal(AsyncWriteRequest request, id
 		return;
 	}
 
-	auto pending_completion = AddCompletionAccounting(request);
 	{
 		lock_guard<mutex> guard(lock);
 		VerifyOpen();
@@ -588,7 +586,7 @@ void ManagedAsyncWriteQueue::RegisterWriteInternal(AsyncWriteRequest request, id
 			D_ASSERT(external_pending_bytes >= accounted_external_bytes);
 			external_pending_bytes -= accounted_external_bytes;
 		}
-		pending_writes.emplace_back(std::move(request), std::move(pending_completion));
+		pending_writes.emplace_back(std::move(request));
 		pending_bytes += request_size;
 	}
 	UpdateMemoryState();
@@ -678,10 +676,12 @@ bool ManagedAsyncWriteQueue::TakePendingWriteRequest(AsyncWriteRequest &request,
 	pending_bytes -= request_size;
 	submitted_bytes += request_size;
 	submitted_requests++;
+	// Attach accounting only on submission, so cancelled pending writes never carry it.
+	AddCompletionAccounting(request);
 	return true;
 }
 
-AsyncWriteCompletionCallback ManagedAsyncWriteQueue::AddCompletionAccounting(AsyncWriteRequest &request) {
+void ManagedAsyncWriteQueue::AddCompletionAccounting(AsyncWriteRequest &request) {
 	auto user_completion = request.completion;
 	request.completion = [this, user_completion](idx_t offset, idx_t size, optional_ptr<const ErrorData> error) {
 		CompleteSubmittedWrite(offset, size, error);
@@ -689,7 +689,6 @@ AsyncWriteCompletionCallback ManagedAsyncWriteQueue::AddCompletionAccounting(Asy
 			user_completion(offset, size, error);
 		}
 	};
-	return user_completion;
 }
 
 void ManagedAsyncWriteQueue::CompleteSubmittedWrite(idx_t offset, idx_t size, optional_ptr<const ErrorData> error) {
@@ -801,9 +800,10 @@ void ManagedAsyncWriteQueue::CancelPendingWritesAfterFailure(const ErrorData &er
 		auto request_size = pending.Size();
 		auto &request = pending.request;
 		request.payload.reset();
-		if (pending.pending_completion) {
+		// Pending writes were never submitted, so request.completion is still the raw user callback (if any).
+		if (request.completion) {
 			try {
-				pending.pending_completion(request.offset, request_size, error);
+				request.completion(request.offset, request_size, error);
 			} catch (...) {
 			}
 		}
