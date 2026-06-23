@@ -314,15 +314,9 @@ void DuckTransactionManager::CleanupTransactions() {
 	}
 }
 
-bool DuckTransactionManager::RegisterPendingCommit(transaction_t publish_seq) {
+void DuckTransactionManager::RegisterPendingCommit(transaction_t publish_seq) {
 	lock_guard<mutex> guard(publish_lock);
-	if (catalog_gate_waiters > 0) {
-		// a DDL operation is waiting for pending commits to drain - do not admit new deferred commits,
-		// the caller must fall back to the synchronous commit path
-		return false;
-	}
 	pending_commit_publishes.insert(publish_seq);
-	return true;
 }
 
 void DuckTransactionManager::WaitForPublishTurn(transaction_t publish_seq) {
@@ -341,16 +335,18 @@ void DuckTransactionManager::FinishPendingCommit(transaction_t publish_seq) {
 	publish_cv.notify_all();
 }
 
-unique_lock<mutex> DuckTransactionManager::BlockPendingCommits() {
-	unique_lock<mutex> guard(publish_lock);
-	// while we wait, new commits cannot register as pending (they fall back to the synchronous path) -
-	// otherwise a steady stream of deferred commits could starve the DDL operation indefinitely
-	catalog_gate_waiters++;
-	publish_cv.wait(guard, [&]() { return pending_commit_publishes.empty(); });
-	catalog_gate_waiters--;
-	// return while holding the publish lock: registration stays blocked until the caller releases it,
-	// covering the catalog version attachment
-	return guard;
+unique_ptr<StorageLockKey> DuckTransactionManager::BlockPendingCommits() {
+	// The system catalog has no storage, and in-memory databases have no WAL - neither has deferred (group) commits,
+	// so there is nothing to block (DDL on them, e.g. registering built-in functions at load, must not touch a WAL
+	// lock that does not apply).
+	if (db.IsSystem() || db.GetStorageManager().InMemory()) {
+		return nullptr;
+	}
+	// Take the WAL lock exclusively: this waits for all in-flight deferred commits (which hold it SHARED through
+	// publish) to finish and blocks new ones until the returned handle is released, so the caller can attach a new
+	// catalog version without a deferred commit's catalog validation going stale in between. Writer priority in
+	// StorageLock prevents a steady stream of commits from starving this acquisition.
+	return db.GetStorageManager().GetWALLockExclusive();
 }
 
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
@@ -478,12 +474,10 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// the publish sequence orders deferred publishes in WAL order; it is independent of the commit timestamp
 	transaction_t publish_seq = 0;
 	if (defer_publish) {
+		// assign the publish sequence and register for in-order publishing. A concurrent catalog change cannot
+		// interleave: it takes the WAL lock EXCLUSIVELY (BlockPendingCommits) while we hold it SHARED through publish.
 		publish_seq = next_publish_sequence++;
-		if (!RegisterPendingCommit(publish_seq)) {
-			// a DDL operation is waiting for pending commits to drain before attaching a new catalog version -
-			// fall back to the synchronous commit path (publish + inline fsync under the locks)
-			defer_publish = false;
-		}
+		RegisterPendingCommit(publish_seq);
 	}
 
 	// commit the UndoBuffer of the transaction

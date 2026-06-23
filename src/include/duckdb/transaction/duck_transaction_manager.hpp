@@ -92,13 +92,13 @@ public:
 	                      idx_t extra_data_size = 0);
 	void PushAttach(Transaction &transaction_p, AttachedDatabase &db);
 
-	//! Wait until no pending (unpublished) commits exist, then return while holding the publish lock - blocking
-	//! new deferred commits from registering until the returned lock is released. Used by DDL (ALTER/DROP) to
-	//! attach a new catalog version: a deferred commit validates against the catalog before writing its WAL flush
-	//! marker, and that validation must stay authoritative until the commit is published. While a caller is
-	//! waiting, new commits fall back to the synchronous commit path instead of deferring (avoids starvation).
-	//! The caller must NOT hold the transaction lock or the WAL lock.
-	unique_lock<mutex> BlockPendingCommits();
+	//! Acquire the WAL lock EXCLUSIVELY, returning the lock handle. Used by DDL (ALTER/DROP/CREATE INDEX) to attach a
+	//! new catalog version: a deferred (group) commit validates against the catalog before writing its WAL flush
+	//! marker and holds the WAL lock SHARED until it publishes, so taking the WAL lock exclusively here both drains
+	//! all in-flight deferred commits and blocks new ones until the returned handle is released - keeping that
+	//! validation authoritative. Writer priority (see StorageLock) prevents a steady stream of commits from starving
+	//! the DDL. The caller must NOT already hold the WAL lock (the lock is not reentrant).
+	unique_ptr<StorageLockKey> BlockPendingCommits();
 
 protected:
 	struct CheckpointDecision {
@@ -129,9 +129,8 @@ private:
 	void CleanupTransactions();
 
 	//! Register a commit that is about to write its WAL flush marker and defer its publish, identified by a
-	//! monotonic publish sequence number assigned in WAL order. Returns false if a DDL gate is currently
-	//! waiting (see BlockPendingCommits) - the commit must then fall back to the synchronous commit path.
-	bool RegisterPendingCommit(transaction_t publish_seq);
+	//! monotonic publish sequence number assigned in WAL order (used by WaitForPublishTurn to publish in order).
+	void RegisterPendingCommit(transaction_t publish_seq);
 	//! Wait until all earlier pending commits have been published. Publishing in WAL (publish-sequence) order
 	//! keeps recently_committed_transactions ordered on commit_id and matches WAL replay order.
 	void WaitForPublishTurn(transaction_t publish_seq);
@@ -180,9 +179,6 @@ private:
 	//! their publishes. Decoupled from the commit timestamp, which is only assigned at publish time so that a
 	//! starting transaction can never observe a commit id that is not yet published.
 	transaction_t next_publish_sequence = 1;
-	//! Number of DDL operations currently waiting in BlockPendingCommits. While non-zero, new commits
-	//! cannot register as pending and fall back to the synchronous commit path.
-	idx_t catalog_gate_waiters = 0;
 
 	//! Row groups retired by a checkpoint, kept alive until the database is quiescent so that undo buffers can no
 	//! longer reference their UpdateSegments (see RetireAfterCheckpoint).

@@ -397,11 +397,9 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 
 	read_lock.unlock();
 	write_lock.unlock();
-	// release the publish gate BEFORE updating the dependency manager: it drops/creates dependency entries
-	// through CatalogSet::DropEntry, which acquires the publish gate itself (it is not re-entrant)
-	if (publish_gate.owns_lock()) {
-		publish_gate.unlock();
-	}
+	// release the publish gate (the exclusive WAL lock) BEFORE updating the dependency manager: it drops/creates
+	// dependency entries through CatalogSet::DropEntry, which acquires the gate itself (the WAL lock is not reentrant)
+	publish_gate.reset();
 
 	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
 	catalog.GetDependencyManager()->AlterObject(transaction, *entry, *new_entry, alter_info);
