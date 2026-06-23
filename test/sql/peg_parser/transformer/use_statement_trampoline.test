@@ -1,0 +1,46 @@
+# name: test/sql/peg_parser/transformer/use_statement_trampoline.test
+# description: Test USE statement through the trampoline PEG transformer backend
+# group: [transformer]
+
+statement ok
+SET transformer_trampoline_style=true
+
+statement error
+SELECT 1;
+----
+Not implemented Error: No trampoline transformer for statement rule 'SelectStatement'
+
+statement ok
+USE main
+
+statement ok
+USE MAIN
+
+statement ok
+USE "main"
+
+statement ok
+USE memory.main
+
+statement ok
+USE "memory"."main"
+
+statement error
+USE temp
+----
+Catalog Error: SET schema cannot be set to internal schema "temp"
+
+statement error
+USE main.temp
+----
+Catalog Error: SET schema: No catalog + schema named "main.temp" found.
+
+statement error
+USE main.extra
+----
+Catalog Error: SET schema: No catalog + schema named "main.extra" found.
+
+statement error
+USE main.main.extra
+----
+Parser Error: Expected "USE database" or "USE database.schema"
