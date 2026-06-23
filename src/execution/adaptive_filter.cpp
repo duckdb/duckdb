@@ -40,7 +40,6 @@ AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, vector<idx_t
 
 bool AdaptiveFilter::Remap(const TableFilterSet &new_filters, vector<idx_t> new_ids) {
 	if (new_ids.size() != filter_global_pos.size() || new_ids.size() != new_filters.FilterCount()) {
-		// missing filter cant remap
 		return false;
 	}
 	unordered_map<idx_t, idx_t> new_position_by_identity;
@@ -51,7 +50,6 @@ bool AdaptiveFilter::Remap(const TableFilterSet &new_filters, vector<idx_t> new_
 	for (idx_t i = 0; i < filter_global_pos.size(); i++) {
 		auto it = new_position_by_identity.find(filter_global_pos[i]);
 		if (it == new_position_by_identity.end()) {
-			// missing filter cant remap
 			return false;
 		}
 		old_to_new[i] = it->second;
@@ -94,17 +92,16 @@ AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
 		return AdaptiveFilterState();
 	}
 	AdaptiveFilterState state;
-	state.monotonic_start = Timestamp::GetMonotonicTimestamp();
+	state.monotonic_start = TimePoint::Tick();
 	return state;
 }
 
 void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
 	if (permutation.size() <= 1 || disable_permutations) {
-		// nothing to permute
 		return;
 	}
-	auto duration = static_cast<double>(Timestamp::GetMonotonicTimestamp().value - state.monotonic_start.value) /
-	                static_cast<double>(Interval::MICROS_PER_SEC);
+	auto duration =
+	    static_cast<double>(state.monotonic_start.ElapsedMicros()) / static_cast<double>(Interval::MICROS_PER_SEC);
 	AdaptRuntimeStatistics(duration);
 }
 
@@ -114,13 +111,11 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 
 	D_ASSERT(!disable_permutations);
 	if (!warmup) {
-		// the last swap was observed
 		if (observe && iteration_count == observe_interval) {
 			// keep swap if runtime decreased, else reverse swap
 			auto trial_mean = runtime_sum / static_cast<double>(iteration_count);
 			const char *action;
 			if (prev_mean - trial_mean <= 0) {
-				// reverse swap because runtime didn't decrease
 				std::swap(permutation[swap_idx], permutation[swap_idx + 1]);
 
 				// decrease swap likeliness, but make sure there is always a small likeliness left
@@ -129,7 +124,6 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 				}
 				action = "reverted";
 			} else {
-				// keep swap because runtime decreased, reset likeliness
 				swap_likeliness[swap_idx] = 100;
 				action = "kept";
 			}
@@ -143,36 +137,27 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 			}
 			observe = false;
 
-			// reset values
 			iteration_count = 0;
 			runtime_sum = 0.0;
 		} else if (!observe && iteration_count == execute_interval) {
 			// save old mean to evaluate swap
 			prev_mean = runtime_sum / static_cast<double>(iteration_count);
 
-			// get swap index and swap likeliness
-			// a <= i <= b
 			auto random_number = generator.NextRandomInteger(1, NumericCast<uint32_t>(right_random_border));
 
 			swap_idx = random_number / 100;                    // index to be swapped
 			idx_t likeliness = random_number - 100 * swap_idx; // random number between [0, 100)
 
-			// check if swap is going to happen
 			if (swap_likeliness[swap_idx] > likeliness) { // always true for the first swap of an index
-				// swap
 				std::swap(permutation[swap_idx], permutation[swap_idx + 1]);
-
-				// observe whether swap will be applied
 				observe = true;
 			}
 
-			// reset values
 			iteration_count = 0;
 			runtime_sum = 0.0;
 		}
 	} else {
 		if (iteration_count == 5) {
-			// initially set all values
 			iteration_count = 0;
 			runtime_sum = 0.0;
 			observe = false;

@@ -6,7 +6,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/encryption_functions.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/storage/storage_options.hpp"
 #include "zstd.h"
 
@@ -474,8 +473,8 @@ TemporaryCompressionLevel TemporaryFileCompressionAdaptivity::GetCompressionLeve
 	return result;
 }
 
-void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel level, const int64_t time_before_ns) {
-	const auto duration = Timestamp::GetMonotonicNanoSeconds() - time_before_ns;
+void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel level, const TimePoint &time_before) {
+	const auto duration = time_before.ElapsedNanos();
 	auto &last_write_ns = level == TemporaryCompressionLevel::UNCOMPRESSED
 	                          ? last_uncompressed_write_ns
 	                          : last_compressed_writes_ns[LevelToIndex(level)];
@@ -506,7 +505,7 @@ idx_t TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer
 	const auto adaptivity_idx = TaskScheduler::GetEstimatedCPUId() % COMPRESSION_ADAPTIVITIES;
 	auto &compression_adaptivity = compression_adaptivities[adaptivity_idx];
 
-	const auto time_before_ns = Timestamp::GetMonotonicNanoSeconds();
+	const auto time_before = TimePoint::Tick();
 	AllocatedData compressed_buffer;
 	const auto compression_result = CompressBuffer(compression_adaptivity, buffer, compressed_buffer);
 
@@ -540,7 +539,7 @@ idx_t TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer
 
 	handle->WriteTemporaryBuffer(buffer, index.block_index.GetIndex(), compressed_buffer);
 
-	compression_adaptivity.Update(compression_result.level, time_before_ns);
+	compression_adaptivity.Update(compression_result.level, time_before);
 	return static_cast<idx_t>(compression_result.size);
 }
 

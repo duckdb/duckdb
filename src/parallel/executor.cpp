@@ -1,6 +1,7 @@
 #include "duckdb/execution/executor.hpp"
 
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/time_point.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
@@ -476,10 +477,10 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 void Executor::WaitForTask() {
 #ifndef DUCKDB_NO_THREADS
 	static constexpr std::chrono::microseconds WAIT_TIME_MS = std::chrono::microseconds(WAIT_TIME * 1000);
-	auto begin = Timestamp::GetMonotonicTimestamp();
+	auto begin = TimePoint::Tick();
 	std::unique_lock<mutex> l(executor_lock);
-	auto end = Timestamp::GetMonotonicTimestamp();
-	auto blocked_micros = NumericCast<idx_t>(end.value - begin.value);
+	auto end = TimePoint::Tick();
+	auto blocked_micros = NumericCast<idx_t>(TimePoint::ElapsedNanosSince(begin, end) / 1000);
 	if (to_be_rescheduled_tasks.empty()) {
 		blocked_thread_time += blocked_micros;
 		return;

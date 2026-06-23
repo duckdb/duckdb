@@ -12,6 +12,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/time_point.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -20,8 +21,6 @@ class Logger;
 class HTTPUtil;
 class FileOpener;
 struct FileOpenerInfo;
-
-struct HTTPLogWriter {};
 
 struct HTTPParams {
 	explicit HTTPParams(HTTPUtil &http_util) : http_util(http_util) {
@@ -154,8 +153,8 @@ struct BaseRequest {
 	// System clock start timestamp
 	timestamp_t request_system_start;
 	// Monotonic clock start and end timestamp
-	timestamp_t request_monotonic_start;
-	timestamp_t request_monotonic_end;
+	TimePoint request_monotonic_start;
+	TimePoint request_monotonic_end;
 
 	//! Optional per-request network measurements, populated by clients that measure them.
 	bool have_time_to_fst_byte = false;

@@ -13,14 +13,14 @@
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/time_point.hpp"
 
 namespace duckdb {
 
 class Logger;
 
 struct AdaptiveFilterState {
-	timestamp_t monotonic_start;
+	TimePoint monotonic_start;
 };
 
 enum class AdaptiveFilterSource : uint8_t {

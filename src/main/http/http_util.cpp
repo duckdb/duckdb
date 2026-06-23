@@ -260,21 +260,20 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
 		unique_ptr<HTTPResponse> response;
 
-		// When logging is enabled, we collect request timings
 		if (request.params.logger) {
 			request.have_request_timing = request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
 		}
 
 		try {
 			request.request_system_start = Timestamp::GetCurrentTimestamp();
-			request.request_monotonic_start = Timestamp::GetMonotonicTimestamp();
+			request.request_monotonic_start = TimePoint::Tick();
 			response = client->Request(request);
 		} catch (...) {
-			request.request_monotonic_end = Timestamp::GetMonotonicTimestamp();
+			request.request_monotonic_end = TimePoint::Tick();
 			LogRequest(request, nullptr);
 			throw;
 		}
-		request.request_monotonic_end = Timestamp::GetMonotonicTimestamp();
+		request.request_monotonic_end = TimePoint::Tick();
 		LogRequest(request, response ? response.get() : nullptr);
 		return response;
 	});

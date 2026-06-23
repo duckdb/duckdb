@@ -2,7 +2,7 @@
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/original/std/sstream.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/time_point.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -10,19 +10,18 @@ namespace duckdb {
 
 #ifndef DUCKDB_NO_THREADS
 void ThreadUtil::SleepMs(idx_t sleep_ms, optional_ptr<ClientContext> context) {
-	auto target_time = Timestamp::GetMonotonicTimestamp();
-	target_time.value += static_cast<int64_t>(sleep_ms) * Interval::MICROS_PER_MSEC;
+	auto start_time = TimePoint::Tick();
 	static constexpr idx_t DEFAULT_SLEEP_INTERVAL_MS = 100;
 
 	while (true) {
-		auto current_time = Timestamp::GetMonotonicTimestamp();
 		if (context && context->IsInterrupted()) {
 			throw InterruptException();
 		}
-		if (current_time >= target_time) {
+		auto elapsed_ms = static_cast<idx_t>(start_time.ElapsedMillis());
+		if (elapsed_ms >= sleep_ms) {
 			break;
 		}
-		auto remaining_ms = static_cast<idx_t>(target_time.value - current_time.value) / Interval::MICROS_PER_MSEC;
+		auto remaining_ms = sleep_ms - elapsed_ms;
 		std::this_thread::sleep_for(milliseconds(MinValue(remaining_ms, DEFAULT_SLEEP_INTERVAL_MS)));
 	}
 }

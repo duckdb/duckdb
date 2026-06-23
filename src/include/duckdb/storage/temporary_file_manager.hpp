@@ -15,6 +15,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/random_engine.hpp"
+#include "duckdb/common/time_point.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -223,7 +224,7 @@ public:
 	//! Get the compression level to use based on current write times
 	TemporaryCompressionLevel GetCompressionLevel();
 	//! Update write time for given compression level
-	void Update(TemporaryCompressionLevel level, int64_t time_before_ns);
+	void Update(TemporaryCompressionLevel level, const TimePoint &time_before);
 
 private:
 	//! Convert from level to index into write time array and back
