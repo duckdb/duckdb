@@ -216,7 +216,9 @@ class UseGramPreviewEmitter:
         lines.append("\tif (ops_entry == ops_map.end()) {")
         lines.append('\t\tthrow InternalException("No trampoline ops registered for rule \'%s\'", choice_result.name);')
         lines.append("\t}")
-        lines.append("\tstack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));")
+        lines.append(
+            "\tstack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));"
+        )
         lines.append("}")
         lines.append("")
         lines.append(
