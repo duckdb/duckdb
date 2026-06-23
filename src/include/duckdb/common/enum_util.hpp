@@ -322,6 +322,8 @@ enum class MultiFileColumnMappingMode : uint8_t;
 
 enum class MultiFileFileState : uint8_t;
 
+enum class MultiFileScanPhase : uint8_t;
+
 enum class NType : uint8_t;
 
 enum class NewLineIdentifier : uint8_t;
@@ -997,6 +999,9 @@ const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMapping
 
 template<>
 const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value);
+
+template<>
+const char* EnumUtil::ToChars<MultiFileScanPhase>(MultiFileScanPhase value);
 
 template<>
 const char* EnumUtil::ToChars<NType>(NType value);
@@ -1793,6 +1798,9 @@ MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(cons
 
 template<>
 MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value);
+
+template<>
+MultiFileScanPhase EnumUtil::FromString<MultiFileScanPhase>(const char *value);
 
 template<>
 NType EnumUtil::FromString<NType>(const char *value);
