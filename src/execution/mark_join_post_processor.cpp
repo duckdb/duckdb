@@ -102,10 +102,14 @@ idx_t FilterCandidatesForColumnComparison(Vector &lhs_column, Vector &rhs_column
                                           idx_t rhs_count, const SelectionVector &candidate_sel, idx_t candidate_count,
                                           MarkJoinNullMatchState &state, SelectionVector &remaining_sel) {
 	auto rhs_scalar = rhs_column.GetValue(rhs_row);
-	if (rhs_scalar.IsNull()) {
-		rhs_scalar = Value(rhs_column.GetType());
+	if (rhs_scalar.type() != rhs_value.GetType()) {
+		rhs_scalar = rhs_scalar.DefaultCastAs(rhs_value.GetType());
 	}
-	ConstantVector::Reference(rhs_value, rhs_scalar, count_t(candidate_count));
+	if (rhs_scalar.IsNull()) {
+		ConstantVector::SetNull(rhs_value, count_t(candidate_count));
+	} else {
+		ConstantVector::Reference(rhs_value, rhs_scalar, count_t(candidate_count));
+	}
 	Vector lhs_slice(lhs_column, candidate_sel, candidate_count);
 
 	state.null_mask.SetAllValid(candidate_count);
@@ -333,10 +337,14 @@ idx_t FilterCandidatesForConditionComparison(Vector &lhs_column, Vector &rhs_col
                                              idx_t candidate_count, ExpressionType comparison_type,
                                              MarkJoinNullMatchState &state, SelectionVector &remaining_sel) {
 	auto rhs_scalar = rhs_column.GetValue(rhs_row);
-	if (rhs_scalar.IsNull()) {
-		rhs_scalar = Value(rhs_column.GetType());
+	if (rhs_scalar.type() != rhs_value.GetType()) {
+		rhs_scalar = rhs_scalar.DefaultCastAs(rhs_value.GetType());
 	}
-	ConstantVector::Reference(rhs_value, rhs_scalar, count_t(candidate_count));
+	if (rhs_scalar.IsNull()) {
+		ConstantVector::SetNull(rhs_value, count_t(candidate_count));
+	} else {
+		ConstantVector::Reference(rhs_value, rhs_scalar, count_t(candidate_count));
+	}
 	Vector lhs_slice(lhs_column, candidate_sel, candidate_count);
 
 	state.null_mask.SetAllValid(candidate_count);
