@@ -27,7 +27,7 @@ WHEN NOT MATCHED THEN INSERT DEFAULT VALUES
 1
 
 query II
-FROM Stock
+FROM Stock order by all
 ----
 10	0
 20	0
@@ -45,7 +45,7 @@ WHEN NOT MATCHED THEN ERROR
 1
 
 query II
-FROM Stock
+FROM Stock order by all
 ----
 10	0
 20	100
