@@ -542,8 +542,9 @@ class UseGramPreviewEmitter:
                     lines.append(f"\tauto &{trailing_optional.var_name}_opt = {trailing_optional.parse_expr}.Cast<OptionalParseResult>();")
                     lines.append(f"\tframe.ReserveChildSlots({list_child.slot_start} + list_items.size() + ({trailing_optional.var_name}_opt.HasResult() ? 1 : 0));")
                     lines.append(f"\tif ({trailing_optional.var_name}_opt.HasResult()) {{")
+                    child_expr = trailing_optional.result_expr_template.format(opt=f"{trailing_optional.var_name}_opt")
                     lines.append(
-                        f"\t\tstack.PushFrame({trailing_optional.var_name}_opt.GetResult(), {ops_name(trailing_optional.rule_name)}, "
+                        f"\t\tstack.PushFrame({child_expr}, {ops_name(trailing_optional.rule_name)}, "
                         f"TransformFrameResultTarget(frame.frame_index, {list_child.slot_start} + list_items.size()));"
                     )
                     lines.append("\t}")
@@ -580,8 +581,9 @@ class UseGramPreviewEmitter:
                     lines.append(f"\tauto &{trailing_optional.var_name}_opt = {trailing_optional.parse_expr}.Cast<OptionalParseResult>();")
                     lines.append(f"\tframe.ReserveChildSlots({repeat_child.slot_start} + repeat_children.size() + ({trailing_optional.var_name}_opt.HasResult() ? 1 : 0));")
                     lines.append(f"\tif ({trailing_optional.var_name}_opt.HasResult()) {{")
+                    child_expr = trailing_optional.result_expr_template.format(opt=f"{trailing_optional.var_name}_opt")
                     lines.append(
-                        f"\t\tstack.PushFrame({trailing_optional.var_name}_opt.GetResult(), {ops_name(trailing_optional.rule_name)}, "
+                        f"\t\tstack.PushFrame({child_expr}, {ops_name(trailing_optional.rule_name)}, "
                         f"TransformFrameResultTarget(frame.frame_index, {repeat_child.slot_start} + repeat_children.size()));"
                     )
                     lines.append("\t}")
@@ -619,8 +621,9 @@ class UseGramPreviewEmitter:
                     f"\tauto &{stack_child.var_name}_opt = {stack_child.parse_expr}.Cast<OptionalParseResult>();"
                 )
                 lines.append(f"\tif ({stack_child.var_name}_opt.HasResult()) {{")
+                child_expr = stack_child.result_expr_template.format(opt=f"{stack_child.var_name}_opt")
                 lines.append(
-                    f"\t\tstack.PushFrame({stack_child.var_name}_opt.GetResult(), {ops_name(stack_child.rule_name)}, "
+                    f"\t\tstack.PushFrame({child_expr}, {ops_name(stack_child.rule_name)}, "
                     f"TransformFrameResultTarget(frame.frame_index, {stack_child.slot_idx}));"
                 )
                 lines.append("\t}")

@@ -267,6 +267,7 @@ class OptionalStackChild:
     rule_name: str
     slot_idx: int
     var_name: str
+    result_expr_template: str = "{opt}.GetResult()"
 
 
 @dataclass
@@ -274,6 +275,7 @@ class TrailingOptionalStackChild:
     parse_expr: str
     rule_name: str
     var_name: str
+    result_expr_template: str = "{opt}.GetResult()"
 
 
 @dataclass
@@ -330,6 +332,28 @@ def _trampoline_parse_expr(child_idx, child):
     return parse_expr, child
 
 
+def _optional_stack_child_plan(optional_child):
+    result_expr_template = "{opt}.GetResult()"
+    while isinstance(optional_child, ParensNode):
+        result_expr_template = f"ExtractResultFromParens({result_expr_template})"
+        optional_child = optional_child.inner
+    if isinstance(optional_child, ReferenceNode):
+        return optional_child.name, result_expr_template
+    if isinstance(optional_child, SequenceNode):
+        semantic = []
+        for child_idx, child in enumerate(optional_child.children):
+            if isinstance(child, LiteralNode):
+                continue
+            if isinstance(child, ReferenceNode):
+                semantic.append((child_idx, child.name))
+                continue
+            return None
+        if len(semantic) == 1:
+            child_idx, rule_name = semantic[0]
+            return rule_name, f"{{opt}}.GetResult().Cast<ListParseResult>().GetChild({child_idx})"
+    return None
+
+
 def plan_trampoline_sequence_rule(ast, identifier_rules):
     direct_args = []
     direct_optional_args = []
@@ -379,6 +403,23 @@ def plan_trampoline_sequence_rule(ast, identifier_rules):
                     arg = OptionalStackChild(parse_expr, child.child.name, next_slot, to_snake_case(child.child.name))
                     optional_stack_children.append(arg)
                     next_slot += 1
+            finalize_args.append(arg)
+            continue
+        optional_stack_plan = None
+        if isinstance(child, OptionalNode):
+            optional_stack_plan = _optional_stack_child_plan(child.child)
+        if optional_stack_plan is not None:
+            rule_name, result_expr_template = optional_stack_plan
+            if rule_name in identifier_rules:
+                raise NotImplementedError("wrapped optional identifier child is currently unsupported")
+            if list_child is not None or repeat_child is not None or optional_list_child is not None or required_repeat_child is not None:
+                if trailing_optional_stack_child is not None:
+                    raise NotImplementedError("only one trailing optional stack child is currently supported")
+                arg = TrailingOptionalStackChild(parse_expr, rule_name, to_snake_case(rule_name), result_expr_template)
+            else:
+                arg = OptionalStackChild(parse_expr, rule_name, next_slot, to_snake_case(rule_name), result_expr_template)
+                optional_stack_children.append(arg)
+                next_slot += 1
             finalize_args.append(arg)
             continue
         if isinstance(child, OptionalNode) and literal_string_values(child.child) is not None:
