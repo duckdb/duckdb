@@ -302,6 +302,7 @@ class UseGramPreviewEmitter:
         lines.append("}")
         return lines
 
+
 def main():
     arg_parser = argparse.ArgumentParser(description="Generate trampoline-style transformer wrappers.")
     arg_parser.add_argument("--write", action="store_true", help="Write generated files to disk.")
