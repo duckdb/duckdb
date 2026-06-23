@@ -1,0 +1,34 @@
+#include "duckdb/common/time_point.hpp"
+
+namespace duckdb {
+
+TimePoint::TimePoint() : value() {
+}
+
+TimePoint TimePoint::Tick() {
+	return TimePoint(steady_clock::now());
+}
+
+int64_t TimePoint::ElapsedNanosSince(const TimePoint &start, const TimePoint &end) {
+	return std::chrono::duration_cast<std::chrono::nanoseconds>(end.value - start.value).count();
+}
+
+int64_t TimePoint::ElapsedMillis() const {
+	auto now = steady_clock::now();
+	return std::chrono::duration_cast<std::chrono::milliseconds>(now - value).count();
+}
+
+int64_t TimePoint::ElapsedMicros() const {
+	auto now = steady_clock::now();
+	return std::chrono::duration_cast<std::chrono::microseconds>(now - value).count();
+}
+
+int64_t TimePoint::ElapsedNanos() const {
+	auto now = steady_clock::now();
+	return std::chrono::duration_cast<std::chrono::nanoseconds>(now - value).count();
+}
+
+TimePoint::TimePoint(time_point<steady_clock> value_p) : value(value_p) {
+}
+
+} // namespace duckdb

@@ -2,6 +2,7 @@
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/original/std/sstream.hpp"
 #include "duckdb/common/checked_integer.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/time_point.hpp"

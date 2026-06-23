@@ -90,7 +90,6 @@ vector<pair<string, string>> AdaptiveFilter::BuildInitInfo(AdaptiveFilterSource 
 
 AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
 	if (permutation.size() <= 1 || disable_permutations) {
-		// nothing to permute
 		return AdaptiveFilterState();
 	}
 	AdaptiveFilterState state;
@@ -100,6 +99,7 @@ AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
 
 void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
 	if (permutation.size() <= 1 || disable_permutations) {
+		// nothing to permute
 		return;
 	}
 	auto duration =

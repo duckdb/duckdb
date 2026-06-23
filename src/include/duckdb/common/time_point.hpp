@@ -9,43 +9,29 @@
 #pragma once
 
 #include "duckdb/common/chrono.hpp"
+#include "duckdb/common/common.hpp"
 
 namespace duckdb {
 
 //! Monotonic clock time point, which is used to measure intervals.
-class TimePoint {
+class DUCKDB_API TimePoint {
 public:
-	TimePoint() : time_point() {
-	}
+	TimePoint();
 
-	static TimePoint Tick() {
-		return TimePoint(steady_clock::now());
-	}
+	static TimePoint Tick();
 
-	static int64_t ElapsedNanosSince(const TimePoint &start, const TimePoint &end) {
-		return std::chrono::duration_cast<std::chrono::nanoseconds>(end.time_point - start.time_point).count();
-	}
+	static int64_t ElapsedNanosSince(const TimePoint &start, const TimePoint &end);
 
-	int64_t ElapsedMillis() const {
-		auto now = steady_clock::now();
-		return std::chrono::duration_cast<std::chrono::milliseconds>(now - time_point).count();
-	}
+	int64_t ElapsedMillis() const;
 
-	int64_t ElapsedMicros() const {
-		auto now = steady_clock::now();
-		return std::chrono::duration_cast<std::chrono::microseconds>(now - time_point).count();
-	}
+	int64_t ElapsedMicros() const;
 
-	int64_t ElapsedNanos() const {
-		auto now = steady_clock::now();
-		return std::chrono::duration_cast<std::chrono::nanoseconds>(now - time_point).count();
-	}
+	int64_t ElapsedNanos() const;
 
 private:
-	explicit TimePoint(time_point<steady_clock> tp) : time_point(tp) {
-	}
+	explicit TimePoint(time_point<steady_clock> value_p);
 
-	time_point<steady_clock> time_point;
+	time_point<steady_clock> value;
 };
 
 } // namespace duckdb
