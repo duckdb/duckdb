@@ -12,6 +12,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -51,13 +52,19 @@ static case_insensitive_map_t<LogicalType> GetChildNameToTypeMap(const LogicalTy
 		name_to_type_map.emplace("value", MapType::ValueType(type));
 		break;
 	case LogicalTypeId::STRUCT:
-		for (auto &child_type : StructType::GetChildTypes(type)) {
+	case LogicalTypeId::TUPLE: {
+		// TUPLE children have empty names - mirror the writer's "v0, v1, ..." fallback naming
+		auto &child_types = StructType::GetChildTypes(type);
+		for (idx_t i = 0; i < child_types.size(); i++) {
+			auto &child_type = child_types[i];
 			if (child_type.first == FieldID::DUCKDB_FIELD_ID) {
 				throw BinderException("Cannot have column named \"%s\" with FIELD_IDS", FieldID::DUCKDB_FIELD_ID);
 			}
-			name_to_type_map.emplace(child_type);
+			string child_name = child_type.first.empty() ? "v" + to_string(i) : child_type.first.GetIdentifierName();
+			name_to_type_map.emplace(std::move(child_name), child_type.second);
 		}
 		break;
+	}
 	default: // LCOV_EXCL_START
 		throw InternalException("Unexpected type in GetChildNameToTypeMap");
 	} // LCOV_EXCL_STOP
@@ -78,11 +85,17 @@ static void GetChildNamesAndTypes(const LogicalType &type, vector<Identifier> &c
 		child_types.emplace_back(MapType::ValueType(type));
 		break;
 	case LogicalTypeId::STRUCT:
-		for (auto &child_type : StructType::GetChildTypes(type)) {
-			child_names.emplace_back(child_type.first);
+	case LogicalTypeId::TUPLE: {
+		// TUPLE children have empty names - mirror the writer's "v0, v1, ..." fallback naming
+		auto &struct_children = StructType::GetChildTypes(type);
+		for (idx_t i = 0; i < struct_children.size(); i++) {
+			auto &child_type = struct_children[i];
+			child_names.emplace_back(child_type.first.empty() ? Identifier("v" + to_string(i))
+			                                                  : Identifier(child_type.first));
 			child_types.emplace_back(child_type.second);
 		}
 		break;
+	}
 	default: // LCOV_EXCL_START
 		throw InternalException("Unexpected type in GetChildNamesAndTypes");
 	} // LCOV_EXCL_STOP
@@ -98,7 +111,7 @@ void FieldID::GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const 
 
 		const auto &col_type = sql_types[col_idx];
 		if (col_type.id() != LogicalTypeId::LIST && col_type.id() != LogicalTypeId::MAP &&
-		    col_type.id() != LogicalTypeId::STRUCT) {
+		    !StructType::IsStruct(col_type.id())) {
 			continue;
 		}
 
@@ -179,7 +192,7 @@ void FieldID::GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids
 		if (child_field_ids_value) {
 			const auto &col_type = it->second;
 			if (col_type.id() != LogicalTypeId::LIST && col_type.id() != LogicalTypeId::MAP &&
-			    col_type.id() != LogicalTypeId::STRUCT) {
+			    !StructType::IsStruct(col_type.id())) {
 				throw BinderException("Column \"%s\" with type \"%s\" cannot have a nested FIELD_IDS specification",
 				                      col_name, LogicalTypeIdToString(col_type.id()));
 			}

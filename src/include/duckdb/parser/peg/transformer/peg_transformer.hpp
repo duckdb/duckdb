@@ -825,6 +825,10 @@ public:
 	static unique_ptr<TransformResultValue> TransformMapTypeInternal(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformMapType(PEGTransformer &transformer, const vector<LogicalType> &type);
+	static unique_ptr<TransformResultValue> TransformTupleTypeInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformTupleType(PEGTransformer &transformer,
+	                                                       const vector<LogicalType> &type);
 	static unique_ptr<TransformResultValue> TransformColIdTypeInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static pair<Identifier, LogicalType> TransformColIdType(PEGTransformer &transformer, const Identifier &col_id,

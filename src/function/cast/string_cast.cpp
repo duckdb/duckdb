@@ -491,6 +491,7 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		                         input, LogicalType::ARRAY(LogicalType::VARCHAR, optional_idx()), target),
 		                     ArrayBoundCastData::InitArrayLocalState);
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 		return BoundCastInfo(&StringToNestedTypeCast<VectorStringToStruct>,
 		                     StructBoundCastData::BindStructToStructCast(input, InitVarcharStructType(target), target),
 		                     StructBoundCastData::InitStructCastLocalState);

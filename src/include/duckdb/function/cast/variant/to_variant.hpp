@@ -36,6 +36,7 @@ bool ConvertToVariant(ToVariantSourceData &source, ToVariantGlobalResultData &re
 
 			                                                       values_index_selvec, is_root);
 		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::TUPLE:
 			return ConvertStructToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, count, selvec,
 
 			                                                        values_index_selvec, is_root);

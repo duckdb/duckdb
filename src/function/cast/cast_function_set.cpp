@@ -91,6 +91,8 @@ static auto RelaxedTypeMatch(type_map_t<MAP_VALUE_TYPE> &map, const LogicalType 
 		return map.find(LogicalType::LIST(LogicalType::ANY));
 	case LogicalTypeId::STRUCT:
 		return map.find(LogicalType::STRUCT({{"any", LogicalType::ANY}}));
+	case LogicalTypeId::TUPLE:
+		return map.find(LogicalType::TUPLE({LogicalType::ANY}));
 	case LogicalTypeId::MAP:
 		for (auto it = map.begin(); it != map.end(); it++) {
 			const auto &entry_type = it->first;

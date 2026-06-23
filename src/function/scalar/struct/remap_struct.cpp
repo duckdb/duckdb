@@ -295,7 +295,7 @@ struct RemapEntry {
 		Value struct_val;
 		if (remap_val.type().id() == LogicalTypeId::VARCHAR) {
 			remap_source = remap_val.ToString();
-		} else if (remap_val.type().id() == LogicalTypeId::STRUCT) {
+		} else if (StructType::IsStruct(remap_val.type())) {
 			if (!StructType::IsUnnamed(remap_val.type())) {
 				throw BinderException("Remap keys for remap_struct needs to be an unnamed struct");
 			}
@@ -303,7 +303,7 @@ struct RemapEntry {
 			if (children.size() != 2) {
 				throw BinderException("Remap keys for remap_struct needs to have two children");
 			}
-			if (children[0].type().id() != LogicalTypeId::VARCHAR || children[1].type().id() != LogicalTypeId::STRUCT) {
+			if (children[0].type().id() != LogicalTypeId::VARCHAR || !StructType::IsStruct(children[1].type())) {
 				throw BinderException("Remap keys for remap_struct need to be varchar and struct");
 			}
 			remap_source = children[0].ToString();
@@ -537,7 +537,7 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 		if (!IsRemappable(arg->GetReturnType())) {
 			throw BinderException("Struct remap can only remap nested types, not '%s'",
 			                      arg->GetReturnType().ToString());
-		} else if (arg->GetReturnType().id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(arg->GetReturnType())) {
+		} else if (StructType::IsStruct(arg->GetReturnType()) && StructType::IsUnnamed(arg->GetReturnType())) {
 			throw BinderException("Struct remap can only remap named structs");
 		}
 	}
@@ -545,11 +545,10 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 	auto &to_type = arguments[1]->GetReturnType();
 
 	auto &defaults = arguments[3];
-	if (defaults->GetReturnType().id() != LogicalTypeId::SQLNULL &&
-	    defaults->GetReturnType().id() != LogicalTypeId::STRUCT) {
+	if (defaults->GetReturnType().id() != LogicalTypeId::SQLNULL && !StructType::IsStruct(defaults->GetReturnType())) {
 		throw BinderException("The defaults provided to 'remap_struct' should be of type STRUCT if they're not NULL");
 	}
-	if (defaults->GetReturnType().id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(defaults->GetReturnType())) {
+	if (StructType::IsStruct(defaults->GetReturnType()) && StructType::IsUnnamed(defaults->GetReturnType())) {
 		throw BinderException("The defaults have to be either NULL or a named STRUCT, not an unnamed struct");
 	}
 

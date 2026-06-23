@@ -490,6 +490,7 @@ Expression:
     - CharacterSimpleType
     - QualifiedSimpleType
     - MapType
+    - TupleType
     - RowType
     - GeometryType
     - VariantType

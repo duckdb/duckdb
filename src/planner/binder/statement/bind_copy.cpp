@@ -588,7 +588,7 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 	if (val.IsNull()) {
 		throw BinderException("NULL is not supported as a valid option for COPY option \"" + name + "\"");
 	}
-	if (val.type().id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(val.type())) {
+	if (StructType::IsStruct(val.type()) && StructType::IsUnnamed(val.type())) {
 		// unpack unnamed structs into a list of options
 		return StructValue::GetChildren(val);
 	}

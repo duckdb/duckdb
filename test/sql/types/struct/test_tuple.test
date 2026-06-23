@@ -1,0 +1,113 @@
+# name: test/sql/types/struct/test_tuple.test
+# description: Test the unnamed-struct TUPLE logical type
+# group: [struct]
+
+# row() produces an unnamed TUPLE
+query T
+SELECT typeof(row(1, 'a'));
+----
+TUPLE(INTEGER, VARCHAR)
+
+# struct_pack() / named struct stays a STRUCT
+query T
+SELECT typeof(struct_pack(a := 1, b := 'a'));
+----
+STRUCT(a INTEGER, b VARCHAR)
+
+# the empty struct is a bare STRUCT, not a TUPLE
+query T
+SELECT typeof(row());
+----
+STRUCT
+
+# TUPLE display
+query T
+SELECT row(1, 'a');
+----
+(1, a)
+
+# TUPLE(...) is parseable in a type position
+query T
+SELECT typeof(NULL::TUPLE(INTEGER, VARCHAR));
+----
+TUPLE(INTEGER, VARCHAR)
+
+statement ok
+CREATE TABLE t(c TUPLE(INTEGER, VARCHAR));
+
+query T
+SELECT column_type FROM (DESCRIBE t);
+----
+TUPLE(INTEGER, VARCHAR)
+
+# index-based extraction works on a TUPLE
+query II
+SELECT struct_extract(row(1, 'a'), 1), struct_extract(row(1, 'a'), 2);
+----
+1	a
+
+# name-based extraction does NOT work on a TUPLE
+statement error
+SELECT struct_extract(row(1, 'a'), 'x');
+----
+<REGEX>:.*unnamed struct.*
+
+# struct_keys errors on a TUPLE
+statement error
+SELECT struct_keys(row(1, 'a'));
+----
+<REGEX>:.*unnamed STRUCT.*
+
+# implicit positional cast TUPLE -> named STRUCT
+query T
+SELECT row(1, 'a')::STRUCT(x INTEGER, y VARCHAR);
+----
+{'x': 1, 'y': a}
+
+# implicit positional cast named STRUCT -> TUPLE
+query T
+SELECT {'x': 1, 'y': 'a'}::TUPLE(INTEGER, VARCHAR);
+----
+(1, a)
+
+# a TUPLE is NOT equal to a named STRUCT with the same children
+query T
+SELECT typeof(row(1, 'a')) = typeof(struct_pack(a := 1, b := 'a'));
+----
+false
+
+# TUPLE inside a LIST
+query T
+SELECT typeof([row(1, 'a'), row(2, 'b')]);
+----
+TUPLE(INTEGER, VARCHAR)[]
+
+# struct_values produces a TUPLE
+query T
+SELECT typeof(struct_values({'a': 1, 'b': 'x'}));
+----
+TUPLE(INTEGER, VARCHAR)
+
+# combining two TUPLEs yields a TUPLE
+query T
+SELECT typeof(t.c) FROM (SELECT row(1, 'a') AS c UNION ALL SELECT row(2, 'b')) t LIMIT 1;
+----
+TUPLE(INTEGER, VARCHAR)
+
+# storing and reading back a TUPLE column
+statement ok
+INSERT INTO t VALUES (row(1, 'a')), (row(2, 'b')), (NULL);
+
+query TT
+SELECT c, typeof(c) FROM t ORDER BY c;
+----
+(1, a)	TUPLE(INTEGER, VARCHAR)
+(2, b)	TUPLE(INTEGER, VARCHAR)
+NULL	TUPLE(INTEGER, VARCHAR)
+
+# C-API / DESCRIBE reports the children of a TUPLE
+query II
+SELECT struct_extract(c, 1), struct_extract(c, 2) FROM t WHERE c IS NOT NULL ORDER BY 1;
+----
+1	a
+2	b

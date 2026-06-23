@@ -153,6 +153,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		throw ParameterNotResolvedException();
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::SQLNULL:
 		break;
 	default:
@@ -182,7 +183,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			}
 		}
 		// unnest structs
-		if (type.id() == LogicalTypeId::STRUCT) {
+		if (StructType::IsStruct(type)) {
 			struct_unnests = max_depth - list_unnests;
 		}
 	}
@@ -235,7 +236,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			// check if there are any structs left
 			bool has_structs = false;
 			for (auto &expr : struct_expressions) {
-				if (expr->GetReturnType().id() == LogicalTypeId::STRUCT) {
+				if (StructType::IsStruct(expr->GetReturnType())) {
 					// struct! push a struct_extract
 					auto &child_types = StructType::GetChildTypes(expr->GetReturnType());
 					if (StructType::IsUnnamed(expr->GetReturnType())) {

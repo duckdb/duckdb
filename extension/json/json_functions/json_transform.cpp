@@ -553,12 +553,19 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 	child_names.reserve(child_count);
 	child_vectors.reserve(child_count);
 
+	// A TUPLE is an unnamed struct: it has no member names, so we synthesize keys "v0", "v1", ...
+	// to match the JSON object keys emitted on the write path (see json_create.cpp)
+	const auto is_tuple = result.GetType().id() == LogicalTypeId::TUPLE;
 	unordered_set<idx_t> projected_indices;
 	for (idx_t child_i = 0; child_i < child_count; child_i++) {
 		const auto actual_i = column_index ? column_index->GetChildIndex(child_i).GetPrimaryIndex() : child_i;
 		projected_indices.insert(actual_i);
 
-		child_names.emplace_back(StructType::GetChildName(result.GetType(), actual_i));
+		if (is_tuple) {
+			child_names.emplace_back("v" + to_string(actual_i));
+		} else {
+			child_names.emplace_back(StructType::GetChildName(result.GetType(), actual_i));
+		}
 		child_vectors.push_back(&child_vs[actual_i]);
 	}
 
@@ -981,6 +988,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::BLOB:
 		return TransformToString(vals, alc, result, count);
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 		return TransformObjectInternal(vals, alc, result, count, options, column_index);
 	case LogicalTypeId::LIST:
 		return TransformArrayToList(vals, alc, result, count, options);
@@ -1088,6 +1096,9 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(ExtensionLoader &loader) 
 		switch (type.id()) {
 		case LogicalTypeId::STRUCT:
 			target_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
+			break;
+		case LogicalTypeId::TUPLE:
+			target_type = LogicalType::TUPLE({LogicalType::ANY});
 			break;
 		case LogicalTypeId::LIST:
 			target_type = LogicalType::LIST(LogicalType::ANY);

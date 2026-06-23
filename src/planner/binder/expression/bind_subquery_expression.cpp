@@ -36,7 +36,7 @@ public:
 };
 
 static bool TypeIsUnnamedStruct(const LogicalType &type) {
-	if (type.id() != LogicalTypeId::STRUCT) {
+	if (!StructType::IsStruct(type)) {
 		return false;
 	}
 	return StructType::IsUnnamed(type);

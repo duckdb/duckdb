@@ -62,7 +62,8 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 		case LogicalTypeId::TYPE: {
 			throw InvalidInputException("A table cannot be created with a 'TYPE' column");
 		} break;
-		case LogicalTypeId::STRUCT: {
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::TUPLE: {
 			const auto storage_version = db.GetStorageManager().GetStorageVersion();
 
 			if (storage_version < StorageVersion::V2_0_0 && StructType::GetChildCount(type) == 0) {

@@ -286,12 +286,12 @@ LogicalType BindStructType(BindLogicalTypeInput &input) {
 	}
 
 	if (all_anon) {
-		// Unnamed struct case
+		// Unnamed struct case - produce a TUPLE
 		child_list_t<LogicalType> children;
 		for (auto &arg : arguments) {
 			children.emplace_back("", TypeValue::GetType(arg.GetValue()));
 		}
-		return LogicalType::STRUCT(std::move(children));
+		return LogicalType::TUPLE(std::move(children));
 	}
 
 	// Named struct case
@@ -309,6 +309,29 @@ LogicalType BindStructType(BindLogicalTypeInput &input) {
 	}
 
 	return LogicalType::STRUCT(std::move(children));
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// TUPLE Type
+//----------------------------------------------------------------------------------------------------------------------
+LogicalType BindTupleType(BindLogicalTypeInput &input) {
+	auto &arguments = input.modifiers;
+
+	vector<LogicalType> children;
+	children.reserve(arguments.size());
+	for (auto &arg : arguments) {
+		if (arg.HasName()) {
+			throw BinderException("TUPLE type arguments cannot have names - use STRUCT for named fields");
+		}
+		if (arg.GetValue().type() != LogicalTypeId::TYPE) {
+			throw BinderException("TUPLE type arguments must be types");
+		}
+		if (arg.GetValue().IsNull()) {
+			throw BinderException("TUPLE type arguments cannot be NULL");
+		}
+		children.push_back(TypeValue::GetType(arg.GetValue()));
+	}
+	return LogicalType::TUPLE(std::move(children));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -457,7 +480,7 @@ struct DefaultType {
 	bind_logical_type_function_t bind_function;
 };
 
-using builtin_type_array = std::array<DefaultType, 82>;
+using builtin_type_array = std::array<DefaultType, 83>;
 
 const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, BindDecimalType},
                                            {"dec", LogicalTypeId::DECIMAL, BindDecimalType},
@@ -518,6 +541,7 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"uint8", LogicalTypeId::UTINYINT, nullptr},
                                            {"struct", LogicalTypeId::STRUCT, BindStructType},
                                            {"row", LogicalTypeId::STRUCT, BindStructType},
+                                           {"tuple", LogicalTypeId::TUPLE, BindTupleType},
                                            {"list", LogicalTypeId::LIST, BindListType},
                                            {"array", LogicalTypeId::ARRAY, BindArrayType},
                                            {"map", LogicalTypeId::MAP, BindMapType},

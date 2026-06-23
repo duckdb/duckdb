@@ -65,19 +65,19 @@ static unique_ptr<FunctionData> StructValuesBind(BindScalarFunctionInput &input)
 	// we should take it from the arguments
 	bound_function.GetArguments()[0] = arg_type;
 
-	// Build unnamed children list using only types, with empty names
-	child_list_t<LogicalType> unnamed_children;
+	// Build unnamed TUPLE child list using only the types
+	vector<LogicalType> unnamed_children;
 	auto &children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 	unnamed_children.reserve(children.size());
 	for (auto &child : children) {
-		unnamed_children.emplace_back("", child.second);
+		unnamed_children.emplace_back(child.second);
 	}
-	bound_function.SetReturnType(LogicalType::STRUCT(unnamed_children));
+	bound_function.SetReturnType(LogicalType::TUPLE(std::move(unnamed_children)));
 	return nullptr;
 }
 
 ScalarFunction StructValuesFun::GetFunction() {
-	ScalarFunction func({LogicalTypeId::STRUCT}, LogicalTypeId::STRUCT, StructValuesFunction, StructValuesBind);
+	ScalarFunction func({LogicalTypeId::STRUCT}, LogicalTypeId::TUPLE, StructValuesFunction, StructValuesBind);
 	return func;
 }
 

@@ -2,6 +2,7 @@
 
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/to_string.hpp"
 #include "duckdb/function/cast/variant/to_variant_fwd.hpp"
 
 namespace duckdb {
@@ -41,15 +42,21 @@ bool ConvertStructToVariant(ToVariantSourceData &source, ToVariantGlobalResultDa
 			                               children_offset_data[result_index]);
 
 			if (WRITE_DATA && dictionary_indices.empty()) {
-				if (StructType::IsUnnamed(type)) {
-					throw ConversionException("Can't cast unnamed struct to VARIANT");
-				}
+				// unnamed structs (TUPLEs) have no member names - generate positional names "v0", "v1", ...
+				// (the owning dictionary copies the key, so temporary strings are safe)
+				const bool is_unnamed = StructType::IsUnnamed(type);
 				auto &struct_children = StructType::GetChildTypes(type);
 				for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-					auto &struct_child = struct_children[child_idx];
-					string_t struct_child_str(struct_child.first.c_str(),
-					                          NumericCast<uint32_t>(struct_child.first.size()));
-					dictionary_indices.push_back(result.GetOrCreateIndex(struct_child_str));
+					if (is_unnamed) {
+						auto generated_name = "v" + to_string(child_idx);
+						string_t generated_str(generated_name.c_str(), NumericCast<uint32_t>(generated_name.size()));
+						dictionary_indices.push_back(result.GetOrCreateIndex(generated_str));
+					} else {
+						auto &struct_child = struct_children[child_idx];
+						string_t struct_child_str(struct_child.first.c_str(),
+						                          NumericCast<uint32_t>(struct_child.first.size()));
+						dictionary_indices.push_back(result.GetOrCreateIndex(struct_child_str));
+					}
 				}
 			}
 

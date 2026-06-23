@@ -237,7 +237,8 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 		cast_children.push_back(make_pair(struct_children[i].first, new_child_types[i]));
 	}
 
-	bound_function.GetArguments()[0] = LogicalType::STRUCT(cast_children);
+	// the input is an unnamed struct - represent it as a TUPLE
+	bound_function.GetArguments()[0] = LogicalType::TUPLE(cast_children);
 
 	return nullptr;
 }

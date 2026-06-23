@@ -461,6 +461,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	colname_keyword_map.insert("treat");
 	colname_keyword_map.insert("trim");
 	colname_keyword_map.insert("try_cast");
+	colname_keyword_map.insert("tuple");
 	colname_keyword_map.insert("values");
 	colname_keyword_map.insert("varchar");
 	colname_keyword_map.insert("xmlattributes");
@@ -509,6 +510,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	typefunc_keyword_map.insert("struct");
 	typefunc_keyword_map.insert("tablesample");
 	typefunc_keyword_map.insert("try_cast");
+	typefunc_keyword_map.insert("tuple");
 	typefunc_keyword_map.insert("unpack");
 	typefunc_keyword_map.insert("verbose");
 

@@ -66,7 +66,7 @@ NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
 Type <- TypeVariations ArrayBounds*
-TypeVariations <- TimeType / IntervalType / BitType / RowType / VariantType / MapType / GeometryType / UnionType / NumericType / SetofType / SimpleType
+TypeVariations <- TimeType / IntervalType / BitType / RowType / VariantType / MapType / TupleType / GeometryType / UnionType / NumericType / SetofType / SimpleType
 SimpleType <- CharacterSimpleType / QualifiedSimpleType
 CharacterSimpleType <- CharacterType TypeModifiers?
 QualifiedSimpleType <- QualifiedTypeName TypeModifiers?
@@ -169,6 +169,7 @@ SetofType <- 'SETOF' Type
 UnionType <- 'UNION' ColIdTypeList
 ColIdTypeList <- Parens(List(ColIdType))
 MapType <- 'MAP' Parens(List(Type))
+TupleType <- 'TUPLE' Parens(List(Type))
 ColIdType <- ColId Type
 ArrayBounds <- SquareBracketsArray / ArrayKeyword
 ArrayKeyword <- 'ARRAY'

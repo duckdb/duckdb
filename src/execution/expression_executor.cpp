@@ -171,7 +171,8 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::TYPE) {
 				    return true;
 			    }
-			    if (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type)) {
+			    if (StructType::IsStruct(type) && StructType::IsUnnamed(type)) {
+				    // unnamed structs / tuples cannot roundtrip through VARIANT
 				    return true;
 			    }
 			    return false;

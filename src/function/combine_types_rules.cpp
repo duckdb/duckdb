@@ -32,7 +32,8 @@ static bool CombineStructTypes(LogicalTypeResolver &logical_type_resolver, const
 	auto &right_children = StructType::GetChildTypes(right);
 
 	auto left_unnamed = StructType::IsUnnamed(left);
-	auto is_unnamed = left_unnamed || StructType::IsUnnamed(right);
+	auto right_unnamed = StructType::IsUnnamed(right);
+	auto is_unnamed = left_unnamed || right_unnamed;
 	child_list_t<LogicalType> child_types;
 
 	// At least one side is unnamed, so we attempt positional casting.
@@ -50,7 +51,12 @@ static bool CombineStructTypes(LogicalTypeResolver &logical_type_resolver, const
 			auto &child_name = left_unnamed ? right_children[i].first : left_children[i].first;
 			child_types.emplace_back(child_name, std::move(child_type));
 		}
-		result = LogicalType::STRUCT(child_types);
+		// both sides unnamed -> the result is an unnamed TUPLE, otherwise a named STRUCT
+		if (left_unnamed && right_unnamed) {
+			result = LogicalType::TUPLE(std::move(child_types));
+		} else {
+			result = LogicalType::STRUCT(std::move(child_types));
+		}
 		return true;
 	}
 
@@ -251,7 +257,16 @@ static bool EqualMatchesStruct(const LogicalType &left, const LogicalType &right
 		// rule only applies to equal types
 		return false;
 	}
-	return left.id() == LogicalTypeId::STRUCT;
+	return StructType::IsStruct(left.id());
+}
+
+// STRUCT and TUPLE are structurally compatible - combine them positionally
+static bool UnequalMatchesStruct(const LogicalType &left, const LogicalType &right) {
+	if (left.id() == right.id()) {
+		// rule only applies to unequal types
+		return false;
+	}
+	return StructType::IsStruct(left.id()) && StructType::IsStruct(right.id());
 }
 
 static bool EqualMatchesUnion(const LogicalType &left, const LogicalType &right) {
@@ -341,6 +356,7 @@ const vector<CombineTypesRule> &DefaultCombineTypesRules() {
 	    {UnequalMatchesVariant, CombineVariant},
 	    {UnequalMatchesNullOrUnknown, CombineNullOrUnknown},
 	    {UnequalMatchesEnum, CombineEnum},
+	    {UnequalMatchesStruct, CombineStructTypes},
 	    {UnequalMatchesStringLiteral, CombineStringLiteral},
 	    {EqualMatchesStringLiteral, CombineEqualStringLiteral},
 	    {EqualMatchesIntegerLiteral, CombineEqualIntegerLiteral},

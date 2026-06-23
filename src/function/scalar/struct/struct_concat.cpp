@@ -41,7 +41,7 @@ static unique_ptr<FunctionData> StructConcatBind(BindScalarFunctionInput &input)
 			throw ParameterNotResolvedException();
 		}
 
-		if (arg->GetReturnType().id() != LogicalTypeId::STRUCT) {
+		if (!StructType::IsStruct(arg->GetReturnType())) {
 			throw InvalidInputException("struct_concat: Argument at position \"%d\" is not a STRUCT", arg_idx + 1);
 		}
 
@@ -70,7 +70,12 @@ static unique_ptr<FunctionData> StructConcatBind(BindScalarFunctionInput &input)
 		throw InvalidInputException("struct_concat: Cannot mix named and unnamed STRUCTs");
 	}
 
-	bound_function.SetReturnType(LogicalType::STRUCT(combined_children));
+	// all-unnamed inputs produce an unnamed TUPLE, otherwise a named STRUCT
+	if (has_unnamed) {
+		bound_function.SetReturnType(LogicalType::TUPLE(combined_children));
+	} else {
+		bound_function.SetReturnType(LogicalType::STRUCT(combined_children));
+	}
 	return nullptr;
 }
 

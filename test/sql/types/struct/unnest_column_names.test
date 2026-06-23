@@ -64,7 +64,7 @@ element1	INTEGER
 query II
 SELECT column_name, column_type FROM (DESCRIBE SELECT unnest(row(row(42))));
 ----
-element1	STRUCT(INTEGER)
+element1	TUPLE(INTEGER)
 
 # Check empty names
 

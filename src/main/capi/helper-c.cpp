@@ -164,6 +164,8 @@ duckdb_type LogicalTypeIdToC(const LogicalTypeId type) {
 	case LogicalTypeId::LIST:
 		return DUCKDB_TYPE_LIST;
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
+		// TUPLE is an unnamed struct - reported as DUCKDB_TYPE_STRUCT over the C-API (child names are empty)
 		return DUCKDB_TYPE_STRUCT;
 	case LogicalTypeId::MAP:
 		return DUCKDB_TYPE_MAP;

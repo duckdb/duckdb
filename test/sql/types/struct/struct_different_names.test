@@ -2,13 +2,17 @@
 # description: Test inserting structs with different names and unnamed structs
 # group: [struct]
 
-statement error
+# an unnamed struct produces a TUPLE column, which is storable
+statement ok
 CREATE TABLE wrong AS FROM (VALUES (ROW(3)));
+
+query T
+SELECT column_type FROM (DESCRIBE wrong);
 ----
-<REGEX>:Invalid Input Error.*A table cannot be created from an unnamed struct.*
+TUPLE(INTEGER)
 
 statement ok
-CREATE TABLE t1 (s STRUCT(v VARCHAR)); 
+CREATE TABLE t1 (s STRUCT(v VARCHAR));
 
 statement ok
 INSERT INTO t1 VALUES (ROW(NULL));
@@ -67,10 +71,9 @@ CREATE TABLE tbl (a STRUCT(a INT, b VARCHAR));
 statement ok
 INSERT INTO tbl VALUES (ROW(5, 'hello'));
 
-statement error
+# an unnamed struct produces a TUPLE column, which is storable
+statement ok
 CREATE TABLE tbl2 AS SELECT ROW(42, 'world') a;
-----
-<REGEX>:Invalid Input Error.*A table cannot be created from an unnamed struct.*
 
 query I
 SELECT [{'foo': True}, {'bar': False}, {'foobar': NULL}];

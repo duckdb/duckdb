@@ -350,4 +350,4 @@ SELECT json_array(
 query I
 SELECT CAST((MAP([5, 3, 4], ['a', 'b', 'c']), 2) AS JSON);
 ----
-{"":{"5":"a","3":"b","4":"c"},"":2}
+{"v0":{"5":"a","3":"b","4":"c"},"v1":2}
