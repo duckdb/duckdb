@@ -18,9 +18,11 @@ from transformer_plan import (
     ParensNode,
     DirectOptionalPresenceArg,
     ReferenceNode,
+    RequiredRepeatStackChild,
     RepeatStackChild,
     SequenceNode,
     StackChild,
+    TrailingOptionalStackChild,
     literal_string_values,
     plan_trampoline_sequence_rule,
     to_snake_case,
@@ -357,7 +359,17 @@ class UseGramPreviewEmitter:
             f"TransformStack &stack, TransformStackFrame &frame) {{"
         )
         needs_list_pr = any(
-            isinstance(arg, (DirectParseArg, DirectOptionalArg, DirectOptionalPresenceArg, DirectRepeatArg, DirectListArg))
+            isinstance(
+                arg,
+                (
+                    DirectParseArg,
+                    DirectOptionalArg,
+                    DirectOptionalPresenceArg,
+                    DirectRepeatArg,
+                    DirectListArg,
+                    TrailingOptionalStackChild,
+                ),
+            )
             for arg in plan.finalize_args
         )
         if needs_list_pr:
@@ -414,6 +426,18 @@ class UseGramPreviewEmitter:
                 lines.append(f"\t\t{var_name} = {value_expr};")
                 lines.append("\t}")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
+            elif isinstance(arg, TrailingOptionalStackChild):
+                var_name = arg.var_name
+                lines.append(f"\toptional<{self.cpp_type(arg.rule_name)}> {var_name} {{}};")
+                lines.append(f"\tauto &{var_name}_opt = {arg.parse_expr}.Cast<OptionalParseResult>();")
+                lines.append(f"\tif ({var_name}_opt.HasResult()) {{")
+                lines.append(f"\t\tauto slot_idx = frame.child_results.size() - 1;")
+                value_expr = f"frame.TakeResult<{self.cpp_type(arg.rule_name)}>(slot_idx)"
+                if self.by_value(arg.rule_name):
+                    value_expr = f"std::move({value_expr})"
+                lines.append(f"\t\t{var_name} = {value_expr};")
+                lines.append("\t}")
+                arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
             elif isinstance(arg, RepeatStackChild):
                 var_name = self.identifier_var_name(arg.rule_name)
                 lines.append(f"\toptional<vector<{self.cpp_type(arg.rule_name)}>> {var_name} {{}};")
@@ -422,16 +446,53 @@ class UseGramPreviewEmitter:
                 else:
                     lines.append(f"\tif (frame.child_results.size() > {arg.slot_start}) {{")
                 lines.append(f"\t\tvector<{self.cpp_type(arg.rule_name)}> {var_name}_value;")
-                lines.append(f"\t\tfor (idx_t i = {arg.slot_start}; i < frame.child_results.size(); i++) {{")
+                if plan.trailing_optional_stack_child:
+                    trailing = plan.trailing_optional_stack_child
+                    lines.append("\t\tauto end_idx = frame.child_results.size();")
+                    lines.append(f"\t\tauto &{trailing.var_name}_range_opt = {trailing.parse_expr}.Cast<OptionalParseResult>();")
+                    lines.append(f"\t\tif ({trailing.var_name}_range_opt.HasResult()) {{")
+                    lines.append("\t\t\tend_idx--;")
+                    lines.append("\t\t}")
+                    loop_end = "end_idx"
+                else:
+                    loop_end = "frame.child_results.size()"
+                lines.append(f"\t\tfor (idx_t i = {arg.slot_start}; i < {loop_end}; i++) {{")
                 lines.append(f"\t\t\t{var_name}_value.push_back(frame.TakeResult<{self.cpp_type(arg.rule_name)}>(i));")
                 lines.append("\t\t}")
                 lines.append(f"\t\t{var_name} = std::move({var_name}_value);")
                 lines.append("\t}")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
+            elif isinstance(arg, RequiredRepeatStackChild):
+                var_name = self.identifier_var_name(arg.rule_name)
+                lines.append(f"\tvector<{self.cpp_type(arg.rule_name)}> {var_name};")
+                if plan.trailing_optional_stack_child:
+                    trailing = plan.trailing_optional_stack_child
+                    lines.append("\tauto end_idx = frame.child_results.size();")
+                    lines.append(f"\tauto &{trailing.var_name}_range_opt = {trailing.parse_expr}.Cast<OptionalParseResult>();")
+                    lines.append(f"\tif ({trailing.var_name}_range_opt.HasResult()) {{")
+                    lines.append("\t\tend_idx--;")
+                    lines.append("\t}")
+                    loop_end = "end_idx"
+                else:
+                    loop_end = "frame.child_results.size()"
+                lines.append(f"\tfor (idx_t i = {arg.slot_start}; i < {loop_end}; i++) {{")
+                lines.append(f"\t\t{var_name}.push_back(frame.TakeResult<{self.cpp_type(arg.rule_name)}>(i));")
+                lines.append("\t}")
+                arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
             elif isinstance(arg, ListStackChild):
                 var_name = self.identifier_var_name(arg.rule_name)
                 lines.append(f"\tvector<{self.cpp_type(arg.rule_name)}> {var_name};")
-                lines.append(f"\tfor (idx_t i = {arg.slot_start}; i < frame.child_results.size(); i++) {{")
+                if plan.trailing_optional_stack_child:
+                    trailing = plan.trailing_optional_stack_child
+                    lines.append("\tauto end_idx = frame.child_results.size();")
+                    lines.append(f"\tauto &{trailing.var_name}_range_opt = {trailing.parse_expr}.Cast<OptionalParseResult>();")
+                    lines.append(f"\tif ({trailing.var_name}_range_opt.HasResult()) {{")
+                    lines.append("\t\tend_idx--;")
+                    lines.append("\t}")
+                    loop_end = "end_idx"
+                else:
+                    loop_end = "frame.child_results.size()"
+                lines.append(f"\tfor (idx_t i = {arg.slot_start}; i < {loop_end}; i++) {{")
                 lines.append(f"\t\t{var_name}.push_back(frame.TakeResult<{self.cpp_type(arg.rule_name)}>(i));")
                 lines.append("\t}")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
@@ -455,19 +516,52 @@ class UseGramPreviewEmitter:
             arg for arg in plan.finalize_args if isinstance(arg, (StackChild, OptionalStackChild))
         ]
         fixed_child_slots = len(frame_children)
-        dynamic_child = plan.repeat_child or plan.list_child
+        trailing_optional = plan.trailing_optional_stack_child
+        dynamic_child = plan.repeat_child or plan.required_repeat_child or plan.list_child
         if frame_children or dynamic_child:
             lines.append("\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
         if dynamic_child:
             if plan.list_child:
                 list_child = plan.list_child
                 lines.append(f"\tauto list_items = ExtractParseResultsFromList({list_child.parse_expr});")
-                lines.append(f"\tframe.ReserveChildSlots({list_child.slot_start} + list_items.size());")
+                if trailing_optional:
+                    lines.append(f"\tauto &{trailing_optional.var_name}_opt = {trailing_optional.parse_expr}.Cast<OptionalParseResult>();")
+                    lines.append(f"\tframe.ReserveChildSlots({list_child.slot_start} + list_items.size() + ({trailing_optional.var_name}_opt.HasResult() ? 1 : 0));")
+                    lines.append(f"\tif ({trailing_optional.var_name}_opt.HasResult()) {{")
+                    lines.append(
+                        f"\t\tstack.PushFrame({trailing_optional.var_name}_opt.GetResult(), {ops_name(trailing_optional.rule_name)}, "
+                        f"TransformFrameResultTarget(frame.frame_index, {list_child.slot_start} + list_items.size()));"
+                    )
+                    lines.append("\t}")
+                else:
+                    lines.append(f"\tframe.ReserveChildSlots({list_child.slot_start} + list_items.size());")
                 lines.append("\tfor (idx_t i = list_items.size(); i > 0; i--) {")
                 lines.append("\t\tauto child_idx = i - 1;")
                 lines.append(
                     f"\t\tstack.PushFrame(list_items[child_idx].get(), {ops_name(list_child.rule_name)}, "
                     f"TransformFrameResultTarget(frame.frame_index, {list_child.slot_start} + child_idx));"
+                )
+                lines.append("\t}")
+            elif plan.required_repeat_child:
+                repeat_child = plan.required_repeat_child
+                lines.append(f"\tauto &repeat_pr = {repeat_child.parse_expr}.Cast<RepeatParseResult>();")
+                lines.append("\tauto repeat_children = repeat_pr.GetChildren();")
+                if trailing_optional:
+                    lines.append(f"\tauto &{trailing_optional.var_name}_opt = {trailing_optional.parse_expr}.Cast<OptionalParseResult>();")
+                    lines.append(f"\tframe.ReserveChildSlots({repeat_child.slot_start} + repeat_children.size() + ({trailing_optional.var_name}_opt.HasResult() ? 1 : 0));")
+                    lines.append(f"\tif ({trailing_optional.var_name}_opt.HasResult()) {{")
+                    lines.append(
+                        f"\t\tstack.PushFrame({trailing_optional.var_name}_opt.GetResult(), {ops_name(trailing_optional.rule_name)}, "
+                        f"TransformFrameResultTarget(frame.frame_index, {repeat_child.slot_start} + repeat_children.size()));"
+                    )
+                    lines.append("\t}")
+                else:
+                    lines.append(f"\tframe.ReserveChildSlots({repeat_child.slot_start} + repeat_children.size());")
+                lines.append("\tfor (idx_t i = repeat_children.size(); i > 0; i--) {")
+                lines.append("\t\tauto child_idx = i - 1;")
+                lines.append(
+                    f"\t\tstack.PushFrame(repeat_children[child_idx].get(), {ops_name(repeat_child.rule_name)}, "
+                    f"TransformFrameResultTarget(frame.frame_index, {repeat_child.slot_start} + child_idx));"
                 )
                 lines.append("\t}")
             else:
