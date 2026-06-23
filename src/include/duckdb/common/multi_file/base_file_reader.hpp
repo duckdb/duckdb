@@ -101,6 +101,10 @@ public:
 	//! Scan a chunk
 	virtual AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 	                         LocalTableFunctionState &local_state, DataChunk &chunk) = 0;
+	//! Whether the reader resets its own scan chunk.
+	virtual bool OwnsChunkReset() const {
+		return false;
+	}
 	//! Finish scanning a given file
 	DUCKDB_API virtual void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate);
 	//! Get progress within a given file

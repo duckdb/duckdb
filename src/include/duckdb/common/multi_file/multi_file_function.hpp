@@ -664,17 +664,14 @@ public:
 		return partition_data;
 	}
 
-
-	static bool HandleBlocked(TableFunctionInput &data_p, MultiFileLocalState &data, AsyncResult &res,
-	                                bool preserve_chunk) {
+	static bool HandleBlocked(TableFunctionInput &data_p, AsyncResult &res) {
 		D_ASSERT(res.GetResultType() == AsyncResultType::BLOCKED);
-		data.preserve_chunk = preserve_chunk;
 		switch (data_p.results_execution_mode) {
 		case AsyncResultsExecutionMode::TASK_EXECUTOR:
 			data_p.async_result = std::move(res);
 			return true;
 		case AsyncResultsExecutionMode::SYNCHRONOUS:
-			// run the I/O syncronously, then loop again to resume
+			// run the I/O synchronously, then loop again to resume
 			res.ExecuteTasksSynchronously();
 			if (res.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
 				throw InternalException("Unexpected behaviour from ExecuteTasksSynchronously");
@@ -695,30 +692,25 @@ public:
 	}
 
 	static bool SchedulePhase(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
-	                                MultiFileGlobalState &gstate) {
+	                          MultiFileGlobalState &gstate) {
 		auto scheduled = data.reader->ScheduleIO(context, *gstate.global_state, *data.local_state);
 		data.phase = MultiFileScanPhase::DECODE;
 		if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
-			return HandleBlocked(data_p, data, scheduled, false);
+			return HandleBlocked(data_p, scheduled);
 		}
 		return false;
 	}
 
 	static bool DecodePhase(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
-	                              MultiFileGlobalState &gstate, MultiFileBindData &bind_data, DataChunk &output) {
+	                        MultiFileGlobalState &gstate, MultiFileBindData &bind_data, DataChunk &output) {
 		auto &scan_chunk = data.scan_chunk;
-		if (data.preserve_chunk) {
-			// We need to preserve the chunk if the block happens mid-decode (e.g., parquet filter prefetching)
-			data.preserve_chunk = false;
-		} else {
+		if (!data.reader->OwnsChunkReset()) {
 			scan_chunk.Reset();
 		}
-
 		auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
 
 		if (res.GetResultType() == AsyncResultType::BLOCKED) {
-			// blocked mid-decode: resume into the same scan_chunk once the I/O completes
-			return HandleBlocked(data_p, data, res, true);
+			return HandleBlocked(data_p, res);
 		}
 
 		output.SetChildCardinality(scan_chunk.size());

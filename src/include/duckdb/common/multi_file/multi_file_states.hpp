@@ -201,8 +201,6 @@ public:
 	unique_ptr<LocalTableFunctionState> local_state;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
 	DataChunk scan_chunk;
-	//! Whether we preserve the chunk, or we reset it after finishing a process task
-	bool preserve_chunk = false;
 	//! Whether the current batch still needs its I/O scheduled or is ready to decode
 	MultiFileScanPhase phase = MultiFileScanPhase::SCHEDULE;
 	//! The executor to transform scan_chunk into the final result with FinalizeChunk
