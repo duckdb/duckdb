@@ -333,6 +333,8 @@ private:
 private:
 	ClientContext &context;
 	TaskExecutor executor;
+	mutex lifecycle_lock;
+	bool drained = false;
 	idx_t async_threads;
 	idx_t max_pending_tasks;
 	atomic<idx_t> pending_tasks {0};
@@ -402,21 +404,26 @@ private:
 template <class FUNC>
 void CopyFileLifecycleExecutor::Schedule(shared_ptr<CopyFileLifecycleJob> job, CopyFileLifecycleWaitMode mode,
                                          FUNC &&task) {
-	WaitForTaskSlot(mode);
 	auto job_ref = job;
-	++pending_tasks;
-	try {
-		using TaskType = CopyFileLifecycleTask<typename std::decay<FUNC>::type>;
-		executor.ScheduleTask(make_uniq<TaskType>(executor, *this, std::move(job), std::forward<FUNC>(task)));
-	} catch (...) {
-		--pending_tasks;
-		throw;
+	{
+		lock_guard<mutex> guard(lifecycle_lock);
+		if (drained) {
+			throw InternalException("Attempted to schedule a copy file lifecycle task after drained");
+		}
+		WaitForTaskSlot(mode);
+		++pending_tasks;
+		try {
+			using TaskType = CopyFileLifecycleTask<typename std::decay<FUNC>::type>;
+			executor.ScheduleTask(make_uniq<TaskType>(executor, *this, std::move(job), std::forward<FUNC>(task)));
+		} catch (...) {
+			--pending_tasks;
+			throw;
+		}
 	}
 	if (async_threads == 0) {
 		WaitForJob(*job_ref, mode);
 	}
 }
-
 //===--------------------------------------------------------------------===//
 // Copy State Declarations
 //===--------------------------------------------------------------------===//
@@ -1512,6 +1519,10 @@ void CopyFileLifecycleExecutor::WaitForJob(CopyFileLifecycleJob &job, CopyFileLi
 
 void CopyFileLifecycleExecutor::WaitAll(CopyFileLifecycleWaitMode mode) {
 	if (mode == CopyFileLifecycleWaitMode::DRAIN) {
+		{
+			lock_guard<mutex> guard(lifecycle_lock);
+			drained = true;
+		}
 		executor.WorkOnTasks();
 		ThrowError();
 		return;
