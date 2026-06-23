@@ -29,13 +29,18 @@ namespace duckdb {
 
 namespace {
 
-static idx_t ReadVariableLengthLittleEndian(idx_t length_in_bytes, const_data_ptr_t &ptr) {
+static idx_t ReadVariableLengthLittleEndian(idx_t length_in_bytes, const_data_ptr_t ptr, idx_t &offset,
+                                            const idx_t capacity) {
 	if (length_in_bytes > sizeof(idx_t)) {
 		throw NotImplementedException("Can't read little-endian value of %d bytes", length_in_bytes);
 	}
+	if (offset + length_in_bytes > capacity) {
+		throw IOException("Data corruption detected, read of length_in_bytes (%d) would exceed buffer capacity",
+		                  length_in_bytes);
+	}
 	idx_t result = 0;
-	memcpy(reinterpret_cast<uint8_t *>(&result), ptr, length_in_bytes);
-	ptr += length_in_bytes;
+	memcpy(reinterpret_cast<uint8_t *>(&result), ptr + offset, length_in_bytes);
+	offset += length_in_bytes;
 	return result;
 }
 
@@ -56,21 +61,34 @@ VariantMetadataHeader VariantMetadataHeader::FromHeaderByte(uint8_t byte) {
 }
 
 VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) {
-	auto metadata_data = metadata.GetData();
+	auto metadata_data = reinterpret_cast<const_data_ptr_t>(metadata.GetData());
+	const auto metadata_buffer_capacity = metadata.GetSize();
+	if (!metadata_data || metadata.GetSize() < 1) {
+		throw IOException("Corrupted VARIANT 'metadata' buffer, empty or nullptr");
+	}
 
-	header = VariantMetadataHeader::FromHeaderByte(metadata_data[0]);
+	idx_t metadata_offset = 0;
+	header = VariantMetadataHeader::FromHeaderByte(metadata_data[metadata_offset]);
+	metadata_offset += sizeof(uint8_t);
 
-	const_data_ptr_t ptr = reinterpret_cast<const_data_ptr_t>(metadata_data + sizeof(uint8_t));
-	idx_t dictionary_size = ReadVariableLengthLittleEndian(header.offset_size, ptr);
+	idx_t dictionary_size =
+	    ReadVariableLengthLittleEndian(header.offset_size, metadata_data, metadata_offset, metadata_buffer_capacity);
 
-	auto offsets = ptr;
-	auto bytes = offsets + ((dictionary_size + 1) * header.offset_size);
-	idx_t last_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
+	auto data_start = metadata_offset + ((dictionary_size + 1) * header.offset_size);
+	idx_t last_offset =
+	    ReadVariableLengthLittleEndian(header.offset_size, metadata_data, metadata_offset, metadata_buffer_capacity);
 	for (idx_t i = 0; i < dictionary_size; i++) {
-		auto next_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
-		strings.emplace_back(reinterpret_cast<const char *>(bytes + last_offset), next_offset - last_offset);
+		auto next_offset = ReadVariableLengthLittleEndian(header.offset_size, metadata_data, metadata_offset,
+		                                                  metadata_buffer_capacity);
+		const idx_t string_size = next_offset - last_offset;
+		if (data_start + last_offset + string_size > metadata_buffer_capacity) {
+			throw IOException("Corrupted VARIANT 'metadata' buffer");
+		}
+		strings.emplace_back(reinterpret_cast<const char *>(metadata_data + data_start + last_offset), string_size);
 		last_offset = next_offset;
 	}
+	//! header byte + offsets region + string bytes
+	total_size = metadata_offset + last_offset;
 }
 
 VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {

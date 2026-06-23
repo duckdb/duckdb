@@ -36,8 +36,9 @@ public:
 
 public:
 	VariantMetadataHeader header;
-	const_data_ptr_t offsets;
-	const_data_ptr_t bytes;
+
+	//! Total byte length of the metadata region.
+	idx_t total_size = 0;
 
 	//! The json object keys have to be null-terminated
 	//! But we don't receive them null-terminated

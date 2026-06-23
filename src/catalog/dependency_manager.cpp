@@ -220,6 +220,9 @@ void DependencyManager::CreateDependent(CatalogTransaction transaction, const De
 }
 
 void DependencyManager::CreateDependency(CatalogTransaction transaction, DependencyInfo &info) {
+	auto subject_entry = LookupEntry(transaction, info.subject.entry);
+	info.subject.oid = subject_entry ? subject_entry->oid : optional_idx();
+
 	DependencyCatalogSet subjects(Subjects(), info.dependent.entry);
 	DependencyCatalogSet dependents(Dependents(), info.subject.entry);
 
@@ -277,8 +280,9 @@ void DependencyManager::CreateDependencies(CatalogTransaction transaction, const
 
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.Set()) {
-		DependencyInfo info {/*dependent = */ DependencyDependent {GetLookupProperties(object), dependency_flags},
-		                     /*subject = */ DependencySubject {dependency.entry, DependencySubjectFlags()}};
+		DependencyInfo info {
+		    /*dependent = */ DependencyDependent {GetLookupProperties(object), dependency_flags},
+		    /*subject = */ DependencySubject {dependency.entry, DependencySubjectFlags(), optional_idx()}};
 		CreateDependency(transaction, info);
 	}
 }
@@ -315,12 +319,8 @@ CatalogEntryInfo DependencyManager::GetLookupProperties(const CatalogEntry &entr
 	}
 }
 
-optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency) {
-	if (dependency.type != CatalogType::DEPENDENCY_ENTRY) {
-		return &dependency;
-	}
-	auto info = GetLookupProperties(dependency);
-
+optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction,
+                                                          const CatalogEntryInfo &info) {
 	auto &type = info.type;
 	auto &schema = info.schema;
 	auto &name = info.name;
@@ -331,8 +331,14 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 		// This is a schema entry, perform the callback only providing the schema
 		return reinterpret_cast<CatalogEntry *>(schema_entry.get());
 	}
-	auto entry = schema_entry->GetEntry(transaction, type, name);
-	return entry;
+	return schema_entry->GetEntry(transaction, type, name);
+}
+
+optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency) {
+	if (dependency.type != CatalogType::DEPENDENCY_ENTRY) {
+		return &dependency;
+	}
+	return LookupEntry(transaction, GetLookupProperties(dependency));
 }
 
 void DependencyManager::CleanupDependencies(CatalogTransaction transaction, CatalogEntry &object) {
@@ -470,6 +476,13 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 	if (lookup_result.reason == CatalogSet::EntryLookup::FailureReason::DELETED) {
 		throw DependencyException("Could not commit creation of dependency, subject \"%s\" has been deleted",
 		                          object.SourceInfo().name);
+	}
+	// The subject still exists by name - check if it is the same object the dependency was created against
+	if (!subject.flags.IsOwnership() && subject.oid.IsValid() && lookup_result.result &&
+	    lookup_result.result->oid != subject.oid.GetIndex()) {
+		throw DependencyException(
+		    "Could not commit creation of dependency, subject \"%s\" was dropped and re-created by another transaction",
+		    object.EntryInfo().name);
 	}
 }
 
@@ -791,7 +804,8 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 
 	DependencyInfo info {
 	    /*dependent = */ DependencyDependent {GetLookupProperties(owner), DependencyDependentFlags().SetOwnedBy()},
-	    /*subject = */ DependencySubject {GetLookupProperties(entry), DependencySubjectFlags().SetOwnership()}};
+	    /*subject = */ DependencySubject {GetLookupProperties(entry), DependencySubjectFlags().SetOwnership(),
+	                                      optional_idx()}};
 	CreateDependency(transaction, info);
 }
 

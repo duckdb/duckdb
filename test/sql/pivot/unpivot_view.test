@@ -1,0 +1,26 @@
+# name: test/sql/pivot/unpivot_view.test
+# description: Test unpivot in a view
+# group: [pivot]
+
+load {TEST_DIR}/unpivot_view.db
+
+statement ok
+CREATE TABLE t (
+    id INTEGER,
+    a INTEGER,
+    b INTEGER
+);
+
+statement ok
+INSERT INTO t VALUES (1, 10, 20);
+
+statement ok
+CREATE VIEW v AS
+SELECT *
+FROM t
+UNPIVOT (val FOR key IN (a, b));
+
+restart
+
+statement ok
+FROM v;

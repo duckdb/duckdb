@@ -1,9 +1,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/list_segment.hpp"
-#include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -133,39 +131,39 @@ struct LoadOp {
 	}
 };
 
-// Store rows from the packed binary state buffer into a result vector.
+// Store rows from the packed binary state buffer into a result vector at [offset, offset + count).
 struct StoreOp {
 	template <class T>
-	static void Operation(Vector &result, idx_t count, const data_ptr_t *sources, idx_t field_offset) {
-		auto dst = FlatVector::Writer<T>(result, count);
+	static void Operation(Vector &result, idx_t count, const data_ptr_t *sources, idx_t field_offset, idx_t offset) {
+		auto dst = FlatVector::Writer<T>(result, count, offset);
 		for (idx_t i = 0; i < count; i++) {
 			dst.WriteValue(Load<T>(sources[i] + field_offset));
 		}
 	}
 };
 
-// Recursively serialize a state field to a result vector.
+// Recursively serialize a state field to a result vector, writing the `count` rows at [offset, offset + count).
 // base: accumulated byte offset from the state slot start to this field's parent base.
 // Each child's field_offset is relative to that parent base.
 static void SerializeField(const LogicalType &type, const AggregateStateField &field, Vector &result, idx_t count,
-                           const data_ptr_t *addresses, idx_t base) {
+                           const data_ptr_t *addresses, idx_t base, idx_t offset) {
 	switch (field.kind) {
 	case AggregateFieldKind::OPTIONAL_VALUE:
 		D_ASSERT(field.children.size() == 1);
 		for (idx_t i = 0; i < count; i++) {
 			if (!Load<bool>(addresses[i] + base + field.field_offset)) {
-				FlatVector::SetNull(result, i, true);
+				FlatVector::SetNull(result, offset + i, true);
 			}
 		}
-		SerializeField(type, field.children[0], result, count, addresses, base);
+		SerializeField(type, field.children[0], result, count, addresses, base, offset);
 		break;
 	case AggregateFieldKind::SORT_KEY:
 		for (idx_t i = 0; i < count; i++) {
-			if (!FlatVector::Validity(result).RowIsValid(i)) {
+			if (!FlatVector::Validity(result).RowIsValid(offset + i)) {
 				continue;
 			}
 			const string_t sort_key = Load<string_t>(addresses[i] + base + field.field_offset);
-			CreateSortKeyHelpers::DecodeSortKey(sort_key, result, i,
+			CreateSortKeyHelpers::DecodeSortKey(sort_key, result, offset + i,
 			                                    OrderModifiers(field.sort_key_order, OrderByNullType::NULLS_LAST));
 		}
 		break;
@@ -175,12 +173,12 @@ static void SerializeField(const LogicalType &type, const AggregateStateField &f
 		const idx_t new_base = base + field.field_offset;
 		for (idx_t field_idx = 0; field_idx < field.children.size(); field_idx++) {
 			SerializeField(child_types[field_idx].second, field.children[field_idx], struct_entries[field_idx], count,
-			               addresses, new_base);
+			               addresses, new_base, offset);
 		}
 		break;
 	}
 	case AggregateFieldKind::PRIMITIVE:
-		TemplateDispatch<StoreOp>(type.InternalType(), result, count, addresses, base + field.field_offset);
+		TemplateDispatch<StoreOp>(type.InternalType(), result, count, addresses, base + field.field_offset, offset);
 		break;
 	case AggregateFieldKind::LIST: {
 		// linked list field: build the result LIST vector from each state's linked list
@@ -195,7 +193,8 @@ static void SerializeField(const LogicalType &type, const AggregateStateField &f
 		const auto &element = field.children[0];
 		if (element.kind != AggregateFieldKind::SORT_KEY) {
 			// elements are stored directly - build the result LIST vector from each state's linked list
-			field.list_functions.BuildLists(linked_lists, result, 0);
+			// (BuildLists appends to the result's child, writing the list entries at [offset, offset + count))
+			field.list_functions.BuildLists(linked_lists, result, offset);
 			break;
 		}
 		// the elements are sort keys: build the physically stored (BLOB) elements into a temporary LIST vector, then
@@ -203,14 +202,15 @@ static void SerializeField(const LogicalType &type, const AggregateStateField &f
 		Vector physical_list(LogicalType::LIST(LogicalType::BLOB), count);
 		field.list_functions.BuildLists(linked_lists, physical_list, 0);
 
-		ListVector::Reserve(result, ListVector::GetListSize(physical_list));
+		// append to the result child, starting after any rows already written at a lower offset
+		idx_t child_offset = ListVector::GetListSize(result);
+		ListVector::Reserve(result, child_offset + ListVector::GetListSize(physical_list));
 		auto &result_child = ListVector::GetChildMutable(result);
 		auto result_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 		const OrderModifiers modifiers(element.sort_key_order, OrderByNullType::NULLS_LAST);
 
-		idx_t child_offset = 0;
 		for (const auto list_entry : physical_list.Values<VectorListType<string_t>>()) {
-			const auto row = list_entry.GetIndex();
+			const auto row = offset + list_entry.GetIndex();
 			if (!list_entry.IsValid()) {
 				// an empty linked list is exported as NULL, matching the finalize semantics of list aggregates
 				FlatVector::SetNull(result, row, true);
@@ -324,18 +324,18 @@ static void DeserializeState(const BoundAggregateFunction &aggr, const Aggregate
 	DeserializeField(layout.type, layout.field, input_vec, count, dest_buffer, layout.total_state_size, 0, allocator);
 }
 
-static void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count,
-                           const data_ptr_t *addresses) {
-	SerializeField(layout.type, layout.field, result, count, addresses, 0);
+static void SerializeState(const AggregateStateLayout &layout, Vector &result, idx_t count, const data_ptr_t *addresses,
+                           idx_t offset) {
+	SerializeField(layout.type, layout.field, result, count, addresses, 0, offset);
 }
 
 static void SerializeState(const BoundAggregateFunction &aggr, optional_ptr<FunctionData> bind_data,
                            const AggregateStateLayout &layout, Vector &states, idx_t count, Vector &result,
-                           ArenaAllocator &allocator) {
+                           ArenaAllocator &allocator, idx_t offset) {
 	if (aggr.HasExportAggregateStateCallback()) {
-		// the aggregate explicitly serializes its own states
+		// the aggregate explicitly serializes its own states, writing the count rows at [offset, offset + count)
 		AggregateFinalizeInputData aggr_input_data(aggr, bind_data, allocator);
-		aggr.GetExportAggregateStateCallback()(states, aggr_input_data, result, count, 0);
+		aggr.GetExportAggregateStateCallback()(states, aggr_input_data, result, count, offset);
 		return;
 	}
 	const data_ptr_t *addresses;
@@ -344,7 +344,7 @@ static void SerializeState(const BoundAggregateFunction &aggr, optional_ptr<Func
 	} else {
 		addresses = FlatVector::GetData<data_ptr_t>(states);
 	}
-	SerializeState(layout, result, count, addresses);
+	SerializeState(layout, result, count, addresses, offset);
 }
 
 // destroys the temporary underlying-aggregate states referenced by `states` (no-op if the aggregate has no
@@ -489,7 +489,7 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 		bind_data.aggr.GetStateCombineCallback()(local_state.addresses0, local_state.addresses1, aggr_input_data,
 		                                         count);
 		SerializeState(bind_data.aggr, bind_data.bind_data.get(), layout, local_state.addresses1, count, result,
-		               local_state.allocator);
+		               local_state.allocator, 0);
 	} catch (...) {
 		destroy_states();
 		throw;
@@ -593,6 +593,9 @@ void ParseStateParameters(const Value &parameters, vector<LogicalType> &argument
 	}
 }
 
+// parses an ORDER BY spec (a list of {column, order} structs) - shared by the re-bind path and to_aggregate_state
+void ParseOrderBys(const Value &order_value, idx_t column_count, vector<SortedAggregateStateOrder> &orders);
+
 unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &context, BoundSimpleFunction &function,
                                                                vector<unique_ptr<Expression>> &arguments) {
 	auto &arg_return_type = arguments[0]->GetReturnType();
@@ -619,7 +622,27 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	map<idx_t, Value> constant_parameters;
 	ParseStateParameters(entry->second, argument_types, constant_parameters);
 
-	return BindExportedAggregate(context, function_name, argument_types, constant_parameters);
+	auto inner = BindExportedAggregate(context, function_name, argument_types, constant_parameters);
+
+	auto order_entry = ext_info->properties.find("order_bys");
+	if (order_entry == ext_info->properties.end()) {
+		// a plain (non-ordered) aggregate state
+		return inner;
+	}
+	// an ordered aggregate state: the value is the buffer (LIST<buffered_struct>) - reconstruct the sorted wrapper
+	// around the inner aggregate so finalize sorts the buffer and combine concatenates buffers
+	const auto buffer_struct = ListType::GetChildType(arg_return_type);
+	const idx_t column_count = StructType::GetChildTypes(buffer_struct).size();
+	vector<SortedAggregateStateOrder> orders;
+	ParseOrderBys(order_entry->second, column_count, orders);
+	// the leading buffered columns are the inner aggregate's bound arguments (post constant-erasure)
+	const idx_t argument_count = inner->aggr.GetArguments().size();
+
+	auto reconstructed = FunctionBinder::BindSortedAggregateState(context, inner->aggr, std::move(inner->bind_data),
+	                                                              buffer_struct, orders, argument_count);
+	BoundAggregateFunction wrapper(reconstructed.first);
+	const auto state_size = wrapper.GetStateSizeCallback()(wrapper);
+	return make_uniq<ExportAggregateBindData>(std::move(wrapper), std::move(reconstructed.second), state_size);
 }
 
 unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
@@ -678,15 +701,12 @@ void ExportAggregateFinalize(Vector &state, AggregateFinalizeInputData &aggr_inp
 
 	auto layout = GetLayout(aggr_input_data.function, aggr_input_data.bind_data);
 
+	// only flatten the result the first time it is written - ordered aggregates finalize one group at a time at
+	// increasing offsets, appending into the (already flat) result
 	if (offset == 0) {
-		SerializeState(layout, result, count, addresses_ptrs);
-		return;
+		result.Flatten();
 	}
-	// finalizing at a non-zero offset (e.g. ordered aggregates) - serialize into a temporary vector and copy the
-	// result into place so the rest of the result vector is left untouched
-	Vector temp(result.GetType(), count);
-	SerializeState(layout, temp, count, addresses_ptrs);
-	VectorOperations::Copy(temp, result, count, 0, offset);
+	SerializeState(layout, result, count, addresses_ptrs, offset);
 }
 
 // the executor invokes this callback with combine_aggr's own bind data (ExportAggregateBindData) - the underlying
@@ -772,30 +792,20 @@ void CombineAggrFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_d
 
 	auto layout = GetLayout(underlying_aggr, bind_data.bind_data.get());
 
+	// only flatten the result the first time it is written - ordered aggregates finalize one group at a time at
+	// increasing offsets, appending into the (already flat) result
 	if (offset == 0) {
-		SerializeState(underlying_aggr, bind_data.bind_data.get(), layout, state, count, result,
-		               aggr_input_data.allocator);
-		return;
+		result.Flatten();
 	}
-	// finalizing at a non-zero offset (e.g. ordered aggregates) - serialize into a temporary vector and copy the
-	// result into place so the rest of the result vector is left untouched
-	Vector temp(result.GetType(), count);
-	SerializeState(underlying_aggr, bind_data.bind_data.get(), layout, state, count, temp, aggr_input_data.allocator);
-	VectorOperations::Copy(temp, result, count, 0, offset);
+	SerializeState(underlying_aggr, bind_data.bind_data.get(), layout, state, count, result, aggr_input_data.allocator,
+	               offset);
 }
 
-// constructs the AGGREGATE_STATE type for the given bound aggregate function
-// the state layout (a struct) is aliased to AGGREGATE_STATE, with the function name and signature stored in the
-// extension type info so that the aggregate can be re-bound later (e.g. by FINALIZE/COMBINE)
-LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_function,
-                                     optional_ptr<FunctionData> bind_data) {
-	auto layout = bound_function.GetStateType(bind_data);
-	// deep copy the type before modifying it - SetAlias/SetExtensionInfo modify the (shared) extra type info in
-	// place, and the state layout type can share its type info with e.g. the aggregate's input expressions
-	LogicalType state_layout = layout.type.DeepCopy();
-	state_layout.SetAlias("AGGREGATE_STATE");
-	auto ext_info = make_uniq<ExtensionTypeInfo>();
-	ext_info->properties.emplace("function_name", bound_function.GetName());
+// stores the function name and signature (with any constant parameters) into the extension type info, so that the
+// aggregate can be re-bound later (e.g. by FINALIZE/COMBINE)
+void EncodeStateParameters(ExtensionTypeInfo &ext_info, const BoundAggregateFunction &bound_function,
+                           const AggregateStateLayout &layout) {
+	ext_info.properties.emplace("function_name", bound_function.GetName());
 	auto &original_arguments = bound_function.GetOriginalArguments().empty() ? bound_function.GetArguments()
 	                                                                         : bound_function.GetOriginalArguments();
 	vector<Value> arguments;
@@ -804,7 +814,7 @@ LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_functio
 		for (auto &arg : original_arguments) {
 			arguments.push_back(Value::TYPE(arg));
 		}
-		ext_info->properties.emplace("parameters", Value::LIST(LogicalType::TYPE(), std::move(arguments)));
+		ext_info.properties.emplace("parameters", Value::LIST(LogicalType::TYPE(), std::move(arguments)));
 	} else {
 		// some parameters were bound to a constant (e.g. string_agg's separator) - store the parameters as a list of
 		// (type, value) pairs, where the value holds the constant the parameter must be re-bound with
@@ -820,8 +830,55 @@ LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_functio
 			arguments.push_back(Value::STRUCT(std::move(children)));
 		}
 		auto entry_type = LogicalType::STRUCT({{"type", LogicalType::TYPE()}, {"value", LogicalType::VARIANT()}});
-		ext_info->properties.emplace("parameters", Value::LIST(entry_type, std::move(arguments)));
+		ext_info.properties.emplace("parameters", Value::LIST(entry_type, std::move(arguments)));
 	}
+}
+
+// the STRUCT type of a single ORDER BY entry encoded into an ordered aggregate state's extension info. It matches the
+// shape of to_aggregate_state's ORDER BY argument: the buffered column the key sorts on, and the modifier string.
+LogicalType OrderByEntryType() {
+	return LogicalType::STRUCT({{"column", LogicalType::UINTEGER}, {"order", LogicalType::VARCHAR}});
+}
+
+// renders an order modifier (e.g. ASC NULLS LAST) into the string form parsed by OrderModifiers::Parse
+string OrderModifierToString(OrderType order_type, OrderByNullType null_order) {
+	return StringUtil::Format("%s %s", EnumUtil::ToChars(order_type), EnumUtil::ToChars(null_order));
+}
+
+// constructs the AGGREGATE_STATE type for the given bound aggregate function
+// the state layout (a struct) is aliased to AGGREGATE_STATE, with the function name and signature stored in the
+// extension type info so that the aggregate can be re-bound later (e.g. by FINALIZE/COMBINE)
+LogicalType CreateAggregateStateType(const BoundAggregateFunction &bound_function,
+                                     optional_ptr<FunctionData> bind_data) {
+	auto layout = bound_function.GetStateType(bind_data);
+	// deep copy the type before modifying it - SetAlias/SetExtensionInfo modify the (shared) extra type info in
+	// place, and the state layout type can share its type info with e.g. the aggregate's input expressions
+	LogicalType state_layout = layout.type.DeepCopy();
+	state_layout.SetAlias("AGGREGATE_STATE");
+	auto ext_info = make_uniq<ExtensionTypeInfo>();
+	EncodeStateParameters(*ext_info, bound_function, layout);
+	state_layout.SetExtensionInfo(std::move(ext_info));
+	return state_layout;
+}
+
+// constructs the AGGREGATE_STATE type for an ordered aggregate - the state is the buffer of values
+// (LIST<buffered_struct>), with the inner signature and the ORDER BY spec stored in the extension info
+LogicalType CreateSortedAggregateStateType(const BoundAggregateFunction &inner_function,
+                                           optional_ptr<FunctionData> inner_bind_data, const LogicalType &buffer_struct,
+                                           const vector<SortedAggregateStateOrder> &orders) {
+	LogicalType state_layout = LogicalType::LIST(buffer_struct);
+	state_layout.SetAlias("AGGREGATE_STATE");
+	auto ext_info = make_uniq<ExtensionTypeInfo>();
+	EncodeStateParameters(*ext_info, inner_function, inner_function.GetStateType(inner_bind_data));
+	// per key: the buffered column it sorts on and the modifier string (the argument count is re-derived on re-bind)
+	vector<Value> order_values;
+	for (auto &order : orders) {
+		child_list_t<Value> children;
+		children.emplace_back("column", Value::UINTEGER(UnsafeNumericCast<uint32_t>(order.column)));
+		children.emplace_back("order", Value(OrderModifierToString(order.order_type, order.null_order)));
+		order_values.push_back(Value::STRUCT(std::move(children)));
+	}
+	ext_info->properties.emplace("order_bys", Value::LIST(OrderByEntryType(), std::move(order_values)));
 	state_layout.SetExtensionInfo(std::move(ext_info));
 	return state_layout;
 }
@@ -865,6 +922,49 @@ void ParseConstantParameters(const Value &constants, idx_t argument_count, map<i
 			continue;
 		}
 		constant_parameters[i] = children[i];
+	}
+}
+
+// parses the optional fifth argument of to_aggregate_state: the ORDER BY specification of an ordered aggregate, as a
+// list of {column, order} structs, e.g. [{'column': 1, 'order': 'DESC NULLS LAST'}]. 'column' is the buffered struct
+// column the key sorts on, 'order' is the modifier string (parsed with the same rules as create_sort_key).
+void ParseOrderBys(const Value &order_value, idx_t column_count, vector<SortedAggregateStateOrder> &orders) {
+	if (order_value.IsNull()) {
+		return;
+	}
+	if (order_value.type().id() != LogicalTypeId::LIST) {
+		throw BinderException(
+		    "to_aggregate_state: the ORDER BY argument must be a list of {column, order} structs, e.g. "
+		    "[{'column': 1, 'order': 'DESC NULLS LAST'}]");
+	}
+	for (auto &entry : ListValue::GetChildren(order_value)) {
+		if (entry.IsNull() || entry.type().id() != LogicalTypeId::STRUCT) {
+			throw BinderException("to_aggregate_state: each ORDER BY entry must be a {column, order} struct");
+		}
+		auto &field_types = StructType::GetChildTypes(entry.type());
+		auto &field_values = StructValue::GetChildren(entry);
+		Value column, order;
+		for (idx_t f = 0; f < field_types.size(); f++) {
+			if (field_types[f].first == "column") {
+				column = field_values[f];
+			} else if (field_types[f].first == "order") {
+				order = field_values[f];
+			}
+		}
+		if (column.IsNull() || order.IsNull()) {
+			throw BinderException("to_aggregate_state: each ORDER BY entry must have a non-NULL 'column' and 'order'");
+		}
+		SortedAggregateStateOrder state_order;
+		state_order.column = column.GetValue<uint32_t>();
+		if (state_order.column >= column_count) {
+			throw BinderException(
+			    "to_aggregate_state: ORDER BY column %llu is out of range (the state has %llu columns)",
+			    (uint64_t)state_order.column, (uint64_t)column_count);
+		}
+		auto modifiers = OrderModifiers::Parse(StringValue::Get(order));
+		state_order.order_type = modifiers.order_type;
+		state_order.null_order = modifiers.null_type;
+		orders.push_back(state_order);
 	}
 }
 
@@ -916,6 +1016,29 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 		    "Aggregate function \"%s\" does not have a state type callback defined - cannot convert to its state",
 		    function_name);
 	}
+
+	if (arguments.size() > 4) {
+		// an ordered aggregate state: the value is the buffer (LIST<buffered_struct>), the fifth argument the ORDER BY
+		auto &state_type = arguments[0]->GetReturnType();
+		if (state_type.id() != LogicalTypeId::LIST ||
+		    ListType::GetChildType(state_type).id() != LogicalTypeId::STRUCT) {
+			throw BinderException("to_aggregate_state: an ordered aggregate state value must be a LIST of STRUCTs (the "
+			                      "buffer of values), e.g. [{'v0': ...}, ...]");
+		}
+		const auto buffer_struct = ListType::GetChildType(state_type);
+		const idx_t column_count = StructType::GetChildTypes(buffer_struct).size();
+		vector<SortedAggregateStateOrder> orders;
+		auto order_value = ExpressionExecutor::EvaluateScalar(context, *arguments[4]);
+		ParseOrderBys(order_value, column_count, orders);
+		if (orders.empty()) {
+			throw BinderException("to_aggregate_state: an ordered aggregate state must have at least one ORDER BY key");
+		}
+		bound_function.GetArguments()[0] = LogicalType::LIST(buffer_struct);
+		bound_function.SetReturnType(
+		    CreateSortedAggregateStateType(aggr, bind_data->bind_data.get(), buffer_struct, orders));
+		return std::move(bind_data);
+	}
+
 	auto state_layout = aggr.GetStateType(bind_data->bind_data.get()).type;
 	bound_function.GetArguments()[0] = state_layout;
 	bound_function.SetReturnType(CreateAggregateStateType(aggr, bind_data->bind_data.get()));
@@ -963,6 +1086,17 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	D_ASSERT(bound_function.HasStateSizeCallback());
 	D_ASSERT(bound_function.HasStateFinalizeCallback());
 	D_ASSERT(child_aggregate->Function().GetReturnType().id() != LogicalTypeId::INVALID);
+	if (child_aggregate->GetOrderBys() && !child_aggregate->GetOrderBys()->orders.empty()) {
+		// ordered aggregate: export the buffer of values. The sorted wrapper is built later (physical planning); here
+		// we only fix the AGGREGATE_STATE type so downstream binding (finalize/combine) sees it
+		LogicalType buffer_struct;
+		vector<SortedAggregateStateOrder> orders;
+		idx_t argument_count; // re-derived from the inner aggregate on re-bind
+		FunctionBinder::GetSortedAggregateStateLayout(*child_aggregate, buffer_struct, orders, argument_count);
+		SetStateExport(*child_aggregate, CreateSortedAggregateStateType(
+		                                     bound_function, child_aggregate->BindInfo().get(), buffer_struct, orders));
+		return child_aggregate;
+	}
 	SetStateExport(*child_aggregate, CreateAggregateStateType(bound_function, child_aggregate->BindInfo().get()));
 	return child_aggregate;
 }
@@ -999,10 +1133,14 @@ ScalarFunction CombineFun::GetFunction() {
 ScalarFunctionSet ToAggregateStateFun::GetFunctions() {
 	ScalarFunctionSet set("to_aggregate_state");
 	vector<LogicalType> arguments {LogicalTypeId::ANY, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::ANY)};
-	for (idx_t constant_params = 0; constant_params < 2; constant_params++) {
-		if (constant_params) {
+	for (idx_t optional_args = 0; optional_args < 3; optional_args++) {
+		if (optional_args == 1) {
 			// optional fourth argument: constant parameter values as a list with one entry per argument (e.g.
 			// [NULL, ','])
+			arguments.emplace_back(LogicalTypeId::ANY);
+		} else if (optional_args == 2) {
+			// optional fifth argument: the ORDER BY of an ordered aggregate, as a list of {column, order} structs
+			// (e.g. [{'column': 1, 'order': 'DESC NULLS LAST'}])
 			arguments.emplace_back(LogicalTypeId::ANY);
 		}
 		ScalarFunction function("to_aggregate_state", arguments, LogicalTypeId::ANY, ToAggregateStateFunction,

@@ -15,6 +15,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/function/scalar_function.hpp"
 #include "reader/variant/variant_binary_decoder.hpp"
 
 namespace duckdb {
@@ -78,21 +79,27 @@ public:
 		return ParquetVariantNode(Kind::MISSING);
 	}
 	//! A position in the shredded (typed) tree. 'overlay' is the binary OBJECT holding the leftover fields
-	//! of a partially-shredded object (or null when fully shredded / not an object).
+	//! of a partially-shredded object (or null when fully shredded / not an object); 'overlay_end' is one
+	//! past the end of the overlay's 'value' blob (for bounds-checking the binary reads).
 	static ParquetVariantNode MakeShredded(const ParquetVariantIterator &state, const ShreddedGroupView &view,
-	                                       idx_t index, const_data_ptr_t overlay = nullptr) {
+	                                       idx_t index, const_data_ptr_t overlay = nullptr,
+	                                       const_data_ptr_t overlay_end = nullptr) {
 		ParquetVariantNode result(Kind::SHREDDED);
 		result.state = &state;
 		result.view = &view;
 		result.index = index;
 		result.binary = overlay;
+		result.binary_end = overlay_end;
 		return result;
 	}
-	//! A Spark variant-encoded value starting at 'data' (its header byte)
-	static ParquetVariantNode MakeBinary(const ParquetVariantIterator &state, const_data_ptr_t data) {
+	//! A Spark variant-encoded value starting at 'data' (its header byte); 'end' is one past the end of the
+	//! 'value' blob the value lives in (for bounds-checking the binary reads).
+	static ParquetVariantNode MakeBinary(const ParquetVariantIterator &state, const_data_ptr_t data,
+	                                     const_data_ptr_t end) {
 		ParquetVariantNode result(Kind::BINARY);
 		result.state = &state;
 		result.binary = data;
+		result.binary_end = end;
 		return result;
 	}
 
@@ -126,6 +133,8 @@ private:
 	//! SHREDDED OBJECT: the (binary) overlay object holding leftover fields, or null.
 	//! BINARY: the value's start (header byte).
 	const_data_ptr_t binary = nullptr;
+	//! One past the end of the 'value' blob 'binary' points into (for bounds-checking the binary reads)
+	const_data_ptr_t binary_end = nullptr;
 };
 
 //! A single (key, value) entry of an OBJECT
@@ -141,9 +150,10 @@ class ParquetObjectIterator {
 public:
 	//! Shredded object (typed fields + optional binary overlay)
 	ParquetObjectIterator(const ParquetVariantIterator &state, const ShreddedGroupView &view, idx_t index,
-	                      const_data_ptr_t overlay);
+	                      const_data_ptr_t overlay, const_data_ptr_t overlay_end);
 	//! Binary object
-	ParquetObjectIterator(const ParquetVariantIterator &state, const VariantMetadata &metadata, const_data_ptr_t data);
+	ParquetObjectIterator(const ParquetVariantIterator &state, const VariantMetadata &metadata, const_data_ptr_t data,
+	                      const_data_ptr_t end);
 
 public:
 	const ParquetObjectEntry *begin() const { // NOLINT: match stl API
@@ -166,7 +176,8 @@ public:
 	//! Shredded array
 	ParquetArrayIterator(const ParquetVariantIterator &state, const ShreddedGroupView &view, idx_t index);
 	//! Binary array
-	ParquetArrayIterator(const ParquetVariantIterator &state, const VariantMetadata &metadata, const_data_ptr_t data);
+	ParquetArrayIterator(const ParquetVariantIterator &state, const VariantMetadata &metadata, const_data_ptr_t data,
+	                     const_data_ptr_t end);
 
 public:
 	idx_t size() const {
@@ -186,30 +197,33 @@ private:
 	//! BINARY: where to read each element's value offset, and the values base
 	const_data_ptr_t field_offsets = nullptr;
 	const_data_ptr_t values = nullptr;
+	//! BINARY: one past the end of the 'value' blob (for bounds-checking the binary reads)
+	const_data_ptr_t binary_end = nullptr;
 	uint32_t field_offset_size = 0;
 };
 
 //! Iterates a shredded Parquet VARIANT column (metadata + group), handing out ParquetVariantNode cursors
 //! per row. Binary (Spark-encoded) values are read directly from the 'value' blobs; fixed-width payloads
-//! are fetched by value (no materialization). The only scratch buffer is for base64-encoded strings, which
-//! the (depth-first) emit consumes immediately, so a single reused buffer suffices.
+//! are fetched by value (no materialization).
 class ParquetVariantIterator {
 public:
 	ParquetVariantIterator(Vector &metadata, Vector &group);
+	//! Binary-only: each row is a full Spark variant-encoded value (the metadata blob immediately followed
+	//! by the value blob). There is no shredded group - the value is read right after the metadata.
+	explicit ParquetVariantIterator(Vector &metadata);
 
 public:
 	//! Reset the per-row state (lazily-decoded metadata) for a new row
 	void BeginRow(idx_t row);
 	//! Resolve the root value of 'row' (a missing root is promoted to a SQL NULL)
 	ParquetVariantNode Root(idx_t row) const;
+	//! Resolve the root of a binary-only row: the value blob starts right after the metadata
+	ParquetVariantNode BinaryRoot() const;
 	//! Resolve the value of the group 'view' at logical position 'index'
 	ParquetVariantNode ResolveGroup(const ShreddedGroupView &view, idx_t index) const;
 
 	//! The (lazily-decoded) Variant metadata of the current row
 	const VariantMetadata &GetMetadata() const;
-	//! Base64-encode 'blob' into the row's scratch buffer, returning a string_t that is valid until the
-	//! next call (the emit copies it out immediately)
-	string_t EncodeBase64(string_t blob) const;
 
 	//! The recursive view of the Parquet group tree (used by the shredded-conversion path)
 	const ShreddedGroupView &GetRootView() const {
@@ -226,7 +240,6 @@ private:
 
 	idx_t current_row = 0;
 	mutable unique_ptr<VariantMetadata> current_metadata;
-	mutable string base64_scratch;
 };
 
 //! Convert a Parquet VARIANT (metadata + group) into DuckDB's SHREDDED VARIANT format: the Parquet
@@ -235,6 +248,12 @@ private:
 class ParquetVariantConversion {
 public:
 	static void ConvertToShredded(Vector &metadata, Vector &group, Vector &result, idx_t count);
+	//! Convert binary Variant values (each row being the metadata blob followed by the value blob) into the
+	//! canonical VARIANT 'result' in a single pass
+	static void ConvertBinary(Vector &metadata_and_value, Vector &result, idx_t count);
+	//! 'variant_bytes_to_variant': decode a binary Variant value (metadata followed by value) into a VARIANT.
+	//! The inverse of 'variant_to_parquet_variant'.
+	static ScalarFunction GetBytesToVariantFunction();
 };
 
 } // namespace duckdb

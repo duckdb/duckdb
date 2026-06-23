@@ -1,0 +1,13 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [jsonbench-parquet]
+
+require json load_only
+
+require httpfs load_only
+
+require parquet load_only
+
+cache jsonbench-parquet.db
+
+load benchmark/jsonbench-parquet/queries/load.sql
