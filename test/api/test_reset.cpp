@@ -222,7 +222,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "tracked_metrics",
 	    "debug_verification_mode",
 	    "standard_vector_size",
-	    "warnings_as_errors",      // requires logging to be enabled
+	    "warnings_as_errors", // requires logging to be enabled
 	    "transformer_trampoline_style",
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
