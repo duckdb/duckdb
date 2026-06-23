@@ -2,6 +2,11 @@
 # description: Test USE statement through the trampoline PEG transformer backend
 # group: [transformer]
 
+require skip_reload
+
+statement ok
+ATTACH ':memory:' AS trampoline_use_catalog
+
 statement ok
 SET transformer_trampoline_style=true
 
@@ -20,10 +25,10 @@ statement ok
 USE "main"
 
 statement ok
-USE memory.main
+USE trampoline_use_catalog.main
 
 statement ok
-USE "memory"."main"
+USE "trampoline_use_catalog"."main"
 
 statement error
 USE temp
