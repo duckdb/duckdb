@@ -12,6 +12,7 @@ from transformer_plan import (
     DirectParseArg,
     DirectRepeatArg,
     OptionalStackChild,
+    ParensNode,
     ReferenceNode,
     RepeatStackChild,
     SequenceNode,
@@ -246,6 +247,8 @@ class UseGramPreviewEmitter:
             return self.emit_sequence_rule(rule_name, ast)
         if isinstance(ast, ReferenceNode):
             return self.emit_sequence_rule(rule_name, SequenceNode([ast]))
+        if isinstance(ast, ParensNode):
+            return self.emit_sequence_rule(rule_name, SequenceNode([ast]))
         raise NotImplementedError(f"unsupported preview shape for {rule_name}: {type(ast).__name__}")
 
     def emit_initialize_rule(self, rule_name, ast):
@@ -256,6 +259,8 @@ class UseGramPreviewEmitter:
         if isinstance(ast, SequenceNode):
             return self.emit_sequence_initialize(rule_name, ast)
         if isinstance(ast, ReferenceNode):
+            return self.emit_sequence_initialize(rule_name, SequenceNode([ast]))
+        if isinstance(ast, ParensNode):
             return self.emit_sequence_initialize(rule_name, SequenceNode([ast]))
         raise NotImplementedError(f"unsupported preview shape for {rule_name}: {type(ast).__name__}")
 
@@ -350,16 +355,14 @@ class UseGramPreviewEmitter:
                 arg_names.append(arg.var_name)
             elif isinstance(arg, DirectOptionalArg):
                 lines.append(f"\toptional<Identifier> {arg.var_name} {{}};")
-                lines.append(f"\tauto &{arg.var_name}_opt = list_pr.GetChild({arg.child_idx}).Cast<OptionalParseResult>();")
+                lines.append(f"\tauto &{arg.var_name}_opt = {arg.parse_expr}.Cast<OptionalParseResult>();")
                 lines.append(f"\tif ({arg.var_name}_opt.HasResult()) {{")
                 lines.append(f"\t\t{arg.var_name} = {arg.var_name}_opt.GetResult().Cast<IdentifierParseResult>().identifier;")
                 lines.append("\t}")
                 arg_names.append(arg.var_name)
             elif isinstance(arg, DirectRepeatArg):
                 lines.append(f"\toptional<vector<Identifier>> {arg.var_name} {{}};")
-                lines.append(
-                    f"\tauto &{arg.var_name}_opt = list_pr.GetChild({arg.child_idx}).Cast<OptionalParseResult>();"
-                )
+                lines.append(f"\tauto &{arg.var_name}_opt = {arg.parse_expr}.Cast<OptionalParseResult>();")
                 lines.append(f"\tif ({arg.var_name}_opt.HasResult()) {{")
                 lines.append(f"\t\tvector<Identifier> {arg.var_name}_value;")
                 lines.append(f"\t\tauto &{arg.var_name}_repeat = {arg.var_name}_opt.GetResult().Cast<RepeatParseResult>();")
@@ -415,14 +418,16 @@ class UseGramPreviewEmitter:
             f"void PEGTransformerFactory::{init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
             f"TransformStackFrame &frame) {{"
         )
-        frame_children = plan.stack_children + plan.optional_stack_children
+        frame_children = [
+            arg for arg in plan.finalize_args if isinstance(arg, (StackChild, OptionalStackChild))
+        ]
         fixed_child_slots = len(frame_children)
         if frame_children or plan.repeat_child:
             lines.append("\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
         if plan.repeat_child:
             repeat_child = plan.repeat_child
             lines.append(
-                f"\tauto &repeat_opt = list_pr.GetChild({repeat_child.child_idx}).Cast<OptionalParseResult>();"
+                f"\tauto &repeat_opt = {repeat_child.parse_expr}.Cast<OptionalParseResult>();"
             )
             lines.append("\tif (repeat_opt.HasResult()) {")
             lines.append("\t\tauto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();")
@@ -443,8 +448,7 @@ class UseGramPreviewEmitter:
         for stack_child in reversed(frame_children):
             if isinstance(stack_child, OptionalStackChild):
                 lines.append(
-                    f"\tauto &{stack_child.var_name}_opt = "
-                    f"list_pr.GetChild({stack_child.child_idx}).Cast<OptionalParseResult>();"
+                    f"\tauto &{stack_child.var_name}_opt = {stack_child.parse_expr}.Cast<OptionalParseResult>();"
                 )
                 lines.append(f"\tif ({stack_child.var_name}_opt.HasResult()) {{")
                 lines.append(
@@ -454,7 +458,7 @@ class UseGramPreviewEmitter:
                 lines.append("\t}")
             else:
                 lines.append(
-                    f"\tstack.PushFrame(list_pr.GetChild({stack_child.child_idx}), {ops_name(stack_child.rule_name)}, "
+                    f"\tstack.PushFrame({stack_child.parse_expr}, {ops_name(stack_child.rule_name)}, "
                     f"TransformFrameResultTarget(frame.frame_index, {stack_child.slot_idx}));"
                 )
         lines.append("}")

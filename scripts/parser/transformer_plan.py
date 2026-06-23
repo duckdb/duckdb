@@ -229,28 +229,28 @@ class DirectParseArg:
 
 @dataclass
 class DirectRepeatArg:
-    child_idx: int
+    parse_expr: str
     rule_name: str
     var_name: str
 
 
 @dataclass
 class DirectOptionalArg:
-    child_idx: int
+    parse_expr: str
     rule_name: str
     var_name: str
 
 
 @dataclass
 class StackChild:
-    child_idx: int
+    parse_expr: str
     rule_name: str
     slot_idx: int
 
 
 @dataclass
 class OptionalStackChild:
-    child_idx: int
+    parse_expr: str
     rule_name: str
     slot_idx: int
     var_name: str
@@ -258,7 +258,7 @@ class OptionalStackChild:
 
 @dataclass
 class RepeatStackChild:
-    child_idx: int
+    parse_expr: str
     rule_name: str
     slot_start: int
 
@@ -274,6 +274,14 @@ class SequenceRulePlan:
     finalize_args: List[object]
 
 
+def _trampoline_parse_expr(child_idx, child):
+    parse_expr = f"list_pr.GetChild({child_idx})"
+    while isinstance(child, ParensNode):
+        parse_expr = f"ExtractResultFromParens({parse_expr})"
+        child = child.inner
+    return parse_expr, child
+
+
 def plan_trampoline_sequence_rule(ast, identifier_rules):
     direct_args = []
     direct_optional_args = []
@@ -285,27 +293,28 @@ def plan_trampoline_sequence_rule(ast, identifier_rules):
     next_slot = 0
     children = ast.children if isinstance(ast, SequenceNode) else [ast]
     for child_idx, child in enumerate(children):
+        parse_expr, child = _trampoline_parse_expr(child_idx, child)
         if isinstance(child, LiteralNode):
             continue
         if isinstance(child, ReferenceNode):
             if child.name in identifier_rules:
                 arg = DirectParseArg(
                     to_snake_case(child.name),
-                    f"list_pr.GetChild({child_idx}).Cast<IdentifierParseResult>().identifier",
+                    f"{parse_expr}.Cast<IdentifierParseResult>().identifier",
                 )
                 direct_args.append(arg)
             else:
-                arg = StackChild(child_idx, child.name, next_slot)
+                arg = StackChild(parse_expr, child.name, next_slot)
                 stack_children.append(arg)
                 next_slot += 1
             finalize_args.append(arg)
             continue
         if isinstance(child, OptionalNode) and isinstance(child.child, ReferenceNode):
             if child.child.name in identifier_rules:
-                arg = DirectOptionalArg(child_idx, child.child.name, to_snake_case(child.child.name))
+                arg = DirectOptionalArg(parse_expr, child.child.name, to_snake_case(child.child.name))
                 direct_optional_args.append(arg)
             else:
-                arg = OptionalStackChild(child_idx, child.child.name, next_slot, to_snake_case(child.child.name))
+                arg = OptionalStackChild(parse_expr, child.child.name, next_slot, to_snake_case(child.child.name))
                 optional_stack_children.append(arg)
                 next_slot += 1
             finalize_args.append(arg)
@@ -314,13 +323,13 @@ def plan_trampoline_sequence_rule(ast, identifier_rules):
             repeat_node = child.child.child
             if isinstance(repeat_node, ReferenceNode):
                 if repeat_node.name in identifier_rules:
-                    arg = DirectRepeatArg(child_idx, repeat_node.name, to_snake_case(repeat_node.name))
+                    arg = DirectRepeatArg(parse_expr, repeat_node.name, to_snake_case(repeat_node.name))
                     direct_repeat_args.append(arg)
                     finalize_args.append(arg)
                     continue
                 if repeat_child is not None:
                     raise NotImplementedError("only one repeat child is currently supported")
-                repeat_child = RepeatStackChild(child_idx, repeat_node.name, next_slot)
+                repeat_child = RepeatStackChild(parse_expr, repeat_node.name, next_slot)
                 finalize_args.append(repeat_child)
                 continue
         raise NotImplementedError(f"unsupported semantic child shape: {type(child).__name__}")
