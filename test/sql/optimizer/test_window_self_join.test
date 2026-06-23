@@ -265,3 +265,16 @@ FROM (
 ) AS b;
 ----
 1	10.0
+
+# Regression test: duplicate window-over-aggregate expressions (issue #23383)
+# Using the same window expression standalone AND inside arithmetic must not crash.
+query III rowsort
+SELECT
+    name,
+    MAX(SUM(n)) OVER (PARTITION BY name) AS w1,
+    SUM(n) / MAX(SUM(n)) OVER (PARTITION BY name) AS w2
+FROM (VALUES ('a',1),('a',2),('b',3)) t(name, n)
+GROUP BY name;
+----
+a	3	1.0
+b	3	1.0

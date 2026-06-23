@@ -193,9 +193,22 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 			groups.push_back(std::move(part_copy));
 		}
 
-		for (auto &expr : window.expressions) {
-			auto &w_expr = expr->Cast<BoundWindowExpression>();
-			aggregates.emplace_back(TranslateAggregate(w_expr));
+		// Build deduplicated aggregates: multiple identical window expressions map to the same aggregate output.
+		vector<idx_t> agg_index_for_window(window.expressions.size());
+		for (idx_t i = 0; i < window.expressions.size(); ++i) {
+			auto &w_expr = window.expressions[i]->Cast<BoundWindowExpression>();
+			bool found = false;
+			for (idx_t j = 0; j < i; ++j) {
+				if (w_expr.Equals(*window.expressions[j])) {
+					agg_index_for_window[i] = agg_index_for_window[j];
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				agg_index_for_window[i] = aggregates.size();
+				aggregates.emplace_back(TranslateAggregate(w_expr));
+			}
 		}
 
 		// args: group_index, aggregate_index, ...
@@ -224,12 +237,11 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		join->children.push_back(std::move(agg_op));
 		join->ResolveOperatorTypes();
 
-		// Replace aggregate bindings
-		// Old window column: (window.window_index, x)
-		// New constant column: (aggregate_index, x)
+		// Replace window column bindings with the deduplicated aggregate output bindings.
+		// Old: (window.window_index, i)  →  New: (aggregate_index, agg_index_for_window[i])
 		for (idx_t column_index = 0; column_index < window.expressions.size(); ++column_index) {
 			ColumnBinding old_binding(window.window_index, ProjectionIndex(column_index));
-			ColumnBinding new_binding(aggregate_index, ProjectionIndex(column_index));
+			ColumnBinding new_binding(aggregate_index, ProjectionIndex(agg_index_for_window[column_index]));
 			replacer.replacement_bindings.emplace_back(old_binding, new_binding);
 		}
 
