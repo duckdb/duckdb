@@ -2,6 +2,9 @@
 # description: Test SIMILAR TO statement
 # group: [string]
 
+statement ok
+SET regex_match_operator_semantics = 'full'
+
 query T
 SELECT 'aaa' SIMILAR TO 'bbb'
 ----
@@ -77,7 +80,13 @@ SELECT 'aaa' !~ 'bbb'
 ----
 1
 
-# similar to must match entire expression
+# SIMILAR TO must match the entire expression
+query T
+SELECT 'aaa' SIMILAR TO '^a'
+----
+0
+
+# regex match operators use full matching in this test
 query T
 SELECT 'aaa' ~ '^a'
 ----

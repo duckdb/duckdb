@@ -784,10 +784,49 @@ bool TryNegateLikeFunction(Identifier &function_name) {
 		return true;
 	} else if (function_name == "~~~") {
 		return false;
+	} else if (function_name == "regexp_matches") {
+		return false;
 	} else if (function_name == "regexp_full_match") {
 		return false;
 	}
 	return false;
+}
+
+static string RegexMatchOperatorFunctionName(PEGTransformer &transformer) {
+	if (transformer.options.regex_match_operator_semantics == RegexMatchOperatorSemantics::FULL) {
+		return "regexp_full_match";
+	}
+	return "regexp_matches";
+}
+
+static bool IsRegexMatchFunctionName(const string &function_name) {
+	auto name = function_name;
+	if (StringUtil::StartsWith(name, "!")) {
+		name = name.substr(1);
+	}
+	return name == "regexp_matches" || name == "regexp_full_match";
+}
+
+static bool TryRemoveRegexOperatorNegation(Identifier &function_name) {
+	if (function_name == "!regexp_matches") {
+		function_name = "regexp_matches";
+		return true;
+	}
+	if (function_name == "!regexp_full_match") {
+		function_name = "regexp_full_match";
+		return true;
+	}
+	return false;
+}
+
+static bool TryRemoveRegexCaseInsensitiveSuffix(string &function_name) {
+	static constexpr const char *REGEX_CASE_INSENSITIVE_SUFFIX = "__case_insensitive";
+	if (!StringUtil::EndsWith(function_name, REGEX_CASE_INSENSITIVE_SUFFIX)) {
+		return false;
+	}
+	function_name =
+	    function_name.substr(0, function_name.size() - std::char_traits<char>::length(REGEX_CASE_INSENSITIVE_SUFFIX));
+	return true;
 }
 
 unique_ptr<ParsedExpression>
@@ -815,16 +854,17 @@ PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transfor
 		} else {
 			func_expr->GetArgumentsMutable().insert(func_expr->GetArgumentsMutable().begin(), std::move(expr));
 		}
+		auto regex_operator_negated = TryRemoveRegexOperatorNegation(func_expr->FunctionNameMutable());
 		if (has_not) {
-			if (!TryNegateLikeFunction(func_expr->FunctionNameMutable())) {
+			if (regex_operator_negated) {
+				expr = std::move(func_expr);
+			} else if (!TryNegateLikeFunction(func_expr->FunctionNameMutable())) {
 				// If it wasn't a special "Like" function, wrap it in a standard NOT operator
 				expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(func_expr));
 			} else {
 				expr = std::move(func_expr);
 			}
-		} else if (func_expr->FunctionName() == "!~") {
-			func_expr->FunctionNameMutable() = "regexp_full_match";
-			func_expr->IsOperatorMutable() = false;
+		} else if (regex_operator_negated) {
 			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(func_expr));
 		} else {
 			expr = std::move(func_expr);
@@ -911,8 +951,14 @@ PEGTransformerFactory::TransformLikeClause(PEGTransformer &transformer, const st
                                            unique_ptr<ParsedExpression> other_operator_expression,
                                            optional<unique_ptr<ParsedExpression>> escape_clause) {
 	string like_variation = like_variations;
+	bool case_insensitive_regex = TryRemoveRegexCaseInsensitiveSuffix(like_variation);
+	bool is_regex_operator = IsRegexMatchFunctionName(like_variation);
 	vector<unique_ptr<ParsedExpression>> like_children;
 	like_children.push_back(std::move(other_operator_expression));
+	if (case_insensitive_regex && escape_clause) {
+		throw ParserException(
+		    "ESCAPE clause is not supported with case-insensitive regular expression match operators");
+	}
 	if (escape_clause) {
 		if (like_variation == "~~") {
 			like_variation = "like_escape";
@@ -921,8 +967,11 @@ PEGTransformerFactory::TransformLikeClause(PEGTransformer &transformer, const st
 		}
 		like_children.push_back(std::move(*escape_clause));
 	}
+	if (case_insensitive_regex) {
+		like_children.push_back(make_uniq<ConstantExpression>(Value("i")));
+	}
 	auto result = make_uniq<FunctionExpression>(Identifier(like_variation), std::move(like_children));
-	if (like_variation != "regexp_full_match") {
+	if (!is_regex_operator) {
 		result->IsOperatorMutable() = true;
 	}
 	return std::move(result);
@@ -950,6 +999,14 @@ string PEGTransformerFactory::TransformSimilarToToken(PEGTransformer &transforme
 	return "regexp_full_match";
 }
 
+string PEGTransformerFactory::TransformRegexMatchToken(PEGTransformer &transformer) {
+	return RegexMatchOperatorFunctionName(transformer);
+}
+
+string PEGTransformerFactory::TransformRegexInsensitiveMatchToken(PEGTransformer &transformer) {
+	return RegexMatchOperatorFunctionName(transformer) + "__case_insensitive";
+}
+
 string PEGTransformerFactory::TransformNotILikeOp(PEGTransformer &transformer) {
 	return "!~~*";
 }
@@ -958,8 +1015,12 @@ string PEGTransformerFactory::TransformNotLikeOp(PEGTransformer &transformer) {
 	return "!~~";
 }
 
+string PEGTransformerFactory::TransformNotRegexInsensitiveMatchOp(PEGTransformer &transformer) {
+	return "!" + RegexMatchOperatorFunctionName(transformer) + "__case_insensitive";
+}
+
 string PEGTransformerFactory::TransformNotSimilarToOp(PEGTransformer &transformer) {
-	return "!~";
+	return "!" + RegexMatchOperatorFunctionName(transformer);
 }
 
 unique_ptr<ParsedExpression>

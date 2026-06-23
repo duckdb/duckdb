@@ -1,0 +1,115 @@
+# name: test/sql/function/string/regex_operators.test
+# description: Test regular expression match operators
+# group: [string]
+
+query I
+SELECT current_setting('regex_match_operator_semantics')
+----
+partial
+
+# default partial matching
+query T
+SELECT 'abc' ~ 'b'
+----
+1
+
+query T
+SELECT 'abc' !~ 'b'
+----
+0
+
+query T
+SELECT 'abc' ~ '^a'
+----
+1
+
+query T
+SELECT 'abc' ~ '^b'
+----
+0
+
+# case-sensitive by default
+query T
+SELECT 'ABC' ~ 'a'
+----
+0
+
+# case-insensitive regex operators
+query T
+SELECT 'ABC' ~* 'a'
+----
+1
+
+query T
+SELECT 'ABC' !~* 'a'
+----
+0
+
+statement ok
+SET regex_match_operator_semantics = 'full'
+
+query I
+SELECT current_setting('regex_match_operator_semantics')
+----
+full
+
+# full matching restores the current DuckDB anchoring behavior
+query T
+SELECT 'abc' ~ 'b'
+----
+0
+
+query T
+SELECT 'abc' !~ 'b'
+----
+1
+
+query T
+SELECT 'abc' ~ '^a.*'
+----
+1
+
+query T
+SELECT 'ABC' ~* 'a'
+----
+0
+
+query T
+SELECT 'ABC' ~* 'a.*'
+----
+1
+
+query T
+SELECT 'ABC' !~* 'a'
+----
+1
+
+query T
+SELECT 'ABC' !~* 'a.*'
+----
+0
+
+statement ok
+RESET regex_match_operator_semantics
+
+query I
+SELECT current_setting('regex_match_operator_semantics')
+----
+partial
+
+statement ok
+SET regex_match_operator_semantics = 'PARTIAL'
+
+query T
+SELECT 'abc' ~ 'b'
+----
+1
+
+statement error
+SET regex_match_operator_semantics = 'unknown'
+----
+<REGEX>:.*unrecognized value.*
+
+statement ok
+RESET regex_match_operator_semantics
+
