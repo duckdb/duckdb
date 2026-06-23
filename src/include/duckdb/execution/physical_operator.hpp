@@ -26,6 +26,7 @@
 
 namespace duckdb {
 
+class DictionaryEntry;
 class Event;
 class Executor;
 class PhysicalOperator;
@@ -246,6 +247,13 @@ public:
 	}
 };
 
+//! A cached column that arrived as a global dictionary: the pinned upstream entry is kept and
+//! per-chunk selection indices concatenated, so the dictionary survives the cache instead of flattening
+struct CachedDictColumn {
+	buffer_ptr<DictionaryEntry> entry;
+	SelectionVector accumulated_sel;
+};
+
 //! Contains state for the CachingPhysicalOperator
 class CachingOperatorState : public OperatorState {
 public:
@@ -261,6 +269,13 @@ public:
 		can_cache_chunk = OperatorCachingMode::NONE;
 		must_return_continuation_chunk = false;
 		cached_result = OperatorResultType::NEED_MORE_INPUT;
+		ResetDictCache();
+	}
+
+	//! Drop the dictionary accumulators, returning the cache to plain flat caching
+	void ResetDictCache() {
+		dict_columns.clear();
+		dict_cache_active = false;
 	}
 
 	unique_ptr<DataChunk> cached_chunk;
@@ -269,6 +284,11 @@ public:
 	OperatorCachingMode can_cache_chunk = OperatorCachingMode::NONE;
 	bool must_return_continuation_chunk = false;
 	OperatorResultType cached_result;
+
+	//! One slot per cached column. Invariant: entry != null iff the column is accumulating a global
+	//! dictionary; entry == null iff plain flat caching (the common case)
+	vector<CachedDictColumn> dict_columns;
+	bool dict_cache_active = false;
 };
 
 //! Base class that caches output from child Operator class. Note that Operators inheriting from this class should also

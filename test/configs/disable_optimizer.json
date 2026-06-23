@@ -126,7 +126,8 @@
         "test/sql/copy/parquet/parquet_string_stats.test",
         "test/sql/storage/extended_string_stats.test",
         "test/sql/storage/min_string_length_too_large.test_slow",
-        "test/sql/storage/total_string_length_repeated_insert.test"
+        "test/sql/storage/total_string_length_repeated_insert.test",
+        "test/sql/types/geo/geometry_from_wkb_stats.test"
       ]
     },
     {
