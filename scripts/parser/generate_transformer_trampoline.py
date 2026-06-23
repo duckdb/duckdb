@@ -139,6 +139,45 @@ class UseGramPreviewEmitter:
             )
         return "".join(lines)
 
+    def rule_status(self, rule_name, rule):
+        if self.is_excluded_rule(rule_name):
+            return "excluded", ""
+        if self.is_manual_rule(rule_name):
+            return "manual", ""
+        if rule_name not in self.rule_types:
+            return "unsupported", "no return type in grammar_types.yml"
+        try:
+            ast = tokens_to_ast(rule.tokens)
+        except Exception as e:
+            return "unsupported", f"AST parse error: {e}"
+        if self.is_manual_finalize_rule(rule_name):
+            try:
+                self.emit_initialize_rule(rule_name, ast)
+            except NotImplementedError as e:
+                return "unsupported", f"manual_finalize initialize: {e}"
+            return "manual_finalize", ""
+        try:
+            self.emit_rule(rule_name, ast)
+        except (KeyError, NotImplementedError) as e:
+            return "unsupported", str(e)
+        return "generated", ""
+
+    def emit_report(self):
+        rows = []
+        counts = {}
+        for rule_name, rule in self.rules.items():
+            status, reason = self.rule_status(rule_name, rule)
+            counts[status] = counts.get(status, 0) + 1
+            rows.append((rule_name, status, reason))
+
+        lines = []
+        summary = ", ".join(f"{status}={counts[status]}" for status in sorted(counts))
+        lines.append(f"summary: {summary}")
+        for rule_name, status, reason in rows:
+            suffix = f": {reason}" if reason else ""
+            lines.append(f"{rule_name}: {status}{suffix}")
+        return "\n".join(lines)
+
     def emit_source(self):
         lines = []
         lines.append(GENERATED_HEADER)
@@ -198,12 +237,35 @@ class UseGramPreviewEmitter:
             return self.emit_sequence_rule(rule_name, SequenceNode([ast]))
         raise NotImplementedError(f"unsupported preview shape for {rule_name}: {type(ast).__name__}")
 
+    def emit_initialize_rule(self, rule_name, ast):
+        if isinstance(ast, ChoiceNode):
+            return self.emit_choice_initialize(rule_name)
+        if isinstance(ast, SequenceNode):
+            return self.emit_sequence_initialize(rule_name, ast)
+        if isinstance(ast, ReferenceNode):
+            return self.emit_sequence_initialize(rule_name, SequenceNode([ast]))
+        raise NotImplementedError(f"unsupported preview shape for {rule_name}: {type(ast).__name__}")
+
     def identifier_var_name(self, rule_name):
         return to_snake_case(rule_name)
 
     def emit_choice_rule(self, rule_name):
+        lines = self.emit_choice_initialize(rule_name)
+        if self.is_manual_finalize_rule(rule_name):
+            return lines
         cpp_type = self.cpp_type(rule_name)
         by_value = self.by_value(rule_name)
+        lines.append("")
+        lines.append(
+            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"TransformStack &stack, TransformStackFrame &frame) {{"
+        )
+        lines.append(f"\tauto result = frame.TakeResult<{cpp_type}>(0);")
+        lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', by_value)};")
+        lines.append("}")
+        return lines
+
+    def emit_choice_initialize(self, rule_name):
         lines = []
         lines.append(
             f"void PEGTransformerFactory::{init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
@@ -222,57 +284,16 @@ class UseGramPreviewEmitter:
             "\tstack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));"
         )
         lines.append("}")
-        lines.append("")
-        if self.is_manual_finalize_rule(rule_name):
-            return lines
-        lines.append(
-            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
-            f"TransformStack &stack, TransformStackFrame &frame) {{"
-        )
-        lines.append(f"\tauto result = frame.TakeResult<{cpp_type}>(0);")
-        lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', by_value)};")
-        lines.append("}")
         return lines
 
     def emit_sequence_rule(self, rule_name, ast):
+        lines = self.emit_sequence_initialize(rule_name, ast)
+        if self.is_manual_finalize_rule(rule_name):
+            return lines
         plan = plan_trampoline_sequence_rule(ast, self.identifier_rules)
         cpp_type = self.cpp_type(rule_name)
         by_value = self.by_value(rule_name)
 
-        lines = []
-        lines.append(
-            f"void PEGTransformerFactory::{init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
-            f"TransformStackFrame &frame) {{"
-        )
-        if plan.stack_children or plan.repeat_child:
-            lines.append("\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
-        if plan.repeat_child:
-            repeat_child = plan.repeat_child
-            lines.append(
-                f"\tauto &repeat_opt = list_pr.GetChild({repeat_child.child_idx}).Cast<OptionalParseResult>();"
-            )
-            lines.append("\tif (repeat_opt.HasResult()) {")
-            lines.append("\t\tauto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();")
-            lines.append("\t\tauto repeat_children = repeat_pr.GetChildren();")
-            lines.append(f"\t\tframe.ReserveChildSlots({len(plan.stack_children)} + repeat_children.size());")
-            lines.append("\t\tfor (idx_t i = repeat_children.size(); i > 0; i--) {")
-            lines.append("\t\t\tauto child_idx = i - 1;")
-            lines.append(
-                f"\t\t\tstack.PushFrame(repeat_children[child_idx].get(), {ops_name(repeat_child.rule_name)}, "
-                f"TransformFrameResultTarget(frame.frame_index, {repeat_child.slot_start} + child_idx));"
-            )
-            lines.append("\t\t}")
-            lines.append("\t} else {")
-            lines.append(f"\t\tframe.ReserveChildSlots({len(plan.stack_children)});")
-            lines.append("\t}")
-        else:
-            lines.append(f"\tframe.ReserveChildSlots({len(plan.stack_children)});")
-        for stack_child in reversed(plan.stack_children):
-            lines.append(
-                f"\tstack.PushFrame(list_pr.GetChild({stack_child.child_idx}), {ops_name(stack_child.rule_name)}, "
-                f"TransformFrameResultTarget(frame.frame_index, {stack_child.slot_idx}));"
-            )
-        lines.append("}")
         lines.append("")
         lines.append(
             f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
@@ -337,19 +358,58 @@ class UseGramPreviewEmitter:
         lines.append("}")
         return lines
 
+    def emit_sequence_initialize(self, rule_name, ast):
+        plan = plan_trampoline_sequence_rule(ast, self.identifier_rules)
+        lines = []
+        lines.append(
+            f"void PEGTransformerFactory::{init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
+            f"TransformStackFrame &frame) {{"
+        )
+        if plan.stack_children or plan.repeat_child:
+            lines.append("\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
+        if plan.repeat_child:
+            repeat_child = plan.repeat_child
+            lines.append(
+                f"\tauto &repeat_opt = list_pr.GetChild({repeat_child.child_idx}).Cast<OptionalParseResult>();"
+            )
+            lines.append("\tif (repeat_opt.HasResult()) {")
+            lines.append("\t\tauto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();")
+            lines.append("\t\tauto repeat_children = repeat_pr.GetChildren();")
+            lines.append(f"\t\tframe.ReserveChildSlots({len(plan.stack_children)} + repeat_children.size());")
+            lines.append("\t\tfor (idx_t i = repeat_children.size(); i > 0; i--) {")
+            lines.append("\t\t\tauto child_idx = i - 1;")
+            lines.append(
+                f"\t\t\tstack.PushFrame(repeat_children[child_idx].get(), {ops_name(repeat_child.rule_name)}, "
+                f"TransformFrameResultTarget(frame.frame_index, {repeat_child.slot_start} + child_idx));"
+            )
+            lines.append("\t\t}")
+            lines.append("\t} else {")
+            lines.append(f"\t\tframe.ReserveChildSlots({len(plan.stack_children)});")
+            lines.append("\t}")
+        else:
+            lines.append(f"\tframe.ReserveChildSlots({len(plan.stack_children)});")
+        for stack_child in reversed(plan.stack_children):
+            lines.append(
+                f"\tstack.PushFrame(list_pr.GetChild({stack_child.child_idx}), {ops_name(stack_child.rule_name)}, "
+                f"TransformFrameResultTarget(frame.frame_index, {stack_child.slot_idx}));"
+            )
+        lines.append("}")
+        return lines
+
 
 def main():
     arg_parser = argparse.ArgumentParser(description="Generate trampoline-style transformer wrappers.")
     arg_parser.add_argument("--write", action="store_true", help="Write generated files to disk.")
+    arg_parser.add_argument("--report", action="store_true", help="Print per-rule trampoline generation status.")
     arg_parser.add_argument(
         "--grammar",
         action="append",
-        default=["use.gram"],
+        default=None,
         help="Grammar file to process. Defaults to use.gram. Can be specified multiple times.",
     )
     args = arg_parser.parse_args()
 
-    grammar_files = sorted(set(args.grammar))
+    grammar_files = sorted(set(args.grammar or ["use.gram"]))
     rules = load_grammar_rules(grammar_files)
     all_grammar_files = sorted(path.name for path in statements_dir.glob("*.gram"))
     all_rules = load_grammar_rules(all_grammar_files)
@@ -365,6 +425,9 @@ def main():
             raise NotImplementedError("--write is currently restricted to use.gram")
         write_hpp(emitter.emit_header_declarations())
         write_cpp(emitter.emit_source())
+    elif args.report:
+        print(f"grammar files: {', '.join(grammar_files)}")
+        print(emitter.emit_report())
     else:
         print(f"// grammar files: {', '.join(grammar_files)}")
         print(f"// rules: {len(rules)}")
