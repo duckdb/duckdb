@@ -1748,7 +1748,8 @@ string Value::ToSQLString() const {
 	}
 	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::STRUCT: {
-		bool is_unnamed = StructType::IsUnnamed(type_);
+		// a TUPLE is always unnamed (even when empty, where IsUnnamed cannot tell)
+		bool is_unnamed = type_.id() == LogicalTypeId::TUPLE || StructType::IsUnnamed(type_);
 		string ret = is_unnamed ? "(" : "{";
 		auto &child_types = StructType::GetChildTypes(type_);
 		auto &struct_values = StructValue::GetChildren(*this);

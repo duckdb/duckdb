@@ -14,11 +14,23 @@ SELECT typeof(struct_pack(a := 1, b := 'a'));
 ----
 STRUCT(a INTEGER, b VARCHAR)
 
-# the empty struct is a bare STRUCT, not a TUPLE
-query T
-SELECT typeof(row());
+# row() is an (empty) TUPLE; struct_pack() / {} make an (empty) STRUCT
+query TT
+SELECT typeof(row()), typeof(struct_pack());
 ----
-STRUCT
+TUPLE	STRUCT
+
+# empty TUPLE displays as (), empty STRUCT as {}
+query TT
+SELECT row(), struct_pack();
+----
+()	{}
+
+# empty STRUCT and empty TUPLE are trivially, implicitly castable to each other
+query TT
+SELECT row()::STRUCT, struct_pack() = row();
+----
+{}	true
 
 # TUPLE display
 query T

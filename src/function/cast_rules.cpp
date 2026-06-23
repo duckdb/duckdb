@@ -530,6 +530,11 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 			return -1;
 		}
 
+		if (source_children.empty()) {
+			// both are empty - empty STRUCT and empty TUPLE are trivially inter-castable
+			return 0;
+		}
+
 		auto target_is_unnamed = StructType::IsUnnamed(to);
 		auto source_is_unnamed = StructType::IsUnnamed(from);
 		auto named_struct_cast = !source_is_unnamed && !target_is_unnamed;

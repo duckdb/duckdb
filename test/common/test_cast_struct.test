@@ -92,11 +92,11 @@ SELECT ROW(42, 'asdf');
 ----
 (42, asdf)
 
-# ROW() with no arguments produces an empty struct
+# ROW() with no arguments produces an empty (unnamed) TUPLE
 query I
 SELECT ROW();
 ----
-{}
+()
 
 query I
 SELECT ROW(NULL);

@@ -139,7 +139,8 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	auto &base_children = StructVector::GetEntries(source);
 
 	// now construct the actual varchar vector
-	bool is_unnamed = StructType::IsUnnamed(source.GetType());
+	// a TUPLE is always unnamed (even when empty, where IsUnnamed cannot tell)
+	bool is_unnamed = source.GetType().id() == LogicalTypeId::TUPLE || StructType::IsUnnamed(source.GetType());
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	auto &children = StructVector::GetEntries(varchar_struct);
 	auto source_validity = varchar_struct.Validity();

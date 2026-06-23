@@ -285,8 +285,8 @@ LogicalType BindStructType(BindLogicalTypeInput &input) {
 		throw BinderException("STRUCT type arguments must either all have names or all be anonymous");
 	}
 
-	if (all_anon) {
-		// Unnamed struct case - produce a TUPLE
+	if (all_anon && !arguments.empty()) {
+		// Unnamed struct case - produce a TUPLE (an empty STRUCT(), with no fields, stays a bare STRUCT)
 		child_list_t<LogicalType> children;
 		for (auto &arg : arguments) {
 			children.emplace_back("", TypeValue::GetType(arg.GetValue()));
