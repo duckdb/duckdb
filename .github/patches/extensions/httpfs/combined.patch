@@ -1,11 +1,11 @@
-commit a3a01e4b81db55d2562cd2e27124e4ad048646f3
+commit fd3b6c0fc57ead728385ed9e3974a0200ba797d0
 Author: dentinyhao <dentinyhao@gmail.com>
 Date:   Mon Jun 22 22:29:42 2026 -0700
 
     combined patch
 
 diff --git a/src/httpfs.cpp b/src/httpfs.cpp
-index 1a9c466..0c7cc03 100644
+index 1a9c466..3c5aa17 100644
 --- a/src/httpfs.cpp
 +++ b/src/httpfs.cpp
 @@ -365,6 +365,17 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
@@ -17,7 +17,7 @@ index 1a9c466..0c7cc03 100644
 +	if (response && (response->Success() || response->status == HTTPStatusCode::PartialContent_206 ||
 +	                 response->status == HTTPStatusCode::Accepted_202)) {
 +		const auto elapsed_nanos =
-+		    TimePoint::ElapsedNanosSince(get_request.request_monotonic_start, get_request.request_monotonic_end);
++		    TimePoint::ElapsedNanos(get_request.request_monotonic_start, get_request.request_monotonic_end);
 +		const double total_seconds = elapsed_nanos > 0 ? static_cast<double>(elapsed_nanos) / 1e9 : 0;
 +		const idx_t bytes = get_request.bytes_received != 0 ? get_request.bytes_received : buffer_out_len;
 +		hfh.RecordNetworkSample(total_seconds, bytes, get_request.have_time_to_fst_byte,
@@ -126,7 +126,7 @@ index efdc87d..3852958 100644
  		AddUserAgentIfAvailable(static_cast<HTTPFSParams &>(info.params), info.headers);
  		ResetRequestInfo();
 diff --git a/src/httpfs_httplib_client.cpp b/src/httpfs_httplib_client.cpp
-index f4e01f7..e0eccaa 100644
+index f4e01f7..4e1c6e8 100644
 --- a/src/httpfs_httplib_client.cpp
 +++ b/src/httpfs_httplib_client.cpp
 @@ -54,18 +54,33 @@ public:
@@ -149,7 +149,7 @@ index f4e01f7..e0eccaa 100644
 +					    first_chunk = false;
 +					    info.have_time_to_fst_byte = true;
 +					    // Time to first byte is the duration from issuing the request until the first chunk arrives.
-+					    const auto elapsed_nanos = TimePoint::ElapsedNanosSince(request_monotonic_start, TimePoint::Tick());
++					    const auto elapsed_nanos = TimePoint::ElapsedNanos(request_monotonic_start, TimePoint::Tick());
 +					    info.time_to_fst_byte_sec =
 +					        elapsed_nanos > 0 ? static_cast<double>(elapsed_nanos) / 1e9 : 0;
 +				    }
