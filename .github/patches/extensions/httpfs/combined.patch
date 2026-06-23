@@ -1,8 +1,14 @@
+commit a3a01e4b81db55d2562cd2e27124e4ad048646f3
+Author: dentinyhao <dentinyhao@gmail.com>
+Date:   Mon Jun 22 22:29:42 2026 -0700
+
+    combined patch
+
 diff --git a/src/httpfs.cpp b/src/httpfs.cpp
-index 1a9c466..09cf021 100644
+index 1a9c466..0c7cc03 100644
 --- a/src/httpfs.cpp
 +++ b/src/httpfs.cpp
-@@ -365,6 +365,19 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
+@@ -365,6 +365,17 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
  	auto response = http_util.Request(get_request, http_client);
  
  	hfh.StoreClient(std::move(http_client));
@@ -10,11 +16,9 @@ index 1a9c466..09cf021 100644
 +	// Feed the prefetch cost model a network measurement for this ranged GET
 +	if (response && (response->Success() || response->status == HTTPStatusCode::PartialContent_206 ||
 +	                 response->status == HTTPStatusCode::Accepted_202)) {
-+		double total_seconds = 0;
-+		if (get_request.request_monotonic_end.value > get_request.request_monotonic_start.value) {
-+			total_seconds =
-+			    static_cast<double>(get_request.request_monotonic_end.value - get_request.request_monotonic_start.value) / 1e6;
-+		}
++		const auto elapsed_nanos =
++		    TimePoint::ElapsedNanosSince(get_request.request_monotonic_start, get_request.request_monotonic_end);
++		const double total_seconds = elapsed_nanos > 0 ? static_cast<double>(elapsed_nanos) / 1e9 : 0;
 +		const idx_t bytes = get_request.bytes_received != 0 ? get_request.bytes_received : buffer_out_len;
 +		hfh.RecordNetworkSample(total_seconds, bytes, get_request.have_time_to_fst_byte,
 +		                        get_request.time_to_fst_byte_sec);
@@ -22,7 +26,7 @@ index 1a9c466..09cf021 100644
  	return response;
  }
  
-@@ -462,9 +475,42 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFileExtended(const OpenFileInfo &file
+@@ -462,9 +473,42 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFileExtended(const OpenFileInfo &file
  }
  
  void HTTPFileHandle::AddStatistics(idx_t read_offset, idx_t read_length, idx_t read_duration) {
@@ -122,16 +126,16 @@ index efdc87d..3852958 100644
  		AddUserAgentIfAvailable(static_cast<HTTPFSParams &>(info.params), info.headers);
  		ResetRequestInfo();
 diff --git a/src/httpfs_httplib_client.cpp b/src/httpfs_httplib_client.cpp
-index f4e01f7..87339fa 100644
+index f4e01f7..e0eccaa 100644
 --- a/src/httpfs_httplib_client.cpp
 +++ b/src/httpfs_httplib_client.cpp
-@@ -54,18 +54,32 @@ public:
+@@ -54,18 +54,33 @@ public:
  		if (!info.response_handler && !info.content_handler) {
  			return TransformResult(client->Get(info.path, headers));
  		} else {
 -			return TransformResult(client->Get(
 +			// The httplib client streams per chunk, so the first chunk gives us TTFB, used by the prefetch cost model as the latency estimate.
-+			const auto request_monotonic_start = Timestamp::GetMonotonicTimestamp();
++			const auto request_monotonic_start = TimePoint::Tick();
 +			idx_t total_bytes = 0;
 +			bool first_chunk = true;
 +			auto result = TransformResult(client->Get(
@@ -144,9 +148,10 @@ index f4e01f7..87339fa 100644
 +				    if (first_chunk) {
 +					    first_chunk = false;
 +					    info.have_time_to_fst_byte = true;
-+			            // We calculate the time to first byte as the time from when the request was issues to the chunk arrived.
++					    // Time to first byte is the duration from issuing the request until the first chunk arrives.
++					    const auto elapsed_nanos = TimePoint::ElapsedNanosSince(request_monotonic_start, TimePoint::Tick());
 +					    info.time_to_fst_byte_sec =
-+					        static_cast<double>(Timestamp::GetMonotonicTimestamp().value - request_monotonic_start.value) / 1e6;
++					        elapsed_nanos > 0 ? static_cast<double>(elapsed_nanos) / 1e9 : 0;
 +				    }
 +				    total_bytes += data_length;
  				    if (state) {
@@ -159,7 +164,7 @@ index f4e01f7..87339fa 100644
  		}
  	}
  	unique_ptr<HTTPResponse> Put(PutRequestInfo &info) override {
-@@ -94,6 +108,11 @@ public:
+@@ -94,6 +109,11 @@ public:
  		return TransformResult(client->Delete(info.path, headers));
  	}
  
@@ -790,7 +795,7 @@ index 2b8b860..b3edced 100644
  404 Not Found
  
 diff --git a/test/sql/copy/s3/fully_qualified_s3_url.test b/test/sql/copy/s3/fully_qualified_s3_url.test
-index 99b9113..a40ae34 100644
+index 99b9113..d9ca13b 100644
 --- a/test/sql/copy/s3/fully_qualified_s3_url.test
 +++ b/test/sql/copy/s3/fully_qualified_s3_url.test
 @@ -40,10 +40,10 @@ Unable to connect to URL
@@ -833,7 +838,7 @@ index 99b9113..a40ae34 100644
  #test a joining of two tables with different credentials
  query II
 -SELECT T1.i, T2.j FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}" T1 
-+SELECT T1.i, T2.j FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id={AWS_ACCESS_KEY_ID}&s3_secret_access_key={AWS_SECRET_ACCESS_KEY}" T1 
++SELECT T1.i, T2.j FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id={AWS_ACCESS_KEY_ID}&s3_secret_access_key={AWS_SECRET_ACCESS_KEY}" T1
      INNER JOIN "s3://test-bucket/s3_query_params/test_2.csv?s3_access_key_id=minio_duckdb_user_2&s3_secret_access_key=minio_duckdb_user_2_password" T2 
      ON T1.i+100=T2.j LIMIT 3;
  ----
@@ -1282,7 +1287,7 @@ index 21c344f..f7c53e6 100644
  ----
  1
 diff --git a/test/sql/copy/s3/s3_presigned_read.test_slow b/test/sql/copy/s3/s3_presigned_read.test_slow
-index 9bd3da9..84557f1 100644
+index 9bd3da9..300ac12 100644
 --- a/test/sql/copy/s3/s3_presigned_read.test_slow
 +++ b/test/sql/copy/s3/s3_presigned_read.test_slow
 @@ -37,7 +37,7 @@ query I
@@ -1290,7 +1295,7 @@ index 9bd3da9..84557f1 100644
      sum(l_extendedprice * l_discount) AS revenue
  FROM
 -    '${S3_LARGE_PARQUET_PRESIGNED_URL}' 
-+    '{S3_LARGE_PARQUET_PRESIGNED_URL}' 
++    '{S3_LARGE_PARQUET_PRESIGNED_URL}'
  WHERE
      l_shipdate >= CAST('1994-01-01' AS date)
      AND l_shipdate < CAST('1995-01-01' AS date)
