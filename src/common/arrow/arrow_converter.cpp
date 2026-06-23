@@ -75,7 +75,7 @@ void SetArrowStructFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &chi
 	for (idx_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
 		root_holder.nested_children_ptr.back()[type_idx] = &root_holder.nested_children.back()[type_idx];
 	}
-	child.children = &root_holder.nested_children_ptr.back()[0];
+	child.children = child_types.empty() ? nullptr : &root_holder.nested_children_ptr.back()[0];
 	for (size_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
 		InitializeChild(*child.children[type_idx], root_holder);
 		root_holder.owned_type_names.push_back(AddName(child_types[type_idx].first.GetIdentifierName()));

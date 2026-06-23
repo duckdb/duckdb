@@ -1,6 +1,7 @@
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -66,7 +67,7 @@ public:
 					}
 					const idx_t to_read = MinValue(block_size, file_size - offset);
 					auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, to_read);
-					file_handle.Read(context, buf.GetDataMutable(), to_read, offset);
+					caching_file_handle.ReadAndRecord(context, buf.GetDataMutable(), to_read, offset);
 
 					lk.lock();
 					block->block_handle = buf.GetBlockHandle();
@@ -256,9 +257,10 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		return FileBufferHandleGroup();
 	}
 
-	if (!external_file_cache.IsEnabled()) {
+	// Uncached files are read directly into one contiguous buffer, skipping the per block syscalls and copies
+	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path)) {
 		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-		GetFileHandle().Read(context, buf.GetDataMutable(), nr_bytes, location);
+		ReadAndRecord(context, buf.GetDataMutable(), nr_bytes, location);
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
 		return FileBufferHandleGroup(std::move(mem_handles));
@@ -376,6 +378,10 @@ string CachingFileHandle::GetVersionTag() {
 }
 
 bool CachingFileHandle::Validate() const {
+	if (!external_file_cache.ShouldCacheFile(path.path)) {
+		// uncached files have no stale state to serve, so their metadata must always be read fresh
+		return true;
+	}
 	switch (validate) {
 	case CacheValidationMode::VALIDATE_ALL:
 		return true;
@@ -410,8 +416,59 @@ bool CachingFileHandle::OnDiskFile() {
 	return GetFileHandle().OnDiskFile();
 }
 
+void ReadThroughputEstimator::AddSample(double seconds, idx_t bytes) {
+	const double b = static_cast<double>(bytes);
+	lock_guard<mutex> guard(lock);
+	sample_count++;
+	sum_bytes += b;
+	sum_seconds += seconds;
+	sum_bytes_sq += b * b;
+	sum_bytes_seconds += b * seconds;
+}
+
+bool ReadThroughputEstimator::TryEstimate(NetworkThroughputEstimate &result) const {
+	lock_guard<mutex> guard(lock);
+	if (sample_count < 2) {
+		return false;
+	}
+	const double n = static_cast<double>(sample_count);
+	const double variance = sum_bytes_sq - sum_bytes * sum_bytes / n;
+	if (!(variance > 0)) {
+		// every read was the same size, so we cant really get the latency
+		return false;
+	}
+	// least squares estimate of the line "total_time = intercept + slope * bytes".
+	const double slope = (sum_bytes_seconds - sum_bytes * sum_seconds / n) / variance;
+	const double intercept = (sum_seconds - slope * sum_bytes) / n;
+	if (!(slope > 0) || !(intercept > 0)) {
+		return false;
+	}
+	// intercept is the fixed start-up cost of a read, slope is seconds per byte so bandwidth is 1 / slope
+	result.latency_seconds = intercept;
+	result.bandwidth_bytes_per_s = 1.0 / slope;
+	return true;
+}
+
 bool CachingFileHandle::TryGetNetworkThroughput(NetworkThroughputEstimate &result) {
-	return GetFileHandle().TryGetNetworkThroughput(result);
+	// Remote files measure throughput in their own file system; local files fit it from this handle's own reads.
+	if (GetFileHandle().TryGetNetworkThroughput(result)) {
+		return true;
+	}
+	return throughput_estimator.TryEstimate(result);
+}
+
+void CachingFileHandle::ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location) {
+	auto &handle = GetFileHandle();
+	const auto read_start = steady_clock::now();
+	handle.Read(context, buffer, nr_bytes, location);
+	RecordReadThroughput(duration<double>(steady_clock::now() - read_start).count(), nr_bytes);
+}
+
+void CachingFileHandle::RecordReadThroughput(double total_seconds, idx_t bytes) {
+	if (IsRemoteFile() || !(total_seconds > 0)) {
+		return;
+	}
+	throughput_estimator.AddSample(total_seconds, bytes);
 }
 
 idx_t CachingFileHandle::SeekPosition() {

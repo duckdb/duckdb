@@ -98,8 +98,9 @@ AtUnit <- VersionAtUnit / TimestampAtUnit
 VersionAtUnit <- 'VERSION'
 TimestampAtUnit <- 'TIMESTAMP'
 
-JoinClause <- RegularJoinClause / JoinWithoutOnClause
+JoinClause <- JoinByClause / RegularJoinClause / JoinWithoutOnClause
 RegularJoinClause <- Asof? JoinType? 'JOIN' TableRef JoinQualifier
+JoinByClause <- 'JOIN' 'BY' Parens('TYPE' ColLabel) TableRef JoinQualifier
 Asof <- 'ASOF'
 JoinWithoutOnClause <- JoinPrefix 'JOIN' TableRef
 JoinQualifier <- OnClause / UsingClause

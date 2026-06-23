@@ -44,28 +44,6 @@ BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockMemory> block_memory_p, idx
 	D_ASSERT(!memory_p.expired());
 }
 
-bool BufferEvictionNode::CanUnload(BlockMemory &memory) {
-	if (handle_sequence_number != memory.GetEvictionSequenceNumber()) {
-		// handle was used in between
-		return false;
-	}
-	return memory.CanUnload();
-}
-
-shared_ptr<BlockMemory> BufferEvictionNode::TryGetBlockMemory() {
-	auto shared_memory_p = memory_p.lock();
-	if (!shared_memory_p) {
-		// The block memory has been destroyed.
-		return nullptr;
-	}
-	if (!CanUnload(*shared_memory_p)) {
-		// The memory handle was used in between.
-		return nullptr;
-	}
-	// The node is the latest node in the queue with this memory.
-	return shared_memory_p;
-}
-
 bool BufferEvictionNode::IsDeadNode(optional_idx debug_sleep_micros) {
 	auto shared_memory_p = memory_p.lock();
 	if (debug_sleep_micros.IsValid()) {
@@ -290,24 +268,29 @@ BufferPool::BufferPool(BlockAllocator &block_allocator, idx_t maximum_memory, bo
 BufferPool::~BufferPool() {
 }
 
-bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
+bool BufferPool::AddToEvictionQueue(BlockLock &lock, shared_ptr<BlockHandle> &handle) {
 	auto &memory = handle->GetMemory();
+	// Verify the caller passed this block's lock before we mutate any of its state.
+	// The block lock is held throughout: Unpin holds it; ConvertToPersistent acquires the
+	// (uncontended) lock of the freshly created block before calling.
+	memory.VerifyMutex(lock);
 	auto &queue = GetEvictionQueueForBlockMemory(memory);
 
-	// The block handle is locked during this operation (Unpin),
-	// or the block handle is still a local variable (ConvertToPersistent)
 	D_ASSERT(memory.GetReaders() == 0);
+	if (memory.HasLiveQueueEntry(lock)) {
+		// Count the previous live entry before bumping the sequence number. PurgeIteration
+		// reads sequence numbers without the block lock; bumping first could let it see the
+		// previous entry as stale and decrement dead_nodes before this matching increment.
+		queue.IncrementDeadNodes();
+	}
+
 	auto ts = memory.NextEvictionSequenceNumber();
 	if (track_eviction_timestamps) {
 		memory.SetLRUTimestamp(std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
 		                           .time_since_epoch()
 		                           .count());
 	}
-
-	if (ts != 1) {
-		// we add a newer version, i.e., we kill exactly one previous version
-		queue.IncrementDeadNodes();
-	}
+	memory.SetHasLiveQueueEntry(lock, true);
 
 	// Get the eviction queue for the block and add it
 	BufferEvictionNode node(handle->GetMemoryWeak(), ts);
@@ -492,7 +475,7 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 		}
 
 		// get a reference to the underlying block pointer
-		auto handle = node.TryGetBlockMemory();
+		auto handle = node.memory_p.lock();
 		if (debug_sleep_micros > 0) {
 			// Debug race conditions regarding the ownership of the BlockMemory.
 			// Note that for this to trigger we need at least one purge iteration with the setting active.
@@ -505,9 +488,17 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 
 		// we might be able to free this block: grab the mutex and check if we can free it
 		auto lock = handle->GetLock();
-		if (!node.CanUnload(*handle)) {
-			// something changed in the mean-time, bail out
+		if (node.handle_sequence_number != handle->GetEvictionSequenceNumber()) {
+			// A newer entry superseded this node: it was counted as dead when that entry was added.
 			DecrementDeadNodes();
+			continue;
+		}
+		// This node is the block's live queue entry, and we just dequeued it: the block no longer
+		// has an entry in the queue. Live entries are never counted as dead, so no decrement.
+		handle->SetHasLiveQueueEntry(lock, false);
+		if (!handle->CanUnload()) {
+			// The block cannot be unloaded right now (e.g. it is pinned). It gets a new queue
+			// entry when it is unpinned again.
 			continue;
 		}
 

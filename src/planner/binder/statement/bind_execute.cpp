@@ -3,11 +3,10 @@
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
-#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
@@ -27,7 +26,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto prepared = entry->second;
 	auto &named_param_map = prepared->unbound_statement->named_param_map;
 
-	PreparedStatement::VerifyParameters(stmt.named_values, named_param_map);
+	PreparedStatement::VerifyParameters(stmt.named_values, named_param_map, &context);
 
 	auto &mapped_named_values = stmt.named_values;
 	// bind any supplied parameters
@@ -59,6 +58,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		}
 		bind_values[pair.first] = std::move(parameter_data);
 	}
+	prepared->PopulateMissingParameterValues(context, bind_values);
 	unique_ptr<LogicalOperator> rebound_plan;
 
 	RebindQueryInfo rebind = RebindQueryInfo::DO_NOT_REBIND;
@@ -90,7 +90,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	result.names = prepared->names;
 	result.types = prepared->types;
 
-	prepared->Bind(std::move(bind_values));
+	prepared->Bind(context, bind_values);
 	if (rebound_plan) {
 		auto execute_plan = make_uniq<LogicalExecute>(std::move(prepared));
 		execute_plan->children.push_back(std::move(rebound_plan));

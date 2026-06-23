@@ -165,63 +165,25 @@ This script runs `extension/autocomplete/inline_grammar.py` twice:
 
 Each grammar rule that produces a parse result needs a corresponding transformer function to convert it into a DuckDB AST node (`SQLStatement`, `QueryNode`, `ParsedExpression`, etc.).
 
-### Checking Coverage
+### Generating Wrappers
 
-Run the coverage checker to see which rules need transformers:
-
-```bash
-python scripts/parser/generate_transformer.py
-```
-
-Output labels:
-
-| Label | Meaning |
-|-------|---------|
-| `[ FOUND ]` | Transformer implemented and registered |
-| `[ ENUM ]` | Handled as an enum mapping |
-| `[ NOT REG'D ]` | Transformer exists but not registered in factory |
-| `[ MISSING ]` | No transformer implementation |
-| `[ EXCLUDED ]` | Intentionally excluded (handled by matcher directly) |
-
-Use `-s` to skip `[ FOUND ]` and `[ ENUM ]` rules for a cleaner view:
+Run the grammar build script to regenerate parser artifacts and typed transformer wrappers:
 
 ```bash
-python scripts/parser/generate_transformer.py -s
+./scripts/parser/build_grammar.sh
 ```
 
-### Generating Stubs
+The transformer generator (`scripts/parser/generate_transformer.py`) reads `scripts/parser/grammar_types.yml` to map grammar rules to C++ return types. For supported rules, it updates:
 
-Use the `-g` flag to generate skeleton code for missing rules:
+| File | Generated Content |
+|------|-------------------|
+| `peg_transformer.hpp` | Internal wrapper declarations and typed body declarations |
+| `transform_generated.cpp` | Internal wrappers and generated registration table |
+| `matcher.cpp` | Matcher rule overrides |
 
-```bash
-python scripts/parser/generate_transformer.py -g
-```
+If a generated wrapper needs a hand-written semantic body, the script reports the exact C++ signature and a body stub. Add that implementation to the appropriate `transform_*.cpp` file, then rerun `build_grammar.sh`.
 
-For each missing rule, this generates three pieces of code:
-
-**1. Declaration** (add to `include/transformer/peg_transformer.hpp`):
-
-```cpp
-static unique_ptr<SQLStatement> TransformRuleName(PEGTransformer &transformer,
-                                                   optional_ptr<ParseResult> parse_result);
-```
-
-**2. Registration** (add to `transformer/peg_transformer_factory.cpp` inside the appropriate `Register...()` function):
-
-```cpp
-REGISTER_TRANSFORM(TransformRuleName);
-```
-
-**3. Implementation** (add to the corresponding `transformer/transform_*.cpp` file):
-
-```cpp
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformRuleName(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
-    throw NotImplementedException("TransformRuleName has not yet been implemented");
-}
-```
-
-**Note**: The generated return type (`unique_ptr<SQLStatement>`) is a placeholder. You must change it to match what the rule actually produces (e.g., `unique_ptr<QueryNode>`, `unique_ptr<SelectStatement>`, `QualifiedName`, `ShowType`, etc.).
+Run `scripts/parser/generate_transformer.py --write` directly only when regenerating transformer wrappers without rebuilding the inlined grammar.
 
 ### Transformer Implementation Pattern
 

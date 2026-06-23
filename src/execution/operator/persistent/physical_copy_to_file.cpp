@@ -12,11 +12,14 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
+#include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/main/settings.hpp"
 #include "fmt/format.h"
 
 #include <algorithm>
+#include <exception>
 #include <functional>
+#include <type_traits>
 
 namespace duckdb {
 
@@ -131,14 +134,277 @@ CreateColumnStatistics(const case_insensitive_map_t<case_insensitive_map_t<Value
 }
 
 struct GlobalFileState {
+public:
 	explicit GlobalFileState(unique_ptr<GlobalFunctionData> data_p, const string &path_p)
 	    : data(std::move(data_p)), path(path_p), num_batches(0) {
 	}
+
+public:
 	annotated_mutex lock;
 	unique_ptr<GlobalFunctionData> data;
 	const string path;
 	idx_t num_batches DUCKDB_GUARDED_BY(lock);
 };
+
+//===--------------------------------------------------------------------===//
+// Copy File Lifecycle
+//===--------------------------------------------------------------------===//
+struct PendingFileState {
+	string output_path;
+	optional_ptr<CopyToFileInfo> written_file_info;
+};
+
+class CopyFileLifecycleJob {
+public:
+	bool IsFinished() const {
+		return finished.load(std::memory_order_acquire);
+	}
+
+	void Complete() {
+		finished.store(true, std::memory_order_release);
+	}
+
+	void CompleteException(const std::exception_ptr &error_p) {
+		error = error_p;
+		Complete();
+	}
+
+	void Rethrow() const {
+		if (error) {
+			std::rethrow_exception(error);
+		}
+	}
+
+private:
+	atomic<bool> finished {false};
+	std::exception_ptr error;
+};
+
+class FileStateOpenJob : public CopyFileLifecycleJob {
+public:
+	void Complete(unique_ptr<GlobalFileState> file_state_p) {
+		file_state = std::move(file_state_p);
+		CopyFileLifecycleJob::Complete();
+	}
+
+	GlobalFileState &GetFileState() const {
+		D_ASSERT(IsFinished());
+		Rethrow();
+		D_ASSERT(file_state);
+		return *file_state;
+	}
+
+	unique_ptr<GlobalFileState> TakeFileState() {
+		D_ASSERT(IsFinished());
+		Rethrow();
+		return std::move(file_state);
+	}
+
+private:
+	unique_ptr<GlobalFileState> file_state;
+};
+
+struct PendingFileStateOpen {
+	PendingFileState pending_file_state;
+	shared_ptr<FileStateOpenJob> open_job;
+
+	explicit operator bool() const {
+		return open_job.get();
+	}
+};
+
+struct FileStateHandle {
+public:
+	FileStateHandle() = default;
+	FileStateHandle(FileStateHandle &&) = default;
+	FileStateHandle &operator=(FileStateHandle &&) = default;
+	FileStateHandle(const FileStateHandle &) = delete;
+	FileStateHandle &operator=(const FileStateHandle &) = delete;
+
+public:
+	bool HasFileState() const {
+		return open_job.get();
+	}
+
+	bool IsReady() const {
+		return open_job && open_job->IsFinished();
+	}
+
+	GlobalFileState &GetFileState() const {
+		D_ASSERT(open_job);
+		return open_job->GetFileState();
+	}
+
+	optional_ptr<GlobalFileState> GetFileStatePtr() const {
+		if (!IsReady()) {
+			return nullptr;
+		}
+		return open_job->GetFileState();
+	}
+
+	unique_ptr<GlobalFileState> TakeFileState() {
+		if (!open_job) {
+			return nullptr;
+		}
+		auto result = open_job->TakeFileState();
+		open_job.reset();
+		return result;
+	}
+
+	explicit operator bool() const {
+		return HasFileState();
+	}
+
+public:
+	shared_ptr<FileStateOpenJob> open_job;
+};
+
+template <class FUNC>
+class CopyFileLifecycleTask;
+
+class CopyFileLifecycleExecutor {
+public:
+	explicit CopyFileLifecycleExecutor(ClientContext &context_p)
+	    : context(context_p), executor(context_p, TaskSchedulerType::ASYNC) {
+		auto &scheduler = TaskScheduler::GetScheduler(context);
+		async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
+		auto regular_threads = NumericCast<idx_t>(scheduler.NumberOfThreads());
+		max_pending_tasks = MaxValue<idx_t>(1, (async_threads + regular_threads) * 4);
+	}
+
+public:
+	template <class FUNC>
+	void Schedule(shared_ptr<CopyFileLifecycleJob> job, FUNC &&task);
+	void WaitForJob(CopyFileLifecycleJob &job);
+	void WaitAll();
+	void FinishTask();
+	void PushError(const std::exception_ptr &error);
+
+private:
+	bool WorkOnTask(bool throw_error = true);
+	void WaitForTaskSlot();
+	void ThrowError();
+
+private:
+	ClientContext &context;
+	TaskExecutor executor;
+	idx_t async_threads;
+	idx_t max_pending_tasks;
+	atomic<idx_t> pending_tasks {0};
+	mutex error_lock;
+	std::exception_ptr error;
+};
+
+template <class FUNC>
+class CopyFileLifecycleTask : public Task {
+public:
+	CopyFileLifecycleTask(TaskExecutor &executor_p, CopyFileLifecycleExecutor &lifecycle_p,
+	                      shared_ptr<CopyFileLifecycleJob> job_p, FUNC task_p)
+	    : executor(executor_p), lifecycle(lifecycle_p), job(std::move(job_p)), task(std::move(task_p)) {
+	}
+
+public:
+	TaskExecutionResult Execute(TaskExecutionMode mode) override {
+		try {
+			task();
+			if (!job->IsFinished()) {
+				job->Complete();
+			}
+		} catch (...) {
+			auto error = std::current_exception();
+			job->CompleteException(error);
+			lifecycle.PushError(error);
+		}
+		lifecycle.FinishTask();
+		executor.FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+	string TaskType() const override {
+		return "CopyFileLifecycleTask";
+	}
+
+private:
+	TaskExecutor &executor;
+	CopyFileLifecycleExecutor &lifecycle;
+	shared_ptr<CopyFileLifecycleJob> job;
+	FUNC task;
+};
+
+template <class FUNC>
+void CopyFileLifecycleExecutor::Schedule(shared_ptr<CopyFileLifecycleJob> job, FUNC &&task) {
+	WaitForTaskSlot();
+	auto job_ref = job;
+	++pending_tasks;
+	try {
+		using TaskType = CopyFileLifecycleTask<typename std::decay<FUNC>::type>;
+		executor.ScheduleTask(make_uniq<TaskType>(executor, *this, std::move(job), std::forward<FUNC>(task)));
+	} catch (...) {
+		--pending_tasks;
+		throw;
+	}
+	if (async_threads == 0) {
+		WaitForJob(*job_ref);
+	} else {
+		WorkOnTask(false);
+	}
+}
+
+void CopyFileLifecycleExecutor::WaitForJob(CopyFileLifecycleJob &job) {
+	while (!job.IsFinished()) {
+		context.InterruptCheck();
+		if (!WorkOnTask()) {
+			TaskScheduler::YieldThread();
+		}
+	}
+	job.Rethrow();
+}
+
+void CopyFileLifecycleExecutor::WaitAll() {
+	executor.WorkOnTasks();
+	ThrowError();
+}
+
+void CopyFileLifecycleExecutor::FinishTask() {
+	--pending_tasks;
+}
+
+void CopyFileLifecycleExecutor::PushError(const std::exception_ptr &error_p) {
+	lock_guard<mutex> guard(error_lock);
+	if (!error) {
+		error = error_p;
+	}
+}
+
+bool CopyFileLifecycleExecutor::WorkOnTask(bool throw_error) {
+	shared_ptr<Task> task;
+	if (!executor.GetTask(task)) {
+		return false;
+	}
+	const auto result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+	D_ASSERT(result != TaskExecutionResult::TASK_BLOCKED);
+	task.reset();
+	if (throw_error) {
+		ThrowError();
+	}
+	return true;
+}
+
+void CopyFileLifecycleExecutor::WaitForTaskSlot() {
+	while (pending_tasks >= max_pending_tasks) {
+		context.InterruptCheck();
+		if (!WorkOnTask()) {
+			TaskScheduler::YieldThread();
+		}
+	}
+}
+
+void CopyFileLifecycleExecutor::ThrowError() {
+	lock_guard<mutex> guard(error_lock);
+	if (error) {
+		std::rethrow_exception(error);
+	}
+}
 
 static bool PhysicalCopyRotateNow(const PhysicalCopyToFile &op, GlobalFileState &global_state)
     DUCKDB_REQUIRES(global_state.lock);
@@ -154,20 +420,29 @@ public:
 	~CopyToFileGlobalState() override;
 
 public:
-	void Initialize();
+	void Initialize() DUCKDB_EXCLUDES(lock);
 
 	void CreateDir(const string &dir_path) DUCKDB_REQUIRES(lock);
-	unique_ptr<GlobalFileState> CreateFileStateLocked(string output_path = string(),
-	                                                  optional_ptr<const vector<Value>> partition_values = nullptr)
+	PendingFileState PrepareFileStateLocked(string output_path = string(),
+	                                        optional_ptr<const vector<Value>> partition_values = nullptr)
 	    DUCKDB_REQUIRES(lock);
-	unique_ptr<GlobalFileState> CreateFileState(string output_path = string(),
-	                                            optional_ptr<const vector<Value>> partition_values = nullptr)
+	PendingFileStateOpen CreateFileStateOpenLocked(FileStateHandle &file_state, string output_path = string(),
+	                                               optional_ptr<const vector<Value>> partition_values = nullptr)
+	    DUCKDB_REQUIRES(lock);
+	unique_ptr<GlobalFileState> InitializeFileState(PendingFileState pending_file_state) DUCKDB_EXCLUDES(lock);
+	void RegisterPrepareGlobalStateLocked(GlobalFileState &file_state) DUCKDB_REQUIRES(lock);
+	void ScheduleFileStateOpen(PendingFileStateOpen pending_file_state_open) DUCKDB_EXCLUDES(lock);
+	void RequestFileState(FileStateHandle &file_state, string output_path = string(),
+	                      optional_ptr<const vector<Value>> partition_values = nullptr) DUCKDB_EXCLUDES(lock);
+	GlobalFileState &EnsureFileStateReady(FileStateHandle &file_state,
+	                                      const std::function<void(FileStateHandle &)> &create_file_state_fun)
 	    DUCKDB_EXCLUDES(lock);
-	unique_ptr<GlobalFileState> FinalizeFileStateLocked(unique_ptr<GlobalFileState> file_state) DUCKDB_REQUIRES(lock);
-	void FinalizeFileState(unique_ptr<GlobalFileState> file_state) DUCKDB_EXCLUDES(lock);
+	FileStateHandle FinalizeFileStateLocked(FileStateHandle file_state) DUCKDB_REQUIRES(lock);
+	void FinalizeFileState(FileStateHandle file_state) DUCKDB_EXCLUDES(lock);
 
-	unique_ptr<GlobalFileState> TryFinalizeOwnedFileStateLocked() DUCKDB_REQUIRES(lock);
+	FileStateHandle TryFinalizeOwnedFileStateLocked() DUCKDB_REQUIRES(lock);
 	void TryFinalizeOwnedFileState() DUCKDB_EXCLUDES(lock);
+	void WaitForLifecycleTasks() DUCKDB_EXCLUDES(lock);
 
 private:
 	optional_ptr<CopyToFileInfo> AddFile(const string &file_name) DUCKDB_REQUIRES(lock);
@@ -188,13 +463,13 @@ public:
 	//! Therefore, we must delay deciding which file to flush; otherwise, parallel writes overshoot
 	//! All Prepare are done against this state
 	atomic<optional_ptr<GlobalFileState>> prepare_global_state;
-	unique_ptr<GlobalFileState> prepare_global_state_owned DUCKDB_GUARDED_BY(lock);
+	FileStateHandle prepare_global_state_owned DUCKDB_GUARDED_BY(lock);
 
 	//! The (current) global state
-	unique_ptr<GlobalFileState> global_state;
+	FileStateHandle global_state;
 	//! Lambda to create a new global file state
-	const std::function<unique_ptr<GlobalFileState>()> create_file_state_fun;
-	unordered_set<unique_ptr<GlobalFileState> *> creating_file_states DUCKDB_GUARDED_BY(lock);
+	const std::function<void(FileStateHandle &)> create_file_state_fun;
+	CopyFileLifecycleExecutor lifecycle_executor;
 
 	//! The final batch
 	mutable annotated_mutex last_batch_lock;
@@ -230,7 +505,7 @@ public:
 	CopyToFileGlobalState &gstate;
 
 	//! Global/local file state (unpartitioned write)
-	unique_ptr<GlobalFileState> global_file_state;
+	FileStateHandle global_file_state;
 	unique_ptr<LocalFunctionData> local_file_state;
 
 	//! Current append batch (unpartitioned write)
@@ -273,12 +548,12 @@ struct PartitionedCopyBatch {
 struct PartitionWriteInfo {
 	//! Serializes operations that need a complete partition writer run boundary.
 	annotated_mutex lock;
-	unique_ptr<GlobalFileState> file_state;
+	FileStateHandle file_state;
 	idx_t active_writes = 0;
 };
 
 struct PartitionFileStateReservation {
-	vector<unique_ptr<GlobalFileState>> files_to_finalize;
+	vector<FileStateHandle> files_to_finalize;
 	idx_t offset = 0;
 };
 
@@ -754,16 +1029,15 @@ public:
 	                                 unique_ptr<PartitionedCopyBatch> batch);
 	void FlushPartitionCollection(ExecutionContext &execution_context, InterruptState &interrupt_state,
 	                              DelayedPartitionFlush flush);
-	unique_ptr<GlobalFileState> CreatePartitionFileState(const vector<Value> &values,
-	                                                     FileCreationReason reason = FileCreationReason::NORMAL)
-	    DUCKDB_EXCLUDES(active_writes_lock);
+	void RequestPartitionFileState(FileStateHandle &file_state, const vector<Value> &values,
+	                               FileCreationReason reason = FileCreationReason::NORMAL)
+	    DUCKDB_EXCLUDES(active_writes_lock, copy_gstate.lock);
 	PartitionFileStateReservation
 	ReservePartitionFileStateLocked(const vector<Value> &values, FileCreationReason reason = FileCreationReason::NORMAL)
 	    DUCKDB_REQUIRES(active_writes_lock);
-	unique_ptr<GlobalFileState> CreatePartitionFileStateFromReservation(const vector<Value> &values, idx_t offset)
-	    DUCKDB_EXCLUDES(active_writes_lock);
-	void FinalizeActiveWrites() DUCKDB_EXCLUDES(active_writes_lock);
-	void FinalizeFileStates(vector<unique_ptr<GlobalFileState>> files_to_finalize) DUCKDB_EXCLUDES(active_writes_lock);
+	void FinalizeActiveWrites() DUCKDB_EXCLUDES(active_writes_lock, copy_gstate.lock);
+	void FinalizeFileStates(vector<FileStateHandle> files_to_finalize)
+	    DUCKDB_EXCLUDES(active_writes_lock, copy_gstate.lock);
 	string GetOrCreateDirectory(string path, const vector<Value> &values) DUCKDB_REQUIRES(copy_gstate.lock);
 
 private:
@@ -772,13 +1046,13 @@ private:
 	bool ShouldStopFlushing() const;
 	bool RequiresSerializedPartitionWrites() const;
 	void EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &write_info, const vector<Value> &values)
-	    DUCKDB_EXCLUDES(active_writes_lock);
+	    DUCKDB_EXCLUDES(active_writes_lock, copy_gstate.lock);
 	void EnsureFreshPartitionFileForRotation(PartitionWriteInfo &write_info, const vector<Value> &values)
-	    DUCKDB_EXCLUDES(active_writes_lock);
-	//! Swaps write_info.file_state after temporarily dropping copy_gstate.lock to initialize the replacement file.
+	    DUCKDB_EXCLUDES(active_writes_lock, copy_gstate.lock);
+	//! Swaps write_info.file_state after temporarily dropping copy_gstate.lock to request the replacement file.
 	//! Callers that can reach the swap path must serialize the full partition writer run for this write_info.
 	void EnsureFreshPartitionFile(PartitionWriteInfo &write_info, const vector<Value> &values,
-	                              FileCreationReason reason) DUCKDB_EXCLUDES(active_writes_lock);
+	                              FileCreationReason reason) DUCKDB_EXCLUDES(active_writes_lock, copy_gstate.lock);
 	template <class FUNC>
 	void WithSerializedPartitionWriteRun(PartitionWriteInfo &write_info, FUNC &&func) {
 		annotated_unique_lock<annotated_mutex> run_guard(write_info.lock, std::defer_lock);
@@ -1830,6 +2104,7 @@ public:
 		if (done) {
 			partitioned_copy.FinalizeActiveWrites();
 			partitioned_copy.copy_gstate.TryFinalizeOwnedFileState();
+			partitioned_copy.copy_gstate.WaitForLifecycleTasks();
 		}
 	}
 
@@ -1859,6 +2134,7 @@ void PartitionedCopy::Finalize(Pipeline &pipeline, Event &event, InterruptState 
 	if (should_finalize_writes) {
 		FinalizeActiveWrites();
 		copy_gstate.TryFinalizeOwnedFileState();
+		copy_gstate.WaitForLifecycleTasks();
 	}
 }
 
@@ -2055,9 +2331,10 @@ unique_ptr<PartitionedCopyBatch> PartitionedCopy::PreparePartitionBatch(const ve
                                                                         PartitionWriteInfo &write_info,
                                                                         PartitionedCopyCollection data) {
 	auto collection = PrepareCollectionForWrite(std::move(data));
-	const auto create_file_state_fun = [&]() {
-		return CreatePartitionFileState(values);
+	const auto create_file_state_fun = [&](FileStateHandle &file_state) {
+		RequestPartitionFileState(file_state, values);
 	};
+	create_file_state_fun(write_info.file_state);
 	auto [batch_analyzer, prepared_batch] =
 	    op.PrepareBatch(context, copy_gstate, write_info.file_state, create_file_state_fun, std::move(collection));
 	return make_uniq<PartitionedCopyBatch>(batch_analyzer, std::move(prepared_batch));
@@ -2078,8 +2355,8 @@ void PartitionedCopy::FlushPreparedPartitionRun(const vector<Value> &values, Par
 void PartitionedCopy::FlushPreparedPartitionBatch(const vector<Value> &values, PartitionWriteInfo &write_info,
                                                   unique_ptr<PartitionedCopyBatch> batch) {
 	D_ASSERT(batch);
-	const auto create_file_state_fun = [&]() {
-		return CreatePartitionFileState(values);
+	const auto create_file_state_fun = [&](FileStateHandle &file_state) {
+		RequestPartitionFileState(file_state, values);
 	};
 	op.FlushBatch(context, copy_gstate, write_info.file_state, create_file_state_fun, batch->batch_analyzer,
 	              std::move(batch->prepared_batch));
@@ -2179,15 +2456,56 @@ void PartitionedCopy::ReleasePartitionWriteInfo(PartitionWriteInfo &write_info) 
 	write_info.active_writes--;
 }
 
-unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileState(const vector<Value> &values,
-                                                                      FileCreationReason reason) {
+void PartitionedCopy::RequestPartitionFileState(FileStateHandle &file_state, const vector<Value> &values,
+                                                FileCreationReason reason) {
 	PartitionFileStateReservation reservation;
-	{
+	PendingFileStateOpen pending_file_state_open;
+	try {
 		annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
-		reservation = ReservePartitionFileStateLocked(values, reason);
+		{
+			annotated_lock_guard<annotated_mutex> global_guard(copy_gstate.lock);
+			if (file_state) {
+				return;
+			}
+			reservation = ReservePartitionFileStateLocked(values, reason);
+
+			auto &fs = FileSystem::GetFileSystem(context);
+			const auto hive_path = GetOrCreateDirectory(op.GetTrimmedPath(context, op.file_path), values);
+			auto full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, reservation.offset);
+			if (op.overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
+				// when appending, we first check if the file exists
+				while (fs.FileExists(full_path)) {
+					// file already exists - re-generate name
+					if (!op.filename_pattern.HasUUID()) {
+						throw InternalException("CopyOverwriteMode::COPY_APPEND without {uuid} - and file exists");
+					}
+					full_path =
+					    op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, reservation.offset);
+				}
+			}
+
+			pending_file_state_open = copy_gstate.CreateFileStateOpenLocked(file_state, std::move(full_path), values);
+			D_ASSERT(pending_file_state_open);
+		}
+	} catch (...) {
+		auto error = std::current_exception();
+		try {
+			FinalizeFileStates(std::move(reservation.files_to_finalize));
+		} catch (...) {
+		}
+		std::rethrow_exception(error);
 	}
-	FinalizeFileStates(std::move(reservation.files_to_finalize));
-	return CreatePartitionFileStateFromReservation(values, reservation.offset);
+
+	auto open_job = pending_file_state_open.open_job;
+	try {
+		FinalizeFileStates(std::move(reservation.files_to_finalize));
+		copy_gstate.ScheduleFileStateOpen(std::move(pending_file_state_open));
+	} catch (...) {
+		if (open_job && !open_job->IsFinished()) {
+			open_job->CompleteException(std::current_exception());
+		}
+		throw;
+	}
 }
 
 PartitionFileStateReservation PartitionedCopy::ReservePartitionFileStateLocked(const vector<Value> &values,
@@ -2222,30 +2540,6 @@ PartitionFileStateReservation PartitionedCopy::ReservePartitionFileStateLocked(c
 	return reservation;
 }
 
-unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileStateFromReservation(const vector<Value> &values,
-                                                                                     idx_t offset) {
-	// The reservation/eviction decision has already been made under active_writes_lock. This section only
-	// serializes global file bookkeeping: directory tracking, filename registration, and writer initialization.
-	annotated_lock_guard<annotated_mutex> guard(copy_gstate.lock);
-
-	// Create a writer for the current file
-	auto &fs = FileSystem::GetFileSystem(context);
-	const auto hive_path = GetOrCreateDirectory(op.GetTrimmedPath(context, op.file_path), values);
-	auto full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
-	if (op.overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
-		// when appending, we first check if the file exists
-		while (fs.FileExists(full_path)) {
-			// file already exists - re-generate name
-			if (!op.filename_pattern.HasUUID()) {
-				throw InternalException("CopyOverwriteMode::COPY_APPEND without {uuid} - and file exists");
-			}
-			full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
-		}
-	}
-	// Initialize write
-	return copy_gstate.CreateFileStateLocked(full_path, values);
-}
-
 void PartitionedCopy::EnsureFreshPartitionFileForSortedRun(PartitionWriteInfo &write_info,
                                                            const vector<Value> &values) {
 	if (op.order_columns.empty()) {
@@ -2266,13 +2560,18 @@ void PartitionedCopy::EnsureFreshPartitionFile(PartitionWriteInfo &write_info, c
 	D_ASSERT(reason == FileCreationReason::SORTED_RUN_BOUNDARY || reason == FileCreationReason::ROTATION);
 	D_ASSERT(RequiresSerializedPartitionWrites());
 
-	optional_ptr<GlobalFileState> old_file_state_ptr;
+	if (!write_info.file_state) {
+		return;
+	}
+	auto &old_file_state_ref = copy_gstate.EnsureFileStateReady(
+	    write_info.file_state, [&](FileStateHandle &file_state) { RequestPartitionFileState(file_state, values); });
+	optional_ptr<GlobalFileState> old_file_state_ptr = old_file_state_ref;
 	{
 		annotated_lock_guard<annotated_mutex> global_guard(copy_gstate.lock);
 		if (!write_info.file_state) {
 			return;
 		}
-		old_file_state_ptr = write_info.file_state.get();
+		D_ASSERT(RefersToSameObject(*old_file_state_ptr.get(), write_info.file_state.GetFileState()));
 		annotated_lock_guard<annotated_mutex> file_guard(old_file_state_ptr->lock);
 		if (reason == FileCreationReason::SORTED_RUN_BOUNDARY && old_file_state_ptr->num_batches == 0) {
 			return;
@@ -2282,18 +2581,20 @@ void PartitionedCopy::EnsureFreshPartitionFile(PartitionWriteInfo &write_info, c
 		}
 	}
 
-	auto new_file_state = CreatePartitionFileState(values, reason);
+	FileStateHandle new_file_state;
+	RequestPartitionFileState(new_file_state, values, reason);
 
-	unique_ptr<GlobalFileState> old_file_state;
+	FileStateHandle old_file_state;
 	{
 		annotated_lock_guard<annotated_mutex> global_guard(copy_gstate.lock);
 		D_ASSERT(write_info.file_state);
-		D_ASSERT(RefersToSameObject(*old_file_state_ptr.get(), *write_info.file_state));
-		annotated_lock_guard<annotated_mutex> file_guard(write_info.file_state->lock);
+		auto &current_file_state = write_info.file_state.GetFileState();
+		D_ASSERT(RefersToSameObject(*old_file_state_ptr.get(), current_file_state));
+		annotated_lock_guard<annotated_mutex> file_guard(current_file_state.lock);
 		if (reason == FileCreationReason::SORTED_RUN_BOUNDARY) {
-			D_ASSERT(write_info.file_state->num_batches > 0);
+			D_ASSERT(current_file_state.num_batches > 0);
 		} else {
-			D_ASSERT(PhysicalCopyRotateNow(op, *write_info.file_state));
+			D_ASSERT(PhysicalCopyRotateNow(op, current_file_state));
 		}
 
 		old_file_state = std::move(write_info.file_state);
@@ -2304,7 +2605,7 @@ void PartitionedCopy::EnsureFreshPartitionFile(PartitionWriteInfo &write_info, c
 }
 
 void PartitionedCopy::FinalizeActiveWrites() {
-	vector<unique_ptr<GlobalFileState>> files_to_finalize;
+	vector<FileStateHandle> files_to_finalize;
 	{
 		annotated_lock_guard<annotated_mutex> aw_guard(active_writes_lock);
 		for (auto &entry : active_writes) {
@@ -2315,7 +2616,7 @@ void PartitionedCopy::FinalizeActiveWrites() {
 	FinalizeFileStates(std::move(files_to_finalize));
 }
 
-void PartitionedCopy::FinalizeFileStates(vector<unique_ptr<GlobalFileState>> files_to_finalize) {
+void PartitionedCopy::FinalizeFileStates(vector<FileStateHandle> files_to_finalize) {
 	for (auto &file_state : files_to_finalize) {
 		if (file_state) {
 			copy_gstate.FinalizeFileState(std::move(file_state));
@@ -2350,11 +2651,15 @@ string PartitionedCopy::GetOrCreateDirectory(string path, const vector<Value> &v
 //===--------------------------------------------------------------------===//
 CopyToFileGlobalState::CopyToFileGlobalState(const PhysicalCopyToFile &op_p, ClientContext &context_p)
     : op(op_p), context(context_p), initialized(false), finalized(false), prepare_global_state(nullptr),
-      create_file_state_fun([&]() DUCKDB_EXCLUDES(lock) { return CreateFileState(); }), rows_copied(0),
-      last_file_offset(0) {
+      create_file_state_fun([&](FileStateHandle &file_state) DUCKDB_EXCLUDES(lock) { RequestFileState(file_state); }),
+      lifecycle_executor(context_p), rows_copied(0), last_file_offset(0) {
 }
 
 CopyToFileGlobalState::~CopyToFileGlobalState() {
+	try {
+		WaitForLifecycleTasks();
+	} catch (...) {
+	}
 	if (!initialized || finalized || created_files.empty()) {
 		return;
 	}
@@ -2374,12 +2679,7 @@ void CopyToFileGlobalState::Initialize() {
 	if (initialized) {
 		return;
 	}
-	annotated_lock_guard<annotated_mutex> guard(lock);
-	if (initialized) {
-		return;
-	}
-	// initialize writing to the file
-	global_state = CreateFileStateLocked(op.file_path);
+	RequestFileState(global_state, op.file_path);
 	initialized = true;
 }
 
@@ -2395,8 +2695,8 @@ void CopyToFileGlobalState::CreateDir(const string &dir_path) {
 	created_directories.insert(dir_path);
 }
 
-unique_ptr<GlobalFileState>
-CopyToFileGlobalState::CreateFileStateLocked(string output_path, optional_ptr<const vector<Value>> partition_values) {
+PendingFileState CopyToFileGlobalState::PrepareFileStateLocked(string output_path,
+                                                               optional_ptr<const vector<Value>> partition_values) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	if (output_path.empty()) {
 		output_path = op.filename_pattern.CreateFilename(fs, op.file_path, op.file_extension, last_file_offset++);
@@ -2408,10 +2708,7 @@ CopyToFileGlobalState::CreateFileStateLocked(string output_path, optional_ptr<co
 		written_file_info = AddFile(output_path);
 	}
 
-	auto data = op.function.copy_to_initialize_global(context, *op.bind_data, output_path);
 	if (written_file_info) {
-		op.function.copy_to_get_written_statistics(context, *op.bind_data, *data, *written_file_info->file_stats);
-
 		if (!op.partition_columns.empty()) {
 			D_ASSERT(partition_values);
 			vector<Value> partition_keys;
@@ -2427,22 +2724,95 @@ CopyToFileGlobalState::CreateFileStateLocked(string output_path, optional_ptr<co
 			               std::move(partition_values_as_varchar));
 		}
 	}
+	return {std::move(output_path), written_file_info};
+}
 
+unique_ptr<GlobalFileState> CopyToFileGlobalState::InitializeFileState(PendingFileState pending_file_state) {
+	auto data = op.function.copy_to_initialize_global(context, *op.bind_data, pending_file_state.output_path);
+	if (pending_file_state.written_file_info) {
+		op.function.copy_to_get_written_statistics(context, *op.bind_data, *data,
+		                                           *pending_file_state.written_file_info->file_stats);
+	}
 	if (op.function.initialize_operator) {
 		op.function.initialize_operator(*data, op);
 	}
 
-	auto res = make_uniq<GlobalFileState>(std::move(data), output_path);
-	if (!prepare_global_state.load(std::memory_order_acquire)) {
-		prepare_global_state.store(res, std::memory_order_release);
-	}
-	return res;
+	return make_uniq<GlobalFileState>(std::move(data), pending_file_state.output_path);
 }
 
-unique_ptr<GlobalFileState> CopyToFileGlobalState::CreateFileState(string output_path,
-                                                                   optional_ptr<const vector<Value>> partition_values) {
-	annotated_lock_guard<annotated_mutex> guard(lock);
-	return CreateFileStateLocked(std::move(output_path), partition_values);
+void CopyToFileGlobalState::RegisterPrepareGlobalStateLocked(GlobalFileState &file_state) {
+	if (!prepare_global_state.load(std::memory_order_acquire)) {
+		prepare_global_state.store(file_state, std::memory_order_release);
+	}
+}
+
+PendingFileStateOpen
+CopyToFileGlobalState::CreateFileStateOpenLocked(FileStateHandle &file_state, string output_path,
+                                                 optional_ptr<const vector<Value>> partition_values) {
+	if (file_state.HasFileState()) {
+		return PendingFileStateOpen();
+	}
+	PendingFileStateOpen result;
+	result.pending_file_state = PrepareFileStateLocked(std::move(output_path), partition_values);
+	result.open_job = make_shared_ptr<FileStateOpenJob>();
+	file_state.open_job = result.open_job;
+	return result;
+}
+
+void CopyToFileGlobalState::ScheduleFileStateOpen(PendingFileStateOpen pending_file_state_open) {
+	D_ASSERT(pending_file_state_open);
+	auto open_job = pending_file_state_open.open_job;
+	try {
+		lifecycle_executor.Schedule(
+		    open_job,
+		    [this, open_job, pending_file_state = std::move(pending_file_state_open.pending_file_state)]() mutable {
+			    open_job->Complete(InitializeFileState(std::move(pending_file_state)));
+		    });
+	} catch (...) {
+		if (!open_job->IsFinished()) {
+			open_job->CompleteException(std::current_exception());
+		}
+		throw;
+	}
+}
+
+void CopyToFileGlobalState::RequestFileState(FileStateHandle &file_state, string output_path,
+                                             optional_ptr<const vector<Value>> partition_values) {
+	PendingFileStateOpen pending_file_state_open;
+	{
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		pending_file_state_open = CreateFileStateOpenLocked(file_state, std::move(output_path), partition_values);
+	}
+	if (pending_file_state_open) {
+		ScheduleFileStateOpen(std::move(pending_file_state_open));
+	}
+}
+
+GlobalFileState &
+CopyToFileGlobalState::EnsureFileStateReady(FileStateHandle &file_state,
+                                            const std::function<void(FileStateHandle &)> &create_file_state_fun) {
+	while (true) {
+		shared_ptr<FileStateOpenJob> open_job;
+		{
+			annotated_lock_guard<annotated_mutex> guard(lock);
+			if (file_state.HasFileState()) {
+				open_job = file_state.open_job;
+			}
+		}
+		if (!open_job) {
+			create_file_state_fun(file_state);
+			continue;
+		}
+		lifecycle_executor.WaitForJob(*open_job);
+		{
+			annotated_lock_guard<annotated_mutex> guard(lock);
+			if (file_state.open_job == open_job) {
+				auto &result = open_job->GetFileState();
+				RegisterPrepareGlobalStateLocked(result);
+				return result;
+			}
+		}
+	}
 }
 
 optional_ptr<CopyToFileInfo> CopyToFileGlobalState::AddFile(const string &file_name) {
@@ -2456,41 +2826,68 @@ optional_ptr<CopyToFileInfo> CopyToFileGlobalState::AddFile(const string &file_n
 	return result;
 }
 
-unique_ptr<GlobalFileState> CopyToFileGlobalState::FinalizeFileStateLocked(unique_ptr<GlobalFileState> file_state) {
+FileStateHandle CopyToFileGlobalState::FinalizeFileStateLocked(FileStateHandle file_state) {
 	auto prepare_state = prepare_global_state.load(std::memory_order_acquire);
-	if (prepare_state && RefersToSameObject(*prepare_state.get(), *file_state)) {
+	if (prepare_state && RefersToSameObject(*prepare_state.get(), file_state.GetFileState())) {
 		prepare_global_state_owned = std::move(file_state);
-		return nullptr;
+		return FileStateHandle();
 	}
 	return file_state;
 }
 
-void CopyToFileGlobalState::FinalizeFileState(unique_ptr<GlobalFileState> file_state) {
+void CopyToFileGlobalState::FinalizeFileState(FileStateHandle file_state) {
+	if (!file_state) {
+		return;
+	}
+	lifecycle_executor.WaitForJob(*file_state.open_job);
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		file_state = FinalizeFileStateLocked(std::move(file_state));
 	}
 	if (file_state) {
-		op.function.copy_to_finalize(context, *op.bind_data, *file_state->data);
+		auto finalize_job = make_shared_ptr<CopyFileLifecycleJob>();
+		auto state = file_state.TakeFileState();
+		auto state_holder = make_shared_ptr<unique_ptr<GlobalFileState>>(std::move(state));
+		try {
+			lifecycle_executor.Schedule(finalize_job, [this, finalize_job, state_holder]() mutable {
+				auto state = std::move(*state_holder);
+				op.function.copy_to_finalize(context, *op.bind_data, *state->data);
+				finalize_job->Complete();
+			});
+		} catch (...) {
+			if (!finalize_job->IsFinished() && state_holder && *state_holder) {
+				try {
+					auto state = std::move(*state_holder);
+					op.function.copy_to_finalize(context, *op.bind_data, *state->data);
+				} catch (...) {
+				}
+			}
+			throw;
+		}
 	}
 }
 
-unique_ptr<GlobalFileState> CopyToFileGlobalState::TryFinalizeOwnedFileStateLocked() {
+FileStateHandle CopyToFileGlobalState::TryFinalizeOwnedFileStateLocked() {
 	if (prepare_global_state_owned) {
+		prepare_global_state.store(nullptr, std::memory_order_release);
 		return std::move(prepare_global_state_owned);
 	}
-	return nullptr;
+	return FileStateHandle();
 }
 
 void CopyToFileGlobalState::TryFinalizeOwnedFileState() {
-	unique_ptr<GlobalFileState> file_state;
+	FileStateHandle file_state;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		file_state = TryFinalizeOwnedFileStateLocked();
 	}
 	if (file_state) {
-		op.function.copy_to_finalize(context, *op.bind_data, *file_state->data);
+		FinalizeFileState(std::move(file_state));
 	}
+}
+
+void CopyToFileGlobalState::WaitForLifecycleTasks() {
+	lifecycle_executor.WaitAll();
 }
 
 //===--------------------------------------------------------------------===//
@@ -2622,8 +3019,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 
 		auto state = make_uniq<CopyToFileGlobalState>(*this, context);
 		if (!partition_output && !per_thread_output && Rotate() && write_empty_file) {
-			annotated_lock_guard<annotated_mutex> guard(state->lock);
-			state->global_state = state->CreateFileStateLocked();
+			state->RequestFileState(state->global_state);
 		}
 
 		if (partition_output) {
@@ -2661,6 +3057,15 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
+	if (per_thread_output) {
+		if (!lstate.global_file_state) {
+			gstate.create_file_state_fun(lstate.global_file_state);
+		}
+	} else {
+		gstate.create_file_state_fun(gstate.global_state);
+	}
+	auto &file_state = per_thread_output ? lstate.global_file_state : gstate.global_state;
+
 	if (!lstate.batch) {
 		lstate.batch = make_uniq<ColumnDataCollection>(context.client, expected_types);
 		lstate.batch->InitializeAppend(lstate.batch_append_state);
@@ -2670,9 +3075,7 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	const CopyFunctionBatchAnalyzer batch_analyzer(*lstate.batch, batch_size, batch_size_bytes);
 	if (batch_analyzer.MeetsFlushCriteria()) {
 		lstate.batch_append_state.current_chunk_state.handles.clear();
-		auto &file_state_ptr = per_thread_output ? lstate.global_file_state : gstate.global_state;
-		PrepareAndFlushBatch(context.client, gstate, file_state_ptr, gstate.create_file_state_fun,
-		                     std::move(lstate.batch));
+		PrepareAndFlushBatch(context.client, gstate, file_state, gstate.create_file_state_fun, std::move(lstate.batch));
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -2762,35 +3165,35 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 		// already happened in combine
 		if (NumericCast<int64_t>(gstate.rows_copied.load()) == 0 && sink_state != nullptr) {
 			// no rows from source, write schema to file
-			annotated_lock_guard<annotated_mutex> guard(gstate.lock);
-			gstate.global_state = gstate.CreateFileStateLocked();
+			gstate.RequestFileState(gstate.global_state);
 		}
 	}
 
 	if (gstate.global_state) {
 		gstate.FinalizeFileState(std::move(gstate.global_state));
-
-		if (use_tmp_file) {
-			D_ASSERT(!per_thread_output);
-			D_ASSERT(!partition_output);
-			D_ASSERT(!file_size_bytes.IsValid());
-			D_ASSERT(!Rotate());
-			MoveTmpFile(context, file_path);
-		}
 	}
 
 	gstate.TryFinalizeOwnedFileState();
+	gstate.WaitForLifecycleTasks();
+
+	if (use_tmp_file) {
+		D_ASSERT(!per_thread_output);
+		D_ASSERT(!partition_output);
+		D_ASSERT(!file_size_bytes.IsValid());
+		D_ASSERT(!Rotate());
+		MoveTmpFile(context, file_path);
+	}
 
 	return SinkFinalizeType::READY;
 }
 
 void PhysicalCopyToFile::PrepareAndFlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
-                                              unique_ptr<GlobalFileState> &file_state_ptr,
-                                              const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+                                              FileStateHandle &file_state,
+                                              const std::function<void(FileStateHandle &)> &create_file_state_fun,
                                               unique_ptr<ColumnDataCollection> batch) const {
 	auto [batch_analyzer, prepared_batch] =
-	    PrepareBatch(context, gstate_p, file_state_ptr, create_file_state_fun, std::move(batch));
-	FlushBatch(context, gstate_p, file_state_ptr, create_file_state_fun, batch_analyzer, std::move(prepared_batch));
+	    PrepareBatch(context, gstate_p, file_state, create_file_state_fun, std::move(batch));
+	FlushBatch(context, gstate_p, file_state, create_file_state_fun, batch_analyzer, std::move(prepared_batch));
 }
 
 //===--------------------------------------------------------------------===//
@@ -2834,59 +3237,9 @@ static void FlushLegacyCopyBatch(ClientContext &context, const CopyFunction &fun
 	function.copy_to_combine(execution_context, bind_data, gstate, *local_state);
 }
 
-//===--------------------------------------------------------------------===//
-// Prepare/Flush Batch
-//===--------------------------------------------------------------------===//
-static void EnsureFileState(CopyToFileGlobalState &gstate, unique_ptr<GlobalFileState> &file_state_ptr,
-                            const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun) {
-	auto file_state_key = &file_state_ptr;
-	while (true) {
-		bool create_file_state = false;
-		{
-			annotated_lock_guard<annotated_mutex> guard(gstate.lock);
-			if (file_state_ptr) {
-				return;
-			}
-			if (gstate.creating_file_states.insert(file_state_key).second) {
-				create_file_state = true;
-			}
-		}
-
-		if (!create_file_state) {
-			TaskScheduler::YieldThread();
-			continue;
-		}
-
-		unique_ptr<GlobalFileState> new_file_state;
-		try {
-			new_file_state = create_file_state_fun();
-		} catch (...) {
-			annotated_lock_guard<annotated_mutex> guard(gstate.lock);
-			gstate.creating_file_states.erase(file_state_key);
-			throw;
-		}
-
-		unique_ptr<GlobalFileState> unused_file_state;
-		{
-			annotated_lock_guard<annotated_mutex> guard(gstate.lock);
-			if (!file_state_ptr) {
-				file_state_ptr = std::move(new_file_state);
-			} else {
-				unused_file_state = std::move(new_file_state);
-			}
-			gstate.creating_file_states.erase(file_state_key);
-		}
-		if (unused_file_state) {
-			gstate.FinalizeFileState(std::move(unused_file_state));
-		}
-		return;
-	}
-}
-
 pair<const CopyFunctionBatchAnalyzer, unique_ptr<PreparedBatchData>>
-PhysicalCopyToFile::PrepareBatch(ClientContext &context, GlobalSinkState &gstate_p,
-                                 unique_ptr<GlobalFileState> &file_state_ptr,
-                                 const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+PhysicalCopyToFile::PrepareBatch(ClientContext &context, GlobalSinkState &gstate_p, FileStateHandle &file_state,
+                                 const std::function<void(FileStateHandle &)> &create_file_state_fun,
                                  unique_ptr<ColumnDataCollection> batch) const {
 	auto &gstate = gstate_p.Cast<CopyToFileGlobalState>();
 	const CopyFunctionBatchAnalyzer batch_analyzer(*batch, batch_size, batch_size_bytes);
@@ -2898,8 +3251,7 @@ PhysicalCopyToFile::PrepareBatch(ClientContext &context, GlobalSinkState &gstate
 	// Ensure we have a global state for prepares
 	auto prepare_global_state = gstate.prepare_global_state.load(std::memory_order_acquire);
 	if (!prepare_global_state) {
-		D_ASSERT(!file_state_ptr);
-		EnsureFileState(gstate, file_state_ptr, create_file_state_fun);
+		gstate.EnsureFileStateReady(file_state, create_file_state_fun);
 		prepare_global_state = gstate.prepare_global_state.load(std::memory_order_acquire);
 		D_ASSERT(prepare_global_state);
 	}
@@ -2908,48 +3260,49 @@ PhysicalCopyToFile::PrepareBatch(ClientContext &context, GlobalSinkState &gstate
 	return {batch_analyzer, function.prepare_batch(context, *bind_data, *prepare_global_state->data, std::move(batch))};
 }
 
-void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
-                                    unique_ptr<GlobalFileState> &file_state_ptr,
-                                    const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gstate_p, FileStateHandle &file_state,
+                                    const std::function<void(FileStateHandle &)> &create_file_state_fun,
                                     const CopyFunctionBatchAnalyzer &batch_analyzer,
                                     unique_ptr<PreparedBatchData> prepared_batch) const {
 	auto &gstate = gstate_p.Cast<CopyToFileGlobalState>();
 
 	while (true) {
-		EnsureFileState(gstate, file_state_ptr, create_file_state_fun);
+		gstate.EnsureFileStateReady(file_state, create_file_state_fun);
 
 		// Decide which file to flush to
 		annotated_unique_lock<annotated_mutex> global_guard(gstate.lock);
-		if (!file_state_ptr) {
+		// Another thread may have rotated the file state since EnsureFileStateReady, so re-check readiness
+		if (!file_state.IsReady()) {
 			global_guard.unlock();
 			TaskScheduler::YieldThread();
 			continue;
 		}
 
-		annotated_unique_lock<annotated_mutex> file_guard(file_state_ptr->lock);
-		if (PhysicalCopyRotateNow(*this, *file_state_ptr)) {
+		auto &ready_file_state = file_state.GetFileState();
+		annotated_unique_lock<annotated_mutex> file_guard(ready_file_state.lock);
+		if (PhysicalCopyRotateNow(*this, ready_file_state)) {
 			// Global state must be rotated. Move to local scope, create an new one, and immediately release global lock
-			auto owned_file_state = std::move(file_state_ptr);
+			auto owned_file_state = std::move(file_state);
 			file_guard.unlock();
 			global_guard.unlock();
 
-			EnsureFileState(gstate, file_state_ptr, create_file_state_fun);
+			gstate.EnsureFileStateReady(file_state, create_file_state_fun);
 
 			// Finalize this file!
 			gstate.FinalizeFileState(std::move(owned_file_state));
 		} else {
 			global_guard.unlock();
-			file_state_ptr->num_batches++;
+			ready_file_state.num_batches++;
 
 			DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalCopyToFile", "FlushBatch",
-			           {{"file", file_state_ptr->path},
+			           {{"file", ready_file_state.path},
 			            {"rows", to_string(batch_analyzer.current_batch_size)},
 			            {"size", to_string(batch_analyzer.current_batch_size_bytes)},
 			            {"reason", EnumUtil::ToString(batch_analyzer.ToReason())}});
 			if (UsesLegacyCopyBatchAPI(function)) {
-				FlushLegacyCopyBatch(context, function, *bind_data, *file_state_ptr->data, *prepared_batch);
+				FlushLegacyCopyBatch(context, function, *bind_data, *ready_file_state.data, *prepared_batch);
 			} else {
-				function.flush_batch(context, *bind_data, *file_state_ptr->data, *prepared_batch);
+				function.flush_batch(context, *bind_data, *ready_file_state.data, *prepared_batch);
 			}
 			break;
 		}
@@ -2978,6 +3331,7 @@ unique_ptr<GlobalSourceState> PhysicalCopyToFile::GetGlobalSourceState(ClientCon
 SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                      OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<CopyToFileGlobalState>();
+	gstate.WaitForLifecycleTasks();
 	annotated_lock_guard<annotated_mutex> global_guard(gstate.lock);
 	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
 		auto &source_state = input.global_state.Cast<CopyToFileGlobalSourceState>();

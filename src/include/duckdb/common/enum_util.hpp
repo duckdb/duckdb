@@ -166,6 +166,8 @@ enum class DatePartSpecifier : uint8_t;
 
 enum class DebugInitialize : uint8_t;
 
+enum class DebugOrderVerification : uint8_t;
+
 enum class DebugStatementVerification : uint8_t;
 
 enum class DebugVectorVerification : uint8_t;
@@ -183,6 +185,8 @@ enum class DeprecatedIndexType : uint8_t;
 enum class DeprecatedUsingKeySyntax : uint8_t;
 
 enum class DestroyBufferUpon : uint8_t;
+
+enum class DialectCompatibilityMode : uint8_t;
 
 enum class DistinctCountSource : uint8_t;
 
@@ -488,6 +492,8 @@ enum class TableColumnType : uint8_t;
 
 enum class TableFilterType : uint8_t;
 
+enum class TableFunctionIdentifierConversion : uint8_t;
+
 enum class TableFunctionParallelism : uint8_t;
 
 enum class TablePartitionInfo : uint8_t;
@@ -535,8 +541,6 @@ enum class VariantChildLookupMode : uint8_t;
 enum class VariantLogicalType : uint8_t;
 
 enum class VariantStatsShreddingState : uint8_t;
-
-enum class VariantValueType : uint8_t;
 
 enum class VectorBufferType : uint8_t;
 
@@ -759,6 +763,9 @@ template<>
 const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value);
 
 template<>
+const char* EnumUtil::ToChars<DebugOrderVerification>(DebugOrderVerification value);
+
+template<>
 const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value);
 
 template<>
@@ -784,6 +791,9 @@ const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax
 
 template<>
 const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
+
+template<>
+const char* EnumUtil::ToChars<DialectCompatibilityMode>(DialectCompatibilityMode value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctCountSource>(DistinctCountSource value);
@@ -1242,6 +1252,9 @@ template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value);
 
 template<>
+const char* EnumUtil::ToChars<TableFunctionIdentifierConversion>(TableFunctionIdentifierConversion value);
+
+template<>
 const char* EnumUtil::ToChars<TableFunctionParallelism>(TableFunctionParallelism value);
 
 template<>
@@ -1312,9 +1325,6 @@ const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value);
 
 template<>
 const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingState value);
-
-template<>
-const char* EnumUtil::ToChars<VariantValueType>(VariantValueType value);
 
 template<>
 const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value);
@@ -1546,6 +1556,9 @@ template<>
 DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value);
 
 template<>
+DebugOrderVerification EnumUtil::FromString<DebugOrderVerification>(const char *value);
+
+template<>
 DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value);
 
 template<>
@@ -1571,6 +1584,9 @@ DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const ch
 
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
+
+template<>
+DialectCompatibilityMode EnumUtil::FromString<DialectCompatibilityMode>(const char *value);
 
 template<>
 DistinctCountSource EnumUtil::FromString<DistinctCountSource>(const char *value);
@@ -2029,6 +2045,9 @@ template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value);
 
 template<>
+TableFunctionIdentifierConversion EnumUtil::FromString<TableFunctionIdentifierConversion>(const char *value);
+
+template<>
 TableFunctionParallelism EnumUtil::FromString<TableFunctionParallelism>(const char *value);
 
 template<>
@@ -2099,9 +2118,6 @@ VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value);
 
 template<>
 VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(const char *value);
-
-template<>
-VariantValueType EnumUtil::FromString<VariantValueType>(const char *value);
 
 template<>
 VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);

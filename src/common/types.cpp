@@ -411,8 +411,12 @@ string LogicalType::ToString() const {
 		if (!type_info_) {
 			return "STRUCT";
 		}
-		auto is_unnamed = StructType::IsUnnamed(*this);
 		auto &child_types = StructType::GetChildTypes(*this);
+		if (child_types.empty()) {
+			return "STRUCT";
+		}
+
+		auto is_unnamed = StructType::IsUnnamed(*this);
 		string ret = "STRUCT(";
 		for (size_t i = 0; i < child_types.size(); i++) {
 			if (is_unnamed) {
@@ -688,7 +692,12 @@ bool LogicalType::IsComplete() const {
 		D_ASSERT(type.AuxInfo());
 		switch (type.AuxInfo()->type) {
 		case ExtraTypeInfoType::STRUCT_TYPE_INFO:
-			return type.AuxInfo()->Cast<StructTypeInfo>().child_types.empty(); // Cannot be empty
+			// empty STRUCTs are complete (children, if any, are checked by recursion)
+			// UNION/VARIANT (which also use STRUCT_TYPE_INFO) cannot be empty
+			if (type.id() == LogicalTypeId::STRUCT) {
+				return false;
+			}
+			return type.AuxInfo()->Cast<StructTypeInfo>().child_types.empty();
 		case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
 			return DecimalType::GetWidth(type) >= 1 && DecimalType::GetWidth(type) <= Decimal::MAX_WIDTH_DECIMAL &&
 			       DecimalType::GetScale(type) <= DecimalType::GetWidth(type);

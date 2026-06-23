@@ -3,7 +3,7 @@
 
 namespace duckdb {
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSchemaStmt(PEGTransformer &transformer,
-                                                                             const bool &if_not_exists,
+                                                                             const optional<bool> &if_not_exists,
                                                                              const QualifiedName &qualified_name) {
 	if (!qualified_name.catalog.empty()) {
 		throw ParserException("CREATE SCHEMA too many dots: expected \"catalog.schema\" or \"schema\"");

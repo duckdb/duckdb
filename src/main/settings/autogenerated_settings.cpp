@@ -38,6 +38,9 @@ Value AccessModeSetting::GetSetting(const ClientContext &context) {
 // Allow Parser Override Extension
 //===----------------------------------------------------------------------===//
 void AllowParserOverrideExtensionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("allow_parser_override_extension setting cannot be NULL");
+	}
 	EnumUtil::FromString<AllowParserOverride>(StringValue::Get(parameter));
 }
 
@@ -45,6 +48,9 @@ void AllowParserOverrideExtensionSetting::OnSet(SettingCallbackInfo &info, Value
 // Arrow Output Version
 //===----------------------------------------------------------------------===//
 void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("arrow_output_version setting cannot be NULL");
+	}
 	EnumUtil::FromString<ArrowFormatVersion>(StringValue::Get(parameter));
 }
 
@@ -52,6 +58,9 @@ void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &paramete
 // Checkpoint On Detach
 //===----------------------------------------------------------------------===//
 void CheckpointOnDetachSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("checkpoint_on_detach setting cannot be NULL");
+	}
 	EnumUtil::FromString<CheckpointOnDetach>(StringValue::Get(parameter));
 }
 
@@ -74,13 +83,36 @@ Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {
 // Debug Checkpoint Abort
 //===----------------------------------------------------------------------===//
 void DebugCheckpointAbortSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_checkpoint_abort setting cannot be NULL");
+	}
 	EnumUtil::FromString<CheckpointAbort>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Debug Order Verification
+//===----------------------------------------------------------------------===//
+void DebugOrderVerificationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto str_input = StringUtil::Upper(input.GetValue<string>());
+	config.options.debug_order_verification = EnumUtil::FromString<DebugOrderVerification>(str_input);
+}
+
+void DebugOrderVerificationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.debug_order_verification = DBConfigOptions().debug_order_verification;
+}
+
+Value DebugOrderVerificationSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::Lower(EnumUtil::ToString(config.options.debug_order_verification)));
 }
 
 //===----------------------------------------------------------------------===//
 // Debug Physical Table Scan Execution Strategy
 //===----------------------------------------------------------------------===//
 void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_physical_table_scan_execution_strategy setting cannot be NULL");
+	}
 	EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(StringValue::Get(parameter));
 }
 
@@ -88,6 +120,9 @@ void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &
 // Debug Verify Statement
 //===----------------------------------------------------------------------===//
 void DebugVerifyStatementSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_verify_statement setting cannot be NULL");
+	}
 	EnumUtil::FromString<DebugStatementVerification>(StringValue::Get(parameter));
 }
 
@@ -95,6 +130,9 @@ void DebugVerifyStatementSetting::OnSet(SettingCallbackInfo &info, Value &parame
 // Debug Verify Vector
 //===----------------------------------------------------------------------===//
 void DebugVerifyVectorSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_verify_vector setting cannot be NULL");
+	}
 	EnumUtil::FromString<DebugVectorVerification>(StringValue::Get(parameter));
 }
 
@@ -102,6 +140,9 @@ void DebugVerifyVectorSetting::OnSet(SettingCallbackInfo &info, Value &parameter
 // Debug Window Mode
 //===----------------------------------------------------------------------===//
 void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_window_mode setting cannot be NULL");
+	}
 	EnumUtil::FromString<WindowAggregationMode>(StringValue::Get(parameter));
 }
 
@@ -109,6 +150,9 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 // Default Io Mode
 //===----------------------------------------------------------------------===//
 void DefaultIoModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("default_io_mode setting cannot be NULL");
+	}
 	EnumUtil::FromString<FileIOMode>(StringValue::Get(parameter));
 }
 
@@ -116,6 +160,9 @@ void DefaultIoModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 // Default Transaction Invalidation Policy
 //===----------------------------------------------------------------------===//
 void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("default_transaction_invalidation_policy setting cannot be NULL");
+	}
 	EnumUtil::FromString<TransactionInvalidationPolicy>(StringValue::Get(parameter));
 }
 
@@ -123,7 +170,20 @@ void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 // Deprecated Using Key Syntax
 //===----------------------------------------------------------------------===//
 void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("deprecated_using_key_syntax setting cannot be NULL");
+	}
 	EnumUtil::FromString<DeprecatedUsingKeySyntax>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Dialect Compatibility Mode
+//===----------------------------------------------------------------------===//
+void DialectCompatibilityModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("dialect_compatibility_mode setting cannot be NULL");
+	}
+	EnumUtil::FromString<DialectCompatibilityMode>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -153,6 +213,9 @@ Value EnableProgressBarSetting::GetSetting(const ClientContext &context) {
 // Explain Output
 //===----------------------------------------------------------------------===//
 void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("explain_output setting cannot be NULL");
+	}
 	EnumUtil::FromString<ExplainOutputType>(StringValue::Get(parameter));
 }
 
@@ -160,6 +223,9 @@ void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 // Force Bitpacking Mode
 //===----------------------------------------------------------------------===//
 void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("force_bitpacking_mode setting cannot be NULL");
+	}
 	EnumUtil::FromString<BitpackingMode>(StringValue::Get(parameter));
 }
 
@@ -175,6 +241,9 @@ Value HTTPProxySetting::GetSetting(const ClientContext &context) {
 // Lambda Syntax
 //===----------------------------------------------------------------------===//
 void LambdaSyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("lambda_syntax setting cannot be NULL");
+	}
 	EnumUtil::FromString<LambdaSyntax>(StringValue::Get(parameter));
 }
 
@@ -182,6 +251,9 @@ void LambdaSyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 // Pin Threads
 //===----------------------------------------------------------------------===//
 void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("pin_threads setting cannot be NULL");
+	}
 	EnumUtil::FromString<ThreadPinMode>(StringValue::Get(parameter));
 }
 
@@ -189,13 +261,29 @@ void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 // Storage Block Prefetch
 //===----------------------------------------------------------------------===//
 void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("storage_block_prefetch setting cannot be NULL");
+	}
 	EnumUtil::FromString<StorageBlockPrefetch>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Table Function Identifier Conversion
+//===----------------------------------------------------------------------===//
+void TableFunctionIdentifierConversionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("table_function_identifier_conversion setting cannot be NULL");
+	}
+	EnumUtil::FromString<TableFunctionIdentifierConversion>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
 // Validate External File Cache
 //===----------------------------------------------------------------------===//
 void ValidateExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("validate_external_file_cache setting cannot be NULL");
+	}
 	EnumUtil::FromString<CacheValidationMode>(StringValue::Get(parameter));
 }
 

@@ -855,6 +855,10 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownExpressionGet(unique_ptr<Lo
                                                                    vector<ColumnBinding> state) {
 	state = PushDownChild(plan, propagate_null_values, std::move(state));
 
+	// Rewrite any depth>0 correlated refs already in the expression lists (VALUES (NEW.col))
+	// before appending the delim-get bindings for the join condition.
+	RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(state), correlated_aliases);
+
 	auto &expr_get = plan->Cast<LogicalExpressionGet>();
 	for (auto &expr_list : expr_get.expressions) {
 		AppendCorrelatedColumns(expr_list, state, false);
@@ -864,6 +868,29 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownExpressionGet(unique_ptr<Lo
 	}
 	auto correlated_offset = expr_get.expr_types.size() - correlated_columns.size();
 	return CreateContiguousState(ColumnBinding(expr_get.table_index, ProjectionIndex(correlated_offset)));
+}
+
+vector<ColumnBinding> FlattenDependentJoins::PushDownDML(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+                                                         vector<ColumnBinding> state) {
+	state = PushDownChild(plan, propagate_null_values, std::move(state));
+	if (plan->type == LogicalOperatorType::LOGICAL_INSERT || plan->type == LogicalOperatorType::LOGICAL_UPDATE) {
+		// PushDownChild appended the correlated columns to the child projection.
+		// PhysicalInsert requires an exact column count and PhysicalUpdate requires the row-id last,
+		// so remove the appended columns. The DELIM_GET below re-supplies them.
+		// DELETE is skipped because PhysicalDelete reads the row-id by a fixed index.
+		auto &child = *plan->children[0];
+		if (child.type == LogicalOperatorType::LOGICAL_PROJECTION &&
+		    child.expressions.size() > correlated_columns.size()) {
+			child.expressions.resize(child.expressions.size() - correlated_columns.size());
+			child.ResolveOperatorTypes();
+		}
+	}
+	// DML output does not carry the child columns, so re-expose the correlation keys in a separate DELIM_GET that
+	// the parent DelimJoin can reference.
+	auto expose_idx = binder.GenerateTableIndex();
+	unique_ptr<LogicalOperator> expose_delim = make_uniq<LogicalDelimGet>(expose_idx, delim_types);
+	plan = LogicalCrossProduct::Create(std::move(plan), std::move(expose_delim));
+	return CreateContiguousState(ColumnBinding(expose_idx, ProjectionIndex(0)));
 }
 
 vector<ColumnBinding> FlattenDependentJoins::PushDownGet(unique_ptr<LogicalOperator> &plan,
@@ -1011,6 +1038,11 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCorrelatedNode(unique_ptr<L
 	}
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		return PushDownExpressionGet(plan, propagate_null_values, std::move(state));
+	}
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE: {
+		return PushDownDML(plan, propagate_null_values, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		throw BinderException("PIVOT is not supported in correlated subqueries yet");

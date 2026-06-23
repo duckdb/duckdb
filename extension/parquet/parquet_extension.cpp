@@ -17,6 +17,16 @@
 #include "zstd_file_system.hpp"
 #include "writer/primitive_column_writer.hpp"
 #include "writer/variant_column_writer.hpp"
+#include "reader/variant_column_reader.hpp"
+
+#include <fstream>
+#include <iostream>
+#include <numeric>
+#include <string>
+#include <vector>
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
@@ -70,6 +80,7 @@
 #include "duckdb/storage/storage_info.hpp"
 #include "parquet_field_id.hpp"
 #include "parquet_types.h"
+#include "reader/variant/parquet_variant_iterator.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -961,6 +972,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	// variant_to_parquet_variant
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 
+	// bytes_to_variant
+	loader.RegisterFunction(ParquetVariantConversion::GetBytesToVariantFunction());
+
 	CopyFunction function("parquet");
 	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
@@ -1001,8 +1015,12 @@ static void LoadInternal(ExtensionLoader &loader) {
 	config.AddExtensionOption("disable_parquet_prefetching", "Disable the prefetching mechanism in Parquet",
 	                          LogicalType::BOOLEAN, Value(false));
 	config.AddExtensionOption("prefetch_all_parquet_files",
-	                          "Use the prefetching mechanism for all types of parquet files", LogicalType::BOOLEAN,
-	                          Value(false));
+	                          "(deprecated) Parquet files are now always prefetched, this setting has no effect",
+	                          LogicalType::BOOLEAN, Value(false));
+	config.AddExtensionOption(
+	    "parquet_prefetch_column_gap",
+	    "Byte gap under which Parquet prefetch I/O ranges are coalesced (NULL lets the cost model adapt it)",
+	    LogicalType::UBIGINT, Value(LogicalType::UBIGINT));
 	config.AddExtensionOption("parquet_metadata_cache",
 	                          "Cache Parquet metadata - useful when reading the same files multiple times",
 	                          LogicalType::BOOLEAN, Value(false));
