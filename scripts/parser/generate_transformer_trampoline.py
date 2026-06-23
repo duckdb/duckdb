@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from inline_grammar import parse_peg_grammar
 from grammar_types import load_grammar_types, load_matcher_rule_overrides
-from transformer_trampoline_config import load_transformer_trampoline_config
+from transformer_trampoline_config import TrampolineRuleMode, load_transformer_trampoline_config
 from transformer_plan import (
     ChoiceNode,
     ReferenceNode,
@@ -84,10 +84,11 @@ def typed_result_expr(cpp_type, expr, by_value):
 
 
 class UseGramPreviewEmitter:
-    def __init__(self, rules, rule_types, identifier_rules):
+    def __init__(self, rules, rule_types, identifier_rules, rule_config):
         self.rules = rules
         self.rule_types = rule_types
         self.identifier_rules = identifier_rules
+        self.rule_config = rule_config
 
     def cpp_type(self, rule_name):
         return self.rule_types[rule_name].cpp_type
@@ -95,15 +96,45 @@ class UseGramPreviewEmitter:
     def by_value(self, rule_name):
         return self.rule_types[rule_name].by_value
 
+    def rule_config_entry(self, rule_name):
+        return self.rule_config.get(rule_name)
+
+    def is_excluded_rule(self, rule_name):
+        config = self.rule_config_entry(rule_name)
+        return config is not None and config.mode == TrampolineRuleMode.EXCLUDED
+
+    def is_manual_rule(self, rule_name):
+        config = self.rule_config_entry(rule_name)
+        return config is not None and config.mode == TrampolineRuleMode.MANUAL
+
+    def is_manual_finalize_rule(self, rule_name):
+        config = self.rule_config_entry(rule_name)
+        return config is not None and config.mode == TrampolineRuleMode.MANUAL_FINALIZE
+
+    def emitted_rules(self):
+        return [rule_name for rule_name in self.rules if not self.is_excluded_rule(rule_name)]
+
+    def initialize_hook(self, rule_name):
+        config = self.rule_config_entry(rule_name)
+        if config is not None and config.init:
+            return config.init
+        return init_name(rule_name)
+
+    def finalize_hook(self, rule_name):
+        config = self.rule_config_entry(rule_name)
+        if config is not None and config.finalize:
+            return config.finalize
+        return finalize_name(rule_name)
+
     def emit_header_declarations(self):
         lines = []
-        for rule_name in self.rules:
+        for rule_name in self.emitted_rules():
             lines.append(
-                f"\tstatic void {init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
+                f"\tstatic void {self.initialize_hook(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
                 f"TransformStackFrame &frame);\n"
             )
             lines.append(
-                f"\tstatic unique_ptr<TransformResultValue> {finalize_name(rule_name)}(PEGTransformer &transformer, "
+                f"\tstatic unique_ptr<TransformResultValue> {self.finalize_hook(rule_name)}(PEGTransformer &transformer, "
                 f"TransformStack &stack, TransformStackFrame &frame);\n"
             )
         return "".join(lines)
@@ -114,16 +145,18 @@ class UseGramPreviewEmitter:
         lines.append('\n#include "duckdb/parser/peg/transformer/peg_transformer.hpp"\n\n')
         lines.append("namespace duckdb {\n\n")
         lines.append("")
-        for rule_name in self.rules:
+        for rule_name in self.emitted_rules():
             lines.append(
                 f"static const TransformFrameOps {ops_name(rule_name)} = "
-                f'{{"{rule_name}", &PEGTransformerFactory::{init_name(rule_name)}, '
-                f"&PEGTransformerFactory::{finalize_name(rule_name)}}};"
+                f'{{"{rule_name}", &PEGTransformerFactory::{self.initialize_hook(rule_name)}, '
+                f"&PEGTransformerFactory::{self.finalize_hook(rule_name)}}};"
             )
         lines.append("")
         lines.extend(self.emit_ops_lookup())
         lines.append("")
         for rule_name, rule in self.rules.items():
+            if self.is_excluded_rule(rule_name) or self.is_manual_rule(rule_name):
+                continue
             lines.extend(self.emit_rule(rule_name, tokens_to_ast(rule.tokens)))
             lines.append("")
         lines.append("} // namespace duckdb")
@@ -147,7 +180,7 @@ class UseGramPreviewEmitter:
             "const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::GeneratedTrampolineOps() {"
         )
         lines.append("\tstatic const case_insensitive_map_t<const TransformFrameOps *> result = {")
-        for rule_name in self.rules:
+        for rule_name in self.emitted_rules():
             lines.append(f'\t    {{"{rule_name}", &{ops_name(rule_name)}}},')
         lines.append("\t};")
         lines.append("\treturn result;")
@@ -156,6 +189,8 @@ class UseGramPreviewEmitter:
 
     def emit_rule(self, rule_name, ast):
         if isinstance(ast, ChoiceNode):
+            if self.is_manual_finalize_rule(rule_name):
+                raise NotImplementedError("manual_finalize choice rules are not currently supported")
             return self.emit_choice_rule(rule_name)
         if isinstance(ast, SequenceNode):
             return self.emit_sequence_rule(rule_name, ast)
@@ -188,6 +223,8 @@ class UseGramPreviewEmitter:
         )
         lines.append("}")
         lines.append("")
+        if self.is_manual_finalize_rule(rule_name):
+            return lines
         lines.append(
             f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"TransformStack &stack, TransformStackFrame &frame) {{"
@@ -322,7 +359,7 @@ def main():
     rule_types, _ = load_grammar_types(grammar_types_file)
     identifier_rules = identifier_override_rules(grammar_types_file)
 
-    emitter = UseGramPreviewEmitter(rules, rule_types, identifier_rules)
+    emitter = UseGramPreviewEmitter(rules, rule_types, identifier_rules, rule_config)
     if args.write:
         if grammar_files != ["use.gram"]:
             raise NotImplementedError("--write is currently restricted to use.gram")
