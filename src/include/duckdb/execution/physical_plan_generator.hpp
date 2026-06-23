@@ -21,7 +21,7 @@
 namespace duckdb {
 class ClientContext;
 class ColumnDataCollection;
-class CTEExchangeData;
+class PipelineBroadcastExchange;
 
 class PhysicalPlan {
 public:
@@ -76,7 +76,7 @@ public:
 	//! This data structure is used to establish it.
 	unordered_map<TableIndex, shared_ptr<ColumnDataCollection>> recursive_cte_tables;
 	//! Materialized CTEs that are executed through a streaming exchange
-	unordered_map<TableIndex, shared_ptr<CTEExchangeData>> materialized_cte_exchanges;
+	unordered_map<TableIndex, shared_ptr<PipelineBroadcastExchange>> materialized_cte_exchanges;
 	//! Used to reference the recurring tables
 	unordered_map<TableIndex, shared_ptr<ColumnDataCollection>> recurring_cte_tables;
 	//! Materialized CTE ids must be collected.

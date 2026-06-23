@@ -2,6 +2,7 @@
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/parallel/pipeline_broadcast_exchange.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 
 namespace duckdb {
@@ -27,9 +28,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) 
 
 	// Create the working_table that the PhysicalCTE will use for evaluation.
 	auto working_table = make_shared_ptr<ColumnDataCollection>(context, op.children[0]->types);
-	shared_ptr<CTEExchangeData> exchange;
+	shared_ptr<PipelineBroadcastExchange> exchange;
 	if (use_exchange) {
-		exchange = make_shared_ptr<CTEExchangeData>(context, op.children[0]->types, cte_body_is_dml);
+		exchange = make_shared_ptr<PipelineBroadcastExchange>(context, op.children[0]->types, cte_body_is_dml);
 	}
 
 	// Add the ColumnDataCollection to the context of this PhysicalPlanGenerator
