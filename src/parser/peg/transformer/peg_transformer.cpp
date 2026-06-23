@@ -106,8 +106,10 @@ unique_ptr<TransformResultValue> TransformStack::ExecuteInternal(ParseResult &pa
 }
 
 void TransformStack::DeliverResult(TransformStackFrame &frame, unique_ptr<TransformResultValue> result) {
-	D_ASSERT(frame.result_target);
-	auto &target = *frame.result_target;
+	if (!frame.result_target) {
+		throw InternalException("Cannot deliver trampoline transformer result for root frame '%s'", frame.ops.name);
+	}
+	auto &target = frame.result_target.value();
 	auto &parent = GetFrame(target.frame_index);
 	parent.SetChildResult(target.slot, std::move(result));
 }
