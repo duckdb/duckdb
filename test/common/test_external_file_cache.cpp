@@ -17,11 +17,19 @@ namespace {
 
 using EFCTestFileGuard = CachingTestFileGuard;
 using EFCTrackingFileSystem = SimpleTrackingFileSystem;
+using EFCNoMetadataFileSystem = NoValidationMetadataFileSystem;
 
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
 	OpenFileInfo info(path);
 	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 	info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
+	return info;
+}
+
+OpenFileInfo MakeValidatingOpenFileInfo(const string &path) {
+	OpenFileInfo info(path);
+	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(true);
 	return info;
 }
 
@@ -449,6 +457,38 @@ TEST_CASE("Failed CachingFileHandle construction leaves evictable cached file en
 	auto &object_cache = db_instance.GetObjectCache();
 	EvictObjectCache(object_cache);
 	REQUIRE(cache.GetCachedFileCount() == 0);
+}
+
+TEST_CASE("No-metadata file is not cached and always returns fresh content", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	auto no_meta_fs = make_uniq<EFCNoMetadataFileSystem>();
+
+	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const string content_a(BLOCK_SIZE, 'A');
+	const string content_b(BLOCK_SIZE, 'B');
+	EFCTestFileGuard test_file("test_efc_no_metadata.bin", content_a);
+
+	CachingFileSystem cfs(*no_meta_fs, db_instance);
+
+	// First read: data is fetched from source. No blocks should be stored in the cache.
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
+	}
+	REQUIRE(CountCachedBlocks(cache) == 0);
+
+	// Overwrite the file with different content.
+	WriteTestContent(test_file.GetPath(), content_b);
+
+	// Second read: validate that we return new content.
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_b);
+	}
+	REQUIRE(CountCachedBlocks(cache) == 0);
 }
 
 } // namespace duckdb
