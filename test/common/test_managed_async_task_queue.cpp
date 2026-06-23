@@ -89,6 +89,21 @@ private:
 	ConcurrencyLatch &latch;
 };
 
+//! Task that blocks on a ConcurrencyLatch and then throws.
+class LatchThrowingTask : public AsyncTask {
+public:
+	explicit LatchThrowingTask(ConcurrencyLatch &latch_p) : latch(latch_p) {
+	}
+
+	void Execute() override {
+		latch.Enter();
+		throw IOException("Injected async task failure");
+	}
+
+private:
+	ConcurrencyLatch &latch;
+};
+
 unique_ptr<Connection> TaskQueueConnectionWithAsyncThreads(DuckDB &db, idx_t async_threads = 1) {
 	auto con = make_uniq<Connection>(db);
 	REQUIRE_NO_FAIL(con->Query("SET async_threads=" + to_string(async_threads)));
@@ -233,4 +248,28 @@ TEST_CASE("ManagedAsyncTaskQueue close drains without explicit WaitAll and is id
 	// Double close and post-close error checks must not throw.
 	queue.Close();
 	queue.RethrowTaskError();
+}
+
+TEST_CASE("ManagedAsyncTaskQueue closes after failure with pending tasks", "[async_task_queue]") {
+	DuckDB db(nullptr);
+	auto con = TaskQueueConnectionWithAsyncThreads(db, 1);
+	ManagedAsyncTaskQueue queue(*con->context, 1);
+
+	std::atomic<idx_t> counter(0);
+	ConcurrencyLatch latch;
+	queue.Register(make_uniq<LatchThrowingTask>(latch), 16);
+	queue.Register(make_uniq<CountingTask>(counter), 16);
+	REQUIRE(latch.WaitForEntered(1));
+	latch.Release();
+	while (!queue.HasError()) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+
+	try {
+		queue.Close();
+		FAIL("Expected async task failure");
+	} catch (const Exception &ex) {
+		string error = ex.what();
+		REQUIRE(error.find("Injected async task failure") != string::npos);
+	}
 }
