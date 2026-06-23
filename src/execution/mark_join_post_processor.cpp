@@ -192,6 +192,24 @@ bool IsUnnamedStructType(const LogicalType &type) {
 	       StructType::IsUnnamed(type);
 }
 
+static bool MarkJoinValueContainsNestedNull(const Value &value) {
+	if (value.IsNull()) {
+		return true;
+	}
+	if (value.type().id() == LogicalTypeId::UNION) {
+		return MarkJoinValueContainsNestedNull(UnionValue::GetValue(value));
+	}
+	if (value.type().InternalType() != PhysicalType::STRUCT) {
+		return false;
+	}
+	for (auto &child : StructValue::GetChildren(value)) {
+		if (MarkJoinValueContainsNestedNull(child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 enum class NestedEqualityResult : uint8_t { FALSE_VALUE, TRUE_VALUE, NULL_VALUE };
 
 static NestedEqualityResult EvaluateNestedEqualityForMarkJoin(const Value &left, const Value &right) {
@@ -425,6 +443,11 @@ void MarkJoinPostProcessor::InitializeCorrelatedCounts(const vector<LogicalType>
 	D_ASSERT(join_type == JoinType::MARK);
 	D_ASSERT(context);
 	auto &info = state.correlated_counts;
+	const auto last_key_idx = correlated_types.size();
+	info.payload_masks_nested_null = last_key_idx < equality_predicates.size() &&
+	                                 last_key_idx < condition_types.size() &&
+	                                 equality_predicates[last_key_idx] == ExpressionType::COMPARE_NOTEQUAL &&
+	                                 IsUnnamedStructType(condition_types[last_key_idx]);
 
 	vector<LogicalType> delim_payload_types;
 	vector<BoundAggregateExpression *> correlated_aggregates;
@@ -438,7 +461,8 @@ void MarkJoinPostProcessor::InitializeCorrelatedCounts(const vector<LogicalType>
 
 	auto count_fun = CountFunctionBase::GetFunction();
 	vector<unique_ptr<Expression>> children;
-	children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.GetReturnType(), 0U));
+	children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(
+	    info.payload_masks_nested_null ? LogicalType::BOOLEAN : condition_types[last_key_idx], 0U));
 	aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr, AggregateType::NON_DISTINCT);
 	correlated_aggregates.push_back(&*aggr);
 	delim_payload_types.push_back(aggr->GetReturnType());
@@ -464,10 +488,27 @@ void MarkJoinPostProcessor::SinkBuildKeys(DataChunk &keys) {
 		info.group_chunk.CheckCardinality(keys.size());
 		if (info.correlated_payload.data.empty()) {
 			vector<LogicalType> types;
-			types.push_back(keys.data[info.correlated_types.size()].GetType());
+			types.push_back(info.payload_masks_nested_null ? LogicalType::BOOLEAN
+			                                               : keys.data[info.correlated_types.size()].GetType());
 			info.correlated_payload.InitializeEmpty(types);
 		}
-		info.correlated_payload.data[0].Reference(keys.data[info.correlated_types.size()]);
+		const auto last_key_idx = info.correlated_types.size();
+		if (info.payload_masks_nested_null) {
+			auto &payload = info.correlated_payload.data[0];
+			payload.Reference(Value::BOOLEAN(true), count_t(keys.size()));
+			payload.Flatten();
+			auto payload_data = FlatVector::GetDataMutable<bool>(payload);
+			auto &validity = FlatVector::ValidityMutable(payload);
+			validity.SetAllValid(keys.size());
+			for (idx_t row_idx = 0; row_idx < keys.size(); row_idx++) {
+				payload_data[row_idx] = true;
+				if (MarkJoinValueContainsNestedNull(keys.data[last_key_idx].GetValue(row_idx))) {
+					validity.SetInvalid(row_idx);
+				}
+			}
+		} else {
+			info.correlated_payload.data[0].Reference(keys.data[last_key_idx]);
+		}
 		info.correlated_payload.CheckCardinality(keys.size());
 		info.correlated_counts->AddChunk(info.group_chunk, info.correlated_payload, AggregateType::NON_DISTINCT);
 	}

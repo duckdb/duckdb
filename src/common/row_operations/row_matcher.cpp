@@ -5,9 +5,81 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
 namespace duckdb {
+
+namespace {
+
+enum class NestedEqualityResult : uint8_t { FALSE_VALUE, TRUE_VALUE, NULL_VALUE };
+
+static NestedEqualityResult EvaluateNestedEqualityForRowMatcher(const Value &left, const Value &right) {
+	if (left.IsNull() || right.IsNull()) {
+		return NestedEqualityResult::NULL_VALUE;
+	}
+	if (left.type().id() == LogicalTypeId::UNION && right.type().id() == LogicalTypeId::UNION) {
+		if (UnionValue::GetTag(left) != UnionValue::GetTag(right)) {
+			return NestedEqualityResult::FALSE_VALUE;
+		}
+		return EvaluateNestedEqualityForRowMatcher(UnionValue::GetValue(left), UnionValue::GetValue(right));
+	}
+	auto &left_children = StructValue::GetChildren(left);
+	auto &right_children = StructValue::GetChildren(right);
+	D_ASSERT(left_children.size() == right_children.size());
+	bool has_unknown = false;
+	for (idx_t i = 0; i < left_children.size(); i++) {
+		auto &lhs_child = left_children[i];
+		auto &rhs_child = right_children[i];
+		if ((lhs_child.type().InternalType() == PhysicalType::STRUCT ||
+		     lhs_child.type().id() == LogicalTypeId::UNION) &&
+		    (rhs_child.type().InternalType() == PhysicalType::STRUCT ||
+		     rhs_child.type().id() == LogicalTypeId::UNION)) {
+			auto child_result = EvaluateNestedEqualityForRowMatcher(lhs_child, rhs_child);
+			if (child_result == NestedEqualityResult::FALSE_VALUE) {
+				return NestedEqualityResult::FALSE_VALUE;
+			}
+			has_unknown = has_unknown || child_result == NestedEqualityResult::NULL_VALUE;
+			continue;
+		}
+		if (lhs_child.IsNull() || rhs_child.IsNull()) {
+			has_unknown = true;
+			continue;
+		}
+		if (!ValueOperations::NotDistinctFrom(lhs_child, rhs_child)) {
+			return NestedEqualityResult::FALSE_VALUE;
+		}
+	}
+	return has_unknown ? NestedEqualityResult::NULL_VALUE : NestedEqualityResult::TRUE_VALUE;
+}
+
+template <bool NO_MATCH_SEL>
+static idx_t UnnamedStructNotEqualsMatch(Vector &lhs_vector, const TupleDataVectorFormat &, SelectionVector &sel,
+                                         const idx_t count, const TupleDataLayout &rhs_layout,
+                                         Vector &rhs_row_locations, const idx_t col_idx, const vector<MatchFunction> &,
+                                         SelectionVector *no_match_sel, idx_t &no_match_count) {
+	const auto &type = rhs_layout.GetTypes()[col_idx];
+	Vector rhs_values(type);
+	const auto gather_function = TupleDataCollection::GetGatherFunction(type);
+	gather_function.Gather(rhs_layout, rhs_row_locations, col_idx, sel, count, rhs_values,
+	                       *FlatVector::IncrementalSelectionVector(), nullptr);
+	rhs_values.Verify();
+
+	Vector lhs_values(lhs_vector, sel, count);
+	idx_t match_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		const auto row_idx = sel.get_index(i);
+		const auto row_result = EvaluateNestedEqualityForRowMatcher(lhs_values.GetValue(i), rhs_values.GetValue(i));
+		if (row_result == NestedEqualityResult::FALSE_VALUE) {
+			sel.set_index(match_count++, row_idx);
+		} else if (NO_MATCH_SEL) {
+			no_match_sel->set_index(no_match_count++, row_idx);
+		}
+	}
+	return match_count;
+}
+
+} // namespace
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
@@ -385,6 +457,10 @@ MatchFunction RowMatcher::GetStructMatchFunction(const LogicalType &type, const 
 		child_predicate = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
+		if (StructType::IsUnnamed(type)) {
+			result.function = UnnamedStructNotEqualsMatch<NO_MATCH_SEL>;
+			return result;
+		}
 		result.function = GenericNestedMatch<NO_MATCH_SEL, NotEquals>;
 		return result;
 	case ExpressionType::COMPARE_DISTINCT_FROM:

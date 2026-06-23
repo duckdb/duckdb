@@ -18,21 +18,49 @@ SELECT (1, 2) <> ANY (SELECT * FROM (VALUES (NULL, 2)) t(x, y))
 NULL
 
 query I
-SELECT (1, NULL) <> ANY (SELECT * FROM (VALUES (1, 2)) t(x, y))
+SELECT (1, NULL::INT) <> ANY (SELECT * FROM (VALUES (1, 2)) t(x, y))
 ----
 NULL
 
 query I
-SELECT (NULL, 2) <> ANY (SELECT * FROM (VALUES (1, 2)) t(x, y))
+SELECT (NULL::INT, 2) <> ANY (SELECT * FROM (VALUES (1, 2)) t(x, y))
 ----
 NULL
 
 query I
-SELECT (1, NULL) <> ANY (SELECT * FROM (VALUES (2, 2)) t(x, y))
+SELECT (1, NULL::INT) <> ANY (SELECT * FROM (VALUES (2, 2)) t(x, y))
 ----
 true
 
 query I
-SELECT (1, NULL) <> ANY (SELECT * FROM (VALUES (1, 2), (2, 2)) t(x, y))
+SELECT (1, NULL::INT) <> ANY (SELECT * FROM (VALUES (1, 2), (2, 2)) t(x, y))
 ----
 true
+
+statement ok
+SET nested_loop_join_threshold=0
+
+query I
+SELECT (1, NULL::INT) <> ANY (SELECT * FROM (VALUES (2, 2)) t(x, y))
+----
+true
+
+query I
+SELECT (1, NULL::INT) <> ANY (SELECT * FROM (VALUES (1, 2), (2, 2)) t(x, y))
+----
+true
+
+statement ok
+SET nested_loop_join_threshold=5
+
+query TT
+SELECT i, (1, 10) <> ANY (
+	SELECT x, y
+	FROM (VALUES (1, NULL::INT), (2, 20)) t(x, y)
+	WHERE x = i
+) FROM (VALUES (1), (2), (3)) outer_t(i)
+ORDER BY i
+----
+1	NULL
+2	true
+3	false
