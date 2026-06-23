@@ -12,11 +12,9 @@
 
 namespace duckdb {
 
-//! Monotonic clock time point for measuring intervals.
-//! Unlike timestamp_t, uses steady_clock unaffected by system clock adjustments.
+//! Monotonic clock time point, which is used to measure intervals.
 class TimePoint {
 public:
-	//! Default constructor for containers; use Tick() for current time.
 	TimePoint() : time_point() {
 	}
 

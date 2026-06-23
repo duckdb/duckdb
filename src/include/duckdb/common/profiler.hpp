@@ -13,15 +13,16 @@
 
 namespace duckdb {
 
-//! Measures elapsed time with explicit Start/End lifecycle.
-//! For simple elapsed-since queries, use TimePoint directly.
+//! Profiler class to measure the elapsed time.
 class Profiler {
 public:
+	//! Start the timer.
 	void Start() {
 		finished = false;
 		ran = true;
 		start = TimePoint::Tick();
 	}
+	//! End the timer.
 	void End() {
 		end = TimePoint::Tick();
 		finished = true;
@@ -31,7 +32,10 @@ public:
 		ran = false;
 	}
 
-	//! Returns 0 if not started; total elapsed if End() was called; current elapsed otherwise.
+	//! Returns the elapsed time in seconds.
+	//! If ran is false, it returns 0.
+	//! If End() has been called, it returns the total elapsed time,
+	//! otherwise, returns how far along the timer is right now.
 	double Elapsed() const {
 		if (!ran) {
 			return 0;
