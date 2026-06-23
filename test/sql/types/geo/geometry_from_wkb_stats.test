@@ -102,3 +102,86 @@ query I
 SELECT stats(vertex_extract(ST_GeomFromWKB(wkb), 'x')) FROM be_lines_wkb LIMIT 1;
 ----
 {'has_no_null': false, 'has_null': true}
+
+
+# A structurally valid but truncated (bodyless) LINESTRING header is too short to be a valid geometry
+statement ok
+CREATE TABLE bad_wkb(wkb BLOB);
+
+statement ok
+INSERT INTO bad_wkb VALUES ('\x01\x02\x00\x00\x00'::BLOB);
+
+statement error
+SELECT vertex_extract(ST_GeomFromWKB(wkb), 'x') FROM bad_wkb;
+----
+Unexpected end of binary data at position 5
+
+# A valid empty LINESTRING is exactly 9 bytes (header + zero count)
+statement ok
+CREATE TABLE empty_ls_wkb(wkb BLOB);
+
+statement ok
+INSERT INTO empty_ls_wkb VALUES ('\x01\x02\x00\x00\x00\x00\x00\x00\x00'::BLOB);
+
+query I
+SELECT stats(vertex_extract(ST_GeomFromWKB(wkb), 'x')) FROM empty_ls_wkb LIMIT 1;
+----
+{'has_no_null': false, 'has_null': true}
+
+# The truncation check uses the true min length over every row, not the lexicographic min's prefix length.
+# Here the truncated 6-byte blob sorts AFTER the valid one, so it is not the min blob - yet min_string_length
+# still reflects it, no type is inferred, and the parse error is not folded away.
+statement ok
+CREATE TABLE interior_trunc_wkb(wkb BLOB);
+
+statement ok
+INSERT INTO interior_trunc_wkb SELECT ST_AsWKB('LINESTRING(0 0, 1 1)'::GEOMETRY);
+
+statement ok
+INSERT INTO interior_trunc_wkb VALUES ('\x01\x02\x00\x00\x00\x05'::BLOB);
+
+statement error
+SELECT vertex_extract(ST_GeomFromWKB(wkb), 'x') FROM interior_trunc_wkb;
+----
+Unexpected end of binary data at position 5
+
+# Extended-WKB (EWKB) signals Z/M via the meta high bits (0x80000000 / 0x40000000) rather than the ISO /1000 scheme.
+statement ok
+CREATE TABLE ewkb_point_z(wkb BLOB);
+
+statement ok
+INSERT INTO ewkb_point_z VALUES
+  ('\x01\x01\x00\x00\x80\x00\x00\x00\x00\x00\x00\xF0\x3F\x00\x00\x00\x00\x00\x00\x00\x40\x00\x00\x00\x00\x00\x00\x08\x40'::BLOB);
+
+query I
+SELECT ST_AsText(ST_GeomFromWKB(wkb)) FROM ewkb_point_z;
+----
+POINT Z (1 2 3)
+
+query I
+SELECT vertex_extract(ST_GeomFromWKB(wkb), 'z') FROM ewkb_point_z;
+----
+3.0
+
+# The same for the EWKB M high bit (0x40000000): 'm' is carried (not folded) while 'z' is absent (folded to NULL).
+statement ok
+CREATE TABLE ewkb_point_m(wkb BLOB);
+
+statement ok
+INSERT INTO ewkb_point_m VALUES
+  ('\x01\x01\x00\x00\x40\x00\x00\x00\x00\x00\x00\xF0\x3F\x00\x00\x00\x00\x00\x00\x00\x40\x00\x00\x00\x00\x00\x00\x10\x40'::BLOB);
+
+query I
+SELECT ST_AsText(ST_GeomFromWKB(wkb)) FROM ewkb_point_m;
+----
+POINT M (1 2 4)
+
+query I
+SELECT vertex_extract(ST_GeomFromWKB(wkb), 'm') FROM ewkb_point_m;
+----
+4.0
+
+query I
+SELECT stats(vertex_extract(ST_GeomFromWKB(wkb), 'z')) FROM ewkb_point_m LIMIT 1;
+----
+{'has_no_null': false, 'has_null': true}

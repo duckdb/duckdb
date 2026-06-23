@@ -54,8 +54,28 @@ static auto FromWKBStats(ClientContext &context, FunctionStatisticsInput &input)
 		// Unsupported or invalid geometry type, we can't say anything about the types
 		return result.ToUnique();
 	}
+
+	// Z/M may also be signalled through the Extended-WKB high bits (matching Geometry::FromBinary)
+	const auto has_z = ((flag_id & 0x01) != 0) || ((meta & 0x80000000) != 0);
+	const auto has_m = ((flag_id & 0x02) != 0) || ((meta & 0x40000000) != 0);
+
 	const auto geom_type = static_cast<GeometryType>(type_id);
-	const auto vert_type = static_cast<VertexType>(flag_id);
+	const auto vert_type = static_cast<VertexType>((has_z ? 1 : 0) | (has_m ? 2 : 0));
+
+	// The single inferred type implies a minimum body length: a POINT serializes all of its ordinates inline
+	// (even when empty, encoded as NaNs); every other type serializes at least a 4-byte element count. If the
+	// shortest row (the exact minimum over all rows) can't hold that, the column has a truncated blob, so bail.
+	const idx_t vert_dims = 2 + (has_z ? 1 : 0) + (has_m ? 1 : 0);
+	const auto min_valid_size = geom_type == GeometryType::POINT ? WKB_HEADER_SIZE + vert_dims * sizeof(double)
+	                                                             : WKB_HEADER_SIZE + sizeof(uint32_t);
+
+	const auto min_len = StringStats::MinStringLength(child_stats);
+	if (!min_len.IsValid() || min_len.GetIndex() < min_valid_size) {
+		// Only bounds the byte envelope, not that a declared element count matches the body.
+		// In general, we cant guarantee that the WKB is valid without parsing every row.
+		// But we're generally OK with optimizing assuming valid input - anything else is essentially UB.
+		return result.ToUnique();
+	}
 
 	// All rows share this single geometry type. The extent and emptiness can't be inferred
 	// from the truncated string stats, so those remain unknown.
