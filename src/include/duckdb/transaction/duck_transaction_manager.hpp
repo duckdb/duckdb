@@ -10,7 +10,7 @@
 
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/transaction/checkpoint_lock.hpp"
-#include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/transaction/vacuum_lock.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/common/queue.hpp"
 
@@ -73,8 +73,8 @@ public:
 	//! Try to obtain an exclusive checkpoint lock
 	unique_ptr<CheckpointLockKey> TryGetCheckpointLock();
 	unique_ptr<CheckpointLockKey> TryUpgradeCheckpointLock(CheckpointLockKey &lock);
-	unique_ptr<StorageLockKey> SharedVacuumLock();
-	unique_ptr<StorageLockKey> TryGetVacuumLock();
+	unique_ptr<VacuumLockKey> SharedVacuumLock();
+	unique_ptr<VacuumLockKey> TryGetVacuumLock();
 
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
 	DUCKDB_API idx_t GetCatalogVersion(Transaction &transaction);
@@ -133,7 +133,7 @@ private:
 	//! The checkpoint lock
 	CheckpointLockCoordinator checkpoint_lock;
 	//! The vacuum lock - necessary to start vacuum operations
-	StorageLock vacuum_lock;
+	VacuumLockCoordinator vacuum_lock;
 	//! Lock necessary to start transactions only - used by FORCE CHECKPOINT to prevent new transactions from starting
 	mutex start_transaction_lock;
 

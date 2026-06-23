@@ -250,11 +250,11 @@ unique_ptr<CheckpointLockKey> DuckTransactionManager::TryGetCheckpointLock() {
 	return checkpoint_lock.TryGetExclusiveLock();
 }
 
-unique_ptr<StorageLockKey> DuckTransactionManager::SharedVacuumLock() {
+unique_ptr<VacuumLockKey> DuckTransactionManager::SharedVacuumLock() {
 	return vacuum_lock.GetSharedLock();
 }
 
-unique_ptr<StorageLockKey> DuckTransactionManager::TryGetVacuumLock() {
+unique_ptr<VacuumLockKey> DuckTransactionManager::TryGetVacuumLock() {
 	return vacuum_lock.TryGetExclusiveLock();
 }
 
