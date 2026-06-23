@@ -3439,6 +3439,10 @@ PhysicalCopyToFile::PhysicalCopyToFile(PhysicalPlan &physical_plan, vector<Logic
       function(std::move(function_p)), bind_data(std::move(bind_data)), parallel(false) {
 }
 
+PhysicalCopyToFile::~PhysicalCopyToFile() {
+	sink_state.reset();
+}
+
 InsertionOrderPreservingMap<string> PhysicalCopyToFile::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["FORMAT"] = StringUtil::Upper(function.name.GetIdentifierName());
