@@ -432,6 +432,10 @@ bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0')
 	LowerCase(pat_data, pat_size, pat_ldata.get());
 	string_t str_lcase(str_ldata.get(), UnsafeNumericCast<uint32_t>(str_llength));
 	string_t pat_lcase(pat_ldata.get(), UnsafeNumericCast<uint32_t>(pat_llength));
+	// '\0' is the "no escape" sentinel: use the non-escape matcher so embedded NUL bytes are matched literally
+	if (escape == '\0') {
+		return LikeOperatorFunction(str_lcase, pat_lcase);
+	}
 	return LikeOperatorFunction(str_lcase, pat_lcase, escape);
 }
 
@@ -547,7 +551,10 @@ void ILikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result
 			}
 			LowerCase(str.GetData(), str.GetSize(), scratch.get());
 			string_t str_lcase(scratch.get(), UnsafeNumericCast<uint32_t>(str_llength));
-			bool match = matcher ? matcher->Match(str_lcase) : LikeOperatorFunction(str_lcase, pat_lcase, escape_char);
+			// '\0' escape means no escape: use the non-escape matcher so embedded NUL bytes are matched literally
+			bool match = matcher ? matcher->Match(str_lcase)
+			                     : (escape_char == '\0' ? LikeOperatorFunction(str_lcase, pat_lcase)
+			                                            : LikeOperatorFunction(str_lcase, pat_lcase, escape_char));
 			return INVERT ? !match : match;
 		});
 		return;
