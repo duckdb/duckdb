@@ -16,6 +16,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
 
 namespace duckdb {
@@ -98,6 +99,9 @@ struct CMHelper {
 	                                                                   unique_ptr<BaseStatistics> compress_stats);
 	static bool GetVariantCompressInfo(const BaseStatistics &stats, LogicalType &shredded_type,
 	                                   unique_ptr<BaseStatistics> &typed_stats);
+
+	//! Whether all (non-null) values are non-empty POINTs with XY vertices (so they fit in a UHUGEINT)
+	static bool GeometryIsAllPointXY(const BaseStatistics &stats);
 };
 
 //===--------------------------------------------------------------------===//
@@ -631,6 +635,8 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(
 	switch (type.id()) {
 	case LogicalTypeId::VARCHAR:
 		return GetStringCompress(std::move(input), stats);
+	case LogicalTypeId::GEOMETRY:
+		return GetGeometryCompress(std::move(input), stats);
 	case LogicalTypeId::VARIANT:
 		return GetVariantCompress(std::move(input), stats);
 	default:
@@ -749,6 +755,43 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 	}
 	auto compress_stats = CMHelper::CreateStringCompressStats(stats, cast_type, max_string_length);
 	return CMHelper::CreateStringFunctionCompress(std::move(input), cast_type, std::move(compress_stats));
+}
+
+bool CMHelper::GeometryIsAllPointXY(const BaseStatistics &stats) {
+	if (stats.GetType().id() != LogicalTypeId::GEOMETRY) {
+		return false;
+	}
+	if (stats.GetStatsType() != StatisticsType::GEOMETRY_STATS) {
+		return false;
+	}
+	// Only POINT-XY geometries are present (and at least one is). Empty points are fine: they are stored as a
+	// single XY vertex with NaN coordinates, so the WKB blob is always exactly 21 bytes.
+	if (!GeometryStats::GetTypes(stats).HasOnly(GeometryType::POINT, VertexType::XY)) {
+		return false;
+	}
+	return true;
+}
+
+unique_ptr<CompressExpression> CompressedMaterialization::GetGeometryCompress(unique_ptr<Expression> input,
+                                                                              const BaseStatistics &stats) {
+	if (!CMHelper::GeometryIsAllPointXY(stats)) {
+		// We can only pack POINT-XY geometries into a UHUGEINT
+		return nullptr;
+	}
+
+	const auto target_type = LogicalType::UHUGEINT;
+	auto compress_function = CMGeometryPointCompressFun::GetFunction();
+	vector<unique_ptr<Expression>> arguments;
+	arguments.emplace_back(std::move(input));
+
+	BoundScalarFunction bound_function(compress_function);
+	bound_function.SetReturnType(target_type);
+	auto compress_expr = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+
+	auto compress_stats = BaseStatistics::CreateEmpty(target_type);
+	compress_stats.CopyBase(stats);
+	return make_uniq<CompressExpression>(std::move(compress_expr), compress_stats.ToUnique(),
+	                                     CompressedMaterializationType::FUNCTION);
 }
 
 bool CMHelper::GetVariantCompressInfo(const BaseStatistics &stats, LogicalType &shredded_type,
@@ -877,6 +920,9 @@ unique_ptr<Expression> CompressedMaterialization::GetDecompressExpression(unique
 		arguments.push_back(std::move(variant));
 		return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
 	}
+	if (type.id() == LogicalTypeId::GEOMETRY) {
+		return GetGeometryDecompress(std::move(input), result_type, stats);
+	}
 	if (TypeIsIntegral(type.InternalType())) {
 		return GetIntegralDecompress(std::move(input), result_type, stats);
 	}
@@ -886,6 +932,19 @@ unique_ptr<Expression> CompressedMaterialization::GetDecompressExpression(unique
 	default:
 		throw InternalException("Type other than integral/string/variant marked for decompression!");
 	}
+}
+
+unique_ptr<Expression> CompressedMaterialization::GetGeometryDecompress(unique_ptr<Expression> input,
+                                                                        const LogicalType &result_type,
+                                                                        const BaseStatistics &stats) {
+	D_ASSERT(result_type.id() == LogicalTypeId::GEOMETRY);
+	auto decompress_function = CMGeometryPointDecompressFun::GetFunction();
+	vector<unique_ptr<Expression>> arguments;
+	arguments.emplace_back(std::move(input));
+
+	BoundScalarFunction bound_function(decompress_function);
+	bound_function.SetReturnType(result_type);
+	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_ptr<Expression> input,
