@@ -20,8 +20,7 @@ static ErrorData TaskErrorDataFromExceptionPtr(const std::exception_ptr &error_p
 	} // LCOV_EXCL_STOP
 }
 
-AsyncTaskRequest::AsyncTaskRequest(unique_ptr<AsyncTask> task_p, idx_t size_p,
-                                   AsyncWriteCompletionCallback completion_p)
+AsyncTaskRequest::AsyncTaskRequest(unique_ptr<AsyncTask> task_p, idx_t size_p, AsyncTaskCompletionCallback completion_p)
     : task(std::move(task_p)), size(size_p), completion(std::move(completion_p)) {
 }
 
@@ -232,8 +231,7 @@ void AsyncTaskQueue::DrainRequest() {
 
 void AsyncTaskQueue::CompleteRequest(AsyncTaskRequest &request, idx_t size, optional_ptr<const ErrorData> error) {
 	if (request.completion) {
-		// Tasks have no positional offset; pass 0 to reuse the shared completion callback signature.
-		request.completion(0, size, error);
+		request.completion(size, error);
 	}
 }
 
@@ -472,8 +470,7 @@ bool ManagedAsyncTaskQueue::TakePendingTaskRequest(AsyncTaskRequest &request, Sc
 }
 
 void ManagedAsyncTaskQueue::AddCompletionAccounting(AsyncTaskRequest &request) {
-	request.completion = [this](idx_t offset, idx_t size, optional_ptr<const ErrorData> error) {
-		(void)offset;
+	request.completion = [this](idx_t size, optional_ptr<const ErrorData> error) {
 		CompleteSubmittedTask(size, error);
 	};
 }
@@ -580,7 +577,7 @@ void ManagedAsyncTaskQueue::CancelPendingTasksAfterFailure(const ErrorData &erro
 		request.task.reset();
 		if (request.completion) {
 			try {
-				request.completion(0, request_size, error);
+				request.completion(request_size, error);
 			} catch (...) {
 			}
 		}

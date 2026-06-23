@@ -12,26 +12,31 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/serializer/async_write_queue.hpp"
+#include "duckdb/common/serializer/async_memory_governor.hpp"
 #include "duckdb/parallel/async_result.hpp"
+
+#include <functional>
 
 namespace duckdb {
 
 class ClientContext;
 class TaskExecutor;
 
+//! Completion callback for one generic async task. The error is set when the task failed.
+using AsyncTaskCompletionCallback = std::function<void(idx_t size, optional_ptr<const ErrorData> error)>;
+
 //! One unit of generic async work, tagged with a byte size used for memory accounting.
 class AsyncTaskRequest {
 public:
 	AsyncTaskRequest() = default;
-	AsyncTaskRequest(unique_ptr<AsyncTask> task, idx_t size, AsyncWriteCompletionCallback completion = nullptr);
+	AsyncTaskRequest(unique_ptr<AsyncTask> task, idx_t size, AsyncTaskCompletionCallback completion = nullptr);
 
 	//! The byte size reported for this task (used to bound queued/in-flight memory).
 	idx_t Size() const;
 
 	unique_ptr<AsyncTask> task;
 	idx_t size = 0;
-	AsyncWriteCompletionCallback completion;
+	AsyncTaskCompletionCallback completion;
 };
 
 //! Minimal generic async task scheduler.
@@ -91,7 +96,7 @@ private:
 
 private:
 	ClientContext &client_context;
-	//! Maximum scheduled/running tasks for this queue (the upload concurrency K).
+	//! Maximum scheduled/running tasks for this queue.
 	idx_t max_active_tasks = 1;
 
 	//! Protects state shared between the submitting thread and async tasks.
@@ -115,20 +120,19 @@ private:
 };
 
 //! Generic, memory-managed, multi-producer async task queue.
-//! Tasks are drained on the ASYNC TaskScheduler pool; queued+in-flight bytes are bounded by a shared
+//! Tasks are drained on the ASYNC TaskScheduler pool; queued and in-flight bytes are bounded by a shared
 //! TemporaryMemoryManager reservation. Falls back to synchronous execution when async_threads == 0.
 //!
-//! Semantics:
-//! - Multi-producer: Register is safe to call concurrently from many threads (it takes the internal lock).
-//! - Concurrency K: up to max_active_tasks (default async_threads) tasks run concurrently; one unit per drain
-//!   task, so independent tasks overlap. No coalescing of units.
-//! - Sync fallback: if async_threads == 0, Register executes the task inline on the caller.
-//! - Error model: the first task exception is captured by the underlying TaskExecutor; subsequent scheduling
-//!   stops; WaitAll/Close/RethrowTaskError rethrow it. Partial completion is possible on error.
-//! - Lifetime: call WaitAll then Close in the consumer's finalize step; the destructor asserts drained/closed.
+//! Contract:
+//! - Register is safe to call concurrently from multiple threads.
+//! - Up to max_active_tasks tasks run concurrently; each drain task executes one task.
+//! - With async_threads == 0, Register executes the task inline on the caller.
+//! - The first task error is captured, further scheduling stops, and it is rethrown from WaitAll/Close.
+//!   Partial completion is possible on error.
+//! - Call WaitAll then Close in the consumer's finalize step; the destructor asserts the queue is drained.
 class ManagedAsyncTaskQueue {
 public:
-	//! max_active_tasks == 0 -> use TaskScheduler::NumberOfAsyncThreads() (the upload concurrency K).
+	//! max_active_tasks == 0 -> use TaskScheduler::NumberOfAsyncThreads().
 	DUCKDB_API explicit ManagedAsyncTaskQueue(ClientContext &client_context, idx_t max_active_tasks = 0);
 	DUCKDB_API ~ManagedAsyncTaskQueue();
 
