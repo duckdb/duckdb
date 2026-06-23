@@ -20,7 +20,7 @@ public:
 
 	static TimePoint Tick();
 
-	// Get current timestamp in milliseconds since the epoch
+	// Get current monotonic clock time in milliseconds.
 	static int64_t GetCurrentMillis();
 	// Get two timepoints difference in different units
 	static int64_t ElapsedMillis(const TimePoint &start, const TimePoint &end);
