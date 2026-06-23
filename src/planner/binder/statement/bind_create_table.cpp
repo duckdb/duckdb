@@ -58,9 +58,11 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 		auto logical_type = col.GetType();
 		if (logical_type.id() == LogicalTypeId::UNBOUND && logical_type.HasAlias()) {
 			// Resolve user type if possible
-			const auto type_entry =
-			    Catalog::GetEntry<TypeCatalogEntry>(context, Identifier::InvalidCatalog(), Identifier::InvalidSchema(),
-			                                        Identifier(logical_type.GetAlias()), OnEntryNotFound::RETURN_NULL);
+			const auto type_entry = Catalog::GetEntry<TypeCatalogEntry>(
+			    context,
+			    QualifiedName(Identifier::InvalidCatalog(), Identifier::InvalidSchema(),
+			                  Identifier(logical_type.GetAlias())),
+			    OnEntryNotFound::RETURN_NULL);
 			if (type_entry) {
 				logical_type = type_entry->user_type;
 			}

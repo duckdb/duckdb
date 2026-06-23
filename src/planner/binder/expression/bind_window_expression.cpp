@@ -127,8 +127,8 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	if (!entry ||
 	    (entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY && entry->type != CatalogType::WINDOW_FUNCTION_ENTRY)) {
 		//	Not an aggregate or window function: Look it up to generate error
-		Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, window.Catalog(), window.Schema(),
-		                                                 window.FunctionName(), error_context);
+		Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+		    context, QualifiedName(window.Catalog(), window.Schema(), window.FunctionName()), error_context);
 	}
 
 	// If we have range expressions, then only one order by clause is allowed.

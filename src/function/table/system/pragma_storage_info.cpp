@@ -112,7 +112,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 
 	// look up the table name in the catalog
 	Binder::BindSchemaOrCatalog(context, qname);
-	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.Catalog(), qname.Schema(), qname.Name());
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname);
 	return make_uniq<PragmaStorageFunctionData>(table_entry, options);
 }
 

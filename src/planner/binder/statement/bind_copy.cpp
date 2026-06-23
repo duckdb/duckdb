@@ -527,8 +527,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 
 	// lookup the table to copy into
 	BindSchemaOrCatalog(stmt.info->GetQualifiedNameMutable());
-	auto &table =
-	    Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->Catalog(), stmt.info->Schema(), stmt.info->Table());
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->GetQualifiedName());
 	physical_index_vector_t<idx_t> column_index_map;
 	vector<LogicalIndex> named_column_map;
 	vector<LogicalType> expected_types;
@@ -675,15 +674,17 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	CatalogEntryRetriever entry_retriever {context};
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry =
-	    catalog.GetEntry(entry_retriever, Identifier::DefaultSchema(),
-	                     EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, Identifier(stmt.info->format)), on_entry_do);
+	auto entry = catalog.GetEntry(entry_retriever,
+	                              EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, Identifier(stmt.info->format))
+	                                  .WithQualification(catalog.GetName(), Identifier::DefaultSchema()),
+	                              on_entry_do);
 
 	if (!entry) {
 		IsFormatExtensionKnown(stmt.info->format);
 		// If we did not find an entry, we default to a CSV
-		entry = catalog.GetEntry(entry_retriever, Identifier::DefaultSchema(),
-		                         EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, "csv"),
+		entry = catalog.GetEntry(entry_retriever,
+		                         EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, Identifier("csv"))
+		                             .WithQualification(catalog.GetName(), Identifier::DefaultSchema()),
 		                         OnEntryNotFound::THROW_EXCEPTION);
 	}
 	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();

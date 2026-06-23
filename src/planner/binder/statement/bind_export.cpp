@@ -156,7 +156,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	// lookup the format in the catalog
 	auto &copy_function = Catalog::GetEntry<CopyFunctionCatalogEntry>(
-	    context, Identifier::InvalidCatalog(), Identifier::DefaultSchema(), Identifier(stmt.info->format));
+	    context,
+	    QualifiedName(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), Identifier(stmt.info->format)));
 	if (!copy_function.function.copy_to_bind && !copy_function.function.plan) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}

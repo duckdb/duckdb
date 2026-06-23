@@ -935,8 +935,8 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 	auto catalog = deserializer.ReadProperty<Identifier>(100, "catalog");
 	auto schema = deserializer.ReadProperty<Identifier>(101, "schema");
 	auto table = deserializer.ReadProperty<Identifier>(102, "table");
-	auto &catalog_entry =
-	    Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), catalog, schema, table);
+	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(),
+	                                                           QualifiedName(catalog, schema, table));
 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
 		throw SerializationException("Cant find table for %s.%s", schema, table);
 	}

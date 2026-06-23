@@ -41,7 +41,7 @@ SequenceCatalogEntry &BindSequence(Binder &binder, Identifier &catalog, Identifi
 SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, Identifier &catalog, Identifier &schema,
                                               const Identifier &name) {
 	Binder::BindSchemaOrCatalog(context, catalog, schema);
-	return Catalog::GetEntry<SequenceCatalogEntry>(context, catalog, schema, name);
+	return Catalog::GetEntry<SequenceCatalogEntry>(context, QualifiedName(catalog, schema, name));
 }
 
 SequenceCatalogEntry &BindSequence(Binder &binder, const Identifier &name) {

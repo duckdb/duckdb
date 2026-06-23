@@ -26,8 +26,8 @@ void Binder::BindDropTrigger(DropStatement &stmt, StatementProperties &propertie
 	Identifier schema_name = base_table_ref.Schema();
 	BindSchemaOrCatalog(catalog_name, schema_name);
 	// IF EXISTS only guards the trigger, not the table (PostgreSQL-compatible behavior).
-	auto &table_entry =
-	    Catalog::GetEntry<TableCatalogEntry>(context, catalog_name, schema_name, base_table_ref.Table());
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
+	    context, QualifiedName(catalog_name, schema_name, base_table_ref.Table()));
 	stmt.info->CatalogMutable() = table_entry.ParentCatalog().GetName();
 	stmt.info->SchemaMutable() = table_entry.ParentSchema().name;
 	properties.RegisterDBModify(table_entry.ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);
@@ -66,14 +66,12 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		if (stmt.info->type == CatalogType::MACRO_ENTRY) {
 			// We also support "DROP MACRO" (instead of "DROP MACRO TABLE") for table macros
 			// First try to drop a scalar macro
-			EntryLookupInfo macro_entry_lookup(stmt.info->type, stmt.info->Name());
-			entry = Catalog::GetEntry(context, stmt.info->Catalog(), stmt.info->Schema(), macro_entry_lookup,
-			                          OnEntryNotFound::RETURN_NULL);
+			EntryLookupInfo macro_entry_lookup(stmt.info->type, stmt.info->GetQualifiedName());
+			entry = Catalog::GetEntry(context, macro_entry_lookup, OnEntryNotFound::RETURN_NULL);
 			if (!entry) {
 				// Unable to find a scalar macro, try to drop a table macro
-				EntryLookupInfo table_macro_entry_lookup(CatalogType::TABLE_MACRO_ENTRY, stmt.info->Name());
-				entry = Catalog::GetEntry(context, stmt.info->Catalog(), stmt.info->Schema(), table_macro_entry_lookup,
-				                          OnEntryNotFound::RETURN_NULL);
+				EntryLookupInfo table_macro_entry_lookup(CatalogType::TABLE_MACRO_ENTRY, stmt.info->GetQualifiedName());
+				entry = Catalog::GetEntry(context, table_macro_entry_lookup, OnEntryNotFound::RETURN_NULL);
 				if (entry) {
 					// Change type to table macro so future lookups get the correct one
 					stmt.info->type = CatalogType::TABLE_MACRO_ENTRY;
@@ -82,13 +80,11 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 
 			if (!entry) {
 				// Unable to find table macro, try again with original OnEntryNotFound to ensure we throw if necessary
-				entry = Catalog::GetEntry(context, stmt.info->Catalog(), stmt.info->Schema(), macro_entry_lookup,
-				                          stmt.info->if_not_found);
+				entry = Catalog::GetEntry(context, macro_entry_lookup, stmt.info->if_not_found);
 			}
 		} else {
-			EntryLookupInfo entry_lookup(stmt.info->type, stmt.info->Name());
-			entry = Catalog::GetEntry(context, stmt.info->Catalog(), stmt.info->Schema(), entry_lookup,
-			                          stmt.info->if_not_found);
+			EntryLookupInfo entry_lookup(stmt.info->type, stmt.info->GetQualifiedName());
+			entry = Catalog::GetEntry(context, entry_lookup, stmt.info->if_not_found);
 		}
 		if (!entry) {
 			break;

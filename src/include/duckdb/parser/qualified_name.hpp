@@ -17,6 +17,10 @@ namespace duckdb {
 
 struct QualifiedName {
 	QualifiedName() = default;
+	//! Construct an unqualified name (no catalog/schema). Implicit so that an Identifier can be passed wherever an
+	//! unqualified QualifiedName lookup is expected (also preserves backwards-compatibility for extensions).
+	QualifiedName(Identifier name_p) : name(std::move(name_p)) { // NOLINT: allow implicit conversion
+	}
 	QualifiedName(Identifier catalog_p, Identifier schema_p, Identifier name_p) : name(std::move(name_p)) {
 		// store the catalog/schema as a schema path - in preparation for multi-level schema support
 		// for now we only support a single schema level, so the path is at most [catalog, schema]

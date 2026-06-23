@@ -148,8 +148,9 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	auto path = EvaluateTableDescription(context, *arguments[0]);
 	auto index_name = GetStringArgument(context, *arguments[1], "index_name");
 
-	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, path.database, path.schema, path.table)
-	                        .Cast<TableCatalogEntry>();
+	auto &table_entry =
+	    Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, QualifiedName(path.database, path.schema, path.table))
+	        .Cast<TableCatalogEntry>();
 	auto &duck_table = table_entry.Cast<DuckTableEntry>();
 	auto &data_table = duck_table.GetStorage();
 	auto &data_table_info = *data_table.GetDataTableInfo();

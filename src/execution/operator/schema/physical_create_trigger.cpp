@@ -7,8 +7,8 @@ namespace duckdb {
 SourceResultType PhysicalCreateTrigger::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                         OperatorSourceInput &input) const {
 	auto &catalog = Catalog::GetCatalog(context.client, info->Catalog());
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context.client, info->Catalog(), info->Schema(),
-	                                                   info->base_table->Table());
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(
+	    context.client, QualifiedName(info->Catalog(), info->Schema(), info->base_table->Table()));
 	auto transaction = catalog.GetCatalogTransaction(context.client);
 	table.CreateTrigger(transaction, *info);
 

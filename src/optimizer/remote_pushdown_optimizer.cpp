@@ -622,8 +622,8 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, func_expr.FunctionName());
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		const Identifier &schema = schema_name.empty() ? local_entry.schema : schema_name;
-		auto entry =
-		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, func_lookup, OnEntryNotFound::RETURN_NULL);
+		auto entry = Catalog::GetEntry(binder.context, func_lookup.WithQualification(local_entry.catalog, schema),
+		                               OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 			auto &tf_entry = entry->Cast<TableFunctionCatalogEntry>();
 			bool is_set_returning = false;
@@ -755,7 +755,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 			// to the binder so it can report a proper error message
 			EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.Table());
 			const auto &schema = schema_name.empty() ? Identifier(DEFAULT_SCHEMA) : schema_name;
-			auto entry = Catalog::GetEntry(binder.context, catalog->GetName(), schema, table_lookup,
+			auto entry = Catalog::GetEntry(binder.context, table_lookup.WithQualification(catalog->GetName(), schema),
 			                               OnEntryNotFound::RETURN_NULL);
 			if (!entry) {
 				TrackLocalTable(ref);
@@ -783,8 +783,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		// If the ref specifies a schema, use it; otherwise use the search path schema
 		const auto &schema = schema_name.empty() ? local_entry.schema : schema_name;
-		auto entry =
-		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_lookup, OnEntryNotFound::RETURN_NULL);
+		auto entry = Catalog::GetEntry(binder.context, table_lookup.WithQualification(local_entry.catalog, schema),
+		                               OnEntryNotFound::RETURN_NULL);
 		if (entry) {
 			TrackLocalTable(ref);
 			// Same as Case 1: local table → UNKNOWN to prevent Merge from treating it as neutral.
@@ -796,8 +796,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// but only if the table actually exists there (otherwise fall back to the binder for a proper error)
 	auto &remote_catalog = pushdown_state.remote_catalogs_in_search_path.front().get();
 	const auto &schema = schema_name.empty() ? Identifier(DEFAULT_SCHEMA) : schema_name;
-	auto entry =
-	    Catalog::GetEntry(binder.context, remote_catalog.GetName(), schema, table_lookup, OnEntryNotFound::RETURN_NULL);
+	auto entry = Catalog::GetEntry(binder.context, table_lookup.WithQualification(remote_catalog.GetName(), schema),
+	                               OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		TrackLocalTable(ref);
 		return CatalogPushdownResult::Unknown();
@@ -851,9 +851,8 @@ ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const Functi
 	state.result = CheckCatalogQualification(func, func.Catalog(), func.Schema());
 	// look up the function once - this determines both whether it can be constant-folded and
 	// whether it is a macro in a local catalog (which cannot be evaluated remotely)
-	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, func.FunctionName());
-	auto entry =
-	    Catalog::GetEntry(binder.context, func.Catalog(), func.Schema(), function_lookup, OnEntryNotFound::RETURN_NULL);
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, func.GetQualifiedName());
+	auto entry = Catalog::GetEntry(binder.context, function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		return state;
 	}
