@@ -285,7 +285,10 @@ class UseGramPreviewEmitter:
             _, child_rule, _ = repeat_children[0]
             var_name = self.identifier_var_name(child_rule)
             lines.append(f"\toptional<vector<{self.cpp_type(child_rule)}>> {var_name} {{}};")
-            lines.append(f"\tif (frame.child_results.size() > {len(normal_children)}) {{")
+            if normal_children:
+                lines.append(f"\tif (frame.child_results.size() > {len(normal_children)}) {{")
+            else:
+                lines.append("\tif (!frame.child_results.empty()) {")
             lines.append(f"\t\tvector<{self.cpp_type(child_rule)}> {var_name}_value;")
             lines.append(f"\t\tfor (idx_t i = {len(normal_children)}; i < frame.child_results.size(); i++) {{")
             lines.append(f"\t\t\t{var_name}_value.push_back(frame.TakeResult<{self.cpp_type(child_rule)}>(i));")

@@ -125,7 +125,7 @@ PEGTransformerFactory::FinalizeUseTargetCatalogSchemaTrampoline(PEGTransformer &
 	auto catalog_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	auto reserved_schema_name = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;
 	optional<vector<Identifier>> dot_identifier {};
-	if (frame.child_results.size() > 0) {
+	if (!frame.child_results.empty()) {
 		vector<Identifier> dot_identifier_value;
 		for (idx_t i = 0; i < frame.child_results.size(); i++) {
 			dot_identifier_value.push_back(frame.TakeResult<Identifier>(i));
