@@ -1,8 +1,6 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
@@ -12,6 +10,7 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 
@@ -311,20 +310,21 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-void TableIndexList::CheckPoint(TableIndexWriter &writer) {
+void TableIndexList::CheckPoint(TableIndexWriter &writer) const {
 	lock_guard<mutex> lock(index_entries_lock);
 
 	for (const auto &entry : index_entries) {
 		entry->index->Checkpoint(writer);
 	}
 
-	writer.FlushPartialBlocks();
+	// Flush before swapping the live indexes, so we don't reference blocks that do not exist
+	writer.Flush();
 
 	idx_t index_idx = 0;
 	for (const auto &entry : index_entries) {
 		lock_guard<mutex> guard(entry->lock);
 
-		auto shadow_index = writer.TakeBoundIndex(index_idx++);
+		auto shadow_index = writer.TakeShadowIndex(index_idx++);
 		if (!shadow_index) {
 			D_ASSERT(!entry->index->IsBound());
 			continue;
@@ -376,7 +376,7 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 	}
 }
 
-void TableIndexList::Serialize(vector<CheckpointedIndex> &result, Serializer &serializer) {
+void TableIndexList::Serialize(const vector<CheckpointedIndex> &result, Serializer &serializer) {
 	// write empty block pointers for forwards compatibility
 	const vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);

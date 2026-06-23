@@ -309,12 +309,9 @@ unsafe_unique_ptr<FixedSizeAllocator> FixedSizeAllocator::Persist(PartialBlockMa
 	result->buffers_with_free_space = buffers_with_free_space;
 	result->buffer_with_free_space = buffer_with_free_space;
 
-	for (auto &entry : buffers) {
-		auto buffer_id = entry.first;
-		auto &buffer = *entry.second;
-
+	for (auto &[buffer_id, buffer] : buffers) {
 		result->buffers[buffer_id] =
-		    buffer.Persist(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
+		    buffer->Persist(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
 	}
 
 	return result;

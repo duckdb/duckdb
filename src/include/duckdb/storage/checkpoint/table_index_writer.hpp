@@ -12,6 +12,7 @@
 #include "duckdb/storage/index_serialization_info.hpp"
 
 namespace duckdb {
+class Serializer;
 class PartialBlockManager;
 class SingleFileCheckpointWriter;
 
@@ -21,20 +22,17 @@ public:
 	virtual ~TableIndexWriter();
 
 public:
+	void AddUnboundIndex(shared_ptr<const IndexStorageInfo> info);
+	void AddBoundIndex(IndexStorageInfo info, unique_ptr<BoundIndex> index);
+	unique_ptr<BoundIndex> TakeShadowIndex(idx_t index);
 	PartialBlockManager &GetPartialBlockManager() const {
 		return partial_block_manager;
 	}
-	void AddUnboundIndex(shared_ptr<const IndexStorageInfo> info);
-	void AddBoundIndex(IndexStorageInfo storage_info, unique_ptr<BoundIndex> index);
-	unique_ptr<BoundIndex> TakeBoundIndex(const idx_t index) {
-		D_ASSERT(index < result.size());
-		return std::move(result[index].shadow_index);
-	}
-	vector<CheckpointedIndex> &GetResult() {
-		return result;
-	}
-	virtual void FlushPartialBlocks() = 0;
-	virtual IndexSerializationFormat GetTargetFormat() const = 0;
+	virtual void Serialize(Serializer &serializer) = 0;
+	//! Writes the index buffers to disk
+	virtual void Flush() = 0;
+	//! Get the targeted storage version for the current writer
+	StorageVersion GetStorageVersion() const;
 
 protected:
 	PartialBlockManager &partial_block_manager;
@@ -45,13 +43,20 @@ protected:
 
 class SingleFileIndexWriter : public TableIndexWriter {
 public:
-	explicit SingleFileIndexWriter(PartialBlockManager &partial_block_manager, StorageVersion version);
+	explicit SingleFileIndexWriter(SingleFileCheckpointWriter &checkpoint_manager,
+	                               PartialBlockManager &partial_block_manager, StorageVersion version,
+	                               bool debug_verify_blocks);
 
 public:
-	void FlushPartialBlocks() override;
-	IndexSerializationFormat GetTargetFormat() const override;
+	void Flush() override;
+	void Serialize(Serializer &serializer) override;
 
 private:
+	void VerifyBlockUsage();
+
+private:
+	SingleFileCheckpointWriter &checkpoint_manager;
+	bool debug_verify_blocks;
 };
 
 } // namespace duckdb

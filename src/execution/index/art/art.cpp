@@ -130,8 +130,21 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	}
 }
 
-uint8_t ART::GetAllocatorCount(const IndexSerializationFormat format) {
-	if (format == IndexSerializationFormat::V1_0_0) {
+ART::ART(const ART &src, shared_ptr<AllocatorArray> allocators_ptr)
+    : BoundIndex(src.name, ART::TYPE_NAME, src.index_constraint_type, src.column_ids, src.table_io_manager,
+                 src.unbound_expressions, src.db),
+      tree(src.tree), allocators(std::move(allocators_ptr)), owns_data(true), storage_version(src.storage_version),
+      prefix_count(src.prefix_count) {
+	D_ASSERT(allocators);
+}
+
+unique_ptr<BoundIndex> ART::CreateShadow(shared_ptr<AllocatorArray> new_allocators) {
+	auto art = make_uniq<ART>(*this, std::move(new_allocators));
+	return std::move(art);
+}
+
+uint8_t ART::GetAllocatorCount(const ARTSerializationFormat format) {
+	if (format == ARTSerializationFormat::V1_0_0) {
 		return DEPRECATED_ALLOCATOR_COUNT;
 	}
 
@@ -1019,8 +1032,8 @@ void ART::TransformToDeprecated() {
 	}
 }
 
-IndexStorageInfo ART::PrepareSerialize(const IndexSerializationFormat target_format) {
-	if (target_format == IndexSerializationFormat::V1_0_0) {
+IndexStorageInfo ART::PrepareSerialize(const ARTSerializationFormat target_format) {
+	if (target_format == ARTSerializationFormat::V1_0_0) {
 		TransformToDeprecated();
 	}
 
@@ -1037,7 +1050,7 @@ IndexStorageInfo ART::PrepareSerialize(const IndexSerializationFormat target_for
 	}
 
 #ifdef DEBUG
-	if (target_format == IndexSerializationFormat::V1_0_0) {
+	if (target_format == ARTSerializationFormat::V1_0_0) {
 		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_7_LEAF)]->Empty());
 		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_15_LEAF)]->Empty());
 		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_256_LEAF)]->Empty());
@@ -1049,10 +1062,20 @@ IndexStorageInfo ART::PrepareSerialize(const IndexSerializationFormat target_for
 	return info;
 }
 
+ARTSerializationFormat ART::GetSerializationFormat(const StorageVersion storage_version) {
+	const auto v1_0_0_storage = StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version);
+	if (v1_0_0_storage) {
+		return ARTSerializationFormat::V1_0_0;
+	}
+
+	return ARTSerializationFormat::CURRENT;
+}
+
 void ART::Checkpoint(TableIndexWriter &writer) {
 	lock_guard<mutex> guard(lock);
 
-	const auto target_format = writer.GetTargetFormat();
+	const auto target_format = GetSerializationFormat(writer.GetStorageVersion());
+	// This may mutate the live ART into a deprecated representation, but we accept this to prevent double copying.
 	auto storage_info = PrepareSerialize(target_format);
 
 	auto &partial_block_manager = writer.GetPartialBlockManager();
@@ -1070,13 +1093,14 @@ void ART::Checkpoint(TableIndexWriter &writer) {
 		}
 	}
 
-	auto new_art = CreateShadow(new_allocators, storage_info);
+	auto new_art = CreateShadow(new_allocators);
 	writer.AddBoundIndex(std::move(storage_info), std::move(new_art));
 }
 
-IndexStorageInfo ART::SerializeToWAL(const IndexSerializationFormat target_format) {
+IndexStorageInfo ART::SerializeToWAL(const StorageVersion target_version) {
 	// If the storage format uses deprecated leaf storage,
 	// then we need to transform all nested leaves before serialization.
+	const auto target_format = GetSerializationFormat(target_version);
 	auto info = PrepareSerialize(target_format);
 	const auto allocator_count = ART::GetAllocatorCount(target_format);
 

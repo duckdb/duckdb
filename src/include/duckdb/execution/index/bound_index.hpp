@@ -194,7 +194,7 @@ public:
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;
 
 	//! Serializes index memory to the WAL and returns the index storage information.
-	virtual IndexStorageInfo SerializeToWAL(IndexSerializationFormat target_format);
+	virtual IndexStorageInfo SerializeToWAL(StorageVersion storage_version);
 
 	//! Execute the index expressions on an input chunk
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);

@@ -134,6 +134,7 @@ public:
 };
 
 class SingleFileCheckpointWriter final : public CheckpointWriter {
+	friend class SingleFileIndexWriter;
 	friend class SingleFileRowGroupWriter;
 	friend class SingleFileTableDataWriter;
 

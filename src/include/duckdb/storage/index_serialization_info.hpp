@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-enum IndexSerializationFormat { V1_0_0, CURRENT };
+enum ARTSerializationFormat { V1_0_0, CURRENT };
 
 struct CheckpointedIndex {
 	shared_ptr<const IndexStorageInfo> storage_info;

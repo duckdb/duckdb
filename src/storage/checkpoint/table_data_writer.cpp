@@ -71,10 +71,6 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 	                                           table_data_writer);
 }
 
-unique_ptr<TableIndexWriter> SingleFileTableDataWriter::GetTableIndexWriter(StorageVersion version) {
-	return make_uniq<SingleFileIndexWriter>(checkpoint_manager.partial_block_manager, version);
-}
-
 CheckpointOptions SingleFileTableDataWriter::GetCheckpointOptions() const {
 	return checkpoint_manager.GetCheckpointOptions();
 }
@@ -92,8 +88,10 @@ void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
 	existing_next_row_id = next_row_id;
 }
 
-bool SingleFileTableDataWriter::CheckpointIndexes() const {
-	return true;
+unique_ptr<TableIndexWriter> SingleFileTableDataWriter::GetTableIndexWriter(StorageVersion version) {
+	const auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetDatabase());
+	return make_uniq<SingleFileIndexWriter>(checkpoint_manager, checkpoint_manager.index_partial_block_manager, version,
+	                                        debug_verify_blocks);
 }
 
 void SingleFileTableDataWriter::FlushPartialBlocks() {
@@ -101,8 +99,8 @@ void SingleFileTableDataWriter::FlushPartialBlocks() {
 }
 
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
-                                              RowGroupCollection &collection, vector<CheckpointedIndex> &result,
-                                              Serializer &serializer) {
+                                              RowGroupCollection &collection,
+                                              optional_ptr<TableIndexWriter> index_writer, Serializer &serializer) {
 	MetaBlockPointer pointer;
 	idx_t total_rows;
 	idx_t next_row_id;
@@ -196,17 +194,8 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	// prior: ser version 3
-	// if (debug_verify_blocks) {
-	// 	for (auto &entry : index_storage_infos.ordered_infos) {
-	// 		for (auto &allocator : entry.get().allocator_infos) {
-	// 			for (auto &block : allocator.block_pointers) {
-	// 				checkpoint_manager.verify_block_usage_count[block.block_id]++;
-	// 			}
-	// 		}
-	// 	}
-	// }
-	TableIndexList::Serialize(result, serializer);
+	D_ASSERT(index_writer);
+	index_writer->Serialize(serializer);
 
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WriteProperty(105, "next_row_id", next_row_id);

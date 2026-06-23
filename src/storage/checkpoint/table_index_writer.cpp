@@ -1,4 +1,5 @@
 #include "duckdb/storage/checkpoint/table_index_writer.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
@@ -18,21 +19,42 @@ void TableIndexWriter::AddBoundIndex(IndexStorageInfo info, unique_ptr<BoundInde
 	result.push_back({make_shared_ptr<const IndexStorageInfo>(std::move(info)), std::move(index)});
 }
 
-SingleFileIndexWriter::SingleFileIndexWriter(PartialBlockManager &partial_block_manager, StorageVersion version)
-    : TableIndexWriter(partial_block_manager, version) {
+unique_ptr<BoundIndex> TableIndexWriter::TakeShadowIndex(idx_t index) {
+	D_ASSERT(index < result.size());
+	return std::move(result[index].shadow_index);
 }
 
-void SingleFileIndexWriter::FlushPartialBlocks() {
+StorageVersion TableIndexWriter::GetStorageVersion() const {
+	return storage_version;
+}
+
+SingleFileIndexWriter::SingleFileIndexWriter(SingleFileCheckpointWriter &checkpoint_manager,
+                                             PartialBlockManager &partial_block_manager, const StorageVersion version,
+                                             const bool debug_verify_blocks)
+    : TableIndexWriter(partial_block_manager, version), checkpoint_manager(checkpoint_manager),
+      debug_verify_blocks(debug_verify_blocks) {
+}
+
+void SingleFileIndexWriter::Flush() {
 	partial_block_manager.FlushPartialBlocks();
 }
 
-IndexSerializationFormat SingleFileIndexWriter::GetTargetFormat() const {
-	const auto v1_0_0_storage = StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version);
-	if (v1_0_0_storage) {
-		return IndexSerializationFormat::V1_0_0;
+void SingleFileIndexWriter::Serialize(Serializer &serializer) {
+	if (debug_verify_blocks) {
+		VerifyBlockUsage();
 	}
 
-	return IndexSerializationFormat::CURRENT;
+	TableIndexList::Serialize(result, serializer);
+}
+
+void SingleFileIndexWriter::VerifyBlockUsage() {
+	for (const auto &[storage_info, _] : result) {
+		for (auto &allocator : storage_info->allocator_infos) {
+			for (auto &block : allocator.block_pointers) {
+				checkpoint_manager.verify_block_usage_count[block.block_id]++;
+			}
+		}
+	}
 }
 
 } // namespace duckdb

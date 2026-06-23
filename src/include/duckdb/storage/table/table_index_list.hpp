@@ -89,10 +89,10 @@ public:
 	//! Get the combined column ids of the indexes.
 	unordered_set<column_t> GetRequiredColumns();
 
-	void CheckPoint(TableIndexWriter &writer);
+	void CheckPoint(TableIndexWriter &writer) const;
 
 public:
-	static void Serialize(vector<CheckpointedIndex> &result, Serializer &serializer);
+	static void Serialize(const vector<CheckpointedIndex> &result, Serializer &serializer);
 	//! Initialize an index_chunk from a table.
 	static void InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
 	                                 vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info);

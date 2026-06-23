@@ -56,6 +56,7 @@ public:
 	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
 	    AttachedDatabase &db, const shared_ptr<AllocatorArray> &allocators_ptr = nullptr,
 	    const IndexStorageInfo &info = IndexStorageInfo());
+	ART(const ART &src, shared_ptr<AllocatorArray> allocators_ptr);
 
 	//! Create a index instance of this type.
 	static unique_ptr<BoundIndex> Create(CreateIndexInput &input) {
@@ -65,17 +66,7 @@ public:
 	}
 
 	//! Create an index which is logically equivalent but backed by potentially (partially) different buffers.
-	unique_ptr<BoundIndex> CreateShadow(shared_ptr<AllocatorArray> new_allocators, const IndexStorageInfo &info) {
-		auto art = make_uniq<ART>(name, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db,
-		                          new_allocators, IndexStorageInfo());
-
-		art->SetPrefixCount(info);
-		art->owns_data = true;
-		art->tree.Set(info.root);
-		art->storage_version = storage_version;
-
-		return std::move(art);
-	}
+	unique_ptr<BoundIndex> CreateShadow(shared_ptr<AllocatorArray> new_allocators);
 
 	static IndexType GetARTIndexType();
 
@@ -153,7 +144,7 @@ public:
 	void Checkpoint(TableIndexWriter &writer) override;
 
 	//! Serializes ART memory to the WAL and returns the ART storage information.
-	IndexStorageInfo SerializeToWAL(IndexSerializationFormat target_format) override;
+	IndexStorageInfo SerializeToWAL(StorageVersion target_version) override;
 
 	//! Returns the in-memory usage of the ART.
 	idx_t GetInMemorySize(IndexLock &index_lock) override;
@@ -182,11 +173,10 @@ public:
 		return prefix_count;
 	}
 
-private:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
 
-	static uint8_t GetAllocatorCount(IndexSerializationFormat format);
+	static uint8_t GetAllocatorCount(ARTSerializationFormat format);
 
 	bool FullScan(idx_t max_count, set<row_t> &row_ids);
 	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
@@ -211,7 +201,8 @@ private:
 
 	void InitAllocators(const IndexStorageInfo &info);
 	void TransformToDeprecated();
-	IndexStorageInfo PrepareSerialize(IndexSerializationFormat target_format);
+	IndexStorageInfo PrepareSerialize(ARTSerializationFormat target_format);
+	static ARTSerializationFormat GetSerializationFormat(StorageVersion storage_version);
 	void Deserialize(const BlockPointer &pointer);
 	void SetPrefixCount(const IndexStorageInfo &info);
 

@@ -37,8 +37,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 
-#include <duckdb/storage/checkpoint/table_index_writer.hpp>
-
 namespace duckdb {
 
 DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema,
@@ -1834,24 +1832,15 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 		RebuildIndexes();
 		timer.EndTimer();
 	}
-	// checkpoint all indexes
-	if (!writer.CheckpointIndexes()) {
-		vector<CheckpointedIndex> vec;
-		writer.FinalizeTable(global_stats, *info, *row_groups, vec, serializer);
-		row_groups->SetStats(global_stats);
-		return;
-	}
 
 	const auto storage_version = serializer.GetOptions().storage_compatibility.storage_version;
 	const auto index_writer = writer.GetTableIndexWriter(storage_version);
-	info->GetIndexes().CheckPoint(*index_writer);
+	if (index_writer) {
+		// Only checkpoint indexes when we write to disk
+		info->GetIndexes().CheckPoint(*index_writer);
+	}
 
-	// The row group payload data has been written. Now write:
-	//   sample
-	//   column stats
-	//   row-group pointers
-	//   table pointer
-	writer.FinalizeTable(global_stats, *info, *row_groups, index_writer->GetResult(), serializer);
+	writer.FinalizeTable(global_stats, *info, *row_groups, index_writer, serializer);
 	row_groups->SetStats(global_stats);
 }
 

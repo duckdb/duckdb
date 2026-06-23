@@ -96,7 +96,7 @@ void InMemoryTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
 }
 
 void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
-                                            RowGroupCollection &collection, vector<CheckpointedIndex> &result,
+                                            RowGroupCollection &collection, optional_ptr<TableIndexWriter>,
                                             Serializer &serializer) {
 	// nop: no need to write anything
 }
@@ -107,12 +107,8 @@ unique_ptr<RowGroupWriter> InMemoryTableDataWriter::GetRowGroupWriter(RowGroup &
 }
 
 unique_ptr<TableIndexWriter> InMemoryTableDataWriter::GetTableIndexWriter(StorageVersion) {
-	throw InternalException("Unsupported method GetTableIndexWriter for InMemoryTableDataWriter");
-}
-
-bool InMemoryTableDataWriter::CheckpointIndexes() const {
-	return false;
-}
+	return nullptr;
+};
 
 void InMemoryTableDataWriter::FlushPartialBlocks() {
 }

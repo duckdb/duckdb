@@ -170,7 +170,7 @@ unique_ptr<BoundIndex> BoundIndex::CreateDeltaIndex(DeltaIndexType delta_index_t
 	throw InternalException("BoundIndex::CreateDeltaIndex is not supported for this index type");
 }
 
-IndexStorageInfo BoundIndex::SerializeToWAL(const IndexSerializationFormat target_format) {
+IndexStorageInfo BoundIndex::SerializeToWAL(const StorageVersion storage_version) {
 	throw NotImplementedException("The implementation of this index WAL serialization does not exist.");
 }
 

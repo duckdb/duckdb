@@ -378,19 +378,12 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 
 void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list,
                     const string &name) {
-	IndexSerializationFormat target_format = CURRENT;
 	const auto storage_version = db.GetStorageManager().GetStorageVersion();
-	// Before: serialization version 3
-	const auto v1_0_0_storage = StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version);
-	if (v1_0_0_storage) {
-		target_format = IndexSerializationFormat::V1_0_0;
-	}
-
 	for (auto &index : list.Indexes()) {
 		if (name == index.GetIndexName()) {
 			// We never write an unbound index to the WAL.
 			D_ASSERT(index.IsBound());
-			const auto &info = index.Cast<BoundIndex>().SerializeToWAL(target_format);
+			const auto &info = index.Cast<BoundIndex>().SerializeToWAL(storage_version);
 			serializer.WriteProperty(102, "index_storage_info", info);
 			serializer.WriteList(103, "index_storage", info.buffers.size(), [&](Serializer::List &list, idx_t i) {
 				auto &buffers = info.buffers[i];
