@@ -25,10 +25,8 @@
 namespace duckdb {
 
 static bool TypeIsUnnamedStruct(const LogicalType &type) {
-	if (type.id() != LogicalTypeId::STRUCT) {
-		return false;
-	}
-	return StructType::IsUnnamed(type);
+	return type.id() == LogicalTypeId::TUPLE ||
+	       (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type));
 }
 
 static bool HasCTEAccessor(LogicalOperator &op, TableIndex table_index) {

@@ -461,7 +461,7 @@ MatchFunction RowMatcher::GetStructMatchFunction(const LogicalType &type, const 
 		}
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
-		if (StructType::IsUnnamed(type)) {
+		if (type.id() == LogicalTypeId::TUPLE || StructType::IsUnnamed(type)) {
 			result.function = UnnamedStructNotEqualsMatch<NO_MATCH_SEL>;
 			return result;
 		}

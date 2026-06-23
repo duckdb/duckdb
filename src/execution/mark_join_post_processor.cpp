@@ -102,10 +102,14 @@ idx_t FilterCandidatesForColumnComparison(Vector &lhs_column, Vector &rhs_column
                                           idx_t rhs_count, const SelectionVector &candidate_sel, idx_t candidate_count,
                                           MarkJoinNullMatchState &state, SelectionVector &remaining_sel) {
 	auto rhs_scalar = rhs_column.GetValue(rhs_row);
-	if (rhs_scalar.IsNull()) {
-		rhs_scalar = Value(rhs_column.GetType());
+	if (rhs_scalar.type() != rhs_value.GetType()) {
+		rhs_scalar = rhs_scalar.DefaultCastAs(rhs_value.GetType());
 	}
-	ConstantVector::Reference(rhs_value, rhs_scalar, count_t(candidate_count));
+	if (rhs_scalar.IsNull()) {
+		ConstantVector::SetNull(rhs_value, count_t(candidate_count));
+	} else {
+		ConstantVector::Reference(rhs_value, rhs_scalar, count_t(candidate_count));
+	}
 	Vector lhs_slice(lhs_column, candidate_sel, candidate_count);
 
 	state.null_mask.SetAllValid(candidate_count);
@@ -192,8 +196,9 @@ bool ComparisonPropagatesNull(ExpressionType comparison_type) {
 }
 
 bool IsUnnamedStructType(const LogicalType &type) {
-	return type.id() == LogicalTypeId::STRUCT && type.InternalType() == PhysicalType::STRUCT &&
-	       StructType::IsUnnamed(type);
+	return type.InternalType() == PhysicalType::STRUCT &&
+	       (type.id() == LogicalTypeId::TUPLE ||
+	        (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type)));
 }
 
 static bool MarkJoinValueContainsNestedNull(const Value &value) {
@@ -294,19 +299,13 @@ idx_t SelectComparison(ExpressionType comparison_type, const Vector &left, const
                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		if (left.GetType().id() == LogicalTypeId::STRUCT && right.GetType().id() == LogicalTypeId::STRUCT &&
-		    left.GetType().InternalType() == PhysicalType::STRUCT &&
-		    right.GetType().InternalType() == PhysicalType::STRUCT && StructType::IsUnnamed(left.GetType()) &&
-		    StructType::IsUnnamed(right.GetType())) {
+		if (IsUnnamedStructType(left.GetType()) && IsUnnamedStructType(right.GetType())) {
 			return SelectNestedEqualsOrNotEqualsForMarkJoin(left, right, sel, count, true_sel, false_sel, null_mask,
 			                                                false);
 		}
 		return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel, null_mask);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		if (left.GetType().id() == LogicalTypeId::STRUCT && right.GetType().id() == LogicalTypeId::STRUCT &&
-		    left.GetType().InternalType() == PhysicalType::STRUCT &&
-		    right.GetType().InternalType() == PhysicalType::STRUCT && StructType::IsUnnamed(left.GetType()) &&
-		    StructType::IsUnnamed(right.GetType())) {
+		if (IsUnnamedStructType(left.GetType()) && IsUnnamedStructType(right.GetType())) {
 			return SelectNestedEqualsOrNotEqualsForMarkJoin(left, right, sel, count, true_sel, false_sel, null_mask,
 			                                                true);
 		}
@@ -333,10 +332,14 @@ idx_t FilterCandidatesForConditionComparison(Vector &lhs_column, Vector &rhs_col
                                              idx_t candidate_count, ExpressionType comparison_type,
                                              MarkJoinNullMatchState &state, SelectionVector &remaining_sel) {
 	auto rhs_scalar = rhs_column.GetValue(rhs_row);
-	if (rhs_scalar.IsNull()) {
-		rhs_scalar = Value(rhs_column.GetType());
+	if (rhs_scalar.type() != rhs_value.GetType()) {
+		rhs_scalar = rhs_scalar.DefaultCastAs(rhs_value.GetType());
 	}
-	ConstantVector::Reference(rhs_value, rhs_scalar, count_t(candidate_count));
+	if (rhs_scalar.IsNull()) {
+		ConstantVector::SetNull(rhs_value, count_t(candidate_count));
+	} else {
+		ConstantVector::Reference(rhs_value, rhs_scalar, count_t(candidate_count));
+	}
 	Vector lhs_slice(lhs_column, candidate_sel, candidate_count);
 
 	state.null_mask.SetAllValid(candidate_count);

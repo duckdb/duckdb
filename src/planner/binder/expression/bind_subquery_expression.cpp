@@ -142,11 +142,10 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		// If we keep a row-valued child intact, we still need to distinguish between:
 		// (1) a subquery that returns a single row/struct value and
 		// (2) a subquery that returns multiple scalar columns that should match the row width.
-		if (has_unexpanded_struct && expected_columns == 1 &&
-		    TypeIsUnnamedStruct(child_expressions[0]->GetReturnType())) {
+		if (has_unexpanded_struct && expected_columns == 1 && TypeIsTuple(child_expressions[0]->GetReturnType())) {
 			const auto struct_child_count = StructType::GetChildCount(child_expressions[0]->GetReturnType());
 			const bool subquery_returns_single_struct =
-			    bound_subquery.bound_node.types.size() == 1 && TypeIsUnnamedStruct(bound_subquery.bound_node.types[0]);
+			    bound_subquery.bound_node.types.size() == 1 && TypeIsTuple(bound_subquery.bound_node.types[0]);
 			if (!subquery_returns_single_struct) {
 				// The child is a row with N elements, so a scalar/multi-column subquery must expose N columns.
 				// This preserves the historical width mismatch error for cases like:

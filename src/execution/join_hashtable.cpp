@@ -677,9 +677,8 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 		if (null_values_are_equal[col_idx]) {
 			continue;
 		}
-		if (join_type == JoinType::MARK && keys.data[col_idx].GetType().id() == LogicalTypeId::STRUCT &&
+		if (join_type == JoinType::MARK && keys.data[col_idx].GetType().id() == LogicalTypeId::TUPLE &&
 		    keys.data[col_idx].GetType().InternalType() == PhysicalType::STRUCT &&
-		    StructType::IsUnnamed(keys.data[col_idx].GetType()) &&
 		    conditions[col_idx].GetComparisonType() == ExpressionType::COMPARE_EQUAL) {
 			idx_t filtered_count = 0;
 			for (idx_t i = 0; i < added_count; i++) {
