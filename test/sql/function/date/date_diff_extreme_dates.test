@@ -2,6 +2,9 @@
 # description: Test datediff with extreme date ranges that previously overflowed
 # group: [date]
 
+statement ok
+PRAGMA enable_verification
+
 # Bug fix: datediff('week') used int32 subtraction of date.days which overflowed
 # for dates spanning the full int32 range, producing 0 instead of ~613 million
 query I

@@ -153,6 +153,8 @@ struct BaseRequest {
 	bool have_request_timing = false;
 	timestamp_t request_start;
 	timestamp_t request_end;
+	//! Request body size in bytes (the Content-Length we send). Only set for PUT/POST.
+	idx_t request_body_length = 0;
 
 	//! Optional per-request network measurements, populated by clients that measure them.
 	bool have_time_to_fst_byte = false;
@@ -194,6 +196,7 @@ struct PutRequestInfo : public BaseRequest {
 	               idx_t buffer_in_len, const string &content_type)
 	    : BaseRequest(RequestType::PUT_REQUEST, path, headers, params), buffer_in(buffer_in),
 	      buffer_in_len(buffer_in_len), content_type(content_type) {
+		request_body_length = buffer_in_len;
 	}
 
 	const_data_ptr_t buffer_in;
@@ -224,6 +227,7 @@ struct PostRequestInfo : public BaseRequest {
 	                idx_t buffer_in_len)
 	    : BaseRequest(RequestType::POST_REQUEST, path, headers, params), buffer_in(buffer_in),
 	      buffer_in_len(buffer_in_len) {
+		request_body_length = buffer_in_len;
 	}
 
 	const_data_ptr_t buffer_in;

@@ -346,8 +346,15 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	auto &partial_block_manager = info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<GeoColumnCheckpointState>(row_group, *this, partial_block_manager);
 
-	auto &old_column_stats =
-	    base_column->GetType().id() == LogicalTypeId::GEOMETRY ? old_stats : base_column->GetStatisticsRef();
+	// When the inner column is unshredded, the geometry old_stats are already correct.
+	// When the inner column is shredded, the base_column has no stats of its own (it is parented to us).
+	// Shredded columns are always re-written from scratch, and the stats are recomputes, do the empty stats of the
+	// inner layout type is a correct default in these cases.
+	unique_ptr<BaseStatistics> shredded_stats;
+	if (base_column->GetType().id() != LogicalTypeId::GEOMETRY) {
+		shredded_stats = BaseStatistics::CreateEmpty(base_column->GetType()).ToUnique();
+	}
+	auto &old_column_stats = shredded_stats ? *shredded_stats : old_stats;
 
 	// Are there any changes?
 	if (!HasAnyChanges()) {
@@ -356,17 +363,22 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		checkpoint_state->inner_column_state =
 		    checkpoint_state->inner_column->Checkpoint(row_group, info, old_column_stats);
 
-		if (base_column->GetType().id() == LogicalTypeId::GEOMETRY) {
-			// Get the stats from the base column.
+		// Only the specialized (shredded) layouts need to be reinterpreted via GetSpecializedType.
+		// Both WKB and the legacy SPATIAL format store the full, unshredded geometry, so their stats come
+		// directly from the column rather than from a specialized layout.
+
+		const auto storage_type = checkpoint_state->storage_type;
+		if (storage_type == GeometryStorageType::WKB) {
+			// WKB: the base column carries the geometry stats directly.
 			checkpoint_state->global_stats = checkpoint_state->inner_column_state->GetStatistics();
-		} else if (checkpoint_state->storage_type == GeometryStorageType::SPATIAL) {
+		} else if (storage_type == GeometryStorageType::SPATIAL) {
 			// Legacy spatial storage - we cannot interpret the stats of the old format
 			auto new_stats = checkpoint_state->inner_column_state->GetStatistics();
 			checkpoint_state->global_stats = GeometryStats::CreateUnknown(type).ToUnique();
 			checkpoint_state->global_stats->CopyBase(*new_stats);
 		} else {
-			// Otherwise interpret stats from shredded column
-			const auto types = Geometry::GetSpecializedType(checkpoint_state->storage_type);
+			// Shredded storage, interpret stats from shredded column
+			const auto types = Geometry::GetSpecializedType(storage_type);
 			const auto gtype = types.first;
 			const auto vtype = types.second;
 

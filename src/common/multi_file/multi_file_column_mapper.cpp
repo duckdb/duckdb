@@ -344,6 +344,18 @@ MapColumnMapComponent(ClientContext &context,
 	return child_map;
 }
 
+static bool IsInvalidMapKeyDefault(const ColumnMapResult &mapping) {
+	if (!mapping.default_value) {
+		return false;
+	}
+	auto &expr = *mapping.default_value;
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+		return false;
+	}
+	auto &constant_expr = expr.Cast<BoundConstantExpression>();
+	return constant_expr.GetValue().IsNull();
+}
+
 static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefinition &global_column,
                                     const ColumnIndex &global_index, const MultiFileColumnDefinition &local_column,
                                     const MultiFileLocalIndex &local_id, const ColumnMapper &mapper,
@@ -384,6 +396,11 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 
 		auto map_result = MapColumnMapComponent(context, selected_children, global_index, *nested_mapper, i,
 		                                        global_component, local_key_value);
+		if (name == "key" && IsInvalidMapKeyDefault(map_result)) {
+			throw InvalidInputException(
+			    "'key' of MAP did not map to a value and the registered DEFAULT is NULL, which is not allowed");
+		}
+
 		if (map_result.column_index) {
 			child_indexes.push_back(std::move(*map_result.column_index));
 			mapping->child_mapping.insert(make_pair(i, std::move(map_result.mapping)));
