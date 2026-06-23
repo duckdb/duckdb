@@ -558,6 +558,7 @@ void ManagedAsyncTaskQueue::VerifyDrained() const {
 }
 
 void ManagedAsyncTaskQueue::CancelPendingTasksAfterFailure(const ErrorData &error) noexcept {
+	(void)error;
 	deque<AsyncTaskRequest> tasks;
 	{
 		lock_guard<mutex> guard(lock);
@@ -573,14 +574,7 @@ void ManagedAsyncTaskQueue::CancelPendingTasksAfterFailure(const ErrorData &erro
 	}
 
 	for (auto &request : tasks) {
-		auto request_size = request.Size();
 		request.task.reset();
-		if (request.completion) {
-			try {
-				request.completion(request_size, error);
-			} catch (...) {
-			}
-		}
 	}
 }
 

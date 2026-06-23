@@ -31,6 +31,7 @@ struct ManagedAsyncMemoryConfig {
 class ManagedAsyncMemoryGovernor {
 public:
 	explicit ManagedAsyncMemoryGovernor(ClientContext &client_context);
+	~ManagedAsyncMemoryGovernor();
 
 	ManagedAsyncMemoryGovernor(const ManagedAsyncMemoryGovernor &) = delete;
 	ManagedAsyncMemoryGovernor &operator=(const ManagedAsyncMemoryGovernor &) = delete;

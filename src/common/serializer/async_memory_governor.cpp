@@ -23,6 +23,8 @@ ManagedAsyncMemoryGovernor::ManagedAsyncMemoryGovernor(ClientContext &client_con
 	}
 }
 
+ManagedAsyncMemoryGovernor::~ManagedAsyncMemoryGovernor() = default;
+
 bool ManagedAsyncMemoryGovernor::IsActive() const {
 	return memory_state != nullptr;
 }
