@@ -24,6 +24,12 @@ public:
 	                QueryErrorContext error_context = QueryErrorContext());
 	EntryLookupInfo(CatalogType catalog_type, QualifiedName name, optional_ptr<BoundAtClause> at_clause,
 	                QueryErrorContext error_context);
+	//! Deprecated: pass a QualifiedName instead (use QualifiedName(name) for an unqualified lookup)
+	[[deprecated("Pass a QualifiedName instead, e.g. QualifiedName(name)")]] EntryLookupInfo(
+	    CatalogType catalog_type, Identifier name, QueryErrorContext error_context = QueryErrorContext());
+	[[deprecated("Pass a QualifiedName instead, e.g. QualifiedName(name)")]] EntryLookupInfo(
+	    CatalogType catalog_type, Identifier name, optional_ptr<BoundAtClause> at_clause,
+	    QueryErrorContext error_context);
 	//! Re-use a parent lookup's type/at-clause/error-context with a different (re-qualified) name
 	EntryLookupInfo(const EntryLookupInfo &parent, QualifiedName name);
 	EntryLookupInfo(const EntryLookupInfo &parent, optional_ptr<BoundAtClause> at_clause);
@@ -44,8 +50,6 @@ public:
 	const optional_ptr<BoundAtClause> GetAtClause() const;
 
 	static EntryLookupInfo SchemaLookup(const EntryLookupInfo &parent, Identifier schema_name);
-	//! Return a copy of this lookup re-qualified with the given catalog/schema (keeping the entry name)
-	EntryLookupInfo WithQualification(const Identifier &catalog, const Identifier &schema) const;
 
 private:
 	CatalogType catalog_type;

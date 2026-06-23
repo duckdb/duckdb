@@ -572,8 +572,9 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		    fk.info.schema.empty() ? schema.ParentCatalog().GetName() : Identifier::InvalidCatalog();
 		string fk_schema =
 		    fk.info.schema.empty() ? schema.name.GetIdentifierName() : fk.info.schema.GetIdentifierName();
-		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, fk.info.table);
-		auto table_entry = entry_retriever.GetEntry(fk_catalog, Identifier(fk_schema), table_lookup);
+		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(fk.info.table));
+		auto table_entry = entry_retriever.GetEntry(EntryLookupInfo(
+		    table_lookup, QualifiedName(fk_catalog, Identifier(fk_schema), table_lookup.GetEntryIdentifier())));
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
 			throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
 		}

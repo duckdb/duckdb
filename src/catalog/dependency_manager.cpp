@@ -469,7 +469,7 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 
 	if (type != CatalogType::SCHEMA_ENTRY && lookup_result.result) {
 		auto &schema_entry = lookup_result.result->Cast<SchemaCatalogEntry>();
-		EntryLookupInfo lookup_info(type, name);
+		EntryLookupInfo lookup_info(type, QualifiedName(name));
 		lookup_result = schema_entry.LookupEntryDetailed(transaction, lookup_info);
 	}
 

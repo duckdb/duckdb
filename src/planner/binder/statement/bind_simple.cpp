@@ -126,9 +126,11 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		}
 	} else {
 		// For any other ALTER, we retrieve the catalog entry directly.
-		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), stmt.info->Name());
-		entry =
-		    entry_retriever.GetEntry(stmt.info->Catalog(), stmt.info->Schema(), lookup_info, stmt.info->if_not_found);
+		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), QualifiedName(stmt.info->Name()));
+		entry = entry_retriever.GetEntry(
+		    EntryLookupInfo(lookup_info, QualifiedName(stmt.info->Catalog(), stmt.info->Schema(),
+		                                               lookup_info.GetEntryIdentifier())),
+		    stmt.info->if_not_found);
 	}
 
 	auto &properties = GetStatementProperties();

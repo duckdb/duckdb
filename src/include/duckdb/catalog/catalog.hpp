@@ -249,24 +249,29 @@ public:
 	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const Identifier &schema);
 	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const Identifier &schema);
 	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup);
-	DUCKDB_API static SchemaCatalogEntry &GetSchema(ClientContext &context, const Identifier &catalog_name,
-	                                                const EntryLookupInfo &schema_lookup);
+	//! Resolves the catalog qualification carried in the schema_lookup and returns the matching schema
+	DUCKDB_API static optional_ptr<SchemaCatalogEntry>
+	GetSchema(CatalogEntryRetriever &retriever, const EntryLookupInfo &schema_lookup, OnEntryNotFound if_not_found);
+	[[deprecated("Fold the catalog into the EntryLookupInfo and use GetSchema(context, "
+	             "EntryLookupInfo)")]] DUCKDB_API static SchemaCatalogEntry &
+	GetSchema(ClientContext &context, const Identifier &catalog_name, const EntryLookupInfo &schema_lookup);
 	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const Identifier &schema,
 	                                                      OnEntryNotFound if_not_found);
 	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(CatalogTransaction transaction, const Identifier &schema,
 	                                                      OnEntryNotFound if_not_found);
-	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const Identifier &catalog_name,
-	                                                             const EntryLookupInfo &schema_lookup,
-	                                                             OnEntryNotFound if_not_found);
+	[[deprecated("Fold the catalog into the EntryLookupInfo and use GetSchema(context, "
+	             "EntryLookupInfo)")]] DUCKDB_API static optional_ptr<SchemaCatalogEntry>
+	GetSchema(ClientContext &context, const Identifier &catalog_name, const EntryLookupInfo &schema_lookup,
+	          OnEntryNotFound if_not_found);
 	DUCKDB_API static SchemaCatalogEntry &GetSchema(ClientContext &context, const Identifier &catalog_name,
 	                                                const Identifier &schema);
 	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const Identifier &catalog_name,
 	                                                             const Identifier &schema,
 	                                                             OnEntryNotFound if_not_found);
-	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(CatalogEntryRetriever &retriever,
-	                                                             const Identifier &catalog_name,
-	                                                             const EntryLookupInfo &schema_lookup,
-	                                                             OnEntryNotFound if_not_found);
+	[[deprecated("Fold the catalog into the EntryLookupInfo and use GetSchema(retriever, "
+	             "EntryLookupInfo)")]] DUCKDB_API static optional_ptr<SchemaCatalogEntry>
+	GetSchema(CatalogEntryRetriever &retriever, const Identifier &catalog_name, const EntryLookupInfo &schema_lookup,
+	          OnEntryNotFound if_not_found);
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) = 0;
 

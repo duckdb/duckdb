@@ -619,10 +619,12 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	// this function can either live in a local / system catalog, or in a remote (if it is in the search path)
 	// check the search path
 	FindRemoteCatalogsInSearchPath();
-	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, func_expr.FunctionName());
+	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(func_expr.FunctionName()));
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		const Identifier &schema = schema_name.empty() ? local_entry.schema : schema_name;
-		auto entry = Catalog::GetEntry(binder.context, func_lookup.WithQualification(local_entry.catalog, schema),
+		auto entry = Catalog::GetEntry(binder.context,
+		                               EntryLookupInfo(func_lookup, QualifiedName(local_entry.catalog, schema,
+		                                                                          func_lookup.GetEntryIdentifier())),
 		                               OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 			auto &tf_entry = entry->Cast<TableFunctionCatalogEntry>();
@@ -753,10 +755,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
 			// verify the table actually exists in the remote catalog - if it does not, fall back
 			// to the binder so it can report a proper error message
-			EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.Table());
+			EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(ref.Table()));
 			const auto &schema = schema_name.empty() ? Identifier(DEFAULT_SCHEMA) : schema_name;
-			auto entry = Catalog::GetEntry(binder.context, table_lookup.WithQualification(catalog->GetName(), schema),
-			                               OnEntryNotFound::RETURN_NULL);
+			auto entry =
+			    Catalog::GetEntry(binder.context,
+			                      EntryLookupInfo(table_lookup, QualifiedName(catalog->GetName(), schema,
+			                                                                  table_lookup.GetEntryIdentifier())),
+			                      OnEntryNotFound::RETURN_NULL);
 			if (!entry) {
 				TrackLocalTable(ref);
 				return CatalogPushdownResult::Unknown();
@@ -773,7 +778,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Case 2: no explicit catalog - lazily populate search path catalogs on first use
 	FindRemoteCatalogsInSearchPath();
 
-	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.Table());
+	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(ref.Table()));
 
 	if (pushdown_state.remote_catalogs_in_search_path.size() != 1) {
 		TrackLocalTable(ref);
@@ -783,7 +788,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		// If the ref specifies a schema, use it; otherwise use the search path schema
 		const auto &schema = schema_name.empty() ? local_entry.schema : schema_name;
-		auto entry = Catalog::GetEntry(binder.context, table_lookup.WithQualification(local_entry.catalog, schema),
+		auto entry = Catalog::GetEntry(binder.context,
+		                               EntryLookupInfo(table_lookup, QualifiedName(local_entry.catalog, schema,
+		                                                                           table_lookup.GetEntryIdentifier())),
 		                               OnEntryNotFound::RETURN_NULL);
 		if (entry) {
 			TrackLocalTable(ref);
@@ -796,7 +803,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// but only if the table actually exists there (otherwise fall back to the binder for a proper error)
 	auto &remote_catalog = pushdown_state.remote_catalogs_in_search_path.front().get();
 	const auto &schema = schema_name.empty() ? Identifier(DEFAULT_SCHEMA) : schema_name;
-	auto entry = Catalog::GetEntry(binder.context, table_lookup.WithQualification(remote_catalog.GetName(), schema),
+	auto entry = Catalog::GetEntry(binder.context,
+	                               EntryLookupInfo(table_lookup, QualifiedName(remote_catalog.GetName(), schema,
+	                                                                           table_lookup.GetEntryIdentifier())),
 	                               OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		TrackLocalTable(ref);

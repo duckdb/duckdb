@@ -41,7 +41,7 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
 
 optional_ptr<CatalogEntry> SchemaCatalogEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
                                                         const Identifier &name) {
-	EntryLookupInfo lookup_info(type, name);
+	EntryLookupInfo lookup_info(type, QualifiedName(name));
 	return LookupEntry(transaction, lookup_info);
 }
 

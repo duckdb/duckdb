@@ -263,7 +263,8 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	QueryErrorContext error_context(function.GetQueryLocation());
 	binder.BindSchemaOrCatalog(function.GetQualifiedNameMutable());
 
-	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.FunctionName(), error_context);
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
+	                                error_context);
 	auto func =
 	    binder.GetCatalogEntry(function.Catalog(), function.Schema(), function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (func) {

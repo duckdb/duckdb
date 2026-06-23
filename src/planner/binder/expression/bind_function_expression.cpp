@@ -254,7 +254,7 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 	auto func = qualifier.QualifyFunction(function);
 	if (!func) {
 		// function was not found - check if we this is a table function (to throw a more helpful error message)
-		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.FunctionName(),
+		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
 		                                      error_context);
 		auto table_func =
 		    GetCatalogEntry(function.Catalog(), function.Schema(), table_function_lookup, OnEntryNotFound::RETURN_NULL);
@@ -265,7 +265,8 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 			                      function.FunctionName());
 		}
 		// not a table function - rebind to throw an error
-		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.FunctionName(), error_context);
+		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
+		                                error_context);
 		func =
 		    GetCatalogEntry(function.Catalog(), function.Schema(), function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
