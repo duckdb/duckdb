@@ -468,25 +468,27 @@ TEST_CASE("No-metadata file is not cached and always returns fresh content", "[e
 
 	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
 	const string content_a(BLOCK_SIZE, 'A');
-	const string content_b(BLOCK_SIZE, 'B');
+	const string content_b(BLOCK_SIZE * 2, 'B');
 	EFCTestFileGuard test_file("test_efc_no_metadata.bin", content_a);
 
 	CachingFileSystem cfs(*no_meta_fs, db_instance);
 
-	// First read: data is fetched from source. No blocks should be stored in the cache.
+	// First read: data is fetched from source.  No blocks should be stored in the cache.
 	{
 		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(handle->GetFileSize() == content_a.size());
 		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_a);
 	}
 	REQUIRE(CountCachedBlocks(cache) == 0);
 
-	// Overwrite the file with different content.
+	// Overwrite the file with larger content.
 	WriteTestContent(test_file.GetPath(), content_b);
 
-	// Second read: validate that we return new content.
+	// Second read: file size and content must reflect the new version, not the cached one.
 	{
 		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
-		REQUIRE(ReadFull(*handle, BLOCK_SIZE) == content_b);
+		REQUIRE(handle->GetFileSize() == content_b.size());
+		REQUIRE(ReadFull(*handle, content_b.size()) == content_b);
 	}
 	REQUIRE(CountCachedBlocks(cache) == 0);
 }
