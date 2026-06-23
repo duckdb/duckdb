@@ -66,12 +66,11 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
                              const vector<JoinCondition> &conditions_p, vector<LogicalType> btypes, JoinType type_p,
                              const idx_t initial_radix_bits, const vector<idx_t> &output_columns_p,
                              unique_ptr<ResidualPredicateInfo> residual_p, optional_ptr<Expression> predicate_ptr,
-                             const vector<idx_t> &output_in_probe, bool mark_nulls_are_false_p)
+                             const vector<idx_t> &output_in_probe)
     : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
-      vfound(Value::BOOLEAN(false), count_t(STANDARD_VECTOR_SIZE)), join_type(type_p),
-      mark_nulls_are_false(mark_nulls_are_false_p), finalized(false), has_null(false),
-      residual_predicate(predicate_ptr), radix_bits(initial_radix_bits) {
+      vfound(Value::BOOLEAN(false), count_t(STANDARD_VECTOR_SIZE)), join_type(type_p), finalized(false),
+      has_null(false), residual_predicate(predicate_ptr), radix_bits(initial_radix_bits) {
 	// store residual predicate information
 	residual_info = std::move(residual_p);
 	lhs_output_in_probe = output_in_probe;
@@ -103,8 +102,8 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	}
 	// at least one equality is necessary
 	D_ASSERT(!equality_types.empty());
-	mark_join_post_processor.Initialize(context, buffer_manager, join_type, mark_nulls_are_false, conditions.size(),
-	                                    equality_predicates, condition_types);
+	mark_join_post_processor.Initialize(context, buffer_manager, join_type, conditions.size(), equality_predicates,
+	                                    condition_types);
 
 	if (join_type == JoinType::SINGLE) {
 		single_join_error_on_multiple_rows = Settings::Get<ScalarSubqueryErrorOnMultipleRowsSetting>(context);
@@ -1170,13 +1169,6 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 	}
 }
 
-void JoinHashTable::ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) {
-	D_ASSERT(join_type == JoinType::MARK);
-	D_ASSERT(result.ColumnCount() == probe_data.ColumnCount() + 1);
-	mark_join_post_processor.ConstructEmptyResult(join_keys, probe_data, result, lhs_output_in_probe,
-	                                              null_values_are_equal, has_null);
-}
-
 bool JoinHashTable::TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
                                        ProbeState &probe_state) {
 	static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
@@ -1773,7 +1765,6 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 							result.data[i].Slice(probe_data.data[probe_col_idx], chain_match_sel_vector, result_count);
 						}
 					}
-					result.SetChildCardinality(result_count);
 
 					// on the RHS, we need to fetch the data from the hash table
 					ht.GatherRHS(pointers, chain_match_sel_vector, result_count, result, ht.lhs_output_in_probe.size());
@@ -1801,7 +1792,6 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 				result.data[i].Slice(probe_data.data[probe_col_idx], lhs_sel_vector, base_count);
 			}
 		}
-		result.SetChildCardinality(base_count);
 
 		// 2) gather RHS vectors
 		ht.GatherRHS(rhs_pointers, *FlatVector::IncrementalSelectionVector(), base_count, result,
@@ -1851,7 +1841,6 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data, D
 			idx_t probe_col_idx = ht.lhs_output_in_probe[i];
 			result.data[i].Slice(probe_data.data[probe_col_idx], sel, result_count);
 		}
-		result.SetChildCardinality(result_count);
 	} else {
 		D_ASSERT(result.size() == 0);
 	}
@@ -1979,7 +1968,6 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 				idx_t probe_col_idx = ht.lhs_output_in_probe[i];
 				result.data[i].Slice(probe_data.data[probe_col_idx], sel, remaining_count);
 			}
-			result.SetChildCardinality(remaining_count);
 
 			// now set the right side to NULL
 			for (idx_t i = ht.lhs_output_in_probe.size(); i < result.ColumnCount(); i++) {
@@ -2147,7 +2135,6 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	if (found_entries == 0) {
 		return;
 	}
-	result.SetChildCardinality(found_entries);
 
 	idx_t left_column_count = result.ColumnCount() - output_columns.size();
 	if (join_type == JoinType::RIGHT_SEMI || join_type == JoinType::RIGHT_ANTI) {
@@ -2355,8 +2342,15 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	load_factor = DEFAULT_LOAD_FACTOR;
 	should_build_bloom_filter = false;
 	bloom_filter.Reset();
+	bloom_filter_init_count = 0;
 	prefix_range_filter.reset();
 	should_build_prefix_range_filter = false;
+	// The next iteration may rebuild a different small build side, so this iteration's dictionary
+	// state is stale. Keep in lock-step with BuildDictionaryArrays, which sets these four fields.
+	dict_arrays.clear();
+	aux_next_ptrs.Reset();
+	aux_next_ptrs_data = nullptr;
+	use_dict_emission = false;
 	mark_join_post_processor.Reset();
 	// The next iteration may rebuild a different small build side, so this iteration's dictionary
 	// state is stale. Keep in lock-step with BuildDictionaryArrays, which sets these four fields.

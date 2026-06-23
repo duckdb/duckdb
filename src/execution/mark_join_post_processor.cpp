@@ -362,13 +362,11 @@ idx_t MatchConditionScanRow(DataChunk &join_keys, DataChunk &scan_chunk, idx_t s
 } // namespace
 
 void MarkJoinPostProcessor::Initialize(ClientContext &context_p, BufferManager &buffer_manager_p, JoinType join_type_p,
-                                       bool mark_nulls_are_false_p, idx_t condition_count_p,
-                                       const vector<ExpressionType> &equality_predicates_p,
+                                       idx_t condition_count_p, const vector<ExpressionType> &equality_predicates_p,
                                        const vector<LogicalType> &condition_types_p) {
 	context = context_p;
 	buffer_manager = buffer_manager_p;
 	join_type = join_type_p;
-	mark_nulls_are_false = mark_nulls_are_false_p;
 	condition_count = condition_count_p;
 	equality_predicates = equality_predicates_p;
 	condition_types = condition_types_p;
@@ -377,7 +375,7 @@ void MarkJoinPostProcessor::Initialize(ClientContext &context_p, BufferManager &
 }
 
 MarkNullStrategy MarkJoinPostProcessor::ChooseStrategy() const {
-	if (join_type != JoinType::MARK || mark_nulls_are_false) {
+	if (join_type != JoinType::MARK) {
 		return MarkNullStrategy::NONE;
 	}
 	bool has_null_sensitive_condition = false;
@@ -411,10 +409,6 @@ bool MarkJoinPostProcessor::UsesNullRemainder() const {
 
 bool MarkJoinPostProcessor::UsesConditionScan() const {
 	return state.strategy == MarkNullStrategy::FULL_SCAN;
-}
-
-bool MarkJoinPostProcessor::CanTreatNullAsFalse() const {
-	return state.strategy == MarkNullStrategy::NONE && join_type == JoinType::MARK && mark_nulls_are_false;
 }
 
 void MarkJoinPostProcessor::InitializeCorrelatedCounts(const vector<LogicalType> &correlated_types) {
@@ -580,9 +574,6 @@ void MarkJoinPostProcessor::MergeNullRemainderRows(MarkJoinPostProcessor &other,
 
 void MarkJoinPostProcessor::ApplyJoinKeyNullMask(DataChunk &join_keys, const vector<bool> &null_values_are_equal,
                                                  ValidityMask &mask) const {
-	if (CanTreatNullAsFalse()) {
-		return;
-	}
 	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
 		if (null_values_are_equal[col_idx]) {
 			continue;
@@ -669,7 +660,7 @@ void MarkJoinPostProcessor::RefineUnmatchedRows(DataChunk &join_keys, ValidityMa
                                                 bool has_null) {
 	if (UsesNullRemainder()) {
 		ProbeNullRemainderRows(join_keys, mask, found_match);
-	} else if (has_null && !CanTreatNullAsFalse()) {
+	} else if (has_null) {
 		for (idx_t i = 0; i < join_keys.size(); i++) {
 			if (!found_match[i]) {
 				mask.SetInvalid(i);
@@ -682,7 +673,7 @@ void MarkJoinPostProcessor::ProbeConditionScanRows(DataChunk &join_keys, Validit
                                                    ColumnDataCollection &rhs_condition_data,
                                                    const vector<JoinCondition> &conditions, bool has_null) {
 	D_ASSERT(UsesConditionScan());
-	if (!has_null || CanTreatNullAsFalse()) {
+	if (!has_null) {
 		return;
 	}
 
