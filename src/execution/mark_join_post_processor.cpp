@@ -187,13 +187,102 @@ bool ComparisonPropagatesNull(ExpressionType comparison_type) {
 	}
 }
 
+enum class NestedEqualityResult : uint8_t { FALSE_VALUE, TRUE_VALUE, NULL_VALUE };
+
+static NestedEqualityResult EvaluateNestedEqualityForMarkJoin(const Value &left, const Value &right) {
+	if (left.IsNull() || right.IsNull()) {
+		return NestedEqualityResult::NULL_VALUE;
+	}
+	if (left.type().id() == LogicalTypeId::UNION && right.type().id() == LogicalTypeId::UNION) {
+		if (UnionValue::GetTag(left) != UnionValue::GetTag(right)) {
+			return NestedEqualityResult::FALSE_VALUE;
+		}
+		return EvaluateNestedEqualityForMarkJoin(UnionValue::GetValue(left), UnionValue::GetValue(right));
+	}
+	auto &left_children = StructValue::GetChildren(left);
+	auto &right_children = StructValue::GetChildren(right);
+	D_ASSERT(left_children.size() == right_children.size());
+	bool has_unknown = false;
+	for (idx_t i = 0; i < left_children.size(); i++) {
+		auto &lhs_child = left_children[i];
+		auto &rhs_child = right_children[i];
+		if ((lhs_child.type().InternalType() == PhysicalType::STRUCT ||
+		     lhs_child.type().id() == LogicalTypeId::UNION) &&
+		    (rhs_child.type().InternalType() == PhysicalType::STRUCT ||
+		     rhs_child.type().id() == LogicalTypeId::UNION)) {
+			auto child_result = EvaluateNestedEqualityForMarkJoin(lhs_child, rhs_child);
+			if (child_result == NestedEqualityResult::FALSE_VALUE) {
+				return NestedEqualityResult::FALSE_VALUE;
+			}
+			has_unknown = has_unknown || child_result == NestedEqualityResult::NULL_VALUE;
+			continue;
+		}
+		if (lhs_child.IsNull() || rhs_child.IsNull()) {
+			has_unknown = true;
+			continue;
+		}
+		if (!ValueOperations::NotDistinctFrom(lhs_child, rhs_child)) {
+			return NestedEqualityResult::FALSE_VALUE;
+		}
+	}
+	return has_unknown ? NestedEqualityResult::NULL_VALUE : NestedEqualityResult::TRUE_VALUE;
+}
+
+idx_t SelectNestedEqualsOrNotEqualsForMarkJoin(const Vector &left, const Vector &right,
+                                               optional_ptr<const SelectionVector> sel, idx_t count,
+                                               optional_ptr<SelectionVector> true_sel,
+                                               optional_ptr<SelectionVector> false_sel,
+                                               optional_ptr<ValidityMask> null_mask, bool invert) {
+	idx_t true_count = 0;
+	idx_t false_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		const auto result_idx = sel ? sel->get_index(i) : i;
+		auto row_result = EvaluateNestedEqualityForMarkJoin(left.GetValue(result_idx), right.GetValue(result_idx));
+		if (row_result == NestedEqualityResult::NULL_VALUE) {
+			if (null_mask) {
+				null_mask->SetInvalid(result_idx);
+			}
+			if (false_sel) {
+				false_sel->set_index(false_count++, result_idx);
+			}
+			continue;
+		}
+		const bool matches = row_result == NestedEqualityResult::TRUE_VALUE ? !invert : invert;
+		if (matches) {
+			if (true_sel) {
+				true_sel->set_index(true_count, result_idx);
+			}
+			true_count++;
+		} else {
+			if (false_sel) {
+				false_sel->set_index(false_count++, result_idx);
+			}
+		}
+	}
+	return true_count;
+}
+
 idx_t SelectComparison(ExpressionType comparison_type, const Vector &left, const Vector &right,
                        optional_ptr<const SelectionVector> sel, idx_t count, optional_ptr<SelectionVector> true_sel,
                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
+		if (left.GetType().id() == LogicalTypeId::STRUCT && right.GetType().id() == LogicalTypeId::STRUCT &&
+		    left.GetType().InternalType() == PhysicalType::STRUCT &&
+		    right.GetType().InternalType() == PhysicalType::STRUCT && StructType::IsUnnamed(left.GetType()) &&
+		    StructType::IsUnnamed(right.GetType())) {
+			return SelectNestedEqualsOrNotEqualsForMarkJoin(left, right, sel, count, true_sel, false_sel, null_mask,
+			                                                false);
+		}
 		return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel, null_mask);
 	case ExpressionType::COMPARE_NOTEQUAL:
+		if (left.GetType().id() == LogicalTypeId::STRUCT && right.GetType().id() == LogicalTypeId::STRUCT &&
+		    left.GetType().InternalType() == PhysicalType::STRUCT &&
+		    right.GetType().InternalType() == PhysicalType::STRUCT && StructType::IsUnnamed(left.GetType()) &&
+		    StructType::IsUnnamed(right.GetType())) {
+			return SelectNestedEqualsOrNotEqualsForMarkJoin(left, right, sel, count, true_sel, false_sel, null_mask,
+			                                                true);
+		}
 		return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel, null_mask);
 	case ExpressionType::COMPARE_LESSTHAN:
 		return VectorOperations::LessThan(left, right, sel, count, true_sel, false_sel, null_mask);
@@ -368,14 +457,14 @@ void MarkJoinPostProcessor::SinkBuildKeys(DataChunk &keys) {
 		for (idx_t i = 0; i < info.correlated_types.size(); i++) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
 		}
-		info.group_chunk.SetCardinality(keys);
+		info.group_chunk.CheckCardinality(keys.size());
 		if (info.correlated_payload.data.empty()) {
 			vector<LogicalType> types;
 			types.push_back(keys.data[info.correlated_types.size()].GetType());
 			info.correlated_payload.InitializeEmpty(types);
 		}
 		info.correlated_payload.data[0].Reference(keys.data[info.correlated_types.size()]);
-		info.correlated_payload.SetCardinality(keys);
+		info.correlated_payload.CheckCardinality(keys.size());
 		info.correlated_counts->AddChunk(info.group_chunk, info.correlated_payload, AggregateType::NON_DISTINCT);
 	}
 	RegisterNullRemainderRows(keys);
@@ -515,7 +604,7 @@ void MarkJoinPostProcessor::InitializeMarkJoinResult(DataChunk &join_keys, DataC
                                                      const vector<bool> &null_values_are_equal, bool *&bool_result,
                                                      ValidityMask *&mask,
                                                      optional_ptr<const vector<idx_t>> lhs_output_columns) const {
-	result.SetCardinality(probe_data.size());
+	result.SetChildCardinality(probe_data.size());
 	if (lhs_output_columns) {
 		for (idx_t i = 0; i < lhs_output_columns->size(); i++) {
 			result.data[i].Reference(probe_data.data[(*lhs_output_columns)[i]]);
@@ -681,10 +770,10 @@ void MarkJoinPostProcessor::ConstructCorrelatedMarkResult(DataChunk &keys, DataC
 	for (idx_t i = 0; i < info.group_chunk.ColumnCount(); i++) {
 		info.group_chunk.data[i].Reference(keys.data[i]);
 	}
-	info.group_chunk.SetCardinality(keys);
+	info.group_chunk.CheckCardinality(keys.size());
 	info.correlated_counts->FetchAggregates(info.group_chunk, info.result_chunk);
 
-	result.SetCardinality(probe_data.size());
+	result.SetChildCardinality(probe_data.size());
 	for (idx_t i = 0; i < lhs_output_in_probe.size(); i++) {
 		idx_t probe_col_idx = lhs_output_in_probe[i];
 		result.data[i].Reference(probe_data.data[probe_col_idx]);

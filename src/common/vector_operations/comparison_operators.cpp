@@ -271,8 +271,10 @@ static void ExecuteStructEqualsOrNotEquals(const Vector &left, const Vector &rig
 }
 
 void VectorOperations::Equals(const Vector &left, const Vector &right, Vector &result) {
-	if (left.GetType().InternalType() == PhysicalType::STRUCT &&
-	    right.GetType().InternalType() == PhysicalType::STRUCT) {
+	if (left.GetType().id() == LogicalTypeId::STRUCT && right.GetType().id() == LogicalTypeId::STRUCT &&
+	    left.GetType().InternalType() == PhysicalType::STRUCT &&
+	    right.GetType().InternalType() == PhysicalType::STRUCT && StructType::IsUnnamed(left.GetType()) &&
+	    StructType::IsUnnamed(right.GetType())) {
 		ExecuteStructEqualsOrNotEquals(left, right, result, false);
 		return;
 	}
@@ -282,8 +284,10 @@ void VectorOperations::Equals(const Vector &left, const Vector &right, Vector &r
 }
 
 void VectorOperations::NotEquals(const Vector &left, const Vector &right, Vector &result) {
-	if (left.GetType().InternalType() == PhysicalType::STRUCT &&
-	    right.GetType().InternalType() == PhysicalType::STRUCT) {
+	if (left.GetType().id() == LogicalTypeId::STRUCT && right.GetType().id() == LogicalTypeId::STRUCT &&
+	    left.GetType().InternalType() == PhysicalType::STRUCT &&
+	    right.GetType().InternalType() == PhysicalType::STRUCT && StructType::IsUnnamed(left.GetType()) &&
+	    StructType::IsUnnamed(right.GetType())) {
 		ExecuteStructEqualsOrNotEquals(left, right, result, true);
 		return;
 	}

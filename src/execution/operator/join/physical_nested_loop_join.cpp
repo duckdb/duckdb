@@ -12,6 +12,9 @@ static bool ValueContainsNestedNull(const Value &value) {
 	if (value.IsNull()) {
 		return true;
 	}
+	if (value.type().id() == LogicalTypeId::UNION) {
+		return ValueContainsNestedNull(UnionValue::GetValue(value));
+	}
 	if (value.type().InternalType() != PhysicalType::STRUCT) {
 		return false;
 	}
@@ -60,7 +63,9 @@ bool PhysicalJoin::HasNullValues(DataChunk &chunk) {
 
 static bool HasNestedStructNullValues(DataChunk &chunk) {
 	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
-		if (chunk.data[col_idx].GetType().InternalType() != PhysicalType::STRUCT) {
+		if (chunk.data[col_idx].GetType().id() != LogicalTypeId::STRUCT ||
+		    chunk.data[col_idx].GetType().InternalType() != PhysicalType::STRUCT ||
+		    !StructType::IsUnnamed(chunk.data[col_idx].GetType())) {
 			continue;
 		}
 		for (idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
@@ -74,7 +79,9 @@ static bool HasNestedStructNullValues(DataChunk &chunk) {
 
 static bool NeedsNestedMarkNullCheck(const vector<JoinCondition> &conditions) {
 	for (auto &cond : conditions) {
-		if (cond.GetLHS().GetReturnType().InternalType() == PhysicalType::STRUCT &&
+		if (cond.GetLHS().GetReturnType().id() == LogicalTypeId::STRUCT &&
+		    cond.GetLHS().GetReturnType().InternalType() == PhysicalType::STRUCT &&
+		    StructType::IsUnnamed(cond.GetLHS().GetReturnType()) &&
 		    (cond.GetComparisonType() == ExpressionType::COMPARE_EQUAL ||
 		     cond.GetComparisonType() == ExpressionType::COMPARE_NOTEQUAL)) {
 			return true;
@@ -101,7 +108,7 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 		// reference the columns of the left side from the result
 		result.Slice(left, sel, result_count);
 	} else {
-		result.SetCardinality(0);
+		result.SetChildCardinality(0);
 	}
 }
 
@@ -116,7 +123,7 @@ void PhysicalJoin::ConstructAntiJoinResult(DataChunk &left, DataChunk &result, b
 void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
                                            bool has_null) {
 	// for the initial set of columns we just reference the left side
-	result.SetCardinality(left);
+	result.SetChildCardinality(left.size());
 	for (idx_t i = 0; i < left.ColumnCount(); i++) {
 		result.data[i].Reference(left.data[i]);
 	}

@@ -142,13 +142,20 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 			}
 			expected_columns = child_expressions.size();
 		}
-		// If we have an unexpanded struct (kept intact for ordered comparison),
-		// the subquery might return multiple columns that need to be combined into a struct
-		if (has_unexpanded_struct && expected_columns == 1 && bound_subquery.bound_node.types.size() > 1 &&
+		// If we keep a row-valued child intact, we still need to distinguish between:
+		// (1) a subquery that returns a single row/struct value and
+		// (2) a subquery that returns multiple scalar columns that should match the row width.
+		if (has_unexpanded_struct && expected_columns == 1 &&
 		    TypeIsUnnamedStruct(child_expressions[0]->GetReturnType())) {
-			// The child is a struct with N elements, and the subquery returns N columns
-			// This is allowed - the subquery columns will be matched against the struct during execution
-			expected_columns = StructType::GetChildCount(child_expressions[0]->GetReturnType());
+			const auto struct_child_count = StructType::GetChildCount(child_expressions[0]->GetReturnType());
+			const bool subquery_returns_single_struct =
+			    bound_subquery.bound_node.types.size() == 1 && TypeIsUnnamedStruct(bound_subquery.bound_node.types[0]);
+			if (!subquery_returns_single_struct) {
+				// The child is a row with N elements, so a scalar/multi-column subquery must expose N columns.
+				// This preserves the historical width mismatch error for cases like:
+				// (a, b) = ALL(SELECT 1)
+				expected_columns = struct_child_count;
+			}
 		}
 		if (bound_subquery.bound_node.types.size() != expected_columns) {
 			throw BinderException(expr, "Subquery returns %zu columns - expected %d",
