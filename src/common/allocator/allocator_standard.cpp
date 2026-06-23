@@ -54,6 +54,7 @@ bool Allocator::SupportsFlush() {
 static void MallocTrim(idx_t pad) {
 #ifdef __GLIBC__
 	static constexpr int64_t TRIM_INTERVAL_MS = 100;
+	// Decrement interval at initialization to trim at first access.
 	static atomic<int64_t> LAST_TRIM_TIME_MS {TimePoint::GetCurrentMillis() - TRIM_INTERVAL_MS};
 
 	int64_t last_trim_time_ms = LAST_TRIM_TIME_MS.load();

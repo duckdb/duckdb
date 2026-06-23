@@ -260,6 +260,7 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
 		unique_ptr<HTTPResponse> response;
 
+		// When logging is enabled, we collect request timings
 		if (request.params.logger) {
 			request.have_request_timing = request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
 		}

@@ -1,4 +1,5 @@
 #include "duckdb/common/time_point.hpp"
+#include "duckdb/common/assert.hpp"
 
 namespace duckdb {
 
@@ -14,29 +15,35 @@ int64_t TimePoint::GetCurrentMillis() {
 }
 
 int64_t TimePoint::ElapsedMillis(const TimePoint &start, const TimePoint &end) {
+	D_ASSERT(start.value <= end.value);
 	return std::chrono::duration_cast<std::chrono::milliseconds>(end.value - start.value).count();
 }
 
 int64_t TimePoint::ElapsedMicros(const TimePoint &start, const TimePoint &end) {
+	D_ASSERT(start.value <= end.value);
 	return std::chrono::duration_cast<std::chrono::microseconds>(end.value - start.value).count();
 }
 
 int64_t TimePoint::ElapsedNanos(const TimePoint &start, const TimePoint &end) {
+	D_ASSERT(start.value <= end.value);
 	return std::chrono::duration_cast<std::chrono::nanoseconds>(end.value - start.value).count();
 }
 
 int64_t TimePoint::ElapsedMillis() const {
 	auto now = steady_clock::now();
+	D_ASSERT(value <= now);
 	return std::chrono::duration_cast<std::chrono::milliseconds>(now - value).count();
 }
 
 int64_t TimePoint::ElapsedMicros() const {
 	auto now = steady_clock::now();
+	D_ASSERT(value <= now);
 	return std::chrono::duration_cast<std::chrono::microseconds>(now - value).count();
 }
 
 int64_t TimePoint::ElapsedNanos() const {
 	auto now = steady_clock::now();
+	D_ASSERT(value <= now);
 	return std::chrono::duration_cast<std::chrono::nanoseconds>(now - value).count();
 }
 
