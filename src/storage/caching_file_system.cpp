@@ -120,18 +120,10 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
 		auto guard = cached_file->lock.GetExclusiveLock();
-		const idx_t current_file_size = file_handle->GetFileSize();
-		const bool metadata_changed = cached_file->VersionTag(guard) != version_tag ||
-		                              cached_file->LastModified(guard) != last_modified ||
-		                              cached_file->FileSize(guard) != current_file_size;
-
 		if (!cached_file->IsValid(guard, Validate(), version_tag, last_modified)) {
 			cached_file->Ranges(guard).clear(); // Invalidate entire cache
-		} else if (!Validate() && metadata_changed && !cached_file->Ranges(guard).empty()) {
-			// Keep serving stale cached ranges; do not update metadata to match the overwritten file.
-			return *file_handle;
 		}
-		cached_file->FileSize(guard) = current_file_size;
+		cached_file->FileSize(guard) = file_handle->GetFileSize();
 		cached_file->LastModified(guard) = last_modified;
 		cached_file->VersionTag(guard) = version_tag;
 		cached_file->CanSeek(guard) = file_handle->CanSeek();
