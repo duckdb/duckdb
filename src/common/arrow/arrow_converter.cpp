@@ -66,7 +66,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 void SetArrowStructFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
                           ClientProperties &options, ClientContext &context, bool map_is_parent = false) {
 	child.format = "+s";
-	auto &child_types = StructType::GetChildTypes(type);
+	auto child_types = TupleType::NamedChildren(type);
+
 	child.n_children = NumericCast<int64_t>(child_types.size());
 	root_holder.nested_children.emplace_back();
 	root_holder.nested_children.back().resize(child_types.size());
@@ -78,11 +79,7 @@ void SetArrowStructFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &chi
 	child.children = child_types.empty() ? nullptr : &root_holder.nested_children_ptr.back()[0];
 	for (size_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
 		InitializeChild(*child.children[type_idx], root_holder);
-		// Arrow requires child field names - unnamed struct (TUPLE) children have empty names, so generate one
 		auto child_name = child_types[type_idx].first.GetIdentifierName();
-		if (child_name.empty()) {
-			child_name = "v" + to_string(type_idx);
-		}
 		root_holder.owned_type_names.push_back(AddName(child_name));
 		child.children[type_idx]->name = root_holder.owned_type_names.back().get();
 		SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, options, context);

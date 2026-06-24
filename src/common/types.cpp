@@ -1504,6 +1504,22 @@ bool StructType::IsStruct(LogicalTypeId id) {
 	return id == LogicalTypeId::STRUCT || id == LogicalTypeId::TUPLE;
 }
 
+string TupleType::GetChildName(idx_t index) {
+	return "element" + to_string(index + 1);
+}
+
+child_list_t<LogicalType> TupleType::NamedChildren(const LogicalType &type) {
+	auto &child_types = StructType::GetChildTypes(type);
+	child_list_t<LogicalType> result;
+	result.reserve(child_types.size());
+	for (idx_t i = 0; i < child_types.size(); i++) {
+		auto &child = child_types[i];
+		auto name = child.first.empty() ? TupleType::GetChildName(i) : child.first.GetIdentifierName();
+		result.emplace_back(Identifier(std::move(name)), child.second);
+	}
+	return result;
+}
+
 LogicalType LogicalType::TUPLE(child_list_t<LogicalType> children) {
 	// a TUPLE is an unnamed struct - all member names are empty
 	for (auto &child : children) {

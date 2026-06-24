@@ -109,16 +109,11 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 		}
 		return LogicalType::STRUCT(child_types);
 	}
-	// A TUPLE is an unnamed struct: it has no member names, so we synthesize keys "v0", "v1", ...
-	// and serialize it as a JSON object (matching CreateValuesStruct)
 	case LogicalTypeId::TUPLE: {
 		child_list_t<LogicalType> child_types;
-		auto child_count = StructType::GetChildCount(type);
-		for (idx_t child_idx = 0; child_idx < child_count; child_idx++) {
-			auto child_name = "v" + to_string(child_idx);
-			const_struct_names.Insert(child_name);
-			child_types.emplace_back(child_name,
-			                         GetJSONType(const_struct_names, StructType::GetChildType(type, child_idx)));
+		for (const auto &[name, type] : TupleType::NamedChildren(type)) {
+			const_struct_names.Insert(name.GetIdentifierName());
+			child_types.emplace_back(name, GetJSONType(const_struct_names, type));
 		}
 		return LogicalType::STRUCT(child_types);
 	}
@@ -366,14 +361,13 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
 
 	// Add the key/value pairs to the values
-	// A TUPLE is an unnamed struct: it has no member names, so we synthesize keys "v0", "v1", ...
-	// (these must match the keys registered in GetJSONType)
 	const auto is_tuple = value_v.GetType().id() == LogicalTypeId::TUPLE;
 	auto &entries = StructVector::GetEntries(value_v);
 	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
-		auto key_name = is_tuple ? "v" + to_string(entry_i)
-		                         : StructType::GetChildName(value_v.GetType(), entry_i).GetIdentifierName();
-		auto &struct_key_v = names.Get(key_name, count);
+		auto &struct_key_v =
+		    is_tuple ? names.Get(TupleType::GetChildName(entry_i), count)
+		             : names.Get(StructType::GetChildName(value_v.GetType(), entry_i).GetIdentifierName(), count);
+
 		auto &struct_val_v = entries[entry_i];
 		CreateKeyValuePairs(names, doc, vals, nested_vals, struct_key_v, struct_val_v, count);
 	}

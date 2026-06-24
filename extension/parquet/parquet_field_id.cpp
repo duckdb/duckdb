@@ -51,17 +51,21 @@ static case_insensitive_map_t<LogicalType> GetChildNameToTypeMap(const LogicalTy
 		name_to_type_map.emplace("key", MapType::KeyType(type));
 		name_to_type_map.emplace("value", MapType::ValueType(type));
 		break;
-	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::TUPLE: {
-		// TUPLE children have empty names - mirror the writer's "v0, v1, ..." fallback naming
-		auto &child_types = StructType::GetChildTypes(type);
-		for (idx_t i = 0; i < child_types.size(); i++) {
-			auto &child_type = child_types[i];
-			if (child_type.first == FieldID::DUCKDB_FIELD_ID) {
+	case LogicalTypeId::STRUCT: {
+		for (auto &[name, type] : StructType::GetChildTypes(type)) {
+			if (name == FieldID::DUCKDB_FIELD_ID) {
 				throw BinderException("Cannot have column named \"%s\" with FIELD_IDS", FieldID::DUCKDB_FIELD_ID);
 			}
-			string child_name = child_type.first.empty() ? "v" + to_string(i) : child_type.first.GetIdentifierName();
-			name_to_type_map.emplace(std::move(child_name), child_type.second);
+			name_to_type_map.emplace(name.GetIdentifierName(), type);
+		}
+		break;
+	}
+	case LogicalTypeId::TUPLE: {
+		for (auto &[name, type] : TupleType::NamedChildren(type)) {
+			if (name == FieldID::DUCKDB_FIELD_ID) {
+				throw BinderException("Cannot have column named \"%s\" with FIELD_IDS", FieldID::DUCKDB_FIELD_ID);
+			}
+			name_to_type_map.emplace(name.GetIdentifierName(), type);
 		}
 		break;
 	}
@@ -84,15 +88,17 @@ static void GetChildNamesAndTypes(const LogicalType &type, vector<Identifier> &c
 		child_types.emplace_back(MapType::KeyType(type));
 		child_types.emplace_back(MapType::ValueType(type));
 		break;
-	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::STRUCT: {
+		for (const auto &[name, type] : StructType::GetChildTypes(type)) {
+			child_names.emplace_back(name);
+			child_types.emplace_back(type);
+		}
+		break;
+	}
 	case LogicalTypeId::TUPLE: {
-		// TUPLE children have empty names - mirror the writer's "v0, v1, ..." fallback naming
-		auto &struct_children = StructType::GetChildTypes(type);
-		for (idx_t i = 0; i < struct_children.size(); i++) {
-			auto &child_type = struct_children[i];
-			child_names.emplace_back(child_type.first.empty() ? Identifier("v" + to_string(i))
-			                                                  : Identifier(child_type.first));
-			child_types.emplace_back(child_type.second);
+		for (auto &[name, type] : TupleType::NamedChildren(type)) {
+			child_names.emplace_back(name);
+			child_types.emplace_back(type);
 		}
 		break;
 	}

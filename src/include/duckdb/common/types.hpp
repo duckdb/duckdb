@@ -533,6 +533,17 @@ struct StructType {
 	DUCKDB_API static bool IsStruct(LogicalTypeId id);
 };
 
+//! Helpers for the unnamed-struct TUPLE type. A TUPLE has no member names; when a name is required (e.g. when
+//! converting to a format that mandates field names), positional names "element1", "element2", ... are synthesized -
+//! matching the names produced by UNNEST of a struct.
+struct TupleType {
+	//! The synthesized positional name for the i-th (0-based) member: "element1", "element2", ...
+	DUCKDB_API static string GetChildName(idx_t index);
+	//! Returns the child types of a struct-like type, with synthesized names for any unnamed (empty-named) members.
+	//! Members that already have a name keep it.
+	DUCKDB_API static child_list_t<LogicalType> NamedChildren(const LogicalType &type);
+};
+
 struct MapType {
 	DUCKDB_API static const LogicalType &KeyType(const LogicalType &type);
 	DUCKDB_API static const LogicalType &ValueType(const LogicalType &type);

@@ -553,7 +553,7 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 	child_names.reserve(child_count);
 	child_vectors.reserve(child_count);
 
-	// A TUPLE is an unnamed struct: it has no member names, so we synthesize keys "v0", "v1", ...
+	// A TUPLE is an unnamed struct: it has no member names, so we synthesize keys ("element1", ...)
 	// to match the JSON object keys emitted on the write path (see json_create.cpp)
 	const auto is_tuple = result.GetType().id() == LogicalTypeId::TUPLE;
 	unordered_set<idx_t> projected_indices;
@@ -562,7 +562,7 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 		projected_indices.insert(actual_i);
 
 		if (is_tuple) {
-			child_names.emplace_back("v" + to_string(actual_i));
+			child_names.emplace_back(TupleType::GetChildName(actual_i));
 		} else {
 			child_names.emplace_back(StructType::GetChildName(result.GetType(), actual_i));
 		}
