@@ -5032,7 +5032,8 @@ inline bool is_chunked_transfer_encoding(const Headers &headers) {
 template <typename T, typename U>
 bool prepare_content_receiver(T &x, int &status,
                               ContentReceiverWithProgress receiver,
-                              bool decompress, U callback) {
+                              bool decompress, size_t payload_max_length,
+                              bool &exceed_payload_max_length, U callback) {
   if (decompress) {
     std::string encoding = x.get_header_value("Content-Encoding");
     duckdb::unique_ptr<decompressor> decompressor;
@@ -5062,10 +5063,20 @@ bool prepare_content_receiver(T &x, int &status,
 
     if (decompressor) {
       if (decompressor->is_valid()) {
+        size_t decompressed_size = 0;
         ContentReceiverWithProgress out = [&](const char *buf, size_t n,
                                               size_t off, size_t len) {
           return decompressor->decompress(buf, n,
                                           [&](const char *buf2, size_t n2) {
+                                            // Guard against zip-bomb: check
+                                            // decompressed size against limit.
+                                            if (payload_max_length > 0 &&
+                                                (decompressed_size >= payload_max_length ||
+                                                n2 > payload_max_length - decompressed_size)) {
+                                              exceed_payload_max_length = true;
+                                              return false;
+                                            }
+                                            decompressed_size += n2;
                                             return receiver(buf2, n2, off, len);
                                           });
         };
@@ -5088,10 +5099,14 @@ template <typename T>
 bool read_content(Stream &strm, T &x, size_t payload_max_length, int &status,
                   DownloadProgress progress,
                   ContentReceiverWithProgress receiver, bool decompress) {
+  bool exceed_payload_max_length = false;
   return prepare_content_receiver(
-      x, status, std::move(receiver), decompress,
-      [&](const ContentReceiverWithProgress &out) {
+      x, status, std::move(receiver), decompress, payload_max_length,
+      exceed_payload_max_length, [&](const ContentReceiverWithProgress &out) {
         auto ret = true;
+        // Note: exceed_payload_max_length may also be set by the decompressor
+        // wrapper in prepare_content_receiver when the decompressed payload
+        // size exceeds the limit.
         auto exceed_payload_max_length = false;
 
         if (is_chunked_transfer_encoding(x.headers)) {
@@ -8193,47 +8208,61 @@ inline bool Server::routing(Request &req, Response &res, Stream &strm) {
 
   if (detail::expect_content(req)) {
     // Content reader handler
-    {
-      ContentReader reader(
-          [&](ContentReceiver receiver) {
-            auto result = read_content_with_content_receiver(
-                strm, req, res, std::move(receiver), nullptr, nullptr);
-            if (!result) { output_error_log(Error::Read, &req); }
-            return result;
-          },
-          [&](FormDataHeader header, ContentReceiver receiver) {
-            auto result = read_content_with_content_receiver(
-                strm, req, res, nullptr, std::move(header),
-                std::move(receiver));
-            if (!result) { output_error_log(Error::Read, &req); }
-            return result;
-          });
+    // Track whether the ContentReader was aborted due to the decompressed
+    // payload exceeding `payload_max_length_`.
+    // The user handler runs after the lambda returns, so we must restore the
+    // 413 status if the handler overwrites it.
+    bool content_reader_payload_too_large = false;
+    ContentReader reader(
+        [&](ContentReceiver receiver) {
+          auto result = read_content_with_content_receiver(
+              strm, req, res, std::move(receiver), nullptr, nullptr);
+          if (!result) {
+            output_error_log(Error::Read, &req);
+            if (res.status == StatusCode::PayloadTooLarge_413) {
+              content_reader_payload_too_large = true;
+            }
+          }
+          return result;
+        },
+        [&](FormDataHeader header, ContentReceiver receiver) {
+          auto result = read_content_with_content_receiver(
+              strm, req, res, nullptr, std::move(header),
+              std::move(receiver));
+          if (!result) {
+            output_error_log(Error::Read, &req);
+            if (res.status == StatusCode::PayloadTooLarge_413) {
+              content_reader_payload_too_large = true;
+            }
+          }
+          return result;
+        });
+    bool dispatched = false;
+    if (req.method == "POST") {
+      dispatched = dispatch_request_for_content_reader(
+          req, res, std::move(reader), post_handlers_for_content_reader_);
+    } else if (req.method == "PUT") {
+      dispatched = dispatch_request_for_content_reader(
+          req, res, std::move(reader), put_handlers_for_content_reader_);
+    } else if (req.method == "PATCH") {
+      dispatched = dispatch_request_for_content_reader(
+          req, res, std::move(reader), patch_handlers_for_content_reader_);
+    } else if (req.method == "DELETE") {
+        dispatched = dispatch_request_for_content_reader(
+          req, res, std::move(reader), delete_handlers_for_content_reader_);
+    }
 
-      if (req.method == "POST") {
-        if (dispatch_request_for_content_reader(
-                req, res, std::move(reader),
-                post_handlers_for_content_reader_)) {
-          return true;
-        }
-      } else if (req.method == "PUT") {
-        if (dispatch_request_for_content_reader(
-                req, res, std::move(reader),
-                put_handlers_for_content_reader_)) {
-          return true;
-        }
-      } else if (req.method == "PATCH") {
-        if (dispatch_request_for_content_reader(
-                req, res, std::move(reader),
-                patch_handlers_for_content_reader_)) {
-          return true;
-        }
-      } else if (req.method == "DELETE") {
-        if (dispatch_request_for_content_reader(
-                req, res, std::move(reader),
-                delete_handlers_for_content_reader_)) {
-          return true;
-        }
+    if (dispatched) {
+      if (content_reader_payload_too_large) {
+        // Enforce the limit: override any status the handler may have set
+        // and return false so the error path sends a plain 413 response.
+        res.status = StatusCode::PayloadTooLarge_413;
+        res.body.clear();
+        res.content_length_ = 0;
+        res.content_provider_ = nullptr;
+        return false;
       }
+      return true;
     }
 
     // Read content into `req.body`
