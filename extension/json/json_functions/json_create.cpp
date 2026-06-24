@@ -12,6 +12,8 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
 
@@ -115,11 +117,12 @@ public:
 		result.date_format = has_date_format ? optional_ptr<StrfTimeFormat>(&date_format) : nullptr;
 		result.timestamp_format = has_timestamp_format ? optional_ptr<StrfTimeFormat>(&timestamp_format) : nullptr;
 		result.context = context;
-		result.timestamptz_format_expression =
-		    timestamptz_format_expression ? optional_ptr<const Expression>(timestamptz_format_expression.get()) : nullptr;
-		result.timestamptz_ns_format_expression = timestamptz_ns_format_expression
-		                                               ? optional_ptr<const Expression>(timestamptz_ns_format_expression.get())
-		                                               : nullptr;
+		result.timestamptz_format_expression = timestamptz_format_expression
+		                                           ? optional_ptr<const Expression>(timestamptz_format_expression.get())
+		                                           : nullptr;
+		result.timestamptz_ns_format_expression =
+		    timestamptz_ns_format_expression ? optional_ptr<const Expression>(timestamptz_ns_format_expression.get())
+		                                     : nullptr;
 		return result;
 	}
 
@@ -350,8 +353,7 @@ static unique_ptr<FunctionData> JSONCopyToJSONBind(BindScalarFunctionInput &inpu
 	StrfTimeFormat timestamp_format;
 	string date_format_string;
 	string timestamp_format_string;
-	auto has_date_format =
-	    BindJSONCopyFormat(context, *arguments[1], "date", date_format_string, date_format);
+	auto has_date_format = BindJSONCopyFormat(context, *arguments[1], "date", date_format_string, date_format);
 	auto has_timestamp_format =
 	    BindJSONCopyFormat(context, *arguments[2], "timestamp", timestamp_format_string, timestamp_format);
 
@@ -506,8 +508,8 @@ static void CreateRawValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], const V
 	}
 }
 
-static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[],
-                               Vector &value_v, idx_t count, const JSONCopyFormatOptions &options) {
+static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
+                               idx_t count, const JSONCopyFormatOptions &options) {
 	// Structs become values, therefore we initialize vals to JSON values
 	for (idx_t i = 0; i < count; i++) {
 		vals[i] = yyjson_mut_obj(doc);
@@ -950,8 +952,7 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 }
 
 static void ToJSONFunctionInternal(const StructNames &names, Vector &input, const idx_t count, Vector &result,
-                                   yyjson_alc *alc,
-                                   const JSONCopyFormatOptions &options = JSONCopyFormatOptions()) {
+                                   yyjson_alc *alc, const JSONCopyFormatOptions &options = JSONCopyFormatOptions()) {
 	// Initialize array for values
 	auto doc = JSONCommon::CreateDocument(alc);
 	auto vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
@@ -997,6 +998,14 @@ static void JSONCopyToJSONFunction(DataChunk &args, ExpressionState &state, Vect
 	ToJSONFunctionInternal(info.const_struct_names, args.data[0], args.size(), result, alc, options);
 }
 
+static void JSONCopyToJSONSerialize(Serializer &, optional_ptr<FunctionData>, const BoundScalarFunction &) {
+	throw NotImplementedException("json_copy_to_json is only serializable as part of JSON COPY planning");
+}
+
+static unique_ptr<FunctionData> JSONCopyToJSONDeserialize(Deserializer &, BoundScalarFunction &) {
+	throw NotImplementedException("json_copy_to_json is only deserializable as part of JSON COPY planning");
+}
+
 ScalarFunctionSet JSONFunctions::GetObjectFunction() {
 	ScalarFunction fun("json_object", {}, LogicalType::JSON(), ObjectFunction, JSONObjectBind, nullptr,
 	                   JSONFunctionLocalState::Init);
@@ -1020,12 +1029,14 @@ ScalarFunctionSet JSONFunctions::GetToJSONFunction() {
 	return ScalarFunctionSet(fun);
 }
 
-ScalarFunctionSet JSONFunctions::GetJSONCopyToJSONFunction() {
+ScalarFunction JSONFunctions::GetJSONCopyToJSONFunction() {
 	ScalarFunction fun("json_copy_to_json", {LogicalType::ANY, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                   LogicalType::JSON(), JSONCopyToJSONFunction, JSONCopyToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	return ScalarFunctionSet(fun);
+	fun.SetSerializeCallback(JSONCopyToJSONSerialize);
+	fun.SetDeserializeCallback(JSONCopyToJSONDeserialize);
+	return fun;
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayToJSONFunction() {

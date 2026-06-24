@@ -73,6 +73,7 @@ public:
 	                                                optional_ptr<ReplacementScanData> data);
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
+	static ScalarFunction GetJSONCopyToJSONFunction();
 	static void RegisterSimpleCastFunctions(ExtensionLoader &loader);
 	static void RegisterJSONCreateCastFunctions(ExtensionLoader &loader);
 	static void RegisterJSONTransformCastFunctions(ExtensionLoader &loader);
@@ -85,7 +86,6 @@ private:
 	static ScalarFunctionSet GetArrayFunction();
 	static ScalarFunctionSet GetObjectFunction();
 	static ScalarFunctionSet GetToJSONFunction();
-	static ScalarFunctionSet GetJSONCopyToJSONFunction();
 	static ScalarFunctionSet GetArrayToJSONFunction();
 	static ScalarFunctionSet GetRowToJSONFunction();
 	static ScalarFunctionSet GetMergePatchFunction();

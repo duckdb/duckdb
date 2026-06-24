@@ -162,7 +162,6 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetArrayFunction());
 	functions.push_back(GetObjectFunction());
 	AddAliases({"to_json", "json_quote"}, GetToJSONFunction(), functions);
-	functions.push_back(GetJSONCopyToJSONFunction());
 	functions.push_back(GetArrayToJSONFunction());
 	functions.push_back(GetRowToJSONFunction());
 	functions.push_back(GetMergePatchFunction());
