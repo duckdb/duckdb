@@ -18,6 +18,10 @@ The cast micro benchmark set contains several benchmarks that look at conversion
 [CSV]
 The CSV micro benchmark set contains several benchmarks that are aimed at measuring CSV reading and writing performance.
 
+[feature]
+[Feature]
+The feature benchmark set measures the feature store operations on the ClickBench (Yandex Metrica) dataset: FULL and INCREMENTAL feature refreshes (windowed group-by aggregation) and SERVE point-in-time retrieval (LEFT ASOF JOIN).
+
 [index]
 [Index]
 The index benchmark set checks performance of index lookups compared to non-indexed lookups.

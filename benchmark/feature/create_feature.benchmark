@@ -1,0 +1,22 @@
+# name: benchmark/feature/create_feature.benchmark
+# description: Time CREATE FEATURE (initial materialization + catalog entry creation)
+# group: [feature]
+
+require parquet load_only
+
+require httpfs load_only
+
+cache feature.db
+
+load benchmark/feature/load.sql
+
+name FeatureCreate
+group feature
+
+# Each timed run creates the feature (group-by aggregation + backing table +
+# catalog entry); cleanup drops it so the next run starts from a clean slate.
+run
+CREATE FEATURE bench_create ON hits ENTITY UserID TIMESTAMP EventTime GRANULARITY HOUR WINDOW 24 REFRESH FULL RETAIN 1 AS (SELECT UserID, COUNT(*) AS event_count, AVG(RegionID) AS avg_region);
+
+cleanup
+DROP FEATURE IF EXISTS bench_create;

@@ -1,0 +1,24 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [feature]
+
+require parquet load_only
+
+require httpfs load_only
+
+cache feature.db
+
+load benchmark/feature/load.sql
+
+name ${BENCH_NAME}
+group feature
+
+# Sanity check (runs once, before the timed loop): the source and feature
+# tables must be populated, otherwise the timings would be meaningless.
+assert I
+SELECT COUNT(*) > 0 AND (SELECT COUNT(*) FROM user_activity_full) > 0 FROM hits;
+----
+true
+
+run
+${RUN_QUERY}
