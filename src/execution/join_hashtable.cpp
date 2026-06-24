@@ -1306,18 +1306,16 @@ bool JoinHashTable::TryProbeConstant(ScanStructure &scan_structure, DataChunk &k
 	// constant vectors carry no dictionary id, so there is no cross-chunk cache - resolve the
 	// single distinct key with one hash-table lookup per chunk
 	D_ASSERT(probe_state.dict_state);
-	// Reference shares the constant vector buffer, so shrinking unique_values would otherwise leak back into keys.
-	const idx_t row_count = keys.size();
 	auto &dict_state = *probe_state.dict_state;
 	auto &unique_values = dict_state.unique_values;
 	if (unique_values.ColumnCount() == 0) {
 		unique_values.InitializeEmpty(vector<LogicalType> {equality_types[0]});
 		TupleDataCollection::InitializeChunkState(dict_state.unique_key_state, {equality_types[0]});
 	}
-	unique_values.data[0].Reference(constant_col);
-	unique_values.SetChildCardinality(1);
+	SelectionVector sel(1);
+	sel.set_index(0, 0);
+	unique_values.data[0].Slice(constant_col, sel, 1);
 	unique_values.Flatten();
-	keys.SetChildCardinality(row_count);
 
 	TupleDataCollection::ToUnifiedFormat(dict_state.unique_key_state, unique_values);
 
