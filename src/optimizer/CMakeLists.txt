@@ -31,6 +31,7 @@ add_library_unity(
   join_filter_pushdown_optimizer.cpp
   late_materialization.cpp
   late_materialization_helper.cpp
+  materialized_cte_optimizer.cpp
   optimizer.cpp
   outer_join_simplification.cpp
   partial_aggregate_pushdown.cpp
