@@ -75,7 +75,7 @@
         "description": "Converts `integer` to a human-readable representation using units based on powers of 2 (KiB, MiB, GiB, etc.).",
         "example": "format_bytes(16_000)",
         "categories": ["string", "numeric"],
-        "type": "scalar_function",
+        "type": "scalar_function_set",
         "aliases": ["formatReadableSize"]
     },
     {
@@ -92,7 +92,7 @@
         "description": "Converts `integer` to a human-readable representation using units based on powers of 10 (KB, MB, GB, etc.).",
         "example": "formatReadableDecimalSize(16_000)",
         "categories": ["string", "numeric"],
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "hamming",
