@@ -55,7 +55,8 @@ public:
 	//! Returns the codepoint length in bytes when encoded in UTF8
 	static int CodepointLength(int cp);
 	//! Transform a UTF8 string to a codepoint; returns the codepoint and writes the length of the codepoint (in UTF8) to sz
-	static int32_t UTF8ToCodepoint(const char *c, int &sz);
+	//! "available" caps how many bytes may be read from "c" so a truncated trailing sequence is rejected rather than read past the end
+	static int32_t UTF8ToCodepoint(const char *c, int &sz, size_t available = 4);
 	//! Returns the render width of a single character in a string
 	static size_t RenderWidth(const char *s, size_t len, size_t pos);
 	static size_t RenderWidth(const std::string &str);
