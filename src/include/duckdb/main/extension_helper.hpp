@@ -91,6 +91,9 @@ struct ExtensionInstallOptions {
 	bool use_etags = false;
 	//! Throw an error when installing an extension with a different origin than the one that is installed
 	bool throw_on_origin_mismatch = false;
+	//! The repository was resolved from a registered 'extension_repository' secret (named form). Only then
+	//! may the repository's pinned signing key be trusted at install-time verification.
+	bool custom_repository = false;
 };
 
 class ExtensionHelper {
@@ -133,15 +136,32 @@ public:
 	static vector<string> GetExtensionDirectoryPath(ClientContext &context);
 	static vector<string> GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
 
-	// Check signature of an Extension stored as FileHandle
-	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
+	// Check signature of an Extension stored as FileHandle. repository_url scopes the per-origin custom
+	// signing keys to try (empty = core/community keys only).
+	static bool CheckExtensionSignature(DatabaseInstance &db, FileHandle &handle,
+	                                    ParsedExtensionMetaData &parsed_metadata, const string &repository_url,
 	                                    const bool allow_community_extensions);
 	// Check signature of an Extension, represented by a buffer and total_buffer_length, and a signature to be added
-	static bool CheckExtensionBufferSignature(const char *buffer, idx_t buffer_length, const string &signature,
+	static bool CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t buffer_length,
+	                                          const string &signature, const string &repository_url,
 	                                          const bool allow_community_extensions);
 	// Check signature of an Extension, represented by a buffer and total_buffer_length
-	static bool CheckExtensionBufferSignature(const char *buffer, idx_t total_buffer_length,
-	                                          const bool allow_community_extensions);
+	static bool CheckExtensionBufferSignature(DatabaseInstance &db, const char *buffer, idx_t total_buffer_length,
+	                                          const string &repository_url, const bool allow_community_extensions);
+
+	//! Resolve the full set of public keys to verify an extension from the given origin: core (+ community)
+	//! keys always, plus the pinned per-origin keys when the feature is enabled and a matching
+	//! extension_repository secret exists. For empty/core/community origins this equals GetPublicKeys().
+	static vector<string> GetVerificationKeys(DatabaseInstance &db, const string &repository_url,
+	                                          bool allow_community_extensions);
+	//! Look up the pinned signing key(s) for a repository origin in the extension_repository secrets.
+	//! Returns empty if none match. Works without a ClientContext (uses a system transaction).
+	static vector<string> GetRepositoryKeys(DatabaseInstance &db, const string &repository_url);
+	//! Resolve a registered extension_repository secret by name to its repository url, or "" if none.
+	static string TryGetRepositoryUrlFromSecret(ClientContext &context, const string &secret_name);
+	//! Look up the install-path url_template advertised by a registered extension_repository secret for the
+	//! origin (relative to the repository base url). Returns "" if none.
+	static string GetRepositoryUrlTemplate(DatabaseInstance &db, const string &repository_url);
 	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 

@@ -8,11 +8,18 @@ namespace duckdb {
 
 static void InstallFromRepository(ClientContext &context, const LoadInfo &info) {
 	ExtensionRepository repository;
+	bool custom_repository = false;
 	if (!info.repository.empty() && info.repo_is_alias) {
 		auto repository_url = ExtensionRepository::TryGetRepositoryUrl(info.repository);
-		// This has been checked during bind, so it should not fail here
 		if (repository_url.empty()) {
-			throw InternalException("The repository alias failed to resolve");
+			// Not a built-in alias: resolve a registered extension_repository secret named like the alias.
+			// Only this named form authorizes trusting the repository's pinned signing key.
+			repository_url = ExtensionHelper::TryGetRepositoryUrlFromSecret(context, info.repository);
+			if (repository_url.empty()) {
+				// This has been checked during bind, so it should not fail here
+				throw InternalException("The repository alias failed to resolve");
+			}
+			custom_repository = true;
 		}
 		repository = ExtensionRepository(info.repository, repository_url);
 	} else if (!info.repository.empty()) {
@@ -24,6 +31,7 @@ static void InstallFromRepository(ClientContext &context, const LoadInfo &info) 
 	options.throw_on_origin_mismatch = true;
 	options.version = info.version;
 	options.repository = repository;
+	options.custom_repository = custom_repository;
 
 	ExtensionHelper::InstallExtension(context, info.filename, options);
 }

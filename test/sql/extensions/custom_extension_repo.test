@@ -1,0 +1,42 @@
+# name: test/sql/extensions/custom_extension_repo.test
+# description: Trusted custom extension repositories - secret type, gate and named-repo resolution
+# group: [extensions]
+
+# the opt-in gate exists and defaults to false
+query T
+SELECT current_setting('allow_custom_extension_repositories')
+----
+false
+
+statement ok
+SET allow_custom_extension_repositories=true
+
+# the extension_repository secret type is registered and creatable (signing key is public, not redacted)
+statement ok
+CREATE SECRET custom_repo (
+    TYPE extension_repository,
+    URL '/tmp/duckdb_nonexistent_repo',
+    SIGNING_KEY 'dummy-public-key',
+    KEY_ID 'custom-2026'
+)
+
+query I
+SELECT count(*) FROM duckdb_secrets() WHERE name='custom_repo' AND type='extension_repository'
+----
+1
+
+# an unknown repository name (no matching secret) still fails at bind, as before
+statement error
+INSTALL no_such_extension FROM totally_unknown_repo
+----
+not a known repository name
+
+# the named form resolves the secret's url: bind passes and install proceeds, then fails on the
+# missing local repo file. This proves `INSTALL x FROM <secret_name>` resolution (E3).
+statement error
+INSTALL no_such_extension FROM custom_repo
+----
+no access to the file
+
+statement ok
+DROP SECRET custom_repo

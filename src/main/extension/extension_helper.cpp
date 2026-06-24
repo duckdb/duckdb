@@ -13,6 +13,9 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/secret/secret.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/catalog/catalog_transaction.hpp"
 
 // Note that c++ preprocessor doesn't have a nice way to clean this up so we need to set the defines we use to false
 // explicitly when they are undefined
@@ -320,6 +323,9 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 	options.repository = repository_from_info;
 	options.force_install = true;
 	options.use_etags = true;
+	// Re-trust the repository's pinned key on update if one is registered for this origin (the binary already
+	// passed a trusted install). Empty for core/community origins, so they keep verifying against core keys.
+	options.custom_repository = !ExtensionHelper::GetRepositoryKeys(db, extension_install_info->repository_url).empty();
 
 	unique_ptr<ExtensionInstallInfo> install_result;
 	try {
@@ -863,6 +869,86 @@ const vector<string> ExtensionHelper::GetPublicKeys(bool allow_community_extensi
 		}
 	}
 	return keys;
+}
+
+// Look up the extension_repository secret matching an origin (by scope) and read a single field.
+static bool TryGetRepositorySecretValue(DatabaseInstance &db, const string &repository_url, const char *field,
+                                        Value &result) {
+	if (repository_url.empty()) {
+		return false;
+	}
+	auto &secret_manager = SecretManager::Get(db);
+	auto transaction = CatalogTransaction::GetSystemTransaction(db);
+	SecretMatch match;
+	try {
+		match = secret_manager.LookupSecret(transaction, repository_url, "extension_repository");
+	} catch (...) {
+		return false;
+	}
+	if (!match.HasMatch()) {
+		return false;
+	}
+	auto kv_secret = dynamic_cast<const KeyValueSecret *>(&match.GetSecret());
+	if (!kv_secret) {
+		return false;
+	}
+	return kv_secret->TryGetValue(field, result) && !result.IsNull();
+}
+
+vector<string> ExtensionHelper::GetRepositoryKeys(DatabaseInstance &db, const string &repository_url) {
+	vector<string> keys;
+	Value signing_key;
+	if (TryGetRepositorySecretValue(db, repository_url, "signing_key", signing_key)) {
+		keys.push_back(signing_key.ToString());
+	}
+	return keys;
+}
+
+vector<string> ExtensionHelper::GetVerificationKeys(DatabaseInstance &db, const string &repository_url,
+                                                    bool allow_community_extensions) {
+	auto keys = GetPublicKeys(allow_community_extensions);
+	// Empty origin, feature disabled, or a built-in repository: only core (+ community) keys, as before.
+	if (repository_url.empty() || !Settings::Get<AllowCustomExtensionRepositoriesSetting>(db)) {
+		return keys;
+	}
+	if (!ExtensionRepository::TryConvertUrlToKnownRepository(repository_url).empty()) {
+		return keys;
+	}
+	for (auto &key : GetRepositoryKeys(db, repository_url)) {
+		keys.push_back(key);
+	}
+	return keys;
+}
+
+string ExtensionHelper::GetRepositoryUrlTemplate(DatabaseInstance &db, const string &repository_url) {
+	Value url_template;
+	if (TryGetRepositorySecretValue(db, repository_url, "url_template", url_template)) {
+		return url_template.ToString();
+	}
+	return "";
+}
+
+string ExtensionHelper::TryGetRepositoryUrlFromSecret(ClientContext &context, const string &secret_name) {
+	auto &secret_manager = SecretManager::Get(context);
+	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
+	unique_ptr<SecretEntry> entry;
+	try {
+		entry = secret_manager.GetSecretByName(transaction, secret_name);
+	} catch (...) {
+		return "";
+	}
+	if (!entry || !entry->secret || entry->secret->GetType() != "extension_repository") {
+		return "";
+	}
+	auto kv_secret = dynamic_cast<const KeyValueSecret *>(entry->secret.get());
+	if (!kv_secret) {
+		return "";
+	}
+	Value url_value;
+	if (kv_secret->TryGetValue("url", url_value) && !url_value.IsNull()) {
+		return url_value.ToString();
+	}
+	return "";
 }
 
 } // namespace duckdb
