@@ -46,6 +46,57 @@ SELECT 'ABC' !~* 'a'
 0
 
 statement ok
+CREATE TABLE regex_columns_partial(abc INTEGER, bcd INTEGER, def INTEGER);
+
+statement ok
+INSERT INTO regex_columns_partial VALUES (1, 2, 3);
+
+query II
+SELECT * ~ 'b' FROM regex_columns_partial
+----
+1	2
+
+query II
+SELECT * ~* 'B' FROM regex_columns_partial
+----
+1	2
+
+query T
+SELECT 'abc' ~ ANY(['b', 'z'])
+----
+1
+
+query T
+SELECT 'abc' ~* ANY(['Z', 'B'])
+----
+1
+
+query T
+SELECT 'abc' !~* ALL(['z', 'y'])
+----
+1
+
+query T
+SELECT 'abc' ~ ANY(['z', NULL]) IS NULL
+----
+1
+
+query T
+SELECT 'abc' ~ ALL(['abc', NULL]) IS NULL
+----
+1
+
+query T
+SELECT 'abc' ~ ANY([]::VARCHAR[])
+----
+0
+
+query T
+SELECT 'abc' ~ ALL([]::VARCHAR[])
+----
+1
+
+statement ok
 SET regex_match_operator_semantics = 'full'
 
 query I
@@ -90,6 +141,32 @@ SELECT 'ABC' !~* 'a.*'
 0
 
 statement ok
+CREATE TABLE regex_columns_full(abc INTEGER, "Bcd" INTEGER, def INTEGER);
+
+statement ok
+INSERT INTO regex_columns_full VALUES (1, 2, 3);
+
+query I
+SELECT * ~* 'b.*' FROM regex_columns_full
+----
+2
+
+query T
+SELECT 'abc' ~ ANY(['b', 'abc'])
+----
+1
+
+query T
+SELECT 'abc' ~* ANY(['B', 'ABC'])
+----
+1
+
+query T
+SELECT 'abc' ~* ALL(['ABC', 'A.*'])
+----
+1
+
+statement ok
 RESET regex_match_operator_semantics
 
 query I
@@ -112,4 +189,3 @@ SET regex_match_operator_semantics = 'unknown'
 
 statement ok
 RESET regex_match_operator_semantics
-

@@ -944,7 +944,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"StringOperator <- '^@' / '||'\n"
 	"QualifiedOperator <- 'OPERATOR' Parens(QualifiedOperatorContents)\n"
 	"QualifiedOperatorContents <- ColIdDot* AnyOp\n"
-	"AnyOp <- '!~~*' / '>>=' / '<<=' / '->>' / '!~~' / '~~*' / '~~~' / '!~' / '^@' / '||' / '&&' / '@>' / '<@' / '<=' / '>=' / '<>' / '!=' / '==' / '<<' / '>>' / '//' / '**' / '->' / '~~' / '+' / '-' / '*' / '/' / '%' / '^' / '<' / '>' / '=' / '&' / '|' / '~' / '!'\n"
+	"AnyOp <- '!~~*' / '>>=' / '<<=' / '->>' / '!~~' / '!~*' / '~~*' / '~~~' / '~*' / '!~' / '^@' / '||' / '&&' / '@>' / '<@' / '<=' / '>=' / '<>' / '!=' / '==' / '<<' / '>>' / '//' / '**' / '->' / '~~' / '+' / '-' / '*' / '/' / '%' / '^' / '<' / '>' / '=' / '&' / '|' / '~' / '!'\n"
 	"# LEVEL 9\n"
 	"BitwiseExpression <- AdditiveExpression BitwiseExpressionTail*\n"
 	"BitwiseExpressionTail <- BitOperator AdditiveExpression\n"
