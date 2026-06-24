@@ -668,8 +668,8 @@ ParquetVariantNode ParquetArrayIterator::operator[](idx_t i) const {
 	return ParquetVariantNode::MakeBinary(state.get(), child, binary_end);
 }
 
-void ParquetVariantIterator::EmitBinary(const_data_ptr_t data, VariantBuilder &builder) const {
-	EmitIterator(ParquetVariantNode::MakeBinary(*this, data), builder);
+void ParquetVariantIterator::EmitBinary(const_data_ptr_t data, const_data_ptr_t end, VariantBuilder &builder) const {
+	EmitIterator(ParquetVariantNode::MakeBinary(*this, data, end), builder);
 }
 
 namespace {

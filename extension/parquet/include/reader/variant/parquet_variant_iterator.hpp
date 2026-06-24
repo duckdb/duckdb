@@ -229,9 +229,8 @@ public:
 	const ShreddedGroupView &GetRootView() const {
 		return root_view;
 	}
-	//! Emit a Spark variant-encoded value (starting at 'data') of the current row into the builder.
-	//! Used by the shredded-conversion leftover pass (BeginRow must have been called for the row).
-	void EmitBinary(const_data_ptr_t data, VariantBuilder &builder) const;
+	//! Emit the binary value in ['data', 'end') of the current row into the builder (BeginRow must precede)
+	void EmitBinary(const_data_ptr_t data, const_data_ptr_t end, VariantBuilder &builder) const;
 
 private:
 	ShreddedGroupView root_view;

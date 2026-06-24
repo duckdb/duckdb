@@ -5,8 +5,6 @@
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/string_vector.hpp"
-#include "duckdb/common/types/blob.hpp"
 
 #include <cstring>
 
@@ -86,11 +84,6 @@ LogicalType DeriveTypedValueType(const ShreddedGroupView &view, const ShredPlan 
 	}
 	switch (view.kind) {
 	case ParquetGroupKind::LEAF:
-		//! Parquet emits binary as base64 VARCHAR, so a BLOB leaf is converted (not referenced) - keep the
-		//! shredded type VARCHAR so it unshreds to the same logical value
-		if (view.typed_type.id() == LogicalTypeId::BLOB) {
-			return LogicalType::VARCHAR;
-		}
 		return view.typed_type;
 	case ParquetGroupKind::OBJECT: {
 		child_list_t<LogicalType> fields;
@@ -119,25 +112,9 @@ LogicalType DeriveShredNodeType(const ShreddedGroupView &view, const ShredPlan &
 //===--------------------------------------------------------------------===//
 // Stage 2a: fill the typed_value tree (referencing Parquet leaves where possible)
 //===--------------------------------------------------------------------===//
-//! Reference (or, for BLOB, base64-convert) the Parquet leaf into 'out'
+//! Reference the Parquet leaf into 'out' (BLOB stays raw to preserve the type; base64 happens at JSON time)
 void FillLeafTypedValue(const ShreddedGroupView &view, Vector &out, idx_t count) {
-	if (view.typed_type.id() == LogicalTypeId::BLOB) {
-		//! base64-encode the binary leaf into the VARCHAR typed_value
-		auto blob_data = UnifiedVectorFormat::GetData<string_t>(view.leaf_format);
-		auto out_data = FlatVector::GetDataMutable<string_t>(out);
-		auto &out_validity = FlatVector::ValidityMutable(out);
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = view.leaf_format.sel->get_index(i);
-			if (!view.leaf_format.validity.RowIsValid(idx)) {
-				out_validity.SetInvalid(i);
-				continue;
-			}
-			out_data[i] = StringVector::AddString(out, Blob::ToBase64(blob_data[idx]));
-		}
-	} else {
-		//! zero-copy: the Parquet leaf maps exactly to the shredded type
-		out.Reference(*view.typed_value_vec);
-	}
+	out.Reference(*view.typed_value_vec);
 }
 
 //! Captures the (per-node) untyped_value_index target so the leftover pass can wire it up. A "flat" node has
@@ -271,7 +248,7 @@ struct ShreddedLeftoverSource {
 	void EmitLeftover(const string_t &value, ShredNodeWriter &writer, idx_t index, VariantBuilder &builder) {
 		auto data = const_data_ptr_cast(value.GetData());
 		auto local = builder.LocalValue();
-		iterator.EmitBinary(data, builder);
+		iterator.EmitBinary(data, data + value.GetSize(), builder);
 		writer.untyped_index_data[index] = local + 1;
 		writer.untyped_index_validity->SetValid(index);
 	}
