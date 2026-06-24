@@ -370,6 +370,18 @@ FROM read_text('{TEMP_DIR}/timestamptz_ns_partition/*/*.json') ORDER BY filename
 ----
 {TEMP_DIR}/timestamptz_ns_partition/ts=2026%2F01%2F02%2003%3A04%3A05.123456789/data_0.json	{"ts":"2026/01/02 03:04:05.123456789","v":42}
 
+statement ok
+COPY (
+    SELECT TIMESTAMP_NS '2026-01-02 03:04:05.123456789' AS ts, 42 AS v
+) TO '{TEMP_DIR}/timestamp_ns_partition'
+  (FORMAT JSON, PARTITION_BY (ts), WRITE_PARTITION_COLUMNS, timestampformat '%Y/%m/%d %H:%M:%S.%n');
+
+query II
+SELECT filename, trim(content, chr(10))
+FROM read_text('{TEMP_DIR}/timestamp_ns_partition/*/*.json') ORDER BY filename;
+----
+{TEMP_DIR}/timestamp_ns_partition/ts=2026%2F01%2F02%2003%3A04%3A05.123456789/data_0.json	{"ts":"2026/01/02 03:04:05.123456789","v":42}
+
 # invalid timestampformat must produce a clear error
 statement ok
 CREATE TABLE t (ts TIMESTAMP[])
