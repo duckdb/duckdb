@@ -365,18 +365,13 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		}
 
 		// construct the child schemas recursively
+		// TUPLE children have empty names - NamedChildren synthesizes positional ones for a valid Parquet schema
 		auto child_types = TupleType::NamedChildren(type);
-
 		vector<unique_ptr<ColumnWriter>> child_writers;
-		const auto child_count = StructType::GetChildCount(type);
-		child_writers.reserve(child_count);
-		for (idx_t child_idx = 0; child_idx < child_count; child_idx++) {
-			const auto is_tuple = type.id() == LogicalTypeId::TUPLE;
-
-			const auto child_type = StructType::GetChildType(type, child_idx);
-			const auto child_name =
-			    is_tuple ? TupleType::GetChildName(child_idx) : StructType::GetChildName(type, child_idx);
-
+		child_writers.reserve(child_types.size());
+		for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
+			auto &child_name = child_types[child_idx].first;
+			auto &child_type = child_types[child_idx].second;
 			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name,
 			                                              allow_geometry, child_field_ids, shredding_type, max_repeat,
 			                                              max_define + 1, true));

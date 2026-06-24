@@ -5190,11 +5190,16 @@ PEGTransformerFactory::TransformBoundedListExpressionInternal(PEGTransformer &tr
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformStructExpressionInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<FunctionArgument> struct_field;
-	auto struct_field_items = ExtractParseResultsFromList(list_pr.GetChild(1));
-	for (auto &struct_field_item : struct_field_items) {
-		auto struct_field_value = transformer.Transform<FunctionArgument>(struct_field_item.get());
-		struct_field.push_back(std::move(struct_field_value));
+	optional<vector<FunctionArgument>> struct_field {};
+	auto &struct_field_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (struct_field_opt.HasResult()) {
+		vector<FunctionArgument> struct_field_value;
+		auto struct_field_value_items_1 = ExtractParseResultsFromList(struct_field_opt.GetResult());
+		for (auto &struct_field_value_item_1 : struct_field_value_items_1) {
+			auto struct_field_value_value_1 = transformer.Transform<FunctionArgument>(struct_field_value_item_1.get());
+			struct_field_value.push_back(std::move(struct_field_value_value_1));
+		}
+		struct_field = std::move(struct_field_value);
 	}
 	auto result = TransformStructExpression(transformer, std::move(struct_field));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));

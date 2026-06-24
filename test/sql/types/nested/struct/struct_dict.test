@@ -36,11 +36,11 @@ SELECT {'i': 3, 'i': 4}
 ----
 <REGEX>:.*Binder Error.*Duplicate.*
 
-# empty struct is not allowed
-statement error
+# empty struct is allowed - {} produces an empty STRUCT
+query T
 SELECT {};
 ----
-<REGEX>:.*Parser Error.*syntax error at or near "}".*
+{}
 
 # need string keys
 # PEG parser allows non-string keys

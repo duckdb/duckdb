@@ -544,10 +544,15 @@ PEGTransformerFactory::TransformArrayParensSelect(PEGTransformer &transformer,
 	return std::move(subquery_expr);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructExpression(PEGTransformer &transformer,
-                                                                              vector<FunctionArgument> struct_field) {
-	auto func_name = "struct_pack";
-	return make_uniq<FunctionExpression>(INVALID_CATALOG, "main", func_name, std::move(struct_field));
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformStructExpression(PEGTransformer &transformer,
+                                                 optional<vector<FunctionArgument>> struct_field) {
+	// {} produces an empty STRUCT, {'a': 1, ...} a named STRUCT - both via struct_pack
+	vector<FunctionArgument> fields;
+	if (struct_field) {
+		fields = std::move(*struct_field);
+	}
+	return make_uniq<FunctionExpression>(INVALID_CATALOG, "main", "struct_pack", std::move(fields));
 }
 
 FunctionArgument PEGTransformerFactory::TransformStructField(PEGTransformer &transformer,

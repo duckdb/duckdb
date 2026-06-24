@@ -83,7 +83,7 @@ SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'': {'': 12}}], r
 statement error
 SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{}], recursive := true, keep_parent_names := true));
 ----
-Parser Error: syntax error
+UNNEST of an empty struct is not supported
 
 statement error
 SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([]), recursive := true, keep_parent_names := true));

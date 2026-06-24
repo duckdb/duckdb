@@ -8,6 +8,12 @@ SELECT row(), struct_pack()
 ----
 ()	{}
 
+# the {} brace literal produces an empty STRUCT (MAP {} is still an empty map)
+query TT
+SELECT {}, typeof({})
+----
+{}	STRUCT
+
 # row() is a TUPLE (it is implicitly castable to the empty STRUCT used throughout the rest of this test)
 query T
 SELECT typeof(row())
