@@ -354,7 +354,22 @@ def _optional_stack_child_plan(optional_child):
     return None
 
 
-def plan_trampoline_sequence_rule(ast, identifier_rules):
+def is_syntax_only_node(node, syntax_only_rules):
+    if literal_string_values(node) is not None:
+        return True
+    if isinstance(node, ReferenceNode):
+        return node.name in syntax_only_rules
+    if isinstance(node, ChoiceNode):
+        return all(is_syntax_only_node(alternative, syntax_only_rules) for alternative in node.alternatives)
+    if isinstance(node, SequenceNode):
+        return all(is_syntax_only_node(child, syntax_only_rules) for child in node.children)
+    if isinstance(node, ParensNode):
+        return is_syntax_only_node(node.inner, syntax_only_rules)
+    return False
+
+
+def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None):
+    syntax_only_rules = syntax_only_rules or set()
     direct_args = []
     direct_optional_args = []
     direct_optional_presence_args = []
@@ -372,7 +387,13 @@ def plan_trampoline_sequence_rule(ast, identifier_rules):
     children = ast.children if isinstance(ast, SequenceNode) else [ast]
     for child_idx, child in enumerate(children):
         parse_expr, child = _trampoline_parse_expr(child_idx, child)
-        if isinstance(child, LiteralNode):
+        if isinstance(child, LiteralNode) or is_syntax_only_node(child, syntax_only_rules):
+            continue
+        if isinstance(child, OptionalNode) and is_syntax_only_node(child.child, syntax_only_rules):
+            var_name = "has_result" if len(direct_optional_presence_args) == 0 else f"has_result_{child_idx}"
+            arg = DirectOptionalPresenceArg(parse_expr, var_name)
+            direct_optional_presence_args.append(arg)
+            finalize_args.append(arg)
             continue
         if isinstance(child, ReferenceNode):
             if child.name in identifier_rules:
@@ -420,12 +441,6 @@ def plan_trampoline_sequence_rule(ast, identifier_rules):
                 arg = OptionalStackChild(parse_expr, rule_name, next_slot, to_snake_case(rule_name), result_expr_template)
                 optional_stack_children.append(arg)
                 next_slot += 1
-            finalize_args.append(arg)
-            continue
-        if isinstance(child, OptionalNode) and literal_string_values(child.child) is not None:
-            var_name = "has_result" if len(direct_optional_presence_args) == 0 else f"has_result_{child_idx}"
-            arg = DirectOptionalPresenceArg(parse_expr, var_name)
-            direct_optional_presence_args.append(arg)
             finalize_args.append(arg)
             continue
         if isinstance(child, OptionalNode) and isinstance(child.child, RepeatNode):

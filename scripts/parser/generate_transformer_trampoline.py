@@ -24,6 +24,7 @@ from transformer_plan import (
     SequenceNode,
     StackChild,
     TrailingOptionalStackChild,
+    is_syntax_only_node,
     literal_string_values,
     plan_trampoline_sequence_rule,
     to_snake_case,
@@ -104,6 +105,21 @@ class UseGramPreviewEmitter:
         self.rule_types = rule_types
         self.identifier_rules = identifier_rules
         self.rule_config = rule_config
+        self.syntax_only_rules = self.collect_syntax_only_rules()
+
+    def collect_syntax_only_rules(self):
+        result = set()
+        parsed_rules = {rule_name: tokens_to_ast(rule.tokens) for rule_name, rule in self.rules.items()}
+        changed = True
+        while changed:
+            changed = False
+            for rule_name, ast in parsed_rules.items():
+                if rule_name in result:
+                    continue
+                if is_syntax_only_node(ast, result):
+                    result.add(rule_name)
+                    changed = True
+        return result
 
     def cpp_type(self, rule_name):
         return self.rule_types[rule_name].cpp_type
@@ -127,7 +143,12 @@ class UseGramPreviewEmitter:
         return config is not None and config.mode == TrampolineRuleMode.MANUAL_FINALIZE
 
     def emitted_rules(self):
-        return [rule_name for rule_name in self.rules if not self.is_excluded_rule(rule_name)]
+        return [
+            rule_name
+            for rule_name in self.rules
+            if not self.is_excluded_rule(rule_name)
+            and not (rule_name in self.syntax_only_rules and rule_name not in self.rule_types)
+        ]
 
     def initialize_hook(self, rule_name):
         config = self.rule_config_entry(rule_name)
@@ -159,12 +180,14 @@ class UseGramPreviewEmitter:
             return "excluded", ""
         if self.is_manual_rule(rule_name):
             return "manual", ""
-        if rule_name not in self.rule_types:
-            return "unsupported", "no return type in grammar_types.yml"
         try:
             ast = tokens_to_ast(rule.tokens)
         except Exception as e:
             return "unsupported", f"AST parse error: {e}"
+        if is_syntax_only_node(ast, self.syntax_only_rules) and rule_name not in self.rule_types:
+            return "syntax_only", ""
+        if literal_string_values(ast) is None and rule_name not in self.rule_types:
+            return "unsupported", "no return type in grammar_types.yml"
         if self.is_manual_finalize_rule(rule_name):
             try:
                 self.emit_initialize_rule(rule_name, ast)
@@ -212,6 +235,8 @@ class UseGramPreviewEmitter:
         lines.append("")
         for rule_name, rule in self.rules.items():
             if self.is_excluded_rule(rule_name) or self.is_manual_rule(rule_name):
+                continue
+            if rule_name in self.syntax_only_rules and rule_name not in self.rule_types:
                 continue
             lines.extend(self.emit_rule(rule_name, tokens_to_ast(rule.tokens)))
             lines.append("")
@@ -350,7 +375,7 @@ class UseGramPreviewEmitter:
         lines = self.emit_sequence_initialize(rule_name, ast)
         if self.is_manual_finalize_rule(rule_name):
             return lines
-        plan = plan_trampoline_sequence_rule(ast, self.identifier_rules)
+        plan = plan_trampoline_sequence_rule(ast, self.identifier_rules, self.syntax_only_rules)
         cpp_type = self.cpp_type(rule_name)
         by_value = self.by_value(rule_name)
 
@@ -520,7 +545,7 @@ class UseGramPreviewEmitter:
         return lines
 
     def emit_sequence_initialize(self, rule_name, ast):
-        plan = plan_trampoline_sequence_rule(ast, self.identifier_rules)
+        plan = plan_trampoline_sequence_rule(ast, self.identifier_rules, self.syntax_only_rules)
         lines = []
         lines.append(
             f"void PEGTransformerFactory::{init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
