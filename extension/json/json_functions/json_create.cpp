@@ -194,7 +194,7 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 		return LogicalType::STRUCT(child_types);
 	}
 	case LogicalTypeId::MAP: {
-		return LogicalType::MAP(LogicalType::VARCHAR, GetJSONType(const_struct_names, MapType::ValueType(type)));
+		return LogicalType::MAP(MapType::KeyType(type), GetJSONType(const_struct_names, MapType::ValueType(type)));
 	}
 	case LogicalTypeId::UNION: {
 		child_list_t<LogicalType> member_types;
@@ -535,15 +535,16 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	}
 }
 
+static void CreateValuesMapKeys(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
+                                const JSONCopyFormatOptions &options);
+
 static void CreateValuesMap(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                             idx_t count, const JSONCopyFormatOptions &options) {
 	// Create nested keys
 	auto &map_key_v = MapVector::GetKeys(value_v);
 	auto map_key_count = ListVector::GetListSize(value_v);
-	Vector map_keys_string(LogicalType::VARCHAR, map_key_count);
-	VectorOperations::DefaultCast(map_key_v, map_keys_string, map_key_count);
 	auto nested_keys = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, map_key_count);
-	TemplatedCreateValues<string_t, string_t>(doc, nested_keys, map_keys_string, map_key_count);
+	CreateValuesMapKeys(doc, nested_keys, map_key_v, map_key_count, options);
 	// Create nested values
 	auto &map_val_v = MapVector::GetValues(value_v);
 	auto map_val_count = ListVector::GetListSize(value_v);
@@ -701,67 +702,85 @@ static void CreateValuesFromDefaultCast(yyjson_mut_doc *doc, yyjson_mut_val *val
 	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
 }
 
-static void CreateValuesDate(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
-                             const JSONCopyFormatOptions &options) {
-	if (!options.date_format) {
+template <class FILL>
+static void CreateValuesFormatted(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
+                                  bool has_format, FILL &&fill_strings) {
+	if (!has_format) {
 		CreateValuesFromDefaultCast(doc, vals, value_v, count);
 		return;
 	}
 	Vector string_vector(LogicalType::VARCHAR, count);
-	options.date_format.get_mutable()->ConvertDateVector(value_v, string_vector);
+	fill_strings(string_vector);
 	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
+}
+
+static void CreateValuesDate(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
+                             const JSONCopyFormatOptions &options) {
+	CreateValuesFormatted(doc, vals, value_v, count, bool(options.date_format), [&](Vector &string_vector) {
+		options.date_format.get_mutable()->ConvertDateVector(value_v, string_vector);
+	});
 }
 
 static void CreateValuesTimestamp(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
                                   const JSONCopyFormatOptions &options) {
-	if (!options.timestamp_format) {
-		CreateValuesFromDefaultCast(doc, vals, value_v, count);
-		return;
-	}
-	if (value_v.GetType().id() != LogicalTypeId::TIMESTAMP) {
+	if (options.timestamp_format && value_v.GetType().id() != LogicalTypeId::TIMESTAMP) {
 		Vector timestamp_vector(LogicalType::TIMESTAMP, count);
 		VectorOperations::DefaultCast(value_v, timestamp_vector, count);
 		CreateValuesTimestamp(doc, vals, timestamp_vector, count, options);
 		return;
 	}
-	Vector string_vector(LogicalType::VARCHAR, count);
-	options.timestamp_format.get_mutable()->ConvertTimestampVector(value_v, string_vector);
-	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
+	CreateValuesFormatted(doc, vals, value_v, count, bool(options.timestamp_format), [&](Vector &string_vector) {
+		options.timestamp_format.get_mutable()->ConvertTimestampVector(value_v, string_vector);
+	});
 }
 
 static void CreateValuesTimestampNS(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
                                     const JSONCopyFormatOptions &options) {
-	if (!options.timestamp_format) {
-		CreateValuesFromDefaultCast(doc, vals, value_v, count);
-		return;
-	}
-	Vector string_vector(LogicalType::VARCHAR, count);
-	options.timestamp_format.get_mutable()->ConvertTimestampNSVector(value_v, string_vector);
-	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
+	CreateValuesFormatted(doc, vals, value_v, count, bool(options.timestamp_format), [&](Vector &string_vector) {
+		options.timestamp_format.get_mutable()->ConvertTimestampNSVector(value_v, string_vector);
+	});
 }
 
 static void CreateValuesTimestampTZ(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
                                     const JSONCopyFormatOptions &options) {
-	if (!options.timestamp_format) {
+	CreateValuesFormatted(doc, vals, value_v, count, bool(options.timestamp_format), [&](Vector &string_vector) {
+		auto format_expression = value_v.GetType().id() == LogicalTypeId::TIMESTAMP_TZ_NS
+		                             ? options.timestamptz_ns_format_expression
+		                             : options.timestamptz_format_expression;
+		if (!options.context || !format_expression) {
+			throw InternalException("Missing bound TIMESTAMPTZ formatter for JSON COPY");
+		}
+		DataChunk input;
+		input.InitializeEmpty({value_v.GetType()});
+		input.data[0].Reference(value_v);
+		input.CheckCardinality(count);
+		ExpressionExecutor executor(*options.context.get_mutable(), *format_expression);
+		executor.ExecuteExpression(input, string_vector);
+	});
+}
+
+static void CreateValuesMapKeys(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
+                                const JSONCopyFormatOptions &options) {
+	switch (value_v.GetType().id()) {
+	case LogicalTypeId::DATE:
+		CreateValuesDate(doc, vals, value_v, count, options);
+		break;
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+		CreateValuesTimestamp(doc, vals, value_v, count, options);
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		CreateValuesTimestampNS(doc, vals, value_v, count, options);
+		break;
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		CreateValuesTimestampTZ(doc, vals, value_v, count, options);
+		break;
+	default:
 		CreateValuesFromDefaultCast(doc, vals, value_v, count);
-		return;
+		break;
 	}
-	auto format_expression = value_v.GetType().id() == LogicalTypeId::TIMESTAMP_TZ_NS
-	                             ? options.timestamptz_ns_format_expression
-	                             : options.timestamptz_format_expression;
-	if (!options.context || !format_expression) {
-		throw InternalException("Missing bound TIMESTAMPTZ formatter for JSON COPY");
-	}
-
-	DataChunk input;
-	input.InitializeEmpty({value_v.GetType()});
-	input.data[0].Reference(value_v);
-	input.CheckCardinality(count);
-
-	Vector string_vector(LogicalType::VARCHAR, count);
-	ExpressionExecutor executor(*options.context.get_mutable(), *format_expression);
-	executor.ExecuteExpression(input, string_vector);
-	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
 }
 
 static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,

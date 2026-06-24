@@ -336,6 +336,28 @@ FROM read_json_objects('{TEMP_DIR}/timestampformat_timestamptz_ns.json');
 
 statement ok
 COPY (
+    SELECT map([DATE '2026-01-02'], [DATE '2026-01-03']) AS m
+) TO '{TEMP_DIR}/map_key_dateformat.json' (FORMAT JSON, dateformat '%d/%m/%Y');
+
+query I
+SELECT trim(content, chr(10))
+FROM read_text('{TEMP_DIR}/map_key_dateformat.json');
+----
+{"m":{"02/01/2026":"03/01/2026"}}
+
+statement ok
+COPY (
+    SELECT map([TIMESTAMP_NS '2026-01-02 03:04:05.123456789'], [1]) AS m
+) TO '{TEMP_DIR}/map_key_timestamp_ns_format.json' (FORMAT JSON, timestampformat '%Y/%m/%d %H:%M:%S.%n');
+
+query I
+SELECT trim(content, chr(10))
+FROM read_text('{TEMP_DIR}/map_key_timestamp_ns_format.json');
+----
+{"m":{"2026/01/02 03:04:05.123456789":1}}
+
+statement ok
+COPY (
     SELECT DATE '2026-01-02' AS d, {'d': DATE '2026-01-02'} AS payload, 42 AS v
 ) TO '{TEMP_DIR}/nested_dateformat_partition'
   (FORMAT JSON, PARTITION_BY (d), WRITE_PARTITION_COLUMNS, dateformat '%d/%m/%Y');
