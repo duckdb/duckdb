@@ -167,6 +167,13 @@ buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const Log
 	return entry;
 }
 
+buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableGlobalDictionary(const LogicalType &type,
+                                                                             const idx_t &size) {
+	auto entry = CreateReusableDictionary(type, size);
+	entry->global_dictionary = true;
+	return entry;
+}
+
 const Vector &DictionaryVector::GetCachedHashes(const Vector &input) {
 	D_ASSERT(CanCacheHashes(input));
 

@@ -39,6 +39,7 @@ public:
 public:
 	PhysicalCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types, CopyFunction function,
 	                   unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality);
+	~PhysicalCopyToFile() override;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
