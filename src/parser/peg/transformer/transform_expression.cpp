@@ -174,7 +174,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		// COUNT(*) gets converted into COUNT()
 		function_children.clear();
 	}
-	auto lowercase_name = StringUtil::Lower(qualified_function.name.GetIdentifierName());
+	auto lowercase_name = StringUtil::Lower(qualified_function.Name().GetIdentifierName());
 
 	if (over_clause) {
 		if (transformer.in_window_definition) {
@@ -192,8 +192,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 
 		transformer.in_window_definition = true;
 		auto expr = std::move(*over_clause);
-		expr->CatalogMutable() = qualified_function.catalog;
-		expr->SchemaMutable() = qualified_function.schema;
+		expr->CatalogMutable() = qualified_function.Catalog();
+		expr->SchemaMutable() = qualified_function.Schema();
 		expr->SetFunctionName(lowercase_name);
 
 		for (auto &arg : function_children) {
@@ -323,12 +323,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			}
 			lowercase_name = "mode";
 		} else {
-			throw ParserException("Unknown ordered aggregate \"%s\".", qualified_function.name);
+			throw ParserException("Unknown ordered aggregate \"%s\".", qualified_function.Name());
 		}
 	}
-	auto result = make_uniq<FunctionExpression>(
-	    qualified_function.catalog, qualified_function.schema, Identifier(lowercase_name), std::move(function_children),
-	    std::move(filter_expr), std::move(order_modifier), distinct, false, export_clause);
+	auto result =
+	    make_uniq<FunctionExpression>(qualified_function.Catalog(), qualified_function.Schema(),
+	                                  Identifier(lowercase_name), std::move(function_children), std::move(filter_expr),
+	                                  std::move(order_modifier), distinct, false, export_clause);
 
 	return std::move(result);
 }
@@ -371,9 +372,9 @@ QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer 
                                                                  ParseResult &choice_result) {
 	if (choice_result.type == ParseResultType::IDENTIFIER) {
 		QualifiedName result;
-		result.catalog = INVALID_CATALOG;
-		result.schema = INVALID_SCHEMA;
-		result.name = choice_result.Cast<IdentifierParseResult>().identifier;
+		result.Catalog() = INVALID_CATALOG;
+		result.Schema() = INVALID_SCHEMA;
+		result.Name() = choice_result.Cast<IdentifierParseResult>().identifier;
 		return result;
 	}
 	return transformer.Transform<QualifiedName>(choice_result);
@@ -383,9 +384,9 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedFunctionName(PEGTran
                                                                          const Identifier &schema_qualification,
                                                                          const Identifier &reserved_function_name) {
 	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = schema_qualification;
-	result.name = reserved_function_name;
+	result.Catalog() = INVALID_CATALOG;
+	result.Schema() = schema_qualification;
+	result.Name() = reserved_function_name;
 	return result;
 }
 
@@ -394,13 +395,13 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaFunctionName(
     const optional<Identifier> &reserved_schema_qualification, const Identifier &reserved_function_name) {
 	QualifiedName result;
 	if (reserved_schema_qualification) {
-		result.catalog = catalog_qualification;
-		result.schema = *reserved_schema_qualification;
+		result.Catalog() = catalog_qualification;
+		result.Schema() = *reserved_schema_qualification;
 	} else {
-		result.catalog = INVALID_CATALOG;
-		result.schema = catalog_qualification;
+		result.Catalog() = INVALID_CATALOG;
+		result.Schema() = catalog_qualification;
 	}
-	result.name = reserved_function_name;
+	result.Name() = reserved_function_name;
 	return result;
 }
 

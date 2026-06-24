@@ -1,6 +1,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
 
@@ -46,6 +47,21 @@ end:
 		result.push_back(Identifier(entry));
 	}
 	return result;
+}
+
+hash_t QualifiedName::Hash() const {
+	hash_t result = catalog.Hash();
+	result = CombineHash(result, schema.Hash());
+	result = CombineHash(result, name.Hash());
+	return result;
+}
+
+bool QualifiedName::operator==(const QualifiedName &rhs) const {
+	return catalog == rhs.catalog && schema == rhs.schema && name == rhs.name;
+}
+
+bool QualifiedName::operator!=(const QualifiedName &rhs) const {
+	return !(*this == rhs);
 }
 
 QualifiedName QualifiedName::Parse(const string &input) {

@@ -225,17 +225,17 @@ QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input)
 		throw InternalException("QualifiedName cannot be made with an empty input.");
 	}
 	if (input.size() == 1) {
-		result.catalog = Identifier::InvalidCatalog();
-		result.schema = Identifier::InvalidSchema();
-		result.name = Identifier(input[0]);
+		result.Catalog() = Identifier::InvalidCatalog();
+		result.Schema() = Identifier::InvalidSchema();
+		result.Name() = Identifier(input[0]);
 	} else if (input.size() == 2) {
-		result.catalog = Identifier::InvalidCatalog();
-		result.schema = Identifier(input[0]);
-		result.name = Identifier(input[1]);
+		result.Catalog() = Identifier::InvalidCatalog();
+		result.Schema() = Identifier(input[0]);
+		result.Name() = Identifier(input[1]);
 	} else if (input.size() == 3) {
-		result.catalog = Identifier(input[0]);
-		result.schema = Identifier(input[1]);
-		result.name = Identifier(input[2]);
+		result.Catalog() = Identifier(input[0]);
+		result.Schema() = Identifier(input[1]);
+		result.Name() = Identifier(input[2]);
 	} else {
 		throw ParserException("Too many qualifications found - expected [catalog.schema.name] or [schema.name]");
 	}
