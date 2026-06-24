@@ -46,6 +46,10 @@ bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length)
 	return true;
 }
 
+bool HasNoValidationMetadata(const string &version_tag, timestamp_t last_modified) {
+	return version_tag.empty() && (!Timestamp::IsFinite(last_modified) || last_modified == timestamp_t(0));
+}
+
 } // namespace
 
 CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db_p)
@@ -116,10 +120,18 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
 		auto guard = cached_file->lock.GetExclusiveLock();
+		const idx_t current_file_size = file_handle->GetFileSize();
+		const bool metadata_changed = cached_file->VersionTag(guard) != version_tag ||
+		                              cached_file->LastModified(guard) != last_modified ||
+		                              cached_file->FileSize(guard) != current_file_size;
+
 		if (!cached_file->IsValid(guard, Validate(), version_tag, last_modified)) {
 			cached_file->Ranges(guard).clear(); // Invalidate entire cache
+		} else if (!Validate() && metadata_changed && !cached_file->Ranges(guard).empty()) {
+			// Keep serving stale cached ranges; do not update metadata to match the overwritten file.
+			return *file_handle;
 		}
-		cached_file->FileSize(guard) = file_handle->GetFileSize();
+		cached_file->FileSize(guard) = current_file_size;
 		cached_file->LastModified(guard) = last_modified;
 		cached_file->VersionTag(guard) = version_tag;
 		cached_file->CanSeek(guard) = file_handle->CanSeek();
@@ -136,6 +148,15 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 		GetFileHandle().Read(context, buffer, nr_bytes, location);
 		return result;
 	}
+
+	GetFileHandle();
+	if (HasNoValidationMetadata(version_tag, last_modified)) {
+		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+		buffer = result.Ptr();
+		GetFileHandle().Read(context, buffer, nr_bytes, location);
+		return result;
+	}
+
 	EnsureCachedFileCurrent();
 
 	// Try to read from the cache, filling overlapping_ranges in the process
@@ -181,9 +202,18 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 	BufferHandle result;
 
-	// If we can't seek, we can't use the cache for these calls,
-	// because we won't be able to seek over any parts we skipped by reading from the cache
-	if (!external_file_cache.IsEnabled() || !CanSeek()) {
+	if (!external_file_cache.IsEnabled()) {
+		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+		buffer = result.Ptr();
+		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buffer, nr_bytes));
+		position += NumericCast<idx_t>(nr_bytes);
+		return result;
+	}
+
+	GetFileHandle();
+	if (HasNoValidationMetadata(version_tag, last_modified) || !CanSeek()) {
+		// If we can't seek, we can't use the cache for these calls,
+		// because we won't be able to seek over any parts we skipped by reading from the cache
 		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		buffer = result.Ptr();
 		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buffer, nr_bytes));
