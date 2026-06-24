@@ -16,8 +16,8 @@ struct DBGenFunctionData : public TableFunctionData {
 
 	bool finished = false;
 	double sf = 0;
-	string catalog = INVALID_CATALOG;
-	string schema = DEFAULT_SCHEMA;
+	Identifier catalog = INVALID_CATALOG;
+	Identifier schema = DEFAULT_SCHEMA;
 	string suffix;
 	bool overwrite = false;
 	uint32_t children = 1;
@@ -41,9 +41,9 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 		if (kv.first == "sf") {
 			result->sf = DoubleValue::Get(kv.second);
 		} else if (kv.first == "catalog") {
-			result->catalog = StringValue::Get(kv.second);
+			result->catalog = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "schema") {
-			result->schema = StringValue::Get(kv.second);
+			result->schema = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "suffix") {
 			result->suffix = StringValue::Get(kv.second);
 		} else if (kv.first == "overwrite") {
@@ -185,6 +185,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
 	dbgen_func.named_parameters["children"] = LogicalType::UINTEGER;
 	dbgen_func.named_parameters["step"] = LogicalType::UINTEGER;
+	dbgen_func.call_return_type = StatementReturnType::NOTHING;
 	loader.RegisterFunction(dbgen_func);
 
 	// create the TPCH pragma that allows us to run the query

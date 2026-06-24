@@ -330,7 +330,9 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 		}
 
 		FindValues(conversion_data.variant, row_index, new_sel, child_data_entry);
-		CastVariant(conversion_data, child, new_sel, total_offset, array_size, row_index);
+		if (!CastVariant(conversion_data, child, new_sel, total_offset, array_size, row_index)) {
+			return false;
+		}
 		total_offset += array_size;
 	}
 	return true;
@@ -387,7 +389,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 		//! Then find the relevant child of the OBJECTs we're converting
 		//! FIXME: there is nothing preventing an OBJECT from containing the same key twice I believe ?
 		VariantPathComponent component;
-		component.key = child_name;
+		component.key = child_name.GetIdentifierName();
 		component.lookup_mode = VariantChildLookupMode::BY_KEY;
 		ValidityMask lookup_validity(count);
 		VariantUtils::FindChildValues(conversion_data.variant, component, row_sel, child_values_sel, lookup_validity,

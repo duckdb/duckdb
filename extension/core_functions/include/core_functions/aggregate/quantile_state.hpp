@@ -9,9 +9,59 @@
 #pragma once
 
 #include "core_functions/aggregate/quantile_sort_tree.hpp"
+#include "duckdb/common/operator/negate.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/list_segment.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/aggregate/list_aggregate.hpp"
 #include "SkipList.h"
 
 namespace duckdb {
+
+//! Flattens the values of a linked list into a contiguous array for interpolation.
+//! The flattened values are mutable - the interpolators partially sort them in place.
+//! The flattened chunk lives in the finalize's local state, so that it is allocated (at most) once per
+//! finalize call instead of once per finalized group - callers that keep the local state alive re-use it
+//! across finalize calls.
+template <class INPUT_TYPE>
+struct FlattenedQuantileValues : FunctionLocalState {
+	FlattenedQuantileValues() : capacity(0) {
+	}
+
+	static unique_ptr<FunctionLocalState> Init(const BoundAggregateFunction &, optional_ptr<FunctionData>) {
+		return make_uniq<FlattenedQuantileValues>();
+	}
+
+	//! Flatten the values of the given linked list into the chunk cached in the finalize local state
+	static FlattenedQuantileValues &Flatten(AggregateFinalizeData &finalize_data, const LinkedList &linked_list) {
+		const auto type = PrimitiveToLogicalType<INPUT_TYPE>();
+		const auto required_capacity = MaxValue<idx_t>(linked_list.total_capacity, 1);
+		D_ASSERT(finalize_data.input.local_state);
+		auto &values = finalize_data.input.local_state->Cast<FlattenedQuantileValues>();
+		if (values.capacity < required_capacity) {
+			// (re-)allocate the cached chunk
+			values.capacity = NextPowerOfTwo(required_capacity);
+			values.chunk.Destroy();
+			values.chunk.Initialize(Allocator::DefaultAllocator(), {type}, values.capacity);
+		} else {
+			// re-use the allocated chunk - resetting clears the string heap of the previously flattened state
+			values.chunk.Reset();
+		}
+		ListSegmentFunctions functions;
+		GetSegmentDataFunctions(functions, type);
+		functions.BuildListVector(linked_list, values.chunk.data[0], 0);
+		return values;
+	}
+
+	INPUT_TYPE *Data() {
+		return FlatVector::GetDataMutable<INPUT_TYPE>(chunk.data[0]);
+	}
+
+	//! The flattened values (a single-column chunk) - strings are materialized into the chunk's string heap
+	DataChunk chunk;
+	//! The allocated capacity of the chunk
+	idx_t capacity;
+};
 
 struct QuantileOperation {
 	template <class STATE>
@@ -19,34 +69,14 @@ struct QuantileOperation {
 		new (&state) STATE();
 	}
 
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
-	                              idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
-		}
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &aggr_input) {
-		state.AddElement(input, aggr_input.input);
-	}
-
-	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
-		if (source.v.empty()) {
-			return;
-		}
-		target.v.insert(target.v.end(), source.v.begin(), source.v.end());
+	//! The type of the values buffered in the linked list - used by the shared list update/combine functions
+	static LogicalType GetElementType(AggregateInputData &aggr_input_data) {
+		return aggr_input_data.function.GetArguments()[0];
 	}
 
 	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &) {
 		state.~STATE();
-	}
-
-	static bool IgnoreNull() {
-		return true;
 	}
 
 	template <class STATE, class INPUT_TYPE>
@@ -93,6 +123,21 @@ struct QuantileOperation {
 		return n;
 	}
 };
+
+//! Creates a quantile aggregate that buffers the input values in a linked list, sharing the "list" aggregate
+//! callbacks for update/combine - the operation only provides the finalizer.
+//! Quantiles ignore NULL values, so they are filtered out while appending.
+template <class STATE, class RESULT_TYPE, class OP>
+AggregateFunction QuantileBufferingAggregate(const LogicalType &input_type, const LogicalType &result_type) {
+	AggregateFunction fun({input_type}, result_type, AggregateFunction::StateSize<STATE>,
+	                      AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
+	                      ListUpdateFunction<true>, ListCombineFunction<OP>,
+	                      AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
+	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
+	                      AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
+	fun.SetInitLocalStateFinalizeCallback(FlattenedQuantileValues<typename STATE::InputType>::Init);
+	return fun;
+}
 
 template <class T>
 struct SkipLess {
@@ -242,40 +287,16 @@ struct WindowQuantileState {
 	}
 };
 
-struct QuantileStandardType {
-	template <class T>
-	static T Operation(T input, AggregateInputData &) {
-		return input;
-	}
-};
-
-struct QuantileStringType {
-	template <class T>
-	static T Operation(T input, AggregateInputData &input_data) {
-		if (input.IsInlined()) {
-			return input;
-		}
-		auto string_data = input_data.allocator.Allocate(input.GetSize());
-		memcpy(string_data, input.GetData(), input.GetSize());
-		return string_t(char_ptr_cast(string_data), UnsafeNumericCast<uint32_t>(input.GetSize()));
-	}
-};
-
-template <typename INPUT_TYPE, class TYPE_OP>
-struct QuantileState {
+//! Regular aggregation buffers the values in the linked list of the ListAggState base,
+//! shared with the "list" aggregate callbacks
+template <typename INPUT_TYPE>
+struct QuantileState : ListAggState {
 	using InputType = INPUT_TYPE;
 	using CursorType = QuantileCursor<INPUT_TYPE>;
 
-	// Regular aggregation
-	vector<INPUT_TYPE> v;
-
-	// Window Quantile State
+	// Window Quantile State (only used for window execution)
 	unique_ptr<WindowQuantileState<INPUT_TYPE>> window_state;
 	unique_ptr<CursorType> window_cursor;
-
-	void AddElement(INPUT_TYPE element, AggregateInputData &aggr_input) {
-		v.emplace_back(TYPE_OP::Operation(element, aggr_input));
-	}
 
 	bool HasTree() const {
 		return window_state && window_state->HasTree();
@@ -306,5 +327,83 @@ struct QuantileState {
 		return *window_cursor;
 	}
 };
+
+//===--------------------------------------------------------------------===//
+// Quantile State Export
+//===--------------------------------------------------------------------===//
+template <typename T>
+inline T QuantileNeg(const T &t) {
+	return NegateOperator::Operation<T, T>(t);
+}
+
+//! Restores the sign of a normalized quantile parameter (see QuantileAbs)
+template <>
+inline Value QuantileNeg(const Value &v) {
+	const auto &type = v.type();
+	switch (type.id()) {
+	case LogicalTypeId::DECIMAL: {
+		const auto integral = IntegralValue::Get(v);
+		const auto width = DecimalType::GetWidth(type);
+		const auto scale = DecimalType::GetScale(type);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return Value::DECIMAL(QuantileNeg<int16_t>(Cast::Operation<hugeint_t, int16_t>(integral)), width, scale);
+		case PhysicalType::INT32:
+			return Value::DECIMAL(QuantileNeg<int32_t>(Cast::Operation<hugeint_t, int32_t>(integral)), width, scale);
+		case PhysicalType::INT64:
+			return Value::DECIMAL(QuantileNeg<int64_t>(Cast::Operation<hugeint_t, int64_t>(integral)), width, scale);
+		case PhysicalType::INT128:
+			return Value::DECIMAL(QuantileNeg<hugeint_t>(integral), width, scale);
+		default:
+			throw InternalException("Unknown DECIMAL type");
+		}
+	}
+	default:
+		return Value::DOUBLE(QuantileNeg<double>(v.GetValue<double>()));
+	}
+}
+
+//! Reconstructs the quantile parameter (e.g. 0.5 or [0.25, 0.75]) from the bind data, so that it can be recorded
+//! in the AGGREGATE_STATE type - param_type is the declared type of the (erased) parameter argument
+inline Value QuantileParameterValue(const QuantileBindData &bind_data, const LogicalType &param_type) {
+	vector<Value> quantiles;
+	for (auto &q : bind_data.quantiles) {
+		// the bind data holds the normalized (absolute) quantiles - restore the sign of descending quantiles
+		quantiles.push_back(bind_data.desc ? QuantileNeg(q.val) : q.val);
+	}
+	if (param_type.id() != LogicalTypeId::LIST && param_type.id() != LogicalTypeId::ARRAY) {
+		D_ASSERT(quantiles.size() == 1);
+		return quantiles[0];
+	}
+	if (quantiles.empty()) {
+		return Value::LIST(LogicalType::DOUBLE, std::move(quantiles));
+	}
+	auto child_type = quantiles[0].type();
+	return Value::LIST(child_type, std::move(quantiles));
+}
+
+template <class STATE, class STATE_FIELD = StateListType<StateInputType<0>>>
+AggregateStateLayout QuantileStateLayout(AggregateLayoutInput &input) {
+	auto &function = input.function;
+	AggregateStateLayout layout;
+	if (function.GetReturnType().IsAggregateState()) {
+		// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
+		// its return type IS the state type already
+		layout.type = function.GetReturnType();
+	} else {
+		layout.type = LogicalType::LIST(function.GetArguments()[0]);
+	}
+	layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
+	layout.field = BuildStateField<STATE_FIELD>();
+	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
+	if (function.GetOriginalArguments().size() == 2) {
+		// the quantile parameter must be a constant at bind time (its argument is erased by BindQuantile) -
+		// record its value so that re-binding the exported state can supply it
+		// median and mad have no parameter argument (their binds create the quantile themselves) and skip this
+		auto &bind_data = input.bind_data->Cast<QuantileBindData>();
+		layout.constant_parameters.emplace(1, QuantileParameterValue(bind_data, function.GetOriginalArguments()[1]));
+	}
+	return layout;
+}
 
 } // namespace duckdb

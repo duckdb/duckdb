@@ -67,6 +67,7 @@ LogicalType HTTPLogType::GetLogType() {
 	    {"url", LogicalType::VARCHAR},
 	    {"start_time", LogicalType::TIMESTAMP_TZ},
 	    {"duration_ms", LogicalType::BIGINT},
+	    {"request_body_length", LogicalType::UBIGINT},
 	    {"headers", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
 	};
 	auto request_type = LogicalType::STRUCT(request_child_list);
@@ -102,13 +103,14 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 	    {"start_time", request.have_request_timing ? Value::TIMESTAMP(request.request_start) : Value()},
 	    {"duration_ms", request.have_request_timing ? Value::BIGINT(Timestamp::GetEpochMs(request.request_end) -
 	                                                                Timestamp::GetEpochMs(request.request_start))
-	                                                : Value()}};
+	                                                : Value()},
+	    {"request_body_length", request.request_body_length ? Value::UBIGINT(request.request_body_length) : Value()}};
 	auto request_value = Value::STRUCT(request_child_list);
 	Value response_value;
 	if (response) {
 		child_list_t<Value> response_child_list = {
 		    {"status", Value(EnumUtil::ToString(response->status))},
-		    {"reason", Value(response->reason)},
+		    {"reason", Value(response->reason.empty() ? response->GetRequestError() : response->reason)},
 		    {"headers", CreateHTTPHeadersValue(response->headers)},
 		};
 		response_value = Value::STRUCT(response_child_list);
@@ -202,9 +204,9 @@ LogicalType CheckpointLogType::GetLogType() {
 string CheckpointLogType::CreateLog(const AttachedDatabase &db, DataTableInfo &table, const char *op_name,
                                     vector<Value> map_keys, vector<Value> map_values) {
 	child_list_t<Value> child_list = {
-	    {"database", db.name},
-	    {"schema", table.GetSchemaName()},
-	    {"table", table.GetTableName()},
+	    {"database", db.name.GetIdentifierName()},
+	    {"schema", table.GetSchemaName().GetIdentifierName()},
+	    {"table", table.GetTableName().GetIdentifierName()},
 	    {"type", op_name},
 	    {"info", Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(map_keys), std::move(map_values))},
 	};
@@ -248,7 +250,7 @@ LogicalType TransactionLogType::GetLogType() {
 string TransactionLogType::ConstructLogMessage(const AttachedDatabase &db, const char *log_type,
                                                transaction_t transaction_id) {
 	child_list_t<Value> child_list = {
-	    {"database", db.name},
+	    {"database", db.name.GetIdentifierName()},
 	    {"type", log_type},
 	    {"transaction_id", transaction_id == MAX_TRANSACTION_ID ? Value() : Value::UBIGINT(transaction_id)},
 	};

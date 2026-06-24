@@ -67,7 +67,7 @@ static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const Tabl
 	return alias_cte;
 }
 
-void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &catalog, Identifier &schema) {
 	auto &context = retriever.GetContext();
 	if (schema.empty()) {
 		return;
@@ -88,7 +88,7 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catal
 	auto &search_path = retriever.GetSearchPath();
 	auto catalog_names = search_path.GetCatalogsForSchema(schema);
 	if (catalog_names.empty()) {
-		catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
+		catalog_names.emplace_back(DatabaseManager::GetDefaultDatabase(context));
 	}
 	for (auto &catalog_name : catalog_names) {
 		auto catalog_ptr = Catalog::GetCatalogEntry(retriever, catalog_name);
@@ -97,24 +97,24 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catal
 		}
 		if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema)) {
 			throw BinderException(
-			    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"", schema,
-			    catalog_name, schema);
+			    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
+			    schema.GetIdentifierName(), catalog_name.GetIdentifierName(), schema.GetIdentifierName());
 		}
 	}
 	catalog = schema;
-	schema = string();
+	schema = Identifier();
 }
 
-void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(ClientContext &context, Identifier &catalog, Identifier &schema) {
 	CatalogEntryRetriever retriever(context);
 	BindSchemaOrCatalog(retriever, catalog, schema);
 }
 
-void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
 	BindSchemaOrCatalog(context, catalog, schema);
 }
 
-const string Binder::BindCatalog(string &catalog) {
+Identifier Binder::BindCatalog(const Identifier &catalog) {
 	auto &db_manager = DatabaseManager::Get(context);
 	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, catalog);
 	if (database) {
@@ -127,7 +127,7 @@ const string Binder::BindCatalog(string &catalog) {
 void Binder::SearchSchema(CreateInfo &info) {
 	BindSchemaOrCatalog(info.catalog, info.schema);
 	if (IsInvalidCatalog(info.catalog) && info.temporary) {
-		info.catalog = TEMP_CATALOG;
+		info.catalog = Identifier::TempCatalog();
 	}
 	auto &search_path = ClientData::Get(context).catalog_search_path;
 	if (IsInvalidCatalog(info.catalog) && IsInvalidSchema(info.schema)) {
@@ -135,9 +135,9 @@ void Binder::SearchSchema(CreateInfo &info) {
 		info.catalog = default_entry.catalog;
 		info.schema = default_entry.schema;
 	} else if (IsInvalidSchema(info.schema)) {
-		info.schema = search_path->GetDefaultSchema(context, info.catalog);
+		info.schema = Identifier(search_path->GetDefaultSchema(context, info.catalog));
 	} else if (IsInvalidCatalog(info.catalog)) {
-		info.catalog = search_path->GetDefaultCatalog(info.schema);
+		info.catalog = Identifier(search_path->GetDefaultCatalog(info.schema));
 	}
 	if (IsInvalidCatalog(info.catalog)) {
 		info.catalog = DatabaseManager::GetDefaultDatabase(context);
@@ -179,9 +179,10 @@ void Binder::SetCatalogLookupCallback(catalog_entry_callback_t callback) {
 	entry_retriever.SetCallback(std::move(callback));
 }
 
-void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const string &catalog_name,
-                      const string &schema_name, optional_ptr<LogicalDependencyList> dependencies,
-                      const vector<string> &aliases, vector<LogicalType> &result_types, vector<string> &result_names) {
+void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const Identifier &catalog_name,
+                      const Identifier &schema_name, optional_ptr<LogicalDependencyList> dependencies,
+                      const vector<Identifier> &aliases, vector<LogicalType> &result_types,
+                      vector<Identifier> &result_names) {
 	auto view_binder = Binder::CreateBinder(context);
 	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
@@ -354,20 +355,20 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		}
 
 		vector<LogicalType> dummy_types;
-		vector<string> dummy_names;
+		vector<Identifier> dummy_names;
 		// positional parameters
 		for (idx_t param_idx = 0; param_idx < function->parameters.size(); param_idx++) {
 			dummy_types.emplace_back(function->types.empty() ? LogicalType::UNKNOWN : function->types[param_idx]);
-			dummy_names.push_back(function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName());
+			dummy_names.emplace_back(function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName());
 		}
 
 		if (!type_overloads.insert(dummy_types).second) {
 			throw BinderException(
 			    "Ambiguity in macro overloads - macro %s() has multiple definitions with the same parameters",
-			    base.name);
+			    base.name.GetIdentifierName());
 		}
 
-		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
+		auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name.GetIdentifierName());
 		macro_binding = this_macro_binding.get();
 
 		auto &dependencies = base.dependencies;
@@ -475,6 +476,8 @@ void Binder::BindLogicalType(LogicalType &type) {
 	});
 }
 
+bool BoundBodyContainsTrigger(const LogicalOperator &op);
+
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres)
 	TableDescription table_description(create_trigger_info.base_table->catalog_name,
@@ -520,8 +523,16 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			}
 		}
 	}
-	if (create_trigger_info.for_each == TriggerForEach::ROW) {
-		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
+	if (create_trigger_info.for_each == TriggerForEach::ROW &&
+	    (!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty())) {
+		throw BinderException("REFERENCING is not valid for FOR EACH ROW triggers");
+	}
+	if (create_trigger_info.for_each == TriggerForEach::ROW && create_trigger_info.timing != TriggerTiming::AFTER) {
+		throw NotImplementedException("BEFORE FOR EACH ROW triggers are not yet supported");
+	}
+	if (create_trigger_info.for_each == TriggerForEach::ROW &&
+	    create_trigger_info.event_type != TriggerEventType::INSERT_EVENT) {
+		throw NotImplementedException("UPDATE and DELETE FOR EACH ROW triggers are not yet supported");
 	}
 	if ((!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty()) &&
 	    create_trigger_info.timing != TriggerTiming::AFTER) {
@@ -544,6 +555,23 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		throw BinderException("REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers");
 	}
 
+	auto opposite_for_each =
+	    create_trigger_info.for_each == TriggerForEach::ROW ? TriggerForEach::STATEMENT : TriggerForEach::ROW;
+	// Statement and row triggers use separate expansion paths that don't compose, so reject mixing them per event.
+	// CREATE OR REPLACE that targets the same-named trigger is allowed: that trigger is atomically replaced,
+	// so the final catalog contains only the new one and there is no mixing.
+	auto conflicting = table.GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context),
+	                                             create_trigger_info.event_type, opposite_for_each);
+	bool is_replace = create_trigger_info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
+	auto has_real_conflict =
+	    std::any_of(conflicting.begin(), conflicting.end(), [&](const_reference<TriggerCatalogEntry> t) {
+		    return !(is_replace && t.get().name == create_trigger_info.trigger_name);
+	    });
+	if (has_real_conflict) {
+		throw NotImplementedException(
+		    "Mixing FOR EACH STATEMENT and FOR EACH ROW triggers on the same table is not yet supported");
+	}
+
 	// Validate the trigger body using an isolated binder (own GlobalBinderState).
 	// Set up trigger_expanded_tables to match runtime behavior.
 	// Set up trigger_creation_table to detect recursive triggers during the validation.
@@ -558,7 +586,44 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			body_copy->cte_map.map[alias] = MakeTriggerValidationCTE(table);
 		}
 	}
-	validation_binder->Bind(*body_copy);
+	// For FOR EACH ROW: register NEW as a generic binding so BindCorrelatedColumns can resolve NEW.col column
+	// references.
+	unique_ptr<ExpressionBinder> row_scope_binder;
+	if (create_trigger_info.for_each == TriggerForEach::ROW) {
+		if (table.HasGeneratedColumns()) {
+			throw NotImplementedException(
+			    "FOR EACH ROW triggers on tables with generated columns are not yet supported");
+		}
+		if (create_trigger_info.trigger_action->type == QueryNodeType::UPDATE_QUERY_NODE) {
+			throw NotImplementedException("UPDATE trigger bodies in FOR EACH ROW triggers are not yet supported");
+		}
+		vector<Identifier> col_names;
+		vector<LogicalType> col_types;
+		for (auto &col : table.GetColumns().Physical()) {
+			col_names.push_back(col.GetName());
+			col_types.push_back(col.GetType());
+		}
+		auto new_idx = validation_binder->GenerateTableIndex();
+		row_scope_binder = validation_binder->SetupNewRowScope(new_idx, col_names, col_types);
+	}
+	if (row_scope_binder) {
+		auto body_binder = Binder::CreateBinder(context, validation_binder.get());
+		auto bound_body = body_binder->Bind(*body_copy);
+		validation_binder->GetActiveBinders().pop_back();
+		if (body_binder->correlated_columns.empty()) {
+			throw BinderException("FOR EACH ROW trigger \"%s\" on table \"%s\" must reference at least one NEW "
+			                      "column in the trigger body (use FOR EACH STATEMENT if row data is not needed)",
+			                      create_trigger_info.trigger_name, table.name);
+		}
+		if (BoundBodyContainsTrigger(*bound_body.plan)) {
+			throw NotImplementedException(
+			    "FOR EACH ROW trigger \"%s\" on table \"%s\" writes to a table that has its own FOR EACH ROW "
+			    "trigger (cascading row triggers are not yet supported)",
+			    create_trigger_info.trigger_name, table.name);
+		}
+	} else {
+		validation_binder->Bind(*body_copy);
+	}
 
 	// Add table dependency
 	create_trigger_info.dependencies.AddDependency(table);
@@ -778,8 +843,14 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			bound_options.insert({option.first, ExpressionExecutor::EvaluateScalar(context, *bound_value, true)});
 		}
 
-		CreateSecretInput create_secret_input {type_string,   provider_string, info.storage_type, info.name,
-		                                       scope_strings, bound_options,   info.on_conflict,  info.persist_type};
+		CreateSecretInput create_secret_input {Identifier(type_string),
+		                                       Identifier(provider_string),
+		                                       Identifier(info.storage_type),
+		                                       info.name,
+		                                       scope_strings,
+		                                       bound_options,
+		                                       info.on_conflict,
+		                                       info.persist_type};
 
 		result = SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
 		break;

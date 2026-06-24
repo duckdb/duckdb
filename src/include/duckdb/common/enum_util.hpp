@@ -166,6 +166,8 @@ enum class DatePartSpecifier : uint8_t;
 
 enum class DebugInitialize : uint8_t;
 
+enum class DebugOrderVerification : uint8_t;
+
 enum class DebugStatementVerification : uint8_t;
 
 enum class DebugVectorVerification : uint8_t;
@@ -184,6 +186,8 @@ enum class DeprecatedUsingKeySyntax : uint8_t;
 
 enum class DestroyBufferUpon : uint8_t;
 
+enum class DialectCompatibilityMode : uint8_t;
+
 enum class DistinctCountSource : uint8_t;
 
 enum class DistinctType : uint8_t;
@@ -193,8 +197,6 @@ enum class ErrorType : uint16_t;
 enum class ExceptionFormatValueType : uint8_t;
 
 enum class ExceptionType : uint8_t;
-
-enum class ExplainFormat : uint8_t;
 
 enum class ExplainOutputType : uint8_t;
 
@@ -251,6 +253,8 @@ enum class GateStatus : uint8_t;
 enum class GeometryStorageType : uint8_t;
 
 enum class GeometryType : uint8_t;
+
+enum class GroupByExpressionInfoType : uint8_t;
 
 enum class HLLStorageType : uint8_t;
 
@@ -380,8 +384,6 @@ enum class PreparedStatementMode : uint8_t;
 
 enum class PreserveOrderType : uint8_t;
 
-enum class ProfilerPrintFormat : uint8_t;
-
 enum class ProfilingCoverage : uint8_t;
 
 enum class ProfilingParameterNames : uint8_t;
@@ -490,6 +492,8 @@ enum class TableColumnType : uint8_t;
 
 enum class TableFilterType : uint8_t;
 
+enum class TableFunctionIdentifierConversion : uint8_t;
+
 enum class TableFunctionParallelism : uint8_t;
 
 enum class TablePartitionInfo : uint8_t;
@@ -537,8 +541,6 @@ enum class VariantChildLookupMode : uint8_t;
 enum class VariantLogicalType : uint8_t;
 
 enum class VariantStatsShreddingState : uint8_t;
-
-enum class VariantValueType : uint8_t;
 
 enum class VectorBufferType : uint8_t;
 
@@ -761,6 +763,9 @@ template<>
 const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value);
 
 template<>
+const char* EnumUtil::ToChars<DebugOrderVerification>(DebugOrderVerification value);
+
+template<>
 const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value);
 
 template<>
@@ -788,6 +793,9 @@ template<>
 const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
 
 template<>
+const char* EnumUtil::ToChars<DialectCompatibilityMode>(DialectCompatibilityMode value);
+
+template<>
 const char* EnumUtil::ToChars<DistinctCountSource>(DistinctCountSource value);
 
 template<>
@@ -801,9 +809,6 @@ const char* EnumUtil::ToChars<ExceptionFormatValueType>(ExceptionFormatValueType
 
 template<>
 const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value);
-
-template<>
-const char* EnumUtil::ToChars<ExplainFormat>(ExplainFormat value);
 
 template<>
 const char* EnumUtil::ToChars<ExplainOutputType>(ExplainOutputType value);
@@ -888,6 +893,9 @@ const char* EnumUtil::ToChars<GeometryStorageType>(GeometryStorageType value);
 
 template<>
 const char* EnumUtil::ToChars<GeometryType>(GeometryType value);
+
+template<>
+const char* EnumUtil::ToChars<GroupByExpressionInfoType>(GroupByExpressionInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
@@ -1082,9 +1090,6 @@ template<>
 const char* EnumUtil::ToChars<PreserveOrderType>(PreserveOrderType value);
 
 template<>
-const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
-
-template<>
 const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value);
 
 template<>
@@ -1247,6 +1252,9 @@ template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value);
 
 template<>
+const char* EnumUtil::ToChars<TableFunctionIdentifierConversion>(TableFunctionIdentifierConversion value);
+
+template<>
 const char* EnumUtil::ToChars<TableFunctionParallelism>(TableFunctionParallelism value);
 
 template<>
@@ -1317,9 +1325,6 @@ const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value);
 
 template<>
 const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingState value);
-
-template<>
-const char* EnumUtil::ToChars<VariantValueType>(VariantValueType value);
 
 template<>
 const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value);
@@ -1551,6 +1556,9 @@ template<>
 DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value);
 
 template<>
+DebugOrderVerification EnumUtil::FromString<DebugOrderVerification>(const char *value);
+
+template<>
 DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value);
 
 template<>
@@ -1578,6 +1586,9 @@ template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
 
 template<>
+DialectCompatibilityMode EnumUtil::FromString<DialectCompatibilityMode>(const char *value);
+
+template<>
 DistinctCountSource EnumUtil::FromString<DistinctCountSource>(const char *value);
 
 template<>
@@ -1591,9 +1602,6 @@ ExceptionFormatValueType EnumUtil::FromString<ExceptionFormatValueType>(const ch
 
 template<>
 ExceptionType EnumUtil::FromString<ExceptionType>(const char *value);
-
-template<>
-ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value);
 
 template<>
 ExplainOutputType EnumUtil::FromString<ExplainOutputType>(const char *value);
@@ -1678,6 +1686,9 @@ GeometryStorageType EnumUtil::FromString<GeometryStorageType>(const char *value)
 
 template<>
 GeometryType EnumUtil::FromString<GeometryType>(const char *value);
+
+template<>
+GroupByExpressionInfoType EnumUtil::FromString<GroupByExpressionInfoType>(const char *value);
 
 template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
@@ -1872,9 +1883,6 @@ template<>
 PreserveOrderType EnumUtil::FromString<PreserveOrderType>(const char *value);
 
 template<>
-ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
-
-template<>
 ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value);
 
 template<>
@@ -2037,6 +2045,9 @@ template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value);
 
 template<>
+TableFunctionIdentifierConversion EnumUtil::FromString<TableFunctionIdentifierConversion>(const char *value);
+
+template<>
 TableFunctionParallelism EnumUtil::FromString<TableFunctionParallelism>(const char *value);
 
 template<>
@@ -2107,9 +2118,6 @@ VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value);
 
 template<>
 VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(const char *value);
-
-template<>
-VariantValueType EnumUtil::FromString<VariantValueType>(const char *value);
 
 template<>
 VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);

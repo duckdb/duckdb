@@ -152,6 +152,9 @@ Value::Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
 	value_.double_ = val;
 }
 
+Value::Value(const Identifier &val) : Value(val.GetIdentifierName()) {
+}
+
 Value::Value(const char *val) : Value(val ? string(val) : string()) {
 }
 
@@ -849,8 +852,8 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 		struct_types.reserve(2);
 		new_children.reserve(2);
 
-		struct_types.push_back(make_pair("key", key_type));
-		struct_types.push_back(make_pair("value", value_type));
+		struct_types.emplace_back(make_pair("key", key_type));
+		struct_types.emplace_back(make_pair("value", value_type));
 
 		auto key = keys[i].DefaultCastAs(key_type);
 		MapKeyCheck(unique_keys, key);
@@ -1996,6 +1999,15 @@ union_tag_t UnionValue::GetTag(const Value &value) {
 
 const LogicalType &UnionValue::GetType(const Value &value) {
 	return UnionType::GetMemberType(value.type(), UnionValue::GetTag(value));
+}
+
+Value VariantValue::GetValue(const Value &variant_val) {
+	D_ASSERT(variant_val.type().id() == LogicalTypeId::VARIANT && !variant_val.IsNull());
+	Vector tmp(variant_val, count_t(1));
+	RecursiveUnifiedVectorFormat format;
+	Vector::RecursiveToUnifiedFormat(tmp, format);
+	UnifiedVariantVectorData vector_data(format);
+	return VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
 }
 
 hugeint_t IntegralValue::Get(const Value &value) {

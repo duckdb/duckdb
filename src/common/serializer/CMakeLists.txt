@@ -1,6 +1,10 @@
 add_library_unity(
   duckdb_common_serializer
   OBJECT
+  async_file_writer.cpp
+  async_memory_governor.cpp
+  async_task_queue.cpp
+  async_write_queue.cpp
   binary_serializer.cpp
   binary_deserializer.cpp
   buffered_file_reader.cpp

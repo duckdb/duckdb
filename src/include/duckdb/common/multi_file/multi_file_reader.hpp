@@ -27,6 +27,45 @@ class DataChunk;
 
 enum class ReaderInitializeType { INITIALIZED, SKIP_READING_FILE };
 
+struct MultiFileReaderVirtualColumnBinding {
+public:
+	enum class VirtualColumnBindingType : uint8_t { COLUMN_REFERENCE, EXPRESSION, CONSTANT };
+
+public:
+	explicit MultiFileReaderVirtualColumnBinding(Value constant)
+	    : type(VirtualColumnBindingType::CONSTANT), constant(std::move(constant)) {
+	}
+	MultiFileReaderVirtualColumnBinding(unique_ptr<Expression> &&expr, vector<idx_t> &&virtual_column_ids)
+	    : type(VirtualColumnBindingType::EXPRESSION), expression(std::move(expr)),
+	      local_virtual_column_ids(std::move(virtual_column_ids)) {
+	}
+	explicit MultiFileReaderVirtualColumnBinding(const MultiFileColumnDefinition &column_ref)
+	    : type(VirtualColumnBindingType::COLUMN_REFERENCE), global_column_reference(column_ref) {
+	}
+
+public:
+	VirtualColumnBindingType GetType() const {
+		return type;
+	}
+
+public:
+	VirtualColumnBindingType type;
+	//! CONSTANT state:
+	//! The constant value to replace the virtual column with
+	Value constant;
+
+	//! EXPRESSION state:
+	//! The expression to replace the virtual column with
+	unique_ptr<Expression> expression;
+	//! The column id(s) to provide to the reader to produce the input(s) for the 'expression'
+	vector<idx_t> local_virtual_column_ids;
+	vector<idx_t> local_column_ids;
+
+	//! COLUMN_REFERENCE state:
+	//! The column reference to replace the virtual column with
+	optional_ptr<const MultiFileColumnDefinition> global_column_reference;
+};
+
 //! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files
 struct MultiFileReader {
 public:
@@ -83,16 +122,16 @@ public:
 	                                                                   vector<unique_ptr<Expression>> &filters);
 	DUCKDB_API virtual unique_ptr<MultiFileList>
 	DynamicFilterPushdown(ClientContext &context, const MultiFileList &files, const MultiFileOptions &options,
-	                      const vector<string> &names, const vector<LogicalType> &types,
+	                      const vector<Identifier> &names, const vector<LogicalType> &types,
 	                      const vector<column_t> &column_ids, TableFilterSet &filters);
 	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
 	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList
 	//! directly.
 	DUCKDB_API virtual bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
-	                             vector<string> &names, MultiFileReaderBindData &bind_data);
+	                             vector<Identifier> &names, MultiFileReaderBindData &bind_data);
 	//! Bind the options of the multi-file reader, potentially emitting any extra columns that are required
 	DUCKDB_API virtual void BindOptions(MultiFileOptions &options, MultiFileList &files,
-	                                    vector<LogicalType> &return_types, vector<string> &names,
+	                                    vector<LogicalType> &return_types, vector<Identifier> &names,
 	                                    MultiFileReaderBindData &bind_data);
 
 	//! Initialize global state used by the MultiFileReader
@@ -141,12 +180,12 @@ public:
 	                                         virtual_column_map_t &result);
 
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
-	                                        vector<string> &names, MultiFileList &files, MultiFileBindData &result,
+	                                        vector<Identifier> &names, MultiFileList &files, MultiFileBindData &result,
 	                                        BaseFileReaderOptions &options, MultiFileOptions &file_options);
 
-	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-	                                   MultiFileList &files, MultiFileBindData &result, BaseFileReaderOptions &options,
-	                                   MultiFileOptions &file_options);
+	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types,
+	                                   vector<Identifier> &names, MultiFileList &files, MultiFileBindData &result,
+	                                   BaseFileReaderOptions &options, MultiFileOptions &file_options);
 
 	DUCKDB_API virtual ReaderInitializeType InitializeReader(MultiFileReaderData &reader_data,
 	                                                         const MultiFileBindData &bind_data,
@@ -186,11 +225,10 @@ public:
 	                                                                   idx_t column_id, const LogicalType &type);
 
 	//! Gets an expression to evaluate the given virtual column
-	DUCKDB_API virtual unique_ptr<Expression>
+	DUCKDB_API virtual MultiFileReaderVirtualColumnBinding
 	GetVirtualColumnExpression(ClientContext &context, MultiFileReaderData &reader_data,
-	                           const vector<MultiFileColumnDefinition> &local_columns, idx_t &column_id,
-	                           const LogicalType &type, MultiFileLocalIndex local_index,
-	                           optional_ptr<MultiFileColumnDefinition> &global_column_reference);
+	                           const vector<MultiFileColumnDefinition> &local_columns, const idx_t column_id,
+	                           const LogicalType &type, MultiFileLocalIndex local_index);
 
 	DUCKDB_API virtual unique_ptr<MultiFileReader> Copy() const;
 
@@ -198,7 +236,7 @@ public:
 
 protected:
 	//! Used in errors to report which function is using this MultiFileReader
-	string function_name;
+	Identifier function_name;
 
 public:
 	template <class TARGET>

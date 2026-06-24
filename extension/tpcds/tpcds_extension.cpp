@@ -15,8 +15,8 @@ struct DSDGenFunctionData : public TableFunctionData {
 
 	bool finished = false;
 	double sf = 0;
-	string catalog = INVALID_CATALOG;
-	string schema = DEFAULT_SCHEMA;
+	Identifier catalog = INVALID_CATALOG;
+	Identifier schema = DEFAULT_SCHEMA;
 	string suffix;
 	bool overwrite = false;
 	bool keys = false;
@@ -38,9 +38,9 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunction
 		if (kv.first == "sf") {
 			result->sf = kv.second.GetValue<double>();
 		} else if (kv.first == "catalog") {
-			result->catalog = StringValue::Get(kv.second);
+			result->catalog = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "schema") {
-			result->schema = StringValue::Get(kv.second);
+			result->schema = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "suffix") {
 			result->suffix = StringValue::Get(kv.second);
 		} else if (kv.first == "overwrite") {
@@ -175,6 +175,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	dsdgen_func.named_parameters["catalog"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
+	dsdgen_func.call_return_type = StatementReturnType::NOTHING;
 
 	loader.RegisterFunction(dsdgen_func);
 

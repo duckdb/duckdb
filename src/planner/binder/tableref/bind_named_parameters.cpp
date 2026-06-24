@@ -7,8 +7,17 @@ map<string, T> order_case_insensitive_map(const case_insensitive_map_t<T> &input
 	return map<string, T>(input_map.begin(), input_map.end());
 }
 
+template <typename T>
+map<string, T> order_case_insensitive_map(const identifier_map_t<T> &input_map) {
+	map<string, T> result;
+	for (auto &entry : input_map) {
+		result[entry.first.GetIdentifierName()] = entry.second;
+	}
+	return result;
+}
+
 void Binder::BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
-                                 QueryErrorContext &error_context, string &func_name) {
+                                 QueryErrorContext &error_context, const Identifier &func_name) {
 	for (auto &kv : values) {
 		auto entry = types.find(kv.first);
 		if (entry == types.end()) {
@@ -29,7 +38,7 @@ void Binder::BindNamedParameters(named_parameter_type_map_t &types, named_parame
 				error_msg = "Candidates:\n" + named_params;
 			}
 			throw BinderException(error_context, "Invalid named parameter \"%s\" for function %s\n%s", kv.first,
-			                      func_name, error_msg);
+			                      func_name.GetIdentifierName(), error_msg);
 		}
 		if (entry->second.id() != LogicalTypeId::ANY) {
 			kv.second = kv.second.DefaultCastAs(entry->second);

@@ -44,7 +44,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBVariablesInit(ClientContext &context,
 
 	for (auto &entry : config.user_variables) {
 		VariableData data;
-		data.name = entry.first;
+		data.name = entry.first.GetIdentifierName();
 		data.value = entry.second;
 		result->variables.push_back(std::move(data));
 	}

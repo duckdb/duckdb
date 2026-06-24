@@ -36,11 +36,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 	    TransformAndMaterializeAlter(alter_entry_data,
 	                                 make_uniq<AddColumnInfo>(add_column.GetAlterEntryData(), std::move(null_column),
 	                                                          add_column.if_column_not_exists),
-	                                 column_entry.GetName(), column_entry.DefaultValue().Copy())));
+	                                 column_entry.GetName().GetIdentifierName(), column_entry.DefaultValue().Copy())));
 }
 
 unique_ptr<AlterInfo>
-PEGTransformerFactory::TransformAlterTableStmt(PEGTransformer &transformer, const bool &if_exists,
+PEGTransformerFactory::TransformAlterTableStmt(PEGTransformer &transformer, const optional<bool> &if_exists,
                                                unique_ptr<BaseTableRef> base_table_name,
                                                vector<unique_ptr<AlterTableInfo>> alter_table_options) {
 	if (alter_table_options.size() > 1) {
@@ -56,8 +56,9 @@ PEGTransformerFactory::TransformAlterTableStmt(PEGTransformer &transformer, cons
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterDatabaseStmt(PEGTransformer &transformer,
-                                                                        const bool &if_exists, const string &identifier,
-                                                                        const string &identifier_1) {
+                                                                        const optional<bool> &if_exists,
+                                                                        const Identifier &identifier,
+                                                                        const Identifier &identifier_1) {
 	OnEntryNotFound not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	auto catalog_name = identifier;
 	auto new_name = identifier_1;
@@ -65,7 +66,8 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterDatabaseStmt(PEGTrans
 	return std::move(result);
 }
 
-unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransformer &transformer, const bool &if_exists,
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransformer &transformer,
+                                                                    const optional<bool> &if_exists,
                                                                     unique_ptr<BaseTableRef> base_table_name,
                                                                     unique_ptr<AlterTableInfo> rename_alter) {
 	auto rename_table = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(rename_alter));
@@ -78,14 +80,14 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSchemaStmt(PEGTransformer &transformer,
-                                                                      const bool &if_exists,
+                                                                      const optional<bool> &if_exists,
                                                                       const QualifiedName &qualified_name,
                                                                       unique_ptr<AlterTableInfo> rename_alter) {
 	throw NotImplementedException("Altering schemas is not yet supported");
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTransformer &transformer,
-                                                                        const bool &if_exists,
+                                                                        const optional<bool> &if_exists,
                                                                         const QualifiedName &qualified_sequence_name,
                                                                         unique_ptr<AlterInfo> alter_sequence_options) {
 	if (qualified_sequence_name.schema.empty()) {
@@ -100,12 +102,12 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTrans
 }
 
 QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransformer &transformer,
-                                                                    const string &catalog_qualification,
-                                                                    const string &schema_qualification,
-                                                                    const string &sequence_name) {
+                                                                    const optional<Identifier> &catalog_qualification,
+                                                                    const optional<Identifier> &schema_qualification,
+                                                                    const Identifier &sequence_name) {
 	QualifiedName result;
-	result.catalog = catalog_qualification.empty() ? INVALID_CATALOG : catalog_qualification;
-	result.schema = schema_qualification.empty() ? INVALID_SCHEMA : schema_qualification;
+	result.catalog = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
+	result.schema = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
 	result.name = sequence_name;
 	return result;
 }
@@ -130,7 +132,8 @@ PEGTransformerFactory::TransformSetSequenceOption(PEGTransformer &transformer,
 			}
 			has_owned = true;
 			auto owned_by = unique_ptr_cast<SequenceOption, QualifiedSequenceOption>(std::move(seq_option.second));
-			auto schema = owned_by->qualified_name.schema.empty() ? DEFAULT_SCHEMA : owned_by->qualified_name.schema;
+			auto schema =
+			    owned_by->qualified_name.schema.empty() ? Identifier::DefaultSchema() : owned_by->qualified_name.schema;
 			owned_info =
 			    make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema,
 			                                   owned_by->qualified_name.name, OnEntryNotFound::THROW_EXCEPTION);
@@ -164,7 +167,7 @@ void PEGTransformerFactory::AddUpdateToMultiStatement(const unique_ptr<MultiStat
 	node.table = std::move(table_ref);
 
 	auto set_info = make_uniq<UpdateSetInfo>();
-	set_info->columns.push_back(column_name);
+	set_info->columns.emplace_back(column_name);
 	set_info->expressions.push_back(original_expression->Copy());
 	node.set_info = std::move(set_info);
 
@@ -197,13 +200,15 @@ unique_ptr<MultiStatement> PEGTransformerFactory::TransformAndMaterializeAlter(
 
 	// 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
 	// Reinstate the original default expression.
-	AddToMultiStatement(multi_statement, make_uniq<SetDefaultInfo>(data, column_name, std::move(expression)));
+	AddToMultiStatement(multi_statement,
+	                    make_uniq<SetDefaultInfo>(data, Identifier(column_name), std::move(expression)));
 
 	return multi_statement;
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransformer &transformer,
-                                                                     const bool &if_not_exists,
+                                                                     const bool &has_result,
+                                                                     const optional<bool> &if_not_exists,
                                                                      AddColumnEntry add_column_entry) {
 	auto column_definition = ColumnDefinition(add_column_entry.column_path.back(), add_column_entry.type);
 	if (add_column_entry.default_value) {
@@ -211,26 +216,26 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 	}
 
 	unique_ptr<AlterTableInfo> result;
+	auto if_not_exists_value = if_not_exists.has_value();
 
 	if (add_column_entry.column_path.size() == 1) {
-		result = make_uniq<AddColumnInfo>(AlterEntryData(), std::move(column_definition), if_not_exists);
+		result = make_uniq<AddColumnInfo>(AlterEntryData(), std::move(column_definition), if_not_exists_value);
 	} else {
 		const auto parent_path =
-		    vector<string>(add_column_entry.column_path.begin(), add_column_entry.column_path.end() - 1);
-		result = make_uniq<AddFieldInfo>(AlterEntryData(), parent_path, std::move(column_definition), if_not_exists);
+		    vector<Identifier>(add_column_entry.column_path.begin(), add_column_entry.column_path.end() - 1);
+		result =
+		    make_uniq<AddFieldInfo>(AlterEntryData(), parent_path, std::move(column_definition), if_not_exists_value);
 	}
 	return result;
 }
 
-AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(PEGTransformer &transformer,
-                                                              const vector<string> &dotted_identifier,
-                                                              const LogicalType &type,
-                                                              GeneratedColumnDefinition generated_column,
-                                                              vector<ColumnConstraintEntry> column_constraint) {
+AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
+    PEGTransformer &transformer, const vector<string> &dotted_identifier, const optional<LogicalType> &type,
+    optional<GeneratedColumnDefinition> generated_column, optional<vector<ColumnConstraintEntry>> column_constraint) {
 	AddColumnEntry new_column;
-	new_column.column_path = dotted_identifier;
-	bool has_type = type != LogicalType::INVALID;
-	bool has_generated = generated_column.expr != nullptr;
+	new_column.column_path = StringsToIdentifiers(dotted_identifier);
+	bool has_type = type.has_value();
+	bool has_generated = generated_column && generated_column->expr != nullptr;
 	// TODO(Dtenwolde) this checking logic should be moved to the binder
 	if (!has_type && !has_generated) {
 		throw ParserException("Column definition requires a type or generated expression");
@@ -238,34 +243,40 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(PEGTransformer &tr
 	if (has_generated) {
 		throw ParserException("Adding generated columns after table creation is not supported yet");
 	}
-	new_column.type = type;
-	for (auto &constraint : column_constraint) {
-		if (constraint.constraint_name == "DefaultValue") {
-			if (new_column.default_value) {
-				throw ParserException("Cannot define a default value twice");
+	if (type) {
+		new_column.type = *type;
+	}
+	if (column_constraint) {
+		for (auto &constraint : *column_constraint) {
+			if (constraint.constraint_name == "DefaultValue") {
+				if (new_column.default_value) {
+					throw ParserException("Cannot define a default value twice");
+				}
+				new_column.default_value = std::move(constraint.expression);
 			}
-			new_column.default_value = std::move(constraint.expression);
 		}
 	}
 	return new_column;
 }
 
-unique_ptr<AlterTableInfo>
-PEGTransformerFactory::TransformDropColumn(PEGTransformer &transformer, const bool &if_exists,
-                                           unique_ptr<ColumnRefExpression> nested_column_name,
-                                           const bool &drop_behavior) {
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropColumn(
+    PEGTransformer &transformer, const bool &has_result, const optional<bool> &if_exists,
+    unique_ptr<ColumnRefExpression> nested_column_name, const optional<bool> &drop_behavior) {
+	auto if_exists_value = if_exists.has_value();
+	auto drop_behavior_value = drop_behavior ? *drop_behavior : false;
 	if (nested_column_name->ColumnNames().size() == 1) {
-		auto result = make_uniq<RemoveColumnInfo>(AlterEntryData(), nested_column_name->ColumnNames()[0], if_exists,
-		                                          drop_behavior);
+		auto result =
+		    make_uniq<RemoveColumnInfo>(AlterEntryData(), nested_column_name->ColumnNames()[0].GetIdentifierName(),
+		                                if_exists_value, drop_behavior_value);
 		return std::move(result);
 	}
-	auto result =
-	    make_uniq<RemoveFieldInfo>(AlterEntryData(), nested_column_name->ColumnNames(), if_exists, drop_behavior);
+	auto result = make_uniq<RemoveFieldInfo>(AlterEntryData(), nested_column_name->ColumnNames(), if_exists_value,
+	                                         drop_behavior_value);
 	return std::move(result);
 }
 
 unique_ptr<AlterTableInfo>
-PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer,
+PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, const bool &has_result,
                                             unique_ptr<ColumnRefExpression> nested_column_name,
                                             unique_ptr<AlterTableInfo> alter_column_entry) {
 	if (alter_column_entry->alter_table_type == AlterTableType::SET_DEFAULT) {
@@ -307,14 +318,19 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformChangeNullability(PEG
 	}
 }
 
-unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterType(PEGTransformer &transformer,
-                                                                     const LogicalType &type,
-                                                                     unique_ptr<ParsedExpression> using_expression) {
-	if (type == LogicalType::INVALID && !using_expression) {
+unique_ptr<AlterTableInfo>
+PEGTransformerFactory::TransformAlterType(PEGTransformer &transformer, const bool &has_result,
+                                          const optional<LogicalType> &type,
+                                          optional<unique_ptr<ParsedExpression>> using_expression) {
+	if (!type && !using_expression) {
 		throw ParserException("Omitting the type is only possible in combination with USING");
 	}
-	auto alter_type = type == LogicalType::INVALID ? LogicalType::UNKNOWN : type;
-	return make_uniq<ChangeColumnTypeInfo>(AlterEntryData(), "", alter_type, std::move(using_expression));
+	auto alter_type = type ? *type : LogicalType::UNKNOWN;
+	unique_ptr<ParsedExpression> expression;
+	if (using_expression) {
+		expression = std::move(*using_expression);
+	}
+	return make_uniq<ChangeColumnTypeInfo>(AlterEntryData(), "", alter_type, std::move(expression));
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUsingExpression(PEGTransformer &transformer,
@@ -327,8 +343,10 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddDefault(PEGTransfo
 	return make_uniq<SetDefaultInfo>(AlterEntryData(), "", std::move(expression));
 }
 
-unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformRenameColumn(
-    PEGTransformer &transformer, unique_ptr<ColumnRefExpression> nested_column_name, const string &identifier) {
+unique_ptr<AlterTableInfo>
+PEGTransformerFactory::TransformRenameColumn(PEGTransformer &transformer, const bool &has_result,
+                                             unique_ptr<ColumnRefExpression> nested_column_name,
+                                             const Identifier &identifier) {
 	if (nested_column_name->ColumnNames().size() == 1) {
 		auto result = make_uniq<RenameColumnInfo>(AlterEntryData(), nested_column_name->ColumnNames()[0], identifier);
 		return std::move(result);
@@ -338,7 +356,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformRenameColumn(
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformRenameAlter(PEGTransformer &transformer,
-                                                                       const string &identifier) {
+                                                                       const Identifier &identifier) {
 	return make_uniq<RenameTableInfo>(AlterEntryData(), identifier);
 }
 
@@ -379,10 +397,10 @@ PEGTransformerFactory::TransformSetOptions(PEGTransformer &transformer,
 unique_ptr<AlterTableInfo>
 PEGTransformerFactory::TransformResetOptions(PEGTransformer &transformer,
                                              case_insensitive_map_t<unique_ptr<ParsedExpression>> rel_option_list) {
-	case_insensitive_set_t option_names;
+	identifier_set_t option_names;
 	for (auto &opt : rel_option_list) {
 		if (!opt.second) {
-			option_names.insert(opt.first);
+			option_names.insert(Identifier(opt.first));
 			continue;
 		}
 		if (opt.second->GetExpressionClass() != ExpressionClass::CONSTANT) {
@@ -392,20 +410,22 @@ PEGTransformerFactory::TransformResetOptions(PEGTransformer &transformer,
 		if (!const_expr.GetValue().IsNull()) {
 			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
 		}
-		option_names.insert(opt.first);
+		option_names.insert(Identifier(opt.first));
 	}
 	return make_uniq<ResetTableOptionsInfo>(AlterEntryData(), std::move(option_names));
 }
 
-unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformNestedColumnName(PEGTransformer &transformer,
-                                                                                 const vector<string> &identifier_dot,
-                                                                                 const string &column_name) {
-	vector<string> column_names = identifier_dot;
+unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformNestedColumnName(
+    PEGTransformer &transformer, const optional<vector<Identifier>> &identifier_dot, const Identifier &column_name) {
+	vector<Identifier> column_names;
+	if (identifier_dot) {
+		column_names = *identifier_dot;
+	}
 	column_names.push_back(column_name);
-	return make_uniq<ColumnRefExpression>(std::move(column_names));
+	return make_uniq<ColumnRefExpression>(column_names);
 }
 
-string PEGTransformerFactory::TransformIdentifierDot(PEGTransformer &transformer, const string &identifier) {
+Identifier PEGTransformerFactory::TransformIdentifierDot(PEGTransformer &transformer, const Identifier &identifier) {
 	return identifier;
 }
 

@@ -1,0 +1,7 @@
+# name: benchmark/jsonbench-parquet/q01.benchmark
+# description: Run query 01 from the jsonbench benchmark over a shredded-variant Parquet file
+# group: [jsonbench-parquet]
+
+template benchmark/jsonbench-parquet/jsonbench_parquet.benchmark.in
+QUERY_NUMBER=1
+QUERY_NUMBER_PADDED=01

@@ -47,7 +47,7 @@ struct ARTIndexScanState : public IndexScanState {
 // ART
 //===--------------------------------------------------------------------===//
 
-ART::ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db,
          const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
@@ -583,12 +583,6 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 	if (was_empty) {
 		// All nodes are in-memory.
 		VerifyAllocationsInternal();
-	}
-
-	if (conflict_type == ARTConflictType::TRANSACTION) {
-		// chunk is only null when called from MergeCheckpointDeltas.
-		auto msg = chunk ? AppendRowError(*chunk, conflict_idx.GetIndex()) : string("???");
-		return ErrorData(TransactionException("write-write conflict on key: \"%s\"", msg));
 	}
 
 	if (conflict_type == ARTConflictType::CONSTRAINT) {

@@ -1,0 +1,159 @@
+# name: test/sql/types/struct/empty_struct.test
+# description: Test empty structs (STRUCT with no fields)
+# group: [struct]
+
+# an empty struct is constructed with row() / struct_pack()
+query II
+SELECT row(), struct_pack()
+----
+{}	{}
+
+# the empty struct type is spelled (and printed) as a bare STRUCT - no parameter list
+query T
+SELECT typeof(row())
+----
+STRUCT
+
+query T
+SELECT typeof(NULL::STRUCT)
+----
+STRUCT
+
+# STRUCT() (empty parameter list) is not legal syntax
+statement error
+SELECT NULL::STRUCT()
+----
+<REGEX>:Parser Error.*
+
+# bare STRUCT is a legal type for casts and DDL
+query II
+SELECT NULL::STRUCT, row()::STRUCT
+----
+NULL
+{}
+
+# use a persistent database so the table survives the restart below
+load {TEST_DIR}/empty_struct.db readwrite v2.0.0
+
+statement ok
+CREATE TABLE t(i INTEGER, s STRUCT)
+
+statement ok
+INSERT INTO t VALUES (1, row()), (2, NULL), (3, row())
+
+query IT
+SELECT i, s FROM t ORDER BY i
+----
+1	{}
+2	NULL
+3	{}
+
+# the empty struct value is non-null
+query I
+SELECT count(*) FROM t WHERE s IS NOT NULL
+----
+2
+
+# ordering by an empty struct (NULLs last by default)
+query I
+SELECT i FROM t ORDER BY s, i
+----
+1
+3
+2
+
+# grouping by an empty struct (all non-null empty structs group together)
+query TI
+SELECT s, count(*) FROM t WHERE s IS NOT NULL GROUP BY s
+----
+{}	2
+
+# distinct
+query I
+SELECT count(*) FROM (SELECT DISTINCT s FROM t)
+----
+2
+
+# equality / distinct-from
+query TT
+SELECT row() = row(), row() IS NOT DISTINCT FROM row()
+----
+true
+true
+
+# joining on an empty struct
+query III
+SELECT t1.i, t2.i, t1.s FROM t t1 JOIN t t2 USING (s) WHERE t1.s IS NOT NULL AND t1.i < t2.i ORDER BY 1, 2
+----
+1	3	{}
+
+# nesting: empty struct inside a struct, list, and as a list element
+query III
+SELECT {'a': row(), 'b': 1}, [row(), row()], typeof({'a': row()})
+----
+{'a': {}, 'b': 1}
+[{}, {}]
+STRUCT(a STRUCT)
+
+# casting to varchar
+query T
+SELECT row()::VARCHAR
+----
+{}
+
+#-------------------------------------------------------------------------------
+# struct functions on empty structs
+#-------------------------------------------------------------------------------
+
+# struct_concat with empty structs contributes no fields (named and unnamed)
+query TTT
+SELECT struct_concat(row(), row()), struct_concat(row(), {'x': 1}), struct_concat({'x': 1}, row())
+----
+{}
+{'x': 1}
+{'x': 1}
+
+query T
+SELECT struct_concat(row(), row(1, 2))
+----
+(1, 2)
+
+# struct_contains on an empty struct is always false
+query TT
+SELECT struct_contains(row(), 'a'), struct_contains(row(), 5)
+----
+false
+false
+
+# struct_extract from an empty struct is a bind-time error
+statement error
+SELECT struct_extract(row(), 'a')
+----
+<REGEX>:Binder Error.*empty struct.*
+
+statement error
+SELECT row()[1]
+----
+<REGEX>:Binder Error.*empty struct.*
+
+# UNNEST of an empty struct is not supported
+statement error
+SELECT unnest(row())
+----
+<REGEX>:Binder Error.*empty struct.*
+
+#-------------------------------------------------------------------------------
+# persistence round-trip
+#-------------------------------------------------------------------------------
+
+statement ok
+CHECKPOINT
+
+restart
+
+query IT
+SELECT i, s FROM t ORDER BY i
+----
+1	{}
+2	NULL
+3	{}

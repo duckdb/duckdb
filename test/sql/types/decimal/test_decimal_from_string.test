@@ -52,6 +52,11 @@ select cast('9.99' as decimal(1,0));
 Conversion Error: Could not convert string
 
 statement error
+select decimal 'a';
+----
+Conversion Error: Could not convert string
+
+statement error
 select map { 1: decimal 'b' };
 ----
 Conversion Error: Could not convert string

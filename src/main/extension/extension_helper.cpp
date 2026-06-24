@@ -2,7 +2,6 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -10,6 +9,7 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/settings.hpp"
@@ -349,7 +349,7 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &c
 	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
 
 #ifndef WASM_LOADABLE_EXTENSIONS
-	case_insensitive_set_t seen_extensions;
+	identifier_set_t seen_extensions;
 
 	// scan the install directory for installed extensions
 	auto ext_directory = ExtensionHelper::ExtensionDirectory(db, fs);
@@ -361,7 +361,7 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &c
 		auto extension_file_name = StringUtil::GetFileName(path);
 		auto extension_name = StringUtil::Split(extension_file_name, ".")[0];
 
-		seen_extensions.insert(extension_name);
+		seen_extensions.insert(Identifier(extension_name));
 
 		result.push_back(UpdateExtensionInternal(context, db, fs, fs.JoinPath(ext_directory, path), extension_name));
 	});

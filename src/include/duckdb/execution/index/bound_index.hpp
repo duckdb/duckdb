@@ -59,7 +59,7 @@ enum class DeltaIndexType {
 //! The index is an abstract base class that serves as the basis for indexes
 class BoundIndex : public Index {
 public:
-	BoundIndex(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
+	BoundIndex(const Identifier &name, const string &index_type, IndexConstraintType index_constraint_type,
 	           const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	           const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db);
 
@@ -69,7 +69,7 @@ public:
 	vector<LogicalType> logical_types;
 
 	//! The name of the index
-	string name;
+	Identifier name;
 	//! The index type (ART, B+-tree, Skip-List, ...)
 	string index_type;
 	//! The index constraint type
@@ -97,7 +97,7 @@ public:
 	const string &GetIndexType() const override {
 		return index_type;
 	}
-	const string &GetIndexName() const override {
+	const Identifier &GetIndexName() const override {
 		return name;
 	}
 	IndexConstraintType GetConstraintType() const override {

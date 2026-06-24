@@ -238,7 +238,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// all children bound successfully - collect them (with their explicit names, if any) into the full argument list.
 	// The positional/named split and (for legacy calls) the alias capture are resolved later, per candidate overload.
-	vector<pair<string, unique_ptr<Expression>>> arguments;
+	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
 
 	if (ordered_set_agg) {
 		const bool order_sensitive = (aggr.FunctionName() == "mode");
@@ -323,10 +323,11 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		error.Throw();
 	}
 
+	// attach the ORDER BY before the state export: an ordered aggregate's exported type depends on the ORDER BY keys
+	aggregate->GetOrderBysMutable() = std::move(order_bys);
 	if (aggr.ExportState()) {
 		aggregate = ExportAggregateFunction::Bind(std::move(aggregate));
 	}
-	aggregate->GetOrderBysMutable() = std::move(order_bys);
 
 	// check for all the aggregates if this aggregate already exists
 	ProjectionIndex aggr_index;
@@ -343,9 +344,9 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	auto &bound_aggr = *node.aggregates[aggr_index];
 
 	// now create a column reference referring to the aggregate
-	auto colref = make_uniq<BoundColumnRefExpression>(aggr.GetAlias().empty() ? bound_aggr.ToString() : aggr.GetAlias(),
-	                                                  bound_aggr.GetReturnType(),
-	                                                  ColumnBinding(node.aggregate_index, aggr_index), depth);
+	auto colref = make_uniq<BoundColumnRefExpression>(
+	    aggr.GetAlias().empty() ? Identifier(bound_aggr.ToString()) : aggr.GetAlias(), bound_aggr.GetReturnType(),
+	    ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
 	return BindResult(std::move(colref));
 }

@@ -46,8 +46,8 @@ public:
 	bool stats_initialized = false;
 
 	//! for debug, column names and tables
-	vector<string> column_names;
-	string table_name;
+	vector<Identifier> column_names;
+	Identifier table_name;
 };
 
 class RelationStatisticsHelper {

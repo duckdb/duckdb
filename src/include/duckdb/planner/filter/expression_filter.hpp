@@ -61,6 +61,8 @@ public:
 	static bool IsOptionalFilter(const TableFilter &filter);
 	//! Check if the root of a table filter tree is an optional filter wrapper
 	static bool IsRootOptionalFilter(const TableFilter &filter);
+	//! Check if the root of a table filter tree is a non-selectivity optional filter wrapper
+	static bool IsRootNonSelectivityOptionalFilter(const TableFilter &filter);
 	//! If this is an optional/selectivity-optional wrapper around a root dynamic filter,
 	//! return the shared dynamic filter state.
 	static shared_ptr<DynamicFilterData> GetRootOptionalDynamicFilterData(const TableFilter &filter);

@@ -143,7 +143,7 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 	case ExpressionType::FUNCTION: {
 		auto &function = expr.Cast<FunctionExpression>();
 		if (function.FunctionName() == "struct_pack") {
-			unordered_set<string> unique_names;
+			identifier_set_t unique_names;
 			child_list_t<Value> values;
 			values.reserve(function.GetArguments().size());
 			for (const auto &child : function.GetArguments()) {
@@ -371,7 +371,7 @@ string PivotRef::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += groups[i];
+			result += SQLIdentifier(groups[i].GetIdentifierName());
 		}
 	}
 	result += ")";

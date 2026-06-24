@@ -1,0 +1,53 @@
+{
+  "description": "Run with debug_order_verification=variant (cast every ORDER BY expression to VARIANT to verify the VARIANT comparator matches the regular comparison ordering).",
+  "on_init": "SET debug_order_verification='variant';",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "VARIANT does not carry the VARCHAR collation, so ORDER BY on collated strings orders by the raw (binary) value instead of the collation.",
+      "paths": [
+        "test/sql/attach/attach_icu_collation.test",
+        "test/sql/collate/icu_collation_propagation.test",
+        "test/sql/collate/test_collate_accent_insensitive.test",
+        "test/sql/collate/test_collate_case_insensitive.test",
+        "test/sql/collate/test_collate_expression.test",
+        "test/sql/collate/test_collate_orderby_column_number.test",
+        "test/sql/collate/test_collation_propagation.test",
+        "test/sql/collate/test_default_collations.test",
+        "test/sql/collate/test_icu_collate.test",
+        "test/sql/settings/setting_collation.test",
+        "test/sql/storage/icu_collation.test",
+        "test/sql/types/struct/unnest_struct_mix.test"
+      ]
+    },
+    {
+      "reason": "UNION values order by tag first and then by value natively, but a UNION cast to VARIANT keeps only the active member value, so VARIANT orders by value regardless of tag.",
+      "paths": [
+        "test/sql/index/art/types/test_art_union.test",
+        "test/sql/types/union/union_cast.test",
+        "test/sql/types/union/union_sort.test"
+      ]
+    },
+    {
+      "reason": "ENUM is ordered by its dictionary (definition) order natively, but VARIANT stores the enum value as a string and orders it lexically.",
+      "paths": [
+        "test/sql/export/export_database.test",
+        "test/sql/types/enum/test_enum_table.test"
+      ]
+    },
+    {
+      "reason": "Unnamed (positional) STRUCT cannot be cast to VARIANT, so ORDER BY over such values cannot be rewritten.",
+      "paths": [
+        "test/sql/function/list/list_zip.test"
+      ]
+    },
+    {
+      "reason": "These tests assert EXPLAIN / Top-N optimizer plans; the injected CAST to VARIANT changes the plan output (the create_sort_key-style ORDER BY rewrite has the same limitation).",
+      "paths": [
+        "test/sql/topn/test_top_n_nulls_row_group_pruner_extensive.test",
+        "test/sql/topn/top_n_pruning.test",
+        "test/sql/topn/topn_nulls_first.test"
+      ]
+    }
+  ]
+}

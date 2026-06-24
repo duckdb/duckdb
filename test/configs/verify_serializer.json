@@ -28,6 +28,8 @@
         "test/sql/function/numeric/test_random.test",
         "test/sql/function/generic/test_stats.test",
         "test/sql/storage/types/variant/variant_extract_stats.test",
+        "test/sql/storage/types/variant/variant_comparator_stats.test",
+        "test/sql/types/variant/variant_cast_stats.test",
         "test/sql/alter/alter_type/test_alter_type.test",
         "test/sql/alter/add_col/test_add_col_stats.test",
         "test/sql/copy/parquet/bloom_filters.test",
@@ -44,7 +46,9 @@
         "test/sql/copy/parquet/parquet_string_stats.test",
         "test/sql/storage/extended_string_stats.test",
         "test/sql/storage/min_string_length_too_large.test_slow",
-        "test/sql/storage/total_string_length_repeated_insert.test"
+        "test/sql/storage/total_string_length_repeated_insert.test",
+        "test/sql/types/geo/geometry_vertex_extract.test",
+        "test/sql/types/geo/geometry_from_wkb_stats.test"
       ]
     }
   ]

@@ -8,7 +8,12 @@ CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(PragmaFunction function)
 	functions.AddFunction(std::move(function));
 	internal = true;
 }
-CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(string name, PragmaFunctionSet functions_p)
+CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(PragmaFunctionSet functions_p)
+    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(std::move(functions_p)) {
+	name = functions.name;
+	internal = true;
+}
+CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(Identifier name, PragmaFunctionSet functions_p)
     : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY), functions(std::move(functions_p)) {
 	this->name = std::move(name);
 	internal = true;

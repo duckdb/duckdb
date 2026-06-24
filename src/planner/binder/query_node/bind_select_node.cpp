@@ -1,3 +1,4 @@
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
@@ -18,6 +19,7 @@
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_expanded_expression.hpp"
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
@@ -31,6 +33,8 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
+#include "duckdb/common/enums/dialect_compatibility_mode.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -179,36 +183,57 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 					break;
 				}
 			}
-#if 0
-			// When this verification is enabled, replace ORDER BY x, y with ORDER BY create_sort_key(x, y)
-			// note that we don't enable this during actual verification since it doesn't always work
-			// e.g. it breaks EXPLAIN output on queries
-			bool can_replace = true;
-			for (auto &order_node : order.orders) {
-				if (order_node.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-					// we cannot replace the sort key when we order by literals (e.g. ORDER BY 1, 2`
-					can_replace = false;
-					break;
+			// Spark Compatibility Mode: when ALL is not reserved, ORDER BY ALL is parsed as a column reference.
+			// If no column named "all" exists, treat as ORDER BY ALL.
+			if (Settings::Get<DialectCompatibilityModeSetting>(context) == DialectCompatibilityMode::SPARK &&
+			    order.orders.size() == 1 &&
+			    order.orders[0].expression->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+				auto &colref = order.orders[0].expression->Cast<ColumnRefExpression>();
+				if (colref.ColumnNames().size() == 1 &&
+				    StringUtil::CIEquals(colref.ColumnNames()[0].GetIdentifierName(), "all")) {
+					auto matching = bind_context.GetMatchingBindings("all");
+					if (matching.empty()) {
+						auto order_type = config.ResolveOrder(context, order.orders[0].type);
+						auto null_order = config.ResolveNullOrder(context, order_type, order.orders[0].null_order);
+						auto constant_expr = make_uniq<BoundConstantExpression>(Value("ALL"));
+						bound_order->orders.emplace_back(order_type, null_order, std::move(constant_expr));
+						bound_modifier = std::move(bound_order);
+						break;
+					}
 				}
 			}
-			if (!order_binder.HasExtraList()) {
-				// we can only do the replacement when we can order by elements that are not in the selection list
-				can_replace = false;
-			}
-			if (can_replace) {
-				vector<unique_ptr<ParsedExpression>> sort_key_parameters;
+			if (config.options.debug_order_verification == DebugOrderVerification::CREATE_SORT_KEY) {
+				// When this verification is enabled, replace ORDER BY x, y with ORDER BY create_sort_key(x, y)
+				// note that we don't enable this during actual verification since it doesn't always work
+				// e.g. it breaks EXPLAIN output on queries
+				bool can_replace = true;
 				for (auto &order_node : order.orders) {
-					sort_key_parameters.push_back(std::move(order_node.expression));
-					auto type = config.ResolveOrder(context, order_node.type);
-					auto null_order = config.ResolveNullOrder(context, type, order_node.null_order);
-					string sort_param = EnumUtil::ToString(type) + " " + EnumUtil::ToString(null_order);
-					sort_key_parameters.push_back(make_uniq<ConstantExpression>(Value(sort_param)));
+					if (order_node.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+						// we cannot replace the sort key when we order by literals (e.g. ORDER BY 1, 2`
+						can_replace = false;
+						break;
+					}
 				}
-				order.orders.clear();
-				auto create_sort_key = make_uniq<FunctionExpression>("create_sort_key", std::move(sort_key_parameters));
-				order.orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(create_sort_key));
+				if (!order_binder.HasExtraList()) {
+					// we can only do the replacement when we can order by elements that are not in the selection list
+					can_replace = false;
+				}
+				if (can_replace) {
+					vector<unique_ptr<ParsedExpression>> sort_key_parameters;
+					for (auto &order_node : order.orders) {
+						sort_key_parameters.push_back(std::move(order_node.expression));
+						auto type = config.ResolveOrder(context, order_node.type);
+						auto null_order = config.ResolveNullOrder(context, type, order_node.null_order);
+						string sort_param = EnumUtil::ToString(type) + " " + EnumUtil::ToString(null_order);
+						sort_key_parameters.push_back(make_uniq<ConstantExpression>(Value(sort_param)));
+					}
+					order.orders.clear();
+					auto create_sort_key =
+					    make_uniq<FunctionExpression>("create_sort_key", std::move(sort_key_parameters));
+					order.orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST,
+					                          std::move(create_sort_key));
+				}
 			}
-#endif
 			for (auto &order_node : order.orders) {
 				vector<unique_ptr<ParsedExpression>> order_list;
 				order_binders[0].get().ExpandStarExpression(std::move(order_node.expression), order_list);
@@ -240,7 +265,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 	}
 }
 
-static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<string> &names,
+static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const vector<Identifier> &names,
                                                     const vector<LogicalType> &sql_types, TableIndex table_index,
                                                     ProjectionIndex index) {
 	if (index >= sql_types.size()) {
@@ -255,7 +280,7 @@ static unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr,
 }
 
 static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression> expr, TableIndex table_index,
-                                                          const vector<string> &names,
+                                                          const vector<Identifier> &names,
                                                           const vector<LogicalType> &sql_types,
                                                           const SelectBindState &bind_state) {
 	auto &constant = expr->Cast<BoundConstantExpression>();
@@ -294,7 +319,7 @@ static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression>
 	}
 }
 
-static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_index, const vector<string> &names,
+static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_index, const vector<Identifier> &names,
                              const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
 	if (!expr) {
 		return;
@@ -309,7 +334,7 @@ static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_inde
 	bound_colref.SetReturnType(sql_types[bound_colref.Binding().column_index]);
 }
 
-void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<string> &names,
+void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<Identifier> &names,
                            const vector<LogicalType> &sql_types, const SelectBindState &bind_state) {
 	for (auto &bound_mod : result.modifiers) {
 		switch (bound_mod->type) {
@@ -357,9 +382,19 @@ void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const
 					order.orders.emplace_back(order_type, null_order, std::move(expr));
 				}
 			}
+			auto &config = DBConfig::GetConfig(context);
 			for (auto &order_node : order.orders) {
 				auto &expr = order_node.expression;
-				ExpressionBinder::PushCollation(context, order_node.expression, expr->GetReturnType());
+				if (config.options.debug_order_verification == DebugOrderVerification::VARIANT &&
+				    expr->GetReturnType().id() != LogicalTypeId::VARIANT) {
+					// when this verification is enabled, cast every ORDER BY expression to VARIANT (the
+					// PushCollation below then routes ordering through the VARIANT comparator) to verify it
+					// produces the same ordering as the regular comparison. We do this on the *bound*
+					// expression so alias / positional / GROUP BY ALL resolution is unaffected.
+					order_node.expression = BoundCastExpression::AddCastToType(
+					    context, std::move(order_node.expression), LogicalType::VARIANT());
+				}
+				ExpressionBinder::PushCollation(context, order_node.expression, order_node.expression->GetReturnType());
 			}
 			break;
 		}
@@ -409,7 +444,7 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	}
 }
 
-string Binder::GetExpressionName(const ParsedExpression &expr) {
+Identifier Binder::GetExpressionName(const ParsedExpression &expr) {
 	if (!expr.GetAlias().empty()) {
 		return expr.GetAlias();
 	}
@@ -447,7 +482,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	auto &bind_state = result.bind_state;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
-		result.names.push_back(GetExpressionName(*expr));
+		result.names.emplace_back(GetExpressionName(*expr));
 		ExpressionBinder::QualifyColumnNames(*this, expr);
 		if (!expr->GetAlias().empty()) {
 			bind_state.alias_map[expr->GetAlias()] = i;
@@ -493,6 +528,24 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	}
 
 	auto &group_expressions = statement.groups.group_expressions;
+
+	// Spark Compatibility Mode: when ALL is not a reserved keyword, GROUP BY ALL is parsed as a column reference
+	// instead of the special GROUP BY ALL syntax. Detect this and convert to FORCE_AGGREGATES
+	// if no column named "all" actually exists in scope.
+	if (Settings::Get<DialectCompatibilityModeSetting>(context) == DialectCompatibilityMode::SPARK &&
+	    group_expressions.size() == 1 && group_expressions[0]->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		auto &colref = group_expressions[0]->Cast<ColumnRefExpression>();
+		if (colref.ColumnNames().size() == 1 &&
+		    StringUtil::CIEquals(colref.ColumnNames()[0].GetIdentifierName(), "all")) {
+			auto matching = bind_context.GetMatchingBindings("all");
+			if (matching.empty()) {
+				statement.aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
+				group_expressions.clear();
+				statement.groups.grouping_sets.clear();
+			}
+		}
+	}
+
 	if (!group_expressions.empty()) {
 		// the statement has a GROUP BY clause, bind it
 		GroupBinder group_binder(*this, context, result.group_index, bind_state);
@@ -562,7 +615,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	// if we expand select-list expressions, e.g., via UNNEST, then we need to possibly
 	// adjust the column index of the already bound ORDER BY modifiers, and not only set their types
 	vector<idx_t> group_by_all_indexes;
-	vector<string> new_names;
+	vector<Identifier> new_names;
 	vector<LogicalType> internal_sql_types;
 
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
@@ -585,10 +638,12 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 
 			auto &expanded = expr->Cast<BoundExpandedExpression>();
 			auto &struct_expressions = expanded.GetChildrenMutable();
-			D_ASSERT(!struct_expressions.empty());
+			if (struct_expressions.empty()) {
+				throw BinderException("UNNEST of an empty struct is not supported");
+			}
 
 			for (auto &struct_expr : struct_expressions) {
-				new_names.push_back(struct_expr->GetName());
+				new_names.emplace_back(struct_expr->GetName());
 				result.types.push_back(struct_expr->GetReturnType());
 				internal_sql_types.push_back(struct_expr->GetReturnType());
 				result.select_list.push_back(std::move(struct_expr));

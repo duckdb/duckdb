@@ -35,19 +35,19 @@ MangledEntryName::MangledEntryName(const CatalogEntryInfo &info) {
 	auto &schema = info.schema;
 	auto &name = info.name;
 
-	this->name = CatalogTypeToString(type) + '\0' + schema + '\0' + name;
-	AssertMangledName(this->name, 2);
+	this->name = Identifier(CatalogTypeToString(type) + '\0' + schema + '\0' + name);
+	AssertMangledName(this->name.GetIdentifierName(), 2);
 }
 
 MangledDependencyName::MangledDependencyName(const MangledEntryName &from, const MangledEntryName &to) {
-	this->name = from.name + '\0' + to.name;
-	AssertMangledName(this->name, 5);
+	this->name = Identifier(from.name + '\0' + to.name);
+	AssertMangledName(this->name.GetIdentifierName(), 5);
 }
 
 DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), subjects(catalog), dependents(catalog) {
 }
 
-string DependencyManager::GetSchema(const CatalogEntry &entry) {
+Identifier DependencyManager::GetSchema(const CatalogEntry &entry) {
 	if (entry.type == CatalogType::SCHEMA_ENTRY) {
 		return entry.name;
 	}
@@ -66,7 +66,7 @@ MangledEntryName DependencyManager::MangleName(const CatalogEntry &entry) {
 	auto type = entry.type;
 	auto schema = GetSchema(entry);
 	auto name = entry.name;
-	CatalogEntryInfo info {type, schema, name};
+	CatalogEntryInfo info {type, Identifier(schema), name};
 
 	return MangleName(info);
 }
@@ -220,6 +220,9 @@ void DependencyManager::CreateDependent(CatalogTransaction transaction, const De
 }
 
 void DependencyManager::CreateDependency(CatalogTransaction transaction, DependencyInfo &info) {
+	auto subject_entry = LookupEntry(transaction, info.subject.entry);
+	info.subject.oid = subject_entry ? subject_entry->oid : optional_idx();
+
 	DependencyCatalogSet subjects(Subjects(), info.dependent.entry);
 	DependencyCatalogSet dependents(Dependents(), info.subject.entry);
 
@@ -277,8 +280,9 @@ void DependencyManager::CreateDependencies(CatalogTransaction transaction, const
 
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.Set()) {
-		DependencyInfo info {/*dependent = */ DependencyDependent {GetLookupProperties(object), dependency_flags},
-		                     /*subject = */ DependencySubject {dependency.entry, DependencySubjectFlags()}};
+		DependencyInfo info {
+		    /*dependent = */ DependencyDependent {GetLookupProperties(object), dependency_flags},
+		    /*subject = */ DependencySubject {dependency.entry, DependencySubjectFlags(), optional_idx()}};
 		CreateDependency(transaction, info);
 	}
 }
@@ -311,16 +315,12 @@ CatalogEntryInfo DependencyManager::GetLookupProperties(const CatalogEntry &entr
 		auto schema = DependencyManager::GetSchema(entry);
 		auto &name = entry.name;
 		auto &type = entry.type;
-		return CatalogEntryInfo {type, schema, name};
+		return CatalogEntryInfo {type, Identifier(schema), name};
 	}
 }
 
-optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency) {
-	if (dependency.type != CatalogType::DEPENDENCY_ENTRY) {
-		return &dependency;
-	}
-	auto info = GetLookupProperties(dependency);
-
+optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction,
+                                                          const CatalogEntryInfo &info) {
 	auto &type = info.type;
 	auto &schema = info.schema;
 	auto &name = info.name;
@@ -331,8 +331,14 @@ optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction tra
 		// This is a schema entry, perform the callback only providing the schema
 		return reinterpret_cast<CatalogEntry *>(schema_entry.get());
 	}
-	auto entry = schema_entry->GetEntry(transaction, type, name);
-	return entry;
+	return schema_entry->GetEntry(transaction, type, name);
+}
+
+optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency) {
+	if (dependency.type != CatalogType::DEPENDENCY_ENTRY) {
+		return &dependency;
+	}
+	return LookupEntry(transaction, GetLookupProperties(dependency));
 }
 
 void DependencyManager::CleanupDependencies(CatalogTransaction transaction, CatalogEntry &object) {
@@ -470,6 +476,13 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 	if (lookup_result.reason == CatalogSet::EntryLookup::FailureReason::DELETED) {
 		throw DependencyException("Could not commit creation of dependency, subject \"%s\" has been deleted",
 		                          object.SourceInfo().name);
+	}
+	// The subject still exists by name - check if it is the same object the dependency was created against
+	if (!subject.flags.IsOwnership() && subject.oid.IsValid() && lookup_result.result &&
+	    lookup_result.result->oid != subject.oid.GetIndex()) {
+		throw DependencyException(
+		    "Could not commit creation of dependency, subject \"%s\" was dropped and re-created by another transaction",
+		    object.EntryInfo().name);
 	}
 }
 
@@ -697,7 +710,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		dependencies.emplace_back(dep_info);
 	});
 
-	if (has_new_dependencies || !StringUtil::CIEquals(old_obj.name, new_obj.name)) {
+	if (has_new_dependencies || !(old_obj.name == new_obj.name)) {
 		// The dependencies have changed (e.g. SET DEFAULT) or the name has changed
 		// We need to recreate the dependency links
 		CleanupDependencies(transaction, old_obj);
@@ -791,12 +804,13 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 
 	DependencyInfo info {
 	    /*dependent = */ DependencyDependent {GetLookupProperties(owner), DependencyDependentFlags().SetOwnedBy()},
-	    /*subject = */ DependencySubject {GetLookupProperties(entry), DependencySubjectFlags().SetOwnership()}};
+	    /*subject = */ DependencySubject {GetLookupProperties(entry), DependencySubjectFlags().SetOwnership(),
+	                                      optional_idx()}};
 	CreateDependency(transaction, info);
 }
 
 static string FormatString(const MangledEntryName &mangled) {
-	auto input = mangled.name;
+	auto input = mangled.name.GetIdentifierName();
 	for (size_t i = 0; i < input.size(); i++) {
 		if (input[i] == '\0') {
 			input[i] = '_';

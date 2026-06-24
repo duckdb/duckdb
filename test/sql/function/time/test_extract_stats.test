@@ -23,9 +23,12 @@ CREATE TABLE expected_result AS FROM (VALUES
 
 foreach component second minute hour milliseconds microseconds epoch
 
+# stats.min / stats.max are VARIANT values - EXTRACT(epoch ...) yields a DOUBLE while the other
+# components yield integers. VARIANT comparison is type-first (REAL != NUMBER), so compare the numeric
+# value by casting to DOUBLE instead of relying on VARIANT type identity.
 query I
 SELECT
-	CASE WHEN stats.min = expected_result.min AND stats.max = expected_result.max THEN NULL ELSE {'stats': stats, 'expected_result': expected_result} END
+	CASE WHEN stats.min::DOUBLE = expected_result.min AND stats.max::DOUBLE = expected_result.max THEN NULL ELSE {'stats': stats, 'expected_result': expected_result} END
 FROM (
 	SELECT STATS(EXTRACT({component} FROM i)) AS stats, (SELECT expected_result FROM expected_result WHERE component = '{component}') expected_result FROM times LIMIT 1
 )

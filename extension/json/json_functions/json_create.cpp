@@ -104,7 +104,7 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	case LogicalTypeId::STRUCT: {
 		child_list_t<LogicalType> child_types;
 		for (const auto &child_type : StructType::GetChildTypes(type)) {
-			const_struct_names.Insert(child_type.first);
+			const_struct_names.Insert(child_type.first.GetIdentifierName());
 			child_types.emplace_back(child_type.first, GetJSONType(const_struct_names, child_type.second));
 		}
 		return LogicalType::STRUCT(child_types);
@@ -117,7 +117,7 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 		for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(type); member_idx++) {
 			auto &member_name = UnionType::GetMemberName(type, member_idx);
 			auto &member_type = UnionType::GetMemberType(type, member_idx);
-			const_struct_names.Insert(member_name);
+			const_struct_names.Insert(member_name.GetIdentifierName());
 			member_types.emplace_back(member_name, GetJSONType(const_struct_names, member_type));
 		}
 		return LogicalType::UNION(member_types);
@@ -186,8 +186,8 @@ static unique_ptr<FunctionData> ArrayToJSONBind(BindScalarFunctionInput &input) 
 	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (arg_id != LogicalTypeId::LIST && arg_id != LogicalTypeId::SQLNULL) {
-		throw BinderException("array_to_json() argument type must be LIST");
+	if (arg_id != LogicalTypeId::LIST && arg_id != LogicalTypeId::ARRAY && arg_id != LogicalTypeId::SQLNULL) {
+		throw BinderException("array_to_json() argument type must be LIST or ARRAY");
 	}
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
@@ -288,7 +288,7 @@ static void AddKeyValuePairs(yyjson_mut_doc *doc, yyjson_mut_val *objs[], const 
 	for (idx_t i = 0; i < count; i++) {
 		auto key_entry = keys[i];
 		if (!key_entry.IsValid()) {
-			continue;
+			throw InvalidInputException("JSON key cannot be NULL");
 		}
 		auto key = CreateJSONValue<string_t, string_t>::Operation(doc, key_entry.GetValue());
 		yyjson_mut_obj_add(objs[i], key, vals[i]);
@@ -355,7 +355,7 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	// Add the key/value pairs to the values
 	auto &entries = StructVector::GetEntries(value_v);
 	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
-		auto &struct_key_v = names.Get(StructType::GetChildName(value_v.GetType(), entry_i), count);
+		auto &struct_key_v = names.Get(StructType::GetChildName(value_v.GetType(), entry_i).GetIdentifierName(), count);
 		auto &struct_val_v = entries[entry_i];
 		CreateKeyValuePairs(names, doc, vals, nested_vals, struct_key_v, struct_val_v, count);
 	}
@@ -437,7 +437,8 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
 	// Add the key/value pairs to the values
 	for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(value_v.GetType()); member_idx++) {
 		auto &member_val_v = UnionVector::GetMember(value_v, member_idx);
-		auto &member_key_v = names.Get(UnionType::GetMemberName(value_v.GetType(), member_idx), count);
+		auto &member_key_v =
+		    names.Get(UnionType::GetMemberName(value_v.GetType(), member_idx).GetIdentifierName(), count);
 
 		// This implementation is not optimal since we convert the entire member vector,
 		// and then skip the rows not matching the tag afterwards.

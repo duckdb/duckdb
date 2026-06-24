@@ -38,7 +38,7 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 	D_ASSERT(LogicalTypeId::STRUCT == child_type.id());
 	auto &struct_children = StructType::GetChildTypes(child_type);
 	if (struct_children.empty()) {
-		throw InternalException("Can't extract something from an empty struct");
+		throw BinderException("Can't extract something from an empty struct");
 	}
 	if (StructType::IsUnnamed(child_type)) {
 		throw BinderException(
@@ -60,7 +60,7 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 	if (key_val.IsNull() || key_str.empty()) {
 		throw BinderException("Key name for struct_extract needs to be neither NULL nor empty");
 	}
-	string key = StringUtil::Lower(key_str);
+	auto key = Identifier(key_str);
 
 	LogicalType return_type;
 	idx_t key_index = 0;
@@ -68,7 +68,7 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 
 	for (size_t i = 0; i < struct_children.size(); i++) {
 		auto &child = struct_children[i];
-		if (StringUtil::Lower(child.first) == key) {
+		if (child.first == key) {
 			found_key = true;
 			key_index = i;
 			return_type = child.second;
@@ -80,11 +80,11 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 		vector<string> candidates;
 		candidates.reserve(struct_children.size());
 		for (auto &struct_child : struct_children) {
-			candidates.push_back(struct_child.first);
+			candidates.emplace_back(struct_child.first);
 		}
 		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, key);
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");
-		throw BinderException("Could not find key \"%s\" in struct\n%s", key, message);
+		throw BinderException("Could not find key \"%s\" in struct\n%s", key.GetIdentifierName(), message);
 	}
 
 	bound_function.SetReturnType(std::move(return_type));
@@ -102,7 +102,7 @@ static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context
 	D_ASSERT(LogicalTypeId::STRUCT == child_type.id());
 	auto &struct_children = StructType::GetChildTypes(child_type);
 	if (struct_children.empty()) {
-		throw InternalException("Can't extract something from an empty struct");
+		throw BinderException("Can't extract something from an empty struct");
 	}
 	if (struct_extract && !StructType::IsUnnamed(child_type)) {
 		throw BinderException(

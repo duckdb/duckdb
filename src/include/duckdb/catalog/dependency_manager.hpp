@@ -29,6 +29,8 @@ struct DependencySubject {
 	CatalogEntryInfo entry;
 	//! The type of dependency this is (e.g, ownership)
 	DependencySubjectFlags flags;
+	//! The oid of the subject entry when the dependency was created
+	optional_idx oid;
 };
 
 // The entry that relies on the other entry
@@ -57,11 +59,11 @@ public:
 
 public:
 	//! Format: Type\0Schema\0Name
-	string name;
+	Identifier name;
 
 public:
 	bool operator==(const MangledEntryName &other) const {
-		return StringUtil::CIEquals(other.name, name);
+		return other.name == name;
 	}
 	bool operator!=(const MangledEntryName &other) const {
 		return !(*this == other);
@@ -75,7 +77,7 @@ public:
 
 public:
 	//! Format: MangledEntryName\0MangledEntryName
-	string name;
+	Identifier name;
 };
 
 //! The DependencyManager is in charge of managing dependencies between catalog entries
@@ -104,11 +106,12 @@ private:
 	bool IsSystemEntry(CatalogEntry &entry) const;
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const LogicalDependency &dependency);
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency);
+	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const CatalogEntryInfo &info);
 	string CollectDependents(CatalogTransaction transaction, catalog_entry_set_t &entries, CatalogEntryInfo &info);
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
 
 public:
-	static string GetSchema(const CatalogEntry &entry);
+	static Identifier GetSchema(const CatalogEntry &entry);
 	static MangledEntryName MangleName(const CatalogEntryInfo &info);
 	static MangledEntryName MangleName(const CatalogEntry &entry);
 	static CatalogEntryInfo GetLookupProperties(const CatalogEntry &entry);

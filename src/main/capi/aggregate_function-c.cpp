@@ -122,7 +122,7 @@ void CAPIAggregateCombine(Vector &state, Vector &combined, AggregateInputData &a
 	}
 }
 
-void CAPIAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+void CAPIAggregateFinalize(Vector &state, AggregateFinalizeInputData &aggr_input_data, Vector &result, idx_t count,
                            idx_t offset) {
 	state.Flatten();
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
@@ -174,7 +174,7 @@ void duckdb_aggregate_function_set_name(duckdb_aggregate_function function, cons
 		return;
 	}
 	auto &aggregate_function = GetCAggregateFunction(function);
-	aggregate_function.name = name;
+	aggregate_function.name = duckdb::Identifier(name);
 }
 
 void duckdb_aggregate_function_add_parameter(duckdb_aggregate_function function, duckdb_logical_type type) {
@@ -226,7 +226,7 @@ duckdb_state duckdb_register_aggregate_function(duckdb_connection connection, du
 	}
 
 	auto &aggregate_function = GetCAggregateFunction(function);
-	duckdb::AggregateFunctionSet set(aggregate_function.name);
+	duckdb::AggregateFunctionSet set {aggregate_function.name};
 	set.AddFunction(aggregate_function);
 	return duckdb_register_aggregate_function_set(connection, reinterpret_cast<duckdb_aggregate_function_set>(&set));
 }

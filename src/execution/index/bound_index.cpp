@@ -14,7 +14,7 @@ namespace duckdb {
 // Bound index
 //-------------------------------------------------------------------------------
 
-BoundIndex::BoundIndex(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
+BoundIndex::BoundIndex(const Identifier &name, const string &index_type, IndexConstraintType index_constraint_type,
                        const vector<column_t> &column_ids, TableIOManager &table_io_manager,
                        const vector<unique_ptr<Expression>> &unbound_expressions_p, AttachedDatabase &db)
     : Index(column_ids, table_io_manager, db), name(name), index_type(index_type),

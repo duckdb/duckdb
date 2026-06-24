@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/default/default_generator.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/parser/parser_options.hpp"
 
 namespace duckdb {
 class SchemaCatalogEntry;
@@ -27,10 +28,13 @@ public:
 	SchemaCatalogEntry &schema;
 
 	DUCKDB_API static unique_ptr<CreateMacroInfo> CreateInternalMacroInfo(const DefaultMacro &default_macro);
+	//! Overload taking ParserOptions, so the caller's ParserCache is reused instead of rebuilt per macro.
+	DUCKDB_API static unique_ptr<CreateMacroInfo> CreateInternalMacroInfo(const DefaultMacro &default_macro,
+	                                                                      ParserOptions options);
 
 public:
-	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
-	vector<string> GetDefaultEntries() override;
+	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const Identifier &entry_name) override;
+	vector<Identifier> GetDefaultEntries() override;
 };
 
 } // namespace duckdb

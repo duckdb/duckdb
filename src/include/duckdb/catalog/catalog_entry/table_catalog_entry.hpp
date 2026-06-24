@@ -43,6 +43,7 @@ struct DropNotNullInfo;
 struct SetColumnCommentInfo;
 struct CreateTableInfo;
 struct BoundCreateTableInfo;
+struct ColumnBinding;
 
 class TableFunction;
 struct FunctionData;
@@ -73,10 +74,10 @@ public:
 	DUCKDB_API bool HasGeneratedColumns() const;
 
 	//! Returns whether or not a column with the given name exists
-	DUCKDB_API bool ColumnExists(const string &name) const;
+	DUCKDB_API bool ColumnExists(const Identifier &name) const;
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
-	DUCKDB_API const ColumnDefinition &GetColumn(const string &name) const;
+	DUCKDB_API const ColumnDefinition &GetColumn(const Identifier &name) const;
 	//! Returns a reference to the column of the specified logical index. Throws an
 	//! exception if the column does not exist.
 	DUCKDB_API const ColumnDefinition &GetColumn(LogicalIndex idx) const;
@@ -100,7 +101,7 @@ public:
 	//! If the column does not exist:
 	//! If if_column_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_column_exists is false, throws an exception
-	DUCKDB_API LogicalIndex GetColumnIndex(string &name, bool if_exists = false) const;
+	DUCKDB_API LogicalIndex GetColumnIndex(Identifier &name, bool if_exists = false) const;
 	DUCKDB_API StorageIndex GetStorageIndex(const ColumnIndex &column_index) const;
 
 	//! Returns the scan function that can be used to scan the given table
@@ -138,6 +139,11 @@ public:
 	//! Returns true, if the table has a primary key, else false.
 	bool HasPrimaryKey() const;
 
+	virtual LogicalType GetExpectedTypeForInsert(const ColumnDefinition &column) const;
+	virtual unique_ptr<Expression> GetDefaultExpressionForColumn(ClientContext &context, const LogicalType &input_type,
+	                                                             const LogicalType &result_type, ColumnBinding binding,
+	                                                             const Expression &constant_value) const;
+
 	//! Returns the virtual columns for this table
 	virtual virtual_column_map_t GetVirtualColumns() const;
 
@@ -148,9 +154,13 @@ public:
 	//! Scan all triggers on this table (default: no-op - non-DuckDB tables have no triggers)
 	virtual void ScanTriggers(CatalogTransaction transaction,
 	                          const std::function<void(CatalogEntry &)> &callback) const;
-	//! Collect triggers matching the given timing and event type
+	//! Collect triggers matching the given event type and for_each granularity, regardless of timing
 	vector<const_reference<TriggerCatalogEntry>>
-	GetTriggersForEvent(CatalogTransaction transaction, TriggerTiming timing, TriggerEventType event_type) const;
+	GetTriggersForEvent(CatalogTransaction transaction, TriggerEventType event_type, TriggerForEach for_each) const;
+	//! Collect triggers matching the given timing, event type, and for_each granularity
+	vector<const_reference<TriggerCatalogEntry>> GetTriggersForEvent(CatalogTransaction transaction,
+	                                                                 TriggerTiming timing, TriggerEventType event_type,
+	                                                                 TriggerForEach for_each) const;
 
 protected:
 	//! A list of columns that are part of this table

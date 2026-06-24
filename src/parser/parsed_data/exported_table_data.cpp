@@ -5,7 +5,7 @@
 namespace duckdb {
 
 ExportedTableInfo::ExportedTableInfo(TableCatalogEntry &entry, ExportedTableData table_data_p,
-                                     vector<string> &not_null_columns_p)
+                                     vector<Identifier> &not_null_columns_p)
     : entry(entry), table_data(std::move(table_data_p)) {
 	table_data.not_null_columns = not_null_columns_p;
 }

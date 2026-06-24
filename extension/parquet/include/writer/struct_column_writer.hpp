@@ -14,7 +14,7 @@ namespace duckdb {
 
 class StructColumnWriter : public ColumnWriter {
 public:
-	StructColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p,
+	StructColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<Identifier> schema_path_p,
 	                   vector<unique_ptr<ColumnWriter>> child_writers_p)
 	    : ColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
 		child_writers = std::move(child_writers_p);
@@ -34,6 +34,7 @@ public:
 
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
+	void PrepareWrite(ColumnWriterState &state) override;
 	void FinalizeWrite(ColumnWriterState &state) override;
 	idx_t FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) override;
 };

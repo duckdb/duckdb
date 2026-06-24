@@ -15,6 +15,7 @@
 #include "duckdb/common/owning_string_map.hpp"
 
 namespace duckdb {
+class VariantIterator;
 
 struct VariantPathBindData : public FunctionData {
 public:
@@ -113,14 +114,6 @@ struct VariantPathSelection {
 };
 
 struct VariantUtils {
-	using unary_path_function_t = void (*)(const Vector &, const vector<VariantPathComponent> &, Vector &, idx_t);
-	using many_path_function_t = void (*)(const Vector &, const vector<vector<VariantPathComponent>> &, Vector &,
-	                                      idx_t);
-
-	//! Generic dispatcher for function execution, used by functions that take an (optional) path(s)
-	DUCKDB_API static void ExecutePathFunction(DataChunk &input, const ExpressionState &state, Vector &result,
-	                                           const unary_path_function_t &unary_fn,
-	                                           const many_path_function_t &many_fn);
 	DUCKDB_API static bool IsNestedType(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index);
 	DUCKDB_API static VariantDecimalData DecodeDecimalData(const UnifiedVariantVectorData &variant, idx_t row,
 	                                                       uint32_t value_index);
@@ -159,6 +152,10 @@ struct VariantUtils {
 
 	//! Whether or not a type is natively supported in variant
 	DUCKDB_API static bool VariantSupportsType(const LogicalType &type);
+
+	//! Build a canonical (unshredded) VARIANT vector by traversing a variant directly through a
+	//! VariantIterator - avoids materializing the intermediate vector<VariantValue> tree
+	DUCKDB_API static void ToVariant(const VariantIterator &state, idx_t count, Vector &result);
 };
 
 struct VariantBindUtils {

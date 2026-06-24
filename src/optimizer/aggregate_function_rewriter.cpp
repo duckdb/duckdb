@@ -78,7 +78,8 @@ public:
 		auto avg_child = std::move(bindings[0].get().Cast<BoundAggregateExpression>().GetChildrenMutable()[0]);
 
 		// Replace AVG(x) with SUM(x)
-		auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, DEFAULT_SCHEMA, "sum");
+		auto &sum_entry =
+		    catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, Identifier::DefaultSchema(), "sum");
 		const auto &sum_fun =
 		    sum_entry.functions.GetFunctionByArguments(optimizer.context, {avg_child->GetReturnType()});
 		vector<unique_ptr<Expression>> args;
@@ -181,6 +182,11 @@ public:
 			return false;
 		}
 		auto &expr = expr_p.Cast<BoundAggregateExpression>();
+		// don't rewrite state-export aggregates - list(x ORDER BY x) EXPORT_STATE would become
+		// list_sort(list(x) EXPORT_STATE, ...), which cannot bind list_sort on the AGGREGATE_STATE result
+		if (expr.StateExportMode() == AggregateStateExportMode::STATE_EXPORT) {
+			return false;
+		}
 		if (!FunctionMatcher::Match(function, expr.Function().GetName())) {
 			return false;
 		}

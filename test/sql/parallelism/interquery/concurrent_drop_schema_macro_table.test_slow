@@ -1,0 +1,29 @@
+# name: test/sql/parallelism/interquery/concurrent_drop_schema_macro_table.test_slow
+# description: Concurrent DROP SCHEMA CASCADE while recreating a dependent macro and table
+# group: [interquery]
+
+load __TEST_DIR__/concurrent_drop_schema_macro_table.db
+
+concurrentloop threadid 0 12
+
+loop i 0 200
+
+statement maybe
+DROP SCHEMA IF EXISTS s CASCADE
+----
+
+statement maybe
+CREATE SCHEMA s
+----
+
+statement maybe
+CREATE MACRO s.tok(z) AS lower(z)
+----
+
+statement maybe
+CREATE TABLE s.t AS SELECT s.tok('A') AS v
+----
+
+endloop
+
+endloop

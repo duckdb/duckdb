@@ -146,9 +146,13 @@ def apply_patches_as_commits(ext_dir, patch_dir, patches):
     """
     for patch_name in patches:
         patch_file = patch_dir / patch_name
+        # Apply to the working tree (not --index): a patch may touch files inside a checked-out
+        # submodule (e.g. database-connector/...), and "git apply --index" cannot stage paths that
+        # live in a submodule ("does not exist in index"). We stage everything explicitly afterwards.
         # --whitespace=nowarn: never rewrite patch content; --whitespace=fix corrupts
         # patches that themselves add patch files containing trailing whitespace.
-        run_cmd(['git', 'apply', '--index', '--whitespace=nowarn', str(patch_file)], cwd=ext_dir)
+        run_cmd(['git', 'apply', '--whitespace=nowarn', str(patch_file)], cwd=ext_dir)
+        run_cmd(['git', 'add', '-A'], cwd=ext_dir)
         run_cmd(
             [
                 'git',
@@ -200,7 +204,8 @@ def export_commits_as_patches(name, ext_dir, resolved_git_tag, patch_dir):
     status = run_cmd(['git', 'status', '--porcelain'], cwd=ext_dir)
     if status.stdout.strip():
         raise ExtensionNotCleanError(
-            f"Extension '{name}' has uncommitted changes; cannot export patches:\n" f"{status.stdout.rstrip()}"
+            f"Extension '{name}' has uncommitted changes; cannot export patches, please commit or discard and try again:\n"
+            f"{status.stdout.rstrip()}"
         )
 
     log = run_cmd(['git', 'log', '--format=%H %s', f'{resolved_git_tag}..HEAD'], cwd=ext_dir)
@@ -310,7 +315,9 @@ def sync_extension(ext, external_dir, repo_root):
         run_cmd(['git', 'checkout', git_tag], cwd=ext_dir)
 
         if submodules:
-            run_cmd(['git', 'submodule', 'update', '--init', '--'] + submodules, cwd=ext_dir)
+            # --force so a submodule with a dirty working tree (e.g. from previously applied
+            # patches) is hard-reset to its pinned commit before patches are re-applied.
+            run_cmd(['git', 'submodule', 'update', '--init', '--force', '--'] + submodules, cwd=ext_dir)
 
         if patches and not skip_patches:
             apply_patches_as_commits(ext_dir, patch_dir, patches)
@@ -359,7 +366,9 @@ def sync_extension(ext, external_dir, repo_root):
             run_cmd(['git', 'checkout', git_tag], cwd=ext_dir)
 
         if submodules:
-            run_cmd(['git', 'submodule', 'update', '--init', '--'] + submodules, cwd=ext_dir)
+            # --force so a submodule with a dirty working tree (e.g. from previously applied
+            # patches) is hard-reset to its pinned commit before patches are re-applied.
+            run_cmd(['git', 'submodule', 'update', '--init', '--force', '--'] + submodules, cwd=ext_dir)
 
         if patches:
             apply_patches_as_commits(ext_dir, patch_dir, patches)
