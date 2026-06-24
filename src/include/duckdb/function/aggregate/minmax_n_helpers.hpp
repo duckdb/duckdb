@@ -146,7 +146,7 @@ public:
 		D_ASSERT(std::is_heap(heap, heap + size, Compare));
 	}
 
-	void Insert(ArenaAllocator &allocator, const UnaryAggregateHeap &other) {
+	void Insert(ArenaAllocator &allocator, const UnaryAggregateHeap &other, const bool = false) {
 		for (idx_t slot = 0; slot < other.Size(); slot++) {
 			Insert(allocator, other.heap[slot].value);
 		}
@@ -205,7 +205,7 @@ public:
 		return capacity;
 	}
 
-	void Insert(ArenaAllocator &allocator, const K &key, const V &value) {
+	void Insert(ArenaAllocator &allocator, const K &key, const V &value, const bool with_ties = false) {
 		D_ASSERT(capacity != 0); // must be initialized
 
 		// If the heap is not full, insert the value into a new slot
@@ -221,17 +221,35 @@ public:
 		// If the heap is full, check if the value is greater than the smallest value in the heap
 		// If it is, assign the new value to the slot and re-heapify
 		else if (K_COMPARATOR::Operation(key, heap[0].first.value)) {
-			std::pop_heap(heap, heap + size, Compare);
-			heap[size - 1].first.Assign(allocator, key);
-			heap[size - 1].second.Assign(allocator, value);
+			if (with_ties) {
+				if (size == allocated_capacity) {
+					Grow(allocator, true);
+				}
+				heap[size].first.Assign(allocator, key);
+				heap[size].second.Assign(allocator, value);
+				size++;
+				PruneTies();
+			} else {
+				std::pop_heap(heap, heap + size, Compare);
+				heap[size - 1].first.Assign(allocator, key);
+				heap[size - 1].second.Assign(allocator, value);
+				std::push_heap(heap, heap + size, Compare);
+			}
+		} else if (with_ties && KeysAreEqual(key, heap[0].first.value)) {
+			if (size == allocated_capacity) {
+				Grow(allocator, true);
+			}
+			heap[size].first.Assign(allocator, key);
+			heap[size].second.Assign(allocator, value);
+			size++;
 			std::push_heap(heap, heap + size, Compare);
 		}
 		D_ASSERT(std::is_heap(heap, heap + size, Compare));
 	}
 
-	void Insert(ArenaAllocator &allocator, const BinaryAggregateHeap &other) {
+	void Insert(ArenaAllocator &allocator, const BinaryAggregateHeap &other, const bool with_ties = false) {
 		for (idx_t slot = 0; slot < other.Size(); slot++) {
-			Insert(allocator, other.heap[slot].first.value, other.heap[slot].second.value);
+			Insert(allocator, other.heap[slot].first.value, other.heap[slot].second.value, with_ties);
 		}
 	}
 
@@ -245,15 +263,18 @@ public:
 	}
 
 private:
-	void Grow(ArenaAllocator &allocator) {
-		D_ASSERT(allocated_capacity < capacity);
+	void Grow(ArenaAllocator &allocator, const bool beyond_capacity = false) {
+		D_ASSERT(beyond_capacity || allocated_capacity < capacity);
 		const auto old_allocated_capacity = allocated_capacity;
 		if (allocated_capacity == 0) {
 			allocated_capacity = 1;
-		} else if (allocated_capacity > capacity / 2) {
+		} else if (!beyond_capacity && allocated_capacity > capacity / 2) {
 			allocated_capacity = capacity;
 		} else {
 			allocated_capacity *= 2;
+		}
+		if (!beyond_capacity) {
+			allocated_capacity = MinValue(allocated_capacity, capacity);
 		}
 
 		const auto old_size = old_allocated_capacity * sizeof(STORAGE_TYPE);
@@ -266,6 +287,31 @@ private:
 
 	static bool Compare(const STORAGE_TYPE &left, const STORAGE_TYPE &right) {
 		return K_COMPARATOR::Operation(left.first.value, right.first.value);
+	}
+
+	static bool KeysAreEqual(const K &left, const K &right) {
+		return !K_COMPARATOR::Operation(left, right) && !K_COMPARATOR::Operation(right, left);
+	}
+
+	void PruneTies() {
+		D_ASSERT(size > capacity);
+
+		auto nth = heap + capacity - 1;
+		std::nth_element(heap, nth, heap + size, Compare);
+		const auto threshold = nth->first.value;
+
+		idx_t write_idx = 0;
+		for (idx_t read_idx = 0; read_idx < size; read_idx++) {
+			if (K_COMPARATOR::Operation(threshold, heap[read_idx].first.value)) {
+				continue;
+			}
+			if (write_idx != read_idx) {
+				heap[write_idx] = std::move(heap[read_idx]);
+			}
+			write_idx++;
+		}
+		size = write_idx;
+		std::make_heap(heap, heap + size, Compare);
 	}
 
 	idx_t capacity = 0;
@@ -286,16 +332,18 @@ struct ArgMinMaxFunctionData : FunctionData {
 		auto copy = make_uniq<ArgMinMaxFunctionData>();
 		copy->null_handling = null_handling;
 		copy->nulls_last = nulls_last;
+		copy->with_ties = with_ties;
 		return std::move(copy);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<ArgMinMaxFunctionData>();
-		return other.null_handling == null_handling && other.nulls_last == nulls_last;
+		return other.null_handling == null_handling && other.nulls_last == nulls_last && other.with_ties == with_ties;
 	}
 
 	ArgMinMaxNullHandling null_handling;
 	bool nulls_last;
+	bool with_ties = false;
 };
 
 //------------------------------------------------------------------------------
@@ -438,7 +486,9 @@ struct MinMaxNOperation {
 		}
 
 		// Merge the heaps
-		target.heap.Insert(aggr_input.allocator, source.heap);
+		const bool with_ties =
+		    aggr_input.bind_data ? aggr_input.bind_data->Cast<ArgMinMaxFunctionData>().with_ties : false;
+		target.heap.Insert(aggr_input.allocator, source.heap, with_ties);
 	}
 
 	template <class STATE>

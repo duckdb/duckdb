@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
@@ -18,6 +19,8 @@ namespace duckdb {
 enum class TopNPayloadType { SINGLE_COLUMN, STRUCT_PACK };
 
 struct TopNWindowEliminationParameters {
+	//! The window function being optimized
+	ExpressionType window_type;
 	//! Whether the sort is ASCENDING or DESCENDING
 	OrderType order_type;
 	//! The number of values in the LIMIT clause
@@ -40,6 +43,7 @@ public:
 private:
 	bool CanOptimize(LogicalOperator &op);
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op, ColumnBindingReplacer &replacer);
+	unique_ptr<LogicalOperator> TryOptimizeOrderedRollupPrefix(unique_ptr<LogicalOperator> op);
 
 	unique_ptr<LogicalOperator> CreateAggregateOperator(LogicalWindow &window, vector<unique_ptr<Expression>> args,
 	                                                    const TopNWindowEliminationParameters &params) const;
@@ -48,9 +52,15 @@ private:
 	unique_ptr<LogicalOperator> CreateProjectionOperator(unique_ptr<LogicalOperator> op,
 	                                                     const TopNWindowEliminationParameters &params,
 	                                                     const map<idx_t, idx_t> &group_idxs) const;
+	unique_ptr<LogicalOperator>
+	CreateRankWindowOperator(unique_ptr<LogicalOperator> op, unique_ptr<Expression> rank_expression,
+	                         TableIndex window_idx, const vector<LogicalType> &types,
+	                         const map<idx_t, idx_t> &group_idxs, const vector<ColumnBinding> &topmost_bindings,
+	                         vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer);
 
 	vector<unique_ptr<Expression>> GenerateAggregatePayload(const vector<ColumnBinding> &bindings,
-	                                                        const LogicalWindow &window, map<idx_t, idx_t> &group_idxs);
+	                                                        const LogicalWindow &window, map<idx_t, idx_t> &group_idxs,
+	                                                        bool keep_order_value);
 	bool TraverseProjectionBindings(const vector<ColumnBinding> &old_bindings, reference<LogicalOperator> &op,
 	                                vector<ColumnBinding> &new_bindings);
 	unique_ptr<Expression> CreateAggregateExpression(vector<unique_ptr<Expression>> aggregate_params, bool requires_arg,

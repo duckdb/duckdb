@@ -13,8 +13,82 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table/row_group_reorderer.hpp"
+#include "duckdb/function/partition_stats.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 namespace duckdb {
+
+namespace {
+
+bool TopNDynamicFilterTypeSupported(const LogicalType &type) {
+	return TypeIsNumeric(type.InternalType()) || type.id() == LogicalTypeId::VARCHAR;
+}
+
+ExpressionType TopNComparisonType(const OrderType order_type, const bool single_order) {
+	if (order_type == OrderType::ASCENDING) {
+		return single_order ? ExpressionType::COMPARE_LESSTHAN : ExpressionType::COMPARE_LESSTHANOREQUALTO;
+	}
+	return single_order ? ExpressionType::COMPARE_GREATERTHAN : ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+}
+
+bool TryGetGlobalOrderBoundary(ClientContext &context, LogicalGet &get, const ColumnBinding &binding,
+                               const BoundOrderByNode &order, Value &boundary, idx_t &boundary_groups) {
+	if (!get.function.get_partition_stats || order.null_order != OrderByNullType::NULLS_LAST) {
+		return false;
+	}
+	const auto &type = order.expression->GetReturnType();
+	if (type.id() == LogicalTypeId::VARCHAR || !TypeIsNumeric(type.InternalType())) {
+		return false;
+	}
+
+	const auto &column_index = get.GetColumnIndex(binding);
+	StorageIndex storage_index;
+	if (!get.TryGetStorageIndex(column_index, storage_index)) {
+		return false;
+	}
+
+	GetPartitionStatsInput input(get.function, get.bind_data.get());
+	auto partition_stats = get.function.get_partition_stats(context, input);
+	if (partition_stats.empty()) {
+		return false;
+	}
+
+	const auto order_by = order.type == OrderType::ASCENDING ? OrderByStatistics::MIN : OrderByStatistics::MAX;
+	bool has_boundary = false;
+	for (auto &partition_stat : partition_stats) {
+		if (partition_stat.count_type == CountType::COUNT_APPROXIMATE || !partition_stat.partition_row_group) {
+			return false;
+		}
+		auto stats = partition_stat.partition_row_group->GetColumnStatistics(storage_index);
+		auto value = RowGroupReorderer::RetrieveStat(*stats, order_by, OrderByColumnType::NUMERIC);
+		if (value.IsNull()) {
+			if (order.null_order == OrderByNullType::NULLS_LAST && !stats->CanHaveNoNull()) {
+				continue;
+			}
+			return false;
+		}
+		if (!has_boundary || (order.type == OrderType::ASCENDING && ValueOperations::LessThan(value, boundary)) ||
+		    (order.type == OrderType::DESCENDING && ValueOperations::GreaterThan(value, boundary))) {
+			boundary = std::move(value);
+			has_boundary = true;
+		}
+	}
+	if (!has_boundary) {
+		return false;
+	}
+
+	for (auto &partition_stat : partition_stats) {
+		auto stats = partition_stat.partition_row_group->GetColumnStatistics(storage_index);
+		auto value = RowGroupReorderer::RetrieveStat(*stats, order_by, OrderByColumnType::NUMERIC);
+		if (!value.IsNull() && ValueOperations::NotDistinctFrom(value, boundary)) {
+			boundary_groups++;
+		}
+	}
+	return true;
+}
+
+} // namespace
 
 TopN::TopN(ClientContext &context_p) : context(context_p) {
 }
@@ -67,7 +141,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	// pushdown dynamic filters through the Top-N operator
 	bool nulls_first = op.orders[0].null_order == OrderByNullType::NULLS_FIRST;
 	auto &type = op.orders[0].expression->GetReturnType();
-	if (!TypeIsNumeric(type.InternalType()) && type.id() != LogicalTypeId::VARCHAR) {
+	if (!TopNDynamicFilterTypeSupported(type)) {
 		// only supported for numeric and varchar types
 		return;
 	}
@@ -91,18 +165,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		return;
 	}
 	// found pushdown targets! generate dynamic filters
-	ExpressionType comparison_type;
-	if (op.orders[0].type == OrderType::ASCENDING) {
-		// for ascending order, we want the lowest N elements, so we filter on C <= [boundary]
-		// if we only have a single order clause, we can filter on C < boundary
-		comparison_type =
-		    op.orders.size() == 1 ? ExpressionType::COMPARE_LESSTHAN : ExpressionType::COMPARE_LESSTHANOREQUALTO;
-	} else {
-		// for descending order, we want the highest N elements, so we filter on C >= [boundary]
-		// if we only have a single order clause, we can filter on C > boundary
-		comparison_type =
-		    op.orders.size() == 1 ? ExpressionType::COMPARE_GREATERTHAN : ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-	}
+	ExpressionType comparison_type = TopNComparisonType(op.orders[0].type, op.orders.size() == 1);
 	Value minimum_value = type.InternalType() == PhysicalType::VARCHAR ? Value("") : Value::MinimumValue(type);
 	auto filter_data = make_shared_ptr<DynamicFilterData>(comparison_type, std::move(minimum_value));
 
@@ -130,6 +193,51 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		    col_binding.column_index,
 		    make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(pushed_expr), type)));
 	}
+
+	if (op.orders.size() < 2 || op.orders[0].null_order != OrderByNullType::NULLS_LAST ||
+	    op.orders[1].null_order != OrderByNullType::NULLS_LAST ||
+	    op.orders[1].expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		return;
+	}
+	auto &second_type = op.orders[1].expression->GetReturnType();
+	if (!TypeIsNumeric(type.InternalType()) || !TypeIsNumeric(second_type.InternalType())) {
+		return;
+	}
+
+	auto &second_colref = op.orders[1].expression->Cast<BoundColumnRefExpression>();
+	vector<JoinFilterPushdownColumn> multi_columns;
+	JoinFilterPushdownColumn first_column;
+	first_column.probe_column_index = colref.binding;
+	multi_columns.push_back(std::move(first_column));
+	JoinFilterPushdownColumn second_column;
+	second_column.probe_column_index = second_colref.binding;
+	multi_columns.push_back(std::move(second_column));
+
+	vector<PushdownFilterTarget> multi_targets;
+	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*op.children[0], std::move(multi_columns), multi_targets);
+	if (multi_targets.size() != 1 || multi_targets[0].columns.size() != 2) {
+		return;
+	}
+
+	auto &target = multi_targets[0];
+	Value prefix_boundary;
+	idx_t prefix_boundary_groups = 0;
+	if (!TryGetGlobalOrderBoundary(context, target.get, target.columns[0].probe_column_index, op.orders[0],
+	                               prefix_boundary, prefix_boundary_groups) ||
+	    prefix_boundary_groups <= 1) {
+		return;
+	}
+
+	auto second_filter_data = make_shared_ptr<DynamicFilterData>(TopNComparisonType(op.orders[1].type, false),
+	                                                             Value::MinimumValue(second_type));
+	op.secondary_dynamic_filter = second_filter_data;
+	op.secondary_dynamic_filter_prefix = std::move(prefix_boundary);
+
+	auto pushed_expr = CreateDynamicFilterExpression(std::move(second_filter_data), second_type);
+	auto col_binding = target.columns[1].probe_column_index;
+	target.get.table_filters.PushFilter(
+	    col_binding.column_index,
+	    make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(pushed_expr), second_type)));
 }
 
 unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
