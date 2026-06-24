@@ -371,7 +371,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	// Refresh the logger
 	logger->Flush();
 	LoggingContext context(LogContextScope::CONNECTION);
-	context.connection_id = reinterpret_cast<idx_t>(this);
+	context.connection_id = connection_id;
 	logger = db->GetLogManager().CreateLogger(context, true);
 
 	// Notify any registered state of query end
@@ -737,6 +737,11 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	D_ASSERT(active_query->IsOpenResult(result));
 	bool invalidate_transaction = true;
 	try {
+		// Surface a pending interrupt even when this thread runs no task that reaches InterruptCheck.
+		// IsInterrupted() rather than InterruptCheck(): we must not enforce query_deadline here.
+		if (!dry_run && IsInterrupted()) {
+			throw InterruptException();
+		}
 		auto query_result = active_query->executor->ExecuteTask(dry_run);
 		if (active_query->progress_bar) {
 			auto is_finished = PendingQueryResult::IsResultReady(query_result);
