@@ -362,7 +362,7 @@ void AsyncFileWriter::Truncate(idx_t size) {
 	handle->Truncate(NumericCast<int64_t>(size));
 	total_written = size;
 	write_queue->ResetNextOffset(total_written);
-	if (handle->CanSeek() && handle->SeekPosition() > size) {
+	if (handle->CanSeek() && handle->SeekPosition() != size) {
 		handle->Seek(size);
 	}
 }

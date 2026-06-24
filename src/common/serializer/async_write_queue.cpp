@@ -1155,6 +1155,7 @@ bool ManagedAsyncWriteStreamQueue::TakePendingWriteRequest(AsyncWriteRequest &re
 		return false;
 	}
 	if (drain_mode == DrainMode::SEQUENTIAL && submitted_requests > 0) {
+		// Non-positional targets write through the file handle's current position, so only one request may be active.
 		return false;
 	}
 	if (policy == SchedulePolicy::THRESHOLD) {
