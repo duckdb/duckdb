@@ -1,7 +1,8 @@
 # name: test/parquet/variant/variant_partial_stats.test
 # description: An unconvertible nested overlay leaves that node's stats unknown instead of marking the
-#              whole variant column's statistics INCONSISTENT
 # group: [variant]
+
+#              whole variant column's statistics INCONSISTENT
 
 require parquet
 
