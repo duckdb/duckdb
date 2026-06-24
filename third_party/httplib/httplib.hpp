@@ -9260,18 +9260,12 @@ inline void ClientImpl::setup_redirect_client(ClientType &client) {
   client.set_compress(compress_);
   client.set_decompress(decompress_);
 
-  // Copy authentication settings BEFORE proxy setup
-  if (!basic_auth_username_.empty()) {
-    client.set_basic_auth(basic_auth_username_, basic_auth_password_);
-  }
-  if (!bearer_token_auth_token_.empty()) {
-    client.set_bearer_token_auth(bearer_token_auth_token_);
-  }
-#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-  if (!digest_auth_username_.empty()) {
-    client.set_digest_auth(digest_auth_username_, digest_auth_password_);
-  }
-#endif
+
+  // NOTE: Authentication credentials (basic auth, bearer token, digest auth)
+  // are intentionally NOT copied to the redirect client. Per RFC 9110 Section
+  // 15.4, credentials must not be forwarded when redirecting to a different
+  // host. This function is only called for cross-host redirects; same-host
+  // redirects are handled directly in ClientImpl::redirect().
 
   // Setup proxy configuration (CRITICAL ORDER - proxy must be set
   // before proxy auth)
