@@ -185,6 +185,10 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				string_length += NULL_LENGTH;
 			}
 		}
+		// a single-element tuple needs a trailing comma to round-trip: "(x,)"
+		if (is_unnamed && children.size() == 1) {
+			string_length++;
+		}
 
 		auto &result_str = result_data.WriteEmptyString(string_length);
 		auto dataptr = result_str.GetDataWriteable();
@@ -219,6 +223,9 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;
 			}
+		}
+		if (is_unnamed && children.size() == 1) {
+			dataptr[offset++] = ',';
 		}
 		dataptr[offset++] = is_unnamed ? ')' : '}';
 		result_str.Finalize();

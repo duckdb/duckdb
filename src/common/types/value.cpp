@@ -1765,6 +1765,10 @@ string Value::ToSQLString() const {
 				ret += ", ";
 			}
 		}
+		// a single-element tuple needs a trailing comma to round-trip: (1,) - otherwise (1) is just grouping
+		if (is_unnamed && struct_values.size() == 1) {
+			ret += ",";
+		}
 		ret += is_unnamed ? ")" : "}";
 		return ret;
 	}

@@ -101,7 +101,7 @@ SELECT ROW();
 query I
 SELECT ROW(NULL);
 ----
-(NULL)
+(NULL,)
 
 query I
 SELECT ROW(NULL, NULL);

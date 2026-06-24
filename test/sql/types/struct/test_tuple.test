@@ -19,10 +19,16 @@ SELECT (1, 'a'), typeof((1, 'a'));
 ----
 (1, a)	TUPLE(INTEGER, VARCHAR)
 
+# a single-element tuple keeps its trailing comma when rendered, so it round-trips
 query TT
 SELECT (42,), typeof((42,));
 ----
-(42)	TUPLE(INTEGER)
+(42,)	TUPLE(INTEGER)
+
+query T
+SELECT (42,)::VARCHAR::TUPLE(INTEGER);
+----
+(42,)
 
 # a single parenthesized expression without a trailing comma is just grouping (a scalar)
 query TT
