@@ -128,6 +128,9 @@ void AsyncResult::ScheduleTasks(InterruptState &interrupt_state, Executor &execu
 		auto task = make_uniq<AsyncExecutionTask>(executor, std::move(async_task), interrupt_state, completion);
 		TaskScheduler::GetScheduler(executor.context).ScheduleTask(executor.GetToken(), std::move(task), pool_type);
 	}
+
+	async_tasks.clear();
+	result_type = AsyncResultType::INVALID;
 }
 
 void AsyncResult::ExecuteTasksSynchronously() {
