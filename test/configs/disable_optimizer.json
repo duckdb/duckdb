@@ -7,6 +7,7 @@
       "reason": "Zone map pruning requires filter pushdown from optimizer.",
       "paths": [
         "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test",
+        "test/sql/types/geo/geometry_parquet_pushdown.test",
         "test/optimizer/statistics/statistics_filter_pruning.test",
         "test/sql/copy/parquet/parquet_expression_filter_pruning.test",
         "test/sql/copy/parquet/parquet_virtual_file_row_group_number.test"
@@ -125,7 +126,8 @@
         "test/sql/copy/parquet/parquet_string_stats.test",
         "test/sql/storage/extended_string_stats.test",
         "test/sql/storage/min_string_length_too_large.test_slow",
-        "test/sql/storage/total_string_length_repeated_insert.test"
+        "test/sql/storage/total_string_length_repeated_insert.test",
+        "test/sql/types/geo/geometry_from_wkb_stats.test"
       ]
     },
     {

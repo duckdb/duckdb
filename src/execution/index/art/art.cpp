@@ -563,12 +563,6 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 		VerifyAllocationsInternal();
 	}
 
-	if (conflict_type == ARTConflictType::TRANSACTION) {
-		// chunk is only null when called from MergeCheckpointDeltas.
-		auto msg = chunk ? AppendRowError(*chunk, conflict_idx.GetIndex()) : string("???");
-		return ErrorData(TransactionException("write-write conflict on key: \"%s\"", msg));
-	}
-
 	if (conflict_type == ARTConflictType::CONSTRAINT) {
 		// chunk is only null when called from MergeCheckpointDeltas.
 		auto msg = chunk ? AppendRowError(*chunk, conflict_idx.GetIndex()) : string("???");

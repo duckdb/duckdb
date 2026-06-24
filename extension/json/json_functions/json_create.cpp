@@ -186,8 +186,8 @@ static unique_ptr<FunctionData> ArrayToJSONBind(BindScalarFunctionInput &input) 
 	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (arg_id != LogicalTypeId::LIST && arg_id != LogicalTypeId::SQLNULL) {
-		throw BinderException("array_to_json() argument type must be LIST");
+	if (arg_id != LogicalTypeId::LIST && arg_id != LogicalTypeId::ARRAY && arg_id != LogicalTypeId::SQLNULL) {
+		throw BinderException("array_to_json() argument type must be LIST or ARRAY");
 	}
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
@@ -288,7 +288,7 @@ static void AddKeyValuePairs(yyjson_mut_doc *doc, yyjson_mut_val *objs[], const 
 	for (idx_t i = 0; i < count; i++) {
 		auto key_entry = keys[i];
 		if (!key_entry.IsValid()) {
-			continue;
+			throw InvalidInputException("JSON key cannot be NULL");
 		}
 		auto key = CreateJSONValue<string_t, string_t>::Operation(doc, key_entry.GetValue());
 		yyjson_mut_obj_add(objs[i], key, vals[i]);

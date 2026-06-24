@@ -29,7 +29,7 @@ public:
 
 	idx_t total_count = 0;
 	//! indices into the top-level 'columns' vector where the stats for the field/element live
-	case_insensitive_map_t<idx_t> field_stats;
+	unordered_map<string, idx_t> field_stats;
 	idx_t element_stats = DConstants::INVALID_INDEX;
 };
 

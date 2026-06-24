@@ -295,7 +295,7 @@ public:
 			throw InternalException("parallel_lock is not held in TryOpenNextFile, this should not happen");
 		}
 
-		const auto file_lookahead_limit = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		const auto file_lookahead_limit = TaskScheduler::GetScheduler(context).NumberOfThreads();
 
 		idx_t file_index = global_state.file_index;
 		idx_t i = 0;
@@ -583,7 +583,7 @@ public:
 		result->filters = input.filters.get();
 		result->op = input.op;
 		result->global_state = bind_data.interface->InitializeGlobalState(context, bind_data, *result);
-		result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		result->max_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 
 		// Ensure all readers are initialized and FileListScan is sync with readers list
 		for (auto &reader_data : result->readers) {
@@ -851,7 +851,7 @@ public:
 	static unique_ptr<NodeStatistics> MultiFileCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<MultiFileBindData>();
 		if (IsEmptyResult(data)) {
-			return make_uniq<NodeStatistics>(0);
+			return make_uniq<NodeStatistics>(idx_t(0));
 		}
 		auto file_list_cardinality_estimate = data.file_list->GetCardinality(context);
 		if (file_list_cardinality_estimate) {

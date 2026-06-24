@@ -16,8 +16,9 @@ static const DefaultMacro JSON_MACROS[] = {
     {DEFAULT_SCHEMA, "json_group_array",
      "(x) AS CAST('[' || string_agg(CASE WHEN x IS NULL THEN 'null'::JSON ELSE to_json(x) END, ',') || ']' AS JSON)"},
     {DEFAULT_SCHEMA, "json_group_object",
-     "(n, v) AS CAST('{' || string_agg(to_json(n::VARCHAR) || ':' || CASE WHEN v IS NULL THEN 'null'::JSON ELSE "
-     "to_json(v) END, ',') || '}' AS JSON)"},
+     "(n, v) AS CAST('{' || string_agg(CASE WHEN n IS NULL THEN error('json_group_object key cannot be NULL') ELSE "
+     "to_json(n::VARCHAR) END || ':' || CASE WHEN v IS NULL THEN 'null'::JSON ELSE to_json(v) END, ',') || '}' AS "
+     "JSON)"},
     {DEFAULT_SCHEMA, "json_group_structure", "(x) AS json_structure(json_group_array(x))->0"},
     {DEFAULT_SCHEMA, "json", "(x) AS json_extract(x, '$')"},
     {DEFAULT_SCHEMA, "json_copy_strftime_if_date", "(x, format) AS x, (x DATE, format) AS strftime(x, format);"},

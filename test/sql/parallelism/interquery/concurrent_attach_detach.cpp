@@ -63,9 +63,6 @@ unique_ptr<MaterializedQueryResult> execQuery(Connection &conn, const string &qu
 	auto result = conn.Query(query);
 	if (result->HasError()) {
 		auto err = result->GetError();
-		if (StringUtil::Contains(err, "write-write conflict on key") && StringUtil::Contains(query, "COMMIT")) {
-			return nullptr;
-		}
 		Printer::PrintF("Failed to execute query %s:\n------\n%s\n-------", query, err);
 		success = false;
 	}

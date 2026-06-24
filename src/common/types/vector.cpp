@@ -188,6 +188,9 @@ void Vector::Reinterpret(const Vector &other) {
 		new_vector.Reinterpret(DictionaryVector::Child(other));
 		auto &old_dict = buffer->Cast<DictionaryBuffer>();
 		auto new_entry = make_shared_ptr<DictionaryEntry>(std::move(new_vector));
+		// reinterpret re-mints the entry; the id and global flag are one contract and must survive together
+		new_entry->id = old_dict.GetEntry().id;
+		new_entry->global_dictionary = old_dict.GetEntry().global_dictionary;
 		buffer = make_buffer<DictionaryBuffer>(old_dict.GetSelVector(), old_dict.Capacity(), std::move(new_entry));
 	}
 }
