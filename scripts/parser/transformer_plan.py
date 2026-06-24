@@ -332,26 +332,33 @@ def _trampoline_parse_expr(child_idx, child):
     return parse_expr, child
 
 
-def _optional_stack_child_plan(optional_child):
-    result_expr_template = "{opt}.GetResult()"
-    while isinstance(optional_child, ParensNode):
-        result_expr_template = f"ExtractResultFromParens({result_expr_template})"
-        optional_child = optional_child.inner
-    if isinstance(optional_child, ReferenceNode):
-        return optional_child.name, result_expr_template
-    if isinstance(optional_child, SequenceNode):
+def _single_semantic_child_plan(node, source_expr_template, syntax_only_rules):
+    while isinstance(node, ParensNode):
+        source_expr_template = f"ExtractResultFromParens({source_expr_template})"
+        node = node.inner
+    if isinstance(node, ReferenceNode):
+        return node.name, source_expr_template
+    if isinstance(node, SequenceNode):
         semantic = []
-        for child_idx, child in enumerate(optional_child.children):
-            if isinstance(child, LiteralNode):
+        for child_idx, child in enumerate(node.children):
+            child_expr_template, child = _sequence_child_expr_template(source_expr_template, child_idx, child)
+            if isinstance(child, LiteralNode) or is_syntax_only_node(child, syntax_only_rules):
                 continue
             if isinstance(child, ReferenceNode):
-                semantic.append((child_idx, child.name))
+                semantic.append((child.name, child_expr_template))
                 continue
             return None
         if len(semantic) == 1:
-            child_idx, rule_name = semantic[0]
-            return rule_name, f"{{opt}}.GetResult().Cast<ListParseResult>().GetChild({child_idx})"
+            return semantic[0]
     return None
+
+
+def _sequence_child_expr_template(source_expr_template, child_idx, child):
+    child_expr_template = f"{source_expr_template}.Cast<ListParseResult>().GetChild({child_idx})"
+    while isinstance(child, ParensNode):
+        child_expr_template = f"ExtractResultFromParens({child_expr_template})"
+        child = child.inner
+    return child_expr_template, child
 
 
 def is_syntax_only_node(node, syntax_only_rules):
@@ -428,7 +435,7 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
             continue
         optional_stack_plan = None
         if isinstance(child, OptionalNode):
-            optional_stack_plan = _optional_stack_child_plan(child.child)
+            optional_stack_plan = _single_semantic_child_plan(child.child, "{opt}.GetResult()", syntax_only_rules)
         if optional_stack_plan is not None:
             rule_name, result_expr_template = optional_stack_plan
             if rule_name in identifier_rules:
@@ -440,6 +447,23 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
             else:
                 arg = OptionalStackChild(parse_expr, rule_name, next_slot, to_snake_case(rule_name), result_expr_template)
                 optional_stack_children.append(arg)
+                next_slot += 1
+            finalize_args.append(arg)
+            continue
+        transparent_child_plan = _single_semantic_child_plan(child, parse_expr, syntax_only_rules)
+        if transparent_child_plan is not None and not isinstance(child, ReferenceNode):
+            rule_name, child_parse_expr = transparent_child_plan
+            if rule_name in identifier_rules:
+                arg = DirectParseArg(
+                    to_snake_case(rule_name),
+                    f"{child_parse_expr}.Cast<IdentifierParseResult>().identifier",
+                )
+                direct_args.append(arg)
+            else:
+                if list_child is not None or repeat_child is not None or optional_list_child is not None or required_repeat_child is not None:
+                    raise NotImplementedError("stack child after dynamic stack child is currently unsupported")
+                arg = StackChild(child_parse_expr, rule_name, next_slot)
+                stack_children.append(arg)
                 next_slot += 1
             finalize_args.append(arg)
             continue
