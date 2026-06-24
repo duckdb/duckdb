@@ -126,7 +126,7 @@ static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker, c
 void TaskSchedulerPool::RelaunchThreads(TaskScheduler &scheduler, bool destroy) {
 #ifndef DUCKDB_NO_THREADS
 	auto &config = DBConfig::GetConfig(db);
-	auto new_thread_count = NumericCast<idx_t>(destroy ? 0 : requested_thread_count.load());
+	auto new_thread_count = destroy ? 0 : requested_thread_count.load();
 
 	idx_t external_threads = 0;
 	ThreadPinMode pin_thread_mode = ThreadPinMode::AUTO;
