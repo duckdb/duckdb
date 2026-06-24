@@ -11,7 +11,6 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/storage/index.hpp"
-#include "duckdb/storage/index_serialization_info.hpp"
 
 namespace duckdb {
 
@@ -19,6 +18,7 @@ class ConflictManager;
 class LocalTableStorage;
 struct IndexStorageInfo;
 struct DataTableInfo;
+struct CheckpointedIndex;
 template <class T>
 class TableIndexIterationHelper;
 class TableIndexWriter;
@@ -89,7 +89,7 @@ public:
 	//! Get the combined column ids of the indexes.
 	unordered_set<column_t> GetRequiredColumns();
 
-	void CheckPoint(TableIndexWriter &writer) const;
+	void CheckPoint(TableIndexWriter &writer);
 
 public:
 	static void Serialize(const vector<CheckpointedIndex> &result, Serializer &serializer);

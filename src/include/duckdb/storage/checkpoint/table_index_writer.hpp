@@ -9,12 +9,16 @@
 #pragma once
 
 #include "duckdb/execution/index/bound_index.hpp"
-#include "duckdb/storage/index_serialization_info.hpp"
 
 namespace duckdb {
 class Serializer;
 class PartialBlockManager;
 class SingleFileCheckpointWriter;
+
+struct CheckpointedIndex {
+	shared_ptr<const IndexStorageInfo> storage_info;
+	unique_ptr<BoundIndex> shadow_index;
+};
 
 class TableIndexWriter {
 public:

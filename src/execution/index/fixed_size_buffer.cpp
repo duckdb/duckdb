@@ -114,7 +114,6 @@ unique_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partia
 	partial_block_manager.RegisterPartialBlock(std::move(allocation));
 
 	return make_uniq<FixedSizeBuffer>(block_manager, segment_count, new_allocation_size, new_block_pointer);
-	;
 }
 
 void FixedSizeBuffer::LoadFromDisk() {

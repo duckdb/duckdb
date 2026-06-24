@@ -12,8 +12,6 @@
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
-#include <duckdb/storage/index_serialization_info.hpp>
-
 namespace duckdb {
 class TableIndexList;
 class DuckTableEntry;

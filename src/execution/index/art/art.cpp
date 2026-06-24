@@ -2,7 +2,6 @@
 
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art_builder.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
@@ -28,9 +27,8 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-
-#include <duckdb/storage/checkpoint/table_index_writer.hpp>
-#include <duckdb/storage/table/table_index_list.hpp>
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 
 namespace duckdb {
 

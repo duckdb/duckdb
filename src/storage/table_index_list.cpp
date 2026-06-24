@@ -310,7 +310,7 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-void TableIndexList::CheckPoint(TableIndexWriter &writer) const {
+void TableIndexList::CheckPoint(TableIndexWriter &writer) {
 	lock_guard<mutex> lock(index_entries_lock);
 
 	for (const auto &entry : index_entries) {

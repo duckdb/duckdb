@@ -18,7 +18,6 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/storage/index_serialization_info.hpp"
 
 namespace duckdb {
 
