@@ -4776,12 +4776,11 @@ inline bool parse_header(const char *beg, const char *end, T fn) {
 
     if (!detail::fields::is_field_value(val)) { return false; }
 
-    if (case_ignore::equal(key, "Location") ||
-        case_ignore::equal(key, "Referer")) {
-      fn(key, val);
-    } else {
-      fn(key, decode_path_component(val));
-    }
+    // RFC 9110 §5.5: header field values are opaque octets and MUST NOT be
+    // percent-decoded by the recipient. Applications that need to interpret a
+    // value as a URI component should call httplib::decode_uri_component()
+    // (or decode_path_component()) explicitly.
+    fn(key, val);
 
     return true;
   }
