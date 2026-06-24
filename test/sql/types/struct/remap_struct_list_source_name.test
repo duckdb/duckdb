@@ -1,0 +1,84 @@
+# name: test/sql/types/struct/remap_struct_list_source_name.test
+# description: remap_struct must tolerate a non-"list" source name for a LIST child
+# group: [struct]
+
+# A LIST has exactly one child, which remap_struct canonically keys as "list". Some producers
+# carry the physical child name instead: the multi-file reader names a LIST child after the
+# Parquet "repeated" group, which is "list" for DuckDB/parquet-mr, "array" for parquet-avro/Hive,
+# and "bag" for Spark legacy. Such a non-"list" source name must still remap (the mapping is
+# unambiguous for a LIST) rather than throwing "Source value <name> not found".
+
+statement ok
+PRAGMA enable_verification
+
+# Control: the canonical "list" source name keeps working.
+query I
+SELECT remap_struct(
+	[ {'first_name': 'Alice', 'age': 43} ],
+	NULL::STRUCT(age INTEGER, given_name VARCHAR)[],
+	{ 'list': ROW('list', { 'age': 'age', 'given_name': 'first_name' }) },
+	NULL
+);
+----
+[{'age': 43, 'given_name': Alice}]
+
+# Source LIST child named "array" (parquet-avro / Hive): rename + reorder the element struct.
+query I
+SELECT remap_struct(
+	[ {'first_name': 'Alice', 'age': 43}, {'first_name': 'Bob', 'age': 35} ],
+	NULL::STRUCT(age INTEGER, given_name VARCHAR)[],
+	{ 'list': ROW('array', { 'age': 'age', 'given_name': 'first_name' }) },
+	NULL
+);
+----
+[{'age': 43, 'given_name': Alice}, {'age': 35, 'given_name': Bob}]
+
+# Source LIST child named "bag" (Spark legacy).
+query I
+SELECT remap_struct(
+	[ {'first_name': 'Alice', 'age': 43} ],
+	NULL::STRUCT(age INTEGER, given_name VARCHAR)[],
+	{ 'list': ROW('bag', { 'age': 'age', 'given_name': 'first_name' }) },
+	NULL
+);
+----
+[{'age': 43, 'given_name': Alice}]
+
+# Defaults still apply through a non-"list" source name (target defaults key on the canonical
+# "list" target child, the source child is "array").
+query I
+SELECT remap_struct(
+	[ {'first_name': 'Alice'} ],
+	NULL::STRUCT(given_name VARCHAR, verified BOOLEAN)[],
+	{ 'list': ROW('array', { 'given_name': 'first_name' }) },
+	{ 'list': { 'verified': NULL::BOOLEAN } }
+);
+----
+[{'given_name': Alice, 'verified': NULL}]
+
+# Nested: a LIST<STRUCT> inside a STRUCT, with the list child named "array". This is the
+# realistic multi-file/Iceberg shape and exercises the fallback on the recursion path.
+query I
+SELECT remap_struct(
+	{'people': [ {'first_name': 'Alice', 'age': 43}, {'first_name': 'Bob', 'age': 35} ]},
+	NULL::STRUCT(people STRUCT(age INTEGER, given_name VARCHAR)[]),
+	{ 'people': ROW('people', { 'list': ROW('array', { 'age': 'age', 'given_name': 'first_name' }) }) },
+	NULL
+);
+----
+{'people': [{'age': 43, 'given_name': Alice}, {'age': 35, 'given_name': Bob}]}
+
+# Larger list to exercise the vectorized path with the non-"list" source name.
+statement ok
+CREATE TABLE large_list(s STRUCT(i INTEGER)[]);
+
+statement ok
+INSERT INTO large_list (SELECT LIST(CASE WHEN i%2=0 THEN {'i': i} ELSE NULL END) FROM range(5000) t(i));
+
+query III
+SELECT COUNT(*), COUNT(j), SUM(j)
+FROM (
+	SELECT UNNEST(remap_struct(s, NULL::ROW(j INTEGER)[], {'list': ROW('array', {'j': 'i'})}, NULL), recursive := True) FROM large_list
+)
+----
+5000	2500	6247500

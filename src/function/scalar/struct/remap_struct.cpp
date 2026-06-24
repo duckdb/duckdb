@@ -314,6 +314,13 @@ struct RemapEntry {
 
 		// find the source index
 		auto entry = source_map.find(Identifier(remap_source));
+		if (entry == source_map.end() && parent_type.id() == LogicalTypeId::LIST) {
+			// A LIST has exactly one child, which GetMap canonically keys as "list". Some producers
+			// carry the physical child name instead (e.g. the multi-file reader for Parquet files whose
+			// repeated group is named "array" for parquet-avro/Hive or "bag" for Spark legacy). The
+			// mapping is unambiguous for a LIST, so fall back to the canonical "list" child.
+			entry = source_map.find(Identifier("list"));
+		}
 		if (entry == source_map.end()) {
 			throw BinderException("Source value %s not found", remap_source);
 		}
