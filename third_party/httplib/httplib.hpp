@@ -8423,6 +8423,11 @@ get_client_ip(const std::string &x_forwarded_for,
                   ip_list.emplace_back(std::string(b + r.first, b + r.second));
                 });
 
+  // A malformed X-Forwarded-For (empty, comma-only, whitespace-only) yields
+  // no segments. Signal "no client IP derived" with an empty string so the
+  // caller can fall back to the connection-level remote address.
+  if (ip_list.empty()) { return std::string(); }
+
   for (size_t i = 0; i < ip_list.size(); ++i) {
     auto ip = ip_list[i];
 
@@ -8510,7 +8515,8 @@ Server::process_request(Stream &strm, const std::string &remote_addr,
 
   if (!trusted_proxies_.empty() && req.has_header("X-Forwarded-For")) {
     auto x_forwarded_for = req.get_header_value("X-Forwarded-For");
-    req.remote_addr = get_client_ip(x_forwarded_for, trusted_proxies_);
+    auto derived = get_client_ip(x_forwarded_for, trusted_proxies_);
+    req.remote_addr = derived.empty() ? remote_addr : derived;
   } else {
     req.remote_addr = remote_addr;
   }
