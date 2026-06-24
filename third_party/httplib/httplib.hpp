@@ -4312,7 +4312,16 @@ inline constexpr unsigned int str2tag_core(const char *s, size_t l,
 }
 
 inline unsigned int str2tag(const std::string &s) {
-  return str2tag_core(s.data(), s.size(), 0);
+  // Iterative form of str2tag_core: the recursive constexpr version is kept
+  // for compile-time UDL evaluation of short string literals, but at runtime
+  // we may receive arbitrarily long inputs (e.g. fuzzed Content-Type) that
+  // would blow the stack with one frame per character.
+  unsigned int h = 0;
+  for (auto c : s) {
+    h = (((std::numeric_limits<unsigned int>::max)() >> 6) & h * 33) ^
+        static_cast<unsigned char>(c);
+  }
+  return h;
 }
 
 namespace udl {
