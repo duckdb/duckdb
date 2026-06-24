@@ -9207,18 +9207,10 @@ inline bool ClientImpl::create_redirect_client(
     // Setup basic client configuration first
     setup_redirect_client(redirect_client);
 
-    // SSL-specific configuration for proxy environments
-    if (!proxy_host_.empty() && proxy_port_ != -1) {
-      // Critical: Disable SSL verification for proxy environments
-      redirect_client.enable_server_certificate_verification(false);
-      redirect_client.enable_server_hostname_verification(false);
-    } else {
-      // For direct SSL connections, copy SSL verification settings
-      redirect_client.enable_server_certificate_verification(
-          server_certificate_verification_);
-      redirect_client.enable_server_hostname_verification(
-          server_hostname_verification_);
-    }
+    redirect_client.enable_server_certificate_verification(
+        server_certificate_verification_);
+    redirect_client.enable_server_hostname_verification(
+        server_hostname_verification_);
 
     // Handle CA certificate store and paths if available
     if (ca_cert_store_ && X509_STORE_up_ref(ca_cert_store_)) {
