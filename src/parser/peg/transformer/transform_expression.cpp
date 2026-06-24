@@ -433,12 +433,15 @@ PEGTransformerFactory::TransformFilterClauseContents(PEGTransformer &transformer
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformParenthesisExpression(PEGTransformer &transformer,
-                                                      vector<unique_ptr<ParsedExpression>> expression) {
-	// ParenthesisExpression <- Parens(List(Expression))
-	if (expression.size() == 1) {
-		return std::move(expression[0]);
+                                                      optional<vector<unique_ptr<ParsedExpression>>> expression) {
+	// ParenthesisExpression <- Parens(List(Expression)?)
+	// Python-style tuples: (), (x,) and (a, b, ...) all build an (unnamed) row/TUPLE.
+	// A single (x) without a trailing comma is grouping and is handled earlier by ParensExpression.
+	vector<unique_ptr<ParsedExpression>> children;
+	if (expression) {
+		children = std::move(*expression);
 	}
-	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(expression));
+	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(children));
 }
 
 void PEGTransformerFactory::RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr) {

@@ -741,7 +741,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"IgnoreOrRespectNulls <- IgnoreNulls / RespectNulls\n"
 	"IgnoreNulls <- 'IGNORE' 'NULLS'\n"
 	"RespectNulls <- 'RESPECT' 'NULLS'\n"
-	"ParenthesisExpression <- Parens(List(Expression))\n"
+	"ParenthesisExpression <- Parens(List(Expression)?)\n"
 	"LiteralExpression <- StringLiteral / NumberLiteral / ConstantLiteral\n"
 	"ConstantLiteral <- NullLiteral / TrueLiteral / FalseLiteral\n"
 	"NullLiteral <- 'NULL'\n"

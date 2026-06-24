@@ -78,4 +78,4 @@ Parser Error: syntax error at or near ")"
 statement error
 UPDATE tbl SET (key, fruit) = ();
 ----
-Parser Error: syntax error at or near ")"
+Parser Error: Could not perform assignment, expected 2 values, got 0

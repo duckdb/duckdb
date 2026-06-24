@@ -8,6 +8,28 @@ SELECT typeof(row(1, 'a'));
 ----
 TUPLE(INTEGER, VARCHAR)
 
+# Python-style tuple literals: () is empty, (x,) is a 1-tuple, (a, b) is a tuple, (x) is grouping
+query TT
+SELECT (), typeof(());
+----
+()	TUPLE
+
+query TT
+SELECT (1, 'a'), typeof((1, 'a'));
+----
+(1, a)	TUPLE(INTEGER, VARCHAR)
+
+query TT
+SELECT (42,), typeof((42,));
+----
+(42)	TUPLE(INTEGER)
+
+# a single parenthesized expression without a trailing comma is just grouping (a scalar)
+query TT
+SELECT (42), typeof((42));
+----
+42	INTEGER
+
 # struct_pack() / named struct stays a STRUCT
 query T
 SELECT typeof(struct_pack(a := 1, b := 'a'));
