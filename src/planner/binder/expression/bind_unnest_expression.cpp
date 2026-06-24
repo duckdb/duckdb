@@ -154,6 +154,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::SQLNULL:
+	case LogicalTypeId::VARIANT:
 		break;
 	default:
 		return BindResult(BinderException(function, "UNNEST() can only be applied to lists, structs and NULL, not %s",
@@ -165,6 +166,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 
 	auto unnest_expr = std::move(child);
 	if (child_type.id() == LogicalTypeId::SQLNULL) {
+		list_unnests = 1;
+	} else if (child_type.id() == LogicalTypeId::VARIANT) {
 		list_unnests = 1;
 	} else {
 		// perform all LIST/ARRAY unnests
@@ -198,6 +201,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			return_type = ListType::GetChildType(return_type);
 		} else if (return_type.id() == LogicalTypeId::ARRAY) {
 			return_type = ArrayType::GetChildType(return_type);
+		} else if (return_type.id() == LogicalTypeId::VARIANT) {
+			return_type = LogicalType::VARIANT();
 		}
 
 		if (unnest_expr->GetReturnType().id() == LogicalTypeId::ARRAY) {

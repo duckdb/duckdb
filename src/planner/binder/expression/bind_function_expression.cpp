@@ -415,7 +415,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
 		    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
 		    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
-		    list_child->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
+		    list_child->GetReturnType().id() != LogicalTypeId::UNKNOWN &&
+		    list_child->GetReturnType().id() != LogicalTypeId::VARIANT) {
 			return BindResult("Invalid LIST argument during lambda function binding!");
 		}
 	}

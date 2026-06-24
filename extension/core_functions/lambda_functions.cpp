@@ -242,6 +242,8 @@ LogicalType LambdaFunctions::DetermineListChildType(const LogicalType &child_typ
 			return ArrayType::GetChildType(child_type);
 		} else if (child_type.id() == LogicalTypeId::LIST) {
 			return ListType::GetChildType(child_type);
+		} else if (child_type.id() == LogicalTypeId::VARIANT) {
+			return LogicalType::VARIANT();
 		}
 		throw InternalException("The first argument must be a list or array type");
 	}
@@ -369,8 +371,10 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_pt
 		throw ParameterNotResolvedException();
 	}
 
-	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-	D_ASSERT(arguments[0]->GetReturnType().id() == LogicalTypeId::LIST);
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::VARIANT) {
+		arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+		D_ASSERT(arguments[0]->GetReturnType().id() == LogicalTypeId::LIST);
+	}
 	return nullptr;
 }
 
