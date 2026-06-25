@@ -46,10 +46,6 @@ bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length)
 	return true;
 }
 
-bool HasNoValidationMetadata(const string &version_tag, timestamp_t last_modified) {
-	return version_tag.empty() && (!Timestamp::IsFinite(last_modified) || last_modified == timestamp_t(0));
-}
-
 } // namespace
 
 CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db_p)
@@ -134,21 +130,15 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, const idx_t location) {
 	BufferHandle result;
-	if (!external_file_cache.IsEnabled()) {
+	// Only cache when file metadata is available.
+	const bool no_validation_metadata =
+	    Validate() && version_tag.empty() && (!Timestamp::IsFinite(last_modified) || last_modified == timestamp_t(0));
+	if (!external_file_cache.IsEnabled() || no_validation_metadata) {
 		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		buffer = result.Ptr();
 		GetFileHandle().Read(context, buffer, nr_bytes, location);
 		return result;
 	}
-
-	GetFileHandle();
-	if (HasNoValidationMetadata(version_tag, last_modified)) {
-		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-		buffer = result.Ptr();
-		GetFileHandle().Read(context, buffer, nr_bytes, location);
-		return result;
-	}
-
 	EnsureCachedFileCurrent();
 
 	// Try to read from the cache, filling overlapping_ranges in the process
@@ -194,18 +184,13 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 	BufferHandle result;
 
-	if (!external_file_cache.IsEnabled()) {
-		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-		buffer = result.Ptr();
-		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buffer, nr_bytes));
-		position += NumericCast<idx_t>(nr_bytes);
-		return result;
-	}
+	// Only cache when file metadata is available.
+	const bool no_validation_metadata =
+	    Validate() && version_tag.empty() && (!Timestamp::IsFinite(last_modified) || last_modified == timestamp_t(0));
 
-	GetFileHandle();
-	if (HasNoValidationMetadata(version_tag, last_modified) || !CanSeek()) {
-		// If we can't seek, we can't use the cache for these calls,
-		// because we won't be able to seek over any parts we skipped by reading from the cache
+	// If we can't seek, we can't use the cache for these calls,
+	// because we won't be able to seek over any parts we skipped by reading from the cache
+	if (!external_file_cache.IsEnabled() || !CanSeek() || no_validation_metadata) {
 		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		buffer = result.Ptr();
 		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buffer, nr_bytes));
