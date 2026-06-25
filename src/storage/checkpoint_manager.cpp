@@ -307,8 +307,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 			for (auto &segment : segment_info) {
 				verify_block_usage_count[segment.block_id]++;
 				if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
-					auto overflow_blocks =
-					    StringUtil::Replace(segment.segment_info, "Overflow String Block Ids: ", "");
+					auto overflow_blocks = StringUtil::Replace(segment.segment_info, "Overflow String Block Ids: ", "");
 					auto splits = StringUtil::Split(overflow_blocks, ", ");
 					for (auto &split : splits) {
 						auto overflow_block_id = std::stoll(split);
