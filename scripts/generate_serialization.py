@@ -269,6 +269,15 @@ def get_deserialize_element_template(
     return template
 
 
+def deserialize_local_name(entry):
+    # Name of the local variable a member is read into (base-class / constructor deserialize).
+    # Accessor-call deserialize properties (containing '(') are not valid identifiers, so fall back
+    # to the member name.
+    if '(' in entry.deserialize_property:
+        return entry.name
+    return entry.deserialize_property.replace('.', '_')
+
+
 def get_deserialize_assignment(property_name, property_type, pointer_type):
     assignment = '.' if pointer_type == 'none' else '->'
     property = property_name.replace('.', '_')
@@ -536,7 +545,10 @@ class SerializableClass:
         if not pointer_type:
             pointer_type = self.pointer_type
 
-        property_name = property_name.replace('.', '_')
+        # When deserializing into a local variable (base-class / constructor reads) the target is an
+        # accessor call (e.g. qualified_name.NameMutable()), which is not a valid identifier. Use the
+        # member name as the local variable instead.
+        property_name = deserialize_local_name(entry)
         template = DESERIALIZE_ELEMENT_FORMAT
         if base:
             template = DESERIALIZE_ELEMENT_BASE_FORMAT.replace('{base_property}', base.replace('*', ''))
@@ -690,15 +702,14 @@ def generate_base_class_code(base_class: SerializableClass):
     for entry in assign_entries:
         if entry.status != MemberVariableStatus.EXISTING:
             continue
+        local = deserialize_local_name(entry)
         move = False
         if entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type):
             move = True
         if move:
-            base_class_deserialize += (
-                f'\tresult->{entry.deserialize_property} = std::move({entry.deserialize_property});\n'
-            )
+            base_class_deserialize += f'\tresult->{entry.deserialize_property} = std::move({local});\n'
         else:
-            base_class_deserialize += f'\tresult->{entry.deserialize_property} = {entry.deserialize_property};\n'
+            base_class_deserialize += f'\tresult->{entry.deserialize_property} = {local};\n'
     if base_class.finalize_deserialization is not None:
         for line in base_class.finalize_deserialization:
             base_class_deserialize += "\t" + line + "\n"

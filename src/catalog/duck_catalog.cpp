@@ -84,8 +84,8 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
 			DropInfo drop_info;
 			drop_info.type = CatalogType::SCHEMA_ENTRY;
-			drop_info.catalog = info.catalog;
-			drop_info.name = info.schema;
+			drop_info.CatalogMutable() = info.catalog;
+			drop_info.NameMutable() = info.schema;
 			DropSchema(transaction, drop_info);
 			result = CreateSchemaInternal(transaction, info);
 			if (!result) {
@@ -104,10 +104,10 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 }
 
 void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
-	D_ASSERT(!info.name.empty());
-	if (!schemas->DropEntry(transaction, info.name, info.cascade)) {
+	D_ASSERT(!info.Name().empty());
+	if (!schemas->DropEntry(transaction, info.Name(), info.cascade)) {
 		if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, info.name, string());
+			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, info.Name(), string());
 		}
 	}
 }
