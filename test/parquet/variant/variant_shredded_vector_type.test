@@ -1,0 +1,63 @@
+# name: test/parquet/variant/variant_shredded_vector_type.test
+# description: Reading a shredded Parquet VARIANT emits a SHREDDED_VECTOR (verified via vector_type)
+# group: [variant]
+
+require parquet
+
+statement ok
+create macro data() AS TABLE (
+	FROM (VALUES
+		({'a': 21::INTEGER, 'b': 42::INTEGER}::VARIANT),
+		({'a': 1::INTEGER, 'b': 2::INTEGER}::VARIANT),
+		(NULL::VARIANT),
+		({'a': 100::INTEGER, 'b': 200::INTEGER}::VARIANT)
+	) t(a)
+)
+
+# shredded as a STRUCT
+statement ok
+COPY (
+	from data()
+) TO '{TEST_DIR}/shredded_vector_type_struct.parquet' (
+	shredding {
+		a: 'STRUCT(a INTEGER, b INTEGER)'
+	}
+)
+
+# every emitted vector is a SHREDDED_VECTOR
+query I
+select distinct vector_type(a) from '{TEST_DIR}/shredded_vector_type_struct.parquet';
+----
+SHREDDED_VECTOR
+
+# the values themselves round-trip correctly through the shredded vector
+query I
+select a from '{TEST_DIR}/shredded_vector_type_struct.parquet';
+----
+{'a': 21, 'b': 42}
+{'a': 1, 'b': 2}
+NULL
+{'a': 100, 'b': 200}
+
+# shredded as a LIST
+statement ok
+create macro list_data() AS TABLE (
+	FROM (VALUES
+		([1::INTEGER, 2, 3]::VARIANT),
+		([4::INTEGER, 5]::VARIANT)
+	) t(a)
+)
+
+statement ok
+COPY (
+	from list_data()
+) TO '{TEST_DIR}/shredded_vector_type_list.parquet' (
+	shredding {
+		a: 'INTEGER[]'
+	}
+)
+
+query I
+select distinct vector_type(a) from '{TEST_DIR}/shredded_vector_type_list.parquet';
+----
+SHREDDED_VECTOR
