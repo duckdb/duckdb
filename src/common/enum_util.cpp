@@ -93,6 +93,7 @@
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
+#include "duckdb/common/multi_file/multi_file_states.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
@@ -3517,6 +3518,24 @@ const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value) {
 template<>
 MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value) {
 	return static_cast<MultiFileFileState>(StringUtil::StringToEnum(GetMultiFileFileStateValues(), 5, "MultiFileFileState", value));
+}
+
+const StringUtil::EnumStringLiteral *GetMultiFileScanPhaseValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MultiFileScanPhase::SCHEDULE), "SCHEDULE" },
+		{ static_cast<uint32_t>(MultiFileScanPhase::DECODE), "DECODE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MultiFileScanPhase>(MultiFileScanPhase value) {
+	return StringUtil::EnumToString(GetMultiFileScanPhaseValues(), 2, "MultiFileScanPhase", static_cast<uint32_t>(value));
+}
+
+template<>
+MultiFileScanPhase EnumUtil::FromString<MultiFileScanPhase>(const char *value) {
+	return static_cast<MultiFileScanPhase>(StringUtil::StringToEnum(GetMultiFileScanPhaseValues(), 2, "MultiFileScanPhase", value));
 }
 
 const StringUtil::EnumStringLiteral *GetNTypeValues() {
