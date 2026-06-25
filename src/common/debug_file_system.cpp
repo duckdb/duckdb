@@ -1,8 +1,9 @@
 #include "duckdb/common/debug_file_system.hpp"
+
 #include "duckdb/common/io_latency_model.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
+
 #include <chrono>
 #include <thread>
 
@@ -199,6 +200,7 @@ bool DebugFileSystem::SupportsOpenFileExtended() const {
 bool DebugFileSystem::ListFilesExtended(const string &directory,
                                         const std::function<void(OpenFileInfo &info)> &callback,
                                         optional_ptr<FileOpener> opener) {
+	// Use the public ListFiles API; it routes to ListFilesExtended on the inner filesystem when supported.
 	return inner_fs->ListFiles(directory, callback, opener);
 }
 

@@ -43,10 +43,9 @@ add_library_unity(
   csv_writer.cpp
   complex_json.cpp
   compressed_file_system.cpp
-  debug_file_system.cpp
-  io_latency_model.cpp
   constants.cpp
   checksum.cpp
+  debug_file_system.cpp
   encryption_functions.cpp
   encryption_key_manager.cpp
   encryption_state.cpp
@@ -62,6 +61,7 @@ add_library_unity(
   gzip_file_system.cpp
   identifier.cpp
   hive_partitioning.cpp
+  io_latency_model.cpp
   pipe_file_system.cpp
   local_file_system.cpp
   memory_mapped_file.cpp
