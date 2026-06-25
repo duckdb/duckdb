@@ -291,6 +291,24 @@ ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value) {
 	return static_cast<ARTScanResult>(StringUtil::StringToEnum(GetARTScanResultValues(), 2, "ARTScanResult", value));
 }
 
+const StringUtil::EnumStringLiteral *GetARTSerializationFormatValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ARTSerializationFormat::V1_0_0), "V1_0_0" },
+		{ static_cast<uint32_t>(ARTSerializationFormat::CURRENT), "CURRENT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ARTSerializationFormat>(ARTSerializationFormat value) {
+	return StringUtil::EnumToString(GetARTSerializationFormatValues(), 2, "ARTSerializationFormat", static_cast<uint32_t>(value));
+}
+
+template<>
+ARTSerializationFormat EnumUtil::FromString<ARTSerializationFormat>(const char *value) {
+	return static_cast<ARTSerializationFormat>(StringUtil::StringToEnum(GetARTSerializationFormatValues(), 2, "ARTSerializationFormat", value));
+}
+
 const StringUtil::EnumStringLiteral *GetAccessModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(AccessMode::UNDEFINED), "UNDEFINED" },
