@@ -138,6 +138,8 @@ public:
 	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                         GlobalSourceState &gstate) const;
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
+	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context,
+	                                                           const OperatorPartitionInfo &partition_info) const;
 
 protected:
 	virtual SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,

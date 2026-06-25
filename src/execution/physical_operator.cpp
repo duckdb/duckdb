@@ -133,6 +133,12 @@ unique_ptr<GlobalSourceState> PhysicalOperator::GetGlobalSourceState(ClientConte
 	return make_uniq<GlobalSourceState>();
 }
 
+unique_ptr<GlobalSourceState>
+PhysicalOperator::GetGlobalSourceState(ClientContext &context, const OperatorPartitionInfo &partition_info) const {
+	(void)partition_info;
+	return GetGlobalSourceState(context);
+}
+
 // LCOV_EXCL_START
 SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk,
                                            OperatorSourceInput &input) const {
