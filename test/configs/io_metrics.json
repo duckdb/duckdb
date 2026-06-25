@@ -99,14 +99,21 @@
 		},
 		{
 			"name": "native_checkpoint_write",
+			"comment": "Verifies that checkpoint block writes to the main database file are attributed. The schema is created+checkpointed in the un-instrumented prep phase so that the file-header writes at database creation (attributed to the connection-open context, not a measured statement) are not counted. The measure phase inserts and checkpoints into the existing file. The .wal is excluded because the write-ahead log uses a single long-lived BufferedFileWriter whose per-commit QueryContext is not threaded (a separate known gap, ~1 KB here); the checkpoint/block-manager writes to the main file are fully attributed.",
 			"default_db": "{dir}/native.db",
 			"include": ["{dir}/native.db"],
+			"exclude": ["{dir}/native.db.wal"],
+			"prep": [
+				"ATTACH '{dir}/native.db' AS d",
+				"CREATE TABLE d.t(i INTEGER, j INTEGER)",
+				"CHECKPOINT d",
+				"DETACH d"
+			],
 			"measure": [
-				"CREATE TABLE t AS SELECT range i, range * 2 j FROM range(300000)",
+				"INSERT INTO t SELECT range, range * 2 FROM range(300000)",
 				"CHECKPOINT"
 			],
-			"check": ["write"],
-			"skip": "FIXME: nearly all checkpoint writes are now attributed (~0.53 MB of the ~0.54 MB written). The remaining ~13 KB is database open/close I/O: the file-header writes at database creation and the close-time (shutdown) checkpoint at attached_database.cpp run with an empty QueryContext because no query is executing then. This residual is structurally not attributable to a query; remove this skip only if open/close I/O is given a synthetic attribution."
+			"check": ["write"]
 		}
 	]
 }

@@ -30,38 +30,50 @@
 
 static char g_prefix[MAX_PREFIX][4096];
 static int  g_nprefix = 0;
+static char g_exclude[MAX_PREFIX][4096];
+static int  g_nexclude = 0;
 static unsigned char g_counted[MAX_FDS];     /* 1 if fd refers to a target file */
 static long long g_read = 0, g_write = 0;
 
-__attribute__((constructor))
-static void ioshim_init(void) {
-	const char *inc = getenv("IOSHIM_INCLUDE");
-	if (!inc) {
-		return;
+static int parse_prefixes(const char *env, char dst[][4096]) {
+	if (!env) {
+		return 0;
 	}
 	char buf[65536];
-	strncpy(buf, inc, sizeof(buf) - 1);
+	strncpy(buf, env, sizeof(buf) - 1);
 	buf[sizeof(buf) - 1] = '\0';
+	int n = 0;
 	char *save = NULL;
-	for (char *tok = strtok_r(buf, ",", &save); tok && g_nprefix < MAX_PREFIX;
-	     tok = strtok_r(NULL, ",", &save)) {
-		strncpy(g_prefix[g_nprefix], tok, 4095);
-		g_prefix[g_nprefix][4095] = '\0';
-		g_nprefix++;
+	for (char *tok = strtok_r(buf, ",", &save); tok && n < MAX_PREFIX; tok = strtok_r(NULL, ",", &save)) {
+		strncpy(dst[n], tok, 4095);
+		dst[n][4095] = '\0';
+		n++;
 	}
+	return n;
+}
+
+__attribute__((constructor))
+static void ioshim_init(void) {
+	g_nprefix = parse_prefixes(getenv("IOSHIM_INCLUDE"), g_prefix);
+	g_nexclude = parse_prefixes(getenv("IOSHIM_EXCLUDE"), g_exclude);
+}
+
+static int matches_any(const char *path, char prefixes[][4096], int n) {
+	for (int i = 0; i < n; i++) {
+		size_t len = strlen(prefixes[i]);
+		if (strncmp(path, prefixes[i], len) == 0) {
+			return 1;
+		}
+	}
+	return 0;
 }
 
 static int path_is_target(const char *path) {
 	if (!path) {
 		return 0;
 	}
-	for (int i = 0; i < g_nprefix; i++) {
-		size_t n = strlen(g_prefix[i]);
-		if (strncmp(path, g_prefix[i], n) == 0) {
-			return 1;
-		}
-	}
-	return 0;
+	/* Counted only if it matches an include prefix and no exclude prefix. */
+	return matches_any(path, g_prefix, g_nprefix) && !matches_any(path, g_exclude, g_nexclude);
 }
 
 static void mark_fd(int fd, const char *path) {

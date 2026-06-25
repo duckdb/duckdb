@@ -87,6 +87,9 @@ PROFILING_PRELUDE = [
 	# (a cache hit does no syscall I/O but is still counted by the metric, which would be
 	# nondeterministic under the no-tolerance comparison).
 	"SET enable_external_file_cache=false;",
+	# Single-threaded so parquet's async prefetcher issues a deterministic set of coalesced reads
+	# (under multi-thread load the real OS byte count can vary slightly run-to-run).
+	"SET threads=1;",
 ]
 
 
@@ -111,7 +114,7 @@ def read_io_metric(path):
 	return int(io.get("total_bytes_read", 0) or 0), int(io.get("total_bytes_written", 0) or 0)
 
 
-def run_measure(duckdb, statements, include, env_inject, shim_lib, workdir, database):
+def run_measure(duckdb, statements, include, exclude, env_inject, shim_lib, workdir, database):
 	"""
 	Run the instrumented statements and return (reported_read, reported_written,
 	os_read, os_written). os_* is the shim's syscall-level ground truth; reported_*
@@ -121,6 +124,8 @@ def run_measure(duckdb, statements, include, env_inject, shim_lib, workdir, data
 	os_out = os.path.join(workdir, "os.json")
 	env = dict(os.environ)
 	env["IOSHIM_INCLUDE"] = ",".join(include)
+	if exclude:
+		env["IOSHIM_EXCLUDE"] = ",".join(exclude)
 	env["IOSHIM_OUT"] = os_out
 	env[env_inject] = shim_lib
 
@@ -225,6 +230,7 @@ def main():
 			return s.replace("{dir}", workdir)
 
 		include = [subst(p) for p in t["include"]]
+		exclude = [subst(p) for p in t.get("exclude", [])]
 		checks = t.get("check", ["read", "write"])
 		skip_reason = t.get("skip")
 		database = subst(t["default_db"]) if t.get("default_db") else ":memory:"
@@ -232,7 +238,7 @@ def main():
 		try:
 			run_prep(duckdb, [subst(s) for s in t.get("prep", [])])
 			rep_r, rep_w, os_r, os_w = run_measure(
-			    duckdb, [subst(s) for s in t["measure"]], include, env_inject, shim_lib, workdir, database)
+			    duckdb, [subst(s) for s in t["measure"]], include, exclude, env_inject, shim_lib, workdir, database)
 		except Exception as e:  # noqa: BLE001 - report any test error uniformly
 			if skip_reason:
 				skipped.append(name)
