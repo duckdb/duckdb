@@ -138,7 +138,8 @@ public:
 	//! Vacuums the ART storage.
 	void Vacuum(IndexLock &state) override;
 
-	//!
+	//! Checkpoint the ART, this creates a shadow index which is swapped with the live index, only after its blocks have
+	//! been flushed.
 	void Checkpoint(TableIndexWriter &writer) override;
 
 	//! Serializes ART memory to the WAL and returns the ART storage information.
@@ -175,6 +176,7 @@ private:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
 
+	//! Returns how many allocators are used based on the target serialization format.
 	static uint8_t GetAllocatorCount(ARTSerializationFormat format);
 
 	bool FullScan(idx_t max_count, set<row_t> &row_ids);
@@ -200,7 +202,10 @@ private:
 
 	void InitAllocators(const IndexStorageInfo &info);
 	void TransformToDeprecated();
+	//! Gathers metadata used at serialization, optionally transforms the in-memory ART to a deprecated representation
+	//! based on the target serialization format.
 	IndexStorageInfo PrepareSerialize(ARTSerializationFormat target_format);
+	//! Get the serialization format of the ART based on the active storage version.
 	static ARTSerializationFormat GetSerializationFormat(StorageVersion storage_version);
 	void Deserialize(const BlockPointer &pointer);
 	void SetPrefixCount(const IndexStorageInfo &info);

@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "table_index_writer.hpp"
 #include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 #include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
 namespace duckdb {

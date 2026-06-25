@@ -1051,8 +1051,7 @@ IndexStorageInfo ART::PrepareSerialize(const ARTSerializationFormat target_forma
 }
 
 ARTSerializationFormat ART::GetSerializationFormat(const StorageVersion storage_version) {
-	const auto v1_0_0_storage = StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version);
-	if (v1_0_0_storage) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version)) {
 		return ARTSerializationFormat::V1_0_0;
 	}
 

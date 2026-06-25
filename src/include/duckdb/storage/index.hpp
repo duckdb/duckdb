@@ -58,8 +58,8 @@ public:
 	//! The index constraint type
 	virtual IndexConstraintType GetConstraintType() const = 0;
 
-	//!
-	virtual void Checkpoint(TableIndexWriter &writer);
+	//! Checkpoint an index
+	virtual void Checkpoint(TableIndexWriter &writer) = 0;
 
 	//! Returns unique flag
 	bool IsUnique() const {
