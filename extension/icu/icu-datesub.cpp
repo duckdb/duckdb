@@ -202,8 +202,8 @@ struct ICUCalendarDiff : public ICUDateFunc {
 	}
 
 	template <typename T>
-	static int64_t DifferenceFunc(icu::Calendar *calendar, T start_date, T end_date,
-	                              part_trunc_t trunc_func, part_sub_t sub_func) {
+	static int64_t DifferenceFunc(icu::Calendar *calendar, T start_date, T end_date, part_trunc_t trunc_func,
+	                              part_sub_t sub_func) {
 		// Truncate the two arguments. This is safe because we will stay in range
 		auto start_micros = TruncateForDiff(calendar, start_date, trunc_func);
 		auto end_micros = TruncateForDiff(calendar, end_date, trunc_func);
