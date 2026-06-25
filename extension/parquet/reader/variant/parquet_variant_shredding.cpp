@@ -130,6 +130,43 @@ struct ShredNodeWriter {
 	bool subtree_has_leftover = false;
 };
 
+//! Recursively NULL a shred node (and all its descendants) at 'row' - a child of a NULL struct must itself be
+//! NULL. Only the synthesized parts are written: the wrapper struct validity, its untyped_value_index, and the
+//! validity of any nested STRUCT/LIST typed_value. A picked-off (flat) leaf and a LEAF's referenced Parquet
+//! leaf are skipped: they already read as NULL wherever their object is absent.
+void SetShredNodeNull(const ShreddedGroupView &view, const ShredPlan &plan, Vector &node, idx_t row) {
+	if (plan.flat) {
+		return;
+	}
+	auto &entries = StructVector::GetEntries(node);
+	auto &typed_value = entries[SHRED_TYPED_VALUE];
+	auto &untyped_index = entries[SHRED_UNTYPED_INDEX];
+	FlatVector::ValidityMutable(node).SetInvalid(row);
+	FlatVector::ValidityMutable(untyped_index).SetInvalid(row);
+	if (!view.has_typed_value) {
+		//! constant-NULL placeholder typed_value
+		return;
+	}
+	switch (view.kind) {
+	case ParquetGroupKind::LEAF:
+		//! typed_value references the Parquet leaf, already NULL where its object is absent
+		break;
+	case ParquetGroupKind::OBJECT: {
+		FlatVector::ValidityMutable(typed_value).SetInvalid(row);
+		auto &field_entries = StructVector::GetEntries(typed_value);
+		for (idx_t f = 0; f < view.fields.size(); f++) {
+			SetShredNodeNull(*view.fields[f], plan.fields[f], field_entries[f], row);
+		}
+		break;
+	}
+	default:
+		D_ASSERT(view.kind == ParquetGroupKind::ARRAY);
+		//! typed_value is a LIST; the entry at this row is an empty/NULL list (no element rows to recurse into)
+		FlatVector::ValidityMutable(typed_value).SetInvalid(row);
+		break;
+	}
+}
+
 //! 'is_object_field': whether this node is a field of an OBJECT. For object fields the "no leftover" default
 //! is 0 (== a missing field), since a NULL untyped_value_index means a present VARIANT_NULL value. For the
 //! root / array elements (no notion of "missing") the default is NULL (== VARIANT_NULL).
@@ -157,7 +194,8 @@ void FillShredNode(const ShreddedGroupView &view, const ShredPlan &plan, Vector 
 	bool has_leftover = !ValueAllNull(view, count);
 
 	if (!view.has_typed_value) {
-		FlatVector::ValidityMutable(typed_value).SetAllInvalid(count);
+		//! Nothing is shredded here - the typed_value is a never-read all-NULL placeholder, so make it constant
+		ConstantVector::SetNull(typed_value, count_t(count));
 		writer.subtree_has_leftover = has_leftover;
 		return;
 	}
@@ -169,17 +207,23 @@ void FillShredNode(const ShreddedGroupView &view, const ShredPlan &plan, Vector 
 	case ParquetGroupKind::OBJECT: {
 		//! typed_value is a STRUCT of field nodes; its validity is the object's shredded-ness
 		auto &dst_validity = FlatVector::ValidityMutable(typed_value);
-		for (idx_t i = 0; i < count; i++) {
-			if (!view.typed_validity->IsValid(i)) {
-				dst_validity.SetInvalid(i);
-			}
-		}
 		auto &field_entries = StructVector::GetEntries(typed_value);
 		writer.fields.resize(view.fields.size());
 		for (idx_t i = 0; i < view.fields.size(); i++) {
 			writer.fields[i] = make_uniq<ShredNodeWriter>();
 			FillShredNode(*view.fields[i], plan.fields[i], field_entries[i], count, *writer.fields[i], true);
 			has_leftover |= writer.fields[i]->subtree_has_leftover;
+		}
+		//! Where the object is not shredded, the typed_value struct is NULL - recursively NULL the field nodes
+		//! too, since a child of a NULL struct must itself be NULL
+		for (idx_t i = 0; i < count; i++) {
+			if (view.typed_validity->IsValid(i)) {
+				continue;
+			}
+			dst_validity.SetInvalid(i);
+			for (idx_t f = 0; f < view.fields.size(); f++) {
+				SetShredNodeNull(*view.fields[f], plan.fields[f], field_entries[f], i);
+			}
 		}
 		break;
 	}

@@ -595,23 +595,9 @@ inline void BuildEmptyVariant(idx_t count, Vector &result) {
 	if (count == 0) {
 		return;
 	}
-	auto &keys = VariantVector::GetKeys(result);
-	auto &children = VariantVector::GetChildren(result);
-	auto &values = VariantVector::GetValues(result);
-	ListVector::SetListSize(keys, 0);
-	ListVector::SetListSize(children, 0);
-	ListVector::SetListSize(values, 0);
-
-	VariantVectorData variant_data(result);
-	memset(variant_data.keys_data, 0, count * sizeof(list_entry_t));
-	memset(variant_data.children_data, 0, count * sizeof(list_entry_t));
-	memset(variant_data.values_data, 0, count * sizeof(list_entry_t));
-	memset(variant_data.blob_data, 0, count * sizeof(string_t));
-
-	//! Every row is a (never-consulted) VARIANT NULL; the real row validity lives on the shredded component
-	FlatVector::ValidityMutable(result).SetAllInvalid(count);
-	FlatVector::SetSize(result, count);
-	result.Verify();
+	//! Every row is a (never-consulted) VARIANT NULL; the real row validity lives on the shredded component. The
+	//! pool is never read, so represent it as a single constant NULL (children come along as NULL for free).
+	ConstantVector::SetNull(result, count_t(count));
 }
 
 } // namespace duckdb
