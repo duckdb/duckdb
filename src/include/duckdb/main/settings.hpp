@@ -588,8 +588,7 @@ struct DebugForceNoCrossProductSetting {
 struct DebugFsDelayMeanMsSetting {
 	using RETURN_TYPE = double;
 	static constexpr const char *Name = "debug_fs_delay_mean_ms";
-	static constexpr const char *Description =
-	    "DEBUG SETTING: mean latency (ms) for filesystem operations (log-normal distribution)";
+	static constexpr const char *Description = "DEBUG SETTING: mean latency (ms) for filesystem operations";
 	static constexpr const char *InputType = "DOUBLE";
 	static constexpr const char *DefaultValue = "0.0";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;

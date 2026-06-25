@@ -349,11 +349,24 @@
         "default_value": "false"
     },
     {
-        "name": "debug_local_file_system_delay_ms",
-        "description": "DEBUG SETTING: time to sleep before local file system open/read/write operations",
-        "type": "UBIGINT",
+        "name": "debug_fs_delay_mean_ms",
+        "description": "DEBUG SETTING: mean latency (ms) for filesystem operations",
+        "type": "DOUBLE",
         "scope": "global",
-        "default_value": "0"
+        "default_value": "0.0",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "debug_fs_delay_stddev_ms",
+        "description": "DEBUG SETTING: standard deviation (ms) for filesystem operation latency",
+        "type": "DOUBLE",
+        "scope": "global",
+        "default_value": "0.0",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "debug_order_verification",
