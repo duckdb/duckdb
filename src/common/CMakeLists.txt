@@ -41,7 +41,6 @@ add_library_unity(
   cgroups.cpp
   column_index.cpp
   csv_writer.cpp
-  complex_json.cpp
   compressed_file_system.cpp
   constants.cpp
   checksum.cpp

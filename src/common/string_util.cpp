@@ -714,41 +714,33 @@ string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const s
 	return StringUtil::CandidatesMessage(closest_strings, message_prefix);
 }
 
-static unique_ptr<ComplexJSON> ParseJSON(const string &json, JSONValue value, bool ignore_errors) {
+//! Converts a single JSON value to its string representation: scalars become their literal value, nested
+//! objects/arrays are re-serialized as a JSON string.
+static string JSONValueToString(const string &json, JSONValue value) {
 	switch (value.GetType()) {
-	case JSONValueType::ARRAY: {
-		auto result = make_uniq<ComplexJSON>();
-		value.IterateArray([&](JSONValue child) { result->AddArrayElement(ParseJSON(json, child, ignore_errors)); });
-		return result;
-	}
-	case JSONValueType::OBJECT: {
-		auto result = make_uniq<ComplexJSON>();
-		value.IterateObject([&](const string &key, JSONValue child) {
-			result->AddObjectEntry(key, ParseJSON(json, child, ignore_errors));
-		});
-		return result;
-	}
 	case JSONValueType::STRING:
-		// Since this is a string, we can directly add the value
-		return make_uniq<ComplexJSON>(value.GetString());
+		return value.GetString();
 	case JSONValueType::BOOLEAN:
-		return make_uniq<ComplexJSON>(value.GetBoolean() ? "true" : "false");
+		return value.GetBoolean() ? "true" : "false";
 	case JSONValueType::UNSIGNED_INTEGER:
-		return make_uniq<ComplexJSON>(to_string(value.GetUnsignedInteger()));
+		return to_string(value.GetUnsignedInteger());
 	case JSONValueType::SIGNED_INTEGER:
-		return make_uniq<ComplexJSON>(to_string(value.GetSignedInteger()));
+		return to_string(value.GetSignedInteger());
 	case JSONValueType::DOUBLE:
 	case JSONValueType::RAW:
-		return make_uniq<ComplexJSON>(to_string(value.GetDouble()));
+		return to_string(value.GetDouble());
 	case JSONValueType::JSON_NULL:
-		return make_uniq<ComplexJSON>("null");
+		return "null";
+	case JSONValueType::OBJECT:
+	case JSONValueType::ARRAY:
+		return value.ToString(JSONWriteFlags::ALLOW_INVALID_UNICODE);
 	default:
 		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
 }
 
-unique_ptr<ComplexJSON> StringUtil::ParseJSONMap(const string &json, bool ignore_errors) {
-	auto result = make_uniq<ComplexJSON>(json);
+unordered_map<string, string> StringUtil::ParseJSONMap(const string &json, bool ignore_errors) {
+	unordered_map<string, string> result;
 	if (json.empty()) {
 		return result;
 	}
@@ -767,7 +759,8 @@ unique_ptr<ComplexJSON> StringUtil::ParseJSONMap(const string &json, bool ignore
 		}
 		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
-	return ParseJSON(json, root, ignore_errors);
+	root.IterateObject([&](const string &key, JSONValue value) { result[key] = JSONValueToString(json, value); });
+	return result;
 }
 
 string StringUtil::ToJSONMap(const unordered_map<string, string> &map) {
@@ -778,53 +771,6 @@ string StringUtil::ToJSONMap(const unordered_map<string, string> &map) {
 	}
 	writer.SetRoot(obj);
 	return writer.ToString(JSONWriteFlags::ALLOW_INVALID_UNICODE);
-}
-
-string ComplexJSON::GetValue(const string &key) const {
-	if (type == ComplexJSONType::OBJECT) {
-		if (obj_value.find(key) != obj_value.end()) {
-			return GetValueRecursive(*obj_value.at(key));
-		}
-	}
-	// Object either doesn't exist or this is just a string
-	return "";
-}
-
-string ComplexJSON::GetValue(const idx_t &index) const {
-	if (type == ComplexJSONType::ARRAY) {
-		if (index >= arr_value.size()) {
-			return "";
-		}
-		return GetValueRecursive(*arr_value[index]);
-	}
-	return "";
-}
-
-string ComplexJSON::GetValueRecursive(const ComplexJSON &child) {
-	if (child.type == ComplexJSONType::OBJECT) {
-		// We have to construct the nested json
-		JSONWriter writer;
-		auto obj = writer.CreateObject();
-		for (const auto &object : child.obj_value) {
-			obj.AddString(object.first, GetValueRecursive(*object.second));
-		}
-		writer.SetRoot(obj);
-		return writer.ToString(JSONWriteFlags::ALLOW_INVALID_UNICODE);
-	} else if (child.type == ComplexJSONType::ARRAY) {
-		JSONWriter writer;
-		auto arr = writer.CreateArray();
-		for (const auto &elem : child.arr_value) {
-			arr.AppendString(GetValueRecursive(*elem));
-		}
-		writer.SetRoot(arr);
-		return writer.ToString(JSONWriteFlags::ALLOW_INVALID_UNICODE);
-	} else {
-		// simple string we can just write
-		return child.str_value;
-	}
-}
-string StringUtil::ToComplexJSONMap(const ComplexJSON &complex_json) {
-	return ComplexJSON::GetValueRecursive(complex_json);
 }
 
 string StringUtil::ValidateJSON(const char *data, const idx_t &len) {

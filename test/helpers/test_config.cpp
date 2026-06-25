@@ -395,8 +395,7 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 		// read the config file
 		auto buffer = ReadFileToString(config_path);
 		// parse json
-		auto json = StringUtil::ParseJSONMap(buffer);
-		auto json_values = json->Flatten();
+		auto json_values = StringUtil::ParseJSONMap(buffer);
 
 		auto extends_it = json_values.find("extends");
 		if (extends_it != json_values.end()) {
