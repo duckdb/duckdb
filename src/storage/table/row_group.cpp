@@ -854,7 +854,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
 			}
 			auto &buffer_manager = block_manager.buffer_manager;
-			buffer_manager.Prefetch(prefetch_state.blocks);
+			buffer_manager.Prefetch(state.context, prefetch_state.blocks);
 		}
 
 		bool has_filters = filter_info.HasFilters();

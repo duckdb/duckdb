@@ -59,7 +59,7 @@ public:
 	virtual BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) = 0;
 	//! Pre-fetch a series of blocks.
 	//! Using this function is a performance suggestion.
-	virtual void Prefetch(vector<shared_ptr<BlockHandle>> &handles) = 0;
+	virtual void Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) = 0;
 	//! Unpin a block handle.
 	virtual void Unpin(shared_ptr<BlockHandle> &handle) = 0;
 

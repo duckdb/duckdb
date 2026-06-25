@@ -214,8 +214,9 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 	return Pin(block);
 }
 
-void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
-                                      block_id_t first_block, block_id_t last_block) {
+void StandardBufferManager::BatchRead(QueryContext context, vector<shared_ptr<BlockHandle>> &handles,
+                                      const map<block_id_t, idx_t> &load_map, block_id_t first_block,
+                                      block_id_t last_block) {
 	idx_t block_count = NumericCast<idx_t>(last_block - first_block + 1);
 	if (block_count == 1) {
 		if (Settings::Get<StorageBlockPrefetchSetting>(db) != StorageBlockPrefetch::DEBUG_FORCE_ALWAYS) {
@@ -234,7 +235,7 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 
 	// perform a batch read of the blocks into the buffer
 	auto &block_manager = handles[0]->GetBlockManager();
-	block_manager.ReadBlocks(intermediate_buffer.GetFileBuffer(), first_block, block_count);
+	block_manager.ReadBlocks(context, intermediate_buffer.GetFileBuffer(), first_block, block_count);
 
 	// the blocks are read - now we need to assign them to the individual blocks
 	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
@@ -267,7 +268,7 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 	}
 }
 
-void StandardBufferManager::Prefetch(vector<shared_ptr<BlockHandle>> &handles) {
+void StandardBufferManager::Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) {
 	// figure out which set of blocks we should load
 	map<block_id_t, idx_t> to_be_loaded;
 	for (idx_t block_idx = 0; block_idx < handles.size(); block_idx++) {
@@ -295,7 +296,7 @@ void StandardBufferManager::Prefetch(vector<shared_ptr<BlockHandle>> &handles) {
 		} else {
 			// this block is not adjacent to the previous block
 			// perform the batch read for the previous batch
-			BatchRead(handles, to_be_loaded, first_block, previous_block_id);
+			BatchRead(context, handles, to_be_loaded, first_block, previous_block_id);
 
 			// set the first_block and previous_block_id to the current block
 			first_block = entry.first;
@@ -303,7 +304,7 @@ void StandardBufferManager::Prefetch(vector<shared_ptr<BlockHandle>> &handles) {
 		}
 	}
 	// batch read the final batch
-	BatchRead(handles, to_be_loaded, first_block, previous_block_id);
+	BatchRead(context, handles, to_be_loaded, first_block, previous_block_id);
 }
 
 BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {

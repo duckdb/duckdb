@@ -1184,13 +1184,14 @@ void SingleFileBlockManager::Read(QueryContext context, Block &block) {
 	ReadAndChecksum(context, block, GetBlockLocation(block.id));
 }
 
-void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) {
+void SingleFileBlockManager::ReadBlocks(QueryContext context, FileBuffer &buffer, block_id_t start_block,
+                                        idx_t block_count) {
 	D_ASSERT(start_block >= 0);
 	D_ASSERT(block_count >= 1);
 
 	// read the buffer from disk
 	auto location = GetBlockLocation(start_block);
-	handle->Read(QueryContext(), buffer, location);
+	handle->Read(context, buffer, location);
 
 	// for each of the blocks - verify the checksum
 	auto ptr = buffer.InternalBuffer();
