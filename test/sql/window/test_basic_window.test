@@ -164,3 +164,41 @@ sales	-111.111111
 sales	0.000000
 sales	0.000000
 
+# partition-only windows with nulls and multiple partition keys
+query II
+WITH t AS (
+	SELECT i, CASE WHEN i % 5 = 0 THEN NULL ELSE i % 7 END AS p, i % 3 AS q
+	FROM range(10000) tbl(i)
+), w AS (
+	SELECT i, p, q, count(*) OVER (PARTITION BY p, q) AS c
+	FROM t
+), g AS (
+	SELECT p, q, count(*) AS c
+	FROM t
+	GROUP BY ALL
+)
+SELECT count(*), sum(CASE WHEN w.c = g.c THEN 1 ELSE 0 END)
+FROM w
+JOIN g ON w.p IS NOT DISTINCT FROM g.p AND w.q = g.q
+----
+10000	10000
+
+# ORDER BY windows still require ordering inside a partition
+query I
+WITH t AS (
+	SELECT i, i % 5 AS p
+	FROM range(1000) tbl(i)
+), w AS (
+	SELECT i, p, row_number() OVER (PARTITION BY p ORDER BY i DESC) AS rn
+	FROM t
+), g AS (
+	SELECT p, max(i) AS max_i
+	FROM t
+	GROUP BY p
+)
+SELECT count(*)
+FROM w
+JOIN g USING (p)
+WHERE rn = 1 AND i = max_i
+----
+5

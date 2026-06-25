@@ -29,12 +29,219 @@ public:
 	TupleDataParallelScanState parallel_scan;
 	atomic<idx_t> tasks_completed;
 	unique_ptr<GlobalSourceState> sort_source;
+	unique_ptr<ColumnDataCollection> direct_column_data;
 };
 
 HashedSortGroup::HashedSortGroup(ClientContext &client, Sort &sort, idx_t group_idx)
     : group_idx(group_idx), count(0), sort(sort), tasks_completed(0) {
 	sort_global = sort.GetGlobalSinkState(client);
 }
+
+enum class HashedSortKeyState : uint8_t { EMPTY, SINGLE_KEY, MULTIPLE_KEYS };
+
+class HashedSortKeyTracker {
+public:
+	struct Bin {
+		HashedSortKeyState state = HashedSortKeyState::EMPTY;
+		hash_t hash = 0;
+		vector<Value> values;
+	};
+
+	explicit HashedSortKeyTracker(idx_t key_count_p) : key_count(key_count_p) {
+	}
+
+	void Reset(idx_t radix_bits_p) {
+		radix_bits = radix_bits_p;
+		bins.clear();
+		bins.resize(RadixPartitioning::NumberOfPartitions(radix_bits));
+	}
+
+	bool CanBypass(idx_t hash_bin) const {
+		return hash_bin < bins.size() && bins[hash_bin].state == HashedSortKeyState::SINGLE_KEY;
+	}
+
+	void Update(DataChunk &keys, Vector &hashes, PartitionedTupleDataAppendState &append_state, idx_t count) {
+		if (bins.empty() || !count || AllTouchedBinsMixed(append_state)) {
+			return;
+		}
+
+		D_ASSERT(keys.ColumnCount() == key_count);
+		UnifiedVectorFormat hash_data;
+		hashes.ToUnifiedFormat(hash_data);
+		const auto hash_values = UnifiedVectorFormat::GetData<hash_t>(hash_data);
+
+		UnifiedVectorFormat partition_data;
+		append_state.partition_indices.ToUnifiedFormat(partition_data);
+		const auto partition_values = UnifiedVectorFormat::GetData<hash_t>(partition_data);
+
+		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+			const auto hash_idx = hash_data.sel->get_index(row_idx);
+			const auto partition_idx = partition_data.sel->get_index(row_idx);
+			UpdateRow(keys, row_idx, hash_values[hash_idx], partition_values[partition_idx]);
+		}
+	}
+
+	void Combine(const HashedSortKeyTracker &other) {
+		if (other.bins.empty()) {
+			return;
+		}
+		if (bins.empty()) {
+			radix_bits = other.radix_bits;
+			bins.resize(other.bins.size());
+		}
+		D_ASSERT(radix_bits == other.radix_bits);
+		D_ASSERT(bins.size() == other.bins.size());
+		for (idx_t bin_idx = 0; bin_idx < bins.size(); bin_idx++) {
+			CombineBin(bins[bin_idx], other.bins[bin_idx]);
+		}
+	}
+
+private:
+	bool AllTouchedBinsMixed(PartitionedTupleDataAppendState &append_state) const {
+		bool found = false;
+		for (auto it = append_state.fixed_partition_entries.begin(); it != append_state.fixed_partition_entries.end();
+		     ++it) {
+			found = true;
+			if (!IsMixed(it.GetKey())) {
+				return false;
+			}
+		}
+		for (auto &entry : append_state.partition_entries) {
+			found = true;
+			if (!IsMixed(entry.first)) {
+				return false;
+			}
+		}
+		return found;
+	}
+
+	bool IsMixed(idx_t bin_idx) const {
+		D_ASSERT(bin_idx < bins.size());
+		return bins[bin_idx].state == HashedSortKeyState::MULTIPLE_KEYS;
+	}
+
+	void StoreRepresentative(Bin &bin, DataChunk &keys, idx_t row_idx, hash_t hash) const {
+		bin.state = HashedSortKeyState::SINGLE_KEY;
+		bin.hash = hash;
+		bin.values.clear();
+		bin.values.reserve(key_count);
+		for (idx_t col_idx = 0; col_idx < key_count; col_idx++) {
+			bin.values.push_back(keys.GetValue(col_idx, row_idx));
+		}
+	}
+
+	static void MarkMixed(Bin &bin) {
+		bin.state = HashedSortKeyState::MULTIPLE_KEYS;
+		bin.values.clear();
+	}
+
+	bool MatchesRepresentative(const Bin &bin, DataChunk &keys, idx_t row_idx) const {
+		D_ASSERT(bin.values.size() == key_count);
+		for (idx_t col_idx = 0; col_idx < key_count; col_idx++) {
+			if (!Value::NotDistinctFrom(bin.values[col_idx], keys.GetValue(col_idx, row_idx))) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	void UpdateRow(DataChunk &keys, idx_t row_idx, hash_t hash, idx_t bin_idx) {
+		D_ASSERT(bin_idx < bins.size());
+		auto &bin = bins[bin_idx];
+		switch (bin.state) {
+		case HashedSortKeyState::EMPTY:
+			StoreRepresentative(bin, keys, row_idx, hash);
+			break;
+		case HashedSortKeyState::SINGLE_KEY:
+			if (bin.hash != hash || !MatchesRepresentative(bin, keys, row_idx)) {
+				MarkMixed(bin);
+			}
+			break;
+		case HashedSortKeyState::MULTIPLE_KEYS:
+			break;
+		}
+	}
+
+	void CombineBin(Bin &target, const Bin &source) const {
+		if (source.state == HashedSortKeyState::EMPTY || target.state == HashedSortKeyState::MULTIPLE_KEYS) {
+			return;
+		}
+		if (source.state == HashedSortKeyState::MULTIPLE_KEYS) {
+			MarkMixed(target);
+			return;
+		}
+		D_ASSERT(source.state == HashedSortKeyState::SINGLE_KEY);
+		if (target.state == HashedSortKeyState::EMPTY) {
+			target = source;
+			return;
+		}
+		D_ASSERT(target.state == HashedSortKeyState::SINGLE_KEY);
+		if (target.hash != source.hash) {
+			MarkMixed(target);
+			return;
+		}
+		for (idx_t col_idx = 0; col_idx < key_count; col_idx++) {
+			if (!Value::NotDistinctFrom(target.values[col_idx], source.values[col_idx])) {
+				MarkMixed(target);
+				return;
+			}
+		}
+	}
+
+private:
+	idx_t key_count;
+	idx_t radix_bits = 0;
+	vector<Bin> bins;
+};
+
+class HashedSortRepartitionObserver : public PartitionedTupleDataRepartitionObserver {
+public:
+	HashedSortRepartitionObserver(Allocator &allocator, HashedSortKeyTracker &tracker_p, const HashedSort &hashed_sort)
+	    : tracker(tracker_p), partition_key_ids(hashed_sort.partition_key_ids),
+	      hash_col_idx(hashed_sort.payload_types.size()), hash_vector(LogicalType::HASH) {
+		vector<LogicalType> key_types;
+		key_types.reserve(hashed_sort.partition_key_count);
+		for (idx_t key_idx = 0; key_idx < hashed_sort.partition_key_count; key_idx++) {
+			key_types.push_back(hashed_sort.partitions[key_idx].expression->GetReturnType());
+		}
+		keys.Initialize(allocator, key_types);
+	}
+
+	void RepartitionChunk(TupleDataCollection &source_partition, TupleDataChunkState &source_chunk,
+	                      PartitionedTupleDataAppendState &target_append, idx_t count) override {
+		if (!count) {
+			return;
+		}
+
+		if (key_gather_state.column_ids.empty()) {
+			source_partition.InitializeChunkState(key_gather_state, partition_key_ids);
+			source_partition.InitializeChunkState(hash_gather_state, {hash_col_idx});
+		}
+
+		keys.Reset();
+		TupleDataCollection::ResetCachedCastVectors(key_gather_state, partition_key_ids);
+		source_partition.Gather(source_chunk.row_locations, *FlatVector::IncrementalSelectionVector(), count,
+		                        partition_key_ids, keys, *FlatVector::IncrementalSelectionVector(),
+		                        key_gather_state.cached_cast_vectors);
+		keys.SetChildCardinality(count);
+
+		TupleDataCollection::ResetCachedCastVectors(hash_gather_state, hash_gather_state.column_ids);
+		source_partition.Gather(source_chunk.row_locations, *FlatVector::IncrementalSelectionVector(), count,
+		                        hash_col_idx, hash_vector, *FlatVector::IncrementalSelectionVector(),
+		                        hash_gather_state.cached_cast_vectors[0].get());
+
+		tracker.Update(keys, hash_vector, target_append, count);
+	}
+
+private:
+	HashedSortKeyTracker &tracker;
+	const vector<column_t> &partition_key_ids;
+	column_t hash_col_idx;
+	DataChunk keys;
+	Vector hash_vector;
+	TupleDataChunkState key_gather_state;
+	TupleDataChunkState hash_gather_state;
+};
 
 //===--------------------------------------------------------------------===//
 // HashedSortGlobalSinkState
@@ -53,9 +260,12 @@ public:
 	// OVER(PARTITION BY...) (hash grouping)
 	unique_ptr<RadixPartitionedTupleData> CreatePartition(idx_t new_bits) const;
 	void SyncPartitioning(const HashedSortGlobalSinkState &other);
-	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &partition_append);
-	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
+	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &partition_append,
+	                          optional_ptr<HashedSortKeyTracker> local_tracker);
+	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append,
+	                           optional_ptr<HashedSortKeyTracker> local_tracker);
 	ProgressData GetSinkProgress(ClientContext &context, const ProgressData source_progress) const;
+	bool CanBypassSort(idx_t hash_bin) const;
 
 	//! System and query state
 	ClientContext &client;
@@ -68,6 +278,7 @@ public:
 	GroupingPartition grouping_data;
 	//! Payload plus hash column
 	shared_ptr<TupleDataLayout> grouping_types_ptr;
+	unique_ptr<HashedSortKeyTracker> single_key_tracker;
 	//! The number of radix bits if this partition is being synced with another
 	idx_t fixed_bits;
 
@@ -80,12 +291,17 @@ public:
 
 private:
 	void Rehash(idx_t cardinality);
-	void SyncLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
+	void SyncLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append,
+	                        optional_ptr<HashedSortKeyTracker> local_tracker);
 };
 
 HashedSortGlobalSinkState::HashedSortGlobalSinkState(ClientContext &client, const HashedSort &hashed_sort)
     : client(client), hashed_sort(hashed_sort), buffer_manager(BufferManager::GetBufferManager(client)),
       allocator(Allocator::Get(client)), fixed_bits(0), max_bits(1), count(0) {
+	if (hashed_sort.can_bypass_single_key_sort) {
+		single_key_tracker = make_uniq<HashedSortKeyTracker>(hashed_sort.partition_key_count);
+	}
+
 	const auto memory_per_thread = PhysicalOperator::GetMaxThreadMemory(client);
 	const auto thread_pages = PreviousPowerOfTwo(memory_per_thread / (4 * buffer_manager.GetBlockAllocSize()));
 	while (max_bits < 8 && (thread_pages >> max_bits) > 1) {
@@ -123,10 +339,14 @@ void HashedSortGlobalSinkState::Rehash(idx_t cardinality) {
 	// Repartition the grouping data
 	if (new_bits != bits) {
 		grouping_data = CreatePartition(new_bits);
+		if (single_key_tracker) {
+			single_key_tracker->Reset(new_bits);
+		}
 	}
 }
 
-void HashedSortGlobalSinkState::SyncLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append) {
+void HashedSortGlobalSinkState::SyncLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append,
+                                                   optional_ptr<HashedSortKeyTracker> local_tracker) {
 	// We are done if the local_partition is right sized.
 	const auto new_bits = grouping_data->GetRadixBits();
 	if (local_partition->GetRadixBits() == new_bits) {
@@ -136,7 +356,12 @@ void HashedSortGlobalSinkState::SyncLocalPartition(GroupingPartition &local_part
 	// If the local partition is now too small, flush it and reallocate
 	auto new_partition = CreatePartition(new_bits);
 	local_partition->FlushAppendState(*local_append);
-	local_partition->Repartition(client, *new_partition);
+	unique_ptr<HashedSortRepartitionObserver> observer;
+	if (local_tracker) {
+		local_tracker->Reset(new_bits);
+		observer = make_uniq<HashedSortRepartitionObserver>(allocator, *local_tracker, hashed_sort);
+	}
+	local_partition->Repartition(client, *new_partition, observer.get());
 
 	local_partition = std::move(new_partition);
 	local_append = make_uniq<PartitionedTupleDataAppendState>();
@@ -144,13 +369,17 @@ void HashedSortGlobalSinkState::SyncLocalPartition(GroupingPartition &local_part
 }
 
 void HashedSortGlobalSinkState::UpdateLocalPartition(GroupingPartition &local_partition,
-                                                     GroupingAppend &partition_append) {
+                                                     GroupingAppend &partition_append,
+                                                     optional_ptr<HashedSortKeyTracker> local_tracker) {
 	// First call: initialize the local partition
 	if (!local_partition) {
 		lock_guard<mutex> guard(lock);
 		local_partition = CreatePartition(grouping_data->GetRadixBits());
 		partition_append = make_uniq<PartitionedTupleDataAppendState>();
 		local_partition->InitializeAppendState(*partition_append);
+		if (local_tracker) {
+			local_tracker->Reset(local_partition->GetRadixBits());
+		}
 		return;
 	}
 
@@ -169,7 +398,12 @@ void HashedSortGlobalSinkState::UpdateLocalPartition(GroupingPartition &local_pa
 
 		auto new_partition = CreatePartition(new_bits);
 		local_partition->FlushAppendState(*partition_append);
-		local_partition->Repartition(client, *new_partition);
+		unique_ptr<HashedSortRepartitionObserver> observer;
+		if (local_tracker) {
+			local_tracker->Reset(new_bits);
+			observer = make_uniq<HashedSortRepartitionObserver>(allocator, *local_tracker, hashed_sort);
+		}
+		local_partition->Repartition(client, *new_partition, observer.get());
 		local_partition = std::move(new_partition);
 		partition_append = make_uniq<PartitionedTupleDataAppendState>();
 		local_partition->InitializeAppendState(*partition_append);
@@ -182,11 +416,14 @@ void HashedSortGlobalSinkState::SyncPartitioning(const HashedSortGlobalSinkState
 	const auto old_bits = grouping_data ? grouping_data->GetRadixBits() : 0;
 	if (fixed_bits != old_bits) {
 		grouping_data = CreatePartition(fixed_bits);
+		if (single_key_tracker) {
+			single_key_tracker->Reset(fixed_bits);
+		}
 	}
 }
 
-void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_partition,
-                                                      GroupingAppend &local_append) {
+void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append,
+                                                      optional_ptr<HashedSortKeyTracker> local_tracker) {
 	if (!local_partition) {
 		return;
 	}
@@ -195,7 +432,7 @@ void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_p
 	// Make sure grouping_data doesn't change under us.
 	// Combine has an internal mutex, so this is single-threaded anyway.
 	lock_guard<mutex> guard(lock);
-	SyncLocalPartition(local_partition, local_append);
+	SyncLocalPartition(local_partition, local_append, local_tracker);
 	fixed_bits = true;
 
 	//	We now know the number of hash_groups (some may be empty)
@@ -218,7 +455,14 @@ void HashedSortGlobalSinkState::CombineLocalPartition(GroupingPartition &local_p
 	}
 
 	//	Combine the thread data into the global data
+	if (single_key_tracker && local_tracker) {
+		single_key_tracker->Combine(*local_tracker);
+	}
 	grouping_data->Combine(*local_partition);
+}
+
+bool HashedSortGlobalSinkState::CanBypassSort(idx_t hash_bin) const {
+	return single_key_tracker && single_key_tracker->CanBypass(hash_bin);
 }
 
 ProgressData HashedSortGlobalSinkState::GetSinkProgress(ClientContext &client, const ProgressData source) const {
@@ -311,6 +555,7 @@ public:
 	//! OVER(PARTITION BY...) (hash grouping)
 	GroupingPartition local_grouping;
 	GroupingAppend grouping_append;
+	unique_ptr<HashedSortKeyTracker> single_key_tracker;
 
 	//! (optional) HyperLogLog state
 	optional_ptr<ParallelHyperLogLogLocalState> hll;
@@ -337,6 +582,10 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 	group_chunk.Initialize(allocator, group_types);
 	hash_types.emplace_back(LogicalType::HASH);
 	payload_chunk.Initialize(allocator, hash_types);
+
+	if (hashed_sort.can_bypass_single_key_sort) {
+		single_key_tracker = make_uniq<HashedSortKeyTracker>(hashed_sort.partition_key_count);
+	}
 }
 
 void HashedSort::Synchronize(const GlobalSinkState &source, GlobalSinkState &target) const {
@@ -404,8 +653,11 @@ SinkResultType HashedSort::Sink(ExecutionContext &context, DataChunk &input_chun
 
 	auto &local_grouping = lstate.local_grouping;
 	auto &grouping_append = lstate.grouping_append;
-	gstate.UpdateLocalPartition(local_grouping, grouping_append);
+	gstate.UpdateLocalPartition(local_grouping, grouping_append, lstate.single_key_tracker.get());
 	local_grouping->Append(*grouping_append, payload_chunk);
+	if (lstate.single_key_tracker) {
+		lstate.single_key_tracker->Update(lstate.group_chunk, hash_vector, *grouping_append, input_chunk.size());
+	}
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -422,7 +674,7 @@ SinkCombineResultType HashedSort::Combine(ExecutionContext &context, OperatorSin
 
 	// Flush our data and lock the bit count
 	auto &grouping_append = lstate.grouping_append;
-	gstate.CombineLocalPartition(local_grouping, grouping_append);
+	gstate.CombineLocalPartition(local_grouping, grouping_append, lstate.single_key_tracker.get());
 
 	return SinkCombineResultType::FINISHED;
 }
@@ -432,39 +684,65 @@ void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, Oper
 
 	//	Loop over the partitions and add them to each hash group's global sort state
 	auto &partitions = gstate.grouping_data->GetPartitions();
-	if (hash_bin < partitions.size()) {
-		auto &partition = *partitions[hash_bin];
-		if (!partition.Count()) {
-			return;
-		}
+	if (hash_bin >= partitions.size()) {
+		return;
+	}
 
-		auto &hash_group = *gstate.hash_groups[hash_bin];
-		auto &parallel_scan = hash_group.parallel_scan;
+	auto &partition = *partitions[hash_bin];
+	if (!partition.Count()) {
+		return;
+	}
 
-		DataChunk chunk;
-		partition.InitializeScanChunk(parallel_scan.scan_state, chunk);
-		TupleDataLocalScanState local_scan;
-		partition.InitializeScan(local_scan);
+	auto &hash_group = *gstate.hash_groups[hash_bin];
+	auto &parallel_scan = hash_group.parallel_scan;
 
-		auto sort_local = sort->GetLocalSinkState(context);
-		OperatorSinkInput sink {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
+	DataChunk chunk;
+	partition.InitializeScanChunk(parallel_scan.scan_state, chunk);
+	TupleDataLocalScanState local_scan;
+	partition.InitializeScan(local_scan);
+
+	if (gstate.CanBypassSort(hash_bin)) {
+		auto local_column_data = make_uniq<ColumnDataCollection>(context.client, payload_types,
+		                                                         ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+		ColumnDataAppendState append_state;
+		local_column_data->InitializeAppend(append_state);
+
 		idx_t combined = 0;
 		while (partition.Scan(hash_group.parallel_scan, local_scan, chunk)) {
-			sort->Sink(context, chunk, sink);
+			local_column_data->Append(append_state, chunk);
 			combined += chunk.size();
 		}
 
-		OperatorSinkCombineInput combine {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
-		sort->Combine(context, combine);
-		hash_group.count += combined;
-
-		//	Whoever finishes last can Finalize
-		lock_guard<mutex> finalize_guard(hash_group.scan_lock);
-		if (hash_group.count == partition.Count() && !hash_group.sort_source) {
-			OperatorSinkFinalizeInput lfinalize {*hash_group.sort_global, finalize.interrupt_state};
-			sort->Finalize(context.client, lfinalize);
-			hash_group.sort_source = sort->GetGlobalSourceState(context.client, *hash_group.sort_global);
+		lock_guard<mutex> direct_guard(hash_group.scan_lock);
+		if (combined) {
+			if (!hash_group.direct_column_data) {
+				hash_group.direct_column_data = std::move(local_column_data);
+			} else {
+				hash_group.direct_column_data->Combine(*local_column_data);
+			}
+			hash_group.count += combined;
 		}
+		return;
+	}
+
+	auto sort_local = sort->GetLocalSinkState(context);
+	OperatorSinkInput sink {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
+	idx_t combined = 0;
+	while (partition.Scan(hash_group.parallel_scan, local_scan, chunk)) {
+		sort->Sink(context, chunk, sink);
+		combined += chunk.size();
+	}
+
+	OperatorSinkCombineInput combine {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
+	sort->Combine(context, combine);
+	hash_group.count += combined;
+
+	//	Whoever finishes last can Finalize
+	lock_guard<mutex> finalize_guard(hash_group.scan_lock);
+	if (hash_group.count == partition.Count() && !hash_group.sort_source) {
+		OperatorSinkFinalizeInput lfinalize {*hash_group.sort_global, finalize.interrupt_state};
+		sort->Finalize(context.client, lfinalize);
+		hash_group.sort_source = sort->GetGlobalSourceState(context.client, *hash_group.sort_global);
 	}
 }
 
@@ -535,6 +813,8 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
                        bool require_payload)
     : SortStrategy(input_types), estimated_cardinality(estimated_cardinality) {
 	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
+	partition_key_count = partitions.size();
+	can_bypass_single_key_sort = order_bys.empty();
 
 	//	We have to compute ordering expressions ourselves and materialise them.
 	//	To do this, we scan the orders and add generate extra payload columns that we can reference.
@@ -554,6 +834,9 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
 		sort_ids.emplace_back(idx);
 		payload_types.emplace_back(type);
 		sort_exprs.emplace_back(std::move(saved));
+	}
+	for (idx_t key_idx = 0; key_idx < partition_key_count; key_idx++) {
+		partition_key_ids.push_back(sort_ids[key_idx]);
 	}
 
 	// If a payload column is required, check whether there is one already
@@ -613,6 +896,10 @@ static SourceResultType MaterializeHashGroupData(ExecutionContext &context, idx_
 		}
 	}
 
+	if (!build_runs && gsink.CanBypassSort(hash_bin)) {
+		return SourceResultType::FINISHED;
+	}
+
 	auto &sort = hash_group.sort;
 	auto &sort_global = *hash_group.sort_source;
 	auto sort_local = sort.GetLocalSourceState(context, sort_global);
@@ -634,6 +921,14 @@ HashedSort::HashGroupPtr HashedSort::GetColumnData(idx_t hash_bin, OperatorSourc
 	auto &gsource = source.global_state.Cast<HashedSortGlobalSourceState>();
 	auto &gsink = gsource.gsink;
 	auto &hash_group = *gsink.hash_groups[hash_bin];
+
+	if (gsink.CanBypassSort(hash_bin)) {
+		auto result = std::move(hash_group.direct_column_data);
+		if (result && result->Count() == hash_group.count) {
+			return result;
+		}
+		return nullptr;
+	}
 
 	auto &sort = hash_group.sort;
 	auto &sort_global = *hash_group.sort_source;

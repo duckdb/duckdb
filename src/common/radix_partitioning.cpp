@@ -19,8 +19,7 @@ public:
 public:
 	//! Apply bitmask and right shift to get a number between 0 and NUM_PARTITIONS
 	static hash_t ApplyMask(const hash_t hash) {
-		D_ASSERT((hash & MASK) >> SHIFT < NUM_PARTITIONS);
-		return (hash & MASK) >> SHIFT;
+		return RadixPartitioning::ApplyMask(hash, radix_bits);
 	}
 };
 
