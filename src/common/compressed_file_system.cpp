@@ -174,7 +174,8 @@ int64_t CompressedFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr
 void CompressedFileSystem::Reset(FileHandle &handle) {
 	auto &compressed_file = handle.Cast<CompressedFile>();
 	compressed_file.child_handle->Reset();
-	compressed_file.Initialize(QueryContext(), compressed_file.write);
+	// Preserve the query context across a reset so re-reads (e.g. the scan after the CSV sniffer) stay attributed.
+	compressed_file.Initialize(compressed_file.context, compressed_file.write);
 }
 
 int64_t CompressedFileSystem::GetFileSize(FileHandle &handle) {

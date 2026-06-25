@@ -88,8 +88,7 @@
 			"include": ["{dir}/in.csv.gz"],
 			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.csv.gz' (FORMAT csv, COMPRESSION gzip)"],
 			"measure": ["SELECT count(*), sum(i) FROM read_csv('{dir}/in.csv.gz')"],
-			"check": ["read", "write"],
-			"skip": "FIXME: the gzip CSV file is read twice at the OS level (the CSV sniffer/schema-detection pass plus the actual scan) but only the scan is attributed, so io.total_bytes_read is reported as ~half the real compressed bytes. The CSV sniffer opens the file without a QueryContext-carrying opener, so its compressed child reads are not attributed. Remove once the CSV sniffer threads a QueryContext into its file open."
+			"check": ["read", "write"]
 		},
 		{
 			"name": "json_read",
