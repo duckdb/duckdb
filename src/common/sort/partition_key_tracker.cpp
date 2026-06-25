@@ -15,12 +15,12 @@ static idx_t GetPartitionRowIndex(PartitionedTupleDataAppendState &append_state,
 }
 
 PartitionKeyTracker::PartitionKeyTracker(Allocator &allocator_p, const vector<LogicalType> &key_types_p)
-    : allocator(allocator_p), key_types(key_types_p), key_count(key_types.size()) {
+    : key_count(key_types_p.size()) {
 	single_value_sel.Initialize();
 	candidate_input_sel.Initialize();
 	candidate_rep_sel.Initialize();
 	mismatch_sel.Initialize();
-	representatives.Initialize(allocator, key_types);
+	representatives.Initialize(allocator_p, key_types_p);
 }
 
 void PartitionKeyTracker::Reset(idx_t radix_bits_p) {
@@ -85,11 +85,6 @@ void PartitionKeyTracker::Combine(const PartitionKeyTracker &other) {
 	if (candidate_count) {
 		CompareTrackerCandidates(other, candidate_count);
 	}
-}
-
-bool PartitionKeyTracker::IsMixed(idx_t bin_idx) const {
-	D_ASSERT(bin_idx < states.size());
-	return states[bin_idx] == State::MULTIPLE_KEYS;
 }
 
 void PartitionKeyTracker::StoreRepresentative(DataChunk &keys, idx_t row_idx, hash_t hash, idx_t bin_idx) {
@@ -162,12 +157,11 @@ idx_t PartitionKeyTracker::CompactCandidates(idx_t candidate_count) {
 	idx_t new_count = 0;
 	for (idx_t candidate_idx = 0; candidate_idx < candidate_count; candidate_idx++) {
 		const auto bin_idx = candidate_rep_sel.get_index_unsafe(candidate_idx);
-		if (states[bin_idx] != State::SINGLE_KEY) {
-			continue;
-		}
-		candidate_input_sel.set_index(new_count, candidate_input_sel.get_index_unsafe(candidate_idx));
+		const auto input_idx = candidate_input_sel.get_index_unsafe(candidate_idx);
+		const auto keep = states[bin_idx] == State::SINGLE_KEY;
+		candidate_input_sel.set_index(new_count, input_idx);
 		candidate_rep_sel.set_index(new_count, bin_idx);
-		new_count++;
+		new_count += keep;
 	}
 	return new_count;
 }
@@ -216,12 +210,11 @@ idx_t PartitionKeyTracker::CompactTrackerCandidates(idx_t candidate_count) {
 	idx_t new_count = 0;
 	for (idx_t candidate_idx = 0; candidate_idx < candidate_count; candidate_idx++) {
 		const auto bin_idx = candidate_input_sel.get_index_unsafe(candidate_idx);
-		if (states[bin_idx] != State::SINGLE_KEY) {
-			continue;
-		}
+		const auto source_bin_idx = candidate_rep_sel.get_index_unsafe(candidate_idx);
+		const auto keep = states[bin_idx] == State::SINGLE_KEY;
 		candidate_input_sel.set_index(new_count, bin_idx);
-		candidate_rep_sel.set_index(new_count, candidate_rep_sel.get_index_unsafe(candidate_idx));
-		new_count++;
+		candidate_rep_sel.set_index(new_count, source_bin_idx);
+		new_count += keep;
 	}
 	return new_count;
 }

@@ -25,7 +25,6 @@ public:
 private:
 	enum class State : uint8_t { EMPTY, SINGLE_KEY, MULTIPLE_KEYS };
 
-	bool IsMixed(idx_t bin_idx) const;
 	void StoreRepresentative(DataChunk &keys, idx_t row_idx, hash_t hash, idx_t bin_idx);
 	void StoreRepresentative(const PartitionKeyTracker &source, idx_t source_bin, idx_t target_bin);
 	void MarkMixed(idx_t bin_idx);
@@ -39,8 +38,6 @@ private:
 	void CompareTrackerCandidates(const PartitionKeyTracker &source, idx_t candidate_count);
 
 private:
-	Allocator &allocator;
-	vector<LogicalType> key_types;
 	idx_t key_count;
 	idx_t radix_bits = 0;
 	unsafe_vector<State> states;
