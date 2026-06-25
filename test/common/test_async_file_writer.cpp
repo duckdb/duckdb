@@ -909,7 +909,7 @@ TEST_CASE("AsyncFileWriter coalesces remote non-positional writes", "[async_file
 TEST_CASE("AsyncFileWriter uses remote coalescing when local file delay is enabled", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
-	REQUIRE_NO_FAIL(con->Query("SET GLOBAL debug_local_file_system_delay_ms=1"));
+	REQUIRE_NO_FAIL(con->Query("SET GLOBAL debug_fs_delay_mean_ms=1.0"));
 	BlockingWriteFileSystem fs(true);
 	auto path = TestCreatePath("async_file_writer_debug_delay_remote_coalesce.tmp");
 	if (fs.FileExists(path)) {

@@ -267,7 +267,7 @@ bool AsyncFileWriter::SupportsPositionalWrites() {
 }
 
 bool AsyncFileWriter::IsLocalFile() {
-	if (Settings::Get<DebugLocalFileSystemDelayMsSetting>(client_context) > 0) {
+	if (Settings::Get<DebugFsDelayMeanMsSetting>(client_context) > 0.0) {
 		return false;
 	}
 	auto local_file = fs.IsLocalFileSystem();
