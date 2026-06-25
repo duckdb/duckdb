@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -323,6 +324,12 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			RemoveUnusedColumns remove(*this, true);
 			remove.VisitOperator(op.children[0]);
 		}
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_CHUNK_GET: {
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		auto &get = op.Cast<LogicalColumnDataGet>();
+		RemoveColumnsFromLogicalColumnDataGet(get);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
@@ -731,6 +738,16 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 		throw InternalException("CheckPushdownExtract not supported for LogicalOperatorType::%s",
 		                        EnumUtil::ToString(op.type));
 	}
+}
+
+void RemoveUnusedColumns::RemoveColumnsFromLogicalColumnDataGet(LogicalColumnDataGet &get) {
+	if (everything_referenced) {
+		return;
+	}
+
+	auto column_ids = get.GetColumnIds();
+	ClearUnusedExpressions(column_ids, get.table_index);
+	get.SetColumnIds(std::move(column_ids));
 }
 
 void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref) {

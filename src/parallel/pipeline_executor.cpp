@@ -19,7 +19,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
 		required_partition_info = pipeline.sink->RequiredPartitionInfo();
 		if (required_partition_info.AnyRequired()) {
-			D_ASSERT(pipeline.source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex()));
+			D_ASSERT(pipeline.source->SupportsPartitioning(required_partition_info));
 			auto &partition_info = local_sink_state->partition_info;
 			D_ASSERT(!partition_info.batch_index.IsValid());
 			// batch index is not set yet - initialize before fetching anything
@@ -83,7 +83,7 @@ void PipelineExecutor::Reset() {
 		required_partition_info = pipeline.sink->RequiredPartitionInfo();
 		local_sink_state->partition_info = SourcePartitionInfo();
 		if (required_partition_info.AnyRequired()) {
-			D_ASSERT(pipeline.source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex()));
+			D_ASSERT(pipeline.source->SupportsPartitioning(required_partition_info));
 			auto &partition_info = local_sink_state->partition_info;
 			D_ASSERT(!partition_info.batch_index.IsValid());
 			partition_info.batch_index = pipeline.RegisterNewBatchIndex();

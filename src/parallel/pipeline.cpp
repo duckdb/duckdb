@@ -164,7 +164,7 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	// Handle partition requirements specific to scheduling
 	auto partition_info = sink->RequiredPartitionInfo();
 	if (partition_info.batch_index) {
-		if (!source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex())) {
+		if (!source->SupportsPartitioning(partition_info)) {
 			throw InternalException(
 			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
 		}
@@ -363,10 +363,11 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}
 	auto source_state = GetSourceState();
+	auto partition_info = sink ? sink->RequiredPartitionInfo() : OperatorPartitionInfo::NoPartitionInfo();
 	if (allow_reuse && source_state && source_state->SupportsReuse()) {
 		source_state->Reset(client);
 	} else {
-		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(client)));
+		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(client, partition_info)));
 	}
 	initialized = true;
 }
@@ -377,7 +378,8 @@ void Pipeline::ResetSource(bool force) {
 	}
 	auto source_state = GetSourceState();
 	if (force || !source_state) {
-		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(GetClientContext())));
+		auto partition_info = sink ? sink->RequiredPartitionInfo() : OperatorPartitionInfo::NoPartitionInfo();
+		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(GetClientContext(), partition_info)));
 	}
 }
 

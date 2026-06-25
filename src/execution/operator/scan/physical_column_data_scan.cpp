@@ -11,36 +11,64 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
-static constexpr idx_t COLUMN_DATA_SCAN_BATCH_SIZE = STANDARD_VECTOR_SIZE * 50ULL;
-
 static idx_t ColumnDataScanBatchCount(idx_t count, idx_t batch_size) {
 	return MaxValue<idx_t>(count / batch_size + (count % batch_size != 0), 1);
+}
+
+static idx_t GetColumnDataScanBatchSize(ClientContext &context, const OperatorPartitionInfo &partition_info) {
+	if (ClientConfig::GetConfig(context).verify_parallelism) {
+		return STANDARD_VECTOR_SIZE;
+	}
+	if (partition_info.preferred_batch_size.IsValid() && partition_info.preferred_batch_size.GetIndex() > 0) {
+		return partition_info.preferred_batch_size.GetIndex();
+	}
+	return DEFAULT_ROW_GROUP_SIZE;
+}
+
+static vector<column_t> GenerateColumnDataColumnIds(const vector<LogicalType> &types) {
+	vector<column_t> column_ids;
+	column_ids.reserve(types.size());
+	for (idx_t i = 0; i < types.size(); i++) {
+		column_ids.push_back(i);
+	}
+	return column_ids;
 }
 
 PhysicalColumnDataScan::PhysicalColumnDataScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                                PhysicalOperatorType op_type, idx_t estimated_cardinality,
                                                optionally_owned_ptr<ColumnDataCollection> collection_p)
     : PhysicalOperator(physical_plan, op_type, std::move(types), estimated_cardinality),
-      collection(std::move(collection_p)) {
+      collection(std::move(collection_p)), column_ids(GenerateColumnDataColumnIds(this->types)) {
+}
+
+PhysicalColumnDataScan::PhysicalColumnDataScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                               PhysicalOperatorType op_type, idx_t estimated_cardinality,
+                                               optionally_owned_ptr<ColumnDataCollection> collection_p,
+                                               vector<column_t> column_ids_p)
+    : PhysicalOperator(physical_plan, op_type, std::move(types), estimated_cardinality),
+      collection(std::move(collection_p)), column_ids(std::move(column_ids_p)) {
+	D_ASSERT(this->types.size() == column_ids.size());
 }
 
 PhysicalColumnDataScan::PhysicalColumnDataScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                                PhysicalOperatorType op_type, idx_t estimated_cardinality,
                                                TableIndex cte_index)
     : PhysicalOperator(physical_plan, op_type, std::move(types), estimated_cardinality), collection(nullptr),
-      cte_index(cte_index) {
+      column_ids(GenerateColumnDataColumnIds(this->types)), cte_index(cte_index) {
 }
 
 class PhysicalColumnDataGlobalScanState : public GlobalSourceState {
 public:
-	PhysicalColumnDataGlobalScanState(ClientContext &context, const ColumnDataCollection &collection)
-	    : batch_size(ClientConfig::GetConfig(context).verify_parallelism ? STANDARD_VECTOR_SIZE
-	                                                                     : COLUMN_DATA_SCAN_BATCH_SIZE),
+	PhysicalColumnDataGlobalScanState(ClientContext &context, const ColumnDataCollection &collection,
+	                                  const vector<column_t> &column_ids,
+	                                  const OperatorPartitionInfo &partition_info)
+	    : batch_size(GetColumnDataScanBatchSize(context, partition_info)),
 	      max_threads(ColumnDataScanBatchCount(collection.Count(), batch_size)) {
-		collection.InitializeScan(global_scan_state);
+		collection.InitializeScan(global_scan_state, column_ids);
 	}
 
 	idx_t MaxThreads() override {
@@ -102,7 +130,16 @@ unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(Clien
 	if (!collection) {
 		return make_uniq<GlobalSourceState>();
 	}
-	return make_uniq<PhysicalColumnDataGlobalScanState>(context, *collection);
+	return GetGlobalSourceState(context, OperatorPartitionInfo::NoPartitionInfo());
+}
+
+unique_ptr<GlobalSourceState>
+PhysicalColumnDataScan::GetGlobalSourceState(ClientContext &context,
+                                             const OperatorPartitionInfo &partition_info) const {
+	if (!collection) {
+		return make_uniq<GlobalSourceState>();
+	}
+	return make_uniq<PhysicalColumnDataGlobalScanState>(context, *collection, column_ids, partition_info);
 }
 
 unique_ptr<LocalSourceState> PhysicalColumnDataScan::GetLocalSourceState(ExecutionContext &,
@@ -120,8 +157,14 @@ SourceResultType PhysicalColumnDataScan::GetDataInternal(ExecutionContext &conte
 	}
 
 	auto &entry = lstate.entries[lstate.entry_index++];
-	collection->ScanAtIndex(gstate.global_scan_state, lstate.local_scan_state, chunk, entry.chunk_index,
-	                        entry.segment_index, entry.row_index);
+	if (column_ids.empty()) {
+		chunk.Reset();
+		auto &chunk_data = collection->GetSegments()[entry.segment_index]->chunk_data[entry.chunk_index];
+		chunk.SetChildCardinality(chunk_data.count);
+	} else {
+		collection->ScanAtIndex(gstate.global_scan_state, lstate.local_scan_state, chunk, entry.chunk_index,
+		                        entry.segment_index, entry.row_index);
+	}
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
