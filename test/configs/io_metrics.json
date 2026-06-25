@@ -58,6 +58,14 @@
 			"check": ["read", "write"]
 		},
 		{
+			"name": "parquet_read_no_prefetch",
+			"include": ["{dir}/in.parquet"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.parquet' (FORMAT parquet)"],
+			"settings": ["SET disable_parquet_prefetching=true"],
+			"measure": ["SELECT count(*), sum(i), sum(j) FROM read_parquet('{dir}/in.parquet')"],
+			"check": ["read", "write"]
+		},
+		{
 			"name": "csv_read",
 			"include": ["{dir}/in.csv"],
 			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.csv' (FORMAT csv)"],

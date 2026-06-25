@@ -114,7 +114,7 @@ def read_io_metric(path):
 	return int(io.get("total_bytes_read", 0) or 0), int(io.get("total_bytes_written", 0) or 0)
 
 
-def run_measure(duckdb, statements, include, exclude, env_inject, shim_lib, workdir, database):
+def run_measure(duckdb, statements, include, exclude, env_inject, shim_lib, workdir, database, settings):
 	"""
 	Run the instrumented statements and return (reported_read, reported_written,
 	os_read, os_written). os_* is the shim's syscall-level ground truth; reported_*
@@ -129,13 +129,14 @@ def run_measure(duckdb, statements, include, exclude, env_inject, shim_lib, work
 	env["IOSHIM_OUT"] = os_out
 	env[env_inject] = shim_lib
 
+	prelude = PROFILING_PRELUDE + [s.rstrip(";") + ";" for s in settings]
 	rep_r = rep_w = 0
 	if len(statements) == 1:
 		# Single statement: simple one-shot, one profiling file. This is the exact
 		# path used by the clean (passing) external-file cases.
 		prof = os.path.join(workdir, "prof.json")
-		script = "\n".join(PROFILING_PRELUDE + [f"PRAGMA profiling_output='{prof}';",
-		                                        statements[0].rstrip(";") + ";"])
+		script = "\n".join(prelude + [f"PRAGMA profiling_output='{prof}';",
+		                              statements[0].rstrip(";") + ";"])
 		res = subprocess.run([duckdb, "-batch", database], input=script, text=True,
 		                     capture_output=True, env=env)
 		if res.returncode != 0:
@@ -145,7 +146,7 @@ def run_measure(duckdb, statements, include, exclude, env_inject, shim_lib, work
 		# Multiple statements (e.g. CREATE/CHECKPOINT): drive them one at a time over
 		# stdin, reading each statement's profile before the next pragma overwrites
 		# it, and sum the reported metric across statements.
-		rep_r, rep_w = _run_measure_multi(duckdb, statements, env, workdir, database)
+		rep_r, rep_w = _run_measure_multi(duckdb, statements, env, workdir, database, prelude)
 
 	os_r, os_w = read_io_metric_os(os_out)
 	return rep_r, rep_w, os_r, os_w
@@ -157,7 +158,7 @@ def read_io_metric_os(path):
 	return int(d["os_bytes_read"]), int(d["os_bytes_written"])
 
 
-def _run_measure_multi(duckdb, statements, env, workdir, database):
+def _run_measure_multi(duckdb, statements, env, workdir, database, prelude):
 	proc = subprocess.Popen([duckdb, "-batch", database], stdin=subprocess.PIPE,
 	                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
 	                        text=True, env=env, bufsize=1)
@@ -166,7 +167,7 @@ def _run_measure_multi(duckdb, statements, env, workdir, database):
 		proc.stdin.write(line + "\n")
 		proc.stdin.flush()
 
-	for line in PROFILING_PRELUDE:
+	for line in prelude:
 		send(line)
 
 	rep_r = rep_w = 0
@@ -238,7 +239,8 @@ def main():
 		try:
 			run_prep(duckdb, [subst(s) for s in t.get("prep", [])])
 			rep_r, rep_w, os_r, os_w = run_measure(
-			    duckdb, [subst(s) for s in t["measure"]], include, exclude, env_inject, shim_lib, workdir, database)
+			    duckdb, [subst(s) for s in t["measure"]], include, exclude, env_inject, shim_lib, workdir, database,
+			    t.get("settings", []))
 		except Exception as e:  # noqa: BLE001 - report any test error uniformly
 			if skip_reason:
 				skipped.append(name)

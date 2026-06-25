@@ -201,7 +201,8 @@ using duckdb_parquet::Type;
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
 CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, bool prefetch_mode,
                          uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP) {
-	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode, accepted_column_gap);
+	auto transport =
+	    duckdb_base_std::make_shared<ThriftFileTransport>(context, file_handle, prefetch_mode, accepted_column_gap);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
