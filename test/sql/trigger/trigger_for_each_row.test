@@ -108,7 +108,7 @@ statement error
 CREATE TRIGGER trg_noref AFTER INSERT ON t2 FOR EACH ROW
     INSERT INTO audit2 VALUES ('row');
 ----
-Binder Error: FOR EACH ROW trigger "trg_noref" on table "t2" must reference at least one NEW column
+Binder Error: FOR EACH ROW trigger "trg_noref" on table "t2" must reference at least one NEW or OLD column
 
 # Insert from SELECT fires per row
 statement ok
@@ -288,17 +288,54 @@ statement error
 CREATE TRIGGER trg_upd_ev AFTER UPDATE ON t_upd_ev FOR EACH ROW
     INSERT INTO t_upd_ev VALUES (NEW.id);
 ----
-Not implemented Error: UPDATE and DELETE FOR EACH ROW triggers are not yet supported
+Not implemented Error: UPDATE FOR EACH ROW triggers are not yet supported
 
-# FOR EACH ROW DELETE is not yet supported
+# FOR EACH ROW DELETE: fires once per deleted row using OLD.col
 statement ok
-CREATE TABLE t_del_ev (id INTEGER);
+CREATE TABLE t_del_ev (id INTEGER, v INTEGER);
+
+statement ok
+CREATE TABLE t_del_ev_audit (old_id INTEGER, old_v INTEGER);
+
+statement ok
+CREATE TRIGGER trg_del_ev AFTER DELETE ON t_del_ev FOR EACH ROW
+    INSERT INTO t_del_ev_audit VALUES (OLD.id, OLD.v);
+
+statement ok
+INSERT INTO t_del_ev VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+DELETE FROM t_del_ev WHERE id <= 2;
+
+query II
+SELECT old_id, old_v FROM t_del_ev_audit ORDER BY old_id;
+----
+1	10
+2	20
+
+# Deleting all rows triggers once per row
+statement ok
+DELETE FROM t_del_ev;
+
+query II
+SELECT old_id, old_v FROM t_del_ev_audit ORDER BY old_id;
+----
+1	10
+2	20
+3	30
+
+# FOR EACH ROW DELETE body must reference at least one OLD column
+statement ok
+CREATE TABLE t_del_noref (id INTEGER);
+
+statement ok
+CREATE TABLE t_del_noref_audit (msg VARCHAR);
 
 statement error
-CREATE TRIGGER trg_del_ev AFTER DELETE ON t_del_ev FOR EACH ROW
-    INSERT INTO t_del_ev VALUES (1);
+CREATE TRIGGER trg_del_noref AFTER DELETE ON t_del_noref FOR EACH ROW
+    INSERT INTO t_del_noref_audit VALUES ('deleted');
 ----
-Not implemented Error: UPDATE and DELETE FOR EACH ROW triggers are not yet supported
+Binder Error: FOR EACH ROW trigger "trg_del_noref" on table "t_del_noref" must reference at least one NEW or OLD column
 
 # FOR EACH ROW + REFERENCING is rejected
 statement ok
@@ -604,3 +641,273 @@ query I
 SELECT id FROM replace_log ORDER BY id;
 ----
 1
+
+# ============================================================
+# AFTER DELETE FOR EACH ROW
+# ============================================================
+
+# Basic: fires once per deleted row, OLD carries all column values
+statement ok
+CREATE TABLE del_t (id INTEGER, val VARCHAR);
+
+statement ok
+CREATE TABLE del_audit (row_id INTEGER, row_val VARCHAR);
+
+statement ok
+CREATE TRIGGER del_trg_basic AFTER DELETE ON del_t FOR EACH ROW
+    INSERT INTO del_audit VALUES (OLD.id, OLD.val);
+
+statement ok
+INSERT INTO del_t VALUES (1, 'a'), (2, 'b'), (3, 'c');
+
+statement ok
+DELETE FROM del_t WHERE id = 2;
+
+query II
+SELECT row_id, row_val FROM del_audit ORDER BY row_id;
+----
+2	b
+
+# Multi-row delete: fires once per deleted row
+statement ok
+DELETE FROM del_t;
+
+query II
+SELECT row_id, row_val FROM del_audit ORDER BY row_id;
+----
+1	a
+2	b
+3	c
+
+# Zero-row delete: trigger does not fire
+statement ok
+DELETE FROM del_t WHERE id = 999;
+
+query I
+SELECT COUNT(*) FROM del_audit;
+----
+3
+
+# Duplicate OLD values: trigger must still fire once per deleted row (not deduplicated)
+statement ok
+CREATE TABLE del_dup (id INTEGER, val VARCHAR);
+
+statement ok
+CREATE TABLE del_dup_audit (row_id INTEGER);
+
+statement ok
+CREATE TRIGGER del_trg_dup AFTER DELETE ON del_dup FOR EACH ROW
+    INSERT INTO del_dup_audit VALUES (OLD.id);
+
+statement ok
+INSERT INTO del_dup VALUES (5, 'a'), (5, 'b'), (5, 'c'), (5, 'd');
+
+statement ok
+DELETE FROM del_dup;
+
+query I
+SELECT COUNT(*) FROM del_dup_audit;
+----
+4
+
+query II
+SELECT row_id, COUNT(*) FROM del_dup_audit GROUP BY row_id;
+----
+5	4
+
+# Fully identical rows: still fires once per deleted row
+statement ok
+CREATE TABLE del_dup_all (id INTEGER, val VARCHAR);
+
+statement ok
+CREATE TABLE del_dup_all_audit (row_id INTEGER, row_val VARCHAR);
+
+statement ok
+CREATE TRIGGER del_trg_dup_all AFTER DELETE ON del_dup_all FOR EACH ROW
+    INSERT INTO del_dup_all_audit VALUES (OLD.id, OLD.val);
+
+statement ok
+INSERT INTO del_dup_all VALUES (1, 'same'), (1, 'same'), (1, 'same');
+
+statement ok
+DELETE FROM del_dup_all;
+
+query I
+SELECT COUNT(*) FROM del_dup_all_audit;
+----
+3
+
+# Constraint failure on base table: trigger must NOT fire
+statement ok
+CREATE TABLE del_fk (id INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE del_fk_audit (fired_id INTEGER);
+
+statement ok
+CREATE TRIGGER del_trg_fk AFTER DELETE ON del_fk FOR EACH ROW
+    INSERT INTO del_fk_audit VALUES (OLD.id);
+
+statement ok
+INSERT INTO del_fk VALUES (1);
+
+# Delete a non-existent row: no error, no trigger fire
+statement ok
+DELETE FROM del_fk WHERE id = 999;
+
+query I
+SELECT COUNT(*) FROM del_fk_audit;
+----
+0
+
+# DELETE trigger body using OLD in a correlated WHERE (delete from another table)
+statement ok
+CREATE TABLE del_src (id INTEGER);
+
+statement ok
+CREATE TABLE del_ref (id INTEGER);
+
+statement ok
+INSERT INTO del_src VALUES (10), (20), (30);
+INSERT INTO del_ref VALUES (10), (20), (30), (40);
+
+statement ok
+CREATE TRIGGER del_trg_corr AFTER DELETE ON del_src FOR EACH ROW
+    DELETE FROM del_ref WHERE id = OLD.id;
+
+statement ok
+DELETE FROM del_src WHERE id IN (10, 30);
+
+query I
+SELECT id FROM del_ref ORDER BY id;
+----
+20
+40
+
+# Multiple FOR EACH ROW DELETE triggers each fire once per deleted row
+statement ok
+CREATE TABLE del_multi (id INTEGER);
+
+statement ok
+CREATE TABLE del_multi_audit (n INTEGER);
+
+statement ok
+CREATE TRIGGER del_trg_m1 AFTER DELETE ON del_multi FOR EACH ROW
+    INSERT INTO del_multi_audit VALUES (OLD.id * 10);
+
+statement ok
+CREATE TRIGGER del_trg_m2 AFTER DELETE ON del_multi FOR EACH ROW
+    INSERT INTO del_multi_audit VALUES (OLD.id * 100);
+
+statement ok
+INSERT INTO del_multi VALUES (1), (2);
+
+statement ok
+DELETE FROM del_multi;
+
+query I
+SELECT COUNT(*) FROM del_multi_audit;
+----
+4
+
+query I
+SELECT SUM(n) FROM del_multi_audit;
+----
+330
+
+# DELETE trigger body with SELECT (using OLD in SELECT list)
+statement ok
+CREATE TABLE del_sel (id INTEGER);
+
+statement ok
+CREATE TABLE del_sel_audit (id INTEGER);
+
+statement ok
+CREATE TRIGGER del_trg_sel AFTER DELETE ON del_sel FOR EACH ROW
+    INSERT INTO del_sel_audit SELECT OLD.id;
+
+statement ok
+INSERT INTO del_sel VALUES (1), (2);
+
+statement ok
+DELETE FROM del_sel;
+
+query I
+SELECT COUNT(*) FROM del_sel_audit;
+----
+2
+
+# RETURNING is not supported alongside FOR EACH ROW DELETE trigger
+statement ok
+CREATE TABLE del_ret (id INTEGER);
+
+statement ok
+CREATE TABLE del_ret_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER del_trg_ret AFTER DELETE ON del_ret FOR EACH ROW
+    INSERT INTO del_ret_log VALUES (OLD.id);
+
+statement ok
+INSERT INTO del_ret VALUES (1);
+
+statement error
+DELETE FROM del_ret WHERE id = 1 RETURNING id;
+----
+Not implemented Error: RETURNING is not yet supported on tables with FOR EACH ROW triggers
+
+# Self-referential FOR EACH ROW DELETE trigger is rejected
+statement ok
+CREATE TABLE del_self (id INTEGER);
+
+statement error
+CREATE TRIGGER del_trg_self AFTER DELETE ON del_self FOR EACH ROW
+    DELETE FROM del_self WHERE id = OLD.id + 1;
+----
+Not implemented Error: Recursive trigger chains are not yet supported
+
+# Cascade: DELETE trigger body writing to a table that itself has a FOR EACH ROW trigger is rejected
+statement ok
+CREATE TABLE del_casc_a (id INTEGER);
+
+statement ok
+CREATE TABLE del_casc_b (id INTEGER);
+
+statement ok
+CREATE TABLE del_casc_c (id INTEGER);
+
+statement ok
+CREATE TRIGGER del_trg_casc_b AFTER DELETE ON del_casc_b FOR EACH ROW
+    INSERT INTO del_casc_c VALUES (OLD.id);
+
+statement error
+CREATE TRIGGER del_trg_casc_a AFTER DELETE ON del_casc_a FOR EACH ROW
+    DELETE FROM del_casc_b WHERE id = OLD.id;
+----
+writes to a table that has its own FOR EACH ROW trigger (cascading row triggers are not yet supported)
+
+# Replacing a STATEMENT DELETE trigger with a same-name ROW trigger is allowed
+statement ok
+CREATE TABLE del_replace_t (id INTEGER);
+
+statement ok
+CREATE TABLE del_replace_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER del_replace_trg AFTER DELETE ON del_replace_t FOR EACH STATEMENT
+    INSERT INTO del_replace_log VALUES (0);
+
+statement ok
+CREATE OR REPLACE TRIGGER del_replace_trg AFTER DELETE ON del_replace_t FOR EACH ROW
+    INSERT INTO del_replace_log VALUES (OLD.id);
+
+statement ok
+INSERT INTO del_replace_t VALUES (7);
+
+statement ok
+DELETE FROM del_replace_t;
+
+query I
+SELECT id FROM del_replace_log ORDER BY id;
+----
+7

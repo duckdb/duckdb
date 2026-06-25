@@ -1312,8 +1312,9 @@ bool JoinHashTable::TryProbeConstant(ScanStructure &scan_structure, DataChunk &k
 		unique_values.InitializeEmpty(vector<LogicalType> {equality_types[0]});
 		TupleDataCollection::InitializeChunkState(dict_state.unique_key_state, {equality_types[0]});
 	}
-	unique_values.data[0].Reference(constant_col);
-	unique_values.SetChildCardinality(1);
+	SelectionVector sel(1);
+	sel.set_index(0, 0);
+	unique_values.data[0].Slice(constant_col, sel, 1);
 	unique_values.Flatten();
 
 	TupleDataCollection::ToUnifiedFormat(dict_state.unique_key_state, unique_values);

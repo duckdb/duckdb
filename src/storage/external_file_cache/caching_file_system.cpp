@@ -257,8 +257,11 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		return FileBufferHandleGroup();
 	}
 
-	// Uncached files are read directly into one contiguous buffer, skipping the per block syscalls and copies
-	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path)) {
+	// Only cache when file metadata is available.
+	const bool no_validation_metadata =
+	    Validate() && version_tag.empty() && (!last_modified.IsFinite() || last_modified == timestamp_t(0));
+
+	if (!external_file_cache.IsEnabled() || !external_file_cache.ShouldCacheFile(path.path) || no_validation_metadata) {
 		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		ReadAndRecord(context, buf.GetDataMutable(), nr_bytes, location);
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
