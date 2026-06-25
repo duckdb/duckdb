@@ -795,10 +795,8 @@ AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState
 		}
 	}
 #endif
-	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
-	local_state.scan_state.op = gstate.op;
-	return Scan(context, local_state.scan_state, chunk);
+	return Process(context, local_state.scan_state, chunk);
 }
 
 unique_ptr<MultiFileReaderInterface> ParquetMultiFileInfo::Copy() {

@@ -188,13 +188,6 @@ struct ParquetPrefetchMetrics {
 	}
 };
 
-//! Where the scan is in its async execution.
-enum class ParquetScanState : uint8_t {
-	PROCESS,        //! process the current row group into a output chunk
-	RESUME_PAYLOAD, //! resume decoding the payload columns after the filter-column I/O blocked
-	FINISHED        //! the scan is done
-};
-
 struct ParquetReaderScanState {
 public:
 	ColumnReader &GetColumnReader(idx_t i);
@@ -208,7 +201,8 @@ public:
 	vector<unique_ptr<ColumnReader>> column_readers;
 	duckdb_base_std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
 
-	ParquetScanState scan_state;
+	//! Set while resuming payload-column decode after the filter-column I/O blocked (vs a fresh row-group pass)
+	bool resuming_payload = false;
 	SelectionVector sel;
 
 	ResizeableBuffer define_buf;
@@ -342,7 +336,6 @@ public:
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const;
-	AsyncResult Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
 
 	idx_t NumRows() const;
 	idx_t NumRowGroups() const;
@@ -416,7 +409,7 @@ private:
 	//! Build the async I/O tasks for the registered read-heads
 	AsyncResult ScheduleRowGroupReads(ParquetReaderScanState &state, ParquetPrefetchStrategy strategy);
 	//! Process up to STANDARD_VECTOR_SIZE rows of the current row group into result.
-	AsyncResult Process(ClientContext &context, ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
+	AsyncResult Process(ClientContext &context, ParquetReaderScanState &state, DataChunk &result);
 	//! Log and finalize the row group's prefetch metrics
 	void FinishRowGroup(ClientContext &context, ParquetReaderScanState &state, bool log_prefetch);
 	//! Process filters

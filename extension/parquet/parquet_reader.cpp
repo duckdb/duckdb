@@ -1445,7 +1445,7 @@ ParquetScanFilter::~ParquetScanFilter() {
 }
 
 void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const {
-	state.scan_state = ParquetScanState::PROCESS;
+	state.resuming_payload = false;
 	state.offset_in_group = 0;
 	state.filter_count = 0;
 	state.group_index = group_to_read;
@@ -1707,22 +1707,6 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 	return strategy;
 }
 
-AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
-	const bool log_prefetch =
-	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
-
-	switch (state.scan_state) {
-	case ParquetScanState::FINISHED:
-		return SourceResultType::FINISHED;
-	case ParquetScanState::PROCESS:
-	case ParquetScanState::RESUME_PAYLOAD:
-		// the multifile loop owns the chunk reset; it preserves the chunk across a RESUME_PAYLOAD block
-		return Process(context, state, result, log_prefetch);
-	default:
-		throw InternalException("Unexpected ParquetScanState");
-	}
-}
-
 ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &context, ParquetReaderScanState &state) {
 	const bool log_prefetch =
 	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
@@ -1804,7 +1788,7 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 			}
 		}
 	}
-	state.scan_state = ParquetScanState::PROCESS;
+	state.resuming_payload = false;
 	return strategy;
 }
 
@@ -1945,13 +1929,13 @@ vector<unique_ptr<AsyncTask>> ParquetReader::ScheduleRemainingColumns(ParquetRea
 		// no payload to do
 		return {};
 	}
-	state.scan_state = ParquetScanState::RESUME_PAYLOAD;
+	state.resuming_payload = true;
 	return io_tasks;
 }
 
 AsyncResult ParquetReader::ProcessFilters(ParquetReaderScanState &state, DataChunk &result, idx_t scan_count,
                                           uint8_t *define_ptr, uint8_t *repeat_ptr, bool log_prefetch) {
-	if (state.scan_state == ParquetScanState::PROCESS) {
+	if (!state.resuming_payload) {
 		state.filter_count = EvaluateFilters(state, result, scan_count, define_ptr, repeat_ptr, log_prefetch);
 		auto io_tasks = ScheduleRemainingColumns(state, result, scan_count);
 		if (!io_tasks.empty()) {
@@ -1965,18 +1949,19 @@ AsyncResult ParquetReader::ProcessFilters(ParquetReaderScanState &state, DataChu
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanState &state, DataChunk &result,
-                                   bool log_prefetch) {
+AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
+	// a fresh pass evaluates filters; the resume path (resuming_payload) decodes only the payload columns
+	const bool log_prefetch =
+	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
 	const idx_t group_num_rows = GetGroup(state).num_rows;
 	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, group_num_rows - state.offset_in_group);
-	if (state.scan_state == ParquetScanState::PROCESS) {
+	if (!state.resuming_payload) {
 		result.SetChildCardinality(scan_count);
 	}
 
 	if (scan_count == 0) {
 		// the row group is fully consumed
 		FinishRowGroup(context, state, log_prefetch);
-		state.scan_state = ParquetScanState::FINISHED;
 		return SourceResultType::FINISHED;
 	}
 
@@ -2016,7 +2001,7 @@ AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanStat
 	result.SetChildCardinality(result.size());
 	rows_read += scan_count;
 	state.offset_in_group += scan_count;
-	state.scan_state = ParquetScanState::PROCESS;
+	state.resuming_payload = false;
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
