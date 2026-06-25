@@ -437,6 +437,8 @@ def generate_member_hash(member, indent='\t'):
         return [f'{indent}hash = CombineHash(hash, {field_name}.Hash());']
     if type_str == 'LogicalType':
         return [f'{indent}hash = CombineHash(hash, {field_name}.Hash());']
+    if type_str == 'QualifiedName':
+        return [f'{indent}hash = CombineHash(hash, {field_name}.Hash());']
     if type_str == 'bool':
         return [f'{indent}hash = CombineHash(hash, duckdb::Hash<bool>({field_name}));']
     if type_str == 'idx_t':

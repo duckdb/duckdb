@@ -11,6 +11,7 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
@@ -25,20 +26,26 @@ public:
 	TypeExpression(const string &type_name, vector<unique_ptr<ParsedExpression>> children);
 
 public:
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+	QualifiedName &GetQualifiedNameMutable() {
+		return qualified_name;
+	}
 	const Identifier &GetTypeName() const {
-		return type_name;
+		return qualified_name.Name();
 	}
 	const Identifier &GetSchema() const {
-		return schema;
+		return qualified_name.Schema();
 	}
 	void SetSchema(Identifier new_schema) {
-		schema = std::move(new_schema);
+		qualified_name.SchemaMutable() = std::move(new_schema);
 	}
 	const Identifier &GetCatalog() const {
-		return catalog;
+		return qualified_name.Catalog();
 	}
 	void SetCatalog(Identifier new_catalog) {
-		catalog = std::move(new_catalog);
+		qualified_name.CatalogMutable() = std::move(new_catalog);
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
 		return children;
@@ -63,10 +70,8 @@ public:
 private:
 	TypeExpression();
 
-	//! Qualified name parts
-	Identifier catalog;
-	Identifier schema;
-	Identifier type_name;
+	//! Qualified name of the type (catalog.schema.name)
+	QualifiedName qualified_name;
 
 	//! Children of the type expression (e.g. type parameters)
 	vector<unique_ptr<ParsedExpression>> children;

@@ -232,17 +232,8 @@
     "members": [
       {
         "id": 200,
-        "name": "function_name",
-        "type": "Identifier",
-        "accessor_mut": "FunctionNameMutable()",
-        "accessor": "FunctionName()"
-      },
-      {
-        "id": 201,
-        "name": "schema",
-        "type": "Identifier",
-        "accessor_mut": "SchemaMutable()",
-        "accessor": "Schema()"
+        "name": "qualified_name",
+        "type": "QualifiedName"
       },
       {
         "id": 202,
@@ -289,13 +280,6 @@
         "type": "bool",
         "accessor_mut": "ExportStateMutable()",
         "accessor": "ExportState()"
-      },
-      {
-        "id": 208,
-        "name": "catalog",
-        "type": "Identifier",
-        "accessor_mut": "CatalogMutable()",
-        "accessor": "Catalog()"
       },
       {
         "id": 209,
@@ -478,18 +462,8 @@
     "members": [
       {
         "id": 200,
-        "name": "function_name",
-        "type": "Identifier"
-      },
-      {
-        "id": 201,
-        "name": "schema",
-        "type": "Identifier"
-      },
-      {
-        "id": 202,
-        "name": "catalog",
-        "type": "Identifier"
+        "name": "qualified_name",
+        "type": "QualifiedName"
       },
       {
         "id": 203,
@@ -605,19 +579,36 @@
     "enum": "TYPE",
     "members": [
       {
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "serialize_skip": true
+      },
+      {
         "id": 200,
         "name": "catalog",
-        "type": "Identifier"
+        "serialize_property": "qualified_name.Catalog()",
+        "deserialize_property": "qualified_name.CatalogMutable()",
+        "type": "Identifier",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "Identifier"
+        "serialize_property": "qualified_name.Schema()",
+        "deserialize_property": "qualified_name.SchemaMutable()",
+        "type": "Identifier",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 202,
         "name": "type_name",
-        "type": "Identifier"
+        "serialize_property": "qualified_name.Name()",
+        "deserialize_property": "qualified_name.NameMutable()",
+        "type": "Identifier",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 203,
