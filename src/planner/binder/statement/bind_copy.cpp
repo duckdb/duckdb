@@ -526,7 +526,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	auto &bound_insert = insert_statement.plan->Cast<LogicalInsert>();
 
 	// lookup the table to copy into
-	BindSchemaOrCatalog(stmt.info->CatalogMutable(), stmt.info->SchemaMutable());
+	BindSchemaOrCatalog(stmt.info->GetQualifiedNameMutable());
 	auto &table =
 	    Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->Catalog(), stmt.info->Schema(), stmt.info->Table());
 	physical_index_vector_t<idx_t> column_index_map;

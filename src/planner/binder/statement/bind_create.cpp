@@ -112,6 +112,22 @@ void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
 	BindSchemaOrCatalog(context, catalog, schema);
 }
 
+void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &qualified_name) {
+	auto catalog = qualified_name.Catalog();
+	auto schema = qualified_name.Schema();
+	BindSchemaOrCatalog(retriever, catalog, schema);
+	qualified_name = QualifiedName(std::move(catalog), std::move(schema), qualified_name.Name());
+}
+
+void Binder::BindSchemaOrCatalog(ClientContext &context, QualifiedName &qualified_name) {
+	CatalogEntryRetriever retriever(context);
+	BindSchemaOrCatalog(retriever, qualified_name);
+}
+
+void Binder::BindSchemaOrCatalog(QualifiedName &qualified_name) {
+	BindSchemaOrCatalog(context, qualified_name);
+}
+
 Identifier Binder::BindCatalog(const Identifier &catalog) {
 	auto &db_manager = DatabaseManager::Get(context);
 	optional_ptr<AttachedDatabase> database = db_manager.GetDatabase(context, catalog);
@@ -123,7 +139,7 @@ Identifier Binder::BindCatalog(const Identifier &catalog) {
 }
 
 void Binder::SearchSchema(CreateInfo &info) {
-	BindSchemaOrCatalog(info.CatalogMutable(), info.SchemaMutable());
+	BindSchemaOrCatalog(info.GetQualifiedNameMutable());
 	if (IsInvalidCatalog(info.Catalog()) && info.temporary) {
 		info.CatalogMutable() = Identifier::TempCatalog();
 	}
