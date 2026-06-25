@@ -246,7 +246,6 @@ private:
 //! (including the entire value when there is no 'typed_value' at all) goes into the unshredded component.
 class ParquetVariantConversion {
 public:
-	static void ConvertToShredded(Vector &metadata, Vector &group, Vector &result, idx_t count);
 	//! Convert binary Variant values (each row being the metadata blob followed by the value blob) into the
 	//! canonical VARIANT 'result' in a single pass
 	static void ConvertBinary(Vector &metadata_and_value, Vector &result, idx_t count);

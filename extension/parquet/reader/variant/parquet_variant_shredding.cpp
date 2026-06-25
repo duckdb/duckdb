@@ -1,4 +1,5 @@
 #include "reader/variant/parquet_variant_iterator.hpp"
+#include "reader/variant_column_reader.hpp"
 
 #include "duckdb/common/types/variant/variant_builder.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
@@ -305,7 +306,7 @@ struct ShreddedLeftoverSource {
 
 } // namespace
 
-void ParquetVariantConversion::ConvertToShredded(Vector &metadata, Vector &group, Vector &result, idx_t count) {
+void VariantColumnReader::Convert(Vector &metadata, Vector &group, Vector &result, idx_t count) {
 	ParquetVariantIterator iterator(metadata, group);
 	auto &root_view = iterator.GetRootView();
 
@@ -314,7 +315,10 @@ void ParquetVariantConversion::ConvertToShredded(Vector &metadata, Vector &group
 	child_list_t<LogicalType> shredded_data_children;
 	shredded_data_children.emplace_back("unshredded", VariantShredding::GetUnshreddedType());
 	shredded_data_children.emplace_back("shredded", DeriveShredNodeType(root_view, root_plan));
-	Vector shredded_data(LogicalType::STRUCT(std::move(shredded_data_children)), count);
+	auto shredded_data_type = LogicalType::STRUCT(std::move(shredded_data_children));
+
+	PrepareChunk(shredded_chunk, shredded_capacity, {shredded_data_type}, count);
+	auto &shredded_data = shredded_chunk.data[0];
 
 	auto &shredded_data_entries = StructVector::GetEntries(shredded_data);
 	auto &unshredded = shredded_data_entries[0];
