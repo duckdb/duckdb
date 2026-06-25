@@ -769,12 +769,10 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			if (db.IsInitialDatabase()) {
-				// The initial (default) database cannot be detached and reattached, so a checkpoint failure here
-				// is not recoverable: invalidate the whole instance as before.
 				ValidChecker::Invalidate(db.GetDatabase(), error.RawMessage());
 				throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
 			}
-			// An attached database can be detached and reattached, so scope the failure to it.
+			// A non-initial database can be detached and reattached, so scope invalidation to this db.
 			db.Invalidate(error.RawMessage());
 			throw IOException("Checkpoint failed for database \"%s\". The database has been invalidated and must be "
 			                  "detached and reattached. Original error: %s",

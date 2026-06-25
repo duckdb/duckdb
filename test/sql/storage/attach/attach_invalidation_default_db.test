@@ -1,5 +1,5 @@
-# name: test/sql/storage/attach/initial_database_checkpoint_failure.test
-# description: A checkpoint failure on the initial (default) database invalidates the whole instance
+# name: test/sql/storage/attach/attach_invalidation_default_db.test
+# description: A checkpoint failure on the default database is instance-wide, even with another database attached
 # group: [attach]
 
 require skip_reload
@@ -8,7 +8,7 @@ require no_alternative_verify
 
 foreach abort_mode before_header before_header_non_fatal
 
-load {TEST_DIR}/initial_db_checkpoint_failure_{abort_mode}.db
+load {TEST_DIR}/attach_inval_default_main_{abort_mode}.db
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown;
@@ -26,13 +26,13 @@ statement ok
 CHECKPOINT;
 
 statement ok
-ATTACH '{TEST_DIR}/initial_db_checkpoint_failure_sec_{abort_mode}.db' AS sec;
+ATTACH '{TEST_DIR}/attach_inval_default_sib_{abort_mode}.db' AS sib;
 
 statement ok
-CREATE TABLE sec.t(i INTEGER);
+CREATE TABLE sib.t(i INTEGER);
 
 statement ok
-INSERT INTO sec.t VALUES (100);
+INSERT INTO sib.t VALUES (100);
 
 statement ok
 PRAGMA debug_checkpoint_abort = '{abort_mode}';
@@ -40,7 +40,6 @@ PRAGMA debug_checkpoint_abort = '{abort_mode}';
 statement ok
 INSERT INTO t VALUES (2);
 
-# a checkpoint failure on the initial database is instance-wide (not scoped)
 statement error
 CHECKPOINT;
 ----
@@ -52,7 +51,7 @@ SELECT 42;
 <REGEX>:.*database has been invalidated.*
 
 statement error
-SELECT COUNT(*) FROM sec.t;
+SELECT COUNT(*) FROM sib.t;
 ----
 <REGEX>:.*database has been invalidated.*
 
