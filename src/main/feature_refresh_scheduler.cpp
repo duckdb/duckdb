@@ -10,6 +10,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -19,6 +20,35 @@
 #endif
 
 namespace duckdb {
+
+#ifndef DUCKDB_NO_THREADS
+class FeatureRefreshSchedulerTransactionState : public ClientContextState {
+public:
+	void NotifyOnCommit() {
+		notify_on_commit = true;
+	}
+
+	void TransactionCommit(MetaTransaction &transaction, ClientContext &context) override {
+		if (!notify_on_commit) {
+			return;
+		}
+		notify_on_commit = false;
+		DatabaseInstance::GetDatabase(context).NotifyFeatureRefreshScheduler();
+	}
+
+	void TransactionRollback(MetaTransaction &transaction, ClientContext &context) override {
+		notify_on_commit = false;
+	}
+
+	void TransactionRollback(MetaTransaction &transaction, ClientContext &context,
+	                         optional_ptr<ErrorData> error) override {
+		notify_on_commit = false;
+	}
+
+private:
+	bool notify_on_commit = false;
+};
+#endif
 
 FeatureRefreshScheduler::FeatureRefreshScheduler(DatabaseInstance &db_p) : db(db_p) {
 }
@@ -64,6 +94,14 @@ void FeatureRefreshScheduler::Notify() {
 #ifndef DUCKDB_NO_THREADS
 	heap_dirty.store(true);
 	cv.notify_all();
+#endif
+}
+
+void FeatureRefreshScheduler::NotifyOnCommit(ClientContext &context) {
+#ifndef DUCKDB_NO_THREADS
+	auto state = context.registered_state->GetOrCreate<FeatureRefreshSchedulerTransactionState>(
+	    "feature_refresh_scheduler_transaction_state");
+	state->NotifyOnCommit();
 #endif
 }
 
@@ -198,6 +236,34 @@ void FeatureRefreshScheduler::RebuildHeap(FeatureHeap &heap) {
 	}
 }
 
+bool FeatureRefreshScheduler::ValidateScheduledFeature(ScheduledFeature &feature) {
+	Connection con(db);
+	con.BeginTransaction();
+	EntryLookupInfo lookup_info(CatalogType::FEATURE_ENTRY, feature.feature_name);
+	auto entry = Catalog::GetEntry(*con.context, feature.catalog_name, feature.schema_name, lookup_info,
+	                              OnEntryNotFound::RETURN_NULL);
+	if (!entry) {
+		con.Commit();
+		return false;
+	}
+	auto &catalog_entry = entry->Cast<FeatureCatalogEntry>();
+	if (catalog_entry.catalog.GetAttached().IsReadOnly()) {
+		con.Commit();
+		return false;
+	}
+	if (!catalog_entry.has_schedule || !catalog_entry.schedule_enabled) {
+		con.Commit();
+		return false;
+	}
+	if (IntervalToMicros(catalog_entry.schedule_interval) < Interval::MICROS_PER_SEC) {
+		con.Commit();
+		return false;
+	}
+	feature.schedule_interval = catalog_entry.schedule_interval;
+	con.Commit();
+	return true;
+}
+
 void FeatureRefreshScheduler::Run() {
 	// Start idle, like a TaskScheduler worker with no tasks: do NOT scan the catalog here. A scan
 	// would create a Connection + transaction and allocate buffer-managed memory on every database
@@ -239,6 +305,11 @@ void FeatureRefreshScheduler::Run() {
 
 			try {
 				Connection con(db);
+				if (!ValidateScheduledFeature(feat)) {
+					lock_guard<std::mutex> lock(mtx);
+					known_next_refresh.erase(feat.key);
+					continue;
+				}
 				auto use_result =
 				    con.Query("USE " + SQLIdentifier(feat.catalog_name) + "." + SQLIdentifier(feat.schema_name));
 				if (use_result->HasError()) {

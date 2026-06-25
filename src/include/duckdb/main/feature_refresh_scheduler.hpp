@@ -23,6 +23,7 @@
 namespace duckdb {
 
 class DatabaseInstance;
+class ClientContext;
 
 //! Owns a background thread that fires REFRESH FEATURE on each scheduled feature at its configured interval.
 //! Disabled for READ_ONLY databases and DUCKDB_NO_THREADS builds.
@@ -37,6 +38,8 @@ public:
 	void Stop();
 	//! Wake the scheduler so it re-scans the catalog (call after CREATE/ALTER/DROP changes a schedule).
 	void Notify();
+	//! Wake the scheduler after the current transaction commits successfully.
+	void NotifyOnCommit(ClientContext &context);
 	//! Remove any tracked features from a detached catalog and wake the scheduler if the heap must be rebuilt.
 	void RemoveCatalog(const string &catalog_name);
 	//! Returns the in-memory next refresh timestamp for a scheduled feature, if it is currently tracked.
@@ -66,6 +69,8 @@ private:
 	using FeatureHeap = std::priority_queue<ScheduledFeature, vector<ScheduledFeature>, FeatureCmp>;
 
 	void Run();
+	//! Check that a heap entry still points at a committed, enabled schedule before refreshing.
+	bool ValidateScheduledFeature(ScheduledFeature &feature);
 	//! Scan the catalog for scheduled features and (re)build the heap. Preserves next_refresh_at for
 	//! features already tracked so heap rebuilds don't reset in-flight timers.
 	void RebuildHeap(FeatureHeap &heap);

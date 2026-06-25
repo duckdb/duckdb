@@ -1,0 +1,155 @@
+# name: test/sql/feature/test_feature_scheduler_invalidation.test_slow
+# description: Test scheduler invalidation for committed feature create/alter/drop changes
+# group: [feature]
+
+load {TEST_DIR}/feature_scheduler_invalidation.db
+
+statement ok
+CREATE TABLE events (user_id VARCHAR, value INTEGER, event_time TIMESTAMP);
+
+statement ok
+INSERT INTO events VALUES
+    ('alice', 10, '2024-01-01 08:00:00'),
+    ('alice', 20, '2024-01-01 09:00:00'),
+    ('bob',   30, '2024-01-01 10:00:00');
+
+# A scheduled feature created inside an explicit transaction should be picked up after COMMIT.
+statement ok
+START TRANSACTION;
+
+statement ok
+CREATE FEATURE tx_create_sched ON events
+    ENTITY user_id
+    TIMESTAMP event_time
+    GRANULARITY HOUR
+    WINDOW 24
+    REFRESH INCREMENTAL
+    EVERY INTERVAL '1 second'
+    RETAIN 20
+    AS (SELECT user_id, SUM(value) AS total_value FROM events GROUP BY user_id);
+
+statement ok
+COMMIT;
+
+sleep 3 seconds
+
+query I
+SELECT current_version > 1 FROM duckdb_features() WHERE feature_name = 'tx_create_sched';
+----
+true
+
+# A committed DISABLE SCHEDULE should stop an already tracked feature.
+statement ok
+CREATE FEATURE disable_sched ON events
+    ENTITY user_id
+    TIMESTAMP event_time
+    GRANULARITY HOUR
+    WINDOW 24
+    REFRESH INCREMENTAL
+    EVERY INTERVAL '1 second'
+    RETAIN 20
+    AS (SELECT user_id, COUNT(*) AS event_count FROM events GROUP BY user_id);
+
+sleep 2 seconds
+
+query I
+SELECT current_version > 1 FROM duckdb_features() WHERE feature_name = 'disable_sched';
+----
+true
+
+statement ok
+ALTER FEATURE disable_sched DISABLE SCHEDULE;
+
+# Let any refresh that was already in flight finish before recording the stable version.
+sleep 2 seconds
+
+statement ok
+CREATE TEMP TABLE disabled_version AS
+    SELECT current_version AS version FROM duckdb_features() WHERE feature_name = 'disable_sched';
+
+sleep 3 seconds
+
+query I
+SELECT current_version = (SELECT version FROM disabled_version)
+FROM duckdb_features()
+WHERE feature_name = 'disable_sched';
+----
+true
+
+# Rolling back DISABLE SCHEDULE must not stop the scheduler.
+statement ok
+CREATE FEATURE rollback_disable_sched ON events
+    ENTITY user_id
+    TIMESTAMP event_time
+    GRANULARITY HOUR
+    WINDOW 24
+    REFRESH INCREMENTAL
+    EVERY INTERVAL '1 second'
+    RETAIN 20
+    AS (SELECT user_id, COUNT(*) AS event_count FROM events GROUP BY user_id);
+
+sleep 2 seconds
+
+statement ok
+CREATE TEMP TABLE rollback_disable_version AS
+    SELECT current_version AS version FROM duckdb_features() WHERE feature_name = 'rollback_disable_sched';
+
+statement ok
+START TRANSACTION;
+
+statement ok
+ALTER FEATURE rollback_disable_sched DISABLE SCHEDULE;
+
+statement ok
+ROLLBACK;
+
+sleep 3 seconds
+
+query I
+SELECT current_version > (SELECT version FROM rollback_disable_version)
+FROM duckdb_features()
+WHERE feature_name = 'rollback_disable_sched';
+----
+true
+
+# DROP FEATURE should invalidate the old heap entry; recreating the same name should schedule the new entry.
+statement ok
+CREATE FEATURE drop_recreate_sched ON events
+    ENTITY user_id
+    TIMESTAMP event_time
+    GRANULARITY HOUR
+    WINDOW 24
+    REFRESH INCREMENTAL
+    EVERY INTERVAL '1 second'
+    RETAIN 20
+    AS (SELECT user_id, COUNT(*) AS event_count FROM events GROUP BY user_id);
+
+sleep 2 seconds
+
+statement ok
+DROP FEATURE drop_recreate_sched;
+
+sleep 2 seconds
+
+query I
+SELECT COUNT(*) FROM duckdb_features() WHERE feature_name = 'drop_recreate_sched';
+----
+0
+
+statement ok
+CREATE FEATURE drop_recreate_sched ON events
+    ENTITY user_id
+    TIMESTAMP event_time
+    GRANULARITY HOUR
+    WINDOW 24
+    REFRESH INCREMENTAL
+    EVERY INTERVAL '1 second'
+    RETAIN 20
+    AS (SELECT user_id, MAX(value) AS max_value FROM events GROUP BY user_id);
+
+sleep 3 seconds
+
+query I
+SELECT current_version > 1 FROM duckdb_features() WHERE feature_name = 'drop_recreate_sched';
+----
+true
