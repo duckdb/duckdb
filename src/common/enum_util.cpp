@@ -93,6 +93,7 @@
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/sorting/partition_key_tracker.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
@@ -5126,6 +5127,25 @@ const char* EnumUtil::ToChars<StarExpressionType>(StarExpressionType value) {
 template<>
 StarExpressionType EnumUtil::FromString<StarExpressionType>(const char *value) {
 	return static_cast<StarExpressionType>(StringUtil::StringToEnum(GetStarExpressionTypeValues(), 4, "StarExpressionType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(State::EMPTY), "EMPTY" },
+		{ static_cast<uint32_t>(State::SINGLE_KEY), "SINGLE_KEY" },
+		{ static_cast<uint32_t>(State::MULTIPLE_KEYS), "MULTIPLE_KEYS" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<State>(State value) {
+	return StringUtil::EnumToString(GetStateValues(), 3, "State", static_cast<uint32_t>(value));
+}
+
+template<>
+State EnumUtil::FromString<State>(const char *value) {
+	return static_cast<State>(StringUtil::StringToEnum(GetStateValues(), 3, "State", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStatementReturnTypeValues() {
