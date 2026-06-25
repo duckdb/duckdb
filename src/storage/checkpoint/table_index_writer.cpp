@@ -1,6 +1,7 @@
 #include "duckdb/storage/checkpoint/table_index_writer.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
+#include "duckdb/storage/checkpoint_manager.hpp"
 
 namespace duckdb {
 
