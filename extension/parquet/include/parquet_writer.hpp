@@ -267,6 +267,7 @@ public:
 	uint32_t WriteData(unique_ptr<AsyncWriteBuffer> buffer);
 
 	GeoParquetFileMetadata &GetGeoParquetData();
+	void RegisterBBoxCovering(const string &geom_column_name, const string &bbox_column_name);
 
 	static bool TryGetParquetType(const LogicalType &duckdb_type,
 	                              optional_ptr<duckdb_parquet::Type::type> type = nullptr,
