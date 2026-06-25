@@ -28,7 +28,7 @@ void PartitionKeyTracker::Reset(idx_t radix_bits_p) {
 	const auto partition_count = RadixPartitioning::NumberOfPartitions(radix_bits);
 	D_ASSERT(partition_count <= STANDARD_VECTOR_SIZE);
 	states.clear();
-	states.resize(partition_count, State::EMPTY);
+	states.resize(partition_count, PartitionKeyTrackerState::EMPTY);
 	hashes.clear();
 	hashes.resize(partition_count);
 	representatives.Reset();
@@ -36,7 +36,7 @@ void PartitionKeyTracker::Reset(idx_t radix_bits_p) {
 }
 
 bool PartitionKeyTracker::CanBypass(idx_t hash_bin) const {
-	return hash_bin < states.size() && states[hash_bin] == State::SINGLE_KEY;
+	return hash_bin < states.size() && states[hash_bin] == PartitionKeyTrackerState::SINGLE_KEY;
 }
 
 void PartitionKeyTracker::Update(DataChunk &keys, Vector &hashes, PartitionedTupleDataAppendState &append_state,
@@ -88,7 +88,7 @@ void PartitionKeyTracker::Combine(const PartitionKeyTracker &other) {
 }
 
 void PartitionKeyTracker::StoreRepresentative(DataChunk &keys, idx_t row_idx, hash_t hash, idx_t bin_idx) {
-	states[bin_idx] = State::SINGLE_KEY;
+	states[bin_idx] = PartitionKeyTrackerState::SINGLE_KEY;
 	this->hashes[bin_idx] = hash;
 	single_value_sel.set_index(0, row_idx);
 	for (idx_t col_idx = 0; col_idx < key_count; col_idx++) {
@@ -97,7 +97,7 @@ void PartitionKeyTracker::StoreRepresentative(DataChunk &keys, idx_t row_idx, ha
 }
 
 void PartitionKeyTracker::StoreRepresentative(const PartitionKeyTracker &source, idx_t source_bin, idx_t target_bin) {
-	states[target_bin] = State::SINGLE_KEY;
+	states[target_bin] = PartitionKeyTrackerState::SINGLE_KEY;
 	hashes[target_bin] = source.hashes[source_bin];
 	single_value_sel.set_index(0, source_bin);
 	for (idx_t col_idx = 0; col_idx < key_count; col_idx++) {
@@ -106,7 +106,7 @@ void PartitionKeyTracker::StoreRepresentative(const PartitionKeyTracker &source,
 }
 
 void PartitionKeyTracker::MarkMixed(idx_t bin_idx) {
-	states[bin_idx] = State::MULTIPLE_KEYS;
+	states[bin_idx] = PartitionKeyTrackerState::MULTIPLE_KEYS;
 }
 
 template <bool FIXED, bool USE_PARTITION_SEL>
@@ -122,12 +122,12 @@ idx_t PartitionKeyTracker::BuildCandidates(DataChunk &keys, Vector &input_hashes
 		const auto bin_idx = GETTER::GetKey(it);
 		const auto &entry = GETTER::GetValue(it);
 
-		if (states[bin_idx] == State::MULTIPLE_KEYS) {
+		if (states[bin_idx] == PartitionKeyTrackerState::MULTIPLE_KEYS) {
 			continue;
 		}
 
 		idx_t entry_idx = 0;
-		if (states[bin_idx] == State::EMPTY) {
+		if (states[bin_idx] == PartitionKeyTrackerState::EMPTY) {
 			const auto row_idx = GetPartitionRowIndex<USE_PARTITION_SEL>(append_state, entry.offset);
 			D_ASSERT(row_idx < count);
 			const auto hash_idx = hash_data.sel->get_index(row_idx);
@@ -147,7 +147,7 @@ idx_t PartitionKeyTracker::BuildCandidates(DataChunk &keys, Vector &input_hashes
 			candidate_rep_sel.set_index(candidate_count, bin_idx);
 			candidate_count += hash_match;
 		}
-		states[bin_idx] = hash_mismatch ? State::MULTIPLE_KEYS : states[bin_idx];
+		states[bin_idx] = hash_mismatch ? PartitionKeyTrackerState::MULTIPLE_KEYS : states[bin_idx];
 		candidate_count = hash_mismatch ? candidate_start : candidate_count;
 	}
 	return candidate_count;
@@ -158,7 +158,7 @@ idx_t PartitionKeyTracker::CompactCandidates(idx_t candidate_count) {
 	for (idx_t candidate_idx = 0; candidate_idx < candidate_count; candidate_idx++) {
 		const auto bin_idx = candidate_rep_sel.get_index_unsafe(candidate_idx);
 		const auto input_idx = candidate_input_sel.get_index_unsafe(candidate_idx);
-		const auto keep = states[bin_idx] == State::SINGLE_KEY;
+		const auto keep = states[bin_idx] == PartitionKeyTrackerState::SINGLE_KEY;
 		candidate_input_sel.set_index(new_count, input_idx);
 		candidate_rep_sel.set_index(new_count, bin_idx);
 		new_count += keep;
@@ -184,19 +184,20 @@ void PartitionKeyTracker::CompareCandidates(DataChunk &keys, idx_t candidate_cou
 }
 
 void PartitionKeyTracker::CombineBin(const PartitionKeyTracker &source, idx_t bin_idx, idx_t &candidate_count) {
-	if (source.states[bin_idx] == State::EMPTY || states[bin_idx] == State::MULTIPLE_KEYS) {
+	if (source.states[bin_idx] == PartitionKeyTrackerState::EMPTY ||
+	    states[bin_idx] == PartitionKeyTrackerState::MULTIPLE_KEYS) {
 		return;
 	}
-	if (source.states[bin_idx] == State::MULTIPLE_KEYS) {
+	if (source.states[bin_idx] == PartitionKeyTrackerState::MULTIPLE_KEYS) {
 		MarkMixed(bin_idx);
 		return;
 	}
-	D_ASSERT(source.states[bin_idx] == State::SINGLE_KEY);
-	if (states[bin_idx] == State::EMPTY) {
+	D_ASSERT(source.states[bin_idx] == PartitionKeyTrackerState::SINGLE_KEY);
+	if (states[bin_idx] == PartitionKeyTrackerState::EMPTY) {
 		StoreRepresentative(source, bin_idx, bin_idx);
 		return;
 	}
-	D_ASSERT(states[bin_idx] == State::SINGLE_KEY);
+	D_ASSERT(states[bin_idx] == PartitionKeyTrackerState::SINGLE_KEY);
 	if (hashes[bin_idx] != source.hashes[bin_idx]) {
 		MarkMixed(bin_idx);
 		return;
@@ -211,7 +212,7 @@ idx_t PartitionKeyTracker::CompactTrackerCandidates(idx_t candidate_count) {
 	for (idx_t candidate_idx = 0; candidate_idx < candidate_count; candidate_idx++) {
 		const auto bin_idx = candidate_input_sel.get_index_unsafe(candidate_idx);
 		const auto source_bin_idx = candidate_rep_sel.get_index_unsafe(candidate_idx);
-		const auto keep = states[bin_idx] == State::SINGLE_KEY;
+		const auto keep = states[bin_idx] == PartitionKeyTrackerState::SINGLE_KEY;
 		candidate_input_sel.set_index(new_count, bin_idx);
 		candidate_rep_sel.set_index(new_count, source_bin_idx);
 		new_count += keep;

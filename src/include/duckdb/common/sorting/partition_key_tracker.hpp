@@ -23,7 +23,7 @@ public:
 	void Combine(const PartitionKeyTracker &other);
 
 private:
-	enum class State : uint8_t { EMPTY, SINGLE_KEY, MULTIPLE_KEYS };
+	enum class PartitionKeyTrackerState : uint8_t { EMPTY, SINGLE_KEY, MULTIPLE_KEYS };
 
 	void StoreRepresentative(DataChunk &keys, idx_t row_idx, hash_t hash, idx_t bin_idx);
 	void StoreRepresentative(const PartitionKeyTracker &source, idx_t source_bin, idx_t target_bin);
@@ -41,7 +41,7 @@ private:
 private:
 	idx_t key_count;
 	idx_t radix_bits = 0;
-	unsafe_vector<State> states;
+	unsafe_vector<PartitionKeyTrackerState> states;
 	unsafe_vector<hash_t> hashes;
 	DataChunk representatives;
 	SelectionVector single_value_sel;
