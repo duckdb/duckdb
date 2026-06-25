@@ -108,7 +108,8 @@ logging_storage	[memory]
 
 
 # Due to different file locking behaviour, this currently fails on windows
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 #### 
 # Configuring a different log storage, using the config param to pass arbitrary (extensible!) options

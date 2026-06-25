@@ -1,7 +1,8 @@
 # name: test/sql/copy/csv/rejects/csv_rejects_truncate_line_invalid_utf8.test
 # group: [rejects]
 
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 # truncating this file with a line limit of 4 bytes results in incorrect UTF8
 statement ok

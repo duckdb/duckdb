@@ -292,6 +292,14 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		result.Print();
 	}
 
+	if (statement.skip_on_failure && error &&
+	    !TestIsInternalError(runner.always_fail_error_messages, result.GetError())) {
+		// statement skip_test_on_error: a failing statement skips the test instead of failing it
+		runner.SkipTest("statement skip_test_on_error: " + result.GetError());
+		runner.finished_processing_file = true;
+		return true;
+	}
+
 	/* Check to see if we are expecting success or failure */
 	auto expected_result = statement.expected_result;
 	if (expected_result != ExpectedResult::RESULT_SUCCESS) {

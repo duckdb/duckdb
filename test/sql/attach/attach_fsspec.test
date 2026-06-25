@@ -3,7 +3,8 @@
 # group: [attach]
 
 # this doesn't work on Windows because this expands to "file:///Users/..." on Mac/Linux, but "file://C:\.." on Windows
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 statement error
 ATTACH 'dummy_extension:/hello.world';

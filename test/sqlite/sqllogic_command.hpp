@@ -84,6 +84,8 @@ public:
 
 	ExpectedResult expected_result;
 	string expected_error;
+	//! statement require: when the statement fails, skip the test instead of failing it
+	bool skip_on_failure = false;
 
 public:
 	void ExecuteInternal(ExecuteContext &context) const override;

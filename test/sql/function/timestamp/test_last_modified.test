@@ -5,7 +5,8 @@
 require icu
 # Disabled on Windows: filesystem last-modified metadata can lag or be truncated enough in CI that
 # comparing it to epoch(now()) with a 5-second tolerance flakes.
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 loop i 0 100
 

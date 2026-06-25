@@ -4,7 +4,8 @@
 
 require parquet
 
-require vector_size 64
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 64, 'requires vector_size>=64')
 
 statement ok
 BEGIN TRANSACTION

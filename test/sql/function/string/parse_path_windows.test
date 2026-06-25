@@ -2,7 +2,8 @@
 # description: test parse path functions in windows
 # group: [string]
 
-require windows
+statement skip_test_on_error
+SELECT assert_true(platform LIKE 'windows_%', 'requires a windows platform') FROM pragma_platform()
 
 # all separators option
 query T

@@ -5,7 +5,8 @@
 require skip_reload
 
 # Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 statement ok
 SELECT * FROM read_csv(

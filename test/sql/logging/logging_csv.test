@@ -5,7 +5,8 @@
 require noforcestorage
 
 # Due to different file locking behaviour, this currently fails on windows
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 # Enable FileSystem logging to single csv file  
 statement ok

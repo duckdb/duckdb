@@ -2,7 +2,8 @@
 # description: Test mixed lines
 # group: [csv]
 
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 query III
 from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', strict_mode=false)

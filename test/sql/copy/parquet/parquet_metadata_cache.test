@@ -19,7 +19,8 @@ select * from parquet_scan('{DATA_DIR}/parquet-testing/cache/cache1.parquet')
 1	hello
 
 # writer requires vector_size >= 64
-require vector_size 64
+statement skip_test_on_error
+SELECT assert_true(current_setting('standard_vector_size')::INT >= 64, 'requires vector_size>=64')
 
 # copy cache1.parquet to cached.parquet
 statement ok

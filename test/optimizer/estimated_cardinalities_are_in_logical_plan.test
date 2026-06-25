@@ -2,7 +2,8 @@
 # description: Make sure estimated cardinalities are respected
 # group: [optimizer]
 
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 statement ok
 CREATE TABLE t1 AS SELECT range a FROM range(100000);

@@ -9,7 +9,8 @@ select id, value as f, date from parquet_scan('{DATA_DIR}/parquet-testing/hive-p
 ----
 
 # requires notwindows for windows-style path backslash reasons
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 query III
 select i, j, filename from parquet_scan('{DATA_DIR}/parquet-testing/glob*/t?.parquet', FILENAME=1) order by i;

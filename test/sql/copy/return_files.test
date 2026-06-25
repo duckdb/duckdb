@@ -38,7 +38,8 @@ COPY integers TO '{TEST_DIR}/test_per_thread_output' (RETURN_FILES, PER_THREAD_O
 ----
 200000	<REGEX>:.*data_0.csv.*
 
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 statement ok
 SET threads=1;

@@ -3,7 +3,8 @@
 # group: [csv]
 
 # requires notwindows because tests will return \r\n to be used in the parameters
-require notwindows
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE 'windows_%', 'requires a non-windows platform') FROM pragma_platform()
 
 # This has a row with an extra column, so with ignore_errors we give preference to that
 query II

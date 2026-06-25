@@ -2,9 +2,11 @@
 # description: Test overwrite to pipe on windows systems
 # group: [overwrite]
 
-require windows
+statement skip_test_on_error
+SELECT assert_true(platform LIKE 'windows_%', 'requires a windows platform') FROM pragma_platform()
 
-require notmingw
+statement skip_test_on_error
+SELECT assert_true(platform NOT LIKE '%_mingw', 'requires a non-mingw platform') FROM pragma_platform()
 
 # Write to pipe - should pass since .tmp is not added when writing to a pipe
 statement ok
