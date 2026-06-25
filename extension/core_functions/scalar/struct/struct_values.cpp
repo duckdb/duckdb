@@ -17,7 +17,7 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 	D_ASSERT(result_children.size() == input_children.size());
 
 	// UnnamedStruct vector and Struct vector are actually the same underneath, so we can just reference the children
-	if (StructType::IsUnnamed(input.GetType())) {
+	if (input.GetType().id() == LogicalTypeId::TUPLE) {
 		result.Reference(input);
 		return;
 	}

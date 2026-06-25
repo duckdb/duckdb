@@ -1482,7 +1482,11 @@ idx_t StructType::GetChildIndexUnsafe(const LogicalType &type, const string &nam
 idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
 }
+
 bool StructType::IsUnnamed(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::TUPLE) {
+		return true;
+	}
 	auto &child_types = StructType::GetChildTypes(type);
 	if (child_types.empty()) {
 		return false;

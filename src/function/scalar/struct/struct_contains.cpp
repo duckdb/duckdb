@@ -214,7 +214,7 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 		bound_function.GetArguments()[0] = child_type;
 		return nullptr;
 	}
-	if (!StructType::IsUnnamed(child_type)) {
+	if (child_type.id() != LogicalTypeId::TUPLE) {
 		throw BinderException("%s can only be used on unnamed structs", bound_function.GetName());
 	}
 	bound_function.GetArguments()[0] = child_type;
@@ -244,12 +244,12 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 }
 
 ScalarFunction StructContainsFun::GetFunction() {
-	return ScalarFunction("struct_contains", {LogicalTypeId::STRUCT, LogicalType::ANY}, LogicalType::BOOLEAN,
+	return ScalarFunction("struct_contains", {LogicalTypeId::TUPLE, LogicalType::ANY}, LogicalType::BOOLEAN,
 	                      StructSearchFunction<bool>, StructContainsBind);
 }
 
 ScalarFunction StructPositionFun::GetFunction() {
-	ScalarFunction fun("struct_contains", {LogicalTypeId::STRUCT, LogicalType::ANY}, LogicalType::INTEGER,
+	ScalarFunction fun("struct_contains", {LogicalTypeId::TUPLE, LogicalType::ANY}, LogicalType::INTEGER,
 	                   StructSearchFunction<int32_t, true>, StructContainsBind);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;

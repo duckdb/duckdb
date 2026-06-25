@@ -239,7 +239,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 				if (StructType::IsStruct(expr->GetReturnType())) {
 					// struct! push a struct_extract
 					auto &child_types = StructType::GetChildTypes(expr->GetReturnType());
-					if (StructType::IsUnnamed(expr->GetReturnType())) {
+					if (expr->GetReturnType().id() == LogicalTypeId::TUPLE) {
 						for (idx_t child_index = 0; child_index < child_types.size(); child_index++) {
 							new_expressions.push_back(
 							    CreateBoundStructExtractIndex(context, expr->Copy(), child_index + 1));

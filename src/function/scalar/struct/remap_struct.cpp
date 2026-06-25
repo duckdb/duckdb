@@ -296,6 +296,7 @@ struct RemapEntry {
 		if (remap_val.type().id() == LogicalTypeId::VARCHAR) {
 			remap_source = remap_val.ToString();
 		} else if (StructType::IsStruct(remap_val.type())) {
+			// the remap spec is an (internally-built) unnamed struct, which may be a STRUCT or a TUPLE
 			if (!StructType::IsUnnamed(remap_val.type())) {
 				throw BinderException("Remap keys for remap_struct needs to be an unnamed struct");
 			}
