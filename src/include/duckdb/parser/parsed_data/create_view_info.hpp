@@ -25,7 +25,12 @@ public:
 
 public:
 	//! View name
-	Identifier view_name;
+	const Identifier &GetViewName() const {
+		return qualified_name.Name();
+	}
+	void SetViewName(Identifier name) {
+		qualified_name.NameMutable() = std::move(name);
+	}
 	//! Aliases of the view
 	vector<Identifier> aliases;
 	//! Return types

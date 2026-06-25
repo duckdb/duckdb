@@ -9,7 +9,8 @@ CreateTableInfo::CreateTableInfo() : CreateInfo(CatalogType::TABLE_ENTRY, Identi
 }
 
 CreateTableInfo::CreateTableInfo(Identifier catalog_p, Identifier schema_p, Identifier name_p)
-    : CreateInfo(CatalogType::TABLE_ENTRY, std::move(schema_p), std::move(catalog_p)), table(std::move(name_p)) {
+    : CreateInfo(CatalogType::TABLE_ENTRY, std::move(schema_p), std::move(catalog_p)) {
+	SetTableName(std::move(name_p));
 }
 
 CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, Identifier name_p)
@@ -17,7 +18,7 @@ CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, Identifier name_p)
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
-	auto result = make_uniq<CreateTableInfo>(catalog, schema, table);
+	auto result = make_uniq<CreateTableInfo>(Catalog(), Schema(), GetTableName());
 	CopyProperties(*result);
 	result->columns = columns.Copy();
 	for (auto &constraint : constraints) {
@@ -69,7 +70,7 @@ string CreateTableInfo::ExtraOptionsToString() const {
 
 string CreateTableInfo::ToString() const {
 	string ret = GetCreatePrefix("TABLE");
-	ret += QualifierToString(temporary ? Identifier() : catalog, schema, table);
+	ret += QualifierToString(temporary ? Identifier() : Catalog(), Schema(), GetTableName());
 
 	if (query != nullptr) {
 		ret += TableCatalogEntry::ColumnNamesToSQL(columns);

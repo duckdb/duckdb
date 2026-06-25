@@ -33,7 +33,12 @@ public:
 	//! (optionally) the provider of the secret credentials
 	unique_ptr<ParsedExpression> provider;
 	//! (optionally) the name of the secret
-	Identifier name;
+	const Identifier &GetSecretName() const {
+		return qualified_name.Name();
+	}
+	void SetSecretName(Identifier name) {
+		qualified_name.NameMutable() = std::move(name);
+	}
 	//! (optionally) the scope of the secret
 	unique_ptr<ParsedExpression> scope;
 	//! Named parameter list (if any)

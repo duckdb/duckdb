@@ -33,7 +33,12 @@ struct CreateSequenceInfo : public CreateInfo {
 	CreateSequenceInfo();
 
 	//! Sequence name to create
-	Identifier name;
+	const Identifier &GetSequenceName() const {
+		return qualified_name.Name();
+	}
+	void SetSequenceName(Identifier name) {
+		qualified_name.NameMutable() = std::move(name);
+	}
 	//! Usage count of the sequence
 	uint64_t usage_count;
 	//! The increment value

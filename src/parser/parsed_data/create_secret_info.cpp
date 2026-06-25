@@ -16,7 +16,7 @@ unique_ptr<CreateInfo> CreateSecretInfo::Copy() const {
 	auto result = make_uniq<CreateSecretInfo>(on_conflict, persist_type);
 
 	result->storage_type = storage_type;
-	result->name = name;
+	result->SetSecretName(GetSecretName());
 
 	if (type) {
 		result->type = type->Copy();
@@ -44,8 +44,8 @@ string CreateSecretInfo::ToString() const {
 		create_type = "SECRET";
 	}
 	result = GetCreatePrefix(create_type);
-	if (!name.empty()) {
-		result += " " + SQLIdentifier(name);
+	if (!GetSecretName().empty()) {
+		result += " " + SQLIdentifier(GetSecretName());
 	}
 	if (!storage_type.empty()) {
 		result += " IN" + SQLIdentifier(storage_type);

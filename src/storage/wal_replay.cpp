@@ -723,7 +723,7 @@ void WriteAheadLogDeserializer::ReplayCreateTable() {
 	}
 	// bind the constraints to the table again
 	auto binder = Binder::CreateBinder(context);
-	auto &schema = catalog.GetSchema(context, info->schema);
+	auto &schema = catalog.GetSchema(context, info->Schema());
 	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
 
 	catalog.CreateTable(context, *bound_info);
@@ -880,7 +880,7 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSchema() {
 	CreateSchemaInfo info;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.SchemaMutable() = Identifier(deserializer.ReadProperty<string>(101, "schema"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -932,7 +932,7 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 		return;
 	}
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, trigger_info.catalog, trigger_info.schema,
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, trigger_info.Catalog(), trigger_info.Schema(),
 	                                                   trigger_info.base_table->table_name);
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
@@ -1063,7 +1063,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 		info.index_type = ART::TYPE_NAME;
 	}
 
-	const auto schema_name = create_info->schema;
+	const auto schema_name = create_info->Schema();
 	const auto table_name = info.table;
 
 	auto &entry = catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);

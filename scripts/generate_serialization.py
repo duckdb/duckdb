@@ -278,9 +278,11 @@ def deserialize_local_name(entry):
     return entry.deserialize_property.replace('.', '_')
 
 
-def get_deserialize_assignment(property_name, property_type, pointer_type):
+def get_deserialize_assignment(property_name, property_type, pointer_type, local_name=None):
     assignment = '.' if pointer_type == 'none' else '->'
-    property = property_name.replace('.', '_')
+    # local_name is the variable the property was read into; accessor-call properties (containing '(')
+    # are not valid identifiers, so callers pass the member name instead.
+    property = local_name if local_name is not None else property_name.replace('.', '_')
     if requires_move(property_type):
         property = f'std::move({property})'
     return f'\tresult{assignment}{property_name} = {property};\n'
@@ -853,7 +855,7 @@ def generate_class_code(class_entry: SerializableClass):
             )
         elif entry.name not in constructor_entries and entry.status == MemberVariableStatus.EXISTING:
             class_deserialize += get_deserialize_assignment(
-                entry.deserialize_property, entry.type, class_entry.pointer_type
+                entry.deserialize_property, entry.type, class_entry.pointer_type, deserialize_local_name(entry)
             )
         if entry.name in class_entry.set_parameter_names and entry.status == MemberVariableStatus.EXISTING:
             class_deserialize += SET_DESERIALIZE_PARAMETER_FORMAT.format(

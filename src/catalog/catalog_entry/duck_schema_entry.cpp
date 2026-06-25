@@ -181,7 +181,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 	if (info.on_conflict == OnCreateConflict::ALTER_ON_CONFLICT) {
 		// check if the original entry exists
 		auto &catalog_set = GetCatalogSet(info.type);
-		auto current_entry = catalog_set.GetEntry(transaction, info.name);
+		auto current_entry = catalog_set.GetEntry(transaction, info.GetFunctionName());
 		if (current_entry) {
 			// the current entry exists - alter it instead
 			auto alter_info = info.GetAlterInfo();
@@ -255,8 +255,8 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction trans
 	// currently, we can not alter PK/FK/UNIQUE constraints
 	// concurrency-safe name checks against other INDEX catalog entries happens in the catalog
 	if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT &&
-	    !table.GetStorage().IndexNameIsUnique(info.index_name.GetIdentifierName())) {
-		throw CatalogException("An index with the name " + info.index_name + " already exists!");
+	    !table.GetStorage().IndexNameIsUnique(info.GetIndexName().GetIdentifierName())) {
+		throw CatalogException("An index with the name " + info.GetIndexName() + " already exists!");
 	}
 
 	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info, table);
