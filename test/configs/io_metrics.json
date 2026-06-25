@@ -1,0 +1,117 @@
+{
+	"comment": [
+		"Configuration for the I/O-metrics ground-truth test (run_io_metrics_test.py).",
+		"Each test runs a small workload under a syscall-interposition shim that measures",
+		"the REAL bytes read/written to the target file(s), then compares that ground truth",
+		"against DuckDB's reported io.total_bytes_read / io.total_bytes_written profiling",
+		"metrics. Any non-skipped mismatch fails the run (hard-fail, no tolerance).",
+		"",
+		"A test with a non-empty \"skip\" field is a KNOWN-WRONG metric: the string explains",
+		"why it is currently wrong (these are the QueryContext-not-passed bugs). When such a",
+		"bug is fixed the test starts matching, and the harness will report that the skip is",
+		"no longer needed so the entry can be removed.",
+		"",
+		"Placeholders: {dir} expands to the per-test scratch directory.",
+		"Fields: name, include (target path prefixes the shim attributes I/O to), prep",
+		"(statements run un-instrumented to create inputs), measure (instrumented statements),",
+		"check (which dimensions to compare: read and/or write), skip (FIXME reason or absent)."
+	],
+	"tests": [
+		{
+			"name": "parquet_write",
+			"include": ["{dir}/out.parquet"],
+			"measure": ["COPY (SELECT range i, range * 2 j FROM range(500000)) TO '{dir}/out.parquet' (FORMAT parquet)"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "parquet_write_zstd",
+			"include": ["{dir}/out.parquet"],
+			"measure": ["COPY (SELECT range i FROM range(1000000)) TO '{dir}/out.parquet' (FORMAT parquet, COMPRESSION zstd)"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "parquet_read",
+			"include": ["{dir}/in.parquet"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.parquet' (FORMAT parquet)"],
+			"measure": ["SELECT count(*), sum(i), sum(j) FROM read_parquet('{dir}/in.parquet')"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "parquet_read_projection",
+			"include": ["{dir}/in.parquet"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.parquet' (FORMAT parquet)"],
+			"measure": ["SELECT sum(i) FROM read_parquet('{dir}/in.parquet')"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "parquet_read_filter",
+			"include": ["{dir}/in.parquet"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.parquet' (FORMAT parquet)"],
+			"measure": ["SELECT count(*) FROM read_parquet('{dir}/in.parquet') WHERE i > 250000"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "parquet_read_zstd",
+			"include": ["{dir}/in.parquet"],
+			"prep": ["COPY (SELECT range i FROM range(1000000)) TO '{dir}/in.parquet' (FORMAT parquet, COMPRESSION zstd)"],
+			"measure": ["SELECT sum(i) FROM read_parquet('{dir}/in.parquet')"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "csv_read",
+			"include": ["{dir}/in.csv"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.csv' (FORMAT csv)"],
+			"measure": ["SELECT count(*), sum(i) FROM read_csv('{dir}/in.csv')"],
+			"check": ["read", "write"]
+		},
+
+		{
+			"name": "csv_write",
+			"include": ["{dir}/out.csv"],
+			"measure": ["COPY (SELECT range i, range * 2 j FROM range(500000)) TO '{dir}/out.csv' (FORMAT csv)"],
+			"check": ["read", "write"],
+			"skip": "FIXME: the CSV writer does not thread a QueryContext into FileHandle::Write, so io.total_bytes_written is reported as 0 while the OS actually writes ~6.8 MB. Remove this skip once the CSV COPY-to-file path passes a QueryContext."
+		},
+		{
+			"name": "csv_write_gzip",
+			"include": ["{dir}/out.csv.gz"],
+			"measure": ["COPY (SELECT range i FROM range(500000)) TO '{dir}/out.csv.gz' (FORMAT csv, COMPRESSION gzip)"],
+			"check": ["read", "write"],
+			"skip": "FIXME: the gzip CSV writer reports only a few bytes (the gzip header) instead of the ~1 MB actually written, because the compressed-stream writes go through GZipFileSystem without a QueryContext. Remove once the compressed writer path is instrumented."
+		},
+		{
+			"name": "json_write",
+			"include": ["{dir}/out.json"],
+			"measure": ["COPY (SELECT range i, range * 2 j FROM range(200000)) TO '{dir}/out.json' (FORMAT json)"],
+			"check": ["read", "write"],
+			"skip": "FIXME: the JSON writer does not thread a QueryContext into FileHandle::Write, so io.total_bytes_written is reported as 0 while the OS actually writes ~2.5 MB. Remove once the JSON COPY-to-file path passes a QueryContext."
+		},
+		{
+			"name": "csv_read_gzip",
+			"include": ["{dir}/in.csv.gz"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.csv.gz' (FORMAT csv, COMPRESSION gzip)"],
+			"measure": ["SELECT count(*), sum(i) FROM read_csv('{dir}/in.csv.gz')"],
+			"check": ["read", "write"],
+			"skip": "FIXME: reading a gzipped CSV reports a wildly inflated io.total_bytes_read (~100 MB for a 7 MB file). The decompression path appears to count decompressed/buffered bytes through a QueryContext rather than the real compressed file reads. Remove once the gzip reader attributes the real on-disk bytes."
+		},
+		{
+			"name": "json_read",
+			"include": ["{dir}/in.json"],
+			"prep": ["COPY (SELECT range i, range * 2 j FROM range(200000)) TO '{dir}/in.json' (FORMAT json)"],
+			"measure": ["SELECT count(*) FROM read_json('{dir}/in.json')"],
+			"check": ["read", "write"],
+			"skip": "FIXME: the JSON reader reads the file twice at the OS level (schema detection + scan) but only tracks one pass, so io.total_bytes_read is reported as ~half the real bytes. Remove once both read passes thread a QueryContext (or the schema-detection read is attributed)."
+		},
+		{
+			"name": "native_checkpoint_write",
+			"default_db": "{dir}/native.db",
+			"include": ["{dir}/native.db"],
+			"measure": [
+				"CREATE TABLE t AS SELECT range i, range * 2 j FROM range(300000)",
+				"CHECKPOINT"
+			],
+			"check": ["write"],
+			"skip": "FIXME: the storage write path under-counts. The OS writes ~0.5 MB to the database file but only ~0.26 MB is reported (the CHECKPOINT itself reports only ~4 KB) because the single-file block manager / checkpoint writes do not thread a QueryContext. Remove once those writes pass a QueryContext."
+		}
+	]
+}
