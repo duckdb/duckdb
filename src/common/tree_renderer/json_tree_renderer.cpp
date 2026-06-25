@@ -1,6 +1,5 @@
 #include "duckdb/common/tree_renderer/json_tree_renderer.hpp"
 
-#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -21,45 +20,45 @@ using namespace duckdb_yyjson; // NOLINT
 namespace duckdb {
 
 string JSONTreeRenderer::ToString(const LogicalOperator &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string JSONTreeRenderer::ToString(const PhysicalOperator &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string JSONTreeRenderer::ToString(const ProfilingNode &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string JSONTreeRenderer::ToString(const Pipeline &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
-void JSONTreeRenderer::Render(const LogicalOperator &op, BaseResultRenderer &ss) {
+void JSONTreeRenderer::Render(const LogicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void JSONTreeRenderer::Render(const PhysicalOperator &op, BaseResultRenderer &ss) {
+void JSONTreeRenderer::Render(const PhysicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void JSONTreeRenderer::Render(const ProfilingNode &op, BaseResultRenderer &ss) {
+void JSONTreeRenderer::Render(const ProfilingNode &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void JSONTreeRenderer::Render(const Pipeline &op, BaseResultRenderer &ss) {
+void JSONTreeRenderer::Render(const Pipeline &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
@@ -96,7 +95,7 @@ static yyjson_mut_val *RenderRecursive(yyjson_mut_doc *doc, RenderTree &tree, id
 	return object;
 }
 
-void JSONTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) {
+void JSONTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) {
 	auto doc = yyjson_mut_doc_new(nullptr);
 	auto result_obj = yyjson_mut_arr(doc);
 	yyjson_mut_doc_set_root(doc, result_obj);
@@ -115,7 +114,7 @@ void JSONTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss
 	yyjson_mut_doc_free(doc);
 }
 
-void JSONTreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseResultRenderer &ss) {
+void JSONTreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseTreeRenderer &ss) {
 	// the JSON profiler output is the full query profile result tree (including query-level metrics)
 	ss << profiler.ToJSON();
 }

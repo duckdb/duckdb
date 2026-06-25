@@ -29,7 +29,7 @@
 
 namespace duckdb {
 
-class BaseResultRenderer;
+class BaseTreeRenderer;
 class ClientContext;
 class ExpressionExecutor;
 class ProfilingNode;
@@ -139,7 +139,7 @@ public:
 	DUCKDB_API string QueryTreeToString() const;
 	DUCKDB_API void QueryTreeToStream(std::ostream &str) const;
 	//! Render the framed query tree (header, total time, phase timings, operator tree) into the given sink.
-	DUCKDB_API void RenderQueryTree(BaseResultRenderer &ss) const;
+	DUCKDB_API void RenderQueryTree(BaseTreeRenderer &ss) const;
 	DUCKDB_API void Print();
 
 	//! Render the profiler output as a string, formatted based on the given ProfilerPrintFormat (or the configured
@@ -150,7 +150,7 @@ public:
 	DUCKDB_API string ToString(const string &profiler_format_name) const;
 	//! Render the profiling node tree using the given renderer into the sink (renders nothing when there is no tree).
 	//! Called by TreeRenderer::RenderProfiler for the formats that render the node tree directly.
-	DUCKDB_API void RenderProfilingNodeTree(TreeRenderer &renderer, BaseResultRenderer &ss) const;
+	DUCKDB_API void RenderProfilingNodeTree(TreeRenderer &renderer, BaseTreeRenderer &ss) const;
 
 	// Sanitize a Value::MAP
 	static Value JSONSanitize(const Value &input);
@@ -169,7 +169,7 @@ public:
 
 private:
 	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const idx_t depth = 0);
-	void Render(const ProfilingNode &node, BaseResultRenderer &str) const;
+	void Render(const ProfilingNode &node, BaseTreeRenderer &str) const;
 	//! Render the profiler output to a string via the given renderer (nullptr renders nothing), handling the disabled
 	//! case. Used for the programmatic / string paths.
 	string RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const;

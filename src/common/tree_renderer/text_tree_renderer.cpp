@@ -1,6 +1,5 @@
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 
-#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -10,30 +9,1340 @@
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/typedefs.hpp"
 
-#include <sstream>
+#include <algorithm>
 
 namespace duckdb {
 
 namespace {
 
-struct StringSegment {
+//===--------------------------------------------------------------------===//
+// Render-width helpers (UTF8-aware)
+//===--------------------------------------------------------------------===//
+static idx_t RenderLength(const string &str) {
+	return Utf8Proc::RenderWidth(str);
+}
+static idx_t RenderLength(const char *str, idx_t len) {
+	return Utf8Proc::RenderWidth(string(str, len));
+}
+//! Whether the byte starts a codepoint (i.e. is not a UTF8 continuation byte)
+static bool IsCharacter(char c) {
+	return (static_cast<uint8_t>(c) & 0xC0) != 0x80;
+}
+
+//===--------------------------------------------------------------------===//
+// Styled text primitives
+//===--------------------------------------------------------------------===//
+struct ExplainSpan {
+	ExplainSpan(string text_p, TreeRenderType type_p) : text(std::move(text_p)), type(type_p) {
+	}
+	string text;
+	TreeRenderType type;
+};
+
+using ExplainLine = vector<ExplainSpan>;
+
+//! A rectangular block of rendered lines. `spine` is the column at which a parent connects down into this block.
+struct ExplainBlock {
+	vector<ExplainLine> lines;
+	idx_t width = 0;
+	idx_t spine = 0;
+};
+
+static idx_t LineWidth(const ExplainLine &line) {
+	idx_t width = 0;
+	for (auto &span : line) {
+		width += RenderLength(span.text);
+	}
+	return width;
+}
+
+static void OffsetLine(ExplainLine &line, idx_t offset) {
+	if (offset == 0) {
+		return;
+	}
+	line.insert(line.begin(), ExplainSpan(string(offset, ' '), TreeRenderType::LAYOUT));
+}
+
+static void PadLine(ExplainLine &line, idx_t width) {
+	idx_t current_width = LineWidth(line);
+	if (current_width >= width) {
+		return;
+	}
+	line.emplace_back(string(width - current_width, ' '), TreeRenderType::LAYOUT);
+}
+
+static idx_t LeadingSpaces(const ExplainLine &line) {
+	idx_t count = 0;
+	for (auto &span : line) {
+		for (char c : span.text) {
+			if (c != ' ') {
+				return count;
+			}
+			count++;
+		}
+	}
+	return count;
+}
+
+//! Append `src` to `dst` so that the first non-space character of `src` lands at render column `content_col`.
+static void AppendAt(ExplainLine &dst, const ExplainLine &src, idx_t content_col) {
+	PadLine(dst, content_col);
+	idx_t to_skip = LeadingSpaces(src);
+	idx_t skipped = 0;
+	for (auto &span : src) {
+		if (skipped >= to_skip) {
+			dst.push_back(span);
+			continue;
+		}
+		idx_t i = 0;
+		while (i < span.text.size() && span.text[i] == ' ' && skipped < to_skip) {
+			i++;
+			skipped++;
+		}
+		if (i < span.text.size()) {
+			ExplainSpan trimmed = span;
+			trimmed.text = span.text.substr(i);
+			dst.push_back(std::move(trimmed));
+		}
+	}
+}
+
+//! Returns true if the codepoint at render column "col" equals the given (single-width) UTF8 character.
+static bool RenderCharEquals(const ExplainLine &line, idx_t col, const char *expected) {
+	idx_t col_offset = 0;
+	for (auto &span : line) {
+		idx_t span_width = RenderLength(span.text);
+		if (col >= col_offset + span_width) {
+			col_offset += span_width;
+			continue;
+		}
+		idx_t char_idx = 0;
+		for (idx_t i = 0; i < span.text.size(); i++) {
+			if (IsCharacter(span.text[i])) {
+				if (char_idx == col - col_offset) {
+					idx_t j = i + 1;
+					while (j < span.text.size() && !IsCharacter(span.text[j])) {
+						j++;
+					}
+					return span.text.compare(i, j - i, expected) == 0;
+				}
+				char_idx++;
+			}
+		}
+		return false;
+	}
+	return false;
+}
+
+//! Replace the (single-width) character at render column "col" with the given UTF8 character.
+static void SetLayoutChar(ExplainLine &line, idx_t col, const char *replacement) {
+	idx_t col_offset = 0;
+	for (auto &span : line) {
+		idx_t span_width = RenderLength(span.text);
+		if (col >= col_offset + span_width) {
+			col_offset += span_width;
+			continue;
+		}
+		idx_t char_idx = 0;
+		idx_t byte_start = 0;
+		idx_t byte_end = span.text.size();
+		for (idx_t i = 0; i < span.text.size(); i++) {
+			if (IsCharacter(span.text[i])) {
+				if (char_idx == col - col_offset) {
+					byte_start = i;
+				} else if (char_idx == col - col_offset + 1) {
+					byte_end = i;
+					break;
+				}
+				char_idx++;
+			}
+		}
+		span.text = span.text.substr(0, byte_start) + replacement + span.text.substr(byte_end);
+		return;
+	}
+}
+
+//! Draw the upward connector (┴) onto a child's top border, where its parent connects down into it.
+static void DrawRoofConnector(ExplainBlock &child, idx_t col) {
+	if (!child.lines.empty() && RenderCharEquals(child.lines.front(), col, "─")) {
+		SetLayoutChar(child.lines.front(), col, "┴");
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Plan tree
+//===--------------------------------------------------------------------===//
+struct ExplainTreeNode {
+	string name;
+	vector<std::pair<string, vector<string>>> details;
+	optional_idx rows;
+	optional_idx estimated_rows;
+	double timing = -1;
+	vector<unique_ptr<ExplainTreeNode>> children;
+
+	double subtree_time = 0;
+	idx_t subtree_count = 1;
+};
+
+static void ComputeSubtreeStats(ExplainTreeNode &node) {
+	node.subtree_time = node.timing > 0 ? node.timing : 0;
+	node.subtree_count = 1;
+	for (auto &child : node.children) {
+		ComputeSubtreeStats(*child);
+		node.subtree_time += child->subtree_time;
+		node.subtree_count += child->subtree_count;
+	}
+}
+
+//! The operator name as shown in a box title - underscores are turned into spaces (e.g. HASH_JOIN -> HASH JOIN)
+static string DisplayName(const string &name) {
+	string result = name;
+	std::replace(result.begin(), result.end(), '_', ' ');
+	return result;
+}
+
+static TreeRenderType GetOperatorType(const ExplainTreeNode &node) {
+	auto &name = node.name;
+	if (StringUtil::Contains(name, "SCAN") || StringUtil::Contains(name, "GET")) {
+		return TreeRenderType::NODE_NAME_SCAN;
+	}
+	if (StringUtil::Contains(name, "JOIN") || name == "CROSS_PRODUCT") {
+		return TreeRenderType::NODE_NAME_JOIN;
+	}
+	if (StringUtil::Contains(name, "AGGREGATE") || StringUtil::Contains(name, "GROUP_BY") ||
+	    StringUtil::Contains(name, "DISTINCT") || StringUtil::Contains(name, "WINDOW")) {
+		return TreeRenderType::NODE_NAME_AGGREGATE;
+	}
+	if (StringUtil::Contains(name, "ORDER_BY") || StringUtil::Contains(name, "TOP_N")) {
+		return TreeRenderType::NODE_NAME_ORDER;
+	}
+	if (node.children.empty()) {
+		for (auto &entry : node.details) {
+			if (entry.first == "Table" || entry.first == "Function") {
+				return TreeRenderType::NODE_NAME_SCAN;
+			}
+		}
+	}
+	return TreeRenderType::NODE_NAME;
+}
+
+//! Remove the redundant outer pair of parentheses wrapping an expression, e.g. "(a >= 1)" -> "a >= 1".
+static string StripOuterParens(string text) {
+	while (text.size() >= 2 && text.front() == '(' && text.back() == ')') {
+		idx_t depth = 0;
+		bool in_quote = false;
+		bool wraps = true;
+		for (idx_t i = 0; i < text.size(); i++) {
+			char c = text[i];
+			if (c == '\'') {
+				in_quote = !in_quote;
+				continue;
+			}
+			if (in_quote) {
+				continue;
+			}
+			if (c == '(') {
+				depth++;
+			} else if (c == ')') {
+				if (depth == 0) {
+					wraps = false;
+					break;
+				}
+				depth--;
+				if (depth == 0 && i + 1 != text.size()) {
+					wraps = false;
+					break;
+				}
+			}
+		}
+		if (!wraps || depth != 0 || in_quote) {
+			break;
+		}
+		text = text.substr(1, text.size() - 2);
+	}
+	return text;
+}
+
+//! Build the renderer's plan tree from a RenderTree (mapping the extra_text metadata onto name/details/rows/timing)
+static unique_ptr<ExplainTreeNode> BuildExplainTree(RenderTree &tree, idx_t x, idx_t y) {
+	auto node_p = tree.GetNode(x, y);
+	if (!node_p) {
+		return nullptr;
+	}
+	auto &render_node = *node_p;
+	auto node = make_uniq<ExplainTreeNode>();
+	node->name = render_node.name;
+	for (auto &entry : render_node.extra_text) {
+		auto &key = entry.first;
+		auto &value = entry.second;
+		if (value.empty()) {
+			continue;
+		}
+		if (key == RenderTreeNode::CARDINALITY) {
+			node->rows = idx_t(std::strtoull(value.c_str(), nullptr, 10));
+			continue;
+		}
+		if (key == RenderTreeNode::ESTIMATED_CARDINALITY) {
+			node->estimated_rows = idx_t(std::strtoull(value.c_str(), nullptr, 10));
+			continue;
+		}
+		if (key == RenderTreeNode::TIMING) {
+			// stored as a formatted "<seconds>s" string - parse the leading number back to seconds
+			node->timing = std::strtod(value.c_str(), nullptr);
+			continue;
+		}
+		auto values = StringUtil::Split(value, "\n");
+		if (values.empty()) {
+			continue;
+		}
+		for (auto &v : values) {
+			v = StripOuterParens(std::move(v));
+		}
+		// internal keys (e.g. __projections__) are cleaned up for display: __projections__ -> "Projections"
+		string display_key = key;
+		if (StringUtil::StartsWith(display_key, "__")) {
+			display_key = StringUtil::Title(StringUtil::Replace(StringUtil::Replace(display_key, "__", ""), "_", " "));
+		}
+		node->details.emplace_back(std::move(display_key), std::move(values));
+	}
+	for (auto &child_pos : render_node.child_positions) {
+		auto child = BuildExplainTree(tree, child_pos.x, child_pos.y);
+		if (child) {
+			node->children.push_back(std::move(child));
+		}
+	}
+	return node;
+}
+
+static double SumOperatorTimings(const ExplainTreeNode &node) {
+	double total = node.timing > 0 ? node.timing : 0;
+	for (auto &child : node.children) {
+		total += SumOperatorTimings(*child);
+	}
+	return total;
+}
+
+//===--------------------------------------------------------------------===//
+// Formatting helpers
+//===--------------------------------------------------------------------===//
+static string FormatCount(idx_t count, char thousand_separator) {
+	string result = std::to_string(count);
+	if (!thousand_separator) {
+		return result;
+	}
+	string formatted;
+	idx_t digits_until_separator = result.size() % 3 == 0 ? 3 : result.size() % 3;
+	for (idx_t i = 0; i < result.size(); i++) {
+		if (digits_until_separator == 0) {
+			formatted += thousand_separator;
+			digits_until_separator = 3;
+		}
+		formatted += result[i];
+		digits_until_separator--;
+	}
+	return formatted;
+}
+
+static string FormatTiming(double seconds) {
+	if (seconds >= 1.0) {
+		return StringUtil::Format("%.2fs", seconds);
+	}
+	if (seconds >= 0.001) {
+		return StringUtil::Format("%.1fms", seconds * 1000.0);
+	}
+	return StringUtil::Format("%.0fµs", seconds * 1000000.0);
+}
+
+//! Heat-color the timing based on the share of the total query time spent in this operator
+static ExplainSpan TimingSpan(double seconds, double total_time) {
+	double fraction = total_time > 0 ? seconds / total_time : 0;
+	auto text = FormatTiming(seconds);
+	if (fraction >= 0.25) {
+		return ExplainSpan(std::move(text), TreeRenderType::TIMING_CRITICAL);
+	}
+	if (fraction >= 0.10) {
+		return ExplainSpan(std::move(text), TreeRenderType::TIMING_HIGH);
+	}
+	if (fraction >= 0.01) {
+		return ExplainSpan(std::move(text), TreeRenderType::TIMING_MODERATE);
+	}
+	return ExplainSpan(std::move(text), TreeRenderType::TIMING_LOW);
+}
+
+static string TruncateText(const string &text, idx_t max_width) {
+	if (RenderLength(text) <= max_width) {
+		return text;
+	}
+	if (max_width <= 1) {
+		return "…";
+	}
+	string result;
+	idx_t width = 0;
+	for (idx_t i = 0; i < text.size();) {
+		idx_t next = i + 1;
+		while (next < text.size() && !IsCharacter(text[next])) {
+			next++;
+		}
+		auto char_width = RenderLength(text.c_str() + i, next - i);
+		if (width + char_width > max_width - 1) {
+			break;
+		}
+		result += text.substr(i, next - i);
+		width += char_width;
+		i = next;
+	}
+	return result + "…";
+}
+
+static string CutToWidth(const string &text, idx_t width) {
+	if (RenderLength(text) <= width) {
+		return text;
+	}
+	string result;
+	idx_t rendered = 0;
+	for (idx_t i = 0; i < text.size();) {
+		idx_t next = i + 1;
+		while (next < text.size() && !IsCharacter(text[next])) {
+			next++;
+		}
+		auto char_width = RenderLength(text.c_str() + i, next - i);
+		if (rendered + char_width > width) {
+			break;
+		}
+		result += text.substr(i, next - i);
+		rendered += char_width;
+		i = next;
+	}
+	return result;
+}
+
+//! Word-wrap a single string across lines of the given budget, breaking at spaces (no line limit).
+static vector<string> WordWrap(const string &text, idx_t budget) {
+	if (budget < 2) {
+		budget = 2;
+	}
+	vector<string> lines;
+	string line;
+	idx_t line_width = 0;
+	for (idx_t i = 0; i < text.size();) {
+		idx_t j = i;
+		while (j < text.size() && text[j] != ' ') {
+			j++;
+		}
+		string word = text.substr(i, j - i);
+		i = j < text.size() ? j + 1 : j;
+		if (word.empty()) {
+			continue;
+		}
+		if (RenderLength(word) > budget) {
+			word = TruncateText(word, budget);
+		}
+		idx_t word_width = RenderLength(word);
+		idx_t needed = word_width + (line.empty() ? 0 : 1);
+		if (line_width + needed <= budget) {
+			if (!line.empty()) {
+				line += ' ';
+				line_width++;
+			}
+			line += word;
+			line_width += word_width;
+		} else {
+			if (!line.empty()) {
+				lines.push_back(std::move(line));
+			}
+			line = std::move(word);
+			line_width = word_width;
+		}
+	}
+	if (!line.empty() || lines.empty()) {
+		lines.push_back(std::move(line));
+	}
+	return lines;
+}
+
+//! Wrap a list of values across up to max_lines lines of the given budget.
+static vector<string> WrapValues(const vector<string> &values, idx_t budget, idx_t max_lines) {
+	if (budget < 2) {
+		budget = 2;
+	}
+	vector<string> lines;
+	string cur;
+	idx_t cur_width = 0;
+	for (idx_t k = 0; k < values.size(); k++) {
+		string piece = k + 1 < values.size() ? values[k] + "," : values[k];
+		idx_t piece_width = RenderLength(piece);
+		idx_t sep = cur.empty() ? 0 : 1;
+		if (cur_width + sep + piece_width <= budget) {
+			cur = cur.empty() ? std::move(piece) : cur + " " + piece;
+			cur_width += sep + piece_width;
+			continue;
+		}
+		if (!cur.empty()) {
+			lines.push_back(std::move(cur));
+			cur.clear();
+			cur_width = 0;
+		}
+		if (piece_width <= budget) {
+			cur = std::move(piece);
+			cur_width = piece_width;
+		} else {
+			auto sub = WordWrap(piece, budget);
+			for (idx_t s = 0; s + 1 < sub.size(); s++) {
+				lines.push_back(std::move(sub[s]));
+			}
+			cur = std::move(sub.back());
+			cur_width = RenderLength(cur);
+		}
+	}
+	if (!cur.empty() || lines.empty()) {
+		lines.push_back(std::move(cur));
+	}
+	if (lines.size() > max_lines) {
+		lines.resize(max_lines);
+		auto &last = lines.back();
+		if (RenderLength(last) + 2 > budget) {
+			last = CutToWidth(last, budget >= 2 ? budget - 2 : 0);
+		}
+		last += last.empty() ? "…" : " …";
+	}
+	return lines;
+}
+
+//===--------------------------------------------------------------------===//
+// Box layout
+//===--------------------------------------------------------------------===//
+//! How the query plan tree is laid out horizontally
+enum class ExplainAlignment { LEFT, CENTER };
+
+class ExplainBoxRenderer {
 public:
-	StringSegment(idx_t start, idx_t width) : start(start), width(width) {
+	static constexpr idx_t HORIZONTAL_GAP = 2;
+	static constexpr idx_t MAX_BOX_CONTENT_WIDTH = 48;
+	static constexpr idx_t MAX_COMPACT_DETAIL = 40;
+	static constexpr idx_t NARROW_MIN_WIDTH = 30;
+	static constexpr idx_t MAX_DETAIL_LINES = 5;
+	static constexpr idx_t MINIMUM_RENDER_WIDTH = 30;
+	static constexpr idx_t METRICS_GAP = 3;
+	static constexpr idx_t MAX_TREE_WIDTH = 400;
+	static constexpr double FLATTEN_TIME_FRACTION = 0.01;
+	static constexpr idx_t MIN_FLATTEN_NODES = 2;
+	static constexpr idx_t MIN_GROUP_NODES = 2;
+	static constexpr idx_t MAX_GROUP_ROWS = 8;
+	static constexpr double SIGNIFICANT_TIME_FRACTION = 0.05;
+
+	ExplainBoxRenderer(idx_t max_width, char thousand_separator, double total_time, ExplainAlignment alignment,
+	                   bool flatten, bool merge)
+	    : max_width(MaxValue<idx_t>(max_width, MINIMUM_RENDER_WIDTH)), thousand_separator(thousand_separator),
+	      total_time(total_time), alignment(alignment),
+	      layout_width(MaxValue<idx_t>(MaxValue<idx_t>(max_width, MINIMUM_RENDER_WIDTH), MAX_TREE_WIDTH)),
+	      flatten(flatten), merge(merge), flatten_threshold(total_time * FLATTEN_TIME_FRACTION),
+	      significant_threshold(total_time * SIGNIFICANT_TIME_FRACTION) {
 	}
 
-public:
-	idx_t start;
-	idx_t width;
+	vector<ExplainLine> Render(const ExplainTreeNode &root) {
+		next_subtree = 0;
+		pending.clear();
+		pending.push_back({0, &root});
+
+		vector<ExplainLine> result;
+		for (idx_t i = 0; i < pending.size(); i++) {
+			auto entry = pending[i];
+			tree_content_width = MaxValue<idx_t>(TreeContentWidth(*entry.second), 6);
+			auto block = RenderNode(*entry.second, layout_width, ChainWidth(*entry.second));
+			if (entry.first != 0) {
+				result.emplace_back(); // blank separating line
+				ExplainLine header;
+				header.emplace_back(SubtreeLabel(entry.first), TreeRenderType::SUBTREE_REFERENCE);
+				result.push_back(std::move(header));
+			}
+			for (auto &line : block.lines) {
+				result.push_back(std::move(line));
+			}
+		}
+		return result;
+	}
+
+private:
+	static string SubtreeLabel(idx_t number) {
+		return "[Subtree #" + std::to_string(number) + "]";
+	}
+
+	static idx_t LongestValue(const vector<string> &values) {
+		idx_t longest = 0;
+		for (auto &value : values) {
+			longest = MaxValue<idx_t>(longest, RenderLength(value));
+		}
+		return longest;
+	}
+
+	static bool DetailIsNarrow(const std::pair<string, vector<string>> &entry) {
+		if (entry.first == "Text") {
+			return false;
+		}
+		idx_t compact = RenderLength(entry.first) + 2 + LongestValue(entry.second);
+		return compact > MAX_COMPACT_DETAIL;
+	}
+
+	static idx_t DetailWidth(const std::pair<string, vector<string>> &entry, idx_t max_content) {
+		idx_t longest = LongestValue(entry.second) + (entry.second.size() > 1 ? 1 : 0);
+		if (!DetailIsNarrow(entry)) {
+			idx_t key = entry.first == "Text" ? 0 : RenderLength(entry.first) + 2;
+			return key + longest;
+		}
+		idx_t narrow = MaxValue<idx_t>(RenderLength(entry.first), MinValue<idx_t>(longest, max_content));
+		return MaxValue<idx_t>(narrow, NARROW_MIN_WIDTH);
+	}
+
+	bool IsCondensed(const ExplainTreeNode &node) const {
+		return flatten && node.timing >= 0 && node.timing < significant_threshold;
+	}
+
+	static bool IsEssentialDetail(const std::pair<string, vector<string>> &entry) {
+		return entry.first == "Table";
+	}
+
+	idx_t BoxContentWidth(const ExplainTreeNode &node) {
+		idx_t max_content = MinValue<idx_t>(layout_width - 4, MAX_BOX_CONTENT_WIDTH);
+		bool condensed = IsCondensed(node);
+		idx_t width = RenderLength(node.name);
+		for (auto &entry : node.details) {
+			if (condensed && !IsEssentialDetail(entry)) {
+				continue;
+			}
+			width = MaxValue<idx_t>(width, DetailWidth(entry, max_content));
+		}
+		width = MaxValue<idx_t>(width, MetricsWidth(node));
+		return MaxValue<idx_t>(MinValue<idx_t>(width, max_content), 6);
+	}
+
+	idx_t TreeContentWidth(const ExplainTreeNode &node) {
+		idx_t width = BoxContentWidth(node);
+		for (auto &child : node.children) {
+			width = MaxValue<idx_t>(width, TreeContentWidth(*child));
+		}
+		return width;
+	}
+
+	idx_t ChainWidth(const ExplainTreeNode &node) {
+		idx_t width = 6;
+		const ExplainTreeNode *current = &node;
+		while (true) {
+			if (IsCollapsible(*current)) {
+				width = MaxValue<idx_t>(width, SubtreeGroupedWidth(*current));
+				break;
+			}
+			if (IsGroupable(*current)) {
+				width = MaxValue<idx_t>(width, GroupedRowWidth(*current));
+			} else {
+				width = MaxValue<idx_t>(width, BoxContentWidth(*current));
+			}
+			if (current->children.empty()) {
+				break;
+			}
+			current = current->children[0].get();
+		}
+		return width;
+	}
+
+	idx_t EffectiveWidth(idx_t chain_width) const {
+		return alignment == ExplainAlignment::LEFT ? chain_width : tree_content_width;
+	}
+
+	bool IsCollapsible(const ExplainTreeNode &node) const {
+		return merge && node.subtree_count >= MIN_FLATTEN_NODES && node.subtree_time < flatten_threshold;
+	}
+
+	bool IsGroupable(const ExplainTreeNode &node) const {
+		return IsCondensed(node) && node.children.size() == 1 && !IsCollapsible(node);
+	}
+
+	idx_t GroupRunLength(const ExplainTreeNode &node) const {
+		idx_t count = 0;
+		const ExplainTreeNode *current = &node;
+		while (IsGroupable(*current)) {
+			count++;
+			current = current->children[0].get();
+		}
+		return count;
+	}
+
+	const ExplainTreeNode &GroupRunAfter(const ExplainTreeNode &node, idx_t count) const {
+		const ExplainTreeNode *current = &node;
+		for (idx_t i = 0; i < count; i++) {
+			current = current->children[0].get();
+		}
+		return *current;
+	}
+
+	ExplainLine GroupedMetrics(const ExplainTreeNode &node) {
+		ExplainLine metrics;
+		if (node.rows.IsValid()) {
+			auto rows = node.rows.GetIndex();
+			metrics.emplace_back(FormatCount(rows, thousand_separator) + (rows == 1 ? " row" : " rows"),
+			                     TreeRenderType::ROWS);
+		} else if (node.estimated_rows.IsValid()) {
+			auto estimate = node.estimated_rows.GetIndex();
+			metrics.emplace_back("~" + FormatCount(estimate, thousand_separator) + (estimate == 1 ? " row" : " rows"),
+			                     TreeRenderType::KEY);
+		}
+		if (node.timing >= 0) {
+			if (!metrics.empty()) {
+				metrics.emplace_back(" · ", TreeRenderType::KEY);
+			}
+			metrics.push_back(TimingSpan(node.timing, total_time));
+		}
+		return metrics;
+	}
+
+	string GroupedRowName(const ExplainTreeNode &node) {
+		string name = DisplayName(node.name);
+		for (auto &entry : node.details) {
+			if (entry.first == "Table" && !entry.second.empty()) {
+				const string &table = entry.second.front();
+				auto pos = table.find_last_of('.');
+				return name + " " + (pos == string::npos ? table : table.substr(pos + 1));
+			}
+		}
+		return name;
+	}
+
+	idx_t GroupedRowWidth(const ExplainTreeNode &node) {
+		return RenderLength(GroupedRowName(node)) + METRICS_GAP + LineWidth(GroupedMetrics(node));
+	}
+
+	idx_t SubtreeGroupedWidth(const ExplainTreeNode &node) {
+		idx_t width = GroupedRowWidth(node);
+		for (auto &child : node.children) {
+			width = MaxValue<idx_t>(width, SubtreeGroupedWidth(*child));
+		}
+		return width;
+	}
+
+	idx_t PlaceholderContentWidth() const {
+		return alignment == ExplainAlignment::LEFT ? RenderLength(string("[Subtree #00]")) : tree_content_width;
+	}
+
+	struct BoxMetrics {
+		ExplainLine left;
+		ExplainLine right;
+		bool Empty() const {
+			return left.empty() && right.empty();
+		}
+	};
+
+	BoxMetrics BuildMetrics(const ExplainTreeNode &node) {
+		BoxMetrics metrics;
+		if (node.rows.IsValid()) {
+			auto rows = node.rows.GetIndex();
+			metrics.left.emplace_back(FormatCount(rows, thousand_separator) + (rows == 1 ? " row" : " rows"),
+			                          TreeRenderType::ROWS);
+		} else if (node.estimated_rows.IsValid()) {
+			auto estimate = node.estimated_rows.GetIndex();
+			metrics.left.emplace_back("~" + FormatCount(estimate, thousand_separator) +
+			                              (estimate == 1 ? " row" : " rows"),
+			                          TreeRenderType::KEY);
+		}
+		if (node.timing >= 0) {
+			metrics.right.push_back(TimingSpan(node.timing, total_time));
+		}
+		return metrics;
+	}
+
+	idx_t MetricsWidth(const ExplainTreeNode &node) {
+		auto metrics = BuildMetrics(node);
+		idx_t left_width = LineWidth(metrics.left);
+		idx_t right_width = LineWidth(metrics.right);
+		if (left_width > 0 && right_width > 0) {
+			return left_width + METRICS_GAP + right_width;
+		}
+		return MaxValue<idx_t>(left_width, right_width);
+	}
+
+	ExplainBlock BuildBox(const ExplainTreeNode &node, idx_t chain_width) {
+		idx_t content_width = EffectiveWidth(chain_width);
+
+		vector<ExplainLine> content;
+		bool condensed = IsCondensed(node);
+		for (auto &entry : node.details) {
+			if (condensed && !IsEssentialDetail(entry)) {
+				continue;
+			}
+			bool has_key = entry.first != "Text";
+			if (has_key && DetailIsNarrow(entry)) {
+				content.emplace_back();
+				content.back().emplace_back(TruncateText(entry.first, content_width), TreeRenderType::KEY);
+				for (auto &value_line : WrapValues(entry.second, content_width, MAX_DETAIL_LINES)) {
+					content.emplace_back();
+					content.back().emplace_back(std::move(value_line), TreeRenderType::VALUE);
+				}
+				continue;
+			}
+			string key = has_key ? entry.first + ": " : string();
+			idx_t key_width = RenderLength(key);
+			if (has_key && key_width >= content_width) {
+				key = TruncateText(key, content_width >= 1 ? content_width - 1 : 1);
+				key_width = RenderLength(key);
+			}
+			auto value_lines = WrapValues(entry.second, content_width - key_width, MAX_DETAIL_LINES);
+			for (idx_t li = 0; li < value_lines.size(); li++) {
+				ExplainLine line;
+				if (li == 0 && has_key) {
+					line.emplace_back(key, TreeRenderType::KEY);
+				} else if (has_key) {
+					line.emplace_back(string(key_width, ' '), TreeRenderType::LAYOUT);
+				}
+				line.emplace_back(std::move(value_lines[li]), TreeRenderType::VALUE);
+				content.push_back(std::move(line));
+			}
+		}
+		auto metrics = BuildMetrics(node);
+		if (!metrics.Empty()) {
+			idx_t left_width = LineWidth(metrics.left);
+			idx_t right_width = LineWidth(metrics.right);
+			ExplainLine line;
+			for (auto &span : metrics.left) {
+				line.push_back(std::move(span));
+			}
+			if (right_width > 0) {
+				idx_t gap = content_width > left_width + right_width ? content_width - left_width - right_width : 1;
+				line.emplace_back(string(gap, ' '), TreeRenderType::LAYOUT);
+				for (auto &span : metrics.right) {
+					line.push_back(std::move(span));
+				}
+			}
+			content.push_back(std::move(line));
+		}
+
+		string title = TruncateText(DisplayName(node.name), content_width >= 2 ? content_width - 2 : 1);
+		idx_t title_width = RenderLength(title);
+		idx_t box_width = content_width + 4;
+
+		ExplainBlock block;
+		ExplainLine top;
+		top.emplace_back("╭─ ", TreeRenderType::LAYOUT);
+		top.emplace_back(std::move(title), GetOperatorType(node));
+		top.emplace_back(" " + StringUtil::Repeat("─", box_width - 5 - title_width) + "╮", TreeRenderType::LAYOUT);
+		block.lines.push_back(std::move(top));
+		for (auto &line : content) {
+			ExplainLine content_line;
+			content_line.emplace_back("│ ", TreeRenderType::LAYOUT);
+			idx_t line_width = LineWidth(line);
+			for (auto &span : line) {
+				content_line.push_back(std::move(span));
+			}
+			idx_t padding = content_width >= line_width ? content_width - line_width : 0;
+			content_line.emplace_back(string(padding + 1, ' ') + "│", TreeRenderType::LAYOUT);
+			block.lines.push_back(std::move(content_line));
+		}
+		ExplainLine bottom;
+		bottom.emplace_back("╰" + StringUtil::Repeat("─", box_width - 2) + "╯", TreeRenderType::LAYOUT);
+		block.lines.push_back(std::move(bottom));
+		block.width = box_width;
+		block.spine = box_width / 2;
+		return block;
+	}
+
+	void AddGroupedRow(ExplainBlock &block, const string &label, TreeRenderType label_type, ExplainLine metrics,
+	                   idx_t content_width) {
+		string text = TruncateText(label, content_width);
+		idx_t name_width = RenderLength(text);
+		idx_t metrics_width = LineWidth(metrics);
+		ExplainLine line;
+		line.emplace_back("│ ", TreeRenderType::LAYOUT);
+		line.emplace_back(std::move(text), label_type);
+		idx_t used = name_width + metrics_width;
+		idx_t gap = content_width > used ? content_width - used : 1;
+		line.emplace_back(string(gap, ' '), TreeRenderType::LAYOUT);
+		for (auto &span : metrics) {
+			line.push_back(std::move(span));
+		}
+		idx_t line_content = name_width + gap + metrics_width;
+		idx_t padding = content_width >= line_content ? content_width - line_content : 0;
+		line.emplace_back(string(padding + 1, ' ') + "│", TreeRenderType::LAYOUT);
+		block.lines.push_back(std::move(line));
+	}
+
+	ExplainBlock BuildGroupedBox(const vector<const ExplainTreeNode *> &nodes, idx_t chain_width) {
+		idx_t content_width = EffectiveWidth(chain_width);
+		idx_t box_width = content_width + 4;
+
+		ExplainBlock block;
+		block.lines.emplace_back();
+		block.lines.back().emplace_back("╭" + StringUtil::Repeat("─", box_width - 2) + "╮", TreeRenderType::LAYOUT);
+
+		idx_t shown = MinValue<idx_t>(nodes.size(), MAX_GROUP_ROWS);
+		for (idx_t i = 0; i < shown; i++) {
+			AddGroupedRow(block, GroupedRowName(*nodes[i]), GetOperatorType(*nodes[i]), GroupedMetrics(*nodes[i]),
+			              content_width);
+		}
+		if (nodes.size() > shown) {
+			idx_t more = nodes.size() - shown;
+			double remaining = 0;
+			for (idx_t i = shown; i < nodes.size(); i++) {
+				remaining += nodes[i]->timing > 0 ? nodes[i]->timing : 0;
+			}
+			ExplainLine metrics;
+			if (remaining > 0) {
+				metrics.push_back(TimingSpan(remaining, total_time));
+			}
+			AddGroupedRow(block, "… " + std::to_string(more) + " more", TreeRenderType::KEY, std::move(metrics),
+			              content_width);
+		}
+
+		block.lines.emplace_back();
+		block.lines.back().emplace_back("╰" + StringUtil::Repeat("─", box_width - 2) + "╯", TreeRenderType::LAYOUT);
+		block.width = box_width;
+		block.spine = box_width / 2;
+		return block;
+	}
+
+	vector<const ExplainTreeNode *> GroupRunNodes(const ExplainTreeNode &node, idx_t count) {
+		vector<const ExplainTreeNode *> nodes;
+		const ExplainTreeNode *current = &node;
+		for (idx_t i = 0; i < count; i++) {
+			nodes.push_back(current);
+			current = current->children[0].get();
+		}
+		return nodes;
+	}
+
+	void CollectSubtreeNodes(const ExplainTreeNode &node, vector<const ExplainTreeNode *> &nodes) {
+		nodes.push_back(&node);
+		for (auto &child : node.children) {
+			CollectSubtreeNodes(*child, nodes);
+		}
+	}
+
+	ExplainBlock StackChain(ExplainBlock box, ExplainBlock child) {
+		idx_t target = MaxValue<idx_t>(box.spine, child.spine);
+		idx_t box_offset = target - box.spine;
+		idx_t child_offset = target - child.spine;
+		SetLayoutChar(box.lines.back(), box.spine, "┬");
+		DrawRoofConnector(child, child.spine);
+
+		ExplainBlock result;
+		for (auto &line : box.lines) {
+			OffsetLine(line, box_offset);
+			result.lines.push_back(std::move(line));
+		}
+		for (auto &line : child.lines) {
+			OffsetLine(line, child_offset);
+			result.lines.push_back(std::move(line));
+		}
+		result.width = MaxValue<idx_t>(box_offset + box.width, child_offset + child.width);
+		result.spine = target;
+		return result;
+	}
+
+	ExplainBlock AttachHorizontal(ExplainBlock box, vector<ExplainBlock> &children) {
+		if (alignment == ExplainAlignment::LEFT) {
+			return AttachHorizontalLeft(std::move(box), children);
+		}
+		return AttachHorizontalCentered(std::move(box), children);
+	}
+
+	void LayoutRow(vector<ExplainBlock> &children, vector<ExplainLine> &row_lines, vector<idx_t> &spines,
+	               idx_t &row_width) {
+		bool compact = alignment == ExplainAlignment::LEFT;
+		vector<idx_t> offsets(children.size(), 0);
+		vector<idx_t> profile;
+		idx_t cumulative = 0;
+		for (idx_t i = 0; i < children.size(); i++) {
+			DrawRoofConnector(children[i], children[i].spine);
+			auto &lines = children[i].lines;
+			idx_t offset = cumulative;
+			if (compact) {
+				offset = 0;
+				for (idx_t r = 0; r < lines.size() && r < profile.size(); r++) {
+					if (profile[r] == 0) {
+						continue;
+					}
+					idx_t need = profile[r] + HORIZONTAL_GAP;
+					idx_t left = LeadingSpaces(lines[r]);
+					if (need > left) {
+						offset = MaxValue<idx_t>(offset, need - left);
+					}
+				}
+			}
+			offsets[i] = offset;
+			spines.push_back(offset + children[i].spine);
+			for (idx_t r = 0; r < lines.size(); r++) {
+				if (r >= profile.size()) {
+					profile.resize(r + 1, 0);
+				}
+				profile[r] = MaxValue<idx_t>(profile[r], offset + LineWidth(lines[r]));
+			}
+			cumulative = offset + children[i].width + HORIZONTAL_GAP;
+		}
+		row_width = 0;
+		for (auto width : profile) {
+			row_width = MaxValue<idx_t>(row_width, width);
+		}
+		for (idx_t line_idx = 0; line_idx < profile.size(); line_idx++) {
+			ExplainLine line;
+			for (idx_t i = 0; i < children.size(); i++) {
+				if (line_idx < children[i].lines.size()) {
+					auto &child_line = children[i].lines[line_idx];
+					AppendAt(line, child_line, offsets[i] + LeadingSpaces(child_line));
+				}
+			}
+			row_lines.push_back(std::move(line));
+		}
+	}
+
+	ExplainBlock AttachHorizontalLeft(ExplainBlock box, vector<ExplainBlock> &children) {
+		vector<ExplainLine> row_lines;
+		vector<idx_t> spines;
+		idx_t row_width = 0;
+		LayoutRow(children, row_lines, spines, row_width);
+
+		SetLayoutChar(box.lines.back(), box.spine, "┬");
+		ExplainBlock result;
+		for (auto &line : box.lines) {
+			result.lines.push_back(std::move(line));
+		}
+		string routing;
+		for (idx_t col = spines.front(); col <= spines.back(); col++) {
+			bool is_child_spine = std::find(spines.begin(), spines.end(), col) != spines.end();
+			const char *c = "─";
+			if (col == spines.front()) {
+				c = "├";
+			} else if (col == spines.back()) {
+				c = "╮";
+			} else if (is_child_spine) {
+				c = "┬";
+			}
+			routing += c;
+		}
+		ExplainLine routing_line;
+		routing_line.emplace_back(std::move(routing), TreeRenderType::LAYOUT);
+		OffsetLine(routing_line, spines.front());
+		result.lines.push_back(std::move(routing_line));
+		for (auto &line : row_lines) {
+			result.lines.push_back(std::move(line));
+		}
+		result.width = MaxValue<idx_t>(box.width, row_width);
+		result.spine = box.spine;
+		return result;
+	}
+
+	ExplainBlock AttachHorizontalCentered(ExplainBlock box, vector<ExplainBlock> &children) {
+		vector<ExplainLine> row_lines;
+		vector<idx_t> spines;
+		idx_t row_width = 0;
+		LayoutRow(children, row_lines, spines, row_width);
+
+		idx_t parent_spine = (spines.front() + spines.back()) / 2;
+		idx_t box_offset = 0;
+		idx_t row_offset = 0;
+		if (parent_spine > box.spine) {
+			box_offset = parent_spine - box.spine;
+		} else {
+			row_offset = box.spine - parent_spine;
+			for (auto &spine : spines) {
+				spine += row_offset;
+			}
+			parent_spine = box.spine;
+		}
+
+		bool direct = true;
+		for (auto spine : spines) {
+			if (spine <= box_offset || spine >= box_offset + box.width - 1) {
+				direct = false;
+				break;
+			}
+		}
+		ExplainBlock result;
+		if (direct) {
+			for (auto spine : spines) {
+				SetLayoutChar(box.lines.back(), spine - box_offset, "┬");
+			}
+		} else {
+			SetLayoutChar(box.lines.back(), box.spine, "┬");
+		}
+		for (auto &line : box.lines) {
+			OffsetLine(line, box_offset);
+			result.lines.push_back(std::move(line));
+		}
+		if (!direct) {
+			string routing;
+			for (idx_t col = spines.front(); col <= spines.back(); col++) {
+				const char *c = "─";
+				bool is_child_spine = std::find(spines.begin(), spines.end(), col) != spines.end();
+				if (col == spines.front()) {
+					c = is_child_spine && col == parent_spine ? "├" : "╭";
+				} else if (col == spines.back()) {
+					c = is_child_spine && col == parent_spine ? "┤" : "╮";
+				} else if (is_child_spine) {
+					c = col == parent_spine ? "┼" : "┬";
+				} else if (col == parent_spine) {
+					c = "┴";
+				}
+				routing += c;
+			}
+			ExplainLine routing_line;
+			routing_line.emplace_back(std::move(routing), TreeRenderType::LAYOUT);
+			OffsetLine(routing_line, spines.front());
+			result.lines.push_back(std::move(routing_line));
+		}
+		for (auto &line : row_lines) {
+			OffsetLine(line, row_offset);
+			result.lines.push_back(std::move(line));
+		}
+		result.width = MaxValue<idx_t>(box_offset + box.width, row_offset + row_width);
+		result.spine = box_offset + box.spine;
+		return result;
+	}
+
+	idx_t PlaceholderWidth() const {
+		return PlaceholderContentWidth() + 4;
+	}
+
+	ExplainBlock BuildLabelBox(const string &label) {
+		idx_t content_width = MaxValue<idx_t>(PlaceholderContentWidth(), RenderLength(label) + 2);
+		string title = TruncateText(label, content_width >= 2 ? content_width - 2 : 1);
+		idx_t title_width = RenderLength(title);
+		idx_t box_width = content_width + 4;
+
+		ExplainBlock block;
+		ExplainLine top;
+		top.emplace_back("╭─ ", TreeRenderType::LAYOUT);
+		top.emplace_back(std::move(title), TreeRenderType::SUBTREE_REFERENCE);
+		top.emplace_back(" " + StringUtil::Repeat("─", box_width - 5 - title_width) + "╮", TreeRenderType::LAYOUT);
+		block.lines.push_back(std::move(top));
+		ExplainLine bottom;
+		bottom.emplace_back("╰" + StringUtil::Repeat("─", box_width - 2) + "╯", TreeRenderType::LAYOUT);
+		block.lines.push_back(std::move(bottom));
+		block.width = box_width;
+		block.spine = box_width / 2;
+		return block;
+	}
+
+	struct Extent {
+		idx_t width = 0;
+		idx_t spine = 0;
+	};
+
+	static Extent StackExtent(Extent box, Extent child) {
+		idx_t target = MaxValue<idx_t>(box.spine, child.spine);
+		idx_t box_offset = target - box.spine;
+		idx_t child_offset = target - child.spine;
+		return {MaxValue<idx_t>(box_offset + box.width, child_offset + child.width), target};
+	}
+
+	Extent ForkExtent(Extent box, const vector<Extent> &children) {
+		idx_t row_width = 0;
+		vector<idx_t> spines;
+		for (idx_t i = 0; i < children.size(); i++) {
+			spines.push_back(row_width + children[i].spine);
+			row_width += children[i].width + (i + 1 < children.size() ? HORIZONTAL_GAP : 0);
+		}
+		if (alignment == ExplainAlignment::LEFT) {
+			return {MaxValue<idx_t>(box.width, row_width), box.spine};
+		}
+		idx_t parent_spine = (spines.front() + spines.back()) / 2;
+		idx_t box_offset = 0;
+		idx_t row_offset = 0;
+		if (parent_spine > box.spine) {
+			box_offset = parent_spine - box.spine;
+		} else {
+			row_offset = box.spine - parent_spine;
+		}
+		return {MaxValue<idx_t>(box_offset + box.width, row_offset + row_width), box_offset + box.spine};
+	}
+
+	Extent BoxExtent(idx_t chain_width) {
+		idx_t box_width = EffectiveWidth(chain_width) + 4;
+		return {box_width, box_width / 2};
+	}
+
+	vector<bool> DecideDeferred(Extent box, const vector<Extent> &child_extents, const vector<bool> &has_children,
+	                            Extent placeholder, idx_t avail) {
+		vector<bool> deferred(child_extents.size(), false);
+		while (true) {
+			vector<Extent> row;
+			for (idx_t i = 0; i < child_extents.size(); i++) {
+				row.push_back(deferred[i] ? placeholder : child_extents[i]);
+			}
+			if (ForkExtent(box, row).width <= avail) {
+				break;
+			}
+			idx_t best = child_extents.size();
+			for (idx_t i = 0; i < child_extents.size(); i++) {
+				if (!deferred[i] && has_children[i] &&
+				    (best == child_extents.size() || child_extents[i].width > child_extents[best].width)) {
+					best = i;
+				}
+			}
+			if (best == child_extents.size()) {
+				break;
+			}
+			deferred[best] = true;
+		}
+		return deferred;
+	}
+
+	Extent EstimateLayout(const ExplainTreeNode &node, idx_t avail, idx_t chain_width) {
+		avail = MaxValue<idx_t>(avail, MINIMUM_RENDER_WIDTH);
+		if (IsCollapsible(node)) {
+			return BoxExtent(chain_width);
+		}
+		if (node.children.size() == 1) {
+			idx_t run = GroupRunLength(node);
+			const ExplainTreeNode &next = run >= MIN_GROUP_NODES ? GroupRunAfter(node, run) : *node.children[0];
+			return StackExtent(BoxExtent(chain_width), EstimateLayout(next, avail, chain_width));
+		}
+		Extent box = BoxExtent(chain_width);
+		if (node.children.empty()) {
+			return box;
+		}
+		vector<Extent> child_extents;
+		vector<bool> has_children;
+		for (idx_t i = 0; i < node.children.size(); i++) {
+			auto &child = node.children[i];
+			idx_t child_chain = i == 0 ? chain_width : ChainWidth(*child);
+			child_extents.push_back(EstimateLayout(*child, avail, child_chain));
+			has_children.push_back(!child->children.empty());
+		}
+		Extent placeholder = {PlaceholderWidth(), PlaceholderWidth() / 2};
+		auto deferred = DecideDeferred(box, child_extents, has_children, placeholder, avail);
+		vector<Extent> row;
+		for (idx_t i = 0; i < child_extents.size(); i++) {
+			row.push_back(deferred[i] ? placeholder : child_extents[i]);
+		}
+		return ForkExtent(box, row);
+	}
+
+	ExplainBlock RenderNode(const ExplainTreeNode &node, idx_t avail, idx_t chain_width) {
+		avail = MaxValue<idx_t>(avail, MINIMUM_RENDER_WIDTH);
+		if (IsCollapsible(node)) {
+			vector<const ExplainTreeNode *> nodes;
+			CollectSubtreeNodes(node, nodes);
+			return BuildGroupedBox(nodes, chain_width);
+		}
+		if (node.children.size() == 1) {
+			idx_t run = GroupRunLength(node);
+			if (run >= MIN_GROUP_NODES) {
+				auto &after = GroupRunAfter(node, run);
+				return StackChain(BuildGroupedBox(GroupRunNodes(node, run), chain_width),
+				                  RenderNode(after, avail, chain_width));
+			}
+			return StackChain(BuildBox(node, chain_width), RenderNode(*node.children[0], avail, chain_width));
+		}
+		auto box = BuildBox(node, chain_width);
+		if (node.children.empty()) {
+			return box;
+		}
+		vector<idx_t> child_chains;
+		vector<Extent> child_extents;
+		vector<bool> has_children;
+		for (idx_t i = 0; i < node.children.size(); i++) {
+			child_chains.push_back(i == 0 ? chain_width : ChainWidth(*node.children[i]));
+			child_extents.push_back(EstimateLayout(*node.children[i], avail, child_chains[i]));
+			has_children.push_back(!node.children[i]->children.empty());
+		}
+		Extent placeholder = {PlaceholderWidth(), PlaceholderWidth() / 2};
+		auto deferred = DecideDeferred(BoxExtent(chain_width), child_extents, has_children, placeholder, avail);
+		vector<ExplainBlock> children;
+		for (idx_t i = 0; i < node.children.size(); i++) {
+			if (deferred[i]) {
+				idx_t number = ++next_subtree;
+				pending.push_back({number, node.children[i].get()});
+				children.push_back(BuildLabelBox(SubtreeLabel(number)));
+			} else {
+				children.push_back(RenderNode(*node.children[i], avail, child_chains[i]));
+			}
+		}
+		return AttachHorizontal(std::move(box), children);
+	}
+
+private:
+	idx_t max_width;
+	char thousand_separator;
+	double total_time;
+	ExplainAlignment alignment;
+	idx_t layout_width;
+	bool flatten;
+	bool merge;
+	double flatten_threshold;
+	double significant_threshold;
+	idx_t tree_content_width = 0;
+	idx_t next_subtree = 0;
+	vector<std::pair<idx_t, const ExplainTreeNode *>> pending;
 };
+
+//! Several operators are only merged into one node for plans with at least this many operators.
+static constexpr idx_t MERGE_MIN_NODES = 30;
 
 } // namespace
 
-static char GetSeparatorSetting(const string &name, const Value &value) {
-	auto separator = value.ToString();
-	if (separator.size() != 1) {
-		throw InvalidInputException("Renderer setting \"%s\" must be a single character, got \"%s\"", name, separator);
+string TextTreeRenderer::ToString(const LogicalOperator &op) {
+	StringTreeRenderer ss;
+	Render(op, ss);
+	return ss.str();
+}
+
+string TextTreeRenderer::ToString(const PhysicalOperator &op) {
+	StringTreeRenderer ss;
+	Render(op, ss);
+	return ss.str();
+}
+
+string TextTreeRenderer::ToString(const ProfilingNode &op) {
+	StringTreeRenderer ss;
+	Render(op, ss);
+	return ss.str();
+}
+
+string TextTreeRenderer::ToString(const Pipeline &op) {
+	StringTreeRenderer ss;
+	Render(op, ss);
+	return ss.str();
+}
+
+void TextTreeRenderer::Render(const LogicalOperator &op, BaseTreeRenderer &ss) {
+	auto tree = RenderTree::CreateRenderTree(op);
+	ToStream(*tree, ss);
+}
+
+void TextTreeRenderer::Render(const PhysicalOperator &op, BaseTreeRenderer &ss) {
+	auto tree = RenderTree::CreateRenderTree(op);
+	ToStream(*tree, ss);
+}
+
+void TextTreeRenderer::Render(const ProfilingNode &op, BaseTreeRenderer &ss) {
+	auto tree = RenderTree::CreateRenderTree(op);
+	ToStream(*tree, ss);
+}
+
+void TextTreeRenderer::Render(const Pipeline &op, BaseTreeRenderer &ss) {
+	auto tree = RenderTree::CreateRenderTree(op);
+	ToStream(*tree, ss);
+}
+
+void TextTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) {
+	auto plan = BuildExplainTree(root, 0, 0);
+	// skip the EXPLAIN_ANALYZE / RESULT_COLLECTOR wrapper operators that wrap an EXPLAIN ANALYZE plan
+	while (plan && (plan->name == "EXPLAIN_ANALYZE" || plan->name == "RESULT_COLLECTOR") &&
+	       plan->children.size() == 1) {
+		plan = std::move(plan->children[0]);
 	}
-	return separator[0];
+	if (!plan) {
+		return;
+	}
+	ComputeSubtreeStats(*plan);
+	double total_time = SumOperatorTimings(*plan);
+	// condense low-impact operators when we have timing (EXPLAIN ANALYZE); merge sub-trees only for large plans
+	bool flatten = total_time > 0;
+	bool merge = flatten && plan->subtree_count >= MERGE_MIN_NODES;
+	ExplainBoxRenderer renderer(config.maximum_render_width, config.thousand_separator, total_time,
+	                            ExplainAlignment::LEFT, flatten, merge);
+	for (auto &line : renderer.Render(*plan)) {
+		for (auto &span : line) {
+			ss.Render(span.text, span.type);
+		}
+		ss << "\n";
+	}
 }
 
 void TextTreeRenderer::Configure(const unordered_map<string, Value> &settings) {
@@ -43,544 +1352,25 @@ void TextTreeRenderer::Configure(const unordered_map<string, Value> &settings) {
 		if (name == "max_extra_lines") {
 			config.max_extra_lines = value.DefaultCastAs(LogicalType::UBIGINT).GetValue<idx_t>();
 		} else if (name == "thousand_separator") {
-			config.thousand_separator = GetSeparatorSetting(name, value);
+			auto separator = value.ToString();
+			if (separator.size() > 1) {
+				throw InvalidInputException("Renderer setting \"%s\" must be a single character, got \"%s\"", name,
+				                            separator);
+			}
+			config.thousand_separator = separator.empty() ? '\0' : separator[0];
 		} else if (name == "decimal_separator") {
-			config.decimal_separator = GetSeparatorSetting(name, value);
-		}
-		// settings that are not recognized are ignored - they may be intended for a different renderer
-	}
-}
-
-void TextTreeRenderer::RenderTopLayer(RenderTree &root, BaseResultRenderer &ss, idx_t y) {
-	for (idx_t x = 0; x < root.width; x++) {
-		if (x * config.node_render_width >= config.maximum_render_width) {
-			break;
-		}
-		if (root.HasNode(x, y)) {
-			ss << config.LTCORNER;
-			ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2 - 1);
-			if (y == 0) {
-				// top level node: no node above this one
-				ss << config.HORIZONTAL;
-			} else {
-				// render connection to node above this one
-				ss << config.DMIDDLE;
+			auto separator = value.ToString();
+			if (separator.size() != 1) {
+				throw InvalidInputException("Renderer setting \"%s\" must be a single character, got \"%s\"", name,
+				                            separator);
 			}
-			ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2 - 1);
-			ss << config.RTCORNER;
-		} else {
-			bool has_adjacent_nodes = false;
-			for (idx_t i = 0; x + i < root.width; i++) {
-				has_adjacent_nodes = has_adjacent_nodes || root.HasNode(x + i, y);
-			}
-			if (!has_adjacent_nodes) {
-				// There are no nodes to the right side of this position
-				// no need to fill the empty space
-				continue;
-			}
-			// there are nodes next to this, fill the space
-			ss << StringUtil::Repeat(" ", config.node_render_width);
+			config.decimal_separator = separator[0];
 		}
-	}
-	ss << '\n';
-}
-
-static bool NodeHasMultipleChildren(RenderTreeNode &node) {
-	return node.child_positions.size() > 1;
-}
-
-static bool ShouldRenderWhitespace(RenderTree &root, idx_t x, idx_t y) {
-	idx_t found_children = 0;
-	for (;; x--) {
-		auto node = root.GetNode(x, y);
-		if (root.HasNode(x, y + 1)) {
-			found_children++;
-		}
-		if (node) {
-			if (NodeHasMultipleChildren(*node)) {
-				if (found_children < node->child_positions.size()) {
-					return true;
-				}
-			}
-			return false;
-		}
-		if (x == 0) {
-			break;
-		}
-	}
-	return false;
-}
-
-void TextTreeRenderer::RenderBottomLayer(RenderTree &root, BaseResultRenderer &ss, idx_t y) {
-	for (idx_t x = 0; x <= root.width; x++) {
-		if (x * config.node_render_width >= config.maximum_render_width) {
-			break;
-		}
-		bool has_adjacent_nodes = false;
-		for (idx_t i = 0; x + i < root.width; i++) {
-			has_adjacent_nodes = has_adjacent_nodes || root.HasNode(x + i, y);
-		}
-		auto node = root.GetNode(x, y);
-		if (node) {
-			ss << config.LDCORNER;
-			ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2 - 1);
-			if (root.HasNode(x, y + 1)) {
-				// node below this one: connect to that one
-				ss << config.TMIDDLE;
-			} else {
-				// no node below this one: end the box
-				ss << config.HORIZONTAL;
-			}
-			ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2 - 1);
-			ss << config.RDCORNER;
-		} else if (root.HasNode(x, y + 1)) {
-			ss << StringUtil::Repeat(" ", config.node_render_width / 2);
-			ss << config.VERTICAL;
-			if (has_adjacent_nodes || ShouldRenderWhitespace(root, x, y)) {
-				ss << StringUtil::Repeat(" ", config.node_render_width / 2);
-			}
-		} else {
-			if (has_adjacent_nodes || ShouldRenderWhitespace(root, x, y)) {
-				ss << StringUtil::Repeat(" ", config.node_render_width);
-			}
-		}
-	}
-	ss << '\n';
-}
-
-string AdjustTextForRendering(string source, idx_t max_render_width) {
-	const idx_t size = source.size();
-	const char *input = source.c_str();
-
-	idx_t render_width = 0;
-
-	// For every character in the input, create a StringSegment
-	vector<StringSegment> render_widths;
-	idx_t current_position = 0;
-	while (current_position < size) {
-		idx_t char_render_width = Utf8Proc::RenderWidth(input, size, current_position);
-		current_position = Utf8Proc::NextGraphemeCluster(input, size, current_position);
-		render_width += char_render_width;
-		render_widths.push_back(StringSegment(current_position, render_width));
-		if (render_width > max_render_width) {
-			break;
-		}
-	}
-
-	if (render_width > max_render_width) {
-		// need to find a position to truncate
-		for (idx_t pos = render_widths.size(); pos > 0; pos--) {
-			auto &source_range = render_widths[pos - 1];
-			if (source_range.width < max_render_width - 4) {
-				return source.substr(0, source_range.start) + string("...") +
-				       string(max_render_width - source_range.width - 3, ' ');
-			}
-		}
-		source = "...";
-	}
-	// need to pad with spaces
-	idx_t total_spaces = max_render_width - render_width;
-	idx_t half_spaces = total_spaces / 2;
-	idx_t extra_left_space = total_spaces % 2 == 0 ? 0 : 1;
-	return string(half_spaces + extra_left_space, ' ') + source + string(half_spaces, ' ');
-}
-
-string TextTreeRenderer::FormatNumber(const string &input) {
-	if (config.decimal_separator == '\0' && config.thousand_separator == '\0') {
-		// no thousand separator
-		return input;
-	}
-	// first check how many digits there are (preceding any decimal point)
-	idx_t character_count = 0;
-	for (auto c : input) {
-		if (!StringUtil::CharacterIsDigit(c)) {
-			break;
-		}
-		character_count++;
-	}
-	// find the position of the first thousand separator
-	idx_t separator_position = character_count % 3 == 0 ? 3 : character_count % 3;
-	// now add the thousand separators
-	string result;
-	for (idx_t c = 0; c < character_count; c++) {
-		if (c == separator_position && config.thousand_separator != '\0') {
-			result += config.thousand_separator;
-			separator_position += 3;
-		}
-		result += input[c];
-	}
-	// add any remaining characters
-	for (idx_t c = character_count; c < input.size(); c++) {
-		if (input[c] == '.' && config.decimal_separator != '\0') {
-			result += config.decimal_separator;
-		} else {
-			result += input[c];
-		}
-	}
-	return result;
-}
-
-void TextTreeRenderer::RenderBoxContent(RenderTree &root, BaseResultRenderer &ss, idx_t y) {
-	// we first need to figure out how high our boxes are going to be
-	vector<vector<string>> extra_info;
-	idx_t extra_height = 0;
-	extra_info.resize(root.width);
-	for (idx_t x = 0; x < root.width; x++) {
-		auto node = root.GetNode(x, y);
-		if (node) {
-			SplitUpExtraInfo(node->extra_text, extra_info[x], config.max_extra_lines);
-			if (extra_info[x].size() > extra_height) {
-				extra_height = extra_info[x].size();
-			}
-		}
-	}
-	idx_t halfway_point = (extra_height + 1) / 2;
-	// now we render the actual node
-	for (idx_t render_y = 0; render_y <= extra_height; render_y++) {
-		for (idx_t x = 0; x < root.width; x++) {
-			if (x * config.node_render_width >= config.maximum_render_width) {
-				break;
-			}
-			bool has_adjacent_nodes = false;
-			for (idx_t i = 0; x + i < root.width; i++) {
-				has_adjacent_nodes = has_adjacent_nodes || root.HasNode(x + i, y);
-			}
-			auto node = root.GetNode(x, y);
-			if (!node) {
-				if (render_y == halfway_point) {
-					bool has_child_to_the_right = ShouldRenderWhitespace(root, x, y);
-					if (root.HasNode(x, y + 1)) {
-						// node right below this one
-						ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2);
-						if (has_child_to_the_right) {
-							ss << config.TMIDDLE;
-							// but we have another child to the right! keep rendering the line
-							ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width / 2);
-						} else {
-							ss << config.RTCORNER;
-							if (has_adjacent_nodes) {
-								// only a child below this one: fill the rest with spaces
-								ss << StringUtil::Repeat(" ", config.node_render_width / 2);
-							}
-						}
-					} else if (has_child_to_the_right) {
-						// child to the right, but no child right below this one: render a full line
-						ss << StringUtil::Repeat(config.HORIZONTAL, config.node_render_width);
-					} else {
-						if (has_adjacent_nodes) {
-							// empty spot: render spaces
-							ss << StringUtil::Repeat(" ", config.node_render_width);
-						}
-					}
-				} else if (render_y >= halfway_point) {
-					if (root.HasNode(x, y + 1)) {
-						// we have a node below this empty spot: render a vertical line
-						ss << StringUtil::Repeat(" ", config.node_render_width / 2);
-						ss << config.VERTICAL;
-						if (has_adjacent_nodes || ShouldRenderWhitespace(root, x, y)) {
-							ss << StringUtil::Repeat(" ", config.node_render_width / 2);
-						}
-					} else {
-						if (has_adjacent_nodes || ShouldRenderWhitespace(root, x, y)) {
-							// empty spot: render spaces
-							ss << StringUtil::Repeat(" ", config.node_render_width);
-						}
-					}
-				} else {
-					if (has_adjacent_nodes) {
-						// empty spot: render spaces
-						ss << StringUtil::Repeat(" ", config.node_render_width);
-					}
-				}
-			} else {
-				ss << config.VERTICAL;
-				// figure out what to render
-				string render_text;
-				if (render_y == 0) {
-					render_text = node->name;
-				} else {
-					if (render_y <= extra_info[x].size()) {
-						render_text = extra_info[x][render_y - 1];
-					}
-				}
-				if (render_y + 1 == extra_height && render_text.empty()) {
-					auto entry = node->extra_text.find(RenderTreeNode::CARDINALITY);
-					if (entry != node->extra_text.end()) {
-						render_text = FormatNumber(entry->second) + " row" + (entry->second == "1" ? "" : "s");
-					}
-				}
-				if (render_y == extra_height && render_text.empty()) {
-					auto timing_entry = node->extra_text.find(RenderTreeNode::TIMING);
-					if (timing_entry != node->extra_text.end()) {
-						render_text = "(" + timing_entry->second + ")";
-					} else if (node->extra_text.find(RenderTreeNode::CARDINALITY) == node->extra_text.end()) {
-						// we only render estimated cardinality if there is no real cardinality
-						auto entry = node->extra_text.find(RenderTreeNode::ESTIMATED_CARDINALITY);
-						if (entry != node->extra_text.end()) {
-							render_text =
-							    "~" + FormatNumber(entry->second) + " row" + (entry->second == "1" ? "" : "s");
-						}
-					}
-					if (node->extra_text.find(RenderTreeNode::CARDINALITY) == node->extra_text.end()) {
-						// we only render estimated cardinality if there is no real cardinality
-						auto entry = node->extra_text.find(RenderTreeNode::ESTIMATED_CARDINALITY);
-						if (entry != node->extra_text.end()) {
-							render_text =
-							    "~" + FormatNumber(entry->second) + " row" + (entry->second == "1" ? "" : "s");
-						}
-					}
-				}
-				// determine the type of this cell: the box title (render_y 0) is the operator name, the
-				// separator line between the title and the extra info is layout, everything else is a value
-				ResultRenderType content_type;
-				if (render_y == 0) {
-					content_type = ResultRenderType::COLUMN_NAME;
-				} else if (render_text == ExtraInfoSeparator()) {
-					content_type = ResultRenderType::LAYOUT;
-				} else {
-					content_type = ResultRenderType::VALUE;
-				}
-				// center the text in the box, rendering the surrounding padding as layout and the text with its type
-				render_text = AdjustTextForRendering(render_text, config.node_render_width - 2);
-				idx_t content_start = 0;
-				while (content_start < render_text.size() && render_text[content_start] == ' ') {
-					content_start++;
-				}
-				idx_t content_end = render_text.size();
-				while (content_end > content_start && render_text[content_end - 1] == ' ') {
-					content_end--;
-				}
-				if (content_start > 0) {
-					ss << render_text.substr(0, content_start);
-				}
-				if (content_end > content_start) {
-					ss.Render(content_type, render_text.substr(content_start, content_end - content_start));
-				}
-				if (content_end < render_text.size()) {
-					ss << render_text.substr(content_end);
-				}
-
-				if (render_y == halfway_point && NodeHasMultipleChildren(*node)) {
-					ss << config.LMIDDLE;
-				} else {
-					ss << config.VERTICAL;
-				}
-			}
-		}
-		ss << '\n';
+		// unrecognized settings are ignored - they may be intended for a different renderer
 	}
 }
 
-string TextTreeRenderer::ToString(const LogicalOperator &op) {
-	StringResultRenderer ss;
-	Render(op, ss);
-	return ss.str();
-}
-
-string TextTreeRenderer::ToString(const PhysicalOperator &op) {
-	StringResultRenderer ss;
-	Render(op, ss);
-	return ss.str();
-}
-
-string TextTreeRenderer::ToString(const ProfilingNode &op) {
-	StringResultRenderer ss;
-	Render(op, ss);
-	return ss.str();
-}
-
-string TextTreeRenderer::ToString(const Pipeline &op) {
-	StringResultRenderer ss;
-	Render(op, ss);
-	return ss.str();
-}
-
-void TextTreeRenderer::Render(const LogicalOperator &op, BaseResultRenderer &ss) {
-	auto tree = RenderTree::CreateRenderTree(op);
-	ToStream(*tree, ss);
-}
-
-void TextTreeRenderer::Render(const PhysicalOperator &op, BaseResultRenderer &ss) {
-	auto tree = RenderTree::CreateRenderTree(op);
-	ToStream(*tree, ss);
-}
-
-void TextTreeRenderer::Render(const ProfilingNode &op, BaseResultRenderer &ss) {
-	auto tree = RenderTree::CreateRenderTree(op);
-	ToStream(*tree, ss);
-}
-
-void TextTreeRenderer::Render(const Pipeline &op, BaseResultRenderer &ss) {
-	auto tree = RenderTree::CreateRenderTree(op);
-	ToStream(*tree, ss);
-}
-
-void TextTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) {
-	while (root.width * config.node_render_width > config.maximum_render_width) {
-		if (config.node_render_width - 2 < config.minimum_render_width) {
-			break;
-		}
-		config.node_render_width -= 2;
-	}
-
-	for (idx_t y = 0; y < root.height; y++) {
-		// start by rendering the top layer
-		RenderTopLayer(root, ss, y);
-		// now we render the content of the boxes
-		RenderBoxContent(root, ss, y);
-		// render the bottom layer of each of the boxes
-		RenderBottomLayer(root, ss, y);
-	}
-}
-
-bool TextTreeRenderer::CanSplitOnThisChar(char l) {
-	return (l < '0' || (l > '9' && l < 'A') || (l > 'Z' && l < 'a')) && l != '_';
-}
-
-bool TextTreeRenderer::IsPadding(char l) {
-	return l == ' ' || l == '\t' || l == '\n' || l == '\r';
-}
-
-string TextTreeRenderer::RemovePadding(string l) {
-	idx_t start = 0, end = l.size();
-	while (start < l.size() && IsPadding(l[start])) {
-		start++;
-	}
-	while (end > 0 && IsPadding(l[end - 1])) {
-		end--;
-	}
-	return l.substr(start, end - start);
-}
-
-void TextTreeRenderer::SplitStringBuffer(const string &source, vector<string> &result) {
-	D_ASSERT(Utf8Proc::IsValid(source.c_str(), source.size()));
-	const idx_t max_line_render_size = config.node_render_width - 2;
-	// utf8 in prompt, get render width
-	idx_t character_pos = 0;
-	idx_t start_pos = 0;
-	idx_t render_width = 0;
-	idx_t last_possible_split = 0;
-
-	const idx_t size = source.size();
-	const char *input = source.c_str();
-
-	while (character_pos < size) {
-		size_t char_render_width = Utf8Proc::RenderWidth(input, size, character_pos);
-		idx_t next_character_pos = Utf8Proc::NextGraphemeCluster(input, size, character_pos);
-
-		// Does the next character make us exceed the line length?
-		if (render_width + char_render_width > max_line_render_size) {
-			if (start_pos + 8 > last_possible_split) {
-				// The last character we can split on is one of the first 8 characters of the line
-				// to not create very small lines we instead split on the current character
-				last_possible_split = character_pos;
-			}
-			result.push_back(source.substr(start_pos, last_possible_split - start_pos));
-			render_width = character_pos - last_possible_split;
-			start_pos = last_possible_split;
-			character_pos = last_possible_split;
-		}
-		// check if we can split on this character
-		if (CanSplitOnThisChar(source[character_pos])) {
-			last_possible_split = character_pos;
-		}
-		character_pos = next_character_pos;
-		render_width += char_render_width;
-	}
-	if (size > start_pos) {
-		// append the remainder of the input
-		result.push_back(source.substr(start_pos, size - start_pos));
-	}
-}
-
-void TextTreeRenderer::SplitUpExtraInfo(const InsertionOrderPreservingMap<string> &extra_info, vector<string> &result,
-                                        idx_t max_lines) {
-	if (extra_info.empty()) {
-		return;
-	}
-	for (auto &item : extra_info) {
-		auto &text = item.second;
-		if (!Utf8Proc::IsValid(text.c_str(), text.size())) {
-			return;
-		}
-	}
-	result.push_back(ExtraInfoSeparator());
-
-	bool requires_padding = false;
-	bool was_inlined = false;
-	for (auto &item : extra_info) {
-		string str = RemovePadding(item.second);
-		if (str.empty()) {
-			continue;
-		}
-		bool is_inlined = false;
-		if (!StringUtil::StartsWith(item.first, "__")) {
-			// the name is not internal (i.e. not __text__) - so we display the name in addition to the entry
-			const idx_t available_width = (config.node_render_width - 7);
-			idx_t total_size = item.first.size() + str.size() + 2;
-			bool is_multiline = StringUtil::Contains(str, "\n");
-			if (!is_multiline && total_size < available_width) {
-				// we can inline the full entry - no need for any separators unless the previous entry explicitly
-				// requires it
-				str = item.first + ": " + str;
-				is_inlined = true;
-			} else {
-				str = item.first + ":\n" + str;
-			}
-		}
-		if (is_inlined && was_inlined) {
-			// we can skip the padding if we have multiple inlined entries in a row
-			requires_padding = false;
-		}
-		if (requires_padding) {
-			result.emplace_back();
-		}
-		// cardinality, timing and estimated cardinality are rendered separately
-		// this is to allow alignment horizontally across nodes
-		if (item.first == RenderTreeNode::CARDINALITY) {
-			// cardinality - need to reserve space for cardinality AND timing
-			result.emplace_back();
-			if (extra_info.find(RenderTreeNode::TIMING) != extra_info.end()) {
-				result.emplace_back();
-			}
-			continue;
-		}
-		if (item.first == RenderTreeNode::ESTIMATED_CARDINALITY) {
-			// estimated cardinality - reserve space for estimate
-			if (extra_info.find(RenderTreeNode::CARDINALITY) != extra_info.end()) {
-				// if we have a true cardinality render that instead of the estimate
-				result.pop_back();
-				continue;
-			}
-			result.emplace_back();
-			continue;
-		}
-		auto splits = StringUtil::Split(str, "\n");
-		if (splits.size() > max_lines) {
-			// truncate this entry
-			vector<string> truncated_splits;
-			for (idx_t i = 0; i < max_lines / 2; i++) {
-				truncated_splits.push_back(std::move(splits[i]));
-			}
-			truncated_splits.push_back("...");
-			for (idx_t i = splits.size() - max_lines / 2; i < splits.size(); i++) {
-				truncated_splits.push_back(std::move(splits[i]));
-			}
-			splits = std::move(truncated_splits);
-		}
-		for (auto &split : splits) {
-			SplitStringBuffer(split, result);
-		}
-		requires_padding = true;
-		was_inlined = is_inlined;
-	}
-}
-
-string TextTreeRenderer::ExtraInfoSeparator() {
-	return StringUtil::Repeat(string(config.HORIZONTAL), (config.node_render_width - 9));
-}
-
-void TextTreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseResultRenderer &ss) {
+void TextTreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseTreeRenderer &ss) {
 	// the text profiler output is the framed query tree (header, total time, phase timings, operator tree)
 	profiler.RenderQueryTree(ss);
 }

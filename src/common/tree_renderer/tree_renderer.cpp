@@ -1,9 +1,8 @@
 #include "duckdb/common/tree_renderer.hpp"
-#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
-void TreeRenderer::ToStream(RenderTree &root, BaseResultRenderer &ss) {
+void TreeRenderer::ToStream(RenderTree &root, BaseTreeRenderer &ss) {
 	if (!UsesRawKeyNames()) {
 		root.SanitizeKeyNames();
 	}

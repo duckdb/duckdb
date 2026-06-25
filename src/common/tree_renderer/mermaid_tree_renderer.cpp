@@ -1,6 +1,5 @@
 #include "duckdb/common/tree_renderer/mermaid_tree_renderer.hpp"
 
-#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
@@ -17,45 +16,45 @@
 namespace duckdb {
 
 string MermaidTreeRenderer::ToString(const LogicalOperator &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string MermaidTreeRenderer::ToString(const PhysicalOperator &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string MermaidTreeRenderer::ToString(const ProfilingNode &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string MermaidTreeRenderer::ToString(const Pipeline &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
-void MermaidTreeRenderer::Render(const LogicalOperator &op, BaseResultRenderer &ss) {
+void MermaidTreeRenderer::Render(const LogicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void MermaidTreeRenderer::Render(const PhysicalOperator &op, BaseResultRenderer &ss) {
+void MermaidTreeRenderer::Render(const PhysicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void MermaidTreeRenderer::Render(const ProfilingNode &op, BaseResultRenderer &ss) {
+void MermaidTreeRenderer::Render(const ProfilingNode &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void MermaidTreeRenderer::Render(const Pipeline &op, BaseResultRenderer &ss) {
+void MermaidTreeRenderer::Render(const Pipeline &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
@@ -81,7 +80,7 @@ static string SanitizeMermaidLabel(const string &text) {
 	return result;
 }
 
-void MermaidTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) {
+void MermaidTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) {
 	vector<string> nodes;
 	vector<string> edges;
 

@@ -5,7 +5,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/tree_renderer/base_tree_renderer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
@@ -311,7 +311,7 @@ string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) 
 	if (!IsEnabled()) {
 		return renderer->RenderProfilerDisabled();
 	}
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	renderer->RenderProfiler(*this, ss);
 	return ss.str();
 }
@@ -330,7 +330,7 @@ void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) con
 	renderer->RenderProfiler(*this, *sink);
 }
 
-void QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer, BaseResultRenderer &ss) const {
+void QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer, BaseTreeRenderer &ss) const {
 	lock_guard<std::mutex> guard(lock);
 	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized
@@ -514,20 +514,6 @@ string QueryProfiler::DrawPadded(const string &str, idx_t width) {
 	}
 }
 
-static string RenderTitleCase(string str) {
-	str = StringUtil::Lower(str);
-	str[0] = NumericCast<char>(toupper(str[0]));
-	for (idx_t i = 0; i < str.size(); i++) {
-		if (str[i] == '_') {
-			str[i] = ' ';
-			if (i + 1 < str.size()) {
-				str[i + 1] = NumericCast<char>(toupper(str[i + 1]));
-			}
-		}
-	}
-	return str;
-}
-
 static string RenderTiming(double timing) {
 	string timing_s;
 	if (timing >= 1) {
@@ -541,13 +527,13 @@ static string RenderTiming(double timing) {
 }
 
 string QueryProfiler::QueryTreeToString() const {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	RenderQueryTree(ss);
 	return ss.str();
 }
 
 // renders a centered line: the surrounding box-drawing and padding is layout, the text itself is a value
-static void RenderPaddedValue(BaseResultRenderer &ss, const string &border_left, const string &padded,
+static void RenderPaddedValue(BaseTreeRenderer &ss, const string &border_left, const string &padded,
                               const string &border_right) {
 	idx_t start = 0;
 	while (start < padded.size() && padded[start] == ' ') {
@@ -562,7 +548,7 @@ static void RenderPaddedValue(BaseResultRenderer &ss, const string &border_left,
 		ss << padded.substr(0, start);
 	}
 	if (end > start) {
-		ss.Render(ResultRenderType::VALUE, padded.substr(start, end - start));
+		ss.Render(padded.substr(start, end - start), TreeRenderType::VALUE);
 	}
 	if (end < padded.size()) {
 		ss << padded.substr(end);
@@ -570,96 +556,15 @@ static void RenderPaddedValue(BaseResultRenderer &ss, const string &border_left,
 	ss << border_right;
 }
 
-void RenderPhaseTimings(BaseResultRenderer &ss, const pair<string, double> &head, map<string, double> &timings,
-                        idx_t width) {
-	ss << "┌────────────────────────────────────────────────┐\n";
-	RenderPaddedValue(
-	    ss, "│", QueryProfiler::DrawPadded(RenderTitleCase(head.first) + ": " + RenderTiming(head.second), width - 2),
-	    "│\n");
-	ss << "│┌──────────────────────────────────────────────┐│\n";
-
-	for (const auto &entry : timings) {
-		RenderPaddedValue(
-		    ss, "││",
-		    QueryProfiler::DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second), width - 4),
-		    "││\n");
-	}
-	ss << "│└──────────────────────────────────────────────┘│\n";
-	ss << "└────────────────────────────────────────────────┘\n";
-}
-
-void PrintPhaseTimingsToStream(BaseResultRenderer &ss, const GatheredMetrics &info, idx_t width) {
-	map<string, double> optimizer_timings;
-	map<string, double> planner_timings;
-	map<string, double> parser_timings;
-	map<string, double> physical_planner_timings;
-
-	pair<string, double> optimizer_head;
-	pair<string, double> planner_head;
-	pair<string, double> parser_head;
-	pair<string, double> physical_planner_head;
-
-	for (const auto &entry : info.GetMetrics()) {
-		const auto &metric = entry.first;
-		// Check specific total_time metrics BEFORE group checks — MetricInGroup would otherwise match these first.
-		if (MetricsUtils::IsMetric<MetricOptimizerTotalTime>(metric)) {
-			optimizer_head = {"Optimizer", entry.second.GetValue<double>()};
-		} else if (MetricsUtils::IsMetric<MetricPhysicalPlannerTotalTime>(metric)) {
-			physical_planner_head = {"Physical Planner", entry.second.GetValue<double>()};
-		} else if (MetricsUtils::IsMetric<MetricPlannerTotalTime>(metric)) {
-			planner_head = {"Planner", entry.second.GetValue<double>()};
-		} else if (MetricsUtils::IsMetric<MetricParserTotalTime>(metric)) {
-			parser_head = {"Parser", entry.second.GetValue<double>()};
-		} else if (MetricsUtils::MetricInGroup(metric, "optimizer")) {
-			// "optimizer.expression_rewriter" -> display as "expression_rewriter"
-			optimizer_timings[metric.substr(10)] = entry.second.GetValue<double>();
-		} else if (MetricsUtils::MetricInGroup(metric, "physical_planner")) {
-			// "physical_planner.column_binding" -> display as "column_binding"
-			physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
-		} else if (MetricsUtils::IsMetric<MetricPlannerBindingTime>(metric)) {
-			planner_timings["binding_time"] = entry.second.GetValue<double>();
-		}
-	}
-
-	if (!optimizer_head.first.empty()) {
-		RenderPhaseTimings(ss, optimizer_head, optimizer_timings, width);
-	}
-	if (!physical_planner_head.first.empty()) {
-		RenderPhaseTimings(ss, physical_planner_head, physical_planner_timings, width);
-	}
-	if (!planner_head.first.empty()) {
-		RenderPhaseTimings(ss, planner_head, planner_timings, width);
-	}
-	if (!parser_head.first.empty()) {
-		RenderPhaseTimings(ss, parser_head, parser_timings, width);
-	}
-}
-
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
-	StringResultRenderer renderer;
+	StringTreeRenderer renderer;
 	RenderQueryTree(renderer);
 	ss << renderer.str();
 }
 
-void QueryProfiler::RenderQueryTree(BaseResultRenderer &ss) const {
+void QueryProfiler::RenderQueryTree(BaseTreeRenderer &ss) const {
 	lock_guard<std::mutex> guard(lock);
 
-	bool show_query_name = false;
-	if (root) {
-		auto &info = *metrics;
-		show_query_name = info.MetricIsTracked<MetricQuerySQL>();
-	}
-	ss << "┌─────────────────────────────────────┐\n";
-	ss << "│┌───────────────────────────────────┐│\n";
-	RenderPaddedValue(ss, "││", "    Query Profiling Information    ", "││\n");
-	ss << "│└───────────────────────────────────┘│\n";
-	ss << "└─────────────────────────────────────┘\n";
-	if (show_query_name) {
-		ss.Render(ResultRenderType::VALUE, StringUtil::Replace(query_metrics.query_sql, "\n", " "));
-	}
-	ss << "\n";
-
-	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized
 	if (query_metrics.query_sql.empty() && !root) {
 		return;
@@ -672,19 +577,23 @@ void QueryProfiler::RenderQueryTree(BaseResultRenderer &ss) const {
 	}
 	ss << state_info.str();
 
-	constexpr idx_t TOTAL_BOX_WIDTH = 50;
-	ss << "┌────────────────────────────────────────────────┐\n";
-	ss << "│┌──────────────────────────────────────────────┐│\n";
-	string total_time = "Total Time: " + RenderTiming(query_metrics.GetStringMetricInSeconds("query.total_time"));
-	RenderPaddedValue(ss, "││", DrawPadded(total_time, TOTAL_BOX_WIDTH - 4), "││\n");
-	ss << "│└──────────────────────────────────────────────┘│\n";
-	ss << "└────────────────────────────────────────────────┘\n";
+	// total-time box, styled to match the operator boxes (rounded corners, title in the top border)
+	const string title = "Total Time";
+	string timing = RenderTiming(query_metrics.GetStringMetricInSeconds("query.total_time"));
+	idx_t content_width = MaxValue<idx_t>(title.size() + 2, timing.size());
+	idx_t box_width = content_width + 4;
+	// top border: ╭─ Total Time ─╮
+	ss << "╭─ ";
+	ss.Render(title, TreeRenderType::HEADER);
+	ss << " " + StringUtil::Repeat("─", box_width - 5 - title.size()) + "╮\n";
+	// value line: │ 0.0017s      │
+	ss << "│ ";
+	ss.Render(timing, TreeRenderType::VALUE);
+	ss << string(content_width - timing.size() + 1, ' ') + "│\n";
+	// bottom border
+	ss << "╰" + StringUtil::Repeat("─", box_width - 2) + "╯\n";
 	// render the main operator tree
 	if (root) {
-		// print phase timings
-		if (PrintOptimizerOutput()) {
-			PrintPhaseTimingsToStream(ss, *metrics, TOTAL_BOX_WIDTH);
-		}
 		Render(*root, ss);
 	}
 }
@@ -1087,7 +996,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	}
 }
 
-void QueryProfiler::Render(const ProfilingNode &node, BaseResultRenderer &ss) const {
+void QueryProfiler::Render(const ProfilingNode &node, BaseTreeRenderer &ss) const {
 	TextTreeRenderer renderer;
 	renderer.Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
 	renderer.Render(node, ss);

@@ -33,12 +33,12 @@ public:
 	string ToString(const ProfilingNode &op);
 	string ToString(const Pipeline &op);
 
-	void Render(const LogicalOperator &op, BaseResultRenderer &ss);
-	void Render(const PhysicalOperator &op, BaseResultRenderer &ss);
-	void Render(const ProfilingNode &op, BaseResultRenderer &ss) override;
-	void Render(const Pipeline &op, BaseResultRenderer &ss);
+	void Render(const LogicalOperator &op, BaseTreeRenderer &ss);
+	void Render(const PhysicalOperator &op, BaseTreeRenderer &ss);
+	void Render(const ProfilingNode &op, BaseTreeRenderer &ss) override;
+	void Render(const Pipeline &op, BaseTreeRenderer &ss);
 
-	void ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) override;
+	void ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) override;
 
 	string RenderProfilerDisabled() override;
 };

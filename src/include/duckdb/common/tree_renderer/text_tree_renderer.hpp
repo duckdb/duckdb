@@ -75,15 +75,15 @@ public:
 	string ToString(const ProfilingNode &op);
 	string ToString(const Pipeline &op);
 
-	void Render(const LogicalOperator &op, BaseResultRenderer &ss);
-	void Render(const PhysicalOperator &op, BaseResultRenderer &ss);
-	void Render(const ProfilingNode &op, BaseResultRenderer &ss) override;
-	void Render(const Pipeline &op, BaseResultRenderer &ss);
+	void Render(const LogicalOperator &op, BaseTreeRenderer &ss);
+	void Render(const PhysicalOperator &op, BaseTreeRenderer &ss);
+	void Render(const ProfilingNode &op, BaseTreeRenderer &ss) override;
+	void Render(const Pipeline &op, BaseTreeRenderer &ss);
 
-	void ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) override;
+	void ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) override;
 
 	//! Profiler text output: the framed query tree (with phase timings, total time, etc.)
-	void RenderProfiler(const QueryProfiler &profiler, BaseResultRenderer &ss) override;
+	void RenderProfiler(const QueryProfiler &profiler, BaseTreeRenderer &ss) override;
 
 	void Configure(const unordered_map<string, Value> &settings) override;
 
@@ -94,20 +94,6 @@ public:
 private:
 	//! The configuration used for rendering
 	TextTreeRendererConfig config;
-
-private:
-	string ExtraInfoSeparator();
-	void RenderTopLayer(RenderTree &root, BaseResultRenderer &ss, idx_t y);
-	void RenderBoxContent(RenderTree &root, BaseResultRenderer &ss, idx_t y);
-	void RenderBottomLayer(RenderTree &root, BaseResultRenderer &ss, idx_t y);
-
-	bool CanSplitOnThisChar(char l);
-	bool IsPadding(char l);
-	string RemovePadding(string l);
-	void SplitUpExtraInfo(const InsertionOrderPreservingMap<string> &extra_info, vector<string> &result,
-	                      idx_t max_lines);
-	void SplitStringBuffer(const string &source, vector<string> &result);
-	string FormatNumber(const string &input);
 };
 
 } // namespace duckdb
