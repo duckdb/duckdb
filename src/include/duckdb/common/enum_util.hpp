@@ -406,6 +406,8 @@ enum class RecursiveCTEInlineStageType : uint8_t;
 
 enum class RecursiveProbeSidePreference : uint8_t;
 
+enum class RegexMatchOperatorSemantics : uint8_t;
+
 enum class RelationType : uint8_t;
 
 enum class RemoteCapability : uint8_t;
@@ -1121,6 +1123,9 @@ const char* EnumUtil::ToChars<RecursiveCTEInlineStageType>(RecursiveCTEInlineSta
 
 template<>
 const char* EnumUtil::ToChars<RecursiveProbeSidePreference>(RecursiveProbeSidePreference value);
+
+template<>
+const char* EnumUtil::ToChars<RegexMatchOperatorSemantics>(RegexMatchOperatorSemantics value);
 
 template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
@@ -1914,6 +1919,9 @@ RecursiveCTEInlineStageType EnumUtil::FromString<RecursiveCTEInlineStageType>(co
 
 template<>
 RecursiveProbeSidePreference EnumUtil::FromString<RecursiveProbeSidePreference>(const char *value);
+
+template<>
+RegexMatchOperatorSemantics EnumUtil::FromString<RegexMatchOperatorSemantics>(const char *value);
 
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);
