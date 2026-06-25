@@ -48,8 +48,8 @@ protected:
 class SingleFileTableIndexWriter : public TableIndexWriter {
 public:
 	explicit SingleFileTableIndexWriter(SingleFileCheckpointWriter &checkpoint_manager,
-	                               PartialBlockManager &partial_block_manager, StorageVersion version,
-	                               bool debug_verify_blocks);
+	                                    PartialBlockManager &partial_block_manager, StorageVersion version,
+	                                    bool debug_verify_blocks);
 
 public:
 	void Flush() override;

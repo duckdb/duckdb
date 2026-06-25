@@ -29,8 +29,8 @@ StorageVersion TableIndexWriter::GetStorageVersion() const {
 }
 
 SingleFileTableIndexWriter::SingleFileTableIndexWriter(SingleFileCheckpointWriter &checkpoint_manager,
-                                             PartialBlockManager &partial_block_manager, const StorageVersion version,
-                                             const bool debug_verify_blocks)
+                                                       PartialBlockManager &partial_block_manager,
+                                                       const StorageVersion version, const bool debug_verify_blocks)
     : TableIndexWriter(partial_block_manager, version), checkpoint_manager(checkpoint_manager),
       debug_verify_blocks(debug_verify_blocks) {
 }
