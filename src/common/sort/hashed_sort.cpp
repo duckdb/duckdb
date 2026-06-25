@@ -123,7 +123,7 @@ unique_ptr<RadixPartitionedTupleData> HashedSortGlobalSinkState::CreatePartition
 unique_ptr<RepartitionKeyTracker>
 HashedSortGlobalSinkState::CreateRepartitionKeyTracker(PartitionKeyTracker &tracker) const {
 	return make_uniq<RepartitionKeyTracker>(allocator, tracker, hashed_sort.partition_key_types,
-	                                        hashed_sort.partition_key_ids, hashed_sort.payload_types.size());
+	                                        hashed_sort.partition_key_ids);
 }
 
 void HashedSortGlobalSinkState::Rehash(idx_t cardinality) {
@@ -618,7 +618,7 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
     : SortStrategy(input_types), estimated_cardinality(estimated_cardinality) {
 	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
 	partition_key_count = partitions.size();
-	can_bypass_single_key_sort = order_bys.empty();
+	can_bypass_single_key_sort = partition_key_count > 0 && order_bys.empty();
 	partition_key_types.reserve(partition_key_count);
 	for (idx_t key_idx = 0; key_idx < partition_key_count; key_idx++) {
 		partition_key_types.push_back(partitions[key_idx].expression->GetReturnType());
