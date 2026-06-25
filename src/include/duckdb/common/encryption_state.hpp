@@ -28,6 +28,22 @@ struct CryptoHash {
 	DUCKDB_API static void ToHex(const_data_ptr_t input, idx_t input_len, char *output);
 };
 
+class CryptoHashState {
+public:
+	DUCKDB_API explicit CryptoHashState(CryptoHashFunction function);
+	DUCKDB_API virtual ~CryptoHashState();
+
+	DUCKDB_API virtual void Hash(const_data_ptr_t input, idx_t input_len, data_ptr_t output) = 0;
+	DUCKDB_API virtual void HashHex(const_data_ptr_t input, idx_t input_len, char *output);
+
+	CryptoHashFunction GetFunction() const {
+		return function;
+	}
+
+private:
+	CryptoHashFunction function;
+};
+
 struct EncryptionStateMetadata {
 private:
 	const EncryptionTypes::CipherType cipher;
@@ -99,6 +115,7 @@ public:
 	                             data_ptr_t output) const;
 	DUCKDB_API virtual void HashHex(CryptoHashFunction function, const_data_ptr_t input, idx_t input_len,
 	                                char *output) const;
+	DUCKDB_API virtual unique_ptr<CryptoHashState> CreateHashState(CryptoHashFunction function) const;
 	DUCKDB_API virtual void Hmac(CryptoHashFunction function, const_data_ptr_t key, idx_t key_len,
 	                             const_data_ptr_t input, idx_t input_len, data_ptr_t output) const;
 	DUCKDB_API virtual bool SupportsHash(CryptoHashFunction function) const;

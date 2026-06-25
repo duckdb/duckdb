@@ -111,6 +111,69 @@ void MbedTlsWrapper::ToBase16(char *in, char *out, size_t len) {
 	}
 }
 
+class MbedTLSCryptoHashState : public duckdb::CryptoHashState {
+public:
+	explicit MbedTLSCryptoHashState(duckdb::CryptoHashFunction function) : duckdb::CryptoHashState(function) {
+		switch (function) {
+		case duckdb::CryptoHashFunction::MD5:
+			break;
+		case duckdb::CryptoHashFunction::SHA1:
+			mbedtls_sha1_init(&sha1_context);
+			break;
+		case duckdb::CryptoHashFunction::SHA256:
+			mbedtls_sha256_init(&sha256_context);
+			break;
+		default:
+			throw duckdb::InternalException("Unsupported crypto hash function");
+		}
+	}
+
+	~MbedTLSCryptoHashState() override {
+		switch (GetFunction()) {
+		case duckdb::CryptoHashFunction::MD5:
+			break;
+		case duckdb::CryptoHashFunction::SHA1:
+			mbedtls_sha1_free(&sha1_context);
+			break;
+		case duckdb::CryptoHashFunction::SHA256:
+			mbedtls_sha256_free(&sha256_context);
+			break;
+		default:
+			break;
+		}
+	}
+
+	void Hash(duckdb::const_data_ptr_t input, duckdb::idx_t input_len, duckdb::data_ptr_t output) override {
+		switch (GetFunction()) {
+		case duckdb::CryptoHashFunction::MD5: {
+			duckdb::MD5Context context;
+			context.Add(input, input_len);
+			context.Finish(output);
+			return;
+		}
+		case duckdb::CryptoHashFunction::SHA1:
+			if (mbedtls_sha1_starts(&sha1_context) || mbedtls_sha1_update(&sha1_context, input, input_len) ||
+			    mbedtls_sha1_finish(&sha1_context, output)) {
+				throw std::runtime_error("SHA1 Error");
+			}
+			return;
+		case duckdb::CryptoHashFunction::SHA256:
+			if (mbedtls_sha256_starts(&sha256_context, false) ||
+			    mbedtls_sha256_update(&sha256_context, input, input_len) ||
+			    mbedtls_sha256_finish(&sha256_context, output)) {
+				throw std::runtime_error("SHA256 Error");
+			}
+			return;
+		default:
+			throw duckdb::InternalException("Unsupported crypto hash function");
+		}
+	}
+
+private:
+	mbedtls_sha1_context sha1_context;
+	mbedtls_sha256_context sha256_context;
+};
+
 void MbedTlsWrapper::AESStateMBEDTLSFactory::Hash(duckdb::CryptoHashFunction function, duckdb::const_data_ptr_t input,
                                                   duckdb::idx_t input_len, duckdb::data_ptr_t output) const {
 	switch (function) {
@@ -133,6 +196,11 @@ void MbedTlsWrapper::AESStateMBEDTLSFactory::Hash(duckdb::CryptoHashFunction fun
 	default:
 		throw duckdb::InternalException("Unsupported crypto hash function");
 	}
+}
+
+duckdb::unique_ptr<duckdb::CryptoHashState>
+MbedTlsWrapper::AESStateMBEDTLSFactory::CreateHashState(duckdb::CryptoHashFunction function) const {
+	return duckdb::make_uniq<MbedTLSCryptoHashState>(function);
 }
 
 void MbedTlsWrapper::AESStateMBEDTLSFactory::Hmac(duckdb::CryptoHashFunction function, duckdb::const_data_ptr_t key,

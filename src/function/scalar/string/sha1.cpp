@@ -12,7 +12,7 @@ void SHA1Function(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &input = args.data[0];
 	auto &local_state = crypto_hash_scalar::GetLocalState(state);
 	auto &heap = StringVector::GetStringHeap(result);
-	crypto_hash_scalar::StringData data(*local_state.encryption_util, heap);
+	crypto_hash_scalar::StringData data(*local_state.hash_state, heap);
 
 	UnaryExecutor::GenericExecute<string_t, string_t, crypto_hash_scalar::StringOperator<CryptoHashFunction::SHA1>>(
 	    input, result, data);

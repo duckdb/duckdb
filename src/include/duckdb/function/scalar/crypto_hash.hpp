@@ -19,10 +19,15 @@ namespace duckdb {
 namespace crypto_hash_scalar {
 
 struct LocalState : public FunctionLocalState {
-	explicit LocalState(shared_ptr<EncryptionUtil> encryption_util_p) : encryption_util(std::move(encryption_util_p)) {
+	LocalState(shared_ptr<EncryptionUtil> encryption_util_p, CryptoHashFunction function)
+	    : encryption_util(std::move(encryption_util_p)) {
+		D_ASSERT(encryption_util);
+		hash_state = encryption_util->CreateHashState(function);
+		D_ASSERT(hash_state);
 	}
 
 	shared_ptr<EncryptionUtil> encryption_util;
+	unique_ptr<CryptoHashState> hash_state;
 };
 
 template <CryptoHashFunction FUNCTION>
@@ -30,24 +35,24 @@ unique_ptr<FunctionLocalState> InitLocalState(ExpressionState &state, const Boun
 	auto &context = state.GetContext();
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.force_mbedtls && config.encryption_util && config.encryption_util->SupportsHash(FUNCTION)) {
-		return make_uniq<LocalState>(config.encryption_util);
+		return make_uniq<LocalState>(config.encryption_util, FUNCTION);
 	}
-	return make_uniq<LocalState>(context.db->GetMbedTLSUtil(config.options.force_mbedtls));
+	return make_uniq<LocalState>(context.db->GetMbedTLSUtil(config.options.force_mbedtls), FUNCTION);
 }
 
 struct StringData {
-	StringData(EncryptionUtil &encryption_util, StringHeap &heap) : encryption_util(encryption_util), heap(heap) {
+	StringData(CryptoHashState &hash_state, StringHeap &heap) : hash_state(hash_state), heap(heap) {
 	}
 
-	EncryptionUtil &encryption_util;
+	CryptoHashState &hash_state;
 	StringHeap &heap;
 };
 
 struct NumberData {
-	explicit NumberData(EncryptionUtil &encryption_util) : encryption_util(encryption_util) {
+	explicit NumberData(CryptoHashState &hash_state) : hash_state(hash_state) {
 	}
 
-	EncryptionUtil &encryption_util;
+	CryptoHashState &hash_state;
 };
 
 template <CryptoHashFunction FUNCTION>
@@ -55,8 +60,7 @@ struct StringOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &, idx_t, StringData &data) {
 		auto hash = data.heap.EmptyString(CryptoHash::GetHexDigestSize(FUNCTION));
-		data.encryption_util.HashHex(FUNCTION, const_data_ptr_cast(input.GetData()), input.GetSize(),
-		                             hash.GetDataWriteable());
+		data.hash_state.HashHex(const_data_ptr_cast(input.GetData()), input.GetSize(), hash.GetDataWriteable());
 		hash.Finalize();
 		return hash;
 	}

@@ -15,8 +15,7 @@ struct MD5Number128Operator {
 		uhugeint_t result;
 		D_ASSERT(CryptoHash::GetDigestSize(CryptoHashFunction::MD5) == sizeof(digest));
 		D_ASSERT(sizeof(result) == sizeof(digest));
-		data.encryption_util.Hash(CryptoHashFunction::MD5, const_data_ptr_cast(input.GetData()), input.GetSize(),
-		                          digest);
+		data.hash_state.Hash(const_data_ptr_cast(input.GetData()), input.GetSize(), digest);
 		memcpy(&result, digest, sizeof(result));
 		return BSwapIfBE(result);
 	}
@@ -26,7 +25,7 @@ void MD5Function(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &input = args.data[0];
 	auto &local_state = crypto_hash_scalar::GetLocalState(state);
 	auto &heap = StringVector::GetStringHeap(result);
-	crypto_hash_scalar::StringData data(*local_state.encryption_util, heap);
+	crypto_hash_scalar::StringData data(*local_state.hash_state, heap);
 
 	UnaryExecutor::GenericExecute<string_t, string_t, crypto_hash_scalar::StringOperator<CryptoHashFunction::MD5>>(
 	    input, result, data);
@@ -35,7 +34,7 @@ void MD5Function(DataChunk &args, ExpressionState &state, Vector &result) {
 void MD5NumberFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &input = args.data[0];
 	auto &local_state = crypto_hash_scalar::GetLocalState(state);
-	crypto_hash_scalar::NumberData data(*local_state.encryption_util);
+	crypto_hash_scalar::NumberData data(*local_state.hash_state);
 
 	UnaryExecutor::GenericExecute<string_t, uhugeint_t, MD5Number128Operator>(input, result, data);
 }

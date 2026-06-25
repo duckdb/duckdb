@@ -28,6 +28,20 @@ void CryptoHash::ToHex(const_data_ptr_t input, idx_t input_len, char *output) {
 	}
 }
 
+CryptoHashState::CryptoHashState(CryptoHashFunction function_p) : function(function_p) {
+}
+
+CryptoHashState::~CryptoHashState() {
+}
+
+void CryptoHashState::HashHex(const_data_ptr_t input, idx_t input_len, char *output) {
+	auto digest_size = CryptoHash::GetDigestSize(function);
+	data_t digest[CryptoHash::MAX_DIGEST_SIZE];
+	D_ASSERT(digest_size <= CryptoHash::MAX_DIGEST_SIZE);
+	Hash(input, input_len, digest);
+	CryptoHash::ToHex(digest, digest_size, output);
+}
+
 EncryptionState::EncryptionState(unique_ptr<EncryptionStateMetadata> metadata_p) : metadata(std::move(metadata_p)) {
 }
 
@@ -64,6 +78,24 @@ void EncryptionUtil::HashHex(CryptoHashFunction function, const_data_ptr_t input
 	D_ASSERT(digest_size <= CryptoHash::MAX_DIGEST_SIZE);
 	Hash(function, input, input_len, digest);
 	CryptoHash::ToHex(digest, digest_size, output);
+}
+
+class EncryptionUtilCryptoHashState : public CryptoHashState {
+public:
+	EncryptionUtilCryptoHashState(const EncryptionUtil &encryption_util_p, CryptoHashFunction function)
+	    : CryptoHashState(function), encryption_util(encryption_util_p) {
+	}
+
+	void Hash(const_data_ptr_t input, idx_t input_len, data_ptr_t output) override {
+		encryption_util.Hash(GetFunction(), input, input_len, output);
+	}
+
+private:
+	const EncryptionUtil &encryption_util;
+};
+
+unique_ptr<CryptoHashState> EncryptionUtil::CreateHashState(CryptoHashFunction function) const {
+	return make_uniq<EncryptionUtilCryptoHashState>(*this, function);
 }
 
 void EncryptionUtil::Hmac(CryptoHashFunction, const_data_ptr_t, idx_t, const_data_ptr_t, idx_t, data_ptr_t) const {
