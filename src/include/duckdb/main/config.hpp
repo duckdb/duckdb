@@ -61,6 +61,7 @@ class HTTPUtil;
 class DatabaseFilePathManager;
 class ExtensionCallbackManager;
 class TypeManager;
+class VirtualFileSystem;
 
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
@@ -210,6 +211,8 @@ public:
 	DUCKDB_API static idx_t GetAliasCount();
 	DUCKDB_API static vector<string> GetOptionNames();
 	DUCKDB_API static bool IsInMemoryDatabase(const char *database_path);
+
+	DUCKDB_API VirtualFileSystem &GetVirtualFileSystem();
 
 	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,

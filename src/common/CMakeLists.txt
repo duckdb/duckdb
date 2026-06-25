@@ -43,6 +43,8 @@ add_library_unity(
   csv_writer.cpp
   complex_json.cpp
   compressed_file_system.cpp
+  debug_file_system.cpp
+  io_latency_model.cpp
   constants.cpp
   checksum.cpp
   encryption_functions.cpp

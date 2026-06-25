@@ -2,6 +2,8 @@
 
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/debug_file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -110,6 +112,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugForceFetchRowSetting),
     DUCKDB_SETTING(DebugForceNoCrossProductSetting),
     DUCKDB_SETTING(DebugLocalFileSystemDelayMsSetting),
+    DUCKDB_SETTING(DebugFsDelayMeanMsSetting),
+    DUCKDB_SETTING(DebugFsDelayStddevMsSetting),
     DUCKDB_GLOBAL(DebugOrderVerificationSetting),
     DUCKDB_SETTING_CALLBACK(DebugPhysicalTableScanExecutionStrategySetting),
     DUCKDB_SETTING(DebugSkipCheckpointOnCommitSetting),
@@ -268,6 +272,11 @@ vector<ConfigurationAlias> DBConfig::GetAliases() {
 		aliases.push_back(setting_aliases[index]);
 	}
 	return aliases;
+}
+
+VirtualFileSystem &DBConfig::GetVirtualFileSystem() {
+	auto &inner = static_cast<DebugFileSystem &>(*file_system).GetInnerFileSystem();
+	return static_cast<VirtualFileSystem &>(inner);
 }
 
 SettingCallbackInfo::SettingCallbackInfo(ClientContext &context_p, SetScope scope)
