@@ -1,10 +1,12 @@
 # name: test/sql/storage/attach/attach_invalidation.test
-# description: Test attached database invalidation after checkpoint failures
+# description: A checkpoint failure on an attached database is scoped to that database
 # group: [attach]
 
 require noforcestorage
 
 require no_alternative_verify
+
+foreach abort_mode before_header before_header_non_fatal
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown;
@@ -16,22 +18,16 @@ statement ok
 SET auto_checkpoint_skip_wal_threshold = 9999999999;
 
 statement ok
-ATTACH '{TEST_DIR}/attach_invalidation_a.db' AS a;
+ATTACH '{TEST_DIR}/attach_invalidation_a_{abort_mode}.db' AS a;
 
 statement ok
-ATTACH '{TEST_DIR}/attach_invalidation_b.db' AS b;
-
-statement ok
-CREATE TABLE main_tbl(i INTEGER);
+ATTACH '{TEST_DIR}/attach_invalidation_b_{abort_mode}.db' AS b;
 
 statement ok
 CREATE TABLE a.tbl(i INTEGER);
 
 statement ok
 CREATE TABLE b.tbl(i INTEGER);
-
-statement ok
-INSERT INTO main_tbl VALUES (1);
 
 statement ok
 INSERT INTO a.tbl SELECT range::INTEGER FROM range(10);
@@ -43,19 +39,18 @@ statement ok
 CHECKPOINT a;
 
 statement ok
-CHECKPOINT b;
-
-statement ok
 INSERT INTO a.tbl VALUES (10);
 
 statement ok
-PRAGMA debug_checkpoint_abort = 'before_header';
+PRAGMA debug_checkpoint_abort = '{abort_mode}';
 
+# the failing checkpoint is scoped to "a"
 statement error
 CHECKPOINT a;
 ----
 <REGEX>:IO Error: Checkpoint failed for database "a".*Checkpoint aborted before header write.*
 
+# "a" is invalidated: reads, writes and further checkpoints all fail
 statement error
 SELECT COUNT(*) FROM a.tbl;
 ----
@@ -71,10 +66,11 @@ CHECKPOINT a;
 ----
 <REGEX>:IO Error: Database "a" has been invalidated because checkpointing failed.*
 
+# the instance and the sibling database "b" are unaffected
 query I
-SELECT COUNT(*) FROM b.tbl;
+SELECT 42;
 ----
-1
+42
 
 statement ok
 INSERT INTO b.tbl VALUES (101);
@@ -84,16 +80,7 @@ SELECT COUNT(*) FROM b.tbl;
 ----
 2
 
-query I
-SELECT COUNT(*) FROM main_tbl;
-----
-1
-
-query I
-SELECT 42;
-----
-42
-
+# immediate transaction mode must skip the invalidated database when starting transactions
 statement ok
 SET immediate_transaction_mode = true;
 
@@ -116,6 +103,7 @@ ROLLBACK;
 statement ok
 SET immediate_transaction_mode = false;
 
+# detach + reattach clears the invalidation and recovers committed data from the WAL
 statement ok
 PRAGMA debug_checkpoint_abort = 'none';
 
@@ -123,18 +111,19 @@ statement ok
 DETACH a;
 
 statement ok
-ATTACH '{TEST_DIR}/attach_invalidation_a.db' AS a;
+ATTACH '{TEST_DIR}/attach_invalidation_a_{abort_mode}.db' AS a;
 
 query I
 SELECT COUNT(*) FROM a.tbl;
 ----
 11
 
+# the same scoping applies to a failing auto-checkpoint (triggered by the WAL size, not an explicit CHECKPOINT)
 statement ok
 SET wal_autocheckpoint = '1KB';
 
 statement ok
-PRAGMA debug_checkpoint_abort = 'before_header';
+PRAGMA debug_checkpoint_abort = '{abort_mode}';
 
 statement ok
 INSERT INTO a.tbl SELECT (range + 1000)::INTEGER FROM range(10000);
@@ -149,11 +138,6 @@ SELECT COUNT(*) FROM b.tbl;
 ----
 2
 
-query I
-SELECT 42;
-----
-42
-
 statement ok
 PRAGMA debug_checkpoint_abort = 'none';
 
@@ -161,9 +145,18 @@ statement ok
 DETACH a;
 
 statement ok
-ATTACH '{TEST_DIR}/attach_invalidation_a.db' AS a;
+ATTACH '{TEST_DIR}/attach_invalidation_a_{abort_mode}.db' AS a;
 
 query I
 SELECT COUNT(*) FROM a.tbl;
 ----
 10011
+
+# detach both so the next iteration can reattach fresh database files
+statement ok
+DETACH a;
+
+statement ok
+DETACH b;
+
+endloop

@@ -281,6 +281,9 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
 		throw FatalException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
 	}
+	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER_NON_FATAL) {
+		throw IOException("Checkpoint aborted before header write (non-fatal) because of PRAGMA checkpoint_abort flag");
+	}
 
 	// finally write the updated header
 	DatabaseHeader header;
