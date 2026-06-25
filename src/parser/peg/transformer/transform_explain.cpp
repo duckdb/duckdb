@@ -9,8 +9,8 @@ ProfilerPrintFormat ParseProfilerPrintFormat(const Value &val) {
 	if (val.type().id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("Expected a string as argument to FORMAT");
 	}
-	// resolve the format name through the shared explain format registry (see main/profiler/profiler_print_format.hpp)
-	return ProfilerPrintFormat::FromString(val.GetValue<string>());
+	// the format name is validated when the renderer is created (needs a ClientContext); only normalize it here
+	return ProfilerPrintFormat(StringUtil::Lower(val.GetValue<string>()));
 }
 
 unique_ptr<SQLStatement>
