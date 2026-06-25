@@ -106,7 +106,15 @@ struct PipelineBroadcastExchange::ChunkPool : public enable_shared_from_this<Pip
 
 PipelineBroadcastExchangeLocalState::PipelineBroadcastExchangeLocalState(ClientContext &context,
                                                                          const PipelineBroadcastExchange &exchange) {
-	for (auto &pipeline_ref : exchange.direct_pipelines) {
+	vector<reference<Pipeline>> direct_pipeline_refs;
+	{
+		lock_guard<mutex> guard(exchange.lock);
+		direct_only = !exchange.consumers.empty() && exchange.active_consumers == 0 &&
+		              exchange.direct_pipelines.size() == exchange.consumers.size();
+		direct_pipeline_refs = exchange.direct_pipelines;
+	}
+
+	for (auto &pipeline_ref : direct_pipeline_refs) {
 		auto &pipeline = pipeline_ref.get();
 		pipeline.PrepareExternalInput();
 		direct_executors.push_back(make_uniq<PipelineExecutor>(context, pipeline));
@@ -140,17 +148,11 @@ bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, id
 	if (!pipeline.CanUseExternalInput()) {
 		return false;
 	}
-	MarkDirectConsumer(consumer_idx);
-	direct_pipelines.push_back(pipeline);
-	return true;
-}
-
-void PipelineBroadcastExchange::MarkDirectConsumer(idx_t consumer_idx) {
 	lock_guard<mutex> guard(lock);
 	D_ASSERT(consumer_idx < consumers.size());
 	auto &consumer = consumers[consumer_idx];
 	if (consumer.direct) {
-		return;
+		return true;
 	}
 	consumer.direct = true;
 	if (consumer.active) {
@@ -164,6 +166,8 @@ void PipelineBroadcastExchange::MarkDirectConsumer(idx_t consumer_idx) {
 	consumer.backlog_base_position = base_position;
 	consumer.backlog_next_position = base_position;
 	consumer.backlog_bytes = 0;
+	direct_pipelines.push_back(pipeline);
+	return true;
 }
 
 void PipelineBroadcastExchange::Reset() {
@@ -175,8 +179,8 @@ void PipelineBroadcastExchange::Reset() {
 		base_position = 0;
 		next_position = 0;
 		buffered_bytes = 0;
-		produced_rows = 0;
-		direct_consumer_progress = false;
+		produced_rows.store(0, std::memory_order_relaxed);
+		direct_consumer_progress.store(false, std::memory_order_relaxed);
 		producer_finished = false;
 		cancelled = false;
 		active_consumers = 0;
@@ -203,6 +207,24 @@ void PipelineBroadcastExchange::Reset() {
 SinkResultType PipelineBroadcastExchange::Push(DataChunk &chunk, PipelineBroadcastExchangeLocalState &lstate,
                                                const InterruptState &interrupt_state) {
 	bool all_direct_finished = lstate.direct_all_finished_for_chunk;
+	if (lstate.direct_only) {
+		D_ASSERT(!lstate.direct_executors.empty());
+		if (!lstate.direct_done_for_chunk) {
+			auto direct_result = PushDirectConsumers(chunk, lstate, interrupt_state, all_direct_finished);
+			if (direct_result == SinkResultType::BLOCKED) {
+				return SinkResultType::BLOCKED;
+			}
+			lstate.direct_done_for_chunk = true;
+			lstate.direct_all_finished_for_chunk = all_direct_finished;
+		}
+		RecordProducedRows(chunk.size());
+		ResetPushChunk(lstate);
+		if (!RunToCompletion() && all_direct_finished) {
+			return SinkResultType::FINISHED;
+		}
+		return SinkResultType::NEED_MORE_INPUT;
+	}
+
 	bool rows_recorded = false;
 	if (!lstate.direct_done_for_chunk && !lstate.direct_executors.empty()) {
 		auto direct_result = PushDirectConsumers(chunk, lstate, interrupt_state, all_direct_finished);
@@ -249,8 +271,10 @@ SinkCombineResultType PipelineBroadcastExchange::FinishLocal(PipelineBroadcastEx
 	return FinishDirectConsumers(lstate, interrupt_state);
 }
 
-SinkResultType PipelineBroadcastExchange::PushDirectConsumers(DataChunk &chunk, PipelineBroadcastExchangeLocalState &lstate,
-                                                             const InterruptState &interrupt_state, bool &all_finished) {
+SinkResultType PipelineBroadcastExchange::PushDirectConsumers(DataChunk &chunk,
+                                                              PipelineBroadcastExchangeLocalState &lstate,
+                                                              const InterruptState &interrupt_state,
+                                                              bool &all_finished) {
 	if (!lstate.waiting_for_direct) {
 		lstate.direct_idx = 0;
 	}
@@ -343,20 +367,18 @@ SinkResultType PipelineBroadcastExchange::Append(DataChunk &chunk, const Interru
 			next_position++;
 			WakeReadersLocked(readers);
 		}
-		produced_rows += chunk.size();
+		RecordProducedRows(chunk.size());
 	}
 	CallbackAll(readers);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
 void PipelineBroadcastExchange::RecordDirectConsumerProgress() {
-	lock_guard<mutex> guard(lock);
-	direct_consumer_progress = true;
+	direct_consumer_progress.store(true, std::memory_order_relaxed);
 }
 
 void PipelineBroadcastExchange::RecordProducedRows(idx_t count) {
-	lock_guard<mutex> guard(lock);
-	produced_rows += count;
+	produced_rows.fetch_add(count, std::memory_order_relaxed);
 }
 
 void PipelineBroadcastExchange::Finish() {
@@ -392,7 +414,8 @@ void PipelineBroadcastExchange::Cancel() {
 	CallbackAll(writers);
 }
 
-SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &chunk, shared_ptr<DataChunk> &current_chunk,
+SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &chunk,
+                                                 shared_ptr<DataChunk> &current_chunk,
                                                  const InterruptState &interrupt_state) {
 	vector<InterruptState> writers;
 	auto result = SourceResultType::HAVE_MORE_OUTPUT;
@@ -478,7 +501,7 @@ ProgressData PipelineBroadcastExchange::ScanProgress(idx_t consumer_idx, idx_t e
 		progress.SetInvalid();
 		return progress;
 	}
-	auto total = produced_rows;
+	auto total = produced_rows.load(std::memory_order_relaxed);
 	if (!producer_finished) {
 		static constexpr const idx_t MAX_PROGRESS_CARDINALITY = 1ULL << 48ULL;
 		if (estimated_cardinality > 0 && estimated_cardinality < MAX_PROGRESS_CARDINALITY) {
@@ -493,10 +516,12 @@ ProgressData PipelineBroadcastExchange::ScanProgress(idx_t consumer_idx, idx_t e
 	return progress;
 }
 
-ProgressData PipelineBroadcastExchange::SinkProgress(const ProgressData &source_progress, idx_t estimated_cardinality) const {
+ProgressData PipelineBroadcastExchange::SinkProgress(const ProgressData &source_progress,
+                                                     idx_t estimated_cardinality) const {
 	lock_guard<mutex> guard(lock);
 	ProgressData progress;
-	auto produced = double(produced_rows);
+	auto produced_count = produced_rows.load(std::memory_order_relaxed);
+	auto produced = double(produced_count);
 	if (producer_finished) {
 		auto total = MaxValue<double>(produced, 1.0);
 		progress.done = total;
@@ -509,7 +534,7 @@ ProgressData PipelineBroadcastExchange::SinkProgress(const ProgressData &source_
 	} else {
 		static constexpr const idx_t MAX_PROGRESS_CARDINALITY = 1ULL << 48ULL;
 		if (estimated_cardinality > 0 && estimated_cardinality < MAX_PROGRESS_CARDINALITY) {
-			progress.total = double(MaxValue<idx_t>(estimated_cardinality, produced_rows + 1));
+			progress.total = double(MaxValue<idx_t>(estimated_cardinality, produced_count + 1));
 		} else {
 			progress.total = produced + 1.0;
 		}
@@ -569,7 +594,7 @@ void PipelineBroadcastExchange::DetachLaggingConsumersLocked() {
 		return;
 	}
 
-	bool has_progressed_consumer = direct_consumer_progress;
+	bool has_progressed_consumer = direct_consumer_progress.load(std::memory_order_relaxed);
 	bool has_lagging_consumer = false;
 	for (auto &consumer : consumers) {
 		if (!consumer.active || consumer.detached) {

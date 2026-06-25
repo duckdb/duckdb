@@ -31,7 +31,7 @@ EXPLAIN WITH ins AS MATERIALIZED (
 )
 SELECT * FROM ins LIMIT 1;
 ----
-physical_plan	<REGEX>:.*PIPELINE_EXCHANGE.*Run To Completion.*true.*CTE_SCAN.*
+physical_plan	<REGEX>:.*STREAMING_FANOUT.*Run To Completion.*true.*CTE_SCAN.*
 
 # Basic INSERT CTE with RETURNING
 query I rowsort

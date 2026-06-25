@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
@@ -36,6 +37,7 @@ private:
 	idx_t direct_finalize_idx = 0;
 	bool direct_done_for_chunk = false;
 	bool direct_all_finished_for_chunk = false;
+	bool direct_only = false;
 };
 
 class PipelineBroadcastExchange {
@@ -97,7 +99,6 @@ private:
 	};
 
 private:
-	void MarkDirectConsumer(idx_t consumer_idx);
 	SinkResultType Append(DataChunk &chunk, const InterruptState &interrupt_state);
 	void RecordDirectConsumerProgress();
 	void RecordProducedRows(idx_t count);
@@ -138,8 +139,8 @@ private:
 	idx_t next_position = 0;
 	idx_t active_consumers = 0;
 	idx_t buffered_bytes = 0;
-	idx_t produced_rows = 0;
-	bool direct_consumer_progress = false;
+	atomic<idx_t> produced_rows {0};
+	atomic<bool> direct_consumer_progress {false};
 	bool producer_finished = false;
 	bool cancelled = false;
 };

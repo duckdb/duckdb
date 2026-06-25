@@ -136,25 +136,25 @@ public:
 
 class CTELocalState : public LocalSinkState {
 public:
-	explicit CTELocalState(ClientContext &context, const PhysicalCTE &op)
-	    : lhs_data(context, op.working_table ? op.working_table->Types() : op.exchange->Types()),
-	      materialized_mode(!op.exchange) {
+	explicit CTELocalState(ClientContext &context, const PhysicalCTE &op) : materialized_mode(!op.exchange) {
 		if (materialized_mode) {
-			lhs_data.InitializeAppend(append_state);
+			lhs_data = make_uniq<ColumnDataCollection>(context, op.working_table->Types());
+			lhs_data->InitializeAppend(append_state);
 		} else {
 			exchange_state = op.exchange->GetLocalState(context);
 		}
 	}
 
 	unique_ptr<LocalSinkState> distinct_state;
-	ColumnDataCollection lhs_data;
+	unique_ptr<ColumnDataCollection> lhs_data;
 	ColumnDataAppendState append_state;
 	bool materialized_mode;
 	unique_ptr<PipelineBroadcastExchangeLocalState> exchange_state;
 
 	void Append(DataChunk &input) {
 		D_ASSERT(materialized_mode);
-		lhs_data.Append(append_state, input);
+		D_ASSERT(lhs_data);
+		lhs_data->Append(append_state, input);
 	}
 };
 
@@ -175,7 +175,7 @@ SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, Op
 		D_ASSERT(lstate.exchange_state);
 		return gstate.exchange->Push(chunk, *lstate.exchange_state, input.interrupt_state);
 	}
-	lstate.lhs_data.Append(lstate.append_state, chunk);
+	lstate.Append(chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -187,7 +187,8 @@ SinkCombineResultType PhysicalCTE::Combine(ExecutionContext &context, OperatorSi
 		return exchange->FinishLocal(*lstate.exchange_state, input.interrupt_state);
 	}
 	auto &gstate = input.global_state.Cast<CTEGlobalState>();
-	gstate.MergeIT(lstate.lhs_data);
+	D_ASSERT(lstate.lhs_data);
+	gstate.MergeIT(*lstate.lhs_data);
 
 	return SinkCombineResultType::FINISHED;
 }
@@ -267,6 +268,8 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 	if (exchange) {
 		auto direct_count = exchange->DirectConsumerCount();
 		auto consumer_count = exchange->ConsumerCount();
+		D_ASSERT(direct_count <= consumer_count);
+		auto buffered_count = consumer_count - direct_count;
 		if (direct_count == 0) {
 			result["Fanout Mode"] = "BUFFERED";
 		} else if (direct_count == consumer_count) {
@@ -274,6 +277,9 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 		} else {
 			result["Fanout Mode"] = "MIXED";
 		}
+		result["Consumers"] = StringUtil::Format("%llu", consumer_count);
+		result["Direct Consumers"] = StringUtil::Format("%llu", direct_count);
+		result["Buffered Consumers"] = StringUtil::Format("%llu", buffered_count);
 		result["Chunk Storage"] = "POOLED";
 	}
 	SetEstimatedCardinality(result, estimated_cardinality);
