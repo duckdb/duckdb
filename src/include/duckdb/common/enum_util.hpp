@@ -158,6 +158,8 @@ enum class CopyOverwriteMode : uint8_t;
 
 enum class CopyToType : uint8_t;
 
+enum class CryptoHashFunction : uint8_t;
+
 enum class DataFileType : uint8_t;
 
 enum class DateCastResult : uint8_t;
@@ -322,6 +324,8 @@ enum class MultiFileColumnMappingMode : uint8_t;
 
 enum class MultiFileFileState : uint8_t;
 
+enum class MultiFileScanPhase : uint8_t;
+
 enum class NType : uint8_t;
 
 enum class NewLineIdentifier : uint8_t;
@@ -405,6 +409,8 @@ enum class RecoveryMode : uint8_t;
 enum class RecursiveCTEInlineStageType : uint8_t;
 
 enum class RecursiveProbeSidePreference : uint8_t;
+
+enum class RegexMatchOperatorSemantics : uint8_t;
 
 enum class RelationType : uint8_t;
 
@@ -751,6 +757,9 @@ template<>
 const char* EnumUtil::ToChars<CopyToType>(CopyToType value);
 
 template<>
+const char* EnumUtil::ToChars<CryptoHashFunction>(CryptoHashFunction value);
+
+template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
 
 template<>
@@ -997,6 +1006,9 @@ template<>
 const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value);
 
 template<>
+const char* EnumUtil::ToChars<MultiFileScanPhase>(MultiFileScanPhase value);
+
+template<>
 const char* EnumUtil::ToChars<NType>(NType value);
 
 template<>
@@ -1121,6 +1133,9 @@ const char* EnumUtil::ToChars<RecursiveCTEInlineStageType>(RecursiveCTEInlineSta
 
 template<>
 const char* EnumUtil::ToChars<RecursiveProbeSidePreference>(RecursiveProbeSidePreference value);
+
+template<>
+const char* EnumUtil::ToChars<RegexMatchOperatorSemantics>(RegexMatchOperatorSemantics value);
 
 template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
@@ -1544,6 +1559,9 @@ template<>
 CopyToType EnumUtil::FromString<CopyToType>(const char *value);
 
 template<>
+CryptoHashFunction EnumUtil::FromString<CryptoHashFunction>(const char *value);
+
+template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);
 
 template<>
@@ -1790,6 +1808,9 @@ template<>
 MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value);
 
 template<>
+MultiFileScanPhase EnumUtil::FromString<MultiFileScanPhase>(const char *value);
+
+template<>
 NType EnumUtil::FromString<NType>(const char *value);
 
 template<>
@@ -1914,6 +1935,9 @@ RecursiveCTEInlineStageType EnumUtil::FromString<RecursiveCTEInlineStageType>(co
 
 template<>
 RecursiveProbeSidePreference EnumUtil::FromString<RecursiveProbeSidePreference>(const char *value);
+
+template<>
+RegexMatchOperatorSemantics EnumUtil::FromString<RegexMatchOperatorSemantics>(const char *value);
 
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);

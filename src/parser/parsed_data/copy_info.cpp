@@ -4,14 +4,13 @@
 namespace duckdb {
 
 CopyInfo::CopyInfo()
-    : ParseInfo(TYPE), catalog(INVALID_CATALOG), schema(DEFAULT_SCHEMA), is_from(false), is_format_auto_detected(true) {
+    : ParseInfo(TYPE), is_from(false), is_format_auto_detected(true),
+      qualified_name(Identifier(INVALID_CATALOG), Identifier(DEFAULT_SCHEMA), Identifier()) {
 }
 
 unique_ptr<CopyInfo> CopyInfo::Copy() const {
 	auto result = make_uniq<CopyInfo>();
-	result->catalog = catalog;
-	result->schema = schema;
-	result->table = table;
+	result->qualified_name = qualified_name;
 	result->select_list = select_list;
 	result->file_path_expression = file_path_expression ? file_path_expression->Copy() : nullptr;
 	result->file_path = file_path;
@@ -77,8 +76,8 @@ string CopyInfo::CopyOptionsToString() const {
 string CopyInfo::TablePartToString() const {
 	string result;
 
-	D_ASSERT(!table.empty());
-	result += QualifierToString(catalog, schema, table);
+	D_ASSERT(!Table().empty());
+	result += qualified_name.ToString();
 
 	// (c1, c2, ..)
 	if (!select_list.empty()) {

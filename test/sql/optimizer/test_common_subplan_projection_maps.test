@@ -1,0 +1,173 @@
+# name: test/sql/optimizer/test_common_subplan_projection_maps.test
+# description: Common subplan materialization invalidates stale projection maps
+# group: [optimizer]
+
+statement ok
+CREATE TABLE csp_pm_a_upserts(customer_id BIGINT, id BIGINT);
+
+statement ok
+CREATE TABLE csp_pm_a_snapshot AS
+SELECT 9999 + i AS customer_id, 9999 + i AS id
+FROM range(1, 6) tbl(i);
+
+statement ok
+CREATE TABLE csp_pm_a_deletes(id BIGINT);
+
+statement ok
+CREATE VIEW csp_pm_a AS
+	(SELECT * FROM csp_pm_a_upserts)
+	UNION ALL
+	(SELECT tbl.customer_id, tbl.id
+	 FROM csp_pm_a_snapshot tbl
+	 ANTI JOIN csp_pm_a_deletes d ON tbl.id = d.id);
+
+statement ok
+CREATE TABLE csp_pm_tx_upserts(a_id BIGINT, id BIGINT);
+
+statement ok
+CREATE TABLE csp_pm_tx_snapshot AS
+SELECT 9999 + i AS a_id, 9999 + i AS id
+FROM range(1, 6) tbl(i);
+
+statement ok
+CREATE TABLE csp_pm_tx_deletes(id BIGINT);
+
+statement ok
+CREATE VIEW csp_pm_tx AS
+	(SELECT * FROM csp_pm_tx_upserts)
+	UNION ALL
+	(SELECT tbl.a_id, tbl.id
+	 FROM csp_pm_tx_snapshot tbl
+	 ANTI JOIN csp_pm_tx_deletes d ON tbl.id = d.id);
+
+statement ok
+CREATE TABLE csp_pm_o_upserts(customer_id BIGINT, id BIGINT, flag BOOLEAN);
+
+statement ok
+CREATE TABLE csp_pm_o_snapshot AS
+SELECT 9999 + i AS id,
+       10000 + ((i - 1) % 5) AS customer_id,
+       (i % 3 = 0) AS flag
+FROM range(1, 5) tbl(i);
+
+statement ok
+CREATE TABLE csp_pm_o_deletes(id BIGINT);
+
+statement ok
+CREATE VIEW csp_pm_o AS
+	(SELECT * FROM csp_pm_o_upserts)
+	UNION ALL
+	(SELECT tbl.customer_id, tbl.id, tbl.flag
+	 FROM csp_pm_o_snapshot tbl
+	 ANTI JOIN csp_pm_o_deletes d ON tbl.id = d.id);
+
+statement ok
+CREATE TABLE csp_pm_i_upserts(order_id BIGINT, product_id BIGINT, id BIGINT);
+
+statement ok
+CREATE TABLE csp_pm_i_snapshot AS
+SELECT 9999 + i AS id,
+       10000 + ((i - 1) % 4) AS order_id,
+       1 + ((i - 1) % 3) AS product_id
+FROM range(1, 5) tbl(i);
+
+statement ok
+CREATE TABLE csp_pm_i_deletes(id BIGINT);
+
+statement ok
+CREATE VIEW csp_pm_i AS
+	(SELECT * FROM csp_pm_i_upserts)
+	UNION ALL
+	(SELECT tbl.order_id, tbl.product_id, tbl.id
+	 FROM csp_pm_i_snapshot tbl
+	 ANTI JOIN csp_pm_i_deletes d ON tbl.id = d.id);
+
+statement ok
+CREATE TABLE csp_pm_p_upserts(id BIGINT, category VARCHAR, alert_at TIMETZ);
+
+statement ok
+CREATE TABLE csp_pm_p_snapshot AS
+SELECT i AS id,
+       'cat' || (1 + ((i - 1) % 3)) AS category,
+       CASE WHEN i <= 2 THEN ('18:30:00.178')::TIMETZ ELSE ('18:29:00')::TIMETZ END AS alert_at
+FROM range(1, 4) tbl(i);
+
+statement ok
+CREATE TABLE csp_pm_p_deletes(id BIGINT);
+
+statement ok
+CREATE VIEW csp_pm_p AS
+	(SELECT * FROM csp_pm_p_upserts)
+	UNION ALL
+	(SELECT tbl.id, tbl.category, tbl.alert_at
+	 FROM csp_pm_p_snapshot tbl
+	 ANTI JOIN csp_pm_p_deletes d ON tbl.id = d.id);
+
+statement ok
+CREATE TABLE csp_pm_c_upserts(name VARCHAR, short_name VARCHAR, demand SMALLINT);
+
+statement ok
+CREATE TABLE csp_pm_c_snapshot AS
+SELECT 'cat' || i AS name,
+       'short' || i AS short_name,
+       CASE WHEN i <= 1 THEN 2::SMALLINT ELSE 3::SMALLINT END AS demand
+FROM range(1, 3) tbl(i);
+
+statement ok
+CREATE TABLE csp_pm_c_deletes(name VARCHAR);
+
+statement ok
+CREATE VIEW csp_pm_c AS
+	(SELECT * FROM csp_pm_c_upserts)
+	UNION ALL
+	(SELECT tbl.name, tbl.short_name, tbl.demand
+	 FROM csp_pm_c_snapshot tbl
+	 ANTI JOIN csp_pm_c_deletes d ON tbl.name = d.name);
+
+query I
+SELECT MAX(CASE WHEN COALESCE(orders_by_customer.c1, 0) = 0 OR COALESCE(orders_by_customer.c2, 0) = 0 THEN 1 ELSE 2 END)
+FROM csp_pm_a
+LEFT JOIN (
+	SELECT csp_pm_o.customer_id,
+	       COUNT(product_info.name1) AS c1,
+	       COUNT(product_info.name2) AS c2
+	FROM csp_pm_o
+	INNER JOIN csp_pm_i ON csp_pm_o.id = csp_pm_i.order_id
+	LEFT JOIN (
+		SELECT csp_pm_p.id,
+		       category_info.name1 AS name1,
+		       category_info.name2 AS name2
+		FROM csp_pm_p
+		LEFT JOIN (
+			SELECT csp_pm_c.name,
+			       csp_pm_c.short_name AS name1,
+			       csp_pm_c.short_name AS name2
+			FROM csp_pm_c
+			WHERE csp_pm_c.demand <= 2::SMALLINT
+		) AS category_info
+		ON csp_pm_p.category = category_info.name
+		WHERE csp_pm_p.alert_at >= ('18:30:00.178')::TIMETZ
+	) AS product_info
+	ON csp_pm_i.product_id = product_info.id
+	GROUP BY csp_pm_o.customer_id
+) AS orders_by_customer
+ON csp_pm_a.customer_id = orders_by_customer.customer_id
+LEFT JOIN csp_pm_tx
+ON csp_pm_a.id = csp_pm_tx.a_id
+LEFT JOIN (
+	SELECT csp_pm_o.customer_id,
+	       MAX(repeated_order.v) AS v
+	FROM csp_pm_o
+	LEFT JOIN (
+		SELECT csp_pm_o.customer_id,
+		       MIN(DISTINCT csp_pm_o.customer_id) AS v
+		FROM csp_pm_o
+		GROUP BY csp_pm_o.customer_id
+	) AS repeated_order
+	ON csp_pm_o.customer_id = repeated_order.customer_id
+	WHERE csp_pm_o.flag != FALSE
+	GROUP BY csp_pm_o.customer_id
+) AS unreferenced_branch
+ON csp_pm_a.customer_id = unreferenced_branch.customer_id;
+----
+2

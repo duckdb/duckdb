@@ -27,7 +27,7 @@ unique_ptr<CatalogEntry> DefaultSchemaGenerator::CreateDefaultEntry(CatalogTrans
                                                                     const Identifier &entry_name) {
 	if (IsDefaultSchema(entry_name)) {
 		CreateSchemaInfo info;
-		info.schema = Identifier(StringUtil::Lower(entry_name.GetIdentifierName()));
+		info.SchemaMutable() = Identifier(StringUtil::Lower(entry_name.GetIdentifierName()));
 		info.internal = true;
 		return make_uniq_base<CatalogEntry, DuckSchemaEntry>(catalog, info);
 	}

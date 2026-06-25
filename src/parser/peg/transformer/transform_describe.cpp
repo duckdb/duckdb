@@ -27,15 +27,15 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer 
                                                                  const QualifiedName &qualified_name) {
 	auto showref = make_uniq<ShowRef>();
 	showref->show_type = ShowType::SHOW_FROM;
-	if (!IsInvalidCatalog(qualified_name.catalog)) {
+	if (!IsInvalidCatalog(qualified_name.Catalog())) {
 		throw ParserException("Expected \"SHOW TABLES FROM database\", \"SHOW TABLES FROM schema\", or "
 		                      "\"SHOW TABLES FROM database.schema\"");
 	}
-	if (IsInvalidSchema(qualified_name.schema)) {
-		showref->schema_name = qualified_name.name;
+	if (IsInvalidSchema(qualified_name.Schema())) {
+		showref->schema_name = qualified_name.Name();
 	} else {
-		showref->catalog_name = qualified_name.schema;
-		showref->schema_name = qualified_name.name;
+		showref->catalog_name = qualified_name.Schema();
+		showref->schema_name = qualified_name.Name();
 	}
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());

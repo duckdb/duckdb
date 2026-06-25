@@ -18,7 +18,12 @@ struct CreateCopyFunctionInfo : public CreateInfo {
 	DUCKDB_API explicit CreateCopyFunctionInfo(CopyFunction function);
 
 	//! Function name
-	Identifier name;
+	const Identifier &GetCopyFunctionName() const {
+		return qualified_name.Name();
+	}
+	void SetCopyFunctionName(Identifier name) {
+		qualified_name.NameMutable() = std::move(name);
+	}
 	//! The table function
 	CopyFunction function;
 

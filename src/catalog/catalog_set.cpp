@@ -245,7 +245,7 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 	// lock the catalog for writing
 	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 
-	auto entry = GetEntryInternal(transaction, info.name);
+	auto entry = GetEntryInternal(transaction, info.Name());
 	if (!entry) {
 		return false;
 	}

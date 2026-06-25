@@ -61,6 +61,9 @@ enum class HighlightElementType : uint32_t {
 	NONE
 };
 
+//! Registers a ProfilerExtension that highlights the CLI "query_tree" profiler output
+void RegisterProfilerHighlighting(duckdb::DBConfig &config);
+
 struct HighlightColorInfo {
 	const char *color_name;
 	uint8_t code;

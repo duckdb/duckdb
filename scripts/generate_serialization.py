@@ -269,9 +269,20 @@ def get_deserialize_element_template(
     return template
 
 
-def get_deserialize_assignment(property_name, property_type, pointer_type):
+def deserialize_local_name(entry):
+    # Name of the local variable a member is read into (base-class / constructor deserialize).
+    # Accessor-call deserialize properties (containing '(') are not valid identifiers, so fall back
+    # to the member name.
+    if '(' in entry.deserialize_property:
+        return entry.name
+    return entry.deserialize_property.replace('.', '_')
+
+
+def get_deserialize_assignment(property_name, property_type, pointer_type, local_name=None):
     assignment = '.' if pointer_type == 'none' else '->'
-    property = property_name.replace('.', '_')
+    # local_name is the variable the property was read into; accessor-call properties (containing '(')
+    # are not valid identifiers, so callers pass the member name instead.
+    property = local_name if local_name is not None else property_name.replace('.', '_')
     if requires_move(property_type):
         property = f'std::move({property})'
     return f'\tresult{assignment}{property_name} = {property};\n'
@@ -320,6 +331,8 @@ supported_member_entries = [
     # equality/hash generation annotations (used by generate_util.py)
     'equals_skip',
     'hash_skip',
+    # skip (de)serialization entirely (member only exists for equals/hash/copy generation)
+    'serialize_skip',
     # accessor annotations (used by generate_util.py for Children/ChildrenMutable generation)
     'accessor_mut',
     'accessor',
@@ -360,7 +373,8 @@ def normalize_json_type(type_str):
 
 class MemberVariable:
     def __init__(self, entry):
-        self.id = entry['id']
+        # serialize_skip members are not (de)serialized, so they need no field id
+        self.id = entry.get('id', -1)
         self.name = entry['name']
         self.type = normalize_json_type(entry['type'])
         self.base = None
@@ -398,6 +412,9 @@ class MemberVariable:
             self.has_default = True
         if 'base' in entry:
             self.base = entry['base']
+        # Members marked serialize_skip are not (de)serialized; they only exist for the
+        # equals/hash/copy generation (e.g. an aggregate field serialized as its components).
+        self.serialize_skip = entry.get('serialize_skip', False)
         for key in entry.keys():
             if key not in supported_member_entries:
                 print(
@@ -530,7 +547,10 @@ class SerializableClass:
         if not pointer_type:
             pointer_type = self.pointer_type
 
-        property_name = property_name.replace('.', '_')
+        # When deserializing into a local variable (base-class / constructor reads) the target is an
+        # accessor call (e.g. qualified_name.NameMutable()), which is not a valid identifier. Use the
+        # member name as the local variable instead.
+        property_name = deserialize_local_name(entry)
         template = DESERIALIZE_ELEMENT_FORMAT
         if base:
             template = DESERIALIZE_ELEMENT_BASE_FORMAT.replace('{base_property}', base.replace('*', ''))
@@ -684,15 +704,14 @@ def generate_base_class_code(base_class: SerializableClass):
     for entry in assign_entries:
         if entry.status != MemberVariableStatus.EXISTING:
             continue
+        local = deserialize_local_name(entry)
         move = False
         if entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type):
             move = True
         if move:
-            base_class_deserialize += (
-                f'\tresult->{entry.deserialize_property} = std::move({entry.deserialize_property});\n'
-            )
+            base_class_deserialize += f'\tresult->{entry.deserialize_property} = std::move({local});\n'
         else:
-            base_class_deserialize += f'\tresult->{entry.deserialize_property} = {entry.deserialize_property};\n'
+            base_class_deserialize += f'\tresult->{entry.deserialize_property} = {local};\n'
     if base_class.finalize_deserialization is not None:
         for line in base_class.finalize_deserialization:
             base_class_deserialize += "\t" + line + "\n"
@@ -802,12 +821,16 @@ def generate_class_code(class_entry: SerializableClass):
         class_serialize += BASE_SERIALIZE_FORMAT.format(base_class_name=class_entry.base)
     for entry_idx in range(last_constructor_index + 1):
         entry = class_entry.members[entry_idx]
+        if entry.serialize_skip:
+            continue
         class_deserialize += class_entry.get_deserialize_element(entry, base=entry.base, pointer_type='unique_ptr')
 
     class_deserialize += class_entry.generate_constructor(constructor_parameters)
     if class_entry.members is None:
         return None
     for entry_idx, entry in enumerate(class_entry.members):
+        if entry.serialize_skip:
+            continue
         write_property_name = entry.serialize_property
         deserialize_template_str = DESERIALIZE_ELEMENT_CLASS_FORMAT
         if entry.base:
@@ -832,7 +855,7 @@ def generate_class_code(class_entry: SerializableClass):
             )
         elif entry.name not in constructor_entries and entry.status == MemberVariableStatus.EXISTING:
             class_deserialize += get_deserialize_assignment(
-                entry.deserialize_property, entry.type, class_entry.pointer_type
+                entry.deserialize_property, entry.type, class_entry.pointer_type, deserialize_local_name(entry)
             )
         if entry.name in class_entry.set_parameter_names and entry.status == MemberVariableStatus.EXISTING:
             class_deserialize += SET_DESERIALIZE_PARAMETER_FORMAT.format(

@@ -148,7 +148,7 @@ optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, 
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
-	auto &schema = GetSchema(transaction, info.base->schema);
+	auto &schema = GetSchema(transaction, info.base->Schema());
 	return CreateTable(transaction, schema, info);
 }
 
@@ -156,7 +156,7 @@ optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, 
 // View
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateView(CatalogTransaction transaction, CreateViewInfo &info) {
-	auto &schema = GetSchema(transaction, info.schema);
+	auto &schema = GetSchema(transaction, info.Schema());
 	return CreateView(transaction, schema, info);
 }
 
@@ -173,7 +173,7 @@ optional_ptr<CatalogEntry> Catalog::CreateView(CatalogTransaction transaction, S
 // Sequence
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) {
-	auto &schema = GetSchema(transaction, info.schema);
+	auto &schema = GetSchema(transaction, info.Schema());
 	return CreateSequence(transaction, schema, info);
 }
 
@@ -190,7 +190,7 @@ optional_ptr<CatalogEntry> Catalog::CreateSequence(CatalogTransaction transactio
 // Type
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
-	auto &schema = GetSchema(transaction, info.schema);
+	auto &schema = GetSchema(transaction, info.Schema());
 	return CreateType(transaction, schema, info);
 }
 
@@ -207,7 +207,7 @@ optional_ptr<CatalogEntry> Catalog::CreateType(CatalogTransaction transaction, S
 // Table Function
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo &info) {
-	auto &schema = GetSchema(transaction, info.schema);
+	auto &schema = GetSchema(transaction, info.Schema());
 	return CreateTableFunction(transaction, schema, info);
 }
 
@@ -229,7 +229,7 @@ optional_ptr<CatalogEntry> Catalog::CreateTableFunction(ClientContext &context,
 // Copy Function
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo &info) {
-	auto &schema = GetSchema(transaction, info.schema);
+	auto &schema = GetSchema(transaction, info.Schema());
 	return CreateCopyFunction(transaction, schema, info);
 }
 
@@ -247,7 +247,7 @@ optional_ptr<CatalogEntry> Catalog::CreateCopyFunction(CatalogTransaction transa
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(CatalogTransaction transaction,
                                                          CreatePragmaFunctionInfo &info) {
-	auto &schema = GetSchema(transaction, info.schema);
+	auto &schema = GetSchema(transaction, info.Schema());
 	return CreatePragmaFunction(transaction, schema, info);
 }
 
@@ -264,7 +264,7 @@ optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(CatalogTransaction tran
 // Function
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) {
-	auto &schema = GetSchema(transaction, info.schema);
+	auto &schema = GetSchema(transaction, info.Schema());
 	return CreateFunction(transaction, schema, info);
 }
 
@@ -286,7 +286,7 @@ optional_ptr<CatalogEntry> Catalog::AddFunction(ClientContext &context, CreateFu
 // Collation
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) {
-	auto &schema = GetSchema(transaction, info.schema);
+	auto &schema = GetSchema(transaction, info.Schema());
 	return CreateCollation(transaction, schema, info);
 }
 
@@ -304,7 +304,7 @@ optional_ptr<CatalogEntry> Catalog::CreateCollation(CatalogTransaction transacti
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateCoordinateSystem(CatalogTransaction transaction,
                                                            CreateCoordinateSystemInfo &info) {
-	auto &schema = GetSchema(transaction, info.schema);
+	auto &schema = GetSchema(transaction, info.Schema());
 	return CreateCoordinateSystem(transaction, schema, info);
 }
 
@@ -321,7 +321,7 @@ optional_ptr<CatalogEntry> Catalog::CreateCoordinateSystem(CatalogTransaction tr
 // Index
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info) {
-	auto &schema = GetSchema(transaction, info.schema);
+	auto &schema = GetSchema(transaction, info.Schema());
 	auto &table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table)->Cast<TableCatalogEntry>();
 	return schema.CreateIndex(transaction, info, table);
 }
@@ -397,8 +397,8 @@ void Catalog::DropEntry(ClientContext &context, DropInfo &info) {
 	}
 
 	CatalogEntryRetriever retriever(context);
-	EntryLookupInfo lookup_info(info.type, info.name);
-	auto lookup = LookupEntry(retriever, info.schema.GetIdentifierName(), lookup_info, info.if_not_found);
+	EntryLookupInfo lookup_info(info.type, info.Name());
+	auto lookup = LookupEntry(retriever, info.Schema().GetIdentifierName(), lookup_info, info.if_not_found);
 	if (!lookup.Found()) {
 		return;
 	}
@@ -1239,15 +1239,15 @@ vector<reference<CatalogEntry>> Catalog::GetAllEntries(ClientContext &context, C
 void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {
 	if (transaction.HasContext()) {
 		CatalogEntryRetriever retriever(transaction.GetContext());
-		EntryLookupInfo lookup_info(info.GetCatalogType(), info.name);
-		auto lookup = LookupEntry(retriever, info.schema.GetIdentifierName(), lookup_info, info.if_not_found);
+		EntryLookupInfo lookup_info(info.GetCatalogType(), info.Name());
+		auto lookup = LookupEntry(retriever, info.Schema().GetIdentifierName(), lookup_info, info.if_not_found);
 		if (!lookup.Found()) {
 			return;
 		}
 		return lookup.schema->Alter(transaction, info);
 	}
 	D_ASSERT(info.if_not_found == OnEntryNotFound::THROW_EXCEPTION);
-	auto &schema = GetSchema(transaction, info.schema);
+	auto &schema = GetSchema(transaction, info.Schema());
 	return schema.Alter(transaction, info);
 }
 

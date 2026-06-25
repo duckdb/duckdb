@@ -51,6 +51,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
@@ -987,6 +988,27 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 ** any result rows/columns depending on the current mode
 ** set via the supplied callback.
 */
+void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
+	if (!stdout_is_console) {
+		// only pretty-print to an interactive console - redirected output keeps the plain plan as a result value
+		return;
+	}
+	auto &explain = statement.Cast<duckdb::ExplainStatement>();
+	if (explain.format != duckdb::ProfilerPrintFormat::Default()) {
+		// the user explicitly requested an output format (e.g. EXPLAIN (FORMAT json))
+		return;
+	}
+	if (explain.explain_type == duckdb::ExplainType::EXPLAIN_ANALYZE) {
+		auto &profiler_format = duckdb::ClientConfig::GetConfig(*conn->context).profiler_print_format;
+		if (profiler_format != "query_tree" && profiler_format != "no_output") {
+			// a custom profiler output format is configured - respect it
+			return;
+		}
+	}
+	// render the plan as a highlighted string (see RegisterProfilerHighlighting)
+	explain.format = duckdb::ProfilerPrintFormat("shell_explain_printer");
+}
+
 SuccessState ShellState::ExecuteSQL(const string &zSql) {
 	auto &con = *conn;
 	try {
@@ -1008,6 +1030,7 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			cMode = mode;
 			if (statement->type == duckdb::StatementType::EXPLAIN_STATEMENT) {
 				cMode = RenderMode::EXPLAIN;
+				SetupPrettyExplain(*statement);
 			}
 			if (mode == RenderMode::DUCKBOX && UseDescribeRenderMode(*statement, describe_table_name)) {
 				cMode = RenderMode::DESCRIBE;

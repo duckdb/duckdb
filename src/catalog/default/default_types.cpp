@@ -604,7 +604,7 @@ unique_ptr<CatalogEntry> DefaultTypeGenerator::CreateDefaultEntry(ClientContext 
 		return nullptr;
 	}
 	CreateTypeInfo info;
-	info.name = entry_name;
+	info.SetTypeName(entry_name);
 	info.type = LogicalType(entry->type);
 	info.internal = true;
 	info.temporary = true;

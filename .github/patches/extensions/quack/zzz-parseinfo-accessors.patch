@@ -1,0 +1,24 @@
+diff --git a/src/storage/quack_schema.cpp b/src/storage/quack_schema.cpp
+index cb9bf27..eb977cc 100644
+--- a/src/storage/quack_schema.cpp
++++ b/src/storage/quack_schema.cpp
+@@ -138,8 +138,8 @@ optional_ptr<CatalogEntry> QuackSchemaCatalogEntry::CreateType(CatalogTransactio
+ 
+ void QuackSchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo &info_p) {
+ 	auto drop_info = info_p.Copy();
+-	drop_info->catalog = GetInfo()->catalog;
+-	drop_info->schema = name;
++	drop_info->CatalogMutable() = GetInfo()->catalog;
++	drop_info->SchemaMutable() = name;
+ 	switch (drop_info->type) {
+ 	case CatalogType::TABLE_ENTRY:
+ 	case CatalogType::VIEW_ENTRY:
+@@ -149,7 +149,7 @@ void QuackSchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo &info_p
+ 	}
+ 	auto &transaction = QuackTransaction::Get(context, ParentCatalog());
+ 	transaction.Query(drop_info->ToString());
+-	tables->DropEntry(info_p.name.GetIdentifierName());
++	tables->DropEntry(info_p.Name().GetIdentifierName());
+ }
+ void QuackSchemaCatalogEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
+ 	throw NotImplementedException("Alter not implemented yet, Alter!");

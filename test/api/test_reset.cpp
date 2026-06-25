@@ -126,6 +126,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"scalar_subquery_error_on_multiple_rows", {false}},
 	    {"ieee_floating_point_ops", {false}},
 	    {"progress_bar_time", {0}},
+	    {"regex_match_operator_semantics", {"full"}},
 	    {"temp_directory", {"tmp"}},
 	    {"wal_autocheckpoint", {"4.0 GiB"}},
 	    {"force_bitpacking_mode", {"constant"}},

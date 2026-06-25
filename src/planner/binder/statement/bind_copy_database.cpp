@@ -29,7 +29,7 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(Catalog &from_databas
 	auto info = make_uniq<CopyDatabaseInfo>(target_database_name);
 	for (auto &entry : catalog_entries) {
 		auto create_info = entry.get().GetInfo();
-		create_info->catalog = target_database_name;
+		create_info->CatalogMutable() = target_database_name;
 		auto on_conflict = create_info->type == CatalogType::SCHEMA_ENTRY ? OnCreateConflict::IGNORE_ON_CONFLICT
 		                                                                  : OnCreateConflict::ERROR_ON_CONFLICT;
 		// Update all the dependencies of the entry to point to the newly created entries on the target database

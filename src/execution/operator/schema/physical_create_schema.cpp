@@ -9,7 +9,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 SourceResultType PhysicalCreateSchema::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                        OperatorSourceInput &input) const {
-	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
+	auto &catalog = Catalog::GetCatalog(context.client, info->Catalog());
 	if (catalog.IsSystemCatalog()) {
 		throw BinderException("Cannot create schema in system catalog");
 	}
