@@ -31,6 +31,7 @@
 #include "duckdb/common/limits.hpp"
 
 #include <type_traits>
+#include <cstring>
 
 namespace duckdb {
 
@@ -583,6 +584,32 @@ void BuildVariant(SOURCE &source, idx_t count, Vector &result) {
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, total_keys);
 	keys_entry.Slice(keys_selvec, total_keys);
 
+	FlatVector::SetSize(result, count);
+	result.Verify();
+}
+
+//! Build an all-NULL canonical (unshredded) VARIANT vector with no values/children/keys. Used as the
+//! unshredded pool of a SHREDDED vector when a chunk has no leftover data: the pool is never consulted, so
+//! only its structural validity matters. Far cheaper than BuildVariant (no per-row traversal / key finalize).
+inline void BuildEmptyVariant(idx_t count, Vector &result) {
+	if (count == 0) {
+		return;
+	}
+	auto &keys = VariantVector::GetKeys(result);
+	auto &children = VariantVector::GetChildren(result);
+	auto &values = VariantVector::GetValues(result);
+	ListVector::SetListSize(keys, 0);
+	ListVector::SetListSize(children, 0);
+	ListVector::SetListSize(values, 0);
+
+	VariantVectorData variant_data(result);
+	memset(variant_data.keys_data, 0, count * sizeof(list_entry_t));
+	memset(variant_data.children_data, 0, count * sizeof(list_entry_t));
+	memset(variant_data.values_data, 0, count * sizeof(list_entry_t));
+	memset(variant_data.blob_data, 0, count * sizeof(string_t));
+
+	//! Every row is a (never-consulted) VARIANT NULL; the real row validity lives on the shredded component
+	FlatVector::ValidityMutable(result).SetAllInvalid(count);
 	FlatVector::SetSize(result, count);
 	result.Verify();
 }

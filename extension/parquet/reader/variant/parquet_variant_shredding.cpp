@@ -124,6 +124,9 @@ struct ShredNodeWriter {
 	ValidityMask *untyped_index_validity = nullptr;
 	vector<unique_ptr<ShredNodeWriter>> fields; //! OBJECT
 	unique_ptr<ShredNodeWriter> element;        //! ARRAY
+	//! Whether this node OR any descendant carries a binary 'value' leftover anywhere in the chunk. When
+	//! false the whole subtree is fully shredded and the per-row leftover pass can skip it entirely.
+	bool subtree_has_leftover = false;
 };
 
 //! 'is_object_field': whether this node is a field of an OBJECT. For object fields the "no leftover" default
@@ -149,8 +152,12 @@ void FillShredNode(const ShreddedGroupView &view, const ShredPlan &plan, Vector 
 		writer.untyped_index_validity->SetAllInvalid(count);
 	}
 
+	//! This node has a leftover if its own binary 'value' is present for any row; OR'd below with its children
+	bool has_leftover = !ValueAllNull(view, count);
+
 	if (!view.has_typed_value) {
 		FlatVector::ValidityMutable(typed_value).SetAllInvalid(count);
+		writer.subtree_has_leftover = has_leftover;
 		return;
 	}
 
@@ -171,6 +178,7 @@ void FillShredNode(const ShreddedGroupView &view, const ShredPlan &plan, Vector 
 		for (idx_t i = 0; i < view.fields.size(); i++) {
 			writer.fields[i] = make_uniq<ShredNodeWriter>();
 			FillShredNode(*view.fields[i], plan.fields[i], field_entries[i], count, *writer.fields[i], true);
+			has_leftover |= writer.fields[i]->subtree_has_leftover;
 		}
 		break;
 	}
@@ -195,9 +203,11 @@ void FillShredNode(const ShreddedGroupView &view, const ShredPlan &plan, Vector 
 		writer.element = make_uniq<ShredNodeWriter>();
 		FillShredNode(*view.element, *plan.element, ListVector::GetChildMutable(typed_value), child_count,
 		              *writer.element, false);
+		has_leftover |= writer.element->subtree_has_leftover;
 		break;
 	}
 	}
+	writer.subtree_has_leftover = has_leftover;
 }
 
 //===--------------------------------------------------------------------===//
@@ -220,12 +230,16 @@ bool IsRowNull(const ParquetVariantNode &root) {
 	return root.IsNull() || root.GetTypeId() == VariantLogicalType::VARIANT_NULL;
 }
 
-//! Initializes an all-NULL unshredded pool for a fully picked-off (flat root) column - it is never accessed
-struct EmptyUnshreddedSource {
-	bool Emit(idx_t row, VariantBuilder &builder) {
-		return true;
+//! Set the shredded struct validity for the SQL NULL rows (used when there is no leftover to build, so the
+//! per-row null marking otherwise done by ShreddedLeftoverSource still has to happen)
+void MarkShreddedNullRows(ParquetVariantIterator &iterator, idx_t count, ValidityMask &shredded_validity) {
+	for (idx_t row = 0; row < count; row++) {
+		iterator.BeginRow(row);
+		if (IsRowNull(iterator.Root(row))) {
+			shredded_validity.SetInvalid(row);
+		}
 	}
-};
+}
 
 struct ShreddedLeftoverSource {
 	ParquetVariantIterator &iterator;
@@ -264,13 +278,20 @@ struct ShreddedLeftoverSource {
 				if (value_present) {
 					EmitLeftover(value_entry.GetValueUnsafe(), writer, index, builder);
 				}
+				//! Descend only into fields whose subtree carries a leftover somewhere in the chunk; a
+				//! fully-shredded field contributes nothing and its untyped_value_index keeps its default
 				for (idx_t i = 0; i < view.fields.size(); i++) {
-					EmitNode(*view.fields[i], *writer.fields[i], index, builder);
+					if (writer.fields[i]->subtree_has_leftover) {
+						EmitNode(*view.fields[i], *writer.fields[i], index, builder);
+					}
 				}
 			} else if (view.kind == ParquetGroupKind::ARRAY) {
-				auto entry = (*view.list)[index].GetValueUnsafe();
-				for (idx_t j = 0; j < entry.length; j++) {
-					EmitNode(*view.element, *writer.element, entry.offset + j, builder);
+				//! Same pruning for arrays: a fully-shredded element type means no element can have a leftover
+				if (writer.element->subtree_has_leftover) {
+					auto entry = (*view.list)[index].GetValueUnsafe();
+					for (idx_t j = 0; j < entry.length; j++) {
+						EmitNode(*view.element, *writer.element, entry.offset + j, builder);
+					}
 				}
 			}
 			//! LEAF (incl. picked-off): fully shredded, no leftover
@@ -302,15 +323,22 @@ void ParquetVariantConversion::ConvertToShredded(Vector &metadata, Vector &group
 	if (root_plan.flat) {
 		//! The whole column is a fully-shredded primitive: reference it; the unshredded pool is unused
 		FillLeafTypedValue(root_view, shredded, count);
-		EmptyUnshreddedSource empty;
-		BuildVariant(empty, count, unshredded);
+		BuildEmptyVariant(count, unshredded);
 	} else {
-		//! Stage 2a: fill the typed_value tree (referencing leaves that map exactly)
+		//! Stage 2a: fill the typed_value tree (referencing leaves that map exactly); this also computes, per
+		//! node, whether its subtree carries any leftover (root_writer.subtree_has_leftover for the whole vector)
 		ShredNodeWriter root_writer;
 		FillShredNode(root_view, root_plan, shredded, count, root_writer, false);
-		//! Stage 2b: build the unshredded pool from leftovers, wire untyped_value_index, set row validity
-		ShreddedLeftoverSource source {iterator, root_writer, FlatVector::ValidityMutable(shredded)};
-		BuildVariant(source, count, unshredded);
+		if (root_writer.subtree_has_leftover) {
+			//! Stage 2b: build the unshredded pool from leftovers, wire untyped_value_index, set row validity
+			ShreddedLeftoverSource source {iterator, root_writer, FlatVector::ValidityMutable(shredded)};
+			BuildVariant(source, count, unshredded);
+		} else {
+			//! No leftover anywhere in this vector: skip building the (never-consulted) unshredded pool, only
+			//! mark the SQL NULL rows on the shredded component
+			MarkShreddedNullRows(iterator, count, FlatVector::ValidityMutable(shredded));
+			BuildEmptyVariant(count, unshredded);
+		}
 	}
 
 	FlatVector::SetSize(shredded_data, count_t(count));
