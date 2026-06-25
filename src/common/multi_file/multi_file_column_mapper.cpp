@@ -296,10 +296,10 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
-			child_list_t<Value> child_list;
-			child_list.emplace_back(string(), Value(local_column.name));
-			child_list.emplace_back(string(), std::move(result.column_map));
-			result.column_map = Value::STRUCT(std::move(child_list));
+			vector<Value> child_list;
+			child_list.push_back(Value(local_column.name));
+			child_list.push_back(std::move(result.column_map));
+			result.column_map = Value::TUPLE(std::move(child_list));
 		}
 	}
 	if (is_selected && child_map.default_value) {
@@ -422,10 +422,10 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
-			child_list_t<Value> child_list;
-			child_list.emplace_back(string(), Value(local_column.name));
-			child_list.emplace_back(string(), std::move(result.column_map));
-			result.column_map = Value::STRUCT(std::move(child_list));
+			vector<Value> child_list;
+			child_list.push_back(Value(local_column.name));
+			child_list.push_back(std::move(result.column_map));
+			result.column_map = Value::TUPLE(std::move(child_list));
 		}
 	}
 	if (!default_expressions.empty()) {
@@ -527,10 +527,10 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
-			child_list_t<Value> child_list;
-			child_list.emplace_back(string(), Value(local_column.name));
-			child_list.emplace_back(string(), std::move(result.column_map));
-			result.column_map = Value::STRUCT(std::move(child_list));
+			vector<Value> child_list;
+			child_list.push_back(Value(local_column.name));
+			child_list.push_back(std::move(result.column_map));
+			result.column_map = Value::TUPLE(std::move(child_list));
 		}
 	}
 

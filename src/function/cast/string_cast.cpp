@@ -191,7 +191,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 	Vector varchar_vector(varchar_struct_type, count);
 	auto &child_vectors = StructVector::GetEntries(varchar_vector);
 	auto &result_children = StructVector::GetEntries(result);
-	auto is_unnamed = StructType::IsUnnamed(result.GetType());
+	auto is_unnamed = result.GetType().id() == LogicalTypeId::TUPLE;
 
 	string_map_t<idx_t> child_names;
 	vector<reference<ValidityMask>> child_masks;

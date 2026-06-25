@@ -161,7 +161,7 @@ ScalarFunction GetKeyExtractFunction() {
 }
 
 ScalarFunction GetIndexExtractFunction() {
-	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::BIGINT}, LogicalType::ANY,
+	return ScalarFunction("struct_extract", {LogicalTypeId::TUPLE, LogicalType::BIGINT}, LogicalType::ANY,
 	                      StructExtractFunction, StructExtractBindIndex, PropagateStructExtractStats);
 }
 
