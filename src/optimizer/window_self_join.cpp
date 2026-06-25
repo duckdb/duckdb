@@ -62,12 +62,12 @@ static unique_ptr<Expression> TranslateAggregate(ClientContext &client, const Bo
 		filter = w_expr.Filter()->Copy();
 	}
 
-	auto aggr_type = w_expr.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT;
-
+	const auto aggr_type = w_expr.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT;
+	const auto aggr_ordered = (agg_func.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT);
 	auto result = make_uniq<BoundAggregateExpression>(std::move(agg_func), std::move(children), std::move(filter),
 	                                                  std::move(bind_info), aggr_type);
 
-	if (agg_func.GetOrderDependent() != AggregateOrderDependent::ORDER_DEPENDENT) {
+	if (!aggr_ordered) {
 		//	ORDER BY is a NOP, so drop it.
 		return std::move(result);
 	}
