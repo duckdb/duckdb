@@ -116,7 +116,7 @@ void PartitionKeyTracker::MarkMixed(idx_t bin_idx) {
 
 template <bool FIXED, bool USE_PARTITION_SEL>
 idx_t PartitionKeyTracker::BuildCandidates(DataChunk &keys, Vector &hashes_v,
-                                           PartitionedTupleDataAppendState &append_state, idx_t count) {
+                                           PartitionedTupleDataAppendState &append_state, const idx_t count) {
 	using GETTER = TemplatedMapGetter<list_entry_t, FIXED>;
 	auto &partition_entries = append_state.GetMap<FIXED>();
 	UnifiedVectorFormat hash_data;
@@ -141,19 +141,19 @@ idx_t PartitionKeyTracker::BuildCandidates(DataChunk &keys, Vector &hashes_v,
 		}
 
 		const auto candidate_start = candidate_count;
+		bool hash_mismatch = false;
 		for (; entry_idx < entry.length; entry_idx++) {
 			const auto row_idx = GetPartitionRowIndex<USE_PARTITION_SEL>(append_state, entry.offset + entry_idx);
 			D_ASSERT(row_idx < count);
 			const auto hash_idx = hash_data.sel->get_index(row_idx);
-			if (this->hashes[bin_idx] != hash_values[hash_idx]) {
-				MarkMixed(bin_idx);
-				candidate_count = candidate_start;
-				break;
-			}
+			const auto hash_match = this->hashes[bin_idx] == hash_values[hash_idx];
+			hash_mismatch |= !hash_match;
 			candidate_input_sel.set_index(candidate_count, row_idx);
 			candidate_rep_sel.set_index(candidate_count, bin_idx);
-			candidate_count++;
+			candidate_count += hash_match;
 		}
+		states[bin_idx] = hash_mismatch ? State::MULTIPLE_KEYS : states[bin_idx];
+		candidate_count = hash_mismatch ? candidate_start : candidate_count;
 	}
 	return candidate_count;
 }
