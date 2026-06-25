@@ -30,6 +30,11 @@ ExpressionColumnReader::ExpressionColumnReader(ClientContext &context, vector<un
 	if (child_readers.empty()) {
 		throw InternalException("Can't instantiate an ExpressionColumnReader with 0 children");
 	}
+	for (auto &child : child_readers) {
+		if (child) {
+			child->SetParent(*this);
+		}
+	}
 	InitializeChunk();
 }
 
@@ -40,6 +45,11 @@ ExpressionColumnReader::ExpressionColumnReader(ClientContext &context, vector<un
       expr(std::move(expr_p)), executor(context, expr.get()), owned_schema(std::move(owned_schema_p)) {
 	if (child_readers.empty()) {
 		throw InternalException("Can't instantiate an ExpressionColumnReader with 0 children");
+	}
+	for (auto &child : child_readers) {
+		if (child) {
+			child->SetParent(*this);
+		}
 	}
 	InitializeChunk();
 }
