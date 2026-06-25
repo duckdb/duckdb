@@ -762,7 +762,7 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 }
 
 int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
-	if (context.GetClientContext() != nullptr) {
+	if (track_io && context.GetClientContext() != nullptr) {
 		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(nr_bytes);
 	}
 
@@ -778,7 +778,7 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 }
 
 int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
-	if (context.GetClientContext() != nullptr) {
+	if (track_io && context.GetClientContext() != nullptr) {
 		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(nr_bytes);
 	}
 
@@ -790,7 +790,7 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 }
 
 void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
-	if (context.GetClientContext() != nullptr) {
+	if (track_io && context.GetClientContext() != nullptr) {
 		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(nr_bytes);
 	}
 
@@ -798,7 +798,7 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 }
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
-	if (context.GetClientContext() != nullptr) {
+	if (track_io && context.GetClientContext() != nullptr) {
 		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(nr_bytes);
 	}
 

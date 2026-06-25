@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/query_context.hpp"
 
 namespace duckdb {
 class CompressedFile;
@@ -68,6 +69,8 @@ public:
 	//! Whether the file is opened for reading or for writing
 	bool write = false;
 	StreamData stream_data;
+	//! The query context, used to attribute the (compressed) on-disk I/O of the child handle to the query
+	QueryContext context;
 
 public:
 	DUCKDB_API void Initialize(QueryContext context, bool write);

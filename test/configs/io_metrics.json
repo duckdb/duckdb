@@ -75,8 +75,7 @@
 			"name": "csv_write_gzip",
 			"include": ["{dir}/out.csv.gz"],
 			"measure": ["COPY (SELECT range i FROM range(500000)) TO '{dir}/out.csv.gz' (FORMAT csv, COMPRESSION gzip)"],
-			"check": ["read", "write"],
-			"skip": "FIXME: the gzip CSV writer now tracks the UNCOMPRESSED bytes handed to the gzip stream (~3.4 MB) instead of the ~1 MB of compressed bytes actually written to disk, because the QueryContext is applied at the BufferedFileWriter rather than at the inner compressed write in GZipFileSystem. Remove once compressed writes are attributed at the inner (on-disk) write."
+			"check": ["read", "write"]
 		},
 		{
 			"name": "json_write",
@@ -90,7 +89,7 @@
 			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.csv.gz' (FORMAT csv, COMPRESSION gzip)"],
 			"measure": ["SELECT count(*), sum(i) FROM read_csv('{dir}/in.csv.gz')"],
 			"check": ["read", "write"],
-			"skip": "FIXME: reading a gzipped CSV reports a wildly inflated io.total_bytes_read (~100 MB for a 7 MB file). The decompression path appears to count decompressed/buffered bytes through a QueryContext rather than the real compressed file reads. Remove once the gzip reader attributes the real on-disk bytes."
+			"skip": "FIXME: the gzip file is read twice at the OS level (the CSV sniffer/schema-detection pass plus the actual scan) but only one pass is attributed, so io.total_bytes_read is reported as ~half the real compressed bytes. Same root cause as json_read. Remove once the sniffer read pass also threads a QueryContext."
 		},
 		{
 			"name": "json_read",
