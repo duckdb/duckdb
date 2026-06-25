@@ -172,13 +172,32 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		// this means we kept the struct intact for ordered comparison (e.g., (a,b) < ANY(...))
 		if (child_expressions.size() == 1 && bound_node.types.size() > 1 &&
 		    TypeIsUnnamedStruct(child_expressions[0]->GetReturnType())) {
-			// Keep the struct as-is for proper lexicographic row comparison
-			result->GetChildrenMutable().push_back(std::move(child_expressions[0]));
-			// Store all the subquery types - they will be used to construct the RHS struct during planning
-			for (auto &subquery_type : bound_node.types) {
-				result->ChildTypesMutable().push_back(subquery_type);
-				result->ChildTargetsMutable().push_back(subquery_type);
+			// the LHS struct is compared element-wise against the subquery columns
+			// reconcile each struct element with the matching subquery column so both sides share a type
+			auto &lhs_children = StructType::GetChildTypes(child_expressions[0]->GetReturnType());
+			if (lhs_children.size() != bound_node.types.size()) {
+				throw BinderException(expr, "Subquery returns %zu columns - expected %zu", bound_node.types.size(),
+				                      lhs_children.size());
 			}
+			child_list_t<LogicalType> compare_children;
+			for (idx_t child_idx = 0; child_idx < bound_node.types.size(); child_idx++) {
+				auto &lhs_type = lhs_children[child_idx].second;
+				auto &subquery_type = bound_node.types[child_idx];
+				LogicalType compare_type;
+				if (!LogicalType::TryGetMaxLogicalType(context, lhs_type, subquery_type, compare_type)) {
+					throw BinderException(
+					    expr,
+					    "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required",
+					    lhs_type.ToString(), subquery_type);
+				}
+				compare_children.emplace_back(lhs_children[child_idx].first, compare_type);
+				result->ChildTypesMutable().push_back(subquery_type);
+				result->ChildTargetsMutable().push_back(compare_type);
+			}
+			// cast the LHS struct to the reconciled element types
+			auto compare_struct = LogicalType::STRUCT(std::move(compare_children));
+			result->GetChildrenMutable().push_back(
+			    BoundCastExpression::AddCastToType(context, std::move(child_expressions[0]), compare_struct));
 		} else {
 			// Standard case: either no struct or struct was extracted into separate expressions
 			for (idx_t child_idx = 0; child_idx < child_expressions.size(); child_idx++) {
