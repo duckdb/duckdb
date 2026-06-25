@@ -30,7 +30,8 @@ private:
 	void MarkMixed(idx_t bin_idx);
 
 	template <bool FIXED, bool USE_PARTITION_SEL>
-	idx_t BuildCandidates(DataChunk &keys, Vector &hashes, PartitionedTupleDataAppendState &append_state, idx_t count);
+	idx_t BuildCandidates(DataChunk &keys, Vector &input_hashes, PartitionedTupleDataAppendState &append_state,
+	                      idx_t count);
 	idx_t CompactCandidates(idx_t candidate_count);
 	void CompareCandidates(DataChunk &keys, idx_t candidate_count);
 	void CombineBin(const PartitionKeyTracker &source, idx_t bin_idx, idx_t &candidate_count);

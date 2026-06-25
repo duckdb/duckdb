@@ -483,6 +483,35 @@ SinkCombineResultType HashedSort::Combine(ExecutionContext &context, OperatorSin
 	return SinkCombineResultType::FINISHED;
 }
 
+static void BuildDirectColumnData(ClientContext &client, const vector<LogicalType> &payload_types,
+                                  TupleDataCollection &partition, HashedSortGroup &hash_group) {
+	DataChunk chunk;
+	partition.InitializeScanChunk(hash_group.parallel_scan.scan_state, chunk);
+	TupleDataLocalScanState local_scan;
+	partition.InitializeScan(local_scan);
+
+	auto local_column_data =
+	    make_uniq<ColumnDataCollection>(client, payload_types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	ColumnDataAppendState append_state;
+	local_column_data->InitializeAppend(append_state);
+
+	idx_t combined = 0;
+	while (partition.Scan(hash_group.parallel_scan, local_scan, chunk)) {
+		local_column_data->Append(append_state, chunk);
+		combined += chunk.size();
+	}
+
+	lock_guard<mutex> direct_guard(hash_group.scan_lock);
+	if (combined) {
+		if (!hash_group.direct_column_data) {
+			hash_group.direct_column_data = std::move(local_column_data);
+		} else {
+			hash_group.direct_column_data->Combine(*local_column_data);
+		}
+		hash_group.count += combined;
+	}
+}
+
 void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize) const {
 	auto &gstate = finalize.global_state.Cast<HashedSortGlobalSinkState>();
 
@@ -498,36 +527,17 @@ void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, Oper
 	}
 
 	auto &hash_group = *gstate.hash_groups[hash_bin];
-	auto &parallel_scan = hash_group.parallel_scan;
 
+	if (gstate.CanBypassSort(hash_bin)) {
+		BuildDirectColumnData(context.client, payload_types, partition, hash_group);
+		return;
+	}
+
+	auto &parallel_scan = hash_group.parallel_scan;
 	DataChunk chunk;
 	partition.InitializeScanChunk(parallel_scan.scan_state, chunk);
 	TupleDataLocalScanState local_scan;
 	partition.InitializeScan(local_scan);
-
-	if (gstate.CanBypassSort(hash_bin)) {
-		auto local_column_data = make_uniq<ColumnDataCollection>(context.client, payload_types,
-		                                                         ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
-		ColumnDataAppendState append_state;
-		local_column_data->InitializeAppend(append_state);
-
-		idx_t combined = 0;
-		while (partition.Scan(hash_group.parallel_scan, local_scan, chunk)) {
-			local_column_data->Append(append_state, chunk);
-			combined += chunk.size();
-		}
-
-		lock_guard<mutex> direct_guard(hash_group.scan_lock);
-		if (combined) {
-			if (!hash_group.direct_column_data) {
-				hash_group.direct_column_data = std::move(local_column_data);
-			} else {
-				hash_group.direct_column_data->Combine(*local_column_data);
-			}
-			hash_group.count += combined;
-		}
-		return;
-	}
 
 	auto sort_local = sort->GetLocalSinkState(context);
 	OperatorSinkInput sink {*hash_group.sort_global, *sort_local, finalize.interrupt_state};
@@ -694,6 +704,8 @@ static SourceResultType MaterializeHashGroupData(ExecutionContext &context, idx_
 	auto &gsink = gsource.gsink;
 	auto &hash_group = *gsink.hash_groups[hash_bin];
 
+	D_ASSERT(!build_runs || !gsink.CanBypassSort(hash_bin));
+
 	//	OVER(PARTITION BY...)
 	if (gsink.grouping_data) {
 		lock_guard<mutex> reset_guard(hash_group.scan_lock);
@@ -764,6 +776,8 @@ HashedSort::SortedRunPtr HashedSort::GetSortedRun(ClientContext &client, idx_t h
 	auto &gsource = source.global_state.Cast<HashedSortGlobalSourceState>();
 	auto &gsink = gsource.gsink;
 	auto &hash_group = *gsink.hash_groups[hash_bin];
+
+	D_ASSERT(!gsink.CanBypassSort(hash_bin));
 
 	auto &sort = hash_group.sort;
 	auto &sort_global = *hash_group.sort_source;

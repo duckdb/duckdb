@@ -110,12 +110,12 @@ void PartitionKeyTracker::MarkMixed(idx_t bin_idx) {
 }
 
 template <bool FIXED, bool USE_PARTITION_SEL>
-idx_t PartitionKeyTracker::BuildCandidates(DataChunk &keys, Vector &hashes_v,
+idx_t PartitionKeyTracker::BuildCandidates(DataChunk &keys, Vector &input_hashes,
                                            PartitionedTupleDataAppendState &append_state, const idx_t count) {
 	using GETTER = TemplatedMapGetter<list_entry_t, FIXED>;
 	auto &partition_entries = append_state.GetMap<FIXED>();
 	UnifiedVectorFormat hash_data;
-	hashes_v.ToUnifiedFormat(hash_data);
+	input_hashes.ToUnifiedFormat(hash_data);
 	const auto hash_values = UnifiedVectorFormat::GetData<hash_t>(hash_data);
 	idx_t candidate_count = 0;
 	for (auto it = partition_entries.begin(); it != partition_entries.end(); ++it) {
