@@ -241,7 +241,7 @@ bool FeatureRefreshScheduler::ValidateScheduledFeature(ScheduledFeature &feature
 	con.BeginTransaction();
 	EntryLookupInfo lookup_info(CatalogType::FEATURE_ENTRY, feature.feature_name);
 	auto entry = Catalog::GetEntry(*con.context, feature.catalog_name, feature.schema_name, lookup_info,
-	                              OnEntryNotFound::RETURN_NULL);
+	                               OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		con.Commit();
 		return false;
