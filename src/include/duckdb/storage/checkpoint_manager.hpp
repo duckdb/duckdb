@@ -148,6 +148,9 @@ public:
 	unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) override;
 
 	BlockManager &GetBlockManager();
+	PartialBlockManager &GetIndexPartialBlockManager() {
+		return index_partial_block_manager;
+	}
 	CheckpointOptions GetCheckpointOptions() const {
 		return options;
 	}
@@ -167,6 +170,8 @@ private:
 	//! Because this is single-file storage, we can share partial blocks across
 	//! an entire checkpoint.
 	PartialBlockManager partial_block_manager;
+	//! Share partial blocks between indexes across the entire checkpoint.
+	PartialBlockManager index_partial_block_manager;
 	//! Checkpoint type
 	CheckpointOptions options;
 	//! Block usage count for verification purposes
