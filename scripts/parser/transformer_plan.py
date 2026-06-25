@@ -410,7 +410,12 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
                 )
                 direct_args.append(arg)
             else:
-                if list_child is not None or repeat_child is not None or optional_list_child is not None or required_repeat_child is not None:
+                if (
+                    list_child is not None
+                    or repeat_child is not None
+                    or optional_list_child is not None
+                    or required_repeat_child is not None
+                ):
                     raise NotImplementedError("stack child after dynamic stack child is currently unsupported")
                 arg = StackChild(parse_expr, child.name, next_slot)
                 stack_children.append(arg)
@@ -422,7 +427,12 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
                 arg = DirectOptionalArg(parse_expr, child.child.name, to_snake_case(child.child.name))
                 direct_optional_args.append(arg)
             else:
-                if list_child is not None or repeat_child is not None or optional_list_child is not None or required_repeat_child is not None:
+                if (
+                    list_child is not None
+                    or repeat_child is not None
+                    or optional_list_child is not None
+                    or required_repeat_child is not None
+                ):
                     if trailing_optional_stack_child is not None:
                         raise NotImplementedError("only one trailing optional stack child is currently supported")
                     arg = TrailingOptionalStackChild(parse_expr, child.child.name, to_snake_case(child.child.name))
@@ -440,12 +450,19 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
             rule_name, result_expr_template = optional_stack_plan
             if rule_name in identifier_rules:
                 raise NotImplementedError("wrapped optional identifier child is currently unsupported")
-            if list_child is not None or repeat_child is not None or optional_list_child is not None or required_repeat_child is not None:
+            if (
+                list_child is not None
+                or repeat_child is not None
+                or optional_list_child is not None
+                or required_repeat_child is not None
+            ):
                 if trailing_optional_stack_child is not None:
                     raise NotImplementedError("only one trailing optional stack child is currently supported")
                 arg = TrailingOptionalStackChild(parse_expr, rule_name, to_snake_case(rule_name), result_expr_template)
             else:
-                arg = OptionalStackChild(parse_expr, rule_name, next_slot, to_snake_case(rule_name), result_expr_template)
+                arg = OptionalStackChild(
+                    parse_expr, rule_name, next_slot, to_snake_case(rule_name), result_expr_template
+                )
                 optional_stack_children.append(arg)
                 next_slot += 1
             finalize_args.append(arg)
@@ -460,7 +477,12 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
                 )
                 direct_args.append(arg)
             else:
-                if list_child is not None or repeat_child is not None or optional_list_child is not None or required_repeat_child is not None:
+                if (
+                    list_child is not None
+                    or repeat_child is not None
+                    or optional_list_child is not None
+                    or required_repeat_child is not None
+                ):
                     raise NotImplementedError("stack child after dynamic stack child is currently unsupported")
                 arg = StackChild(child_parse_expr, rule_name, next_slot)
                 stack_children.append(arg)
@@ -485,15 +507,27 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
             if isinstance(list_node, ReferenceNode):
                 if list_node.name in identifier_rules:
                     raise NotImplementedError("optional identifier list is currently unsupported")
-                if list_child is not None or repeat_child is not None or optional_list_child is not None or required_repeat_child is not None:
+                if (
+                    list_child is not None
+                    or repeat_child is not None
+                    or optional_list_child is not None
+                    or required_repeat_child is not None
+                ):
                     raise NotImplementedError("only one dynamic stack child is currently supported")
-                optional_list_child = OptionalListStackChild(parse_expr, list_node.name, next_slot, to_snake_case(list_node.name))
+                optional_list_child = OptionalListStackChild(
+                    parse_expr, list_node.name, next_slot, to_snake_case(list_node.name)
+                )
                 finalize_args.append(optional_list_child)
                 continue
         if isinstance(child, RepeatNode) and isinstance(child.child, ReferenceNode):
             if child.child.name in identifier_rules:
                 raise NotImplementedError("required identifier repeat is currently unsupported")
-            if list_child is not None or repeat_child is not None or optional_list_child is not None or required_repeat_child is not None:
+            if (
+                list_child is not None
+                or repeat_child is not None
+                or optional_list_child is not None
+                or required_repeat_child is not None
+            ):
                 raise NotImplementedError("only one dynamic stack child is currently supported")
             required_repeat_child = RequiredRepeatStackChild(parse_expr, child.child.name, next_slot)
             finalize_args.append(required_repeat_child)
@@ -504,7 +538,12 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
                 direct_list_args.append(arg)
                 finalize_args.append(arg)
                 continue
-            if list_child is not None or repeat_child is not None or optional_list_child is not None or required_repeat_child is not None:
+            if (
+                list_child is not None
+                or repeat_child is not None
+                or optional_list_child is not None
+                or required_repeat_child is not None
+            ):
                 raise NotImplementedError("only one dynamic stack child is currently supported")
             list_child = ListStackChild(parse_expr, child.inner.name, next_slot)
             finalize_args.append(list_child)

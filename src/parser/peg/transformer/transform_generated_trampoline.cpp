@@ -4,6 +4,34 @@
 
 namespace duckdb {
 
+static const TransformFrameOps CHECKPOINT_STATEMENT_OPS = {
+    "CheckpointStatement", &PEGTransformerFactory::InitializeCheckpointStatementTrampoline,
+    &PEGTransformerFactory::FinalizeCheckpointStatementTrampoline};
+static const TransformFrameOps CHECKPOINT_FORCE_OPS = {"CheckpointForce",
+                                                       &PEGTransformerFactory::InitializeCheckpointForceTrampoline,
+                                                       &PEGTransformerFactory::FinalizeCheckpointForceTrampoline};
+static const TransformFrameOps TRANSACTION_STATEMENT_OPS = {
+    "TransactionStatement", &PEGTransformerFactory::InitializeTransactionStatementTrampoline,
+    &PEGTransformerFactory::FinalizeTransactionStatementTrampoline};
+static const TransformFrameOps BEGIN_TRANSACTION_OPS = {"BeginTransaction",
+                                                        &PEGTransformerFactory::InitializeBeginTransactionTrampoline,
+                                                        &PEGTransformerFactory::FinalizeBeginTransactionTrampoline};
+static const TransformFrameOps ROLLBACK_TRANSACTION_OPS = {
+    "RollbackTransaction", &PEGTransformerFactory::InitializeRollbackTransactionTrampoline,
+    &PEGTransformerFactory::FinalizeRollbackTransactionTrampoline};
+static const TransformFrameOps COMMIT_TRANSACTION_OPS = {"CommitTransaction",
+                                                         &PEGTransformerFactory::InitializeCommitTransactionTrampoline,
+                                                         &PEGTransformerFactory::FinalizeCommitTransactionTrampoline};
+static const TransformFrameOps READ_OR_WRITE_OPS = {"ReadOrWrite",
+                                                    &PEGTransformerFactory::InitializeReadOrWriteTrampoline,
+                                                    &PEGTransformerFactory::FinalizeReadOrWriteTrampoline};
+static const TransformFrameOps READ_ONLY_OR_READ_WRITE_OPS = {
+    "ReadOnlyOrReadWrite", &PEGTransformerFactory::InitializeReadOnlyOrReadWriteTrampoline,
+    &PEGTransformerFactory::FinalizeReadOnlyOrReadWriteTrampoline};
+static const TransformFrameOps READ_ONLY_OPS = {"ReadOnly", &PEGTransformerFactory::InitializeReadOnlyTrampoline,
+                                                &PEGTransformerFactory::FinalizeReadOnlyTrampoline};
+static const TransformFrameOps READ_WRITE_OPS = {"ReadWrite", &PEGTransformerFactory::InitializeReadWriteTrampoline,
+                                                 &PEGTransformerFactory::FinalizeReadWriteTrampoline};
 static const TransformFrameOps USE_STATEMENT_OPS = {"UseStatement",
                                                     &PEGTransformerFactory::InitializeUseStatementTrampoline,
                                                     &PEGTransformerFactory::FinalizeUseStatementTrampoline};
@@ -24,6 +52,16 @@ static const TransformFrameOps DOT_IDENTIFIER_OPS = {"DotIdentifier",
 
 const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::GeneratedTrampolineOps() {
 	static const case_insensitive_map_t<const TransformFrameOps *> result = {
+	    {"CheckpointStatement", &CHECKPOINT_STATEMENT_OPS},
+	    {"CheckpointForce", &CHECKPOINT_FORCE_OPS},
+	    {"TransactionStatement", &TRANSACTION_STATEMENT_OPS},
+	    {"BeginTransaction", &BEGIN_TRANSACTION_OPS},
+	    {"RollbackTransaction", &ROLLBACK_TRANSACTION_OPS},
+	    {"CommitTransaction", &COMMIT_TRANSACTION_OPS},
+	    {"ReadOrWrite", &READ_OR_WRITE_OPS},
+	    {"ReadOnlyOrReadWrite", &READ_ONLY_OR_READ_WRITE_OPS},
+	    {"ReadOnly", &READ_ONLY_OPS},
+	    {"ReadWrite", &READ_WRITE_OPS},
 	    {"UseStatement", &USE_STATEMENT_OPS},
 	    {"UseTarget", &USE_TARGET_OPS},
 	    {"SchemaNameAsUseTarget", &SCHEMA_NAME_AS_USE_TARGET_OPS},
@@ -32,6 +70,185 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"DotIdentifier", &DOT_IDENTIFIER_OPS},
 	};
 	return result;
+}
+
+void PEGTransformerFactory::InitializeCheckpointStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	auto &checkpoint_force_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (checkpoint_force_opt.HasResult()) {
+		stack.PushFrame(checkpoint_force_opt.GetResult(), CHECKPOINT_FORCE_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCheckpointStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	optional<bool> checkpoint_force {};
+	if (frame.child_results[0]) {
+		checkpoint_force = frame.TakeResult<bool>(0);
+	}
+	optional<Identifier> catalog_name {};
+	auto &catalog_name_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (catalog_name_opt.HasResult()) {
+		catalog_name = catalog_name_opt.GetResult().Cast<IdentifierParseResult>().identifier;
+	}
+	auto result = PEGTransformerFactory::TransformCheckpointStatement(transformer, checkpoint_force, catalog_name);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeCheckpointForceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCheckpointForceTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformCheckpointForce(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeTransactionStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                     TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTransactionStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	auto result = frame.TakeResult<unique_ptr<SQLStatement>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeBeginTransactionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	auto &read_or_write_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (read_or_write_opt.HasResult()) {
+		stack.PushFrame(read_or_write_opt.GetResult(), READ_OR_WRITE_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeBeginTransactionTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	optional<TransactionModifierType> read_or_write {};
+	if (frame.child_results[0]) {
+		read_or_write = frame.TakeResult<TransactionModifierType>(0);
+	}
+	auto result = PEGTransformerFactory::TransformBeginTransaction(transformer, has_result, read_or_write);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeRollbackTransactionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeRollbackTransactionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto result = PEGTransformerFactory::TransformRollbackTransaction(transformer, has_result);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeCommitTransactionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCommitTransactionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto result = PEGTransformerFactory::TransformCommitTransaction(transformer, has_result);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeReadOrWriteTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(1), READ_ONLY_OR_READ_WRITE_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeReadOrWriteTrampoline(PEGTransformer &transformer,
+                                                                                      TransformStack &stack,
+                                                                                      TransformStackFrame &frame) {
+	auto read_only_or_read_write = frame.TakeResult<TransactionModifierType>(0);
+	auto result = PEGTransformerFactory::TransformReadOrWrite(transformer, read_only_or_read_write);
+	return make_uniq<TypedTransformResult<TransactionModifierType>>(result);
+}
+
+void PEGTransformerFactory::InitializeReadOnlyOrReadWriteTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeReadOnlyOrReadWriteTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto result = frame.TakeResult<TransactionModifierType>(0);
+	return make_uniq<TypedTransformResult<TransactionModifierType>>(result);
+}
+
+void PEGTransformerFactory::InitializeReadOnlyTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                         TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeReadOnlyTrampoline(PEGTransformer &transformer,
+                                                                                   TransformStack &stack,
+                                                                                   TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformReadOnly(transformer);
+	return make_uniq<TypedTransformResult<TransactionModifierType>>(result);
+}
+
+void PEGTransformerFactory::InitializeReadWriteTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                          TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeReadWriteTrampoline(PEGTransformer &transformer,
+                                                                                    TransformStack &stack,
+                                                                                    TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformReadWrite(transformer);
+	return make_uniq<TypedTransformResult<TransactionModifierType>>(result);
 }
 
 void PEGTransformerFactory::InitializeUseStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
