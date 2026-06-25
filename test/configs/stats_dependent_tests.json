@@ -34,7 +34,18 @@
         "test/sql/storage/min_string_length_too_large.test_slow",
         "test/sql/storage/total_string_length_repeated_insert.test",
         "test/sql/types/geo/geometry_from_wkb_stats.test",
-        "test/parquet/variant/variant_stats_propagation.test"
+        "test/parquet/variant/variant_stats_propagation.test",
+        "test/sql/types/geo/geometry_stats.test",
+        "test/sql/types/geo/geometry_compatability.test",
+        "test/sql/function/numeric/test_random.test",
+        "test/sql/copy/parquet/bloom_filters.test",
+        "test/sql/copy/parquet/parquet_filename_filter.test",
+        "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
+        "test/sql/copy/parquet/parquet_hive.test",
+        "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
+        "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test",
+        "test/sql/copy/parquet/parquet_prefetch_strategy_option.test",
+        "test/sql/types/geo/geometry_vertex_extract.test"
       ]
     }
     ]
