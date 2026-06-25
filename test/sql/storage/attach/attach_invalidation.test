@@ -2,8 +2,6 @@
 # description: A checkpoint failure on an attached database is scoped to that database
 # group: [attach]
 
-require noforcestorage
-
 require no_alternative_verify
 
 foreach abort_mode before_header before_header_non_fatal
