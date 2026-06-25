@@ -60,6 +60,7 @@ add_library_unity(
   gzip_file_system.cpp
   identifier.cpp
   hive_partitioning.cpp
+  json_document.cpp
   pipe_file_system.cpp
   local_file_system.cpp
   memory_mapped_file.cpp
