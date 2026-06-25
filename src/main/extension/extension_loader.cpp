@@ -135,7 +135,7 @@ void ExtensionLoader::RegisterFunction(ScalarFunctionSet function) {
 void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
 	function.extension_name = GetRegisteredExtensionName();
-	if (function.Schema() == DEFAULT_SCHEMA) {
+	if (function.GetQualifiedName().Schema() == DEFAULT_SCHEMA) {
 		function.SchemaMutable() = loader_info.extension_schema;
 	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
@@ -158,7 +158,7 @@ void ExtensionLoader::RegisterFunction(AggregateFunctionSet function) {
 
 void ExtensionLoader::RegisterFunction(CreateAggregateFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
-	if (function.Schema() == DEFAULT_SCHEMA) {
+	if (function.GetQualifiedName().Schema() == DEFAULT_SCHEMA) {
 		function.SchemaMutable() = loader_info.extension_schema;
 	}
 	function.extension_name = GetRegisteredExtensionName();
@@ -182,7 +182,7 @@ void ExtensionLoader::RegisterFunction(WindowFunctionSet function) {
 
 void ExtensionLoader::RegisterFunction(CreateWindowFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
-	if (function.Schema() == DEFAULT_SCHEMA) {
+	if (function.GetQualifiedName().Schema() == DEFAULT_SCHEMA) {
 		function.SchemaMutable() = loader_info.extension_schema;
 	}
 	function.extension_name = GetRegisteredExtensionName();
@@ -214,7 +214,7 @@ void ExtensionLoader::RegisterFunction(TableFunctionSet function) {
 void ExtensionLoader::RegisterFunction(CreateTableFunctionInfo info) {
 	D_ASSERT(!info.functions.name.empty());
 	info.extension_name = GetRegisteredExtensionName();
-	if (info.Schema() == DEFAULT_SCHEMA) {
+	if (info.GetQualifiedName().Schema() == DEFAULT_SCHEMA) {
 		info.SchemaMutable() = loader_info.extension_schema;
 	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
@@ -250,7 +250,7 @@ void ExtensionLoader::RegisterFunction(CopyFunction function) {
 
 void ExtensionLoader::RegisterFunction(CreateMacroInfo &info) {
 	info.extension_name = GetRegisteredExtensionName();
-	if (info.Schema() == DEFAULT_SCHEMA) {
+	if (info.GetQualifiedName().Schema() == DEFAULT_SCHEMA) {
 		info.SchemaMutable() = loader_info.extension_schema;
 	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
@@ -262,7 +262,7 @@ void ExtensionLoader::RegisterCollation(CreateCollationInfo &info) {
 	info.extension_name = GetRegisteredExtensionName();
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
-	if (info.Schema() == DEFAULT_SCHEMA) {
+	if (info.GetQualifiedName().Schema() == DEFAULT_SCHEMA) {
 		info.SchemaMutable() = loader_info.extension_schema;
 	}
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;

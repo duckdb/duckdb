@@ -105,7 +105,7 @@ void ExpressionBinder::FindAggregateExprs(unique_ptr<ParsedExpression> &expr,
 
 		// Look up the function in the catalog, check to see if it is actually an aggregate function
 		EntryLookupInfo fn_entry(CatalogType::AGGREGATE_FUNCTION_ENTRY, QualifiedName(fn_expr.FunctionName()));
-		auto entry = GetCatalogEntry(fn_expr.Catalog(), fn_expr.Schema(), fn_entry, OnEntryNotFound::RETURN_NULL);
+		auto entry = GetCatalogEntry(fn_expr.GetQualifiedName().Catalog(), fn_expr.GetQualifiedName().Schema(), fn_entry, OnEntryNotFound::RETURN_NULL);
 
 		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			exprs.push_back(expr);
@@ -133,8 +133,8 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 
 	// Transfer the macro function attributes
 	auto &window_expr = expr->Cast<WindowExpression>();
-	window_expr.CatalogMutable() = agg_fn_expr.Catalog();
-	window_expr.SchemaMutable() = agg_fn_expr.Schema();
+	window_expr.CatalogMutable() = agg_fn_expr.GetQualifiedName().Catalog();
+	window_expr.SchemaMutable() = agg_fn_expr.GetQualifiedName().Schema();
 	window_expr.FunctionNameMutable() = agg_fn_expr.FunctionName();
 	window_expr.GetArgumentsMutable().clear();
 	for (auto &arg : agg_fn_expr.GetArgumentsMutable()) {

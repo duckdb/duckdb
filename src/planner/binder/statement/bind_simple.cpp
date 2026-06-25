@@ -39,29 +39,29 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	auto &table = entry.Cast<TableCatalogEntry>();
 	auto &column_list = table.GetColumns();
 
-	auto bound_constraint = BindUniqueConstraint(*constraint_info.constraint, table_info.Name(), column_list);
+	auto bound_constraint = BindUniqueConstraint(*constraint_info.constraint, table_info.GetQualifiedName().Name(), column_list);
 	auto &bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
 
 	// Create the CreateIndexInfo.
 	auto create_index_info = make_uniq<CreateIndexInfo>();
-	create_index_info->table = table_info.Name();
+	create_index_info->table = table_info.GetQualifiedName().Name();
 	create_index_info->index_type = ART::TYPE_NAME;
 	create_index_info->constraint_type = IndexConstraintType::PRIMARY;
 
 	for (const auto &physical_index : bound_unique.keys) {
 		auto &col = column_list.GetColumn(physical_index);
-		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.Name());
+		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.GetQualifiedName().Name());
 		create_index_info->expressions.push_back(parsed->Copy());
 		create_index_info->parsed_expressions.push_back(parsed->Copy());
 	}
 
 	auto unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
-	auto index_name = unique_constraint.GetName(table_info.Name());
+	auto index_name = unique_constraint.GetName(table_info.GetQualifiedName().Name());
 	create_index_info->SetIndexName(index_name);
 	D_ASSERT(!create_index_info->GetIndexName().empty());
 
 	// Plan the table scan.
-	TableDescription table_description(table_info.Catalog(), table_info.Schema(), table_info.Name());
+	TableDescription table_description(table_info.GetQualifiedName().Catalog(), table_info.GetQualifiedName().Schema(), table_info.GetQualifiedName().Name());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
@@ -126,9 +126,9 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		}
 	} else {
 		// For any other ALTER, we retrieve the catalog entry directly.
-		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), QualifiedName(stmt.info->Name()));
+		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), QualifiedName(stmt.info->GetQualifiedName().Name()));
 		entry = entry_retriever.GetEntry(
-		    EntryLookupInfo(lookup_info, QualifiedName(stmt.info->Catalog(), stmt.info->Schema(),
+		    EntryLookupInfo(lookup_info, QualifiedName(stmt.info->GetQualifiedName().Catalog(), stmt.info->GetQualifiedName().Schema(),
 		                                               lookup_info.GetEntryIdentifier())),
 		    stmt.info->if_not_found);
 	}
@@ -148,7 +148,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 
 	// Bind types in the same catalog as the entry
 	auto type_binder = Binder::CreateBinder(context, *this);
-	type_binder->SetSearchPath(catalog, stmt.info->Schema());
+	type_binder->SetSearchPath(catalog, stmt.info->GetQualifiedName().Schema());
 
 	BindAlterTypes(*type_binder, stmt);
 

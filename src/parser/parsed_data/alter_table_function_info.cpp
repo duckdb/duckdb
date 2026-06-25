@@ -6,7 +6,7 @@ namespace duckdb {
 // AlterTableFunctionInfo
 //===--------------------------------------------------------------------===//
 AlterTableFunctionInfo::AlterTableFunctionInfo(AlterTableFunctionType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_TABLE_FUNCTION, data.Catalog(), data.Schema(), data.Name(),
+    : AlterInfo(AlterType::ALTER_TABLE_FUNCTION, data.GetQualifiedName().Catalog(), data.GetQualifiedName().Schema(), data.GetQualifiedName().Name(),
                 data.if_not_found),
       alter_table_function_type(type) {
 }

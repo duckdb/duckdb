@@ -50,7 +50,7 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 		return BoundStatement();
 	}
 	for (auto &scan : config.replacement_scans) {
-		ReplacementScanInput input(ref.Catalog().GetIdentifierName(), ref.Schema().GetIdentifierName(),
+		ReplacementScanInput input(ref.GetQualifiedName().Catalog().GetIdentifierName(), ref.GetQualifiedName().Schema().GetIdentifierName(),
 		                           ref.Table().GetIdentifierName());
 		auto replacement_function = scan.function(context, input, scan.data.get());
 		if (!replacement_function) {
@@ -128,7 +128,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 	// CTE name should never be qualified (i.e. schema_name should be empty)
 	// unless we want to refer to the recurring table of "using key".
-	BindingAlias binding_alias(ref.Schema(), ref.Table());
+	BindingAlias binding_alias(ref.GetQualifiedName().Schema(), ref.Table());
 	auto ctebinding = GetCTEBinding(binding_alias);
 	if (ctebinding && ctebinding->CanBeReferenced()) {
 		ctebinding->Reference();
@@ -143,7 +143,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 		bind_context.AddGenericBinding(index, alias, names, ctebinding->GetColumnTypes());
 
-		bool is_recurring = ref.Schema() == "recurring";
+		bool is_recurring = ref.GetQualifiedName().Schema() == "recurring";
 
 		BoundStatement result;
 		result.types = ctebinding->GetColumnTypes();
@@ -159,7 +159,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(ref.Table()), entry_at_clause, error_context);
 	BindSchemaOrCatalog(entry_retriever, ref.GetQualifiedNameMutable());
 	auto table_or_view =
-	    entry_retriever.GetEntry(EntryLookupInfo(table_lookup, QualifiedName(ref.Catalog(), ref.Schema(),
+	    entry_retriever.GetEntry(EntryLookupInfo(table_lookup, QualifiedName(ref.GetQualifiedName().Catalog(), ref.GetQualifiedName().Schema(),
 	                                                                         table_lookup.GetEntryIdentifier())),
 	                             OnEntryNotFound::RETURN_NULL);
 	// we still didn't find the table
@@ -196,7 +196,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 		// Try autoloading an extension, then retry the replacement scan bind
 		auto full_path = ReplacementScan::GetFullPath(
-		    ref.Catalog().GetIdentifierName(), ref.Schema().GetIdentifierName(), ref.Table().GetIdentifierName());
+		    ref.GetQualifiedName().Catalog().GetIdentifierName(), ref.GetQualifiedName().Schema().GetIdentifierName(), ref.Table().GetIdentifierName());
 		auto extension_loaded = TryLoadExtensionForReplacementScan(context, full_path);
 		if (extension_loaded) {
 			replacement_scan_bind_result = BindWithReplacementScan(context, ref);
@@ -228,7 +228,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed
 		// in catalogs that do not have transactional DDL
 		table_or_view = entry_retriever.GetEntry(
-		    EntryLookupInfo(table_lookup, QualifiedName(ref.Catalog(), ref.Schema(),
+		    EntryLookupInfo(table_lookup, QualifiedName(ref.GetQualifiedName().Catalog(), ref.GetQualifiedName().Schema(),
 		                                                table_lookup.GetEntryIdentifier())),
 		    OnEntryNotFound::THROW_EXCEPTION);
 	}

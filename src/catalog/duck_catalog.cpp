@@ -63,12 +63,12 @@ optional_ptr<DependencyManager> DuckCatalog::GetDependencyManager() {
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo &info) {
 	LogicalDependencyList dependencies;
 
-	if (!info.internal && DefaultSchemaGenerator::IsDefaultSchema(info.Schema())) {
+	if (!info.internal && DefaultSchemaGenerator::IsDefaultSchema(info.GetQualifiedName().Schema())) {
 		return nullptr;
 	}
 	auto entry = make_uniq<DuckSchemaEntry>(*this, info);
 	auto result = entry.get();
-	if (!schemas->CreateEntry(transaction, info.Schema(), std::move(entry), dependencies)) {
+	if (!schemas->CreateEntry(transaction, info.GetQualifiedName().Schema(), std::move(entry), dependencies)) {
 		return nullptr;
 	}
 	return result;
@@ -80,12 +80,12 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 	if (!result) {
 		switch (info.on_conflict) {
 		case OnCreateConflict::ERROR_ON_CONFLICT:
-			throw CatalogException::EntryAlreadyExists(CatalogType::SCHEMA_ENTRY, info.Schema());
+			throw CatalogException::EntryAlreadyExists(CatalogType::SCHEMA_ENTRY, info.GetQualifiedName().Schema());
 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
 			DropInfo drop_info;
 			drop_info.type = CatalogType::SCHEMA_ENTRY;
-			drop_info.CatalogMutable() = info.Catalog();
-			drop_info.NameMutable() = info.Schema();
+			drop_info.CatalogMutable() = info.GetQualifiedName().Catalog();
+			drop_info.NameMutable() = info.GetQualifiedName().Schema();
 			DropSchema(transaction, drop_info);
 			result = CreateSchemaInternal(transaction, info);
 			if (!result) {
@@ -105,9 +105,9 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 
 void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
 	D_ASSERT(!info.Name().empty());
-	if (!schemas->DropEntry(transaction, info.Name(), info.cascade)) {
+	if (!schemas->DropEntry(transaction, info.GetQualifiedName().Name(), info.cascade)) {
 		if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, info.Name(), string());
+			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, info.GetQualifiedName().Name(), string());
 		}
 	}
 }

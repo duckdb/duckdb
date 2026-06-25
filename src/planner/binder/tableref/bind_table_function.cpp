@@ -372,8 +372,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->GetExpressionType() == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
-	Identifier catalog = fexpr.Catalog();
-	Identifier schema = fexpr.Schema();
+	Identifier catalog = fexpr.GetQualifiedName().Catalog();
+	Identifier schema = fexpr.GetQualifiedName().Schema();
 	Binder::BindSchemaOrCatalog(context, catalog, schema);
 
 	// fetch the function from the catalog

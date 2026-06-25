@@ -723,7 +723,7 @@ void WriteAheadLogDeserializer::ReplayCreateTable() {
 	}
 	// bind the constraints to the table again
 	auto binder = Binder::CreateBinder(context);
-	auto &schema = catalog.GetSchema(context, info->Schema());
+	auto &schema = catalog.GetSchema(context, info->GetQualifiedName().Schema());
 	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
 
 	catalog.CreateTable(context, *bound_info);
@@ -742,8 +742,8 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 	// Remove any replay indexes of this table.
 	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
 	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
-		                                              return replay_info.table_schema == info.Schema() &&
-		                                                     replay_info.table_name == info.Name();
+		                                              return replay_info.table_schema == info.GetQualifiedName().Schema() &&
+		                                                     replay_info.table_name == info.GetQualifiedName().Name();
 	                                              }),
 	                               state.replay_index_infos.end());
 
@@ -806,7 +806,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
 
 	auto &table =
-	    catalog.GetEntry<TableCatalogEntry>(context, table_info.Schema(), table_info.Name()).Cast<DuckTableEntry>();
+	    catalog.GetEntry<TableCatalogEntry>(context, table_info.GetQualifiedName().Schema(), table_info.GetQualifiedName().Name()).Cast<DuckTableEntry>();
 	auto &column_list = table.GetColumns();
 
 	// Add the table to the bind context to bind the parsed expressions.
@@ -829,7 +829,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto logical_indexes = unique_info.GetLogicalIndexes(column_list);
 	for (const auto &logical_index : logical_indexes) {
 		auto &col = column_list.GetColumn(logical_index);
-		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.Name());
+		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.GetQualifiedName().Name());
 		unbound_expressions.push_back(idx_binder.Bind(parsed));
 	}
 
@@ -847,8 +847,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto index_instance = index_type->create_instance(input);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table_info.Schema(),
-	                                      table_info.Name());
+	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table_info.GetQualifiedName().Schema(),
+	                                      table_info.GetQualifiedName().Name());
 
 	catalog.Alter(context, alter_info);
 }
@@ -933,7 +933,7 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 	}
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(
-	    context, QualifiedName(trigger_info.Catalog(), trigger_info.Schema(), trigger_info.base_table->Table()));
+	    context, QualifiedName(trigger_info.GetQualifiedName().Catalog(), trigger_info.GetQualifiedName().Schema(), trigger_info.base_table->Table()));
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
 	duck_table.CreateTrigger(transaction, trigger_info);
@@ -950,13 +950,13 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 	}
 	if (table_name.empty()) {
 		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger \"%s\"",
-		                        info.Name());
+		                        info.GetQualifiedName().Name());
 	}
 	auto &table =
-	    Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(), info.Schema(), table_name));
+	    Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(), info.GetQualifiedName().Schema(), table_name));
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
-	duck_table.DropTrigger(transaction, info.Name(), info.cascade);
+	duck_table.DropTrigger(transaction, info.GetQualifiedName().Name(), info.cascade);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1064,7 +1064,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 		info.index_type = ART::TYPE_NAME;
 	}
 
-	const auto schema_name = create_info->Schema();
+	const auto schema_name = create_info->GetQualifiedName().Schema();
 	const auto table_name = info.table;
 
 	auto &entry = catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
@@ -1094,8 +1094,8 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 	// Remove the replay index, if any.
 	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
 	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
-		                                              return replay_info.table_schema == info.Schema() &&
-		                                                     replay_info.index->GetIndexName() == info.Name();
+		                                              return replay_info.table_schema == info.GetQualifiedName().Schema() &&
+		                                                     replay_info.index->GetIndexName() == info.GetQualifiedName().Name();
 	                                              }),
 	                               state.replay_index_infos.end());
 

@@ -22,8 +22,8 @@ void Binder::BindDropTrigger(DropStatement &stmt, StatementProperties &propertie
 		throw BinderException("DROP TRIGGER requires an ON clause specifying the table");
 	}
 	auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
-	Identifier catalog_name = base_table_ref.Catalog();
-	Identifier schema_name = base_table_ref.Schema();
+	Identifier catalog_name = base_table_ref.GetQualifiedName().Catalog();
+	Identifier schema_name = base_table_ref.GetQualifiedName().Schema();
 	BindSchemaOrCatalog(catalog_name, schema_name);
 	// IF EXISTS only guards the trigger, not the table (PostgreSQL-compatible behavior).
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
@@ -45,7 +45,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		break;
 	case CatalogType::SCHEMA_ENTRY: {
 		// dropping a schema is never read-only because there are no temporary schemas
-		auto &catalog = Catalog::GetCatalog(context, stmt.info->Catalog());
+		auto &catalog = Catalog::GetCatalog(context, stmt.info->GetQualifiedName().Catalog());
 		properties.RegisterDBModify(catalog, context, DatabaseModificationType::DROP_CATALOG_ENTRY);
 		break;
 	}
@@ -57,7 +57,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::TYPE_ENTRY: {
 		BindSchemaOrCatalog(stmt.info->GetQualifiedNameMutable());
-		auto catalog = Catalog::GetCatalogEntry(context, stmt.info->Catalog());
+		auto catalog = Catalog::GetCatalogEntry(context, stmt.info->GetQualifiedName().Catalog());
 		if (catalog) {
 			// mark catalog as accessed
 			properties.RegisterDBRead(*catalog, context);

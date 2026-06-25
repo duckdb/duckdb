@@ -126,7 +126,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY,
 			                                QualifiedName(func_expr.FunctionName()), error_context);
-			auto entry = GetCatalogEntry(func_expr.Catalog(), Identifier::DefaultSchema(), function_lookup,
+			auto entry = GetCatalogEntry(func_expr.GetQualifiedName().Catalog(), Identifier::DefaultSchema(), function_lookup,
 			                             OnEntryNotFound::RETURN_NULL);
 
 			if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {

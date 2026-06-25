@@ -21,7 +21,7 @@ CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name)
 
 string CreateViewInfo::ToString() const {
 	string result = GetCreatePrefix("VIEW");
-	result += QualifierToString(temporary ? Identifier() : Catalog(), Schema(), GetViewName());
+	result += QualifierToString(temporary ? Identifier() : GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetViewName());
 	if (!aliases.empty()) {
 		result += " (";
 		result +=
@@ -38,7 +38,7 @@ string CreateViewInfo::ToString() const {
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
-	auto result = make_uniq<CreateViewInfo>(Catalog(), Schema(), GetViewName());
+	auto result = make_uniq<CreateViewInfo>(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetViewName());
 	CopyProperties(*result);
 	result->aliases = aliases;
 	result->types = types;

@@ -21,14 +21,14 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 	case CatalogType::PREPARED_STATEMENT: {
 		// DEALLOCATE silently ignores errors
 		auto &statements = ClientData::Get(context.client).prepared_statements;
-		auto stmt_iter = statements.find(info->Name());
+		auto stmt_iter = statements.find(info->GetQualifiedName().Name());
 		if (stmt_iter != statements.end()) {
 			statements.erase(stmt_iter);
 		}
 		break;
 	}
 	case CatalogType::SCHEMA_ENTRY: {
-		auto &catalog = Catalog::GetCatalog(context.client, info->Catalog());
+		auto &catalog = Catalog::GetCatalog(context.client, info->GetQualifiedName().Catalog());
 		catalog.DropEntry(context.client, *info);
 
 		// Check if the dropped schema was set as the current schema
@@ -38,7 +38,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		auto &current_schema = default_entry.schema;
 		D_ASSERT(info->Name() != DEFAULT_SCHEMA);
 
-		if (info->Catalog() == current_catalog && current_schema == info->Name()) {
+		if (info->GetQualifiedName().Catalog() == current_catalog && current_schema == info->GetQualifiedName().Name()) {
 			// Reset the schema to default
 			SchemaSetting::SetLocal(context.client, DEFAULT_SCHEMA);
 		}
@@ -49,7 +49,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		D_ASSERT(info->extra_drop_info);
 		auto &extra_info = info->extra_drop_info->Cast<ExtraDropSecretInfo>();
 		SecretManager::Get(context.client)
-		    .DropSecretByName(context.client, info->Name(), info->if_not_found, extra_info.persist_mode,
+		    .DropSecretByName(context.client, info->GetQualifiedName().Name(), info->if_not_found, extra_info.persist_mode,
 		                      Identifier(extra_info.secret_storage));
 		break;
 	}
@@ -64,19 +64,19 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		}
 		auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
 		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
-		    context.client, QualifiedName(info->Catalog(), info->Schema(), base_table_ref.Table()));
+		    context.client, QualifiedName(info->GetQualifiedName().Catalog(), info->GetQualifiedName().Schema(), base_table_ref.Table()));
 		auto &duck_table = table_entry.Cast<DuckTableEntry>();
 		auto transaction = duck_table.catalog.GetCatalogTransaction(context.client);
-		if (!duck_table.DropTrigger(transaction, info->Name(), info->cascade)) {
+		if (!duck_table.DropTrigger(transaction, info->GetQualifiedName().Name(), info->cascade)) {
 			if (info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"", info->Name(),
+				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"", info->GetQualifiedName().Name(),
 				                       base_table_ref.Table());
 			}
 		}
 		break;
 	}
 	default: {
-		auto &catalog = Catalog::GetCatalog(context.client, info->Catalog());
+		auto &catalog = Catalog::GetCatalog(context.client, info->GetQualifiedName().Catalog());
 		catalog.DropEntry(context.client, *info);
 		break;
 	}

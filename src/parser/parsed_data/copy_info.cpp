@@ -76,7 +76,7 @@ string CopyInfo::CopyOptionsToString() const {
 string CopyInfo::TablePartToString() const {
 	string result;
 
-	D_ASSERT(!Table().empty());
+	D_ASSERT(!GetQualifiedName().Name().empty());
 	result += qualified_name.ToString();
 
 	// (c1, c2, ..)

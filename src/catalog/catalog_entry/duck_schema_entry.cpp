@@ -163,7 +163,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 
 		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info.Name()));
+		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info.GetQualifiedName().Name()));
 	}
 	for (auto &dep : info.dependencies.Set()) {
 		table->dependencies.AddDependency(dep);
@@ -307,7 +307,7 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 			throw CatalogException("Couldn't change ownership!");
 		}
 	} else {
-		auto &name = info.Name();
+		auto &name = info.GetQualifiedName().Name();
 		if (!set.AlterEntry(transaction, name, info)) {
 			throw CatalogException::MissingEntry(type, name, string());
 		}
@@ -333,12 +333,12 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 
 	// first find the entry
 	auto transaction = GetCatalogTransaction(context);
-	auto existing_entry = set.GetEntry(transaction, info.Name());
+	auto existing_entry = set.GetEntry(transaction, info.GetQualifiedName().Name());
 	if (!existing_entry) {
-		throw InternalException("Failed to drop entry \"%s\" - entry could not be found", info.Name());
+		throw InternalException("Failed to drop entry \"%s\" - entry could not be found", info.GetQualifiedName().Name());
 	}
 	if (existing_entry->type != info.type) {
-		throw CatalogException("Existing object %s is of type %s, trying to drop type %s", info.Name(),
+		throw CatalogException("Existing object %s is of type %s, trying to drop type %s", info.GetQualifiedName().Name(),
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info.type));
 	}
 
@@ -350,7 +350,7 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 	}
 
 	OnDropEntry(transaction, *existing_entry);
-	if (!set.DropEntry(transaction, info.Name(), info.cascade, info.allow_drop_internal)) {
+	if (!set.DropEntry(transaction, info.GetQualifiedName().Name(), info.cascade, info.allow_drop_internal)) {
 		throw InternalException("Could not drop element because of an internal error");
 	}
 

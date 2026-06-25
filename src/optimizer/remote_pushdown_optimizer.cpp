@@ -599,8 +599,8 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	auto &func_expr = ref.function->Cast<FunctionExpression>();
 
 	// Figure out
-	Identifier catalog_name = func_expr.Catalog();
-	Identifier schema_name = func_expr.Schema();
+	Identifier catalog_name = func_expr.GetQualifiedName().Catalog();
+	Identifier schema_name = func_expr.GetQualifiedName().Schema();
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
 	// If the function has an explicit catalog prefix, check if it's remote
@@ -733,8 +733,8 @@ bool RemotePushdownOptimizer::RefersToCTE(const Identifier &cte_name, CatalogPus
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Resolve schema_name-as-catalog ambiguity using the binder's own resolution logic
-	Identifier catalog_name = ref.Catalog();
-	Identifier schema_name = ref.Schema();
+	Identifier catalog_name = ref.GetQualifiedName().Catalog();
+	Identifier schema_name = ref.GetQualifiedName().Schema();
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
 	// Case 0: check if this is a CTE reference (must have no explicit catalog/schema)
@@ -857,7 +857,7 @@ CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const P
 
 ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const FunctionExpression &func) {
 	ExpressionPushdownResult state;
-	state.result = CheckCatalogQualification(func, func.Catalog(), func.Schema());
+	state.result = CheckCatalogQualification(func, func.GetQualifiedName().Catalog(), func.GetQualifiedName().Schema());
 	// look up the function once - this determines both whether it can be constant-folded and
 	// whether it is a macro in a local catalog (which cannot be evaluated remotely)
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, func.GetQualifiedName());
@@ -899,7 +899,7 @@ ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const Functi
 
 ExpressionPushdownResult RemotePushdownOptimizer::AnalyzeExpression(const WindowExpression &func) {
 	ExpressionPushdownResult state;
-	state.result = CheckCatalogQualification(func, func.Catalog(), func.Schema());
+	state.result = CheckCatalogQualification(func, func.GetQualifiedName().Catalog(), func.GetQualifiedName().Schema());
 	return state;
 }
 
@@ -1067,9 +1067,9 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const Identifier &
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE: {
 		auto &base = ref.Cast<BaseTableRef>();
-		if (base.Catalog() == catalog_name) {
+		if (base.GetQualifiedName().Catalog() == catalog_name) {
 			base.CatalogMutable() = "";
-		} else if (base.Catalog().empty() && base.Schema() == catalog_name) {
+		} else if (base.GetQualifiedName().Catalog().empty() && base.GetQualifiedName().Schema() == catalog_name) {
 			// 2-part name (schema.table) where the schema is actually the catalog being pushed to
 			base.SchemaMutable() = "";
 		}
@@ -1138,17 +1138,17 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Ide
 	// (e.g. "rpc.my_func()" parsed as schema="rpc", catalog="").
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func = expr.Cast<FunctionExpression>();
-		if (func.Catalog() == catalog_name) {
+		if (func.GetQualifiedName().Catalog() == catalog_name) {
 			func.CatalogMutable() = "";
-		} else if (func.Catalog().empty() && func.Schema() == catalog_name) {
+		} else if (func.GetQualifiedName().Catalog().empty() && func.GetQualifiedName().Schema() == catalog_name) {
 			func.SchemaMutable() = "";
 		}
 		// Fall through to EnumerateChildren to also strip catalog refs inside arguments
 	} else if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
 		auto &win = expr.Cast<WindowExpression>();
-		if (win.Catalog() == catalog_name) {
+		if (win.GetQualifiedName().Catalog() == catalog_name) {
 			win.CatalogMutable() = "";
-		} else if (win.Catalog().empty() && win.Schema() == catalog_name) {
+		} else if (win.GetQualifiedName().Catalog().empty() && win.GetQualifiedName().Schema() == catalog_name) {
 			win.SchemaMutable() = "";
 		}
 		// Fall through to EnumerateChildren to strip catalog refs inside partitions/orders/children

@@ -1216,7 +1216,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(AlterForeignKey
 	}
 	ForeignKeyInfo fk_info;
 	fk_info.type = ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE;
-	fk_info.schema = info.Schema();
+	fk_info.schema = info.GetQualifiedName().Schema();
 	fk_info.table = info.fk_table;
 	fk_info.pk_keys = info.pk_keys;
 	fk_info.fk_keys = info.fk_keys;

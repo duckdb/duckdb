@@ -215,7 +215,7 @@ SourceResultType PhysicalExport::GetDataInternal(ExecutionContext &context, Data
 	auto &ccontext = context.client;
 	auto &fs = FileSystem::GetFileSystem(ccontext);
 
-	auto &catalog = Catalog::GetCatalog(ccontext, info->Catalog());
+	auto &catalog = Catalog::GetCatalog(ccontext, info->GetQualifiedName().Catalog());
 
 	catalog_entry_vector_t catalog_entries;
 	catalog_entries = GetNaiveExportOrder(context.client, catalog);
