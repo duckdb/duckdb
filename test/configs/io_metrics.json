@@ -122,6 +122,24 @@
 				"CHECKPOINT"
 			],
 			"check": ["write"]
+		},
+		{
+			"name": "native_overflow_string_write",
+			"comment": "Exercises the overflow-string checkpoint write path (WriteOverflowStringsToDisk) with strings too large to inline.",
+			"default_db": "{dir}/native.db",
+			"include": ["{dir}/native.db"],
+			"exclude": ["{dir}/native.db.wal"],
+			"prep": [
+				"ATTACH '{dir}/native.db' AS d",
+				"CREATE TABLE d.t(i INTEGER, s VARCHAR)",
+				"CHECKPOINT d",
+				"DETACH d"
+			],
+			"measure": [
+				"INSERT INTO t SELECT i, repeat('x', 20000) FROM range(2000) tbl(i)",
+				"CHECKPOINT"
+			],
+			"check": ["write"]
 		}
 	]
 }
