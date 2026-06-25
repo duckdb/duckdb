@@ -17,9 +17,11 @@ namespace duckdb {
 
 static PhysicalOperator &AddCreateIndex(PhysicalPlanGenerator &plan, LogicalCreateIndex &op, PhysicalOperator &prev,
                                         const IndexType &index_type, unique_ptr<IndexBuildBindData> bind_data) {
-	auto &cindex = plan.Make<PhysicalCreateIndex>(op, op.table, op.info->column_ids, std::move(op.info),
-	                                              std::move(op.unbound_expressions), op.estimated_cardinality,
-	                                              index_type, std::move(bind_data), std::move(op.alter_table_info));
+	PhysicalOperator &cindex = [&]() -> PhysicalOperator & {
+		return plan.Make<PhysicalCreateIndex>(op, op.table, op.info->column_ids, std::move(op.info),
+		                                      std::move(op.unbound_expressions), op.estimated_cardinality, index_type,
+		                                      std::move(bind_data), std::move(op.alter_table_info));
+	}();
 
 	cindex.children.push_back(prev);
 	return cindex;
@@ -119,6 +121,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 
 	// If we get here and the index type is not valid index type, we throw an exception.
 	const auto index_type = context.db->config.GetIndexTypes().FindByName(op.info->index_type);
+
 	if (!index_type) {
 		throw BinderException("Unknown index type: " + op.info->index_type);
 	}
@@ -141,11 +144,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	// SCAN -> PROJECTION -> [FILTER] -> [SORT] -> CREATE INDEX
 
 	// "Bind" the index and determine if we need a sort.
-	auto &duck_table = op.table.Cast<DuckTableEntry>();
-	IndexBuildBindInput bind_input {context, duck_table, *op.info, op.unbound_expressions};
+	IndexBuildBindInput bind_input {context, op};
 	auto bind_data = index_type->build_bind(bind_input);
 
-	auto need_sort = false;
+	bool need_sort = false;
+	// if build_sort contains a callback
 	if (index_type->build_sort) {
 		IndexBuildSortInput sort_input {bind_data.get()};
 		need_sort = index_type->build_sort(sort_input);
@@ -161,11 +164,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	if (need_filter) {
 		plan = &AddFilter(*this, op, *plan);
 	}
+
 	if (need_sort) {
 		plan = &AddSort(*this, op, *plan);
 	}
-	plan = &AddCreateIndex(*this, op, *plan, *index_type, std::move(bind_data));
 
+	plan = &AddCreateIndex(*this, op, *plan, *index_type, std::move(bind_data));
 	return *plan;
 }
 
