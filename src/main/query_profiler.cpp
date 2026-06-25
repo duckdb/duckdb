@@ -5,6 +5,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
@@ -319,7 +320,7 @@ string QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer) const {
 	if (query_metrics.query_sql.empty() || !root) {
 		return "";
 	}
-	stringstream str;
+	StringResultRenderer str;
 	renderer.Render(*root, str);
 	return str.str();
 }
@@ -631,7 +632,9 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 		if (PrintOptimizerOutput()) {
 			PrintPhaseTimingsToStream(ss, *metrics, TOTAL_BOX_WIDTH);
 		}
-		Render(*root, ss);
+		StringResultRenderer result;
+		Render(*root, result);
+		ss << result.str();
 	}
 }
 
@@ -1033,7 +1036,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	}
 }
 
-void QueryProfiler::Render(const ProfilingNode &node, std::ostream &ss) const {
+void QueryProfiler::Render(const ProfilingNode &node, BaseResultRenderer &ss) const {
 	TextTreeRenderer renderer;
 	renderer.Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
 	renderer.Render(node, ss);

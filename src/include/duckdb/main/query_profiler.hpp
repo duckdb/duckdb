@@ -29,6 +29,7 @@
 
 namespace duckdb {
 
+class BaseResultRenderer;
 class ClientContext;
 class ExpressionExecutor;
 class ProfilingNode;
@@ -166,7 +167,7 @@ public:
 
 private:
 	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const idx_t depth = 0);
-	void Render(const ProfilingNode &node, std::ostream &str) const;
+	void Render(const ProfilingNode &node, BaseResultRenderer &str) const;
 	//! Render the profiler output via the given renderer (nullptr renders nothing), handling the disabled case.
 	string RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
 

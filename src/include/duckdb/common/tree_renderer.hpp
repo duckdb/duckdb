@@ -32,10 +32,8 @@ public:
 	}
 
 public:
-	//! Render the tree into a BaseResultRenderer - the primary sink, enabling highlighting-aware output
+	//! Render the tree into a BaseResultRenderer (e.g. a StringResultRenderer, or a highlighting-aware sink)
 	void ToStream(RenderTree &root, BaseResultRenderer &ss);
-	//! Render the tree into a plain ostream (bridges to the BaseResultRenderer path via a StringResultRenderer)
-	void ToStream(RenderTree &root, std::ostream &ss);
 	virtual void ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) = 0;
 	//! Create a renderer for the given format, consulting the pluggable registry and configuring built-ins from the
 	//! client's "profiling_renderer_settings". Matched case-insensitively; throws if unknown, nullptr for "no_output".
@@ -55,7 +53,7 @@ public:
 	virtual bool UsesRawKeyNames() {
 		return false;
 	}
-	virtual void Render(const ProfilingNode &op, std::ostream &ss) {
+	virtual void Render(const ProfilingNode &op, BaseResultRenderer &ss) {
 	}
 
 	//! Render the profiler's output in this format. Only called when profiling is enabled. The base implementation

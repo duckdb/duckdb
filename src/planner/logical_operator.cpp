@@ -7,6 +7,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -162,7 +163,7 @@ string LogicalOperator::ToString(optional_ptr<ClientContext> context, const Prof
 		// formats without output (e.g. "no_output") render nothing
 		return string();
 	}
-	duckdb::stringstream ss;
+	StringResultRenderer ss;
 	auto tree = RenderTree::CreateRenderTree(*this);
 	renderer->ToStream(*tree, ss);
 	return ss.str();
