@@ -445,7 +445,7 @@ void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, CatalogEnt
 	// Make sure that we don't see any uncommitted changes
 	auto transaction_id = MAX_TRANSACTION_ID;
 	// This will allow us to see all committed changes made before this COMMIT happened
-	auto tx_start_time = commit_id;
+	auto tx_start_time = commit_id + 1;
 	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), transaction_id, tx_start_time);
 
 	D_ASSERT(entry.type == CatalogType::DEPENDENCY_ENTRY);
