@@ -8,12 +8,14 @@
 
 #pragma once
 
+// IWYU pragma: begin_exports
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+// IWYU pragma: end_exports
 
 namespace duckdb {
 
