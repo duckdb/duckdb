@@ -320,6 +320,8 @@ supported_member_entries = [
     # equality/hash generation annotations (used by generate_util.py)
     'equals_skip',
     'hash_skip',
+    # skip (de)serialization entirely (member only exists for equals/hash/copy generation)
+    'serialize_skip',
     # accessor annotations (used by generate_util.py for Children/ChildrenMutable generation)
     'accessor_mut',
     'accessor',
@@ -360,7 +362,8 @@ def normalize_json_type(type_str):
 
 class MemberVariable:
     def __init__(self, entry):
-        self.id = entry['id']
+        # serialize_skip members are not (de)serialized, so they need no field id
+        self.id = entry.get('id', -1)
         self.name = entry['name']
         self.type = normalize_json_type(entry['type'])
         self.base = None
@@ -398,6 +401,9 @@ class MemberVariable:
             self.has_default = True
         if 'base' in entry:
             self.base = entry['base']
+        # Members marked serialize_skip are not (de)serialized; they only exist for the
+        # equals/hash/copy generation (e.g. an aggregate field serialized as its components).
+        self.serialize_skip = entry.get('serialize_skip', False)
         for key in entry.keys():
             if key not in supported_member_entries:
                 print(
@@ -802,12 +808,16 @@ def generate_class_code(class_entry: SerializableClass):
         class_serialize += BASE_SERIALIZE_FORMAT.format(base_class_name=class_entry.base)
     for entry_idx in range(last_constructor_index + 1):
         entry = class_entry.members[entry_idx]
+        if entry.serialize_skip:
+            continue
         class_deserialize += class_entry.get_deserialize_element(entry, base=entry.base, pointer_type='unique_ptr')
 
     class_deserialize += class_entry.generate_constructor(constructor_parameters)
     if class_entry.members is None:
         return None
     for entry_idx, entry in enumerate(class_entry.members):
+        if entry.serialize_skip:
+            continue
         write_property_name = entry.serialize_property
         deserialize_template_str = DESERIALIZE_ELEMENT_CLASS_FORMAT
         if entry.base:

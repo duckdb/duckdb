@@ -258,6 +258,16 @@ void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
+// Regex Match Operator Semantics
+//===----------------------------------------------------------------------===//
+void RegexMatchOperatorSemanticsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("regex_match_operator_semantics setting cannot be NULL");
+	}
+	EnumUtil::FromString<RegexMatchOperatorSemantics>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Storage Block Prefetch
 //===----------------------------------------------------------------------===//
 void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
