@@ -330,9 +330,35 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, BaseResultRenderer &ss
 						}
 					}
 				}
+				// determine the type of this cell: the box title (render_y 0) is the operator name, the
+				// separator line between the title and the extra info is layout, everything else is a value
+				ResultRenderType content_type;
+				if (render_y == 0) {
+					content_type = ResultRenderType::COLUMN_NAME;
+				} else if (render_text == ExtraInfoSeparator()) {
+					content_type = ResultRenderType::LAYOUT;
+				} else {
+					content_type = ResultRenderType::VALUE;
+				}
+				// center the text in the box, rendering the surrounding padding as layout and the text with its type
 				render_text = AdjustTextForRendering(render_text, config.node_render_width - 2);
-				// the box title (operator name) is a column name; the rest of the box is value content
-				ss.Render(render_y == 0 ? ResultRenderType::COLUMN_NAME : ResultRenderType::VALUE, render_text);
+				idx_t content_start = 0;
+				while (content_start < render_text.size() && render_text[content_start] == ' ') {
+					content_start++;
+				}
+				idx_t content_end = render_text.size();
+				while (content_end > content_start && render_text[content_end - 1] == ' ') {
+					content_end--;
+				}
+				if (content_start > 0) {
+					ss << render_text.substr(0, content_start);
+				}
+				if (content_end > content_start) {
+					ss.Render(content_type, render_text.substr(content_start, content_end - content_start));
+				}
+				if (content_end < render_text.size()) {
+					ss << render_text.substr(content_end);
+				}
 
 				if (render_y == halfway_point && NodeHasMultipleChildren(*node)) {
 					ss << config.LMIDDLE;

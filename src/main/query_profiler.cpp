@@ -546,23 +546,49 @@ string QueryProfiler::QueryTreeToString() const {
 	return ss.str();
 }
 
-void RenderPhaseTimings(std::ostream &ss, const pair<string, double> &head, map<string, double> &timings, idx_t width) {
+// renders a centered line: the surrounding box-drawing and padding is layout, the text itself is a value
+static void RenderPaddedValue(BaseResultRenderer &ss, const string &border_left, const string &padded,
+                              const string &border_right) {
+	idx_t start = 0;
+	while (start < padded.size() && padded[start] == ' ') {
+		start++;
+	}
+	idx_t end = padded.size();
+	while (end > start && padded[end - 1] == ' ') {
+		end--;
+	}
+	ss << border_left;
+	if (start > 0) {
+		ss << padded.substr(0, start);
+	}
+	if (end > start) {
+		ss.Render(ResultRenderType::VALUE, padded.substr(start, end - start));
+	}
+	if (end < padded.size()) {
+		ss << padded.substr(end);
+	}
+	ss << border_right;
+}
+
+void RenderPhaseTimings(BaseResultRenderer &ss, const pair<string, double> &head, map<string, double> &timings,
+                        idx_t width) {
 	ss << "┌────────────────────────────────────────────────┐\n";
-	ss << "│" + QueryProfiler::DrawPadded(RenderTitleCase(head.first) + ": " + RenderTiming(head.second), width - 2) +
-	          "│\n";
+	RenderPaddedValue(
+	    ss, "│", QueryProfiler::DrawPadded(RenderTitleCase(head.first) + ": " + RenderTiming(head.second), width - 2),
+	    "│\n");
 	ss << "│┌──────────────────────────────────────────────┐│\n";
 
 	for (const auto &entry : timings) {
-		ss << "││" +
-		          QueryProfiler::DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second),
-		                                    width - 4) +
-		          "││\n";
+		RenderPaddedValue(
+		    ss, "││",
+		    QueryProfiler::DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second), width - 4),
+		    "││\n");
 	}
 	ss << "│└──────────────────────────────────────────────┘│\n";
 	ss << "└────────────────────────────────────────────────┘\n";
 }
 
-void PrintPhaseTimingsToStream(std::ostream &ss, const GatheredMetrics &info, idx_t width) {
+void PrintPhaseTimingsToStream(BaseResultRenderer &ss, const GatheredMetrics &info, idx_t width) {
 	map<string, double> optimizer_timings;
 	map<string, double> planner_timings;
 	map<string, double> parser_timings;
@@ -625,10 +651,13 @@ void QueryProfiler::RenderQueryTree(BaseResultRenderer &ss) const {
 	}
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
-	ss << "││    Query Profiling Information    ││\n";
+	RenderPaddedValue(ss, "││", "    Query Profiling Information    ", "││\n");
 	ss << "│└───────────────────────────────────┘│\n";
 	ss << "└─────────────────────────────────────┘\n";
-	ss << (show_query_name ? StringUtil::Replace(query_metrics.query_sql, "\n", " ") : "") + "\n";
+	if (show_query_name) {
+		ss.Render(ResultRenderType::VALUE, StringUtil::Replace(query_metrics.query_sql, "\n", " "));
+	}
+	ss << "\n";
 
 	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized
@@ -647,16 +676,14 @@ void QueryProfiler::RenderQueryTree(BaseResultRenderer &ss) const {
 	ss << "┌────────────────────────────────────────────────┐\n";
 	ss << "│┌──────────────────────────────────────────────┐│\n";
 	string total_time = "Total Time: " + RenderTiming(query_metrics.GetStringMetricInSeconds("query.total_time"));
-	ss << "││" + DrawPadded(total_time, TOTAL_BOX_WIDTH - 4) + "││\n";
+	RenderPaddedValue(ss, "││", DrawPadded(total_time, TOTAL_BOX_WIDTH - 4), "││\n");
 	ss << "│└──────────────────────────────────────────────┘│\n";
 	ss << "└────────────────────────────────────────────────┘\n";
 	// render the main operator tree
 	if (root) {
 		// print phase timings
 		if (PrintOptimizerOutput()) {
-			duckdb::stringstream phase_timings;
-			PrintPhaseTimingsToStream(phase_timings, *metrics, TOTAL_BOX_WIDTH);
-			ss << phase_timings.str();
+			PrintPhaseTimingsToStream(ss, *metrics, TOTAL_BOX_WIDTH);
 		}
 		Render(*root, ss);
 	}
