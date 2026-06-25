@@ -115,9 +115,9 @@ void JSONTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss
 	yyjson_mut_doc_free(doc);
 }
 
-string JSONTreeRenderer::RenderProfiler(const QueryProfiler &profiler) {
+void JSONTreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseResultRenderer &ss) {
 	// the JSON profiler output is the full query profile result tree (including query-level metrics)
-	return profiler.ToJSON();
+	ss << profiler.ToJSON();
 }
 
 string JSONTreeRenderer::RenderProfilerDisabled() {

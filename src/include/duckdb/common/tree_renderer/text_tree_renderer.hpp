@@ -83,7 +83,7 @@ public:
 	void ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) override;
 
 	//! Profiler text output: the framed query tree (with phase timings, total time, etc.)
-	string RenderProfiler(const QueryProfiler &profiler) override;
+	void RenderProfiler(const QueryProfiler &profiler, BaseResultRenderer &ss) override;
 
 	void Configure(const unordered_map<string, Value> &settings) override;
 

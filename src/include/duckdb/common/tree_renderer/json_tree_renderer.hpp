@@ -41,7 +41,7 @@ public:
 	void ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) override;
 
 	//! Profiler JSON output: the full query profile result tree (with query-level metrics)
-	string RenderProfiler(const QueryProfiler &profiler) override;
+	void RenderProfiler(const QueryProfiler &profiler, BaseResultRenderer &ss) override;
 	string RenderProfilerDisabled() override;
 };
 

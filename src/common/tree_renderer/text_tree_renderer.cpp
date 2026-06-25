@@ -554,9 +554,9 @@ string TextTreeRenderer::ExtraInfoSeparator() {
 	return StringUtil::Repeat(string(config.HORIZONTAL), (config.node_render_width - 9));
 }
 
-string TextTreeRenderer::RenderProfiler(const QueryProfiler &profiler) {
+void TextTreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseResultRenderer &ss) {
 	// the text profiler output is the framed query tree (header, total time, phase timings, operator tree)
-	return profiler.QueryTreeToString();
+	profiler.RenderQueryTree(ss);
 }
 
 } // namespace duckdb

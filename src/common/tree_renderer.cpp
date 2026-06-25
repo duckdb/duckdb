@@ -11,15 +11,20 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/profiler_extension.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // Profiler output (base implementations)
 //===--------------------------------------------------------------------===//
-string TreeRenderer::RenderProfiler(const QueryProfiler &profiler) {
+void TreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseResultRenderer &ss) {
 	// by default, render the profiling node tree using this renderer (covers HTML/GraphViz/Mermaid)
-	return profiler.RenderProfilingNodeTree(*this);
+	profiler.RenderProfilingNodeTree(*this, ss);
+}
+
+unique_ptr<BaseResultRenderer> TreeRenderer::GetPrintRenderer() {
+	return make_uniq<PrinterResultRenderer>();
 }
 
 string TreeRenderer::RenderProfilerDisabled() {
