@@ -6,6 +6,14 @@
 
 namespace duckdb {
 
+template <bool USE_PARTITION_SEL>
+static idx_t GetPartitionRowIndex(PartitionedTupleDataAppendState &append_state, idx_t idx) {
+	if constexpr (USE_PARTITION_SEL) {
+		return append_state.partition_sel.get_index_unsafe(idx);
+	}
+	return idx;
+}
+
 PartitionKeyTracker::PartitionKeyTracker(Allocator &allocator_p, const vector<LogicalType> &key_types_p)
     : allocator(allocator_p), key_types(key_types_p), key_count(key_types.size()) {
 	single_value_sel.Initialize();
@@ -42,11 +50,17 @@ void PartitionKeyTracker::Update(DataChunk &keys, Vector &hashes, PartitionedTup
 
 	idx_t candidate_count;
 	if (append_state.fixed_partition_entries.size()) {
-		const auto use_partition_sel = append_state.fixed_partition_entries.size() > 1;
-		candidate_count = BuildCandidates<true>(keys, hashes, append_state, count, use_partition_sel);
+		if (append_state.fixed_partition_entries.size() > 1) {
+			candidate_count = BuildCandidates<true, true>(keys, hashes, append_state, count);
+		} else {
+			candidate_count = BuildCandidates<true, false>(keys, hashes, append_state, count);
+		}
 	} else {
-		const auto use_partition_sel = append_state.partition_entries.size() > 1;
-		candidate_count = BuildCandidates<false>(keys, hashes, append_state, count, use_partition_sel);
+		if (append_state.partition_entries.size() > 1) {
+			candidate_count = BuildCandidates<false, true>(keys, hashes, append_state, count);
+		} else {
+			candidate_count = BuildCandidates<false, false>(keys, hashes, append_state, count);
+		}
 	}
 	if (candidate_count) {
 		CompareCandidates(keys, candidate_count);
@@ -100,20 +114,14 @@ void PartitionKeyTracker::MarkMixed(idx_t bin_idx) {
 	states[bin_idx] = State::MULTIPLE_KEYS;
 }
 
-template <bool FIXED>
-idx_t PartitionKeyTracker::BuildCandidates(DataChunk &keys, Vector &hashes,
-                                           PartitionedTupleDataAppendState &append_state, idx_t count,
-                                           bool use_partition_sel) {
+template <bool FIXED, bool USE_PARTITION_SEL>
+idx_t PartitionKeyTracker::BuildCandidates(DataChunk &keys, Vector &hashes_v,
+                                           PartitionedTupleDataAppendState &append_state, idx_t count) {
 	using GETTER = TemplatedMapGetter<list_entry_t, FIXED>;
 	auto &partition_entries = append_state.GetMap<FIXED>();
 	UnifiedVectorFormat hash_data;
-	const hash_t *hash_values = nullptr;
-	auto load_hashes = [&]() {
-		if (!hash_values) {
-			hashes.ToUnifiedFormat(hash_data);
-			hash_values = UnifiedVectorFormat::GetData<hash_t>(hash_data);
-		}
-	};
+	hashes_v.ToUnifiedFormat(hash_data);
+	const auto hash_values = UnifiedVectorFormat::GetData<hash_t>(hash_data);
 	idx_t candidate_count = 0;
 	for (auto it = partition_entries.begin(); it != partition_entries.end(); ++it) {
 		const auto bin_idx = GETTER::GetKey(it);
@@ -125,9 +133,8 @@ idx_t PartitionKeyTracker::BuildCandidates(DataChunk &keys, Vector &hashes,
 
 		idx_t entry_idx = 0;
 		if (states[bin_idx] == State::EMPTY) {
-			const auto row_idx = use_partition_sel ? append_state.partition_sel.get_index_unsafe(entry.offset) : 0;
+			const auto row_idx = GetPartitionRowIndex<USE_PARTITION_SEL>(append_state, entry.offset);
 			D_ASSERT(row_idx < count);
-			load_hashes();
 			const auto hash_idx = hash_data.sel->get_index(row_idx);
 			StoreRepresentative(keys, row_idx, hash_values[hash_idx], bin_idx);
 			entry_idx++;
@@ -135,10 +142,8 @@ idx_t PartitionKeyTracker::BuildCandidates(DataChunk &keys, Vector &hashes,
 
 		const auto candidate_start = candidate_count;
 		for (; entry_idx < entry.length; entry_idx++) {
-			const auto row_idx =
-			    use_partition_sel ? append_state.partition_sel.get_index_unsafe(entry.offset + entry_idx) : entry_idx;
+			const auto row_idx = GetPartitionRowIndex<USE_PARTITION_SEL>(append_state, entry.offset + entry_idx);
 			D_ASSERT(row_idx < count);
-			load_hashes();
 			const auto hash_idx = hash_data.sel->get_index(row_idx);
 			if (this->hashes[bin_idx] != hash_values[hash_idx]) {
 				MarkMixed(bin_idx);
@@ -238,10 +243,14 @@ void PartitionKeyTracker::CompareTrackerCandidates(const PartitionKeyTracker &so
 	}
 }
 
-template idx_t PartitionKeyTracker::BuildCandidates<true>(DataChunk &, Vector &, PartitionedTupleDataAppendState &,
-                                                          idx_t, bool);
-template idx_t PartitionKeyTracker::BuildCandidates<false>(DataChunk &, Vector &, PartitionedTupleDataAppendState &,
-                                                           idx_t, bool);
+template idx_t PartitionKeyTracker::BuildCandidates<true, true>(DataChunk &, Vector &,
+                                                                PartitionedTupleDataAppendState &, idx_t);
+template idx_t PartitionKeyTracker::BuildCandidates<true, false>(DataChunk &, Vector &,
+                                                                 PartitionedTupleDataAppendState &, idx_t);
+template idx_t PartitionKeyTracker::BuildCandidates<false, true>(DataChunk &, Vector &,
+                                                                 PartitionedTupleDataAppendState &, idx_t);
+template idx_t PartitionKeyTracker::BuildCandidates<false, false>(DataChunk &, Vector &,
+                                                                  PartitionedTupleDataAppendState &, idx_t);
 
 RepartitionKeyTracker::RepartitionKeyTracker(Allocator &allocator, PartitionKeyTracker &tracker_p,
                                              const vector<LogicalType> &key_types,

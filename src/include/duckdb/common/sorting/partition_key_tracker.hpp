@@ -30,9 +30,8 @@ private:
 	void StoreRepresentative(const PartitionKeyTracker &source, idx_t source_bin, idx_t target_bin);
 	void MarkMixed(idx_t bin_idx);
 
-	template <bool FIXED>
-	idx_t BuildCandidates(DataChunk &keys, Vector &hashes, PartitionedTupleDataAppendState &append_state, idx_t count,
-	                      bool use_partition_sel);
+	template <bool FIXED, bool USE_PARTITION_SEL>
+	idx_t BuildCandidates(DataChunk &keys, Vector &hashes, PartitionedTupleDataAppendState &append_state, idx_t count);
 	idx_t CompactCandidates(idx_t candidate_count);
 	void CompareCandidates(DataChunk &keys, idx_t candidate_count);
 	void CombineBin(const PartitionKeyTracker &source, idx_t bin_idx, idx_t &candidate_count);
@@ -44,8 +43,8 @@ private:
 	vector<LogicalType> key_types;
 	idx_t key_count;
 	idx_t radix_bits = 0;
-	vector<State> states;
-	vector<hash_t> hashes;
+	unsafe_vector<State> states;
+	unsafe_vector<hash_t> hashes;
 	DataChunk representatives;
 	SelectionVector single_value_sel;
 	SelectionVector candidate_input_sel;
