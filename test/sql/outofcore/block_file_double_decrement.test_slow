@@ -33,6 +33,9 @@ statement ok
 SET preserve_insertion_order = false;
 
 statement ok
+SET disable_database_invalidation = true;
+
+statement ok
 CREATE TABLE r1 (id INT, s VARCHAR);
 
 # Phase 1: write ~57 MB of incompressible OVERFLOW_STRINGS data (100 rows × ~576 KB).
