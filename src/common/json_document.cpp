@@ -29,9 +29,16 @@ static yyjson_read_flag TranslateReadFlags(JSONReadFlags flags) {
 }
 
 static yyjson_write_flag TranslateWriteFlags(JSONWriteFlags flags) {
+	const auto raw = static_cast<uint32_t>(flags);
 	yyjson_write_flag result = 0;
-	if (static_cast<uint32_t>(flags) & static_cast<uint32_t>(JSONWriteFlags::ALLOW_INVALID_UNICODE)) {
+	if (raw & static_cast<uint32_t>(JSONWriteFlags::ALLOW_INVALID_UNICODE)) {
 		result |= YYJSON_WRITE_ALLOW_INVALID_UNICODE;
+	}
+	if (raw & static_cast<uint32_t>(JSONWriteFlags::ALLOW_INF_AND_NAN)) {
+		result |= YYJSON_WRITE_ALLOW_INF_AND_NAN;
+	}
+	if (raw & static_cast<uint32_t>(JSONWriteFlags::PRETTY)) {
+		result |= YYJSON_WRITE_PRETTY;
 	}
 	return result;
 }
@@ -95,6 +102,10 @@ bool JSONValue::IsObject() const {
 	return val && yyjson_is_obj(val);
 }
 
+bool JSONValue::IsInteger() const {
+	return val && yyjson_is_int(val);
+}
+
 string JSONValue::GetString() const {
 	const auto str = yyjson_get_str(val);
 	const auto len = yyjson_get_len(val);
@@ -131,6 +142,24 @@ void JSONValue::IterateObject(const std::function<void(const string &, JSONValue
 	yyjson_obj_foreach(val, idx, max, key, value) {
 		callback(string(yyjson_get_str(key), yyjson_get_len(key)), JSONValue(value));
 	}
+}
+
+JSONValue JSONValue::GetMember(const string &key) const {
+	if (!val || !yyjson_is_obj(val)) {
+		return JSONValue();
+	}
+	return JSONValue(yyjson_obj_get(val, key.c_str()));
+}
+
+string JSONValue::ToString(JSONWriteFlags flags) const {
+	size_t len;
+	auto json = yyjson_val_write(val, TranslateWriteFlags(flags), &len);
+	if (!json) {
+		throw SerializationException("Failed to write JSON string");
+	}
+	string result(json, len);
+	free(json);
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -175,10 +204,54 @@ JSONValue JSONDocument::GetRoot() const {
 	return JSONValue(doc ? yyjson_doc_get_root(doc) : nullptr);
 }
 
+string JSONDocument::ToString(JSONWriteFlags flags) const {
+	size_t len;
+	auto json = yyjson_write(doc, TranslateWriteFlags(flags), &len);
+	if (!json) {
+		throw SerializationException("Failed to write JSON string");
+	}
+	string result(json, len);
+	free(json);
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// JSONMutableValue
+//===--------------------------------------------------------------------===//
+JSONMutableValue::JSONMutableValue() : doc(nullptr), val(nullptr) {
+}
+
+JSONMutableValue::JSONMutableValue(yyjson_mut_doc *doc_p, yyjson_mut_val *val_p) : doc(doc_p), val(val_p) {
+}
+
+bool JSONMutableValue::IsValid() const {
+	return val != nullptr;
+}
+
+void JSONMutableValue::Add(const string &key, JSONMutableValue value) {
+	auto key_val = yyjson_mut_strncpy(doc, key.c_str(), key.size());
+	yyjson_mut_obj_add(val, key_val, value.val);
+}
+
+void JSONMutableValue::AddString(const string &key, const string &value) {
+	auto key_val = yyjson_mut_strncpy(doc, key.c_str(), key.size());
+	auto value_val = yyjson_mut_strncpy(doc, value.c_str(), value.size());
+	yyjson_mut_obj_add(val, key_val, value_val);
+}
+
+void JSONMutableValue::Append(JSONMutableValue value) {
+	yyjson_mut_arr_append(val, value.val);
+}
+
+void JSONMutableValue::AppendString(const string &value) {
+	auto value_val = yyjson_mut_strncpy(doc, value.c_str(), value.size());
+	yyjson_mut_arr_append(val, value_val);
+}
+
 //===--------------------------------------------------------------------===//
 // JSONWriter
 //===--------------------------------------------------------------------===//
-JSONWriter::JSONWriter() : doc(yyjson_mut_doc_new(nullptr)), root(nullptr) {
+JSONWriter::JSONWriter() : doc(yyjson_mut_doc_new(nullptr)) {
 }
 
 JSONWriter::~JSONWriter() {
@@ -187,40 +260,53 @@ JSONWriter::~JSONWriter() {
 	}
 }
 
-JSONWriter::JSONWriter(JSONWriter &&other) noexcept : doc(other.doc), root(other.root) {
+JSONWriter::JSONWriter(JSONWriter &&other) noexcept : doc(other.doc) {
 	other.doc = nullptr;
-	other.root = nullptr;
 }
 
 JSONWriter &JSONWriter::operator=(JSONWriter &&other) noexcept {
 	std::swap(doc, other.doc);
-	std::swap(root, other.root);
 	return *this;
 }
 
-JSONWriter JSONWriter::CreateObject() {
-	JSONWriter writer;
-	writer.root = yyjson_mut_obj(writer.doc);
-	yyjson_mut_doc_set_root(writer.doc, writer.root);
-	return writer;
+JSONMutableValue JSONWriter::CreateObject() {
+	return JSONMutableValue(doc, yyjson_mut_obj(doc));
 }
 
-JSONWriter JSONWriter::CreateArray() {
-	JSONWriter writer;
-	writer.root = yyjson_mut_arr(writer.doc);
-	yyjson_mut_doc_set_root(writer.doc, writer.root);
-	return writer;
+JSONMutableValue JSONWriter::CreateArray() {
+	return JSONMutableValue(doc, yyjson_mut_arr(doc));
 }
 
-void JSONWriter::AddString(const string &key, const string &value) {
-	auto key_val = yyjson_mut_strncpy(doc, key.c_str(), key.size());
-	auto value_val = yyjson_mut_strncpy(doc, value.c_str(), value.size());
-	yyjson_mut_obj_add(root, key_val, value_val);
+JSONMutableValue JSONWriter::CreateString(const string &value) {
+	return JSONMutableValue(doc, yyjson_mut_strncpy(doc, value.c_str(), value.size()));
 }
 
-void JSONWriter::AppendString(const string &value) {
-	auto value_val = yyjson_mut_strncpy(doc, value.c_str(), value.size());
-	yyjson_mut_arr_append(root, value_val);
+JSONMutableValue JSONWriter::CreateNull() {
+	return JSONMutableValue(doc, yyjson_mut_null(doc));
+}
+
+JSONMutableValue JSONWriter::CreateBoolean(bool value) {
+	return JSONMutableValue(doc, yyjson_mut_bool(doc, value));
+}
+
+JSONMutableValue JSONWriter::CreateUnsignedInteger(uint64_t value) {
+	return JSONMutableValue(doc, yyjson_mut_uint(doc, value));
+}
+
+JSONMutableValue JSONWriter::CreateSignedInteger(int64_t value) {
+	return JSONMutableValue(doc, yyjson_mut_sint(doc, value));
+}
+
+JSONMutableValue JSONWriter::CreateDouble(double value) {
+	return JSONMutableValue(doc, yyjson_mut_real(doc, value));
+}
+
+JSONMutableValue JSONWriter::CreateCopy(const JSONValue &value) {
+	return JSONMutableValue(doc, yyjson_val_mut_copy(doc, value.val));
+}
+
+void JSONWriter::SetRoot(JSONMutableValue value) {
+	yyjson_mut_doc_set_root(doc, value.val);
 }
 
 string JSONWriter::ToString(JSONWriteFlags flags) const {

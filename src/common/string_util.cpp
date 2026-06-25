@@ -771,10 +771,12 @@ unique_ptr<ComplexJSON> StringUtil::ParseJSONMap(const string &json, bool ignore
 }
 
 string StringUtil::ToJSONMap(const unordered_map<string, string> &map) {
-	auto writer = JSONWriter::CreateObject();
+	JSONWriter writer;
+	auto obj = writer.CreateObject();
 	for (auto &entry : map) {
-		writer.AddString(entry.first, entry.second);
+		obj.AddString(entry.first, entry.second);
 	}
+	writer.SetRoot(obj);
 	return writer.ToString(JSONWriteFlags::ALLOW_INVALID_UNICODE);
 }
 
@@ -801,16 +803,20 @@ string ComplexJSON::GetValue(const idx_t &index) const {
 string ComplexJSON::GetValueRecursive(const ComplexJSON &child) {
 	if (child.type == ComplexJSONType::OBJECT) {
 		// We have to construct the nested json
-		auto writer = JSONWriter::CreateObject();
+		JSONWriter writer;
+		auto obj = writer.CreateObject();
 		for (const auto &object : child.obj_value) {
-			writer.AddString(object.first, GetValueRecursive(*object.second));
+			obj.AddString(object.first, GetValueRecursive(*object.second));
 		}
+		writer.SetRoot(obj);
 		return writer.ToString(JSONWriteFlags::ALLOW_INVALID_UNICODE);
 	} else if (child.type == ComplexJSONType::ARRAY) {
-		auto writer = JSONWriter::CreateArray();
+		JSONWriter writer;
+		auto arr = writer.CreateArray();
 		for (const auto &elem : child.arr_value) {
-			writer.AppendString(GetValueRecursive(*elem));
+			arr.AppendString(GetValueRecursive(*elem));
 		}
+		writer.SetRoot(arr);
 		return writer.ToString(JSONWriteFlags::ALLOW_INVALID_UNICODE);
 	} else {
 		// simple string we can just write
@@ -839,12 +845,14 @@ string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,
 	D_ASSERT(map.find("exception_type") == map.end());
 	D_ASSERT(map.find("exception_message") == map.end());
 
-	auto writer = JSONWriter::CreateObject();
-	writer.AddString("exception_type", Exception::ExceptionTypeToString(type));
-	writer.AddString("exception_message", message);
+	JSONWriter writer;
+	auto obj = writer.CreateObject();
+	obj.AddString("exception_type", Exception::ExceptionTypeToString(type));
+	obj.AddString("exception_message", message);
 	for (auto &entry : map) {
-		writer.AddString(entry.first, entry.second);
+		obj.AddString(entry.first, entry.second);
 	}
+	writer.SetRoot(obj);
 	return writer.ToString(JSONWriteFlags::ALLOW_INVALID_UNICODE);
 }
 

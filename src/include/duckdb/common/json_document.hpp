@@ -52,12 +52,22 @@ constexpr JSONReadFlags operator|(JSONReadFlags a, JSONReadFlags b) {
 }
 
 //! Flags controlling how JSON is written
-enum class JSONWriteFlags : uint32_t { NONE = 0, ALLOW_INVALID_UNICODE = 1 << 0 };
+enum class JSONWriteFlags : uint32_t {
+	NONE = 0,
+	ALLOW_INVALID_UNICODE = 1 << 0,
+	ALLOW_INF_AND_NAN = 1 << 1,
+	PRETTY = 1 << 2
+};
+
+constexpr JSONWriteFlags operator|(JSONWriteFlags a, JSONWriteFlags b) {
+	return static_cast<JSONWriteFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
 
 //! A read-only handle to a single value inside a JSONDocument.
 //! NOTE: a JSONValue is only valid for as long as the JSONDocument it originates from is alive.
 class JSONValue {
 	friend class JSONDocument;
+	friend class JSONWriter;
 
 public:
 	//! Constructs an invalid value
@@ -72,6 +82,8 @@ public:
 	bool IsString() const;
 	bool IsArray() const;
 	bool IsObject() const;
+	//! Whether or not this is an integer (signed or unsigned)
+	bool IsInteger() const;
 
 	//! Get the value as a string (only valid if IsString())
 	string GetString() const;
@@ -84,10 +96,16 @@ public:
 	//! Get the value as a double
 	double GetDouble() const;
 
+	//! Look up a member of an object by key - returns an invalid value if this is not an object or the key is absent
+	JSONValue GetMember(const string &key) const;
+
 	//! Iterate over the elements of an array
 	void IterateArray(const std::function<void(JSONValue)> &callback) const;
 	//! Iterate over the key/value pairs of an object
 	void IterateObject(const std::function<void(const string &, JSONValue)> &callback) const;
+
+	//! Serialize this value to a string
+	string ToString(JSONWriteFlags flags = JSONWriteFlags::NONE) const;
 
 private:
 	explicit JSONValue(duckdb_yyjson::yyjson_val *val);
@@ -128,14 +146,49 @@ public:
 	//! The root value of the document
 	JSONValue GetRoot() const;
 
+	//! Serialize the (immutable) document to a string
+	string ToString(JSONWriteFlags flags = JSONWriteFlags::NONE) const;
+
 private:
 	//! The wrapped yyjson document
 	duckdb_yyjson::yyjson_doc *doc;
 };
 
-//! Builds a JSON document and serializes it to a string. The root is either an object or an array.
+//! A handle to a value being built inside a JSONWriter. The value is owned by the JSONWriter that created it - it must
+//! not outlive that writer.
+class JSONMutableValue {
+	friend class JSONWriter;
+
+public:
+	//! Constructs an invalid value
+	JSONMutableValue();
+
+	bool IsValid() const;
+
+	//! Add a key/value pair to this (object) value
+	void Add(const string &key, JSONMutableValue value);
+	//! Add a string key/value pair to this (object) value
+	void AddString(const string &key, const string &value);
+
+	//! Append a value to this (array) value
+	void Append(JSONMutableValue value);
+	//! Append a string value to this (array) value
+	void AppendString(const string &value);
+
+private:
+	JSONMutableValue(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *val);
+
+private:
+	//! The document this value belongs to - not owned
+	duckdb_yyjson::yyjson_mut_doc *doc;
+	//! The wrapped mutable yyjson value - owned by "doc"
+	duckdb_yyjson::yyjson_mut_val *val;
+};
+
+//! Builds a JSON document out of JSONMutableValues and serializes it to a string.
 class JSONWriter {
 public:
+	JSONWriter();
 	~JSONWriter();
 	// non-copyable, movable
 	JSONWriter(const JSONWriter &) = delete;
@@ -143,27 +196,27 @@ public:
 	JSONWriter(JSONWriter &&other) noexcept;
 	JSONWriter &operator=(JSONWriter &&other) noexcept;
 
-	//! Create a writer with an object as the root value
-	static JSONWriter CreateObject();
-	//! Create a writer with an array as the root value
-	static JSONWriter CreateArray();
+	//! Create values that belong to this document
+	JSONMutableValue CreateObject();
+	JSONMutableValue CreateArray();
+	JSONMutableValue CreateString(const string &value);
+	JSONMutableValue CreateNull();
+	JSONMutableValue CreateBoolean(bool value);
+	JSONMutableValue CreateUnsignedInteger(uint64_t value);
+	JSONMutableValue CreateSignedInteger(int64_t value);
+	JSONMutableValue CreateDouble(double value);
+	//! Create a (deep) copy of an immutable value (e.g. from a parsed JSONDocument) belonging to this document
+	JSONMutableValue CreateCopy(const JSONValue &value);
 
-	//! Add a string key/value pair to the (object) root
-	void AddString(const string &key, const string &value);
-	//! Append a string value to the (array) root
-	void AppendString(const string &value);
+	//! Set the root value of the document
+	void SetRoot(JSONMutableValue value);
 
 	//! Serialize the document to a string
 	string ToString(JSONWriteFlags flags = JSONWriteFlags::NONE) const;
 
 private:
-	JSONWriter();
-
-private:
 	//! The wrapped mutable yyjson document
 	duckdb_yyjson::yyjson_mut_doc *doc;
-	//! The root value of the mutable document - owned by "doc"
-	duckdb_yyjson::yyjson_mut_val *root;
 };
 
 } // namespace duckdb
