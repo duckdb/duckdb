@@ -553,19 +553,12 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 	child_names.reserve(child_count);
 	child_vectors.reserve(child_count);
 
-	// A TUPLE is an unnamed struct: it has no member names, so we synthesize keys ("element1", ...)
-	// to match the JSON object keys emitted on the write path (see json_create.cpp)
-	const auto is_tuple = result.GetType().id() == LogicalTypeId::TUPLE;
 	unordered_set<idx_t> projected_indices;
 	for (idx_t child_i = 0; child_i < child_count; child_i++) {
 		const auto actual_i = column_index ? column_index->GetChildIndex(child_i).GetPrimaryIndex() : child_i;
 		projected_indices.insert(actual_i);
 
-		if (is_tuple) {
-			child_names.emplace_back(TupleType::GetChildName(actual_i));
-		} else {
-			child_names.emplace_back(StructType::GetChildName(result.GetType(), actual_i));
-		}
+		child_names.emplace_back(StructType::GetChildName(result.GetType(), actual_i));
 		child_vectors.push_back(&child_vs[actual_i]);
 	}
 
@@ -656,6 +649,60 @@ static bool TransformArrayToList(yyjson_val *arrays[], yyjson_alc *alc, Vector &
 		throw InvalidInputException(options.error_message);
 	}
 
+	return success;
+}
+
+static bool TransformArrayToTuple(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count,
+                                  JSONTransformOptions &options) {
+	// A TUPLE is serialized as a JSON array - read each array element positionally into the matching struct child
+	bool success = true;
+	auto &result_validity = FlatVector::ValidityMutable(result);
+	auto &child_vs = StructVector::GetEntries(result);
+	const idx_t child_count = child_vs.size();
+
+	// nested_vals[child_i * count + i] holds the JSON value for child child_i of row i
+	auto nested_vals = JSONCommon::AllocateArray<yyjson_val *>(alc, child_count * count);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &arr = arrays[i];
+		bool valid = arr && !unsafe_yyjson_is_null(arr) && unsafe_yyjson_is_arr(arr);
+		if (!valid) {
+			result_validity.SetInvalid(i);
+			if (success && options.strict_cast && arr && !unsafe_yyjson_is_null(arr)) {
+				options.error_message =
+				    StringUtil::Format("Expected ARRAY, but got %s: %s", JSONCommon::ValTypeToString(arr),
+				                       JSONCommon::ValToString(arr, 50));
+				options.object_index = i;
+				success = false;
+			}
+			for (idx_t child_i = 0; child_i < child_count; child_i++) {
+				nested_vals[child_i * count + i] = nullptr;
+			}
+			continue;
+		}
+		// gather up to child_count elements - missing elements become NULL, extra elements are ignored
+		size_t idx, max;
+		yyjson_val *val;
+		idx_t child_i = 0;
+		yyjson_arr_foreach(arr, idx, max, val) {
+			if (child_i < child_count) {
+				nested_vals[child_i * count + i] = val;
+			}
+			child_i++;
+		}
+		for (; child_i < child_count; child_i++) {
+			nested_vals[child_i * count + i] = nullptr;
+		}
+	}
+
+	for (idx_t child_i = 0; child_i < child_count; child_i++) {
+		if (!JSONTransform::Transform(nested_vals + child_i * count, alc, child_vs[child_i], count, options, nullptr)) {
+			success = false;
+		}
+	}
+
+	if (!options.delay_error && !success) {
+		throw InvalidInputException(options.error_message);
+	}
 	return success;
 }
 
@@ -988,8 +1035,9 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::BLOB:
 		return TransformToString(vals, alc, result, count);
 	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::TUPLE:
 		return TransformObjectInternal(vals, alc, result, count, options, column_index);
+	case LogicalTypeId::TUPLE:
+		return TransformArrayToTuple(vals, alc, result, count, options);
 	case LogicalTypeId::LIST:
 		return TransformArrayToList(vals, alc, result, count, options);
 	case LogicalTypeId::MAP:

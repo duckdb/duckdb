@@ -109,13 +109,13 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 		}
 		return LogicalType::STRUCT(child_types);
 	}
+	// A TUPLE is an unnamed struct: it is serialized as a JSON array (matching how Python serializes tuples)
 	case LogicalTypeId::TUPLE: {
-		child_list_t<LogicalType> child_types;
-		for (const auto &[name, type] : TupleType::NamedChildren(type)) {
-			const_struct_names.Insert(name.GetIdentifierName());
-			child_types.emplace_back(name, GetJSONType(const_struct_names, type));
+		vector<LogicalType> child_types;
+		for (const auto &child_type : StructType::GetChildTypes(type)) {
+			child_types.push_back(GetJSONType(const_struct_names, child_type.second));
 		}
-		return LogicalType::STRUCT(child_types);
+		return LogicalType::TUPLE(std::move(child_types));
 	}
 	case LogicalTypeId::MAP: {
 		return LogicalType::MAP(LogicalType::VARCHAR, GetJSONType(const_struct_names, MapType::ValueType(type)));
@@ -361,13 +361,9 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
 
 	// Add the key/value pairs to the values
-	const auto is_tuple = value_v.GetType().id() == LogicalTypeId::TUPLE;
 	auto &entries = StructVector::GetEntries(value_v);
 	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
-		auto &struct_key_v =
-		    is_tuple ? names.Get(TupleType::GetChildName(entry_i), count)
-		             : names.Get(StructType::GetChildName(value_v.GetType(), entry_i).GetIdentifierName(), count);
-
+		auto &struct_key_v = names.Get(StructType::GetChildName(value_v.GetType(), entry_i).GetIdentifierName(), count);
 		auto &struct_val_v = entries[entry_i];
 		CreateKeyValuePairs(names, doc, vals, nested_vals, struct_key_v, struct_val_v, count);
 	}
@@ -377,6 +373,31 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = struct_data.sel->get_index(i);
 		if (!struct_data.validity.RowIsValid(idx)) {
+			vals[i] = yyjson_mut_null(doc);
+		}
+	}
+}
+
+static void CreateValuesTuple(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
+                              idx_t count) {
+	// a TUPLE becomes a JSON array (matching how Python serializes tuples)
+	for (idx_t i = 0; i < count; i++) {
+		vals[i] = yyjson_mut_arr(doc);
+	}
+	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
+	auto &entries = StructVector::GetEntries(value_v);
+	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
+		CreateValues(names, doc, nested_vals, entries[entry_i], count);
+		for (idx_t i = 0; i < count; i++) {
+			yyjson_mut_arr_append(vals[i], nested_vals[i]);
+		}
+	}
+	// Whole tuple can be NULL
+	UnifiedVectorFormat tuple_data;
+	value_v.ToUnifiedFormat(tuple_data);
+	for (idx_t i = 0; i < count; i++) {
+		idx_t idx = tuple_data.sel->get_index(i);
+		if (!tuple_data.validity.RowIsValid(idx)) {
 			vals[i] = yyjson_mut_null(doc);
 		}
 	}
@@ -592,8 +613,10 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		TemplatedCreateValues<string_t, string_t>(doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::TUPLE:
 		CreateValuesStruct(names, doc, vals, value_v, count);
+		break;
+	case LogicalTypeId::TUPLE:
+		CreateValuesTuple(names, doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::MAP:
 		CreateValuesMap(names, doc, vals, value_v, count);
