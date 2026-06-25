@@ -187,6 +187,14 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 //! Phase of a scan job: we are either scheduling its I/O or decoding it
 enum class MultiFileScanPhase : uint8_t { SCHEDULE, DECODE };
 
+//! Outcome of decoding the current scan job (see MultiFileFunction::DecodeCurrentJob)
+enum class MultiFileDecodeResult : uint8_t {
+	CONTINUE,       //! keep looping (BLOCKED ran inline, or an empty chunk was suppressed)
+	EMITTED_RETURN, //! a chunk was emitted to the caller - return from the scan
+	JOB_FINISHED,   //! the job is fully decoded - the caller claims the next one
+	PARKED          //! the operator parked on async I/O - return from the scan
+};
+
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
 struct MultiFileScanJob {
 	//! The reader producing this job (kept alive for the job's lifetime)
@@ -211,7 +219,6 @@ public:
 public:
 	//! The job currently being scanned by this thread
 	MultiFileScanJob job;
-	bool is_parallel;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
 	DataChunk scan_chunk;
 	//! Set when the previous Scan() returned BLOCKED, so the next Scan() preserves the partial chunk

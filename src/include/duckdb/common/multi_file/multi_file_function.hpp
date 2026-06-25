@@ -517,7 +517,6 @@ static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &l
 		}
 
 		auto result = make_uniq<MultiFileLocalState>(context.client);
-		result->is_parallel = true;
 		result->job.batch_index = 0;
 		result->job.reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
 
@@ -694,8 +693,11 @@ static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &l
 		return false;
 	}
 
-	static bool DecodePhase(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
-	                        MultiFileGlobalState &gstate, MultiFileBindData &bind_data, DataChunk &output) {
+	//! Decode the current job in place: scan a chunk and finalize it into 'output'. Never advances or finishes the job
+	//! - the caller claims the next one. Returns what the scan loop should do next.
+	static MultiFileDecodeResult DecodeCurrentJob(ClientContext &context, TableFunctionInput &data_p,
+	                                              MultiFileLocalState &data, MultiFileGlobalState &gstate,
+	                                              MultiFileBindData &bind_data, DataChunk &output) {
 		if (data.scan_chunk_file_index != data.job.file_index) {
 			// if the file changes we need to initialize the chunk again
 			InitializeDecodeChunk(context, data, gstate.projection_ids);
@@ -710,11 +712,10 @@ static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &l
 
 		data.resuming_blocked_scan = res.GetResultType() == AsyncResultType::BLOCKED;
 		if (res.GetResultType() == AsyncResultType::BLOCKED) {
-			return HandleBlocked(data_p, res);
+			return HandleBlocked(data_p, res) ? MultiFileDecodeResult::PARKED : MultiFileDecodeResult::CONTINUE;
 		}
 
 		output.SetChildCardinality(scan_chunk.size());
-
 		if (scan_chunk.size() > 0) {
 			data.rows_scanned += scan_chunk.size();
 			bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.job.reader, *data.job.reader_data,
@@ -723,25 +724,14 @@ static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &l
 		}
 		if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
 			// More chunks left on this batch, lets keep going
-			return EmitOutput(data_p, output);
+			return EmitOutput(data_p, output) ? MultiFileDecodeResult::EMITTED_RETURN : MultiFileDecodeResult::CONTINUE;
 		}
-
 		if (res.GetResultType() != AsyncResultType::FINISHED) {
 			throw InternalException("Unexpected result in MultiFileScan, must be FINISHED, is %s",
 			                        EnumUtil::ToChars(res.GetResultType()));
 		}
-
-		// We are done with this batch
-		if (!ClaimNextJob(context, bind_data, gstate, data.job)) {
-			if (output.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
-				gstate.finished = true;
-				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
-			} else {
-				data_p.async_result = SourceResultType::FINISHED;
-			}
-			return true;
-		}
-		return EmitOutput(data_p, output);
+		// this batch is fully decoded - the caller claims the next one
+		return MultiFileDecodeResult::JOB_FINISHED;
 	}
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -766,8 +756,28 @@ static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &l
 				}
 				break;
 			case MultiFileScanPhase::DECODE:
-				if (DecodePhase(context, data_p, data, gstate, bind_data, output)) {
+				switch (DecodeCurrentJob(context, data_p, data, gstate, bind_data, output)) {
+				case MultiFileDecodeResult::CONTINUE:
+					break;
+				case MultiFileDecodeResult::EMITTED_RETURN:
+				case MultiFileDecodeResult::PARKED:
 					return;
+				case MultiFileDecodeResult::JOB_FINISHED:
+					// we are done with this batch - claim the next one (a fresh job starts in the schedule phase)
+					if (!ClaimNextJob(context, bind_data, gstate, data.job)) {
+						if (output.size() > 0 &&
+						    data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+							gstate.finished = true;
+							data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+						} else {
+							data_p.async_result = SourceResultType::FINISHED;
+						}
+						return;
+					}
+					if (EmitOutput(data_p, output)) {
+						return;
+					}
+					break;
 				}
 				break;
 			default:
