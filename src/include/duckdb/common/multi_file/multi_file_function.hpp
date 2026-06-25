@@ -400,12 +400,12 @@ public:
 
 	static void InitializeFileScanState(ClientContext &context, MultiFileReaderData &reader_data,
 	                                    MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
-		lstate.reader_data = reader_data;
-		auto &reader = *lstate.reader;
+		lstate.job.reader_data = reader_data;
+		auto &reader = *lstate.job.reader;
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
 		vector<LogicalType> intermediate_chunk_types;
 		auto &local_column_ids = reader.column_indexes;
-		auto &local_columns = lstate.reader->GetColumns();
+		auto &local_columns = lstate.job.reader->GetColumns();
 		for (idx_t i = 0; i < local_column_ids.size(); i++) {
 			auto &local_id = local_column_ids[i];
 
@@ -459,29 +459,29 @@ public:
 
 			//! If we don't have a file to read, and the MultiFileList has no new file for us - end the scan
 			if (!HasFilesToRead(gstate, parallel_lock) && !TryGetNextFile(gstate, parallel_lock)) {
-				bind_data.interface->FinishReading(context, *gstate.global_state, *scan_data.local_state);
+				bind_data.interface->FinishReading(context, *gstate.global_state, *scan_data.job.reader_scan_state);
 				return false;
 			}
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
 				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state,
-				                                                  *scan_data.local_state)) {
-					scan_data.reader = current_reader_data.reader;
-					if (!scan_data.reader) {
+				                                                  *scan_data.job.reader_scan_state)) {
+					scan_data.job.reader = current_reader_data.reader;
+					if (!scan_data.job.reader) {
 						throw InternalException("MultiFileReader was moved");
 					}
 					// The current reader has data left to be scanned
-					scan_data.batch_index = gstate.batch_index++;
-					auto old_file_index = scan_data.file_index;
-					scan_data.file_index = gstate.file_index;
+					scan_data.job.batch_index = gstate.batch_index++;
+					auto old_file_index = scan_data.job.file_index;
+					scan_data.job.file_index = gstate.file_index;
 					parallel_lock.unlock();
-					scan_data.reader->PrepareScan(context, *gstate.global_state, *scan_data.local_state);
-					if (old_file_index != scan_data.file_index) {
+					scan_data.job.reader->PrepareScan(context, *gstate.global_state, *scan_data.job.reader_scan_state);
+					if (old_file_index != scan_data.job.file_index) {
 						InitializeFileScanState(context, current_reader_data, scan_data, gstate.projection_ids);
 					}
 					// Initializing a batch is always a schedule phase
-					scan_data.phase = MultiFileScanPhase::SCHEDULE;
+					scan_data.job.phase = MultiFileScanPhase::SCHEDULE;
 					return true;
 				} else {
 					// Set state to the next file
@@ -525,8 +525,8 @@ public:
 
 		auto result = make_uniq<MultiFileLocalState>(context.client);
 		result->is_parallel = true;
-		result->batch_index = 0;
-		result->local_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
+		result->job.batch_index = 0;
+		result->job.reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
 
 		if (!TryInitializeNextBatch(context.client, bind_data, *result, gstate)) {
 			return nullptr;
@@ -657,8 +657,8 @@ public:
 		auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
 		auto &data = input.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
-		OperatorPartitionData partition_data(data.batch_index);
-		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, *data.reader_data,
+		OperatorPartitionData partition_data(data.job.batch_index);
+		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, *data.job.reader_data,
 		                                              gstate.multi_file_reader_state, input.partition_info,
 		                                              partition_data);
 		return partition_data;
@@ -693,8 +693,8 @@ public:
 
 	static bool SchedulePhase(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
 	                          MultiFileGlobalState &gstate) {
-		auto scheduled = data.reader->ScheduleIO(context, *gstate.global_state, *data.local_state);
-		data.phase = MultiFileScanPhase::DECODE;
+		auto scheduled = data.job.reader->ScheduleIO(context, *gstate.global_state, *data.job.reader_scan_state);
+		data.job.phase = MultiFileScanPhase::DECODE;
 		if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
 			return HandleBlocked(data_p, scheduled);
 		}
@@ -709,7 +709,7 @@ public:
 			// keep. Hence, we only reset if we are not resuming from a blocked scan.
 			scan_chunk.Reset();
 		}
-		auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
+		auto res = data.job.reader->Scan(context, *gstate.global_state, *data.job.reader_scan_state, scan_chunk);
 
 		data.resuming_blocked_scan = res.GetResultType() == AsyncResultType::BLOCKED;
 		if (res.GetResultType() == AsyncResultType::BLOCKED) {
@@ -720,8 +720,8 @@ public:
 
 		if (scan_chunk.size() > 0) {
 			data.rows_scanned += scan_chunk.size();
-			bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data, scan_chunk,
-			                                           output, data.executor, gstate.multi_file_reader_state);
+			bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.job.reader, *data.job.reader_data,
+			                                           scan_chunk, output, data.executor, gstate.multi_file_reader_state);
 			output.SetChildCardinality(output.size());
 		}
 		if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
@@ -762,7 +762,7 @@ public:
 		}
 
 		do {
-			switch (data.phase) {
+			switch (data.job.phase) {
 			case MultiFileScanPhase::SCHEDULE:
 				if (SchedulePhase(context, data_p, data, gstate)) {
 					return;

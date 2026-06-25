@@ -334,10 +334,10 @@ static void ParquetScanGetMetrics(TableFunctionGetMetricsInput &input) {
 		return;
 	}
 	auto &local = input.local_state->Cast<MultiFileLocalState>();
-	if (!local.local_state) {
+	if (!local.job.reader_scan_state) {
 		return;
 	}
-	auto &scan_state = local.local_state->Cast<ParquetReadLocalState>().scan_state;
+	auto &scan_state = local.job.reader_scan_state->Cast<ParquetReadLocalState>().scan_state;
 	input.operator_metrics.row_groups_scanned = scan_state.row_groups_read;
 	input.operator_metrics.total_row_groups_to_scan = scan_state.row_groups_read + scan_state.row_groups_skipped;
 }
