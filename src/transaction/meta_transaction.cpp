@@ -54,6 +54,9 @@ optional_ptr<Transaction> MetaTransaction::TryGetTransaction(AttachedDatabase &d
 }
 
 Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
+	if (ValidChecker::IsInvalidated(db)) {
+		throw IOException("%s", ValidChecker::InvalidatedMessage(db));
+	}
 	lock_guard<mutex> guard(lock);
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {

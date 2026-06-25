@@ -229,7 +229,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options, active_checkpoint);
 
 	catalog_entry_vector_t catalog_entries;
-	try {
+	{
 		auto checkpoint_sleep_ms = Settings::Get<DebugCheckpointSleepMsSetting>(db.GetDatabase());
 		if (checkpoint_sleep_ms > 0) {
 			ThreadUtil::SleepMs(checkpoint_sleep_ms);
@@ -345,14 +345,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 			}
 			storage_manager.WALFinishCheckpoint(*wal_lock);
 		}
-	} catch (std::exception &ex) {
-		// any exceptions thrown here are fatal
-		ErrorData error(ex);
-		if (error.Type() == ExceptionType::FATAL) {
-			ValidChecker::Invalidate(db.GetDatabase(), error.Message());
-			throw;
-		}
-		throw FatalException("Failed to create checkpoint: %s", error.Message());
 	}
 
 	// for any indexes that were appended to while checkpointing, merge the delta back into the main index

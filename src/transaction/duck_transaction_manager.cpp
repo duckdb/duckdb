@@ -194,6 +194,9 @@ DuckTransactionManager::GetCheckpointType(DuckTransaction &transaction, const Un
 }
 
 void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
+	if (ValidChecker::IsInvalidated(db)) {
+		throw IOException("%s", ValidChecker::InvalidatedMessage(db));
+	}
 	auto &storage_manager = db.GetStorageManager();
 	auto current = Transaction::TryGet(context, db);
 	if (current) {

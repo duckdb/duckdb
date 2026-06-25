@@ -1,0 +1,59 @@
+# name: test/sql/storage/attach/initial_database_checkpoint_failure.test
+# description: A checkpoint failure on the initial (default) database invalidates the whole instance
+# group: [attach]
+
+require skip_reload
+
+require no_alternative_verify
+
+# the initial/default database is a file (so it actually checkpoints)
+load {TEST_DIR}/initial_db_checkpoint_failure.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint = '1TB';
+
+statement ok
+CREATE TABLE t(i INTEGER);
+
+statement ok
+INSERT INTO t VALUES (1);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+ATTACH '{TEST_DIR}/initial_db_checkpoint_failure_sec.db' AS sec;
+
+statement ok
+CREATE TABLE sec.t(i INTEGER);
+
+statement ok
+INSERT INTO sec.t VALUES (100);
+
+statement ok
+PRAGMA debug_checkpoint_abort = 'before_header';
+
+# write to the initial database so there is something to checkpoint
+statement ok
+INSERT INTO t VALUES (2);
+
+# a checkpoint failure on the initial database is instance-wide (not scoped)
+statement error
+CHECKPOINT;
+----
+<REGEX>:FATAL Error.*Checkpoint aborted before header write.*
+
+# instance-wide: even a no-table query fails (contrast with a scoped secondary failure, where SELECT 42 works)
+statement error
+SELECT 42;
+----
+<REGEX>:.*database has been invalidated.*
+
+# the attached secondary is also dead, because the whole instance is invalidated
+statement error
+SELECT COUNT(*) FROM sec.t;
+----
+<REGEX>:.*database has been invalidated.*

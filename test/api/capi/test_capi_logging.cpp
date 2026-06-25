@@ -116,7 +116,7 @@ TEST_CASE("Test logging silent exceptions using a custom log storage in the CAPI
 	// Shut down - should silently fail while resetting the databases.
 	tester.Cleanup();
 
-	REQUIRE(my_log_store.Contains("Failed to create checkpoint because of error"));
+	REQUIRE(my_log_store.Contains("Checkpoint failed for database"));
 
 	duckdb_destroy_log_storage(&log_storage);
 }
