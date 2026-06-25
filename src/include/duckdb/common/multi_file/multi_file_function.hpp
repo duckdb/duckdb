@@ -397,7 +397,8 @@ public:
 		}
 	}
 
-static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
+	static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &lstate,
+	                                  vector<idx_t> &projection_ids) {
 		auto &reader = *lstate.job.reader;
 		auto &reader_data = *lstate.job.reader_data;
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
@@ -462,7 +463,8 @@ static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &l
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
-				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state, *job.reader_scan_state)) {
+				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state,
+				                                                  *job.reader_scan_state)) {
 					job.reader = current_reader_data.reader;
 					if (!job.reader) {
 						throw InternalException("MultiFileReader was moved");
@@ -710,19 +712,22 @@ static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &l
 
 		data.resuming_blocked_scan = res.GetResultType() == AsyncResultType::BLOCKED;
 		if (res.GetResultType() == AsyncResultType::BLOCKED) {
-			return HandleBlocked(data_p, res) ? MultiFileDecodeResult::PARKED : MultiFileDecodeResult::CONTINUE;
+			return HandleBlocked(data_p, res) ? MultiFileDecodeResult::RETURN_TO_CALLER
+			                                  : MultiFileDecodeResult::CONTINUE;
 		}
 
 		output.SetChildCardinality(scan_chunk.size());
 		if (scan_chunk.size() > 0) {
 			data.rows_scanned += scan_chunk.size();
 			bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.job.reader, *data.job.reader_data,
-			                                           scan_chunk, output, data.executor, gstate.multi_file_reader_state);
+			                                           scan_chunk, output, data.executor,
+			                                           gstate.multi_file_reader_state);
 			output.SetChildCardinality(output.size());
 		}
 		if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
 			// More chunks left on this batch, lets keep going
-			return EmitOutput(data_p, output) ? MultiFileDecodeResult::EMITTED_RETURN : MultiFileDecodeResult::CONTINUE;
+			return EmitOutput(data_p, output) ? MultiFileDecodeResult::RETURN_TO_CALLER
+			                                  : MultiFileDecodeResult::CONTINUE;
 		}
 		if (res.GetResultType() != AsyncResultType::FINISHED) {
 			throw InternalException("Unexpected result in MultiFileScan, must be FINISHED, is %s",
@@ -757,8 +762,7 @@ static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &l
 				switch (DecodeCurrentJob(context, data_p, data, gstate, bind_data, output)) {
 				case MultiFileDecodeResult::CONTINUE:
 					break;
-				case MultiFileDecodeResult::EMITTED_RETURN:
-				case MultiFileDecodeResult::PARKED:
+				case MultiFileDecodeResult::RETURN_TO_CALLER:
 					return;
 				case MultiFileDecodeResult::JOB_FINISHED:
 					// done with this job, gotta claim the next one
