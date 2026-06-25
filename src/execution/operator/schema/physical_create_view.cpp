@@ -8,7 +8,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 SourceResultType PhysicalCreateView::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                      OperatorSourceInput &input) const {
-	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
+	auto &catalog = Catalog::GetCatalog(context.client, info->Catalog());
 	catalog.CreateView(context.client, *info);
 
 	return SourceResultType::FINISHED;

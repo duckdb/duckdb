@@ -9,9 +9,10 @@ CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY, Identi
 }
 
 CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
-    : CreateInfo(CatalogType::INDEX_ENTRY, info.schema), table(info.table), index_name(info.index_name),
-      options(info.options), index_type(info.index_type), constraint_type(info.constraint_type),
-      column_ids(info.column_ids), scan_types(info.scan_types), names(info.names) {
+    : CreateInfo(CatalogType::INDEX_ENTRY, info.Schema()), table(info.table), options(info.options),
+      index_type(info.index_type), constraint_type(info.constraint_type), column_ids(info.column_ids),
+      scan_types(info.scan_types), names(info.names) {
+	SetIndexName(info.GetIndexName());
 }
 
 static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &root_expr, const Identifier &table_name) {
@@ -69,9 +70,9 @@ string CreateIndexInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += "IF NOT EXISTS ";
 	}
-	result += SQLIdentifier(index_name);
+	result += SQLIdentifier(GetIndexName());
 	result += " ON ";
-	result += QualifierToString(temporary ? Identifier() : catalog, schema, table);
+	result += QualifierToString(temporary ? Identifier() : Catalog(), Schema(), table);
 	if (index_type != "ART") {
 		result += " USING ";
 		result += SQLIdentifier(index_type);

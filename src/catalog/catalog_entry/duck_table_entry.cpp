@@ -35,7 +35,7 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_
                               const idx_t id) {
 	auto &table_info = info->Cast<CreateTableInfo>();
 	auto constraint_name = EnumUtil::ToString(type) + "_";
-	auto name = constraint_name + table_info.table + "_" + to_string(id);
+	auto name = constraint_name + table_info.GetTableName() + "_" + to_string(id);
 	IndexStorageInfo index_info {Identifier(name)};
 	if (!v1_0_0_storage) {
 		index_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
@@ -1320,7 +1320,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 
 	// We create a physical table with a new constraint and a new unique index.
 	const auto binder = Binder::CreateBinder(context);
-	const auto bound_constraint = binder->BindConstraint(*info.constraint, table_info.table, table_info.columns);
+	const auto bound_constraint =
+	    binder->BindConstraint(*info.constraint, table_info.GetTableName(), table_info.columns);
 	const auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
 
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, *bound_constraint);

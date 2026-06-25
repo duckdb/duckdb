@@ -1,0 +1,40 @@
+diff --git a/src/spatial/index/rtree/rtree_index_create_logical.cpp b/src/spatial/index/rtree/rtree_index_create_logical.cpp
+index 747748c..2f4610a 100644
+--- a/src/spatial/index/rtree/rtree_index_create_logical.cpp
++++ b/src/spatial/index/rtree/rtree_index_create_logical.cpp
+@@ -290,8 +290,8 @@ unique_ptr<LogicalExtensionOperator> LogicalCreateRTreeIndex::Deserialize(Deseri
+ 
+ 	// We also need to rebind the table
+ 	auto &context = reader.Get<ClientContext &>();
+-	const auto &catalog = info->catalog;
+-	const auto &schema = info->schema;
++	const auto &catalog = info->Catalog();
++	const auto &schema = info->Schema();
+ 	const auto &table_name = info->table;
+ 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table_name);
+ 
+diff --git a/src/spatial/index/rtree/rtree_index_create_physical.cpp b/src/spatial/index/rtree/rtree_index_create_physical.cpp
+index f6436c4..792d90e 100644
+--- a/src/spatial/index/rtree/rtree_index_create_physical.cpp
++++ b/src/spatial/index/rtree/rtree_index_create_physical.cpp
+@@ -79,7 +79,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateRTreeIndex::GetGlobalSinkState(ClientC
+ 	auto &constraint_type = info->constraint_type;
+ 	auto &db = storage.db;
+ 	gstate->rtree =
+-	    make_uniq<RTreeIndex>(Identifier(info->index_name.GetIdentifierName()), constraint_type, storage_ids, table_manager, unbound_expressions, db,
++	    make_uniq<RTreeIndex>(Identifier(info->GetIndexName().GetIdentifierName()), constraint_type, storage_ids, table_manager, unbound_expressions, db,
+ 	                          info->options, context, IndexStorageInfo(), estimated_cardinality);
+ 
+ 	gstate->max_node_capacity = gstate->rtree->tree->GetConfig().max_node_capacity;
+@@ -284,9 +284,9 @@ static void AddIndexToCatalog(ClientContext &context, CreateRTreeIndexGlobalStat
+ 	// Create the index entry in the catalog
+ 	auto &schema = table.schema;
+ 
+-	if (schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info.index_name)) {
++	if (schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info.GetIndexName())) {
+ 		if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
+-			throw CatalogException("Index with name \"%s\" already exists", info.index_name);
++			throw CatalogException("Index with name \"%s\" already exists", info.GetIndexName());
+ 		}
+ 		// IF NOT EXISTS on existing index. We are done.
+ 		// TODO: Early out before this.

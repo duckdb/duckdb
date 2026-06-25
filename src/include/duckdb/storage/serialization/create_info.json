@@ -17,11 +17,15 @@
       {
         "id": 101,
         "name": "catalog",
+        "serialize_property": "qualified_name.Catalog()",
+        "deserialize_property": "qualified_name.CatalogMutable()",
         "type": "Identifier"
       },
       {
         "id": 102,
         "name": "schema",
+        "serialize_property": "qualified_name.Schema()",
+        "deserialize_property": "qualified_name.SchemaMutable()",
         "type": "Identifier"
       },
       {
@@ -81,8 +85,9 @@
       {
         "id": 200,
         "name": "name",
-        "type": "Identifier",
-        "property": "index_name"
+        "serialize_property": "qualified_name.Name()",
+        "deserialize_property": "qualified_name.NameMutable()",
+        "type": "Identifier"
       },
       {
         "id": 201,
@@ -144,6 +149,8 @@
       {
         "id": 200,
         "name": "table",
+        "serialize_property": "qualified_name.Name()",
+        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -199,6 +206,8 @@
       {
         "id": 200,
         "name": "view_name",
+        "serialize_property": "qualified_name.Name()",
+        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -250,6 +259,8 @@
       {
         "id": 200,
         "name": "name",
+        "serialize_property": "qualified_name.Name()",
+        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -271,6 +282,8 @@
       {
         "id": 200,
         "name": "name",
+        "serialize_property": "qualified_name.Name()",
+        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -299,6 +312,8 @@
       {
         "id": 200,
         "name": "name",
+        "serialize_property": "qualified_name.Name()",
+        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -350,6 +365,8 @@
       {
         "id": 200,
         "name": "trigger_name",
+        "serialize_property": "qualified_name.Name()",
+        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
