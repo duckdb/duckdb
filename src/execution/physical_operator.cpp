@@ -84,7 +84,7 @@ bool PhysicalOperator::CanSaturateThreads(ClientContext &context) const {
 	// In debug mode we always return true here so that the code that depends on it is well-tested
 	return true;
 #else
-	const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	return EstimatedThreadCount() >= num_threads;
 #endif
 }
@@ -199,7 +199,7 @@ idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {
 	// Memory usage per thread should scale with max mem / num threads
 	// We take 1/4th of this, to be conservative
 	auto max_memory = BufferManager::GetBufferManager(context).GetOperatorMemoryLimit();
-	auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	return (max_memory / num_threads) / 4;
 }
 
@@ -416,23 +416,28 @@ SelectExecutionMode(const DataChunk &chunk, const OperatorResultType child_resul
 	return CachingPhysicalOperatorExecuteMode::RETURN_CHUNK;
 }
 
-static bool ChunkHasGlobalDictionary(const DataChunk &chunk) {
+//! Empty-id dicts (e.g. slice-of-flat) mint a fresh entry per slice, so their sels must not be accumulated.
+static inline bool IsAccumulableDictionary(const Vector &vector) {
+	return vector.GetVectorType() == VectorType::DICTIONARY_VECTOR && !DictionaryVector::DictionaryId(vector).empty();
+}
+
+static bool ChunkHasAccumulableDictionary(const DataChunk &chunk) {
 	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
-		if (DictionaryVector::IsGlobalDictionary(chunk.data[col_idx])) {
+		if (IsAccumulableDictionary(chunk.data[col_idx])) {
 			return true;
 		}
 	}
 	return false;
 }
 
-//! Switch the empty cache to dictionary mode: pin each global dictionary column's upstream entry and allocate its
-//! sel accumulator. Columns keep a real (resettable) cache so a flushed dict column flattens on the next Reset.
+//! Switch the empty cache to dictionary mode: pin each accumulable dictionary column's upstream entry and allocate
+//! its sel accumulator. Columns keep a real (resettable) cache so a flushed dict column flattens on the next Reset.
 static void SeedDictCache(CachingOperatorState &state, DataChunk &source) {
 	const idx_t col_count = source.ColumnCount();
 	state.dict_columns.clear();
 	state.dict_columns.resize(col_count);
 	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
-		if (!DictionaryVector::IsGlobalDictionary(source.data[col_idx])) {
+		if (!IsAccumulableDictionary(source.data[col_idx])) {
 			continue;
 		}
 		auto &slot = state.dict_columns[col_idx];
@@ -442,15 +447,28 @@ static void SeedDictCache(CachingOperatorState &state, DataChunk &source) {
 	state.dict_cache_active = true;
 }
 
+//! On identity change, demote just this column to flat (materializing the rows so far) instead of flushing the
+//! whole cache, so sibling columns keep accumulating and the chunk still coalesces.
+static void FlattenDictColumn(CachingOperatorState &state, DataChunk &cache, idx_t col_idx, idx_t base) {
+	auto &slot = state.dict_columns[col_idx];
+	D_ASSERT(slot.entry);
+	FlatVector::SetSize(cache.data[col_idx], 0);
+	if (base > 0) {
+		// materialize into the cache's own slot so the possibly-shared upstream child is never flattened in place
+		cache.data[col_idx].Append(slot.entry->data, slot.accumulated_sel, base, VectorAppendMode::ERROR_ON_NO_SPACE);
+	}
+	slot.entry = nullptr;
+}
+
 //! Append source into the cache (created lazily). On the first append into an empty cache, detect
-//! global dictionary columns; those concatenate their selection indices instead of flattening.
+//! accumulable dictionary columns; those concatenate their selection indices instead of flattening.
 static void AppendToCache(CachingOperatorState &state, DataChunk &source, ClientContext &client_context) {
 	if (!state.cached_chunk) {
 		state.cached_chunk = make_uniq<DataChunk>();
 		state.cached_chunk->Initialize(Allocator::Get(client_context), source.GetTypes());
 	}
 	auto &cache = *state.cached_chunk;
-	if (cache.size() == 0 && !state.dict_cache_active && ChunkHasGlobalDictionary(source)) {
+	if (cache.size() == 0 && !state.dict_cache_active && ChunkHasAccumulableDictionary(source)) {
 		SeedDictCache(state, source);
 	}
 	if (!state.dict_cache_active) {
@@ -466,28 +484,31 @@ static void AppendToCache(CachingOperatorState &state, DataChunk &source, Client
 	for (idx_t col_idx = 0; col_idx < cache.ColumnCount(); col_idx++) {
 		auto &slot = state.dict_columns[col_idx];
 		if (slot.entry) {
-			// dict column: every later chunk must be the same global dictionary. Throw (not D_ASSERT)
-			// because the Cast below is UB on a non-dict vector in release, accumulating foreign bytes as indices.
 			auto &source_col = source.data[col_idx];
-			if (source_col.GetVectorType() != VectorType::DICTIONARY_VECTOR ||
-			    DictionaryVector::DictionaryId(source_col).empty() ||
-			    !DictionaryVector::IsGlobalDictionary(source_col)) {
-				throw InternalException("dict-surviving cache: column %llu received a non-global-dictionary "
-				                        "chunk after being seeded for dictionary caching",
+			// Compare the pinned entry by pointer: cheaper than the string id and exact, since pinning keeps the
+			// address stable (no ABA). The type check must come first to guard the Cast against a flat vector.
+			const bool same_dict = source_col.GetVectorType() == VectorType::DICTIONARY_VECTOR &&
+			                       &source_col.Buffer().Cast<DictionaryBuffer>().GetEntry() == slot.entry.get();
+			if (same_dict) {
+				const auto &source_sel = DictionaryVector::SelVector(source_col);
+				for (idx_t row = 0; row < added; row++) {
+					slot.accumulated_sel.set_index(base + row, source_sel.get_index(row));
+				}
+				continue;
+			}
+			// A global dictionary wraps the same entry for the producer's lifetime, so a change is a producer bug
+			// that would desync the downstream sink layout -> fail loudly. A non-global dict rotating is normal.
+			if (slot.entry->global_dictionary) {
+				throw InternalException("dict-surviving cache: global dictionary column %llu changed identity "
+				                        "after being seeded for dictionary caching",
 				                        static_cast<uint64_t>(col_idx));
 			}
-			// An id mismatch past the encoding check is a producer bug (never user-triggerable), so assert.
-			D_ASSERT(source_col.Buffer().Cast<DictionaryBuffer>().GetEntry().id == slot.entry->id);
-			const auto &source_sel = DictionaryVector::SelVector(source_col);
-			for (idx_t row = 0; row < added; row++) {
-				slot.accumulated_sel.set_index(base + row, source_sel.get_index(row));
-			}
-		} else {
-			// flat column: append per column. The D_ASSERT catches a refactor that routes a dict placeholder here.
-			D_ASSERT(!slot.entry);
-			FlatVector::SetSize(cache.data[col_idx], base);
-			cache.data[col_idx].Append(source.data[col_idx], added, VectorAppendMode::ERROR_ON_NO_SPACE);
+			FlattenDictColumn(state, cache, col_idx, base);
 		}
+		// reached by originally-flat and just-demoted columns
+		D_ASSERT(!slot.entry);
+		FlatVector::SetSize(cache.data[col_idx], base);
+		cache.data[col_idx].Append(source.data[col_idx], added, VectorAppendMode::ERROR_ON_NO_SPACE);
 	}
 	// dict columns are rewrapped on flush, flat columns already sized; this only sets the cardinality
 	cache.SetChildCardinality(base + added);
