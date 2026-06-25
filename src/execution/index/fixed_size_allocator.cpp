@@ -278,21 +278,25 @@ FixedSizeAllocatorInfo FixedSizeAllocator::GetInfo() const {
 	FixedSizeAllocatorInfo info;
 	info.segment_size = segment_size;
 
-	for (const auto &buffer : buffers) {
-		info.buffer_ids.push_back(buffer.first);
+	for (const auto &[buffer_id, buffer] : buffers) {
+		if (!ShouldSerializeBuffer(*buffer)) {
+			continue;
+		}
+
+		info.buffer_ids.push_back(buffer_id);
 
 		// Memory safety check.
-		if (buffer.first > idx_t(MAX_ROW_ID)) {
+		if (buffer_id > idx_t(MAX_ROW_ID)) {
 			throw InternalException("Initializing invalid buffer ID in FixedSizeAllocator::GetInfo");
 		}
 
-		info.block_pointers.push_back(buffer.second->block_pointer);
-		info.segment_counts.push_back(buffer.second->segment_count);
-		info.allocation_sizes.push_back(buffer.second->allocation_size);
-	}
+		info.block_pointers.push_back(buffer->block_pointer);
+		info.segment_counts.push_back(buffer->segment_count);
+		info.allocation_sizes.push_back(buffer->allocation_size);
 
-	for (auto &buffer_id : buffers_with_free_space) {
-		info.buffers_with_free_space.push_back(buffer_id);
+		if (buffers_with_free_space.find(buffer_id) != buffers_with_free_space.end()) {
+			info.buffers_with_free_space.push_back(buffer_id);
+		}
 	}
 
 	return info;
@@ -306,25 +310,37 @@ unsafe_unique_ptr<FixedSizeAllocator> FixedSizeAllocator::Persist(PartialBlockMa
 	D_ASSERT(result->bitmask_offset == bitmask_offset);
 
 	result->total_segment_count = total_segment_count;
-	result->buffers_with_free_space = buffers_with_free_space;
-	result->buffer_with_free_space = buffer_with_free_space;
 
 	for (auto &[buffer_id, buffer] : buffers) {
+		if (!ShouldSerializeBuffer(*buffer)) {
+			continue;
+		}
+
 		result->buffers[buffer_id] =
 		    buffer->Persist(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
+
+		if (buffers_with_free_space.find(buffer_id) != buffers_with_free_space.end()) {
+			result->buffers_with_free_space.insert(buffer_id);
+		}
 	}
+
+	result->NextBufferWithFreeSpace();
 
 	return result;
 }
 
 vector<IndexBufferInfo> FixedSizeAllocator::InitSerializationToWAL() {
 	vector<IndexBufferInfo> buffer_infos;
-	for (auto &buffer : buffers) {
-		buffer.second->SetAllocationSize(available_segments_per_buffer, segment_size, bitmask_offset);
+	for (auto &[buffer_id, buffer] : buffers) {
+		if (!ShouldSerializeBuffer(*buffer)) {
+			continue;
+		}
+
+		buffer->SetAllocationSize(available_segments_per_buffer, segment_size, bitmask_offset);
 
 		// Get a handle to the buffer's memory (offset 0).
-		SegmentHandle handle(*buffer.second, 0);
-		buffer_infos.emplace_back(handle.GetPtr(), buffer.second->allocation_size);
+		SegmentHandle handle(*buffer, 0);
+		buffer_infos.emplace_back(handle.GetPtr(), buffer->allocation_size);
 	}
 	return buffer_infos;
 }
@@ -382,6 +398,10 @@ void FixedSizeAllocator::Deserialize(MetadataManager &metadata_manager, const Bl
 	for (idx_t i = 0; i < buffers_with_free_space_count; i++) {
 		buffers_with_free_space.insert(reader.Read<idx_t>());
 	}
+}
+
+bool FixedSizeAllocator::ShouldSerializeBuffer(const FixedSizeBuffer &buffer) {
+	return buffer.segment_count != 0;
 }
 
 idx_t FixedSizeAllocator::GetAvailableBufferId() const {

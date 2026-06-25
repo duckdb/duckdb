@@ -74,6 +74,8 @@ FixedSizeBuffer::~FixedSizeBuffer() {
 unique_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partial_block_manager,
                                                      const idx_t available_segments, const idx_t segment_size,
                                                      const idx_t bitmask_offset) {
+	D_ASSERT(readers == 0);
+
 	// Early-out, if the block is already on disk and not in memory.
 	if (!InMemory()) {
 		if (!OnDisk() || dirty) {

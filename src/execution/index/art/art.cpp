@@ -1037,10 +1037,6 @@ IndexStorageInfo ART::PrepareSerialize(const ARTSerializationFormat target_forma
 		info.options["storage_version"] = Value::UBIGINT(static_cast<uint64_t>(storage_version));
 	}
 
-	for (const auto &allocator : *allocators) {
-		allocator->RemoveEmptyBuffers();
-	}
-
 #ifdef DEBUG
 	if (target_format == ARTSerializationFormat::V1_0_0) {
 		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_7_LEAF)]->Empty());
@@ -1071,8 +1067,8 @@ void ART::Checkpoint(TableIndexWriter &writer) {
 	auto storage_info = PrepareSerialize(target_format);
 
 	auto &partial_block_manager = writer.GetPartialBlockManager();
-	const auto new_allocators = make_shared_ptr<ART::AllocatorArray>();
-	const auto allocator_count = ART::GetAllocatorCount(target_format);
+	const auto new_allocators = make_shared_ptr<AllocatorArray>();
+	const auto allocator_count = GetAllocatorCount(target_format);
 
 	// We allocate all allocators, but serialize in accordance with the target format.
 	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
@@ -1094,7 +1090,7 @@ IndexStorageInfo ART::SerializeToWAL(const StorageVersion target_version) {
 	// then we need to transform all nested leaves before serialization.
 	const auto target_format = GetSerializationFormat(target_version);
 	auto info = PrepareSerialize(target_format);
-	const auto allocator_count = ART::GetAllocatorCount(target_format);
+	const auto allocator_count = GetAllocatorCount(target_format);
 
 	// Set the correct allocation sizes and get the map containing all buffers.
 	for (idx_t i = 0; i < allocator_count; i++) {
@@ -1103,6 +1099,7 @@ IndexStorageInfo ART::SerializeToWAL(const StorageVersion target_version) {
 
 	for (idx_t i = 0; i < allocator_count; i++) {
 		info.allocator_infos.push_back((*allocators)[i]->GetInfo());
+		D_ASSERT(info.buffers[i].size() == info.allocator_infos[i].buffer_ids.size());
 	}
 
 	return info;

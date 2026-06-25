@@ -196,6 +196,8 @@ private:
 	unordered_set<idx_t> vacuum_buffers;
 
 private:
+	//! Returns if a buffer should be serialized; do not serialize buffers that are empty and exist to reduce churn.
+	static bool ShouldSerializeBuffer(const FixedSizeBuffer &buffer);
 	//! Returns an available buffer id
 	idx_t GetAvailableBufferId() const;
 	//! Caches the next buffer that we're going to fill.
