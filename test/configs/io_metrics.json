@@ -106,7 +106,7 @@
 				"CHECKPOINT"
 			],
 			"check": ["write"],
-			"skip": "FIXME: the storage write path under-counts. The OS writes ~0.5 MB to the database file but only ~0.26 MB is reported (the CHECKPOINT itself reports only ~4 KB) because the single-file block manager / checkpoint writes do not thread a QueryContext. Remove once those writes pass a QueryContext."
+			"skip": "FIXME: nearly all checkpoint writes are now attributed (~0.53 MB of the ~0.54 MB written). The remaining ~13 KB is database open/close I/O: the file-header writes at database creation and the close-time (shutdown) checkpoint at attached_database.cpp run with an empty QueryContext because no query is executing then. This residual is structurally not attributable to a query; remove this skip only if open/close I/O is given a synthetic attribution."
 		}
 	]
 }

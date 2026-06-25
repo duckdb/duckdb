@@ -1361,7 +1361,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		header.free_list = DConstants::INVALID_INDEX;
 	}
 	lock.unlock();
-	metadata_manager.Flush();
+	metadata_manager.Flush(context);
 
 	lock.lock();
 	header.block_count = NumericCast<idx_t>(max_block);
