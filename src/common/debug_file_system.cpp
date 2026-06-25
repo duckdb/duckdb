@@ -1,11 +1,10 @@
 #include "duckdb/common/debug_file_system.hpp"
 
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/io_latency_model.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
-
-#include <chrono>
-#include <thread>
 
 namespace duckdb {
 
@@ -30,11 +29,11 @@ void DebugFileSystem::ApplyDelay() {
 		delay_ms = mean_ms;
 	} else {
 		// Debug filesystem usage is not intended to be used in production, so performance is not a concern.
-		annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
+		const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
 		delay_ms = IoLatencyModel(mean_ms, stddev_ms).SampleLatency(random_engine);
 	}
 	if (delay_ms > 0.0) {
-		std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(delay_ms));
+		ThreadUtil::SleepMs(UnsafeNumericCast<idx_t>(delay_ms));
 	}
 #endif
 }
@@ -66,8 +65,8 @@ int64_t DebugFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 }
 
 string DebugFileSystem::GetName() const {
-	// Return internal filesystem name directly, since debug filesystem wrapper is enabled by default thus easy to cause
-	// confusion.
+	// Return internal filesystem name directly, since debug filesystem wrapper is involved by default thus easy to
+	// cause confusion.
 	return inner_fs->GetName();
 }
 
@@ -200,7 +199,6 @@ bool DebugFileSystem::SupportsOpenFileExtended() const {
 bool DebugFileSystem::ListFilesExtended(const string &directory,
                                         const std::function<void(OpenFileInfo &info)> &callback,
                                         optional_ptr<FileOpener> opener) {
-	// Use the public ListFiles API; it routes to ListFilesExtended on the inner filesystem when supported.
 	return inner_fs->ListFiles(directory, callback, opener);
 }
 

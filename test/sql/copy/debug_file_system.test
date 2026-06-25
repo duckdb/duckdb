@@ -27,29 +27,3 @@ RESET debug_fs_delay_mean_ms;
 
 statement ok
 RESET debug_fs_delay_stddev_ms;
-
-statement ok
-SET debug_local_file_system_delay_ms=1;
-
-statement ok
-RESET debug_local_file_system_delay_ms;
-
-statement ok
-SET debug_fs_delay_mean_ms=2.0;
-
-statement ok
-COPY (SELECT 99 AS i) TO '{TEMP_DIR}/debug_fs_test2.csv' (FORMAT csv);
-
-statement ok
-CREATE TABLE debug_fs_readback2 (i INTEGER);
-
-statement ok
-COPY debug_fs_readback2 FROM '{TEMP_DIR}/debug_fs_test2.csv';
-
-query I
-FROM debug_fs_readback2;
-----
-99
-
-statement ok
-RESET debug_fs_delay_mean_ms;
