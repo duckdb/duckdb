@@ -260,52 +260,28 @@ LogicalType BindArrayType(BindLogicalTypeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 LogicalType BindStructType(BindLogicalTypeInput &input) {
 	auto &arguments = input.modifiers;
-	auto all_name = true;
-	auto all_anon = true;
+
+	identifier_set_t name_collision_set;
+	child_list_t<LogicalType> children;
+	children.reserve(arguments.size());
 
 	for (auto &arg : arguments) {
-		if (arg.HasName()) {
-			all_anon = false;
-		} else {
-			all_name = false;
+		if (!arg.HasName()) {
+			throw BinderException("STRUCT type arguments must have names");
 		}
-
-		// Also check if all arguments are types
 		if (arg.GetValue().type() != LogicalTypeId::TYPE) {
 			throw BinderException("STRUCT type arguments must be types");
 		}
-
-		// And not null!
 		if (arg.GetValue().IsNull()) {
 			throw BinderException("STRUCT type arguments cannot be NULL");
 		}
-	}
 
-	if (!all_name && !all_anon) {
-		throw BinderException("STRUCT type arguments must either all have names or all be anonymous");
-	}
-
-	if (all_anon && !arguments.empty()) {
-		// Unnamed struct case - produce a TUPLE (an empty STRUCT(), with no fields, stays a bare STRUCT)
-		child_list_t<LogicalType> children;
-		for (auto &arg : arguments) {
-			children.emplace_back("", TypeValue::GetType(arg.GetValue()));
+		auto name = Identifier(arg.GetName());
+		if (name_collision_set.find(name) != name_collision_set.end()) {
+			throw BinderException("Duplicate STRUCT type argument name \"%s\"", name);
 		}
-		return LogicalType::TUPLE(std::move(children));
-	}
 
-	// Named struct case
-	D_ASSERT(all_name);
-	child_list_t<LogicalType> children;
-	identifier_set_t name_collision_set;
-
-	for (auto &arg : arguments) {
-		auto &child_name = arg.GetName();
-		if (name_collision_set.find(Identifier(child_name)) != name_collision_set.end()) {
-			throw BinderException("Duplicate STRUCT type argument name \"%s\"", child_name);
-		}
-		name_collision_set.insert(Identifier(child_name));
-		children.emplace_back(child_name, TypeValue::GetType(arg.GetValue()));
+		children.emplace_back(std::move(name), TypeValue::GetType(arg.GetValue()));
 	}
 
 	return LogicalType::STRUCT(std::move(children));

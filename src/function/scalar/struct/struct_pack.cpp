@@ -70,7 +70,7 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 	}
 
 	// this is more for completeness reasons
-	// row() produces an (possibly empty) unnamed TUPLE, struct_pack() produces a named STRUCT
+	// row() produces an unnamed TUPLE, struct_pack() produces a named STRUCT
 	if (IS_STRUCT_PACK) {
 		bound_function.SetReturnType(LogicalType::STRUCT(std::move(struct_children)));
 	} else {

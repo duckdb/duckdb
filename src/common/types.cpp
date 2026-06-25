@@ -1276,12 +1276,11 @@ void LogicalType::Serialize(Serializer &serializer) const {
 			// Ignore errors, just try to write as a USER type instead
 		}
 	}
-	// A non-empty TUPLE is serialized as an unnamed STRUCT for backwards compatibility (its children carry empty
-	// names, so it is detected as unnamed and converted back to TUPLE on deserialize). An empty TUPLE keeps its
-	// own id, since an empty STRUCT and an empty TUPLE are otherwise indistinguishable on disk (both already
-	// require a recent storage version - see CheckTypeIsSupported).
+	// TUPLE is a recent type. We store its own id when targeting a recent storage version (V2_0_0+), but for older
+	// formats we write it as an unnamed STRUCT for backwards compatibility (older engines read it as an unnamed
+	// struct - its children carry empty names - and we convert unnamed structs back to TUPLE on deserialize).
 	auto serialized_id = id_;
-	if (id_ == LogicalTypeId::TUPLE && type_info_ && !StructType::GetChildTypes(*this).empty()) {
+	if (id_ == LogicalTypeId::TUPLE && !serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serialized_id = LogicalTypeId::STRUCT;
 	}
 	serializer.WriteProperty<LogicalTypeId>(100, "id", serialized_id);

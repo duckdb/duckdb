@@ -92,11 +92,11 @@ SELECT struct_extract(row(1, 'a'), 'x');
 ----
 <REGEX>:.*unnamed struct.*
 
-# struct_keys errors on a TUPLE
+# struct_keys errors on a TUPLE (it requires a named STRUCT)
 statement error
 SELECT struct_keys(row(1, 'a'));
 ----
-<REGEX>:.*unnamed STRUCT.*
+<REGEX>:.*expects a STRUCT argument.*
 
 # implicit positional cast TUPLE -> named STRUCT
 query T
@@ -151,3 +151,42 @@ SELECT struct_extract(c, 1), struct_extract(c, 2) FROM t WHERE c IS NOT NULL ORD
 ----
 1	a
 2	b
+
+# storage: a recent (v2.0.0+) database stores the TUPLE id directly - empty and non-empty round-trip as TUPLE
+statement ok
+ATTACH '__TEST_DIR__/tuple_v2.db' AS v2 (STORAGE_VERSION 'v2.0.0');
+
+statement ok
+CREATE TABLE v2.tup AS SELECT row() AS e, row(1) AS one, row(2, 'b') AS two;
+
+statement ok
+DETACH v2;
+
+statement ok
+ATTACH '__TEST_DIR__/tuple_v2.db' AS v2 (READ_ONLY);
+
+query TTTTTT
+SELECT e, typeof(e), one, typeof(one), two, typeof(two) FROM v2.tup;
+----
+()	TUPLE	(1,)	TUPLE(INTEGER)	(2, b)	TUPLE(INTEGER, VARCHAR)
+
+statement ok
+DETACH v2;
+
+# storage: older formats fall back to an unnamed STRUCT on disk, reconstructed as TUPLE on read
+statement ok
+ATTACH '__TEST_DIR__/tuple_v15.db' AS v15 (STORAGE_VERSION 'v1.5.0');
+
+statement ok
+CREATE TABLE v15.tup AS SELECT row(2, 'b') AS two;
+
+statement ok
+DETACH v15;
+
+statement ok
+ATTACH '__TEST_DIR__/tuple_v15.db' AS v15 (READ_ONLY);
+
+query TT
+SELECT two, typeof(two) FROM v15.tup;
+----
+(2, b)	TUPLE(INTEGER, VARCHAR)
