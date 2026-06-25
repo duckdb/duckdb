@@ -198,11 +198,16 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
 		    strings, replaces, result, [&](string_t input, string_t replace) {
+			    auto replace_piece = CreateStringPiece(replace);
+			    std::string rewrite_error;
+			    if (!lstate.constant_pattern.CheckRewriteString(replace_piece, &rewrite_error)) {
+				    throw InvalidInputException("Invalid replacement string for regexp_replace: %s", rewrite_error);
+			    }
 			    std::string sstring = input.GetString();
 			    if (info.global_replace) {
-				    RE2::GlobalReplace(&sstring, lstate.constant_pattern, CreateStringPiece(replace));
+				    RE2::GlobalReplace(&sstring, lstate.constant_pattern, replace_piece);
 			    } else {
-				    RE2::Replace(&sstring, lstate.constant_pattern, CreateStringPiece(replace));
+				    RE2::Replace(&sstring, lstate.constant_pattern, replace_piece);
 			    }
 			    return heap.AddString(sstring);
 		    });
@@ -213,11 +218,16 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 			    if (!re.ok()) {
 				    throw InvalidInputException(re.error());
 			    }
+			    auto replace_piece = CreateStringPiece(replace);
+			    std::string rewrite_error;
+			    if (!re.CheckRewriteString(replace_piece, &rewrite_error)) {
+				    throw InvalidInputException("Invalid replacement string for regexp_replace: %s", rewrite_error);
+			    }
 			    std::string sstring = input.GetString();
 			    if (info.global_replace) {
-				    RE2::GlobalReplace(&sstring, re, CreateStringPiece(replace));
+				    RE2::GlobalReplace(&sstring, re, replace_piece);
 			    } else {
-				    RE2::Replace(&sstring, re, CreateStringPiece(replace));
+				    RE2::Replace(&sstring, re, replace_piece);
 			    }
 			    return heap.AddString(sstring);
 		    });
