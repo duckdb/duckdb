@@ -241,16 +241,17 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(WarningsAsErrorsSetting),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
     DUCKDB_GLOBAL(WriteBufferRowGroupMemoryLimitSetting),
-    DUCKDB_SETTING(ZstdMinStringLengthSetting),    FINAL_SETTING};
+    DUCKDB_SETTING(ZstdMinStringLengthSetting),
+    FINAL_SETTING};
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 29),
-    DUCKDB_SETTING_ALIAS("custom_profiling_settings", 29),
-    DUCKDB_SETTING_ALIAS("memory_limit", 127),
-    DUCKDB_SETTING_ALIAS("null_order", 60),
-    DUCKDB_SETTING_ALIAS("profile_output", 150),
-    DUCKDB_SETTING_ALIAS("user", 167),
-    DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 28),
-    DUCKDB_SETTING_ALIAS("worker_threads", 165),
+                                                     DUCKDB_SETTING_ALIAS("custom_profiling_settings", 29),
+                                                     DUCKDB_SETTING_ALIAS("memory_limit", 127),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 60),
+                                                     DUCKDB_SETTING_ALIAS("profile_output", 150),
+                                                     DUCKDB_SETTING_ALIAS("user", 167),
+                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 28),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 165),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
