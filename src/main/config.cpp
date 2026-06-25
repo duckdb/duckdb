@@ -2,8 +2,6 @@
 
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/debug_file_system.hpp"
-#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -272,11 +270,6 @@ vector<ConfigurationAlias> DBConfig::GetAliases() {
 		aliases.push_back(setting_aliases[index]);
 	}
 	return aliases;
-}
-
-VirtualFileSystem &DBConfig::GetVirtualFileSystem() {
-	auto &inner = static_cast<DebugFileSystem &>(*file_system).GetInnerFileSystem();
-	return static_cast<VirtualFileSystem &>(inner);
 }
 
 SettingCallbackInfo::SettingCallbackInfo(ClientContext &context_p, SetScope scope)
