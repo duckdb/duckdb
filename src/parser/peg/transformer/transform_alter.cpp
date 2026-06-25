@@ -48,7 +48,7 @@ PEGTransformerFactory::TransformAlterTableStmt(PEGTransformer &transformer, cons
 	}
 	auto result = std::move(alter_table_options[0]);
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	result->GetQualifiedNameMutable() = QualifiedName(base_table_name->Catalog(), base_table_name->Schema(), base_table_name->Table());
+	result->GetQualifiedNameMutable() = base_table_name->GetQualifiedName();
 
 	return std::move(result);
 }
@@ -70,7 +70,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
                                                                     unique_ptr<AlterTableInfo> rename_alter) {
 	auto rename_table = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(rename_alter));
 	auto result = make_uniq<RenameViewInfo>(AlterEntryData(), rename_table->new_table_name);
-	result->GetQualifiedNameMutable() = QualifiedName(base_table_name->Catalog(), base_table_name->Schema(), base_table_name->Table());
+	result->GetQualifiedNameMutable() = base_table_name->GetQualifiedName();
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	return std::move(result);
 }
@@ -154,7 +154,7 @@ void PEGTransformerFactory::AddUpdateToMultiStatement(const unique_ptr<MultiStat
 	node.prioritize_table_when_binding = true;
 
 	auto table_ref = make_uniq<BaseTableRef>();
-	table_ref->GetQualifiedNameMutable() = QualifiedName(table_data.catalog, table_data.schema, table_data.name);
+	table_ref->GetQualifiedNameMutable() = table_data.GetQualifiedName();
 	node.table = std::move(table_ref);
 
 	auto set_info = make_uniq<UpdateSetInfo>();

@@ -119,7 +119,7 @@ string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const s
 
 static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_list_t<LogicalType> &select_list) {
 	auto ref = make_uniq<BaseTableRef>();
-	ref->GetQualifiedNameMutable() = QualifiedName(stmt.info->Catalog(), stmt.info->Schema(), stmt.info->Table());
+	ref->GetQualifiedNameMutable() = stmt.info->GetQualifiedName();
 
 	auto statement = make_uniq<SelectNode>();
 	statement->from_table = std::move(ref);

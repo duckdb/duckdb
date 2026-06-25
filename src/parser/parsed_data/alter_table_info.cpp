@@ -88,7 +88,7 @@ AlterTableInfo::AlterTableInfo(AlterTableType type) : AlterInfo(AlterType::ALTER
 }
 
 AlterTableInfo::AlterTableInfo(AlterTableType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_TABLE, std::move(data.catalog), std::move(data.schema), std::move(data.name),
+    : AlterInfo(AlterType::ALTER_TABLE, data.Catalog(), data.Schema(), data.Name(),
                 data.if_not_found),
       alter_table_type(type) {
 }
@@ -534,7 +534,7 @@ AlterViewInfo::AlterViewInfo(AlterViewType type) : AlterInfo(AlterType::ALTER_VI
 }
 
 AlterViewInfo::AlterViewInfo(AlterViewType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_VIEW, std::move(data.catalog), std::move(data.schema), std::move(data.name),
+    : AlterInfo(AlterType::ALTER_VIEW, data.Catalog(), data.Schema(), data.Name(),
                 data.if_not_found),
       alter_view_type(type) {
 }

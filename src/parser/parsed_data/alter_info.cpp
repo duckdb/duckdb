@@ -18,12 +18,7 @@ AlterInfo::~AlterInfo() {
 }
 
 AlterEntryData AlterInfo::GetAlterEntryData() const {
-	AlterEntryData data;
-	data.catalog = Catalog();
-	data.schema = Schema();
-	data.name = Name();
-	data.if_not_found = if_not_found;
-	return data;
+	return AlterEntryData(GetQualifiedName(), if_not_found);
 }
 
 bool AlterInfo::IsAddPrimaryKey() const {

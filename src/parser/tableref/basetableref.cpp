@@ -31,7 +31,7 @@ bool BaseTableRef::Equals(const TableRef &other_p) const {
 unique_ptr<TableRef> BaseTableRef::Copy() {
 	auto copy = make_uniq<BaseTableRef>();
 
-	copy->GetQualifiedNameMutable() = QualifiedName(Catalog(), Schema(), Table());
+	copy->GetQualifiedNameMutable() = GetQualifiedName();
 	copy->column_name_alias = column_name_alias;
 	copy->at_clause = at_clause ? at_clause->Copy() : nullptr;
 	CopyProperties(*copy);
