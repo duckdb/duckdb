@@ -364,6 +364,24 @@ void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 }
 
 //===----------------------------------------------------------------------===//
+
+// Debug FileSystem Delay
+//===----------------------------------------------------------------------===//
+void DebugFsDelayMeanMsSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	auto delay_ms = input.GetValue<double>();
+	if (delay_ms < 0) {
+		throw InvalidInputException("Invalid option for %s: value must be greater than or equal to 0", string(Name));
+	}
+}
+
+void DebugFsDelayStddevMsSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	auto delay_ms = input.GetValue<double>();
+	if (delay_ms < 0) {
+		throw InvalidInputException("Invalid option for %s: value must be greater than or equal to 0", string(Name));
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Verification Mode
 //===----------------------------------------------------------------------===//
 void DebugVerificationModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

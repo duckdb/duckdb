@@ -33,7 +33,7 @@ void DebugFileSystem::ApplyDelay() {
 		delay_ms = IoLatencyModel(mean_ms, stddev_ms).SampleLatency(random_engine);
 	}
 	if (delay_ms > 0.0) {
-		ThreadUtil::SleepMs(UnsafeNumericCast<idx_t>(delay_ms));
+		ThreadUtil::SleepMs(LossyNumericCast<idx_t>(delay_ms));
 	}
 #endif
 }

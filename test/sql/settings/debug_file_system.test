@@ -1,6 +1,6 @@
-# name: test/sql/copy/debug_file_system.test
+# name: test/sql/settings/debug_file_system.test
 # description: Test DebugFileSystem latency injection settings
-# group: [copy]
+# group: [settings]
 
 statement ok
 SET debug_fs_delay_mean_ms=1.0;
@@ -27,3 +27,13 @@ RESET debug_fs_delay_mean_ms;
 
 statement ok
 RESET debug_fs_delay_stddev_ms;
+
+statement error
+SET debug_fs_delay_mean_ms=-1.0;
+----
+Invalid option for debug_fs_delay_mean_ms: value must be greater than or equal to 0
+
+statement error
+SET debug_fs_delay_stddev_ms=-1.0;
+----
+Invalid option for debug_fs_delay_stddev_ms: value must be greater than or equal to 0
