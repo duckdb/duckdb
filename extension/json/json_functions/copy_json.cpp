@@ -12,7 +12,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/function/function_binder.hpp"
 #include "duckdb/common/helper.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
@@ -123,14 +122,9 @@ static void BindJSONCopyToJSONFunction(Binder &binder, BoundStatement &bound, co
 
 	auto alias = to_json->GetAlias();
 	auto &to_json_children = to_json_function.GetChildrenMutable();
-	vector<unique_ptr<Expression>> json_copy_to_json_args;
-	json_copy_to_json_args.push_back(std::move(to_json_children[0]));
-	json_copy_to_json_args.push_back(JSONCopyBoundFormatConstant(date_format));
-	json_copy_to_json_args.push_back(JSONCopyBoundFormatConstant(timestamp_format));
-
-	FunctionBinder function_binder(binder);
-	auto replacement = function_binder.BindScalarFunction(JSONFunctions::GetJSONCopyToJSONFunction(),
-	                                                      std::move(json_copy_to_json_args), false, &binder);
+	auto replacement = JSONFunctions::CreateJSONCopyToJSONExpression(binder.context, std::move(to_json_children[0]),
+	                                                                 JSONCopyBoundFormatConstant(date_format),
+	                                                                 JSONCopyBoundFormatConstant(timestamp_format));
 	replacement->SetAlias(std::move(alias));
 	projection.expressions[0] = std::move(replacement);
 	projection.ResolveOperatorTypes();

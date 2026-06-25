@@ -9,7 +9,9 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -18,6 +20,8 @@
 #include "json_functions.hpp"
 
 namespace duckdb {
+
+static constexpr const char *JSON_COPY_TO_JSON_INTERNAL_NAME = "__internal_json_copy_to_json";
 
 struct StructNames {
 	void Insert(const string &name) {
@@ -315,6 +319,13 @@ static bool BindJSONCopyFormat(ClientContext &context, Expression &argument, con
 	return true;
 }
 
+static void ParseJSONCopyFormatString(const string &format_string, const string &name, StrfTimeFormat &format) {
+	auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
+	if (!error.empty()) {
+		throw InvalidInputException("Failed to parse %s format specifier %s: %s", name, format_string, error);
+	}
+}
+
 static unique_ptr<Expression> BindJSONCopyTimestampTZFormatter(ClientContext &context, const string &format_string,
                                                                const LogicalType &type) {
 	vector<unique_ptr<Expression>> children;
@@ -331,31 +342,17 @@ static unique_ptr<Expression> BindJSONCopyTimestampTZFormatter(ClientContext &co
 	return result;
 }
 
-static unique_ptr<FunctionData> JSONCopyToJSONBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	if (arguments.size() != 3) {
-		throw BinderException("json_copy_to_json() takes exactly three arguments");
-	}
-	if (arguments[0]->HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-
-	StructNames const_struct_names;
-	auto &bound_arguments = bound_function.GetArguments();
-	bound_arguments.clear();
-	bound_arguments.push_back(GetJSONType(const_struct_names, arguments[0]->GetReturnType()));
-	bound_arguments.push_back(LogicalType::VARCHAR);
-	bound_arguments.push_back(LogicalType::VARCHAR);
-
+static unique_ptr<JSONCopyToJSONFunctionData>
+CreateJSONCopyToJSONFunctionData(ClientContext &context, StructNames const_struct_names, bool has_date_format,
+                                 string date_format_string, bool has_timestamp_format, string timestamp_format_string) {
 	StrfTimeFormat date_format;
 	StrfTimeFormat timestamp_format;
-	string date_format_string;
-	string timestamp_format_string;
-	auto has_date_format = BindJSONCopyFormat(context, *arguments[1], "date", date_format_string, date_format);
-	auto has_timestamp_format =
-	    BindJSONCopyFormat(context, *arguments[2], "timestamp", timestamp_format_string, timestamp_format);
+	if (has_date_format) {
+		ParseJSONCopyFormatString(date_format_string, "date", date_format);
+	}
+	if (has_timestamp_format) {
+		ParseJSONCopyFormatString(timestamp_format_string, "timestamp", timestamp_format);
+	}
 
 	unique_ptr<Expression> timestamptz_format_expression;
 	unique_ptr<Expression> timestamptz_ns_format_expression;
@@ -370,6 +367,26 @@ static unique_ptr<FunctionData> JSONCopyToJSONBind(BindScalarFunctionInput &inpu
 	    std::move(const_struct_names), has_date_format, std::move(date_format_string), std::move(date_format),
 	    has_timestamp_format, std::move(timestamp_format_string), std::move(timestamp_format),
 	    std::move(timestamptz_format_expression), std::move(timestamptz_ns_format_expression));
+}
+
+static unique_ptr<JSONCopyToJSONFunctionData> CreateJSONCopyToJSONFunctionData(ClientContext &context,
+                                                                               StructNames const_struct_names,
+                                                                               Expression &date_argument,
+                                                                               Expression &timestamp_argument) {
+	StrfTimeFormat date_format;
+	StrfTimeFormat timestamp_format;
+	string date_format_string;
+	string timestamp_format_string;
+	auto has_date_format = BindJSONCopyFormat(context, date_argument, "date", date_format_string, date_format);
+	auto has_timestamp_format =
+	    BindJSONCopyFormat(context, timestamp_argument, "timestamp", timestamp_format_string, timestamp_format);
+	return CreateJSONCopyToJSONFunctionData(context, std::move(const_struct_names), has_date_format,
+	                                        std::move(date_format_string), has_timestamp_format,
+	                                        std::move(timestamp_format_string));
+}
+
+static unique_ptr<FunctionData> JSONCopyToJSONBind(BindScalarFunctionInput &) {
+	throw BinderException("%s is for internal use only", JSON_COPY_TO_JSON_INTERNAL_NAME);
 }
 
 template <class INPUT_TYPE, class RESULT_TYPE>
@@ -1017,12 +1034,65 @@ static void JSONCopyToJSONFunction(DataChunk &args, ExpressionState &state, Vect
 	ToJSONFunctionInternal(info.const_struct_names, args.data[0], args.size(), result, alc, options);
 }
 
-static void JSONCopyToJSONSerialize(Serializer &, optional_ptr<FunctionData>, const BoundScalarFunction &) {
-	throw NotImplementedException("json_copy_to_json is only serializable as part of JSON COPY planning");
+static void JSONCopyToJSONSerialize(Serializer &serializer, optional_ptr<FunctionData> bind_data,
+                                    const BoundScalarFunction &) {
+	if (!bind_data) {
+		throw InternalException("%s is missing bind data during serialization", JSON_COPY_TO_JSON_INTERNAL_NAME);
+	}
+	auto &data = bind_data->Cast<JSONCopyToJSONFunctionData>();
+	serializer.WriteProperty(100, "has_date_format", data.has_date_format);
+	serializer.WriteProperty(101, "date_format", data.date_format_string);
+	serializer.WriteProperty(102, "has_timestamp_format", data.has_timestamp_format);
+	serializer.WriteProperty(103, "timestamp_format", data.timestamp_format_string);
 }
 
-static unique_ptr<FunctionData> JSONCopyToJSONDeserialize(Deserializer &, BoundScalarFunction &) {
-	throw NotImplementedException("json_copy_to_json is only deserializable as part of JSON COPY planning");
+static unique_ptr<FunctionData> JSONCopyToJSONDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
+	auto has_date_format = deserializer.ReadProperty<bool>(100, "has_date_format");
+	auto date_format_string = deserializer.ReadProperty<string>(101, "date_format");
+	auto has_timestamp_format = deserializer.ReadProperty<bool>(102, "has_timestamp_format");
+	auto timestamp_format_string = deserializer.ReadProperty<string>(103, "timestamp_format");
+
+	auto &arguments = function.GetArguments();
+	if (arguments.size() != 3) {
+		throw InternalException("%s must have exactly three arguments during deserialization",
+		                        JSON_COPY_TO_JSON_INTERNAL_NAME);
+	}
+
+	StructNames const_struct_names;
+	GetJSONType(const_struct_names, arguments[0]);
+
+	auto &context = deserializer.Get<ClientContext &>();
+	return CreateJSONCopyToJSONFunctionData(context, std::move(const_struct_names), has_date_format,
+	                                        std::move(date_format_string), has_timestamp_format,
+	                                        std::move(timestamp_format_string));
+}
+
+unique_ptr<Expression> JSONFunctions::CreateJSONCopyToJSONExpression(ClientContext &context,
+                                                                     unique_ptr<Expression> payload,
+                                                                     unique_ptr<Expression> date_format,
+                                                                     unique_ptr<Expression> timestamp_format) {
+	StructNames const_struct_names;
+	auto json_type = GetJSONType(const_struct_names, payload->GetReturnType());
+	auto bind_data =
+	    CreateJSONCopyToJSONFunctionData(context, std::move(const_struct_names), *date_format, *timestamp_format);
+
+	payload = BoundCastExpression::AddCastToType(context, std::move(payload), json_type);
+
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(payload));
+	children.push_back(std::move(date_format));
+	children.push_back(std::move(timestamp_format));
+
+	auto function = GetJSONCopyToJSONFunction();
+	BoundScalarFunction bound_function(function);
+	auto &arguments = bound_function.GetArguments();
+	arguments.clear();
+	arguments.push_back(std::move(json_type));
+	arguments.push_back(LogicalType::VARCHAR);
+	arguments.push_back(LogicalType::VARCHAR);
+	bound_function.SetReturnType(LogicalType::JSON());
+
+	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(children), std::move(bind_data));
 }
 
 ScalarFunctionSet JSONFunctions::GetObjectFunction() {
@@ -1049,7 +1119,7 @@ ScalarFunctionSet JSONFunctions::GetToJSONFunction() {
 }
 
 ScalarFunction JSONFunctions::GetJSONCopyToJSONFunction() {
-	ScalarFunction fun("json_copy_to_json", {LogicalType::ANY, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	ScalarFunction fun(JSON_COPY_TO_JSON_INTERNAL_NAME, {LogicalType::ANY, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                   LogicalType::JSON(), JSONCopyToJSONFunction, JSONCopyToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);

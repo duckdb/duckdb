@@ -14,6 +14,8 @@
 namespace duckdb {
 
 class TableRef;
+class Expression;
+class ClientContext;
 struct ReplacementScanData;
 class CastFunctionSet;
 struct CastParameters;
@@ -74,6 +76,9 @@ public:
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
 	static ScalarFunction GetJSONCopyToJSONFunction();
+	static unique_ptr<Expression> CreateJSONCopyToJSONExpression(ClientContext &context, unique_ptr<Expression> payload,
+	                                                             unique_ptr<Expression> date_format,
+	                                                             unique_ptr<Expression> timestamp_format);
 	static void RegisterSimpleCastFunctions(ExtensionLoader &loader);
 	static void RegisterJSONCreateCastFunctions(ExtensionLoader &loader);
 	static void RegisterJSONTransformCastFunctions(ExtensionLoader &loader);
