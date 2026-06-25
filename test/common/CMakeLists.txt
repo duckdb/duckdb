@@ -24,6 +24,7 @@ add_library_unity(
   test_strftime.cpp
   test_string_util.cpp
   test_substring_oob.cpp
+  test_utf8_codepoint_oob.cpp
   test_temporary_memory_manager.cpp
   test_value_to_sql_string.cpp)
 

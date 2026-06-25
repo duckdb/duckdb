@@ -39,7 +39,7 @@ static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 
 		// UTF-8.
 		int sz = 0;
-		auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+		auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz, input_length - i);
 		auto converted = IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
 		auto new_sz = Utf8Proc::CodepointLength(converted);
 		output_length += UnsafeNumericCast<idx_t>(new_sz);
@@ -55,7 +55,7 @@ static void CaseConvert(const char *input_data, idx_t input_length, char *result
 		if (input_data[i] & 0x80) {
 			// non-ascii character
 			int sz = 0, new_sz = 0;
-			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz, input_length - i);
 			auto converted_codepoint =
 			    IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
 			auto success = Utf8Proc::CodepointToUtf8(converted_codepoint, new_sz, result_data);
