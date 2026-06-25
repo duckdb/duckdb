@@ -95,9 +95,9 @@ PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, cons
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateViewInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	info->catalog = qualified_name.catalog;
-	info->schema = qualified_name.schema;
-	info->view_name = qualified_name.name;
+	info->catalog = qualified_name.Catalog();
+	info->schema = qualified_name.Schema();
+	info->view_name = qualified_name.Name();
 	if (insert_column_list) {
 		info->aliases = StringsToIdentifiers(*insert_column_list);
 	}

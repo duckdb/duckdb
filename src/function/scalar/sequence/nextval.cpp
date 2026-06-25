@@ -46,7 +46,7 @@ SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, Identifier
 
 SequenceCatalogEntry &BindSequence(Binder &binder, const Identifier &name) {
 	auto qname = QualifiedName::Parse(name.GetIdentifierName());
-	return BindSequence(binder, qname.catalog, qname.schema, qname.name);
+	return BindSequence(binder, qname.CatalogMutable(), qname.SchemaMutable(), qname.NameMutable());
 }
 
 struct NextValLocalState : public FunctionLocalState {
