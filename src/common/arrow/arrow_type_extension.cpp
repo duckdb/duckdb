@@ -381,8 +381,7 @@ struct ArrowGeometry {
 
 		if (!extension_metadata.empty()) {
 			JSONParseError error;
-			auto doc =
-			    JSONDocument::Parse(extension_metadata.data(), extension_metadata.size(), JSONReadFlags::NONE, error);
+			auto doc = JSONDocument::TryParse(extension_metadata.data(), extension_metadata.size(), error);
 			if (!doc) {
 				throw SerializationException("Invalid JSON in GeoArrow metadata");
 			}
@@ -447,7 +446,7 @@ struct ArrowGeometry {
 		switch (crs_type) {
 		case CoordinateReferenceSystemType::PROJJSON: {
 			JSONParseError error;
-			auto projjson_doc = JSONDocument::Parse(crs_def.c_str(), crs_def.size(), JSONReadFlags::NONE, error);
+			auto projjson_doc = JSONDocument::TryParse(crs_def.c_str(), crs_def.size(), error);
 			if (projjson_doc) {
 				root.AddString("crs_type", "projjson");
 				root.Add("crs", writer.CreateCopy(projjson_doc->GetRoot()));

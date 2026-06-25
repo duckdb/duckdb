@@ -183,7 +183,8 @@ JSONDocument &JSONDocument::operator=(JSONDocument &&other) noexcept {
 	return *this;
 }
 
-unique_ptr<JSONDocument> JSONDocument::Parse(const char *data, idx_t len, JSONReadFlags flags, JSONParseError &error) {
+unique_ptr<JSONDocument> JSONDocument::TryParse(const char *data, idx_t len, JSONParseError &error,
+                                                JSONReadFlags flags) {
 	yyjson_read_err read_error;
 	auto parsed = yyjson_read_opts((char *)data, len, TranslateReadFlags(flags), nullptr, &read_error); // NOLINT
 	if (!parsed || read_error.code != YYJSON_READ_SUCCESS) {
@@ -197,6 +198,15 @@ unique_ptr<JSONDocument> JSONDocument::Parse(const char *data, idx_t len, JSONRe
 	}
 	auto result = make_uniq<JSONDocument>();
 	result->doc = parsed;
+	return result;
+}
+
+unique_ptr<JSONDocument> JSONDocument::Parse(const char *data, idx_t len, JSONReadFlags flags) {
+	JSONParseError error;
+	auto result = TryParse(data, len, error, flags);
+	if (!result) {
+		throw InvalidInputException("Failed to parse JSON at byte %llu of input: %s", error.position, error.message);
+	}
 	return result;
 }
 

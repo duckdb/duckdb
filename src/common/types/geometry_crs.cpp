@@ -459,7 +459,7 @@ bool CoordinateReferenceSystem::TryParseWKT2(const string &text, CoordinateRefer
 //----------------------------------------------------------------------------------------------------------------------
 bool CoordinateReferenceSystem::TryParsePROJJSON(const string &text, CoordinateReferenceSystem &result) {
 	JSONParseError error;
-	auto doc = JSONDocument::Parse(text.c_str(), text.size(), JSONReadFlags::NONE, error);
+	auto doc = JSONDocument::TryParse(text.c_str(), text.size(), error);
 	if (!doc) {
 		// Not a valid JSON
 		return false;

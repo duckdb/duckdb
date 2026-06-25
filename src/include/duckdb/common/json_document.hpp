@@ -136,8 +136,11 @@ public:
 	JSONDocument(JSONDocument &&other) noexcept;
 	JSONDocument &operator=(JSONDocument &&other) noexcept;
 
+	//! Parse the given input. Throws an InvalidInputException on failure.
+	static unique_ptr<JSONDocument> Parse(const char *data, idx_t len, JSONReadFlags flags = JSONReadFlags::NONE);
 	//! Parse the given input. Returns nullptr on failure, in which case "error" is populated.
-	static unique_ptr<JSONDocument> Parse(const char *data, idx_t len, JSONReadFlags flags, JSONParseError &error);
+	static unique_ptr<JSONDocument> TryParse(const char *data, idx_t len, JSONParseError &error,
+	                                         JSONReadFlags flags = JSONReadFlags::NONE);
 
 	//! The root value of the document
 	JSONValue GetRoot() const;

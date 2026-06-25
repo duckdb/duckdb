@@ -745,7 +745,7 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json, bool 
 		return result;
 	}
 	JSONParseError error;
-	auto doc = JSONDocument::Parse(json.c_str(), json.size(), JSONReadFlags::ALLOW_INVALID_UNICODE, error);
+	auto doc = JSONDocument::TryParse(json.c_str(), json.size(), error, JSONReadFlags::ALLOW_INVALID_UNICODE);
 	if (!doc) {
 		if (ignore_errors) {
 			return result;
@@ -778,7 +778,7 @@ string StringUtil::ValidateJSON(const char *data, const idx_t &len) {
 	static constexpr auto READ_FLAGS =
 	    JSONReadFlags::ALLOW_INF_AND_NAN | JSONReadFlags::ALLOW_TRAILING_COMMAS | JSONReadFlags::BIGNUM_AS_RAW;
 	JSONParseError error;
-	auto doc = JSONDocument::Parse(data, len, READ_FLAGS, error);
+	auto doc = JSONDocument::TryParse(data, len, error, READ_FLAGS);
 	if (error.HasError()) {
 		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. Input: \"%s\"", error.position,
 		                          error.message, string(data, len));
