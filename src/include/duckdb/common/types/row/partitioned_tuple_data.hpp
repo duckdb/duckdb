@@ -78,9 +78,9 @@ enum class PartitionedTupleDataType : uint8_t {
 	RADIX
 };
 
-class PartitionedTupleDataRepartitionObserver {
+class PartitionedTupleDataRepartitionKeyTracker {
 public:
-	virtual ~PartitionedTupleDataRepartitionObserver() = default;
+	virtual ~PartitionedTupleDataRepartitionKeyTracker() = default;
 
 	virtual void RepartitionChunk(TupleDataCollection &source_partition, TupleDataChunkState &source_chunk,
 	                              PartitionedTupleDataAppendState &target_append, idx_t count) = 0;
@@ -124,7 +124,7 @@ public:
 	void Reset();
 	//! Repartition this PartitionedTupleData into the new PartitionedTupleData
 	void Repartition(ClientContext &context, PartitionedTupleData &new_partitioned_data,
-	                 optional_ptr<PartitionedTupleDataRepartitionObserver> observer = nullptr);
+	                 optional_ptr<PartitionedTupleDataRepartitionKeyTracker> key_tracker = nullptr);
 	//! Unpins the data
 	void Unpin();
 	//! Get the partitions in this PartitionedTupleData

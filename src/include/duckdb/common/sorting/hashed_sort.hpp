@@ -77,6 +77,8 @@ public:
 	vector<column_t> partition_ids;
 	//! The payload columns corresponding to the PARTITION BY keys
 	vector<column_t> partition_key_ids;
+	//! The PARTITION BY key types
+	vector<LogicalType> partition_key_types;
 	//! The number of PARTITION BY keys
 	idx_t partition_key_count = 0;
 	//! Whether single-key hash groups can skip sorting

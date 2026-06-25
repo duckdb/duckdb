@@ -323,7 +323,7 @@ void PartitionedTupleData::Reset() {
 }
 
 void PartitionedTupleData::Repartition(ClientContext &context, PartitionedTupleData &new_partitioned_data,
-                                       optional_ptr<PartitionedTupleDataRepartitionObserver> observer) {
+                                       optional_ptr<PartitionedTupleDataRepartitionKeyTracker> key_tracker) {
 	D_ASSERT(layout.GetTypes() == new_partitioned_data.layout.GetTypes());
 
 	if (partitions.size() == new_partitioned_data.partitions.size()) {
@@ -345,8 +345,8 @@ void PartitionedTupleData::Repartition(ClientContext &context, PartitionedTupleD
 				context.InterruptCheck();
 				const auto count = iterator.GetCurrentChunkCount();
 				new_partitioned_data.Append(append_state, chunk_state, count);
-				if (observer) {
-					observer->RepartitionChunk(partition, chunk_state, append_state, count);
+				if (key_tracker) {
+					key_tracker->RepartitionChunk(partition, chunk_state, append_state, count);
 				}
 			} while (iterator.Next());
 
