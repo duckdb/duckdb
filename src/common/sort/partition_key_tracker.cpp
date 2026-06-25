@@ -20,7 +20,7 @@ PartitionKeyTracker::PartitionKeyTracker(Allocator &allocator_p, const vector<Lo
 	candidate_input_sel.Initialize();
 	candidate_rep_sel.Initialize();
 	mismatch_sel.Initialize();
-	representatives.Initialize(allocator_p, key_types_p);
+	representatives.Initialize(allocator_p, key_types_p, 4096);
 }
 
 void PartitionKeyTracker::Reset(idx_t radix_bits_p) {
@@ -39,7 +39,7 @@ bool PartitionKeyTracker::CanBypass(idx_t hash_bin) const {
 	return hash_bin < states.size() && states[hash_bin] == PartitionKeyTrackerState::SINGLE_KEY;
 }
 
-void PartitionKeyTracker::Update(DataChunk &keys, Vector &hashes, PartitionedTupleDataAppendState &append_state,
+void PartitionKeyTracker::Update(DataChunk &keys, Vector &input_hashes, PartitionedTupleDataAppendState &append_state,
                                  idx_t count) {
 	if (states.empty() || !count) {
 		return;
@@ -51,15 +51,15 @@ void PartitionKeyTracker::Update(DataChunk &keys, Vector &hashes, PartitionedTup
 	idx_t candidate_count;
 	if (append_state.fixed_partition_entries.size()) {
 		if (append_state.fixed_partition_entries.size() > 1) {
-			candidate_count = BuildCandidates<true, true>(keys, hashes, append_state, count);
+			candidate_count = BuildCandidates<true, true>(keys, input_hashes, append_state, count);
 		} else {
-			candidate_count = BuildCandidates<true, false>(keys, hashes, append_state, count);
+			candidate_count = BuildCandidates<true, false>(keys, input_hashes, append_state, count);
 		}
 	} else {
 		if (append_state.partition_entries.size() > 1) {
-			candidate_count = BuildCandidates<false, true>(keys, hashes, append_state, count);
+			candidate_count = BuildCandidates<false, true>(keys, input_hashes, append_state, count);
 		} else {
-			candidate_count = BuildCandidates<false, false>(keys, hashes, append_state, count);
+			candidate_count = BuildCandidates<false, false>(keys, input_hashes, append_state, count);
 		}
 	}
 	if (candidate_count) {
