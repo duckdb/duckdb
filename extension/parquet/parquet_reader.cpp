@@ -1950,7 +1950,6 @@ AsyncResult ParquetReader::ProcessFilters(ParquetReaderScanState &state, DataChu
 }
 
 AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
-	// a fresh pass evaluates filters; the resume path (resuming_payload) decodes only the payload columns
 	const bool log_prefetch =
 	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
 	const idx_t group_num_rows = GetGroup(state).num_rows;
