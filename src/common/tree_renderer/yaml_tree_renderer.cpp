@@ -1,5 +1,6 @@
 #include "duckdb/common/tree_renderer/yaml_tree_renderer.hpp"
 
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -56,8 +57,11 @@ void YAMLTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
 	ToStream(*tree, ss);
 }
 
-void YAMLTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
-	RenderRecursive(root, ss, 0, 0, 0);
+void YAMLTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) {
+	// the YAML output is built with an ostream (using the EscapedString operator) and emitted as layout text
+	duckdb::stringstream result;
+	RenderRecursive(root, result, 0, 0, 0);
+	ss << result.str();
 }
 
 struct EscapedString {

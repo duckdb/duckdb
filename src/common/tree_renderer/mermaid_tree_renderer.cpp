@@ -1,5 +1,6 @@
 #include "duckdb/common/tree_renderer/mermaid_tree_renderer.hpp"
 
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
@@ -80,7 +81,7 @@ static string SanitizeMermaidLabel(const string &text) {
 	return result;
 }
 
-void MermaidTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
+void MermaidTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) {
 	vector<string> nodes;
 	vector<string> edges;
 

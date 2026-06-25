@@ -38,7 +38,7 @@ public:
 	void Render(const ProfilingNode &op, std::ostream &ss) override;
 	void Render(const Pipeline &op, std::ostream &ss);
 
-	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
+	void ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) override;
 
 	//! Profiler JSON output: the full query profile result tree (with query-level metrics)
 	string RenderProfiler(const QueryProfiler &profiler) override;

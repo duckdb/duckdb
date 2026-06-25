@@ -1,5 +1,6 @@
 #include "duckdb/common/tree_renderer/json_tree_renderer.hpp"
 
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -95,7 +96,7 @@ static yyjson_mut_val *RenderRecursive(yyjson_mut_doc *doc, RenderTree &tree, id
 	return object;
 }
 
-void JSONTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
+void JSONTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) {
 	auto doc = yyjson_mut_doc_new(nullptr);
 	auto result_obj = yyjson_mut_arr(doc);
 	yyjson_mut_doc_set_root(doc, result_obj);

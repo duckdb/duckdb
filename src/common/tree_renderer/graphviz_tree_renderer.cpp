@@ -1,5 +1,6 @@
 #include "duckdb/common/tree_renderer/graphviz_tree_renderer.hpp"
 
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
@@ -59,7 +60,7 @@ void GRAPHVIZTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
 	ToStream(*tree, ss);
 }
 
-void GRAPHVIZTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
+void GRAPHVIZTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) {
 	const string digraph_format = R"(
 digraph G {
     node [shape=box, style=rounded, fontname="Courier New", fontsize=10];

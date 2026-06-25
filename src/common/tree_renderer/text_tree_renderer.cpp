@@ -1,5 +1,6 @@
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -50,7 +51,7 @@ void TextTreeRenderer::Configure(const unordered_map<string, Value> &settings) {
 	}
 }
 
-void TextTreeRenderer::RenderTopLayer(RenderTree &root, std::ostream &ss, idx_t y) {
+void TextTreeRenderer::RenderTopLayer(RenderTree &root, BaseResultRenderer &ss, idx_t y) {
 	for (idx_t x = 0; x < root.width; x++) {
 		if (x * config.node_render_width >= config.maximum_render_width) {
 			break;
@@ -110,7 +111,7 @@ static bool ShouldRenderWhitespace(RenderTree &root, idx_t x, idx_t y) {
 	return false;
 }
 
-void TextTreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx_t y) {
+void TextTreeRenderer::RenderBottomLayer(RenderTree &root, BaseResultRenderer &ss, idx_t y) {
 	for (idx_t x = 0; x <= root.width; x++) {
 		if (x * config.node_render_width >= config.maximum_render_width) {
 			break;
@@ -219,7 +220,7 @@ string TextTreeRenderer::FormatNumber(const string &input) {
 	return result;
 }
 
-void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_t y) {
+void TextTreeRenderer::RenderBoxContent(RenderTree &root, BaseResultRenderer &ss, idx_t y) {
 	// we first need to figure out how high our boxes are going to be
 	vector<vector<string>> extra_info;
 	idx_t extra_height = 0;
@@ -330,7 +331,8 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 					}
 				}
 				render_text = AdjustTextForRendering(render_text, config.node_render_width - 2);
-				ss << render_text;
+				// the box title (operator name) is a column name; the rest of the box is value content
+				ss.Render(render_y == 0 ? ResultRenderType::COLUMN_NAME : ResultRenderType::VALUE, render_text);
 
 				if (render_y == halfway_point && NodeHasMultipleChildren(*node)) {
 					ss << config.LMIDDLE;
@@ -387,7 +389,7 @@ void TextTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
 	ToStream(*tree, ss);
 }
 
-void TextTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
+void TextTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) {
 	while (root.width * config.node_render_width > config.maximum_render_width) {
 		if (config.node_render_width - 2 < config.minimum_render_width) {
 			break;

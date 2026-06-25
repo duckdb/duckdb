@@ -80,7 +80,7 @@ public:
 	void Render(const ProfilingNode &op, std::ostream &ss) override;
 	void Render(const Pipeline &op, std::ostream &ss);
 
-	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
+	void ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) override;
 
 	//! Profiler text output: the framed query tree (with phase timings, total time, etc.)
 	string RenderProfiler(const QueryProfiler &profiler) override;
@@ -97,9 +97,9 @@ private:
 
 private:
 	string ExtraInfoSeparator();
-	void RenderTopLayer(RenderTree &root, std::ostream &ss, idx_t y);
-	void RenderBoxContent(RenderTree &root, std::ostream &ss, idx_t y);
-	void RenderBottomLayer(RenderTree &root, std::ostream &ss, idx_t y);
+	void RenderTopLayer(RenderTree &root, BaseResultRenderer &ss, idx_t y);
+	void RenderBoxContent(RenderTree &root, BaseResultRenderer &ss, idx_t y);
+	void RenderBottomLayer(RenderTree &root, BaseResultRenderer &ss, idx_t y);
 
 	bool CanSplitOnThisChar(char l);
 	bool IsPadding(char l);

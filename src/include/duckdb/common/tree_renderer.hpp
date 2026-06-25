@@ -17,6 +17,7 @@
 
 namespace duckdb {
 
+class BaseResultRenderer;
 class ClientContext;
 class QueryProfiler;
 
@@ -31,8 +32,11 @@ public:
 	}
 
 public:
+	//! Render the tree into a BaseResultRenderer - the primary sink, enabling highlighting-aware output
+	void ToStream(RenderTree &root, BaseResultRenderer &ss);
+	//! Render the tree into a plain ostream (bridges to the BaseResultRenderer path via a StringResultRenderer)
 	void ToStream(RenderTree &root, std::ostream &ss);
-	virtual void ToStreamInternal(RenderTree &root, std::ostream &ss) = 0;
+	virtual void ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) = 0;
 	//! Create a renderer for the given format, consulting the pluggable registry and configuring built-ins from the
 	//! client's "profiling_renderer_settings". Matched case-insensitively; throws if unknown, nullptr for "no_output".
 	static unique_ptr<TreeRenderer> CreateRenderer(ClientContext &context, const string &name);

@@ -1,5 +1,6 @@
 #include "duckdb/common/tree_renderer/html_tree_renderer.hpp"
 
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
@@ -257,7 +258,7 @@ function toggleDisplay(button) {
 	return StringUtil::Format(body_section, CreateTreeRecursive(root, 0, 0));
 }
 
-void HTMLTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
+void HTMLTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) {
 	string result;
 	result += CreateHeadSection(root);
 	result += CreateBodySection(root);
