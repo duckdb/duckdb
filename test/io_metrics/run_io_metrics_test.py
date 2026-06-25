@@ -83,6 +83,10 @@ def build_shim(workdir):
 PROFILING_PRELUDE = [
 	"PRAGMA enable_profiling='json';",
 	"SET tracked_metrics=['io.total_bytes_read','io.total_bytes_written'];",
+	# Disable the external file cache so every metric-tracked read corresponds to a real OS read
+	# (a cache hit does no syscall I/O but is still counted by the metric, which would be
+	# nondeterministic under the no-tolerance comparison).
+	"SET enable_external_file_cache=false;",
 ]
 
 

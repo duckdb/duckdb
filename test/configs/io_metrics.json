@@ -69,22 +69,20 @@
 			"name": "csv_write",
 			"include": ["{dir}/out.csv"],
 			"measure": ["COPY (SELECT range i, range * 2 j FROM range(500000)) TO '{dir}/out.csv' (FORMAT csv)"],
-			"check": ["read", "write"],
-			"skip": "FIXME: the CSV writer does not thread a QueryContext into FileHandle::Write, so io.total_bytes_written is reported as 0 while the OS actually writes ~6.8 MB. Remove this skip once the CSV COPY-to-file path passes a QueryContext."
+			"check": ["read", "write"]
 		},
 		{
 			"name": "csv_write_gzip",
 			"include": ["{dir}/out.csv.gz"],
 			"measure": ["COPY (SELECT range i FROM range(500000)) TO '{dir}/out.csv.gz' (FORMAT csv, COMPRESSION gzip)"],
 			"check": ["read", "write"],
-			"skip": "FIXME: the gzip CSV writer reports only a few bytes (the gzip header) instead of the ~1 MB actually written, because the compressed-stream writes go through GZipFileSystem without a QueryContext. Remove once the compressed writer path is instrumented."
+			"skip": "FIXME: the gzip CSV writer now tracks the UNCOMPRESSED bytes handed to the gzip stream (~3.4 MB) instead of the ~1 MB of compressed bytes actually written to disk, because the QueryContext is applied at the BufferedFileWriter rather than at the inner compressed write in GZipFileSystem. Remove once compressed writes are attributed at the inner (on-disk) write."
 		},
 		{
 			"name": "json_write",
 			"include": ["{dir}/out.json"],
 			"measure": ["COPY (SELECT range i, range * 2 j FROM range(200000)) TO '{dir}/out.json' (FORMAT json)"],
-			"check": ["read", "write"],
-			"skip": "FIXME: the JSON writer does not thread a QueryContext into FileHandle::Write, so io.total_bytes_written is reported as 0 while the OS actually writes ~2.5 MB. Remove once the JSON COPY-to-file path passes a QueryContext."
+			"check": ["read", "write"]
 		},
 		{
 			"name": "csv_read_gzip",
