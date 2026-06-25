@@ -17,6 +17,7 @@
 
 namespace duckdb {
 
+class ClientContext;
 class QueryProfiler;
 
 //! TreeRenderer renders a plan/operator tree (for EXPLAIN) or a query profiler's output in a particular format.
@@ -32,11 +33,13 @@ public:
 public:
 	void ToStream(RenderTree &root, std::ostream &ss);
 	virtual void ToStreamInternal(RenderTree &root, std::ostream &ss) = 0;
-	//! Create a TreeRenderer for the given format name (e.g. "json", "text"). The name is matched case-insensitively
-	//! and throws if it is not recognized. Returns nullptr for formats that render no output (i.e. "no_output").
-	//! This is the primary, name-based factory; new render formats are added here.
+	//! Create a renderer for the given format, consulting the pluggable registry and configuring built-ins from the
+	//! client's "profiling_renderer_settings". Matched case-insensitively; throws if unknown, nullptr for "no_output".
+	static unique_ptr<TreeRenderer> CreateRenderer(ClientContext &context, const string &name);
+	static unique_ptr<TreeRenderer> CreateRenderer(ClientContext &context, const ProfilerPrintFormat &format);
+
+	//! Create a built-in renderer without configuring it or consulting the registry (no ClientContext available)
 	static unique_ptr<TreeRenderer> CreateRenderer(const string &name);
-	//! Create a TreeRenderer for the given ProfilerPrintFormat (thin wrapper over the name-based factory).
 	static unique_ptr<TreeRenderer> CreateRenderer(const ProfilerPrintFormat &format);
 
 	//! Generic configuration of the renderer: passes renderer settings (e.g. from the "profiling_renderer_settings"

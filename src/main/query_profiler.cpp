@@ -82,13 +82,7 @@ bool QueryProfiler::IsEnabled() const {
 }
 
 unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const {
-	// formats are resolved through the renderer registry, which matches case-insensitively and throws on
-	// unrecognized formats - "no_output" has no renderer, for which CreateRenderer returns nullptr
-	auto renderer = TreeRenderer::CreateRenderer(name);
-	if (renderer) {
-		renderer->Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
-	}
-	return renderer;
+	return TreeRenderer::CreateRenderer(context, name);
 }
 
 unique_ptr<TreeRenderer> QueryProfiler::GetRenderer(const ProfilerPrintFormat &format) const {

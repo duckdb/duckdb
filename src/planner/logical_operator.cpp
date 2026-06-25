@@ -156,8 +156,8 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 	}
 }
 
-string LogicalOperator::ToString(const ProfilerPrintFormat &format) const {
-	auto renderer = TreeRenderer::CreateRenderer(format);
+string LogicalOperator::ToString(optional_ptr<ClientContext> context, const ProfilerPrintFormat &format) const {
+	auto renderer = context ? TreeRenderer::CreateRenderer(*context, format) : TreeRenderer::CreateRenderer(format);
 	if (!renderer) {
 		// formats without output (e.g. "no_output") render nothing
 		return string();

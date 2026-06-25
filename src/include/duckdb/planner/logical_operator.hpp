@@ -64,7 +64,8 @@ public:
 
 	virtual string GetName() const;
 	virtual InsertionOrderPreservingMap<string> ParamsToString() const;
-	virtual string ToString(const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
+	virtual string ToString(optional_ptr<ClientContext> context = nullptr,
+	                        const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
 	DUCKDB_API void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify(ClientContext &context);
