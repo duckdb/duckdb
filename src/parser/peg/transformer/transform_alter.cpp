@@ -48,9 +48,9 @@ PEGTransformerFactory::TransformAlterTableStmt(PEGTransformer &transformer, cons
 	}
 	auto result = std::move(alter_table_options[0]);
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	result->catalog = base_table_name->catalog_name;
-	result->schema = base_table_name->schema_name;
-	result->name = base_table_name->table_name;
+	result->CatalogMutable() = base_table_name->catalog_name;
+	result->SchemaMutable() = base_table_name->schema_name;
+	result->NameMutable() = base_table_name->table_name;
 
 	return std::move(result);
 }
@@ -72,9 +72,9 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
                                                                     unique_ptr<AlterTableInfo> rename_alter) {
 	auto rename_table = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(rename_alter));
 	auto result = make_uniq<RenameViewInfo>(AlterEntryData(), rename_table->new_table_name);
-	result->catalog = base_table_name->catalog_name;
-	result->schema = base_table_name->schema_name;
-	result->name = base_table_name->table_name;
+	result->CatalogMutable() = base_table_name->catalog_name;
+	result->SchemaMutable() = base_table_name->schema_name;
+	result->NameMutable() = base_table_name->table_name;
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	return std::move(result);
 }
@@ -91,12 +91,12 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTrans
                                                                         const QualifiedName &qualified_sequence_name,
                                                                         unique_ptr<AlterInfo> alter_sequence_options) {
 	if (qualified_sequence_name.Schema().empty()) {
-		alter_sequence_options->schema = qualified_sequence_name.Catalog();
+		alter_sequence_options->SchemaMutable() = qualified_sequence_name.Catalog();
 	} else {
-		alter_sequence_options->catalog = qualified_sequence_name.Catalog();
-		alter_sequence_options->schema = qualified_sequence_name.Schema();
+		alter_sequence_options->CatalogMutable() = qualified_sequence_name.Catalog();
+		alter_sequence_options->SchemaMutable() = qualified_sequence_name.Schema();
 	}
-	alter_sequence_options->name = qualified_sequence_name.Name();
+	alter_sequence_options->NameMutable() = qualified_sequence_name.Name();
 	alter_sequence_options->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	return alter_sequence_options;
 }

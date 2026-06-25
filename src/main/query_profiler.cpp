@@ -5,6 +5,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
@@ -79,13 +80,7 @@ bool QueryProfiler::IsEnabled() const {
 }
 
 unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const {
-	// formats are resolved through the renderer registry, which matches case-insensitively and throws on
-	// unrecognized formats - "no_output" has no renderer, for which CreateRenderer returns nullptr
-	auto renderer = TreeRenderer::CreateRenderer(name);
-	if (renderer) {
-		renderer->Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
-	}
-	return renderer;
+	return TreeRenderer::CreateRenderer(context, name);
 }
 
 unique_ptr<TreeRenderer> QueryProfiler::GetRenderer(const ProfilerPrintFormat &format) const {
@@ -233,13 +228,14 @@ void QueryProfiler::EndQuery() {
 	guard.unlock();
 
 	if (emit_output) {
-		string tree = ToString();
 		auto save_location = GetSaveLocation();
-
 		if (save_location.empty()) {
-			Printer::Print(tree);
+			// print directly through the renderer's print sink
+			auto renderer = GetRenderer();
+			PrintProfilerOutput(renderer.get());
 			Printer::Print("\n");
 		} else {
+			string tree = ToString();
 			WriteToFile(save_location.c_str(), tree);
 		}
 	}
@@ -312,19 +308,33 @@ string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) 
 	if (!IsEnabled()) {
 		return renderer->RenderProfilerDisabled();
 	}
-	return renderer->RenderProfiler(*this);
+	StringResultRenderer ss;
+	renderer->RenderProfiler(*this, ss);
+	return ss.str();
 }
 
-string QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer) const {
+void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const {
+	if (!renderer) {
+		// "no_output" format: nothing is rendered, enabled or not
+		return;
+	}
+	// only created now that we are actually printing
+	auto sink = renderer->GetPrintRenderer();
+	if (!IsEnabled()) {
+		*sink << renderer->RenderProfilerDisabled();
+		return;
+	}
+	renderer->RenderProfiler(*this, *sink);
+}
+
+void QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer, BaseResultRenderer &ss) const {
 	lock_guard<std::mutex> guard(lock);
 	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized
 	if (query_metrics.query_sql.empty() || !root) {
-		return "";
+		return;
 	}
-	stringstream str;
-	renderer.Render(*root, str);
-	return str.str();
+	renderer.Render(*root, ss);
 }
 
 OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
@@ -528,28 +538,54 @@ static string RenderTiming(double timing) {
 }
 
 string QueryProfiler::QueryTreeToString() const {
-	duckdb::stringstream str;
-	QueryTreeToStream(str);
-	return str.str();
+	StringResultRenderer ss;
+	RenderQueryTree(ss);
+	return ss.str();
 }
 
-void RenderPhaseTimings(std::ostream &ss, const pair<string, double> &head, map<string, double> &timings, idx_t width) {
+// renders a centered line: the surrounding box-drawing and padding is layout, the text itself is a value
+static void RenderPaddedValue(BaseResultRenderer &ss, const string &border_left, const string &padded,
+                              const string &border_right) {
+	idx_t start = 0;
+	while (start < padded.size() && padded[start] == ' ') {
+		start++;
+	}
+	idx_t end = padded.size();
+	while (end > start && padded[end - 1] == ' ') {
+		end--;
+	}
+	ss << border_left;
+	if (start > 0) {
+		ss << padded.substr(0, start);
+	}
+	if (end > start) {
+		ss.Render(ResultRenderType::VALUE, padded.substr(start, end - start));
+	}
+	if (end < padded.size()) {
+		ss << padded.substr(end);
+	}
+	ss << border_right;
+}
+
+void RenderPhaseTimings(BaseResultRenderer &ss, const pair<string, double> &head, map<string, double> &timings,
+                        idx_t width) {
 	ss << "┌────────────────────────────────────────────────┐\n";
-	ss << "│" + QueryProfiler::DrawPadded(RenderTitleCase(head.first) + ": " + RenderTiming(head.second), width - 2) +
-	          "│\n";
+	RenderPaddedValue(
+	    ss, "│", QueryProfiler::DrawPadded(RenderTitleCase(head.first) + ": " + RenderTiming(head.second), width - 2),
+	    "│\n");
 	ss << "│┌──────────────────────────────────────────────┐│\n";
 
 	for (const auto &entry : timings) {
-		ss << "││" +
-		          QueryProfiler::DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second),
-		                                    width - 4) +
-		          "││\n";
+		RenderPaddedValue(
+		    ss, "││",
+		    QueryProfiler::DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second), width - 4),
+		    "││\n");
 	}
 	ss << "│└──────────────────────────────────────────────┘│\n";
 	ss << "└────────────────────────────────────────────────┘\n";
 }
 
-void PrintPhaseTimingsToStream(std::ostream &ss, const GatheredMetrics &info, idx_t width) {
+void PrintPhaseTimingsToStream(BaseResultRenderer &ss, const GatheredMetrics &info, idx_t width) {
 	map<string, double> optimizer_timings;
 	map<string, double> planner_timings;
 	map<string, double> parser_timings;
@@ -597,6 +633,12 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const GatheredMetrics &info, id
 }
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
+	StringResultRenderer renderer;
+	RenderQueryTree(renderer);
+	ss << renderer.str();
+}
+
+void QueryProfiler::RenderQueryTree(BaseResultRenderer &ss) const {
 	lock_guard<std::mutex> guard(lock);
 
 	bool show_query_name = false;
@@ -606,10 +648,13 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	}
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
-	ss << "││    Query Profiling Information    ││\n";
+	RenderPaddedValue(ss, "││", "    Query Profiling Information    ", "││\n");
 	ss << "│└───────────────────────────────────┘│\n";
 	ss << "└─────────────────────────────────────┘\n";
-	ss << (show_query_name ? StringUtil::Replace(query_metrics.query_sql, "\n", " ") : "") + "\n";
+	if (show_query_name) {
+		ss.Render(ResultRenderType::VALUE, StringUtil::Replace(query_metrics.query_sql, "\n", " "));
+	}
+	ss << "\n";
 
 	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized
@@ -617,15 +662,18 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 		return;
 	}
 
+	// the registered states write profiling info through an ostream - capture it and emit as layout text
+	duckdb::stringstream state_info;
 	for (auto &state : context.registered_state->States()) {
-		state->WriteProfilingInformation(ss);
+		state->WriteProfilingInformation(state_info);
 	}
+	ss << state_info.str();
 
 	constexpr idx_t TOTAL_BOX_WIDTH = 50;
 	ss << "┌────────────────────────────────────────────────┐\n";
 	ss << "│┌──────────────────────────────────────────────┐│\n";
 	string total_time = "Total Time: " + RenderTiming(query_metrics.GetStringMetricInSeconds("query.total_time"));
-	ss << "││" + DrawPadded(total_time, TOTAL_BOX_WIDTH - 4) + "││\n";
+	RenderPaddedValue(ss, "││", DrawPadded(total_time, TOTAL_BOX_WIDTH - 4), "││\n");
 	ss << "│└──────────────────────────────────────────────┘│\n";
 	ss << "└────────────────────────────────────────────────┘\n";
 	// render the main operator tree
@@ -1021,14 +1069,16 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	}
 }
 
-void QueryProfiler::Render(const ProfilingNode &node, std::ostream &ss) const {
+void QueryProfiler::Render(const ProfilingNode &node, BaseResultRenderer &ss) const {
 	TextTreeRenderer renderer;
 	renderer.Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
 	renderer.Render(node, ss);
 }
 
 void QueryProfiler::Print() {
-	Printer::Print(QueryTreeToString());
+	// print the framed text query tree directly through the renderer's print sink
+	auto renderer = CreateProfiler("query_tree");
+	PrintProfilerOutput(renderer.get());
 }
 
 static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &result) {

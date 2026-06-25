@@ -131,6 +131,9 @@ void ShellExtension::Load(ExtensionLoader &loader) {
 	PlannerExtension planner_ext;
 	planner_ext.post_bind_function = duckdb::ShellPostBind;
 	PlannerExtension::Register(config, planner_ext);
+
+	// highlight the CLI profiler "query_tree" output
+	duckdb_shell::RegisterProfilerHighlighting(config);
 }
 
 std::string ShellExtension::Name() {

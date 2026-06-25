@@ -16,7 +16,7 @@ SourceResultType PhysicalAlter::GetDataInternal(ExecutionContext &context, DataC
 		auto &db_manager = DatabaseManager::Get(context.client);
 		db_manager.Alter(context.client, db_info);
 	} else {
-		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
+		auto &catalog = Catalog::GetCatalog(context.client, info->Catalog());
 		catalog.Alter(context.client, *info);
 	}
 	return SourceResultType::FINISHED;

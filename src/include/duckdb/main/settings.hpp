@@ -1781,6 +1781,18 @@ struct ProgressBarTimeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct RegexMatchOperatorSemanticsSetting {
+	using RETURN_TYPE = RegexMatchOperatorSemantics;
+	static constexpr const char *Name = "regex_match_operator_semantics";
+	static constexpr const char *Description =
+	    "Configures whether regex match operators use partial or full string matching";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "partial";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "scalar_subquery_error_on_multiple_rows";

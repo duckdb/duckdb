@@ -1259,9 +1259,8 @@ static idx_t GetRowGroupOffset(const ParquetReader &reader, idx_t group_idx) {
 
 const ParquetRowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	auto file_meta_data = GetFileMetadata();
-	D_ASSERT(state.current_group >= 0 && (idx_t)state.current_group < state.group_idx_list.size());
-	D_ASSERT(state.group_idx_list[state.current_group] < file_meta_data->row_groups.size());
-	return file_meta_data->row_groups[state.group_idx_list[state.current_group]];
+	D_ASSERT(state.group_index < file_meta_data->row_groups.size());
+	return file_meta_data->row_groups[state.group_index];
 }
 
 uint64_t ParquetReader::GetGroupCompressedSize(ParquetReaderScanState &state) {
@@ -1371,7 +1370,7 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 	}
 
 	if (filters) {
-		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
+		auto stats = column_reader.Stats(state.group_index, group.columns);
 		// filters contain output chunk index, not file col idx!
 		auto filter_entry = filters->TryGetFilterByColumnIndex(col_idx);
 		if (stats && filter_entry) {
@@ -1420,7 +1419,7 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 		}
 	}
 
-	column_reader.InitializeRead(state.group_idx_list[state.current_group], group.columns, *state.thrift_file_proto);
+	column_reader.InitializeRead(state.group_index, group.columns, *state.thrift_file_proto);
 }
 
 idx_t ParquetReader::NumRows() const {
@@ -1451,13 +1450,11 @@ ParquetScanFilter::ParquetScanFilter(ClientContext &context, ProjectionIndex fil
 ParquetScanFilter::~ParquetScanFilter() {
 }
 
-void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state,
-                                   vector<idx_t> groups_to_read) const {
-	state.current_group = -1;
-	state.scan_state = ParquetScanState::SCHEDULE;
+void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const {
+	state.resuming_payload = false;
 	state.offset_in_group = 0;
 	state.filter_count = 0;
-	state.group_idx_list = std::move(groups_to_read);
+	state.group_index = group_to_read;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 	if (!state.file_handle || state.file_handle->GetPath() != file_handle->GetPath()) {
 		auto flags = FileFlags::FILE_FLAGS_READ;
@@ -1716,31 +1713,11 @@ ParquetPrefetchStrategy ParquetReader::ColumnWisePrefetch(ParquetReaderScanState
 	return strategy;
 }
 
-AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
+ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &context, ParquetReaderScanState &state) {
 	const bool log_prefetch =
 	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
-
-	switch (state.scan_state) {
-	case ParquetScanState::FINISHED:
-		result.Reset();
-		return SourceResultType::FINISHED;
-	case ParquetScanState::SCHEDULE:
-		result.Reset();
-		return Schedule(context, state, result, log_prefetch);
-	case ParquetScanState::PROCESS:
-		result.Reset();
-		return Process(state, result, log_prefetch);
-	case ParquetScanState::RESUME_PAYLOAD:
-		return Process(state, result, log_prefetch);
-	default:
-		throw InternalException("Unexpected ParquetScanState");
-	}
-}
-
-AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanState &state, DataChunk &result,
-                                    bool log_prefetch) {
-	state.current_group++;
 	state.offset_in_group = 0;
+	ParquetPrefetchStrategy strategy = ParquetPrefetchStrategy::NONE;
 
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
 	trans.ClearPrefetch();
@@ -1750,18 +1727,8 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 		trans.SetAcceptedColumnGap(DetermineAcceptedColumnGap(context, state));
 	}
 
-	if (log_prefetch && state.prefetch_metrics.filter_ran && state.current_group > 0) {
-		LogRowGroupPrefetch(context, file.path, state.group_idx_list[state.current_group - 1], state);
-	}
-	state.prefetch_metrics.FinalizeRowGroupSelectivity();
-
-	if ((idx_t)state.current_group == state.group_idx_list.size()) {
-		state.scan_state = ParquetScanState::FINISHED;
-		return SourceResultType::FINISHED;
-	}
-
 	// TODO: only need this if we have a deletion vector?
-	state.group_offset = GetRowGroupOffset(*this, state.group_idx_list[state.current_group]);
+	state.group_offset = GetRowGroupOffset(*this, state.group_index);
 
 	uint64_t to_scan_compressed_bytes = 0;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -1780,11 +1747,10 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 	if (state.op) {
 		DUCKDB_LOG(context, PhysicalOperatorLogType, *state.op, "ParquetReader",
 		           row_group_skipped ? "SkipRowGroup" : "ReadRowGroup",
-		           {{"file", file.path}, {"row_group_id", to_string(state.group_idx_list[state.current_group])}});
+		           {{"file", file.path}, {"row_group_id", to_string(state.group_index)}});
 	}
 
-	vector<unique_ptr<AsyncTask>> io_tasks;
-	if (state.prefetch_mode && state.offset_in_group != (idx_t)group.num_rows) {
+	if (state.prefetch_mode && !row_group_skipped) {
 		uint64_t total_row_group_span = GetGroupSpan(state);
 
 		double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);
@@ -1802,7 +1768,6 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 		}
 		if (state.prefetch_mode) {
 			// whole group and column wise prefetch fetch eagerly, filter prefetch fetches lazily
-			ParquetPrefetchStrategy strategy = ParquetPrefetchStrategy::NONE;
 			if (parquet_options.prefetch_strategy == ParquetPrefetchStrategyOption::WHOLE_GROUP) {
 				strategy = WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
 			} else {
@@ -1824,33 +1789,47 @@ AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanSta
 					strategy = ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
 				}
 			}
-			auto read_head_count = trans.GetReadHeads().size();
-			switch (strategy) {
-			case ParquetPrefetchStrategy::PREFETCH_FILTERS:
-				// schedule only the filter columns' I/O, they are last in our list
-				io_tasks = CollectIOTasks(trans, state.file_handle, read_head_count - state.filter_head_count,
-				                          read_head_count);
-				break;
-			case ParquetPrefetchStrategy::WHOLE_GROUP:
-			case ParquetPrefetchStrategy::COLUMN_WISE_EAGER:
-				// schedule the I/O for all columns up front
-				io_tasks = CollectIOTasks(trans, state.file_handle, 0, read_head_count);
-				break;
-			default:
-				throw InternalException("Unexpected parquet prefetch strategy when scheduling I/O");
-			}
 			if (log_prefetch) {
 				state.prefetch_metrics.logger.accepted_column_gap = trans.GetAcceptedColumnGap();
 			}
 		}
 	}
-	result.Reset();
-	// a skipped row group has no rows to decode, so we loop back to schedule the next one
-	state.scan_state = row_group_skipped ? ParquetScanState::SCHEDULE : ParquetScanState::PROCESS;
+	state.resuming_payload = false;
+	return strategy;
+}
+
+AsyncResult ParquetReader::ScheduleRowGroupReads(ParquetReaderScanState &state, ParquetPrefetchStrategy strategy) {
+	if (strategy == ParquetPrefetchStrategy::NONE) {
+		// nothing to prefetch
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	}
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
+	auto read_head_count = trans.GetReadHeads().size();
+	vector<unique_ptr<AsyncTask>> io_tasks;
+	switch (strategy) {
+	case ParquetPrefetchStrategy::PREFETCH_FILTERS:
+		// schedule only the filter columns' I/O, they are last in our list
+		io_tasks = CollectIOTasks(trans, state.file_handle, read_head_count - state.filter_head_count, read_head_count);
+		break;
+	case ParquetPrefetchStrategy::WHOLE_GROUP:
+	case ParquetPrefetchStrategy::COLUMN_WISE_EAGER:
+		// schedule the I/O for all columns up front
+		io_tasks = CollectIOTasks(trans, state.file_handle, 0, read_head_count);
+		break;
+	default:
+		throw InternalException("Unexpected parquet prefetch strategy when scheduling I/O");
+	}
 	if (!io_tasks.empty()) {
 		return AsyncResult(std::move(io_tasks), TaskSchedulerType::ASYNC);
 	}
 	return SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+void ParquetReader::FinishRowGroup(ClientContext &context, ParquetReaderScanState &state, bool log_prefetch) {
+	if (log_prefetch && state.prefetch_metrics.filter_ran) {
+		LogRowGroupPrefetch(context, file.path, state.group_index, state);
+	}
+	state.prefetch_metrics.FinalizeRowGroupSelectivity();
 }
 
 idx_t ParquetReader::EvaluateFilters(ParquetReaderScanState &state, DataChunk &result, idx_t scan_count,
@@ -1956,13 +1935,13 @@ vector<unique_ptr<AsyncTask>> ParquetReader::ScheduleRemainingColumns(ParquetRea
 		// no payload to do
 		return {};
 	}
-	state.scan_state = ParquetScanState::RESUME_PAYLOAD;
+	state.resuming_payload = true;
 	return io_tasks;
 }
 
 AsyncResult ParquetReader::ProcessFilters(ParquetReaderScanState &state, DataChunk &result, idx_t scan_count,
                                           uint8_t *define_ptr, uint8_t *repeat_ptr, bool log_prefetch) {
-	if (state.scan_state == ParquetScanState::PROCESS) {
+	if (!state.resuming_payload) {
 		state.filter_count = EvaluateFilters(state, result, scan_count, define_ptr, repeat_ptr, log_prefetch);
 		auto io_tasks = ScheduleRemainingColumns(state, result, scan_count);
 		if (!io_tasks.empty()) {
@@ -1976,16 +1955,18 @@ AsyncResult ParquetReader::ProcessFilters(ParquetReaderScanState &state, DataChu
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-AsyncResult ParquetReader::Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch) {
+AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
+	const bool log_prefetch =
+	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
 	const idx_t group_num_rows = GetGroup(state).num_rows;
 	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, group_num_rows - state.offset_in_group);
-	if (state.scan_state == ParquetScanState::PROCESS) {
+	if (!state.resuming_payload) {
 		result.SetChildCardinality(scan_count);
 	}
 
 	if (scan_count == 0) {
-		state.scan_state = ParquetScanState::FINISHED;
-		// end of last group, we are done
+		// the row group is fully consumed
+		FinishRowGroup(context, state, log_prefetch);
 		return SourceResultType::FINISHED;
 	}
 
@@ -2025,8 +2006,7 @@ AsyncResult ParquetReader::Process(ParquetReaderScanState &state, DataChunk &res
 	result.SetChildCardinality(result.size());
 	rows_read += scan_count;
 	state.offset_in_group += scan_count;
-	// once the group is fully consumed we schedule the next one, otherwise we keep processing this group
-	state.scan_state = state.offset_in_group >= group_num_rows ? ParquetScanState::SCHEDULE : ParquetScanState::PROCESS;
+	state.resuming_payload = false;
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 

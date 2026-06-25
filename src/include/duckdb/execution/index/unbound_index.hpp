@@ -89,7 +89,7 @@ public:
 		return GetCreateInfo().index_type;
 	}
 	const Identifier &GetIndexName() const override {
-		return GetCreateInfo().index_name;
+		return GetCreateInfo().GetIndexName();
 	}
 	IndexConstraintType GetConstraintType() const override {
 		return GetCreateInfo().constraint_type;

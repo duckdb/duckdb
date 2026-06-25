@@ -36,7 +36,7 @@ static void WriteCatalogEntries(stringstream &ss, catalog_entry_vector_t &entrie
 		auto create_info = entry.get().GetInfo();
 		try {
 			// Strip the catalog from the info
-			create_info->catalog.clear();
+			create_info->CatalogMutable().clear();
 			auto to_string = create_info->ToString();
 			ss << to_string;
 		} catch (const NotImplementedException &) {
@@ -215,7 +215,7 @@ SourceResultType PhysicalExport::GetDataInternal(ExecutionContext &context, Data
 	auto &ccontext = context.client;
 	auto &fs = FileSystem::GetFileSystem(ccontext);
 
-	auto &catalog = Catalog::GetCatalog(ccontext, info->catalog);
+	auto &catalog = Catalog::GetCatalog(ccontext, info->Catalog());
 
 	catalog_entry_vector_t catalog_entries;
 	catalog_entries = GetNaiveExportOrder(context.client, catalog);

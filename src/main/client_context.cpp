@@ -1304,7 +1304,7 @@ void ClientContext::DisableProfiling() {
 void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 	RunFunctionInTransaction([&]() {
 		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(
-		    *this, Identifier::InvalidCatalog(), info.schema, info.name, OnEntryNotFound::RETURN_NULL);
+		    *this, Identifier::InvalidCatalog(), info.Schema(), info.GetFunctionName(), OnEntryNotFound::RETURN_NULL);
 		if (existing_function) {
 			auto &new_info = info.Cast<CreateScalarFunctionInfo>();
 			if (new_info.functions.MergeFunctionSet(existing_function->functions)) {
@@ -1540,6 +1540,7 @@ ParserOptions ClientContext::GetParserOptions() const {
 	ParserOptions options;
 	options.preserve_identifier_case = Settings::Get<PreserveIdentifierCaseSetting>(*this);
 	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
+	options.regex_match_operator_semantics = Settings::Get<RegexMatchOperatorSemanticsSetting>(*this);
 	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);

@@ -29,6 +29,7 @@
 
 namespace duckdb {
 
+class BaseResultRenderer;
 class ClientContext;
 class ExpressionExecutor;
 class ProfilingNode;
@@ -137,6 +138,8 @@ public:
 
 	DUCKDB_API string QueryTreeToString() const;
 	DUCKDB_API void QueryTreeToStream(std::ostream &str) const;
+	//! Render the framed query tree (header, total time, phase timings, operator tree) into the given sink.
+	DUCKDB_API void RenderQueryTree(BaseResultRenderer &ss) const;
 	DUCKDB_API void Print();
 
 	//! Render the profiler output as a string, formatted based on the given ProfilerPrintFormat (or the configured
@@ -145,9 +148,9 @@ public:
 	//! Render the profiler output for the given profiler format name (e.g. "json", "query_tree"), handling the
 	//! profiling-disabled and no-output cases.
 	DUCKDB_API string ToString(const string &profiler_format_name) const;
-	//! Render the profiling node tree using the given renderer. Returns an empty string when there is no tree to
-	//! render. Called by TreeRenderer::RenderProfiler for the formats that render the node tree directly.
-	DUCKDB_API string RenderProfilingNodeTree(TreeRenderer &renderer) const;
+	//! Render the profiling node tree using the given renderer into the sink (renders nothing when there is no tree).
+	//! Called by TreeRenderer::RenderProfiler for the formats that render the node tree directly.
+	DUCKDB_API void RenderProfilingNodeTree(TreeRenderer &renderer, BaseResultRenderer &ss) const;
 
 	// Sanitize a Value::MAP
 	static Value JSONSanitize(const Value &input);
@@ -166,9 +169,13 @@ public:
 
 private:
 	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const idx_t depth = 0);
-	void Render(const ProfilingNode &node, std::ostream &str) const;
-	//! Render the profiler output via the given renderer (nullptr renders nothing), handling the disabled case.
+	void Render(const ProfilingNode &node, BaseResultRenderer &str) const;
+	//! Render the profiler output to a string via the given renderer (nullptr renders nothing), handling the disabled
+	//! case. Used for the programmatic / string paths.
 	string RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
+	//! Print the profiler output directly via the renderer's print sink (nullptr prints nothing), handling the
+	//! disabled case. Only used on the terminal-print paths.
+	void PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
 
 private:
 	ClientContext &context;

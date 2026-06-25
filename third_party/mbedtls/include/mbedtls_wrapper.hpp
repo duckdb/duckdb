@@ -117,6 +117,16 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 			return mbedtls_state;
 		}
 
+		DUCKDB_API void Hash(duckdb::CryptoHashFunction function, duckdb::const_data_ptr_t input,
+		                     duckdb::idx_t input_len, duckdb::data_ptr_t output) const override;
+		DUCKDB_API duckdb::unique_ptr<duckdb::CryptoHashState>
+		CreateHashState(duckdb::CryptoHashFunction function) const override;
+		DUCKDB_API void Hmac(duckdb::CryptoHashFunction function, duckdb::const_data_ptr_t key, duckdb::idx_t key_len,
+		                     duckdb::const_data_ptr_t input, duckdb::idx_t input_len,
+		                     duckdb::data_ptr_t output) const override;
+		DUCKDB_API bool SupportsHash(duckdb::CryptoHashFunction function) const override;
+		DUCKDB_API bool SupportsHmac(duckdb::CryptoHashFunction function) const override;
+
 		~AESStateMBEDTLSFactory() override {} //
 
 	public:

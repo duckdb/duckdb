@@ -168,7 +168,7 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		index_count.Append(Value::BIGINT(NumericCast<int64_t>(storage_info.index_info.size())));
 		check_constraint_count.Append(Value::BIGINT(NumericCast<int64_t>(CheckConstraintCount(table))));
 		auto table_info = table.GetInfo();
-		table_info->catalog.clear();
+		table_info->CatalogMutable().clear();
 		sql.Append(Value(table_info->ToString()));
 		count++;
 	}
