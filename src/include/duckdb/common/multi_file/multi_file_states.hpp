@@ -196,13 +196,13 @@ enum class MultiFileDecodeResult : uint8_t {
 
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
 struct MultiFileScanJob {
-	//! The reader producing this job (kept alive for the job's lifetime)
+	//! The reader producing this job
 	shared_ptr<BaseFileReader> reader;
-	//! Per-file data for the reader (constants/expressions used by FinalizeChunk)
+	//! Per-file data for the reader
 	optional_ptr<MultiFileReaderData> reader_data;
 	//! The reader-specific scan state that ScheduleIO/Scan operate on
 	unique_ptr<LocalTableFunctionState> reader_scan_state;
-	//! Batch index of this job (assigned in scan order under the global lock)
+	//! Batch index of this job
 	idx_t batch_index = 0;
 	//! Index of the file this job belongs to
 	idx_t file_index = DConstants::INVALID_INDEX;

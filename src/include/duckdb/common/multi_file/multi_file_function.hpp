@@ -733,7 +733,6 @@ public:
 			throw InternalException("Unexpected result in MultiFileScan, must be FINISHED, is %s",
 			                        EnumUtil::ToChars(res.GetResultType()));
 		}
-		// this batch is fully decoded - the caller claims the next one
 		return MultiFileDecodeResult::JOB_FINISHED;
 	}
 
