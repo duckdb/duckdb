@@ -289,8 +289,7 @@ public:
 
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
 	static bool TryOpenNextFile(ClientContext &context, const MultiFileBindData &bind_data,
-	                            MultiFileLocalState &scan_data, MultiFileGlobalState &global_state,
-	                            unique_lock<mutex> &parallel_lock) {
+	                            MultiFileGlobalState &global_state, unique_lock<mutex> &parallel_lock) {
 		if (!parallel_lock.owns_lock()) {
 			throw InternalException("parallel_lock is not held in TryOpenNextFile, this should not happen");
 		}
@@ -398,14 +397,15 @@ public:
 		}
 	}
 
-	static void InitializeFileScanState(ClientContext &context, MultiFileReaderData &reader_data,
-	                                    MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
-		lstate.job.reader_data = reader_data;
+	//! (Re)initialize the per-thread decode scratch (scan_chunk + executor) for the file of the current job. Only needs
+	//! to run when this thread decodes a job from a different file than the one the scratch is currently built for.
+	static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
 		auto &reader = *lstate.job.reader;
+		auto &reader_data = *lstate.job.reader_data;
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
 		vector<LogicalType> intermediate_chunk_types;
 		auto &local_column_ids = reader.column_indexes;
-		auto &local_columns = lstate.job.reader->GetColumns();
+		auto &local_columns = reader.GetColumns();
 		for (idx_t i = 0; i < local_column_ids.size(); i++) {
 			auto &local_id = local_column_ids[i];
 
@@ -444,12 +444,16 @@ public:
 				executor.AddExpression(*expr);
 			}
 		}
+		lstate.scan_chunk_file_index = lstate.job.file_index;
 	}
 
-	// This function looks for the next available row group. If not available, it will open files from bind_data.files
-	// until there is a row group available for scanning or the files runs out
-	static bool TryInitializeNextBatch(ClientContext &context, const MultiFileBindData &bind_data,
-	                                   MultiFileLocalState &scan_data, MultiFileGlobalState &gstate) {
+	// Claims the next available batch (e.g. a row group) into 'job', opening files as needed until a batch is available
+	// or the files run out. The batch is claimed under the global lock (assigning its batch_index in scan order) and then
+	// prepared off-lock. Returns true if a job was claimed, false if the scan is exhausted. 'job.reader_scan_state' must
+	// already be allocated. This is the lock-bounded scheduling primitive: it never touches per-thread decode scratch, so
+	// it can be called repeatedly to claim several jobs ahead of decoding.
+	static bool ClaimNextJob(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &gstate,
+	                         MultiFileScanJob &job) {
 		unique_lock<mutex> parallel_lock(gstate.lock);
 
 		while (true) {
@@ -459,29 +463,25 @@ public:
 
 			//! If we don't have a file to read, and the MultiFileList has no new file for us - end the scan
 			if (!HasFilesToRead(gstate, parallel_lock) && !TryGetNextFile(gstate, parallel_lock)) {
-				bind_data.interface->FinishReading(context, *gstate.global_state, *scan_data.job.reader_scan_state);
+				bind_data.interface->FinishReading(context, *gstate.global_state, *job.reader_scan_state);
 				return false;
 			}
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
-				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state,
-				                                                  *scan_data.job.reader_scan_state)) {
-					scan_data.job.reader = current_reader_data.reader;
-					if (!scan_data.job.reader) {
+				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state, *job.reader_scan_state)) {
+					job.reader = current_reader_data.reader;
+					if (!job.reader) {
 						throw InternalException("MultiFileReader was moved");
 					}
 					// The current reader has data left to be scanned
-					scan_data.job.batch_index = gstate.batch_index++;
-					auto old_file_index = scan_data.job.file_index;
-					scan_data.job.file_index = gstate.file_index;
+					job.reader_data = current_reader_data;
+					job.batch_index = gstate.batch_index++;
+					job.file_index = gstate.file_index;
 					parallel_lock.unlock();
-					scan_data.job.reader->PrepareScan(context, *gstate.global_state, *scan_data.job.reader_scan_state);
-					if (old_file_index != scan_data.job.file_index) {
-						InitializeFileScanState(context, current_reader_data, scan_data, gstate.projection_ids);
-					}
-					// Initializing a batch is always a schedule phase
-					scan_data.job.phase = MultiFileScanPhase::SCHEDULE;
+					job.reader->PrepareScan(context, *gstate.global_state, *job.reader_scan_state);
+					// A freshly claimed job always starts in the schedule phase
+					job.phase = MultiFileScanPhase::SCHEDULE;
 					return true;
 				} else {
 					// Set state to the next file
@@ -503,7 +503,7 @@ public:
 				continue;
 			}
 
-			if (TryOpenNextFile(context, bind_data, scan_data, gstate, parallel_lock)) {
+			if (TryOpenNextFile(context, bind_data, gstate, parallel_lock)) {
 				continue;
 			}
 
@@ -528,7 +528,7 @@ public:
 		result->job.batch_index = 0;
 		result->job.reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
 
-		if (!TryInitializeNextBatch(context.client, bind_data, *result, gstate)) {
+		if (!ClaimNextJob(context.client, bind_data, gstate, result->job)) {
 			return nullptr;
 		}
 		return std::move(result);
@@ -703,6 +703,10 @@ public:
 
 	static bool DecodePhase(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
 	                        MultiFileGlobalState &gstate, MultiFileBindData &bind_data, DataChunk &output) {
+		// (Re)build the decode scratch if this thread moved to a job from a different file
+		if (data.scan_chunk_file_index != data.job.file_index) {
+			InitializeDecodeChunk(context, data, gstate.projection_ids);
+		}
 		auto &scan_chunk = data.scan_chunk;
 		if (!data.resuming_blocked_scan) {
 			// A BLOCKED scan leaves partial data in the chunk (e.g. filter prefetch from parquet) that the resume must
@@ -735,7 +739,7 @@ public:
 		}
 
 		// We are done with this batch
-		if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
+		if (!ClaimNextJob(context, bind_data, gstate, data.job)) {
 			if (output.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
 				gstate.finished = true;
 				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
