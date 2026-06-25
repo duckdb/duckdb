@@ -45,9 +45,9 @@ protected:
 	vector<CheckpointedIndex> result;
 };
 
-class SingleFileIndexWriter : public TableIndexWriter {
+class SingleFileTableIndexWriter : public TableIndexWriter {
 public:
-	explicit SingleFileIndexWriter(SingleFileCheckpointWriter &checkpoint_manager,
+	explicit SingleFileTableIndexWriter(SingleFileCheckpointWriter &checkpoint_manager,
 	                               PartialBlockManager &partial_block_manager, StorageVersion version,
 	                               bool debug_verify_blocks);
 

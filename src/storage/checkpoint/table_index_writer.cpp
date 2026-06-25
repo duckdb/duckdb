@@ -28,18 +28,18 @@ StorageVersion TableIndexWriter::GetStorageVersion() const {
 	return storage_version;
 }
 
-SingleFileIndexWriter::SingleFileIndexWriter(SingleFileCheckpointWriter &checkpoint_manager,
+SingleFileTableIndexWriter::SingleFileTableIndexWriter(SingleFileCheckpointWriter &checkpoint_manager,
                                              PartialBlockManager &partial_block_manager, const StorageVersion version,
                                              const bool debug_verify_blocks)
     : TableIndexWriter(partial_block_manager, version), checkpoint_manager(checkpoint_manager),
       debug_verify_blocks(debug_verify_blocks) {
 }
 
-void SingleFileIndexWriter::Flush() {
+void SingleFileTableIndexWriter::Flush() {
 	partial_block_manager.FlushPartialBlocks();
 }
 
-void SingleFileIndexWriter::Serialize(Serializer &serializer) {
+void SingleFileTableIndexWriter::Serialize(Serializer &serializer) {
 	if (debug_verify_blocks) {
 		VerifyBlockUsage();
 	}
@@ -47,7 +47,7 @@ void SingleFileIndexWriter::Serialize(Serializer &serializer) {
 	TableIndexList::Serialize(result, serializer);
 }
 
-void SingleFileIndexWriter::VerifyBlockUsage() {
+void SingleFileTableIndexWriter::VerifyBlockUsage() {
 	for (const auto &[storage_info, _] : result) {
 		for (auto &allocator : storage_info->allocator_infos) {
 			for (auto &block : allocator.block_pointers) {

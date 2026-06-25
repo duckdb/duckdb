@@ -1,5 +1,4 @@
 #include "duckdb/storage/index.hpp"
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/radix.hpp"
 
 namespace duckdb {

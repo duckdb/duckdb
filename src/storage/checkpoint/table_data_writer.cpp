@@ -90,7 +90,7 @@ void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
 
 unique_ptr<TableIndexWriter> SingleFileTableDataWriter::GetTableIndexWriter(StorageVersion version) {
 	const auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetDatabase());
-	return make_uniq<SingleFileIndexWriter>(checkpoint_manager, checkpoint_manager.index_partial_block_manager, version,
+	return make_uniq<SingleFileTableIndexWriter>(checkpoint_manager, checkpoint_manager.index_partial_block_manager, version,
 	                                        debug_verify_blocks);
 }
 
