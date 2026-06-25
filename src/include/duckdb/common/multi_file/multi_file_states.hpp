@@ -216,7 +216,7 @@ public:
 	DataChunk scan_chunk;
 	//! Set when the previous Scan() returned BLOCKED, so the next Scan() preserves the partial chunk
 	bool resuming_blocked_scan = false;
-	//! The file index that scan_chunk + executor are currently initialized for.
+	//! The file index that scan_chunk is initialized for.
 	idx_t scan_chunk_file_index = DConstants::INVALID_INDEX;
 	//! The executor to transform scan_chunk into the final result with FinalizeChunk
 	ExpressionExecutor executor;

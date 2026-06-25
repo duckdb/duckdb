@@ -397,9 +397,7 @@ public:
 		}
 	}
 
-	//! (Re)initialize the per-thread decode scratch (scan_chunk + executor) for the file of the current job. Only needs
-	//! to run when this thread decodes a job from a different file than the one the scratch is currently built for.
-	static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
+static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
 		auto &reader = *lstate.job.reader;
 		auto &reader_data = *lstate.job.reader_data;
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
@@ -447,11 +445,6 @@ public:
 		lstate.scan_chunk_file_index = lstate.job.file_index;
 	}
 
-	// Claims the next available batch (e.g. a row group) into 'job', opening files as needed until a batch is available
-	// or the files run out. The batch is claimed under the global lock (assigning its batch_index in scan order) and then
-	// prepared off-lock. Returns true if a job was claimed, false if the scan is exhausted. 'job.reader_scan_state' must
-	// already be allocated. This is the lock-bounded scheduling primitive: it never touches per-thread decode scratch, so
-	// it can be called repeatedly to claim several jobs ahead of decoding.
 	static bool ClaimNextJob(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &gstate,
 	                         MultiFileScanJob &job) {
 		unique_lock<mutex> parallel_lock(gstate.lock);
@@ -703,8 +696,8 @@ public:
 
 	static bool DecodePhase(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
 	                        MultiFileGlobalState &gstate, MultiFileBindData &bind_data, DataChunk &output) {
-		// (Re)build the decode scratch if this thread moved to a job from a different file
 		if (data.scan_chunk_file_index != data.job.file_index) {
+			// if the file changes we need to initialize the chunk again
 			InitializeDecodeChunk(context, data, gstate.projection_ids);
 		}
 		auto &scan_chunk = data.scan_chunk;
