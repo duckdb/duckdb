@@ -183,6 +183,28 @@ JOIN g ON w.p IS NOT DISTINCT FROM g.p AND w.q = g.q
 ----
 10000	10000
 
+# partition-only windows with string keys
+query II
+WITH t AS (
+	SELECT
+		i,
+		CASE WHEN i % 11 = 0 THEN NULL ELSE 'grp_' || (i % 17)::VARCHAR END AS p,
+		CASE WHEN i % 13 = 0 THEN NULL ELSE 'tag_' || (i % 5)::VARCHAR END AS q
+	FROM range(3000) tbl(i)
+), w AS (
+	SELECT i, p, q, count(*) OVER (PARTITION BY p, q) AS c
+	FROM t
+), g AS (
+	SELECT p, q, count(*) AS c
+	FROM t
+	GROUP BY ALL
+)
+SELECT count(*), sum(CASE WHEN w.c = g.c THEN 1 ELSE 0 END)
+FROM w
+JOIN g ON w.p IS NOT DISTINCT FROM g.p AND w.q IS NOT DISTINCT FROM g.q
+----
+3000	3000
+
 # ORDER BY windows still require ordering inside a partition
 query I
 WITH t AS (
