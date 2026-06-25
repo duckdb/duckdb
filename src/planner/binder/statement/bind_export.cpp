@@ -119,9 +119,7 @@ string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const s
 
 static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_list_t<LogicalType> &select_list) {
 	auto ref = make_uniq<BaseTableRef>();
-	ref->CatalogMutable() = stmt.info->Catalog();
-	ref->SchemaMutable() = stmt.info->Schema();
-	ref->TableMutable() = stmt.info->Table();
+	ref->GetQualifiedNameMutable() = QualifiedName(stmt.info->Catalog(), stmt.info->Schema(), stmt.info->Table());
 
 	auto statement = make_uniq<SelectNode>();
 	statement->from_table = std::move(ref);
@@ -225,9 +223,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			id++;
 		}
 		info->is_from = false;
-		info->CatalogMutable() = Identifier(catalog);
-		info->SchemaMutable() = table.schema.name;
-		info->TableMutable() = table.name;
+		info->GetQualifiedNameMutable() = QualifiedName(Identifier(catalog), table.schema.name, table.name);
 
 		// We can not export generated columns
 		child_list_t<LogicalType> select_list;

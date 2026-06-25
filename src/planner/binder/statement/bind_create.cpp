@@ -58,9 +58,7 @@ static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const Tabl
 	auto alias_select = make_uniq<SelectNode>();
 	alias_select->select_list.push_back(make_uniq<StarExpression>());
 	auto alias_table_ref = make_uniq<BaseTableRef>();
-	alias_table_ref->TableMutable() = table.name;
-	alias_table_ref->SchemaMutable() = table.schema.name;
-	alias_table_ref->CatalogMutable() = table.catalog.GetName();
+	alias_table_ref->GetQualifiedNameMutable() = QualifiedName(table.catalog.GetName(), table.schema.name, table.name);
 	alias_select->from_table = std::move(alias_table_ref);
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
 	alias_cte->query_node = std::move(alias_select);

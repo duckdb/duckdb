@@ -255,20 +255,14 @@ Identifier PEGTransformerFactory::TransformCatalogQualification(PEGTransformer &
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_identifier_or_string_literal) {
-	QualifiedName result;
-	result.CatalogMutable() = catalog_qualification;
-	result.SchemaMutable() = reserved_schema_qualification;
-	result.NameMutable() = reserved_identifier_or_string_literal;
+	QualifiedName result(catalog_qualification, reserved_schema_qualification, reserved_identifier_or_string_literal);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLiteral(
     PEGTransformer &transformer, const Identifier &schema_qualification,
     const Identifier &reserved_identifier_or_string_literal) {
-	QualifiedName result;
-	result.CatalogMutable() = INVALID_CATALOG;
-	result.SchemaMutable() = schema_qualification;
-	result.NameMutable() = reserved_identifier_or_string_literal;
+	QualifiedName result(INVALID_CATALOG, schema_qualification, reserved_identifier_or_string_literal);
 	return result;
 }
 
@@ -1276,9 +1270,7 @@ QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransfor
                                                                      const optional<Identifier> &catalog_qualification,
                                                                      const optional<Identifier> &schema_qualification,
                                                                      const Identifier &table_function_name) {
-	QualifiedName result;
-	result.CatalogMutable() = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
-	result.SchemaMutable() = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
+	QualifiedName result(catalog_qualification ? *catalog_qualification : INVALID_CATALOG, schema_qualification ? *schema_qualification : INVALID_SCHEMA, Identifier());
 	if (!result.Catalog().empty() && result.Schema().empty()) {
 		result.SchemaMutable() = result.Catalog();
 		result.CatalogMutable() = INVALID_CATALOG;

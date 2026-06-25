@@ -371,10 +371,7 @@ bool PEGTransformerFactory::TransformAllKeyword(PEGTransformer &transformer) {
 QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer &transformer,
                                                                  ParseResult &choice_result) {
 	if (choice_result.type == ParseResultType::IDENTIFIER) {
-		QualifiedName result;
-		result.CatalogMutable() = INVALID_CATALOG;
-		result.SchemaMutable() = INVALID_SCHEMA;
-		result.NameMutable() = choice_result.Cast<IdentifierParseResult>().identifier;
+		QualifiedName result(INVALID_CATALOG, INVALID_SCHEMA, choice_result.Cast<IdentifierParseResult>().identifier);
 		return result;
 	}
 	return transformer.Transform<QualifiedName>(choice_result);
@@ -383,26 +380,18 @@ QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedFunctionName(PEGTransformer &transformer,
                                                                          const Identifier &schema_qualification,
                                                                          const Identifier &reserved_function_name) {
-	QualifiedName result;
-	result.CatalogMutable() = INVALID_CATALOG;
-	result.SchemaMutable() = schema_qualification;
-	result.NameMutable() = reserved_function_name;
+	QualifiedName result(INVALID_CATALOG, schema_qualification, reserved_function_name);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaFunctionName(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const optional<Identifier> &reserved_schema_qualification, const Identifier &reserved_function_name) {
-	QualifiedName result;
 	if (reserved_schema_qualification) {
-		result.CatalogMutable() = catalog_qualification;
-		result.SchemaMutable() = *reserved_schema_qualification;
+		return QualifiedName(catalog_qualification, *reserved_schema_qualification, reserved_function_name);
 	} else {
-		result.CatalogMutable() = INVALID_CATALOG;
-		result.SchemaMutable() = catalog_qualification;
+		return QualifiedName(INVALID_CATALOG, catalog_qualification, reserved_function_name);
 	}
-	result.NameMutable() = reserved_function_name;
-	return result;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayBoundedListExpression(
