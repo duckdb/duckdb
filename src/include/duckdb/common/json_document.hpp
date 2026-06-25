@@ -25,7 +25,8 @@ struct yyjson_mut_val;
 namespace duckdb {
 
 //! The type of a JSON value
-enum class JSONValueType : uint8_t {
+//! NOTE: no explicit storage type so that EnumUtil ToString/FromString code is not generated for it
+enum class JSONValueType {
 	INVALID,          //!< Not a valid value (e.g. the result of a failed lookup)
 	JSON_NULL,        //!< JSON null
 	BOOLEAN,          //!< true / false
@@ -39,7 +40,7 @@ enum class JSONValueType : uint8_t {
 };
 
 //! Flags controlling how JSON is parsed
-enum class JSONReadFlags : uint32_t {
+enum class JSONReadFlags {
 	NONE = 0,
 	ALLOW_INVALID_UNICODE = 1 << 0,
 	ALLOW_INF_AND_NAN = 1 << 1,
@@ -52,12 +53,7 @@ constexpr JSONReadFlags operator|(JSONReadFlags a, JSONReadFlags b) {
 }
 
 //! Flags controlling how JSON is written
-enum class JSONWriteFlags : uint32_t {
-	NONE = 0,
-	ALLOW_INVALID_UNICODE = 1 << 0,
-	ALLOW_INF_AND_NAN = 1 << 1,
-	PRETTY = 1 << 2
-};
+enum class JSONWriteFlags { NONE = 0, ALLOW_INVALID_UNICODE = 1 << 0, ALLOW_INF_AND_NAN = 1 << 1, PRETTY = 1 << 2 };
 
 constexpr JSONWriteFlags operator|(JSONWriteFlags a, JSONWriteFlags b) {
 	return static_cast<JSONWriteFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
