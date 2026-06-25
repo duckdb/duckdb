@@ -693,8 +693,6 @@ static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &l
 		return false;
 	}
 
-	//! Decode the current job in place: scan a chunk and finalize it into 'output'. Never advances or finishes the job
-	//! - the caller claims the next one. Returns what the scan loop should do next.
 	static MultiFileDecodeResult DecodeCurrentJob(ClientContext &context, TableFunctionInput &data_p,
 	                                              MultiFileLocalState &data, MultiFileGlobalState &gstate,
 	                                              MultiFileBindData &bind_data, DataChunk &output) {
@@ -763,7 +761,7 @@ static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &l
 				case MultiFileDecodeResult::PARKED:
 					return;
 				case MultiFileDecodeResult::JOB_FINISHED:
-					// we are done with this batch - claim the next one (a fresh job starts in the schedule phase)
+					// done with this job, gotta claim the next one
 					if (!ClaimNextJob(context, bind_data, gstate, data.job)) {
 						if (output.size() > 0 &&
 						    data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
