@@ -337,10 +337,6 @@ public:
 	                       LocalTableFunctionState &lstate) override;
 	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
-	//! Parquet resets its own chunk, because of the filter-prefetch
-	bool OwnsChunkReset() const override {
-		return true;
-	}
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 	double GetProgressInFile(ClientContext &context) override;
 

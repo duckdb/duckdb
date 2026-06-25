@@ -1713,12 +1713,10 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 	switch (state.scan_state) {
 	case ParquetScanState::FINISHED:
-		result.Reset();
 		return SourceResultType::FINISHED;
 	case ParquetScanState::PROCESS:
-		result.Reset();
-		return Process(context, state, result, log_prefetch);
 	case ParquetScanState::RESUME_PAYLOAD:
+		// the multifile loop owns the chunk reset; it preserves the chunk across a RESUME_PAYLOAD block
 		return Process(context, state, result, log_prefetch);
 	default:
 		throw InternalException("Unexpected ParquetScanState");

@@ -201,6 +201,8 @@ public:
 	unique_ptr<LocalTableFunctionState> local_state;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
 	DataChunk scan_chunk;
+	//! Set when the previous Scan() returned BLOCKED, so the next Scan() preserves the partial chunk
+	bool resuming_blocked_scan = false;
 	//! Whether the current batch still needs its I/O scheduled or is ready to decode
 	MultiFileScanPhase phase = MultiFileScanPhase::SCHEDULE;
 	//! The executor to transform scan_chunk into the final result with FinalizeChunk

@@ -704,11 +704,13 @@ public:
 	static bool DecodePhase(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
 	                        MultiFileGlobalState &gstate, MultiFileBindData &bind_data, DataChunk &output) {
 		auto &scan_chunk = data.scan_chunk;
-		if (!data.reader->OwnsChunkReset()) {
+		if (!data.resuming_blocked_scan) {
 			scan_chunk.Reset();
 		}
 		auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
 
+		// a BLOCKED scan leaves partial data in the chunk (e.g. filter columns) that the resume must keep
+		data.resuming_blocked_scan = res.GetResultType() == AsyncResultType::BLOCKED;
 		if (res.GetResultType() == AsyncResultType::BLOCKED) {
 			return HandleBlocked(data_p, res);
 		}
