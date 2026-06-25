@@ -64,13 +64,13 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		}
 		auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
 		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context.client, info->Catalog(), info->Schema(),
-		                                                         base_table_ref.table_name);
+		                                                         base_table_ref.Table());
 		auto &duck_table = table_entry.Cast<DuckTableEntry>();
 		auto transaction = duck_table.catalog.GetCatalogTransaction(context.client);
 		if (!duck_table.DropTrigger(transaction, info->Name(), info->cascade)) {
 			if (info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"", info->Name(),
-				                       base_table_ref.table_name);
+				                       base_table_ref.Table());
 			}
 		}
 		break;

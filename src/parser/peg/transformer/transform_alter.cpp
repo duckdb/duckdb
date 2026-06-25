@@ -48,9 +48,9 @@ PEGTransformerFactory::TransformAlterTableStmt(PEGTransformer &transformer, cons
 	}
 	auto result = std::move(alter_table_options[0]);
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	result->CatalogMutable() = base_table_name->catalog_name;
-	result->SchemaMutable() = base_table_name->schema_name;
-	result->NameMutable() = base_table_name->table_name;
+	result->CatalogMutable() = base_table_name->Catalog();
+	result->SchemaMutable() = base_table_name->Schema();
+	result->NameMutable() = base_table_name->Table();
 
 	return std::move(result);
 }
@@ -72,9 +72,9 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
                                                                     unique_ptr<AlterTableInfo> rename_alter) {
 	auto rename_table = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(rename_alter));
 	auto result = make_uniq<RenameViewInfo>(AlterEntryData(), rename_table->new_table_name);
-	result->CatalogMutable() = base_table_name->catalog_name;
-	result->SchemaMutable() = base_table_name->schema_name;
-	result->NameMutable() = base_table_name->table_name;
+	result->CatalogMutable() = base_table_name->Catalog();
+	result->SchemaMutable() = base_table_name->Schema();
+	result->NameMutable() = base_table_name->Table();
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	return std::move(result);
 }
@@ -161,9 +161,9 @@ void PEGTransformerFactory::AddUpdateToMultiStatement(const unique_ptr<MultiStat
 	node.prioritize_table_when_binding = true;
 
 	auto table_ref = make_uniq<BaseTableRef>();
-	table_ref->catalog_name = table_data.catalog;
-	table_ref->schema_name = table_data.schema;
-	table_ref->table_name = table_data.name;
+	table_ref->CatalogMutable() = table_data.catalog;
+	table_ref->SchemaMutable() = table_data.schema;
+	table_ref->TableMutable() = table_data.name;
 	node.table = std::move(table_ref);
 
 	auto set_info = make_uniq<UpdateSetInfo>();

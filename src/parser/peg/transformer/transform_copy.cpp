@@ -134,9 +134,9 @@ PEGTransformerFactory::TransformCopyTable(PEGTransformer &transformer, unique_pt
 	auto result = make_uniq<CopyStatement>();
 	auto info = make_uniq<CopyInfo>();
 
-	info->TableMutable() = base_table_name->table_name;
-	info->SchemaMutable() = base_table_name->schema_name;
-	info->CatalogMutable() = base_table_name->catalog_name;
+	info->TableMutable() = base_table_name->Table();
+	info->SchemaMutable() = base_table_name->Schema();
+	info->CatalogMutable() = base_table_name->Catalog();
 	if (insert_column_list) {
 		info->select_list = StringsToIdentifiers(*insert_column_list);
 	}

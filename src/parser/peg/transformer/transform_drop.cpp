@@ -23,9 +23,9 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTable(PEGTransform
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	auto base_table = std::move(base_table_name[0]);
-	info->CatalogMutable() = base_table->catalog_name;
-	info->SchemaMutable() = base_table->schema_name;
-	info->NameMutable() = base_table->table_name;
+	info->CatalogMutable() = base_table->Catalog();
+	info->SchemaMutable() = base_table->Schema();
+	info->NameMutable() = base_table->Table();
 	info->type = table_or_view;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);

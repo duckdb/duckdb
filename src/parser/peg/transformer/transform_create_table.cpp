@@ -406,8 +406,8 @@ ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(PEGTr
                                                                            const optional<vector<string>> &column_list,
                                                                            const KeyActions &key_actions) {
 	ForeignKeyInfo fk_info;
-	fk_info.schema = base_table_name->schema_name;
-	fk_info.table = base_table_name->table_name;
+	fk_info.schema = base_table_name->Schema();
+	fk_info.table = base_table_name->Table();
 	fk_info.type = ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
 	ColumnConstraintEntry entry;

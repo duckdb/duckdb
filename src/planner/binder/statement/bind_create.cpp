@@ -58,9 +58,9 @@ static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const Tabl
 	auto alias_select = make_uniq<SelectNode>();
 	alias_select->select_list.push_back(make_uniq<StarExpression>());
 	auto alias_table_ref = make_uniq<BaseTableRef>();
-	alias_table_ref->table_name = table.name;
-	alias_table_ref->schema_name = table.schema.name;
-	alias_table_ref->catalog_name = table.catalog.GetName();
+	alias_table_ref->TableMutable() = table.name;
+	alias_table_ref->SchemaMutable() = table.schema.name;
+	alias_table_ref->CatalogMutable() = table.catalog.GetName();
 	alias_select->from_table = std::move(alias_table_ref);
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
 	alias_cte->query_node = std::move(alias_select);
@@ -481,9 +481,9 @@ bool BoundBodyContainsTrigger(const LogicalOperator &op);
 
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres)
-	TableDescription table_description(create_trigger_info.base_table->catalog_name,
-	                                   create_trigger_info.base_table->schema_name,
-	                                   create_trigger_info.base_table->table_name);
+	TableDescription table_description(create_trigger_info.base_table->Catalog(),
+	                                   create_trigger_info.base_table->Schema(),
+	                                   create_trigger_info.base_table->Table());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {

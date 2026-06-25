@@ -74,19 +74,19 @@ unique_ptr<AtClause> AtClause::Deserialize(Deserializer &deserializer) {
 
 void BaseTableRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<Identifier>(200, "schema_name", schema_name);
-	serializer.WritePropertyWithDefault<Identifier>(201, "table_name", table_name);
+	serializer.WritePropertyWithDefault<Identifier>(200, "schema_name", qualified_name.Schema());
+	serializer.WritePropertyWithDefault<Identifier>(201, "table_name", qualified_name.Name());
 	serializer.WritePropertyWithDefault<vector<Identifier>>(202, "column_name_alias", column_name_alias);
-	serializer.WritePropertyWithDefault<Identifier>(203, "catalog_name", catalog_name);
+	serializer.WritePropertyWithDefault<Identifier>(203, "catalog_name", qualified_name.Catalog());
 	serializer.WritePropertyWithDefault<unique_ptr<AtClause>>(204, "at_clause", at_clause);
 }
 
 unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<BaseTableRef>(new BaseTableRef());
-	deserializer.ReadPropertyWithDefault<Identifier>(200, "schema_name", result->schema_name);
-	deserializer.ReadPropertyWithDefault<Identifier>(201, "table_name", result->table_name);
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "schema_name", result->qualified_name.SchemaMutable());
+	deserializer.ReadPropertyWithDefault<Identifier>(201, "table_name", result->qualified_name.NameMutable());
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(202, "column_name_alias", result->column_name_alias);
-	deserializer.ReadPropertyWithDefault<Identifier>(203, "catalog_name", result->catalog_name);
+	deserializer.ReadPropertyWithDefault<Identifier>(203, "catalog_name", result->qualified_name.CatalogMutable());
 	deserializer.ReadPropertyWithDefault<unique_ptr<AtClause>>(204, "at_clause", result->at_clause);
 	return std::move(result);
 }
