@@ -158,6 +158,8 @@ enum class CopyOverwriteMode : uint8_t;
 
 enum class CopyToType : uint8_t;
 
+enum class CryptoHashFunction : uint8_t;
+
 enum class DataFileType : uint8_t;
 
 enum class DateCastResult : uint8_t;
@@ -749,6 +751,9 @@ const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value);
 
 template<>
 const char* EnumUtil::ToChars<CopyToType>(CopyToType value);
+
+template<>
+const char* EnumUtil::ToChars<CryptoHashFunction>(CryptoHashFunction value);
 
 template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
@@ -1542,6 +1547,9 @@ CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value);
 
 template<>
 CopyToType EnumUtil::FromString<CopyToType>(const char *value);
+
+template<>
+CryptoHashFunction EnumUtil::FromString<CryptoHashFunction>(const char *value);
 
 template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);

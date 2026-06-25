@@ -18,6 +18,16 @@ namespace duckdb {
 
 struct EncryptionNonce;
 
+enum class CryptoHashFunction : uint8_t { MD5, SHA1, SHA256 };
+
+struct CryptoHash {
+	static constexpr idx_t MAX_DIGEST_SIZE = 32;
+
+	DUCKDB_API static idx_t GetDigestSize(CryptoHashFunction function);
+	DUCKDB_API static idx_t GetHexDigestSize(CryptoHashFunction function);
+	DUCKDB_API static void ToHex(const_data_ptr_t input, idx_t input_len, char *output);
+};
+
 struct EncryptionStateMetadata {
 private:
 	const EncryptionTypes::CipherType cipher;
@@ -84,6 +94,15 @@ public:
 	virtual shared_ptr<EncryptionState> CreateEncryptionState(unique_ptr<EncryptionStateMetadata> metadata) const {
 		return make_shared_ptr<EncryptionState>(std::move(metadata));
 	}
+
+	DUCKDB_API virtual void Hash(CryptoHashFunction function, const_data_ptr_t input, idx_t input_len,
+	                             data_ptr_t output) const;
+	DUCKDB_API virtual void HashHex(CryptoHashFunction function, const_data_ptr_t input, idx_t input_len,
+	                                char *output) const;
+	DUCKDB_API virtual void Hmac(CryptoHashFunction function, const_data_ptr_t key, idx_t key_len,
+	                             const_data_ptr_t input, idx_t input_len, data_ptr_t output) const;
+	DUCKDB_API virtual bool SupportsHash(CryptoHashFunction function) const;
+	DUCKDB_API virtual bool SupportsHmac(CryptoHashFunction function) const;
 
 	virtual ~EncryptionUtil() {
 	}
