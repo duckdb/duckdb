@@ -23,19 +23,19 @@ struct QualifiedName {
 	const Identifier &Catalog() const {
 		return catalog;
 	}
-	Identifier &Catalog() {
+	Identifier &CatalogMutable() {
 		return catalog;
 	}
 	const Identifier &Schema() const {
 		return schema;
 	}
-	Identifier &Schema() {
+	Identifier &SchemaMutable() {
 		return schema;
 	}
 	const Identifier &Name() const {
 		return name;
 	}
-	Identifier &Name() {
+	Identifier &NameMutable() {
 		return name;
 	}
 

@@ -77,19 +77,19 @@ public:
 		return qualified_name.Catalog();
 	}
 	Identifier &CatalogMutable() {
-		return qualified_name.Catalog();
+		return qualified_name.CatalogMutable();
 	}
 	const Identifier &Schema() const {
 		return qualified_name.Schema();
 	}
 	Identifier &SchemaMutable() {
-		return qualified_name.Schema();
+		return qualified_name.SchemaMutable();
 	}
 	const Identifier &FunctionName() const {
 		return qualified_name.Name();
 	}
 	Identifier &FunctionNameMutable() {
-		return qualified_name.Name();
+		return qualified_name.NameMutable();
 	}
 	const vector<unique_ptr<ParsedExpression>> &Partitions() const {
 		return partitions;

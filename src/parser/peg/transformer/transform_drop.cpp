@@ -102,8 +102,8 @@ PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer, const op
 QualifiedName PEGTransformerFactory::TransformQualifiedSchemaNameString(PEGTransformer &transformer,
                                                                         const Identifier &schema_name) {
 	QualifiedName result;
-	result.Catalog() = INVALID_CATALOG;
-	result.Schema() = schema_name;
+	result.CatalogMutable() = INVALID_CATALOG;
+	result.SchemaMutable() = schema_name;
 	return result;
 }
 
@@ -111,8 +111,8 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchema(PEGTransform
                                                                     const Identifier &catalog_qualification,
                                                                     const Identifier &reserved_schema_name) {
 	QualifiedName result;
-	result.Catalog() = catalog_qualification;
-	result.Schema() = reserved_schema_name;
+	result.CatalogMutable() = catalog_qualification;
+	result.SchemaMutable() = reserved_schema_name;
 	return result;
 }
 
@@ -137,9 +137,9 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransform
 QualifiedName PEGTransformerFactory::TransformQualifiedIndexNameString(PEGTransformer &transformer,
                                                                        const Identifier &index_name) {
 	QualifiedName result;
-	result.Catalog() = INVALID_CATALOG;
-	result.Schema() = INVALID_SCHEMA;
-	result.Name() = index_name;
+	result.CatalogMutable() = INVALID_CATALOG;
+	result.SchemaMutable() = INVALID_SCHEMA;
+	result.NameMutable() = index_name;
 	return result;
 }
 
@@ -147,9 +147,9 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedIndex(PEGTransformer
                                                                   const Identifier &schema_qualification,
                                                                   const Identifier &reserved_index_name) {
 	QualifiedName result;
-	result.Catalog() = INVALID_CATALOG;
-	result.Schema() = schema_qualification;
-	result.Name() = reserved_index_name;
+	result.CatalogMutable() = INVALID_CATALOG;
+	result.SchemaMutable() = schema_qualification;
+	result.NameMutable() = reserved_index_name;
 	return result;
 }
 
@@ -157,9 +157,9 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIndex(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_index_name) {
 	QualifiedName result;
-	result.Catalog() = catalog_qualification;
-	result.Schema() = reserved_schema_qualification;
-	result.Name() = reserved_index_name;
+	result.CatalogMutable() = catalog_qualification;
+	result.SchemaMutable() = reserved_schema_qualification;
+	result.NameMutable() = reserved_index_name;
 	return result;
 }
 

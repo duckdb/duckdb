@@ -39,13 +39,13 @@ public:
 		return qualified_name.Schema();
 	}
 	void SetSchema(Identifier new_schema) {
-		qualified_name.Schema() = std::move(new_schema);
+		qualified_name.SchemaMutable() = std::move(new_schema);
 	}
 	const Identifier &GetCatalog() const {
 		return qualified_name.Catalog();
 	}
 	void SetCatalog(Identifier new_catalog) {
-		qualified_name.Catalog() = std::move(new_catalog);
+		qualified_name.CatalogMutable() = std::move(new_catalog);
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
 		return children;

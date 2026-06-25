@@ -106,9 +106,9 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransform
                                                                     const optional<Identifier> &schema_qualification,
                                                                     const Identifier &sequence_name) {
 	QualifiedName result;
-	result.Catalog() = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
-	result.Schema() = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
-	result.Name() = sequence_name;
+	result.CatalogMutable() = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
+	result.SchemaMutable() = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
+	result.NameMutable() = sequence_name;
 	return result;
 }
 

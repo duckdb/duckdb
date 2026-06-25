@@ -372,9 +372,9 @@ QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer 
                                                                  ParseResult &choice_result) {
 	if (choice_result.type == ParseResultType::IDENTIFIER) {
 		QualifiedName result;
-		result.Catalog() = INVALID_CATALOG;
-		result.Schema() = INVALID_SCHEMA;
-		result.Name() = choice_result.Cast<IdentifierParseResult>().identifier;
+		result.CatalogMutable() = INVALID_CATALOG;
+		result.SchemaMutable() = INVALID_SCHEMA;
+		result.NameMutable() = choice_result.Cast<IdentifierParseResult>().identifier;
 		return result;
 	}
 	return transformer.Transform<QualifiedName>(choice_result);
@@ -384,9 +384,9 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedFunctionName(PEGTran
                                                                          const Identifier &schema_qualification,
                                                                          const Identifier &reserved_function_name) {
 	QualifiedName result;
-	result.Catalog() = INVALID_CATALOG;
-	result.Schema() = schema_qualification;
-	result.Name() = reserved_function_name;
+	result.CatalogMutable() = INVALID_CATALOG;
+	result.SchemaMutable() = schema_qualification;
+	result.NameMutable() = reserved_function_name;
 	return result;
 }
 
@@ -395,13 +395,13 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaFunctionName(
     const optional<Identifier> &reserved_schema_qualification, const Identifier &reserved_function_name) {
 	QualifiedName result;
 	if (reserved_schema_qualification) {
-		result.Catalog() = catalog_qualification;
-		result.Schema() = *reserved_schema_qualification;
+		result.CatalogMutable() = catalog_qualification;
+		result.SchemaMutable() = *reserved_schema_qualification;
 	} else {
-		result.Catalog() = INVALID_CATALOG;
-		result.Schema() = catalog_qualification;
+		result.CatalogMutable() = INVALID_CATALOG;
+		result.SchemaMutable() = catalog_qualification;
 	}
-	result.Name() = reserved_function_name;
+	result.NameMutable() = reserved_function_name;
 	return result;
 }
 

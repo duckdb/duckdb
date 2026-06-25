@@ -586,8 +586,8 @@
       {
         "id": 200,
         "name": "catalog",
-        "property": "qualified_name.Catalog()",
         "serialize_property": "qualified_name.Catalog()",
+        "deserialize_property": "qualified_name.CatalogMutable()",
         "type": "Identifier",
         "equals_skip": true,
         "hash_skip": true
@@ -595,8 +595,8 @@
       {
         "id": 201,
         "name": "schema",
-        "property": "qualified_name.Schema()",
         "serialize_property": "qualified_name.Schema()",
+        "deserialize_property": "qualified_name.SchemaMutable()",
         "type": "Identifier",
         "equals_skip": true,
         "hash_skip": true
@@ -604,8 +604,8 @@
       {
         "id": 202,
         "name": "type_name",
-        "property": "qualified_name.Name()",
         "serialize_property": "qualified_name.Name()",
+        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier",
         "equals_skip": true,
         "hash_skip": true

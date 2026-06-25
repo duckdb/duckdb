@@ -21,14 +21,14 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 QualifiedName PEGTransformerFactory::TransformSchemaNameAsUseTarget(PEGTransformer &transformer,
                                                                     const Identifier &schema_name) {
 	QualifiedName result;
-	result.Name() = schema_name;
+	result.NameMutable() = schema_name;
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformCatalogNameAsUseTarget(PEGTransformer &transformer,
                                                                      const Identifier &catalog_name) {
 	QualifiedName result;
-	result.Name() = catalog_name;
+	result.NameMutable() = catalog_name;
 	return result;
 }
 
@@ -41,9 +41,9 @@ PEGTransformerFactory::TransformUseTargetCatalogSchema(PEGTransformer &transform
 		throw ParserException("Expected \"USE database\" or \"USE database.schema\"");
 	}
 	QualifiedName result;
-	result.Catalog() = Identifier::InvalidCatalog();
-	result.Schema() = catalog_name;
-	result.Name() = reserved_schema_name;
+	result.CatalogMutable() = Identifier::InvalidCatalog();
+	result.SchemaMutable() = catalog_name;
+	result.NameMutable() = reserved_schema_name;
 	return result;
 }
 

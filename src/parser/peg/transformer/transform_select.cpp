@@ -256,9 +256,9 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_identifier_or_string_literal) {
 	QualifiedName result;
-	result.Catalog() = catalog_qualification;
-	result.Schema() = reserved_schema_qualification;
-	result.Name() = reserved_identifier_or_string_literal;
+	result.CatalogMutable() = catalog_qualification;
+	result.SchemaMutable() = reserved_schema_qualification;
+	result.NameMutable() = reserved_identifier_or_string_literal;
 	return result;
 }
 
@@ -266,9 +266,9 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLi
     PEGTransformer &transformer, const Identifier &schema_qualification,
     const Identifier &reserved_identifier_or_string_literal) {
 	QualifiedName result;
-	result.Catalog() = INVALID_CATALOG;
-	result.Schema() = schema_qualification;
-	result.Name() = reserved_identifier_or_string_literal;
+	result.CatalogMutable() = INVALID_CATALOG;
+	result.SchemaMutable() = schema_qualification;
+	result.NameMutable() = reserved_identifier_or_string_literal;
 	return result;
 }
 
@@ -1277,13 +1277,13 @@ QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransfor
                                                                      const optional<Identifier> &schema_qualification,
                                                                      const Identifier &table_function_name) {
 	QualifiedName result;
-	result.Catalog() = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
-	result.Schema() = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
+	result.CatalogMutable() = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
+	result.SchemaMutable() = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
 	if (!result.Catalog().empty() && result.Schema().empty()) {
-		result.Schema() = result.Catalog();
-		result.Catalog() = INVALID_CATALOG;
+		result.SchemaMutable() = result.Catalog();
+		result.CatalogMutable() = INVALID_CATALOG;
 	}
-	result.Name() = table_function_name;
+	result.NameMutable() = table_function_name;
 	return result;
 }
 

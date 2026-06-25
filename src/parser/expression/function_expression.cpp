@@ -167,8 +167,8 @@ void FunctionExpression::Serialize(Serializer &serializer) const {
 
 unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
-	deserializer.ReadPropertyWithDefault<Identifier>(200, "function_name", result->qualified_name.Name());
-	deserializer.ReadPropertyWithDefault<Identifier>(201, "schema", result->qualified_name.Schema());
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "function_name", result->qualified_name.NameMutable());
+	deserializer.ReadPropertyWithDefault<Identifier>(201, "schema", result->qualified_name.SchemaMutable());
 
 	// Legacy children deserialization
 	vector<unique_ptr<ParsedExpression>> children;
@@ -190,7 +190,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<bool>(205, "distinct", result->distinct);
 	deserializer.ReadPropertyWithDefault<bool>(206, "is_operator", result->is_operator);
 	deserializer.ReadPropertyWithDefault<bool>(207, "export_state", result->export_state);
-	deserializer.ReadPropertyWithDefault<Identifier>(208, "catalog", result->qualified_name.Catalog());
+	deserializer.ReadPropertyWithDefault<Identifier>(208, "catalog", result->qualified_name.CatalogMutable());
 
 	// New children deserialization
 	if (children.empty()) {
