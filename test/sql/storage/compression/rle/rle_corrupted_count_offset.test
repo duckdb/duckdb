@@ -13,4 +13,4 @@ RLE
 statement error
 SELECT * FROM t LIMIT 1;
 ----
-IO Error: Corrupted RLE segment: rle_count_offset is corrupted
+IO Error: Corrupted RLE segment: rle_count_offset exceeds the block size. The index_pointer would start outside of the segment
