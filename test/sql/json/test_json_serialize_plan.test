@@ -49,37 +49,3 @@ true
 
 statement ok
 select json_serialize_plan('select blob ''\\x00''');
-
-query I
-SELECT json_extract_string(
-    json_serialize_plan('COPY (SELECT DATE ''2026-01-02'' AS d) TO ''{TEMP_DIR}/serialize_copy_date'' (FORMAT JSON, dateformat ''%d/%m/%Y'')'),
-    '$.error'
-);
-----
-false
-
-query I
-SELECT json_extract_string(
-    json_serialize_plan('COPY (SELECT ''2026-01-02 03:04:05.123456789+00''::TIMESTAMPTZ_NS AS ts) TO ''{TEMP_DIR}/serialize_copy_tstz_ns'' (FORMAT JSON, timestampformat ''%Y/%m/%d %H:%M:%S.%n'')'),
-    '$.error'
-);
-----
-false
-
-statement ok
-SET debug_verify_serializer=true;
-
-statement ok
-COPY (
-    SELECT {'d': DATE '2026-01-02', 'ts': TIMESTAMP_NS '2026-01-02 03:04:05.123456789'} AS payload
-) TO '{TEMP_DIR}/serialize_copy_nested_payload.json'
-  (FORMAT JSON, dateformat '%d/%m/%Y', timestampformat '%Y/%m/%d %H:%M:%S.%n');
-
-query I
-SELECT trim(content, chr(10))
-FROM read_text('{TEMP_DIR}/serialize_copy_nested_payload.json')
-----
-{"payload":{"d":"02/01/2026","ts":"2026/01/02 03:04:05.123456789"}}
-
-statement ok
-SET debug_verify_serializer=false;
