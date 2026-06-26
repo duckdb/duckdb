@@ -16,7 +16,7 @@ namespace duckdb {
 
 //! Semantic category of a styled segment emitted while rendering a plan/profiler tree. A BaseTreeRenderer decides
 //! how each category is realized: plain text, direct terminal output, or syntax highlighting (in the CLI).
-enum class TreeRenderType : uint8_t {
+enum class TreeRenderType {
 	//! Box-drawing characters, padding and connector lines
 	LAYOUT,
 	//! Operator / node name (generic, when the category is unknown)

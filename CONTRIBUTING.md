@@ -109,6 +109,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * Avoid [unnamed magic numbers](https://en.wikipedia.org/wiki/Magic_number_(programming)). Instead, use named variables that are stored in a `constexpr`.
 * [Return early](https://medium.com/swlh/return-early-pattern-3d18a41bba8). Avoid deep nested branches.
 * Do not include commented out code blocks in pull requests.
+* Always use `enum class`, never use C-style `enum`. Assign an explicit storage layout (`: uint8_t`) only if the enum is intended to be serialized. 
 
 ## Error Handling
 
