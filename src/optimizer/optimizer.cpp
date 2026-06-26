@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/optimizer.hpp"
 
+#include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -36,6 +37,7 @@
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/topn_window_elimination.hpp"
+#include "duckdb/optimizer/type_pushdown.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
@@ -205,6 +207,16 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::FILTER_PULLUP, [&]() {
 		FilterPullup filter_pullup;
 		plan = filter_pullup.Rewrite(std::move(plan));
+	});
+
+	/* Push down type casts in SELECT e.g. SELECT num::UHUGEINT to file readers.
+	 * This pass must run before FILTER_PUSHDOWN. After filter pushdown
+	 * get.table_filters are populated because WHERE clauses may have been
+	 * pushed. This makes type pushdown much more complex.
+	 */
+	RunOptimizer(OptimizerType::TYPE_PUSHDOWN, [&] {
+		TypePushdown type_pushdown(context);
+		plan = type_pushdown.Optimize(std::move(plan));
 	});
 
 	// perform filter pushdown
