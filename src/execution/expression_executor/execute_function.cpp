@@ -8,7 +8,7 @@ namespace duckdb {
 
 namespace {
 
-bool IsThinIntegerType(const LogicalType &type) {
+bool IsAutoVecType(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -18,22 +18,24 @@ bool IsThinIntegerType(const LogicalType &type) {
 	case PhysicalType::UINT16:
 	case PhysicalType::UINT32:
 	case PhysicalType::UINT64:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
 		return true;
 	default:
 		return false;
 	}
 }
 
-bool IsSafeThinIntegerArithmetic(const BoundFunctionExpression &expr) {
+bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
 	auto name = expr.Function().GetName();
 	if (name != "+" && name != "-" && name != "*") {
 		return false;
 	}
-	if (!IsThinIntegerType(expr.GetReturnType())) {
+	if (!IsAutoVecType(expr.GetReturnType())) {
 		return false;
 	}
 	for (auto &child : expr.GetChildren()) {
-		if (!IsThinIntegerType(child->GetReturnType())) {
+		if (!IsAutoVecType(child->GetReturnType())) {
 			return false;
 		}
 	}
@@ -74,7 +76,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 			}
 			dictionary_input_indices.push_back(child_idx);
 		}
-		if (!eligible || (dictionary_input_indices.size() > 1 && !IsSafeThinIntegerArithmetic(bound_function))) {
+		if (!eligible || (dictionary_input_indices.size() > 1 && !IsSafeAutoVecArithmetic(bound_function))) {
 			dictionary_input_indices.clear();
 		}
 		break;

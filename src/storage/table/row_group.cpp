@@ -819,12 +819,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			auto filter_state = filter_info.BeginFilter();
 			if (has_filters) {
 				ScanFilterResult acc;
-				acc.row_span = max_count;
-				if (count != max_count) {
-					acc.InitFromSelection(sel, count, max_count);
-				} else {
-					acc.InitAllPass(max_count);
-				}
+				acc.InitFromSelection(sel, count, max_count);
 
 				auto &filter_list = filter_info.GetFilterList();
 				const auto &permutation = adaptive_filter->GetPermutation();

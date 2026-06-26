@@ -817,26 +817,18 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
 		                                                          offset_in_compression_group);
 		// Calculate start of compression algorithm group
-		data_ptr_t current_position_ptr =
-		    scan_state.current_group_ptr + scan_state.current_group_offset * scan_state.current_width / 8;
 		data_ptr_t decompression_group_start_pointer =
-		    current_position_ptr - offset_in_compression_group * scan_state.current_width / 8;
+		    scan_state.current_group_ptr +
+		    (scan_state.current_group_offset - offset_in_compression_group) * scan_state.current_width / 8;
 
 		T *current_result_ptr = result_data + result_offset + scanned;
 
-		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0) {
-			// Decompress directly into result vector
-			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(current_result_ptr), decompression_group_start_pointer,
-			                                     scan_state.current_width, skip_sign_extend);
-		} else {
-			// Decompress compression algorithm to buffer
-			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(scan_state.decompression_buffer),
-			                                     decompression_group_start_pointer, scan_state.current_width,
-			                                     skip_sign_extend);
-
-			memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
-			       to_scan * sizeof(T));
-		}
+		// Decompress one algorithm group to buffer, copy out the requested slice
+		BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(scan_state.decompression_buffer),
+		                                     decompression_group_start_pointer, scan_state.current_width,
+		                                     skip_sign_extend);
+		memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
+		       to_scan * sizeof(T));
 
 		if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
 			ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(current_result_ptr),

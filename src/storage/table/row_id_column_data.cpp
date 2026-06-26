@@ -72,11 +72,7 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 	const auto rowid_end = current_row + max_count;
 	const auto prune_result = RowGroup::CheckRowIdFilter(filter, rowid_start, rowid_end);
 	if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-		acc.InitAllPass(max_count);
-		const idx_t nw = (max_count + 63) / 64;
-		for (idx_t w = 0; w < nw; w++) {
-			acc.bitmap[w] = 0;
-		}
+		acc.Init(max_count, false);
 		return;
 	}
 

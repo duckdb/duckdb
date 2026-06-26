@@ -33,7 +33,6 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
 
@@ -430,22 +429,69 @@ inline bool TryGetComparisonConstant(const Value &constant, const LogicalType &t
 	return true;
 }
 
+// Comparison primitives. For floats this is DuckDB's total order (NaN == NaN, NaN > every
+// non-NaN incl. +inf, +-0 equal); `x != x` is the branchless isnan. The other ops derive from these.
+template <class T>
+struct CmpEq {
+	static inline bool Operation(T a, T b) {
+		if constexpr (std::is_floating_point<T>::value) {
+			return ((a != a) && (b != b)) || (a == b);
+		} else {
+			return a == b;
+		}
+	}
+};
+template <class T>
+struct CmpGt {
+	static inline bool Operation(T a, T b) {
+		if constexpr (std::is_floating_point<T>::value) {
+			return (b == b) && ((a != a) || (a > b));
+		} else {
+			return a > b;
+		}
+	}
+};
+template <class T>
+struct CmpNe {
+	static inline bool Operation(T a, T b) {
+		return !CmpEq<T>::Operation(a, b);
+	}
+};
+template <class T>
+struct CmpLt {
+	static inline bool Operation(T a, T b) {
+		return CmpGt<T>::Operation(b, a);
+	}
+};
+template <class T>
+struct CmpGe {
+	static inline bool Operation(T a, T b) {
+		return !CmpGt<T>::Operation(b, a);
+	}
+};
+template <class T>
+struct CmpLe {
+	static inline bool Operation(T a, T b) {
+		return !CmpGt<T>::Operation(a, b);
+	}
+};
+
 template <class T>
 inline void DispatchCmpToBitmap(ExpressionType op, const T *__restrict data, T constant, idx_t count,
                                 const validity_t *validity, validity_t *__restrict bitmap) {
 	switch (op) {
 	case ExpressionType::COMPARE_EQUAL:
-		return NarrowCmpToBitmap<T, duckdb::Equals>(data, constant, count, validity, bitmap);
+		return NarrowCmpToBitmap<T, CmpEq<T>>(data, constant, count, validity, bitmap);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return NarrowCmpToBitmap<T, duckdb::NotEquals>(data, constant, count, validity, bitmap);
+		return NarrowCmpToBitmap<T, CmpNe<T>>(data, constant, count, validity, bitmap);
 	case ExpressionType::COMPARE_LESSTHAN:
-		return NarrowCmpToBitmap<T, duckdb::LessThan>(data, constant, count, validity, bitmap);
+		return NarrowCmpToBitmap<T, CmpLt<T>>(data, constant, count, validity, bitmap);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return NarrowCmpToBitmap<T, duckdb::LessThanEquals>(data, constant, count, validity, bitmap);
+		return NarrowCmpToBitmap<T, CmpLe<T>>(data, constant, count, validity, bitmap);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return NarrowCmpToBitmap<T, duckdb::GreaterThan>(data, constant, count, validity, bitmap);
+		return NarrowCmpToBitmap<T, CmpGt<T>>(data, constant, count, validity, bitmap);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return NarrowCmpToBitmap<T, duckdb::GreaterThanEquals>(data, constant, count, validity, bitmap);
+		return NarrowCmpToBitmap<T, CmpGe<T>>(data, constant, count, validity, bitmap);
 	default:
 		throw InternalException("Unsupported comparison for bitmap filter");
 	}
@@ -502,14 +548,46 @@ bool TryComparisonToBitmap(const Expression &expr, Vector &col, idx_t count, val
 		return TryFlatComparisonToBitmap<uint32_t>(op, *constant, col, count, validity_data, bitmap);
 	case PhysicalType::UINT64:
 		return TryFlatComparisonToBitmap<uint64_t>(op, *constant, col, count, validity_data, bitmap);
+	case PhysicalType::FLOAT:
+		return TryFlatComparisonToBitmap<float>(op, *constant, col, count, validity_data, bitmap);
+	case PhysicalType::DOUBLE:
+		return TryFlatComparisonToBitmap<double>(op, *constant, col, count, validity_data, bitmap);
 	default:
 		return false;
 	}
 }
 
+bool TryNullCheckToBitmap(const Expression &expr, Vector &col, idx_t count, validity_t *__restrict bitmap) {
+	const auto op = expr.GetExpressionType();
+	if (op != ExpressionType::OPERATOR_IS_NULL && op != ExpressionType::OPERATOR_IS_NOT_NULL) {
+		return false;
+	}
+	auto &bound_op = expr.Cast<BoundOperatorExpression>();
+	if (bound_op.GetChildren().size() != 1 ||
+	    bound_op.GetChildren()[0]->GetExpressionClass() != ExpressionClass::BOUND_REF ||
+	    col.GetVectorType() != VectorType::FLAT_VECTOR) {
+		return false;
+	}
+
+	const bool is_not_null = op == ExpressionType::OPERATOR_IS_NOT_NULL;
+	const auto validity = FlatVector::Validity(col).GetData();
+	const idx_t nwords = (count + 63) / 64;
+	for (idx_t w = 0; w < nwords; w++) {
+		const validity_t valid = validity ? validity[w] : ~validity_t(0);
+		bitmap[w] = is_not_null ? valid : ~valid;
+	}
+	if (count & 63) {
+		bitmap[nwords - 1] &= (validity_t(1) << (count & 63)) - 1;
+	}
+	return true;
+}
+
 bool TryFilterBitmap(const Expression &expr, Vector &col, idx_t count, validity_t *__restrict bitmap) {
 	if (BoundComparisonExpression::IsComparison(expr)) {
 		return TryComparisonToBitmap(expr, col, count, bitmap);
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR) {
+		return TryNullCheckToBitmap(expr, col, count, bitmap);
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION ||
 	    expr.GetExpressionType() != ExpressionType::CONJUNCTION_AND) {

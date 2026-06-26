@@ -110,3 +110,74 @@ query III
 SELECT sum(a + b), sum(a - b), sum(a * b) FROM autovec_arith_t WHERE k >= 3 AND k < 7
 ----
 54	-18	172
+
+# float/double bitmap-path comparisons, incl. DuckDB's NaN total order (NaN == NaN, NaN > everything)
+statement ok
+CREATE TABLE autovec_float_t(f FLOAT, d DOUBLE);
+
+statement ok
+INSERT INTO autovec_float_t VALUES
+	('-inf','-inf'),(-1,-1),('-0.0','-0.0'),(0,0),(1,1),('inf','inf'),('nan','nan'),(NULL,NULL);
+
+query I
+SELECT count(*) FROM autovec_float_t WHERE f > 1
+----
+2
+
+query I
+SELECT count(*) FROM autovec_float_t WHERE d >= 1
+----
+3
+
+query I
+SELECT count(*) FROM autovec_float_t WHERE f < 1
+----
+4
+
+query I
+SELECT count(*) FROM autovec_float_t WHERE d <= 1
+----
+5
+
+query I
+SELECT count(*) FROM autovec_float_t WHERE f = 0
+----
+2
+
+query I
+SELECT count(*) FROM autovec_float_t WHERE d <> 0
+----
+5
+
+# NaN is the largest value: only NaN matches > / >= against a NaN literal
+query I
+SELECT count(*) FROM autovec_float_t WHERE f > 'nan'::FLOAT
+----
+0
+
+query I
+SELECT count(*) FROM autovec_float_t WHERE d = 'nan'::DOUBLE
+----
+1
+
+query I
+SELECT count(*) FROM autovec_float_t WHERE f < 'nan'::FLOAT
+----
+6
+
+# float/double arithmetic dictionary optimization (+, -, *), with nan/inf propagation
+statement ok
+CREATE TABLE autovec_farith_t(a DOUBLE, b DOUBLE, k INTEGER);
+
+statement ok
+INSERT INTO autovec_farith_t SELECT i::DOUBLE, (i * 2)::DOUBLE, i::INTEGER FROM range(10) tbl(i);
+
+query III
+SELECT sum(a + b), sum(a - b), sum(a * b) FROM autovec_farith_t WHERE k >= 3 AND k < 7
+----
+54	-18	172
+
+query III
+SELECT (a + b), (a - b), (a * b) FROM autovec_farith_t WHERE a = 3
+----
+9	-3	18
