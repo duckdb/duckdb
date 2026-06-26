@@ -267,7 +267,7 @@ PEGTransformerFactory::TransformQualifiedSimpleType(PEGTransformer &transformer,
                                                     optional<vector<unique_ptr<ParsedExpression>>> type_modifiers) {
 	auto result = qualified_type_name;
 	if (result.Schema().empty()) {
-		result = QualifiedName(INVALID_CATALOG, result.Catalog(), result.Name());
+		result = QualifiedName(Identifier(), result.Catalog(), result.Name());
 	}
 	vector<unique_ptr<ParsedExpression>> modifiers;
 	if (type_modifiers) {
@@ -278,14 +278,14 @@ PEGTransformerFactory::TransformQualifiedSimpleType(PEGTransformer &transformer,
 
 QualifiedName PEGTransformerFactory::TransformTypeNameAsQualifiedName(PEGTransformer &transformer,
                                                                       const Identifier &type_name) {
-	QualifiedName result(INVALID_CATALOG, INVALID_SCHEMA, type_name);
+	QualifiedName result(type_name);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedTypeName(PEGTransformer &transformer,
                                                                      const Identifier &schema_qualification,
                                                                      const Identifier &reserved_type_name) {
-	QualifiedName result(INVALID_CATALOG, schema_qualification, reserved_type_name);
+	QualifiedName result({schema_qualification}, reserved_type_name);
 	return result;
 }
 

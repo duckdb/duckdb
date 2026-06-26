@@ -39,6 +39,11 @@ struct QualifiedName {
 			schema_path.push_back(std::move(schema_p));
 		}
 	}
+	//! Construct from an explicit schema path (the catalog/schema components actually present) and a name. Use this to
+	//! avoid passing INVALID_CATALOG/INVALID_SCHEMA placeholders for components that are not set.
+	QualifiedName(vector<Identifier> schema_path_p, Identifier name_p)
+	    : schema_path(std::move(schema_path_p)), name(std::move(name_p)) {
+	}
 
 	//! The catalog is the first element of the schema path, but only when the path is fully qualified (size 2)
 	const Identifier &Catalog() const {

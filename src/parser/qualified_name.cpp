@@ -78,31 +78,18 @@ bool QualifiedName::operator!=(const QualifiedName &rhs) const {
 }
 
 QualifiedName QualifiedName::Parse(const string &input) {
-	Identifier catalog;
-	Identifier schema;
-	Identifier name;
-
 	auto entries = ParseComponents(input);
-	if (entries.empty()) {
-		catalog = INVALID_CATALOG;
-		schema = INVALID_SCHEMA;
-	} else if (entries.size() == 1) {
-		catalog = INVALID_CATALOG;
-		schema = INVALID_SCHEMA;
-		name = entries[0];
-	} else if (entries.size() == 2) {
-		catalog = INVALID_CATALOG;
-		schema = entries[0];
-		name = entries[1];
-	} else if (entries.size() == 3) {
-		catalog = entries[0];
-		schema = entries[1];
-		name = entries[2];
-	} else {
+	if (entries.size() > 3) {
 		throw ParserException("Expected catalog.entry, schema.entry or entry: too many entries found (input: %s)",
 		                      input);
 	}
-	return QualifiedName {catalog, schema, name};
+	if (entries.empty()) {
+		return QualifiedName();
+	}
+	// the last component is the name, anything before it is the schema path (at most [catalog, schema])
+	Identifier name = std::move(entries.back());
+	entries.pop_back();
+	return QualifiedName(std::move(entries), std::move(name));
 }
 
 QualifiedColumnName::QualifiedColumnName() {

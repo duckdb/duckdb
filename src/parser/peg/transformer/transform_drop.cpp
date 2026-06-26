@@ -51,7 +51,7 @@ PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer, c
 	if (table_function_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	info->SetQualifiedName(QualifiedName(INVALID_CATALOG, INVALID_SCHEMA, table_function_name[0]));
+	info->SetQualifiedName(QualifiedName(table_function_name[0]));
 	info->type = comment_macro_table;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
@@ -85,7 +85,7 @@ PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer, const op
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	const auto &schema = qualified_schema_name[0];
-	info->SetQualifiedName(QualifiedName(schema.Catalog(), INVALID_SCHEMA, schema.Schema()));
+	info->SetQualifiedName(QualifiedName(schema.Catalog(), Identifier(), schema.Schema()));
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::SCHEMA_ENTRY;
 	result->info = std::move(info);
@@ -94,7 +94,7 @@ PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer, const op
 
 QualifiedName PEGTransformerFactory::TransformQualifiedSchemaNameString(PEGTransformer &transformer,
                                                                         const Identifier &schema_name) {
-	QualifiedName result(INVALID_CATALOG, schema_name, Identifier());
+	QualifiedName result({schema_name}, Identifier());
 	return result;
 }
 
@@ -122,14 +122,14 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransform
 
 QualifiedName PEGTransformerFactory::TransformQualifiedIndexNameString(PEGTransformer &transformer,
                                                                        const Identifier &index_name) {
-	QualifiedName result(INVALID_CATALOG, INVALID_SCHEMA, index_name);
+	QualifiedName result(index_name);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedIndex(PEGTransformer &transformer,
                                                                   const Identifier &schema_qualification,
                                                                   const Identifier &reserved_index_name) {
-	QualifiedName result(INVALID_CATALOG, schema_qualification, reserved_index_name);
+	QualifiedName result({schema_qualification}, reserved_index_name);
 	return result;
 }
 
@@ -150,7 +150,7 @@ PEGTransformerFactory::TransformDropSequence(PEGTransformer &transformer, const 
 	}
 	const auto &sequence = qualified_sequence_name[0];
 	if (sequence.Schema().empty()) {
-		info->SetQualifiedName(QualifiedName(INVALID_CATALOG, sequence.Catalog(), sequence.Name()));
+		info->SetQualifiedName(QualifiedName(Identifier(), sequence.Catalog(), sequence.Name()));
 	} else {
 		info->SetQualifiedName(sequence);
 	}
@@ -195,7 +195,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransforme
 	}
 	const auto &type = qualified_type_name[0];
 	if (type.Schema().empty()) {
-		info->SetQualifiedName(QualifiedName(INVALID_CATALOG, type.Catalog(), type.Name()));
+		info->SetQualifiedName(QualifiedName(Identifier(), type.Catalog(), type.Name()));
 	} else {
 		info->SetQualifiedName(type);
 	}

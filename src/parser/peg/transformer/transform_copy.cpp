@@ -31,8 +31,7 @@ void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &optio
 				for (const auto &partition : option.children) {
 					func_children.push_back(make_uniq<ColumnRefExpression>(Identifier(partition.GetValue<string>())));
 				}
-				auto row_func = make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "row"),
-				                                              std::move(func_children));
+				auto row_func = make_uniq<FunctionExpression>("row", std::move(func_children));
 				info->parsed_options[option.name.GetIdentifierName()] = std::move(row_func);
 			}
 		} else if (option.name == "HEADER" || option.name == "ESCAPE") {

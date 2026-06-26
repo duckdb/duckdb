@@ -88,7 +88,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTrans
                                                                         unique_ptr<AlterInfo> alter_sequence_options) {
 	if (qualified_sequence_name.Schema().empty()) {
 		alter_sequence_options->SetQualifiedName(
-		    QualifiedName(INVALID_CATALOG, qualified_sequence_name.Catalog(), qualified_sequence_name.Name()));
+		    QualifiedName(Identifier(), qualified_sequence_name.Catalog(), qualified_sequence_name.Name()));
 	} else {
 		alter_sequence_options->SetQualifiedName(QualifiedName(
 		    qualified_sequence_name.Catalog(), qualified_sequence_name.Schema(), qualified_sequence_name.Name()));
@@ -101,8 +101,8 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransform
                                                                     const optional<Identifier> &catalog_qualification,
                                                                     const optional<Identifier> &schema_qualification,
                                                                     const Identifier &sequence_name) {
-	QualifiedName result(catalog_qualification ? *catalog_qualification : INVALID_CATALOG,
-	                     schema_qualification ? *schema_qualification : INVALID_SCHEMA, sequence_name);
+	QualifiedName result(catalog_qualification ? *catalog_qualification : Identifier(),
+	                     schema_qualification ? *schema_qualification : Identifier(), sequence_name);
 	return result;
 }
 

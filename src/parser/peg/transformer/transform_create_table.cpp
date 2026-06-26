@@ -185,8 +185,7 @@ PEGTransformerFactory::TransformCreateTableConstraint(PEGTransformer &transforme
 
 QualifiedName PEGTransformerFactory::TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
                                                                         const string &child) {
-	QualifiedName result(INVALID_CATALOG, INVALID_SCHEMA, Identifier(child));
-	return result;
+	return QualifiedName(Identifier(child));
 }
 
 string PEGTransformerFactory::TransformColLabelOrString(PEGTransformer &transformer, ParseResult &parse_result) {
