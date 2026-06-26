@@ -130,6 +130,10 @@ ErrorData MetaTransaction::Commit() {
 
 		auto &transaction_manager = db.GetTransactionManager();
 		auto &transaction_ref = entry->second;
+		if (ValidChecker::IsInvalidated(db)) {
+			error.Merge(ErrorData(IOException("%s", ValidChecker::InvalidatedMessage(db))));
+			continue;
+		}
 		if (transaction_ref.state != TransactionState::UNCOMMITTED) {
 			continue;
 		}
@@ -161,6 +165,10 @@ void MetaTransaction::Rollback() {
 		auto entry = transactions.find(db);
 		D_ASSERT(entry != transactions.end());
 		auto &transaction_ref = entry->second;
+		if (ValidChecker::IsInvalidated(db)) {
+			error.Merge(ErrorData(IOException("%s", ValidChecker::InvalidatedMessage(db))));
+			continue;
+		}
 		if (transaction_ref.state != TransactionState::UNCOMMITTED) {
 			continue;
 		}

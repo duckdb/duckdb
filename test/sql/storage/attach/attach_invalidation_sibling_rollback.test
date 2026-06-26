@@ -1,0 +1,66 @@
+# name: test/sql/storage/attach/attach_invalidation_sibling_rollback.test
+# description: A rollback of a transaction that touched an invalidated database fails
+# group: [attach]
+
+require no_alternative_verify
+
+require skip_reload
+
+statement ok con1
+SET wal_autocheckpoint='1TB';
+
+statement ok con1
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok con1
+ATTACH '{TEST_DIR}/attach_invalidation_sibling_rollback_a.db' AS a;
+
+statement ok con1
+ATTACH '{TEST_DIR}/attach_invalidation_sibling_rollback_b.db' AS b;
+
+statement ok con1
+CREATE TABLE a.tbl(i INTEGER);
+
+statement ok con1
+INSERT INTO a.tbl VALUES (1);
+
+statement ok con1
+CREATE TABLE b.tbl(i INTEGER);
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+SELECT COUNT(*) FROM a.tbl;
+
+statement ok con1
+INSERT INTO b.tbl VALUES (99);
+
+statement ok con2
+SET wal_autocheckpoint='1KB';
+
+statement ok con2
+SET auto_checkpoint_skip_wal_threshold=9999999999;
+
+statement ok con2
+PRAGMA debug_checkpoint_abort='before_header';
+
+statement ok con2
+INSERT INTO a.tbl SELECT range FROM range(10000);
+
+statement error con2
+SELECT COUNT(*) FROM a.tbl;
+----
+<REGEX>:.*Database "a" has been invalidated because checkpointing failed.*
+
+statement ok con2
+PRAGMA debug_checkpoint_abort='none';
+
+statement ok con2
+SET wal_autocheckpoint='1TB';
+
+# con1 touched the invalidated "a", so its rollback fails
+statement error con1
+ROLLBACK;
+----
+<REGEX>:.*Database "a" has been invalidated because checkpointing failed.*
