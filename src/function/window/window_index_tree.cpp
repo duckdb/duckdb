@@ -1,8 +1,6 @@
 #include "duckdb/function/window/window_index_tree.hpp"
 #include "duckdb/function/window/window_collection.hpp"
 
-#include <utility>
-
 namespace duckdb {
 
 WindowIndexTree::WindowIndexTree(ClientContext &context, const vector<BoundOrderByNode> &orders,
@@ -62,21 +60,31 @@ void WindowIndexTreeLocalState::BuildLeaves() {
 }
 
 pair<idx_t, idx_t> WindowIndexTree::SelectNth(const SubFrames &frames, idx_t n) const {
+	pair<idx_t, idx_t> nth;
 	if (mst32) {
-		const auto nth = mst32->SelectNth(frames, n);
+		nth = mst32->SelectNth(frames, n);
 		if (nth.second) {
 			return nth;
-		} else {
-			return {mst32->NthElement(nth.first), 0};
 		}
+		nth.first = mst32->NthElement(nth.first);
 	} else {
-		const auto nth = mst64->SelectNth(frames, n);
+		nth = mst64->SelectNth(frames, n);
 		if (nth.second) {
 			return nth;
-		} else {
-			return {mst64->NthElement(nth.first), 0};
 		}
+		nth.first = mst64->NthElement(nth.first);
 	}
+
+	//	If the value is outside the frame, return an invalid index
+	bool in_frame = false;
+	for (const auto &frame : frames) {
+		in_frame = in_frame || (frame.start <= nth.first && nth.first < frame.end);
+	}
+	if (!in_frame) {
+		nth.first = DConstants::INVALID_INDEX;
+	}
+
+	return nth;
 }
 
 } // namespace duckdb
