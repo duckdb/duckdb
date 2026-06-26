@@ -16,8 +16,7 @@ namespace duckdb {
 //! A schema in the catalog
 class DuckSchemaEntry : public SchemaCatalogEntry {
 public:
-	DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info,
-	                optional_ptr<SchemaCatalogEntry> parent_schema = nullptr);
+	DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info, optional_ptr<SchemaCatalogEntry> parent_schema = nullptr);
 
 private:
 	//! The parent schema (for a nested schema), or nullptr for a top-level schema

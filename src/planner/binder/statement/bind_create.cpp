@@ -220,9 +220,8 @@ void Binder::BindCreateSchema(CreateSchemaInfo &info) {
 			auto &storage_manager = attached.GetStorageManager();
 			if (!attached.IsTemporary() && !storage_manager.InMemory() &&
 			    storage_manager.GetStorageVersion() < StorageVersion::V2_0_0) {
-				throw BinderException(
-				    "Nested schemas are only supported for storage versions v2.0.0 and higher.\n"
-				    "Use an in-memory database, or ATTACH with (STORAGE_VERSION 'v2.0.0')");
+				throw BinderException("Nested schemas are only supported for storage versions v2.0.0 and higher.\n"
+				                      "Use an in-memory database, or ATTACH with (STORAGE_VERSION 'v2.0.0')");
 			}
 		}
 	}
