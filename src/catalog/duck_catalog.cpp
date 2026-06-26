@@ -29,7 +29,7 @@ void DuckCatalog::Initialize(bool load_builtin) {
 
 	// create the default schema
 	CreateSchemaInfo info;
-	info.SetQualifiedName(QualifiedName(INVALID_CATALOG, Identifier::DefaultSchema(), Identifier()));
+	info.SetQualifiedName(QualifiedName({Identifier::DefaultSchema()}, Identifier()));
 	info.internal = true;
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	CreateSchema(data, info);

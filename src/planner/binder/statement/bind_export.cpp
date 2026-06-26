@@ -163,7 +163,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	// gather a list of all the tables
-	string catalog = stmt.database.empty() ? INVALID_CATALOG : stmt.database;
+	string catalog = stmt.database;
 	catalog_entry_vector_t tables;
 	auto schemas = Catalog::GetSchemas(context, catalog);
 	for (auto &schema : schemas) {

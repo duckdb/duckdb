@@ -61,7 +61,7 @@ CatalogSet::EntryLookup SchemaCatalogEntry::LookupEntryDetailed(CatalogTransacti
 
 unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateSchemaInfo>();
-	result->SetQualifiedName(QualifiedName(INVALID_CATALOG, name, Identifier()));
+	result->SetQualifiedName(QualifiedName({name}, Identifier()));
 	result->comment = comment;
 	result->tags = tags;
 	return std::move(result);

@@ -5,7 +5,7 @@ namespace duckdb {
 
 CopyInfo::CopyInfo()
     : ParseInfo(TYPE), is_from(false), is_format_auto_detected(true),
-      qualified_name(Identifier(INVALID_CATALOG), Identifier(DEFAULT_SCHEMA), Identifier()) {
+      qualified_name({Identifier::DefaultSchema()}, Identifier()) {
 }
 
 unique_ptr<CopyInfo> CopyInfo::Copy() const {

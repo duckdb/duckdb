@@ -28,7 +28,7 @@ BoundStatement CreateViewRelation::Bind(Binder &binder) {
 	auto info = make_uniq<CreateViewInfo>();
 	info->query = std::move(select);
 	info->temporary = temporary;
-	info->SetQualifiedName(QualifiedName(INVALID_CATALOG, schema_name, view_name));
+	info->SetQualifiedName(QualifiedName(Identifier(), schema_name, view_name));
 	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	stmt.info = std::move(info);
 	return binder.Bind(stmt.Cast<SQLStatement>());

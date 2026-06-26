@@ -265,15 +265,11 @@ unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformQualifiedSimpleType(PEGTransformer &transformer,
                                                     const QualifiedName &qualified_type_name,
                                                     optional<vector<unique_ptr<ParsedExpression>>> type_modifiers) {
-	auto result = qualified_type_name;
-	if (result.Schema().empty()) {
-		result = QualifiedName(Identifier(), result.Catalog(), result.Name());
-	}
 	vector<unique_ptr<ParsedExpression>> modifiers;
 	if (type_modifiers) {
 		modifiers = std::move(*type_modifiers);
 	}
-	return make_uniq<TypeExpression>(result.Catalog(), result.Schema(), result.Name(), std::move(modifiers));
+	return make_uniq<TypeExpression>(qualified_type_name, std::move(modifiers));
 }
 
 QualifiedName PEGTransformerFactory::TransformTypeNameAsQualifiedName(PEGTransformer &transformer,

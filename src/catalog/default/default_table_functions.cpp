@@ -111,7 +111,7 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 	auto type = CatalogType::TABLE_MACRO_ENTRY;
 	auto bind_info = make_uniq<CreateMacroInfo>(type);
 	bind_info->SetQualifiedName(
-	    QualifiedName(INVALID_CATALOG, Identifier(default_macro.schema), Identifier(default_macro.name)));
+	    QualifiedName({Identifier(default_macro.schema)}, Identifier(default_macro.name)));
 	bind_info->temporary = true;
 	bind_info->internal = true;
 	bind_info->macros.push_back(std::move(function));
