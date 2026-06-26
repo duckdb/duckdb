@@ -23,7 +23,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTable(PEGTransform
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	auto base_table = std::move(base_table_name[0]);
-	info->GetQualifiedNameMutable() = base_table->GetQualifiedName();
+	info->SetQualifiedName(base_table->GetQualifiedName());
 	info->type = table_or_view;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
@@ -51,7 +51,7 @@ PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer, c
 	if (table_function_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	info->GetQualifiedNameMutable() = QualifiedName(INVALID_CATALOG, INVALID_SCHEMA, table_function_name[0]);
+	info->SetQualifiedName(QualifiedName(INVALID_CATALOG, INVALID_SCHEMA, table_function_name[0]));
 	info->type = comment_macro_table;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
@@ -69,7 +69,7 @@ PEGTransformerFactory::TransformDropFunction(PEGTransformer &transformer, const 
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	const auto &function = function_identifier[0];
-	info->GetQualifiedNameMutable() = function;
+	info->SetQualifiedName(function);
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = catalog_type;
 	result->info = std::move(info);
@@ -85,8 +85,7 @@ PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer, const op
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	const auto &schema = qualified_schema_name[0];
-	info->CatalogMutable() = schema.Catalog();
-	info->NameMutable() = schema.Schema();
+	info->SetQualifiedName(QualifiedName(schema.Catalog(), INVALID_SCHEMA, schema.Schema()));
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::SCHEMA_ENTRY;
 	result->info = std::move(info);
@@ -114,7 +113,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransform
 	if (qualified_index_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	info->GetQualifiedNameMutable() = qualified_index_name[0];
+	info->SetQualifiedName(qualified_index_name[0]);
 	info->type = CatalogType::INDEX_ENTRY;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
@@ -151,9 +150,9 @@ PEGTransformerFactory::TransformDropSequence(PEGTransformer &transformer, const 
 	}
 	const auto &sequence = qualified_sequence_name[0];
 	if (sequence.Schema().empty()) {
-		info->GetQualifiedNameMutable() = QualifiedName(INVALID_CATALOG, sequence.Catalog(), sequence.Name());
+		info->SetQualifiedName(QualifiedName(INVALID_CATALOG, sequence.Catalog(), sequence.Name()));
 	} else {
-		info->GetQualifiedNameMutable() = sequence;
+		info->SetQualifiedName(sequence);
 	}
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::SEQUENCE_ENTRY;
@@ -196,9 +195,9 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransforme
 	}
 	const auto &type = qualified_type_name[0];
 	if (type.Schema().empty()) {
-		info->GetQualifiedNameMutable() = QualifiedName(INVALID_CATALOG, type.Catalog(), type.Name());
+		info->SetQualifiedName(QualifiedName(INVALID_CATALOG, type.Catalog(), type.Name()));
 	} else {
-		info->GetQualifiedNameMutable() = type;
+		info->SetQualifiedName(type);
 	}
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::TYPE_ENTRY;

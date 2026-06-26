@@ -32,6 +32,9 @@ public:
 	QualifiedName &GetQualifiedNameMutable() {
 		return qualified_name;
 	}
+	void SetQualifiedName(QualifiedName name) {
+		qualified_name = std::move(name);
+	}
 	const Identifier &GetTypeName() const {
 		return qualified_name.Name();
 	}

@@ -93,8 +93,8 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context
 	}
 
 	auto result = unique_ptr_cast<CreateInfo, CreateViewInfo>(std::move(create_statement.info));
-	result->CatalogMutable() = schema.ParentCatalog().GetName();
-	result->SchemaMutable() = schema.name;
+	result->SetQualifiedName(
+	    QualifiedName(schema.ParentCatalog().GetName(), schema.name, result->GetQualifiedName().Name()));
 
 	auto view_binder = Binder::CreateBinder(context);
 	view_binder->BindCreateViewInfo(*result);

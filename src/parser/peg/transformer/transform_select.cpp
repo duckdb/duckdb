@@ -1267,14 +1267,13 @@ QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransfor
                                                                      const optional<Identifier> &catalog_qualification,
                                                                      const optional<Identifier> &schema_qualification,
                                                                      const Identifier &table_function_name) {
-	QualifiedName result(catalog_qualification ? *catalog_qualification : INVALID_CATALOG,
-	                     schema_qualification ? *schema_qualification : INVALID_SCHEMA, Identifier());
-	if (!result.Catalog().empty() && result.Schema().empty()) {
-		result.SchemaMutable() = result.Catalog();
-		result.CatalogMutable() = INVALID_CATALOG;
+	Identifier catalog = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
+	Identifier schema = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
+	if (!catalog.empty() && schema.empty()) {
+		schema = std::move(catalog);
+		catalog = INVALID_CATALOG;
 	}
-	result.NameMutable() = table_function_name;
-	return result;
+	return QualifiedName(std::move(catalog), std::move(schema), table_function_name);
 }
 
 vector<FunctionArgument>

@@ -73,6 +73,9 @@ public:
 	QualifiedName &GetQualifiedNameMutable() {
 		return qualified_name;
 	}
+	void SetQualifiedName(QualifiedName name) {
+		qualified_name = std::move(name);
+	}
 	Identifier &CatalogMutable() {
 		return qualified_name.CatalogMutable();
 	}
