@@ -189,14 +189,25 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	}
 };
 
-//! Phase of a scan job: we are either scheduling its I/O or decoding it
-enum class MultiFileScanPhase : uint8_t { SCHEDULE, DECODE };
+//! Lifecycle of the job a scanning thread currently holds
+enum class MultiFileJobState : uint8_t {
+	NONE,     //! no job claimed
+	SCHEDULE, //! I/O still needs scheduling
+	DECODE    //! job ready to decode
+};
 
-//! Outcome of decoding the current scan job (see MultiFileFunction::DecodeCurrentJob)
+//! Outcome of decoding the current scan job
 enum class MultiFileDecodeResult : uint8_t {
 	CONTINUE,         //! keep looping
 	RETURN_TO_CALLER, //! return from the scan (a chunk was emitted, or the operator parked on async I/O)
 	JOB_FINISHED      //! job is done
+};
+
+//! Outcome of acquiring the next scan job
+enum class MultiFileAcquireResult : uint8_t {
+	ACQUIRED,  //! a ready-to-decode job is now current
+	EXHAUSTED, //! the scan is exhausted, we have no more jobs
+	PARKED     //! the operator parked on schedule-time async I/O,  return from the scan
 };
 
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
@@ -211,8 +222,6 @@ struct MultiFileScanJob {
 	idx_t batch_index = 0;
 	//! Index of the file this job belongs to
 	idx_t file_index = DConstants::INVALID_INDEX;
-	//! Whether this job still needs its I/O scheduled or is ready to decode
-	MultiFileScanPhase phase = MultiFileScanPhase::SCHEDULE;
 	//! Number of read-ahead I/O tasks for this job that have not completed yet.
 	shared_ptr<atomic<idx_t>> io_tasks_pending;
 };
@@ -225,6 +234,8 @@ public:
 public:
 	//! The job currently being scanned by this thread
 	MultiFileScanJob job;
+	//! Job's state
+	MultiFileJobState job_state = MultiFileJobState::NONE;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
 	DataChunk scan_chunk;
 	//! Set when the previous Scan() returned BLOCKED, so the next Scan() preserves the partial chunk

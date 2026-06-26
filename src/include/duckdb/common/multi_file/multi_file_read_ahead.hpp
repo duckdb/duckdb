@@ -44,6 +44,9 @@ public:
 	//! Pop the oldest queued job
 	unique_ptr<MultiFileScanJob> ClaimJob();
 
+	//! Block until the claimed job's scheduled I/O has completed
+	void WaitForJob(MultiFileScanJob &job);
+
 	//! Mark one dequeued job as fully decoded, freeing its slot.
 	void FinishJob();
 

@@ -82,6 +82,28 @@ unique_ptr<MultiFileScanJob> MultiFileReadAhead::ClaimJob() {
 	return job;
 }
 
+void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
+	if (job.io_tasks_pending) {
+		auto &pending = *job.io_tasks_pending;
+		while (pending.load() > 0) {
+			if (executor && executor->HasError()) {
+				executor->ThrowError();
+			}
+			shared_ptr<Task> task;
+			if (executor && executor->GetTask(task)) {
+				// pull a queued I/O task off the executor and run it on this thread
+				task->Execute(TaskExecutionMode::PROCESS_ALL);
+				task.reset();
+			} else {
+				TaskScheduler::YieldThread();
+			}
+		}
+	}
+	if (executor && executor->HasError()) {
+		executor->ThrowError();
+	}
+}
+
 void MultiFileReadAhead::FinishJob() {
 	D_ASSERT(active_jobs.load() > 0);
 	active_jobs--;

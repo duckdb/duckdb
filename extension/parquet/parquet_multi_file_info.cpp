@@ -751,6 +751,11 @@ unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(E
 	return make_uniq<ParquetReadLocalState>();
 }
 
+unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(ClientContext &,
+                                                                               GlobalTableFunctionState &) {
+	return make_uniq<ParquetReadLocalState>();
+}
+
 bool ParquetReader::TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
                                       LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
