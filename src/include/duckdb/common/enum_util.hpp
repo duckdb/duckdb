@@ -394,6 +394,8 @@ enum class ProfilingParameterNames : uint8_t;
 
 enum class PushdownExtractSupport : uint8_t;
 
+enum class QualifiedNameToStringMode : uint8_t;
+
 enum class QuantileSerializationType : uint8_t;
 
 enum class QueryNodeType : uint8_t;
@@ -1109,6 +1111,9 @@ const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames v
 
 template<>
 const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport value);
+
+template<>
+const char* EnumUtil::ToChars<QualifiedNameToStringMode>(QualifiedNameToStringMode value);
 
 template<>
 const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
@@ -1911,6 +1916,9 @@ ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char
 
 template<>
 PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value);
+
+template<>
+QualifiedNameToStringMode EnumUtil::FromString<QualifiedNameToStringMode>(const char *value);
 
 template<>
 QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);

@@ -5,8 +5,21 @@
 
 namespace duckdb {
 
-string QualifiedName::ToString() const {
-	return ParseInfo::QualifierToString(Catalog(), Schema(), Name());
+string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
+	const auto &catalog = Catalog();
+	const auto &schema = Schema();
+	string result;
+	if (!catalog.empty()) {
+		result += SQLIdentifier(catalog) + ".";
+		if (!schema.empty()) {
+			result += SQLIdentifier(schema) + ".";
+		}
+	} else if (!schema.empty() &&
+	           !(mode == QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA && schema == DEFAULT_SCHEMA)) {
+		result += SQLIdentifier(schema) + ".";
+	}
+	result += SQLIdentifier(name);
+	return result;
 }
 
 vector<Identifier> QualifiedName::ParseComponents(const string &input) {

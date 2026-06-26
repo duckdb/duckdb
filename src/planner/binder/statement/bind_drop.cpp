@@ -22,12 +22,9 @@ void Binder::BindDropTrigger(DropStatement &stmt, StatementProperties &propertie
 		throw BinderException("DROP TRIGGER requires an ON clause specifying the table");
 	}
 	auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
-	Identifier catalog_name = base_table_ref.GetQualifiedName().Catalog();
-	Identifier schema_name = base_table_ref.GetQualifiedName().Schema();
-	BindSchemaOrCatalog(catalog_name, schema_name);
+	BindSchemaOrCatalog(base_table_ref.GetQualifiedNameMutable());
 	// IF EXISTS only guards the trigger, not the table (PostgreSQL-compatible behavior).
-	auto &table_entry =
-	    Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(catalog_name, schema_name, base_table_ref.Table()));
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, base_table_ref.GetQualifiedName());
 	stmt.info->CatalogMutable() = table_entry.ParentCatalog().GetName();
 	stmt.info->SchemaMutable() = table_entry.ParentSchema().name;
 	properties.RegisterDBModify(table_entry.ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);

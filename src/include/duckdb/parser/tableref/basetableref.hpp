@@ -27,7 +27,8 @@ public:
 	}
 	explicit BaseTableRef(const TableDescription &description)
 	    : TableRef(TableReferenceType::BASE_TABLE),
-	      qualified_name(description.qualified_name.Catalog(), description.qualified_name.Schema(), description.qualified_name.Name()) {
+	      qualified_name(description.qualified_name.Catalog(), description.qualified_name.Schema(),
+	                     description.qualified_name.Name()) {
 	}
 
 	//! The timestamp/version at which to read this table entry (if any)

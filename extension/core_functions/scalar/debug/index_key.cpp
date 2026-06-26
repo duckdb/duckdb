@@ -57,7 +57,8 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 		throw BinderException("index_key: path must contain a 'table' field");
 	}
 
-	return TableDescription(QualifiedName(Identifier(fields["catalog"]), Identifier(fields["schema"]), Identifier(fields["table"])));
+	return TableDescription(
+	    QualifiedName(Identifier(fields["catalog"]), Identifier(fields["schema"]), Identifier(fields["table"])));
 }
 
 static TableDescription EvaluateTableDescription(ClientContext &context, const Expression &expr) {
@@ -105,7 +106,7 @@ static BoundIndex &FindBoundIndex(TableIndexList &index_list, const Identifier &
 		return *found;
 	}
 
-	auto qualified_table = ParseInfo::QualifierToString(path.qualified_name.Catalog(), path.qualified_name.Schema(), path.qualified_name.Name());
+	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	vector<Identifier> available;
 	for (auto &idx : index_list.Indexes()) {
 		available.push_back(idx.GetIndexName());
@@ -148,9 +149,10 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	auto path = EvaluateTableDescription(context, *arguments[0]);
 	auto index_name = GetStringArgument(context, *arguments[1], "index_name");
 
-	auto &table_entry =
-	    Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, QualifiedName(path.qualified_name.Catalog(), path.qualified_name.Schema(), path.qualified_name.Name()))
-	        .Cast<TableCatalogEntry>();
+	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY,
+	                                      QualifiedName(path.qualified_name.Catalog(), path.qualified_name.Schema(),
+	                                                    path.qualified_name.Name()))
+	                        .Cast<TableCatalogEntry>();
 	auto &duck_table = table_entry.Cast<DuckTableEntry>();
 	auto &data_table = duck_table.GetStorage();
 	auto &data_table_info = *data_table.GetDataTableInfo();

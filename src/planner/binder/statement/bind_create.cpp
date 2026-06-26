@@ -496,7 +496,7 @@ bool BoundBodyContainsTrigger(const LogicalOperator &op);
 
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres)
-	TableDescription table_description(QualifiedName(create_trigger_info.base_table->GetQualifiedName().Catalog(), create_trigger_info.base_table->GetQualifiedName().Schema(), create_trigger_info.base_table->Table()));
+	TableDescription table_description(create_trigger_info.base_table->GetQualifiedName());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
@@ -711,7 +711,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
 
 		// Plan the table scan.
-		TableDescription table_description(QualifiedName(create_index_info.GetQualifiedName().Catalog(), create_index_info.GetQualifiedName().Schema(), create_index_info.table));
+		TableDescription table_description(QualifiedName(create_index_info.GetQualifiedName().Catalog(),
+		                                                 create_index_info.GetQualifiedName().Schema(),
+		                                                 create_index_info.table));
 		auto table_ref = make_uniq<BaseTableRef>(table_description);
 		auto bound_table = Bind(*table_ref);
 		auto plan = std::move(bound_table.plan);

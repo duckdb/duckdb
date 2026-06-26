@@ -40,9 +40,10 @@ string ChangeOwnershipInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " OWNED BY ";
-	result += QualifierToString(GetQualifiedName().Catalog(), owner_schema, owner_name);
+	result += QualifiedName(GetQualifiedName().Catalog(), owner_schema, owner_name)
+	              .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += ";";
 	return result;
 }
@@ -74,7 +75,7 @@ string SetCommentInfo::ToString() const {
 	result += "COMMENT ON ";
 	result += ParseInfo::TypeToString(entry_catalog_type);
 	result += " ";
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " IS ";
 	result += comment_value.ToSQLString();
 
@@ -124,7 +125,7 @@ string RenameColumnInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " RENAME COLUMN ";
 	result += SQLIdentifier(old_name);
 	result += " TO ";
@@ -157,7 +158,7 @@ string RenameFieldInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " RENAME COLUMN ";
 	for (idx_t i = 0; i < column_path.size(); i++) {
 		if (i > 0) {
@@ -194,7 +195,7 @@ string RenameTableInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " RENAME TO ";
 	result += SQLIdentifier(new_table_name);
 	result += ";";
@@ -226,7 +227,7 @@ string AddColumnInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ADD COLUMN";
 	if (if_column_not_exists) {
 		result += " IF NOT EXISTS";
@@ -267,7 +268,7 @@ string AddFieldInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ADD COLUMN ";
 	if (if_field_not_exists) {
 		result += "IF NOT EXISTS ";
@@ -305,7 +306,7 @@ string RemoveColumnInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " DROP COLUMN ";
 	if (if_column_exists) {
 		result += "IF EXISTS ";
@@ -342,7 +343,7 @@ string RemoveFieldInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " DROP COLUMN ";
 	if (if_column_exists) {
 		result += "IF EXISTS ";
@@ -385,7 +386,7 @@ string ChangeColumnTypeInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ALTER COLUMN ";
 	result += SQLIdentifier(column_name);
 	result += " TYPE ";
@@ -431,7 +432,7 @@ string SetDefaultInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ALTER COLUMN ";
 	result += SQLIdentifier(column_name);
 	if (expression) {
@@ -466,7 +467,7 @@ string SetNotNullInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ALTER COLUMN ";
 	result += SQLIdentifier(column_name);
 	result += " SET NOT NULL";
@@ -496,7 +497,7 @@ string DropNotNullInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ALTER COLUMN ";
 	result += SQLIdentifier(column_name);
 	result += " DROP NOT NULL";
@@ -566,7 +567,7 @@ string RenameViewInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " RENAME TO ";
 	result += SQLIdentifier(new_view_name);
 	result += ";";
@@ -592,7 +593,7 @@ unique_ptr<AlterInfo> AddConstraintInfo::Copy() const {
 
 string AddConstraintInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " ADD ";
 	result += constraint->ToString();
 	result += ";";
@@ -622,7 +623,7 @@ unique_ptr<AlterInfo> SetPartitionedByInfo::Copy() const {
 
 string SetPartitionedByInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	if (partition_keys.empty()) {
 		result += " RESET PARTITIONED BY";
 	} else {
@@ -661,7 +662,7 @@ unique_ptr<AlterInfo> SetSortedByInfo::Copy() const {
 
 string SetSortedByInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	if (orders.empty()) {
 		result += " RESET SORTED BY";
 	} else {
@@ -701,7 +702,7 @@ unique_ptr<AlterInfo> SetTableOptionsInfo::Copy() const {
 
 string SetTableOptionsInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " SET (";
 	idx_t i = 0;
 	for (auto &entry : table_options) {
@@ -738,7 +739,7 @@ unique_ptr<AlterInfo> ResetTableOptionsInfo::Copy() const {
 
 string ResetTableOptionsInfo::ToString() const {
 	string result = "ALTER TABLE ";
-	result += QualifierToString(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += " RESET (";
 	idx_t i = 0;
 	for (auto &entry : table_options) {

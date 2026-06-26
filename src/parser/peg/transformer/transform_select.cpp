@@ -1250,7 +1250,8 @@ PEGTransformerFactory::TransformUnpivotTargetList(PEGTransformer &transformer,
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformSchemaReservedTable(PEGTransformer &transformer,
                                                                              const Identifier &schema_qualification,
                                                                              const Identifier &reserved_table_name) {
-	const auto description = TableDescription(QualifiedName(INVALID_CATALOG, schema_qualification, reserved_table_name));
+	const auto description =
+	    TableDescription(QualifiedName(INVALID_CATALOG, schema_qualification, reserved_table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 

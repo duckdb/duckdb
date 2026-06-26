@@ -77,7 +77,7 @@ string CopyInfo::TablePartToString() const {
 	string result;
 
 	D_ASSERT(!GetQualifiedName().Name().empty());
-	result += qualified_name.ToString();
+	result += qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 
 	// (c1, c2, ..)
 	if (!select_list.empty()) {

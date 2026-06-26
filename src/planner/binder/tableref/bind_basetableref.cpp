@@ -50,9 +50,7 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 		return BoundStatement();
 	}
 	for (auto &scan : config.replacement_scans) {
-		ReplacementScanInput input(ref.GetQualifiedName().Catalog().GetIdentifierName(),
-		                           ref.GetQualifiedName().Schema().GetIdentifierName(),
-		                           ref.Table().GetIdentifierName());
+		ReplacementScanInput input(ref.GetQualifiedName());
 		auto replacement_function = scan.function(context, input, scan.data.get());
 		if (!replacement_function) {
 			continue;

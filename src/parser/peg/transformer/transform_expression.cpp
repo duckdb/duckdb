@@ -48,12 +48,12 @@ PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
 				    "Too many qualifiers encountered. Expected \"catalog.schema.table\" or \"schema.table\"");
 			}
 			if (col_expr.ColumnNames().size() == 3) {
-				auto table_description =
-				    TableDescription(QualifiedName(col_expr.ColumnNames()[0], col_expr.ColumnNames()[1], col_expr.ColumnNames()[2]));
+				auto table_description = TableDescription(
+				    QualifiedName(col_expr.ColumnNames()[0], col_expr.ColumnNames()[1], col_expr.ColumnNames()[2]));
 				select_node->from_table = make_uniq<BaseTableRef>(table_description);
 			} else if (col_expr.ColumnNames().size() == 2) {
-				auto table_description =
-				    TableDescription(QualifiedName(INVALID_CATALOG, col_expr.ColumnNames()[0], col_expr.ColumnNames()[1]));
+				auto table_description = TableDescription(
+				    QualifiedName(INVALID_CATALOG, col_expr.ColumnNames()[0], col_expr.ColumnNames()[1]));
 				select_node->from_table = make_uniq<BaseTableRef>(table_description);
 			}
 		} else {
