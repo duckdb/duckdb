@@ -620,10 +620,10 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(func_expr.FunctionName()));
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		const Identifier &schema = schema_name.empty() ? local_entry.GetSchema() : schema_name;
-		auto entry = Catalog::GetEntry(
-		    binder.context,
-		    EntryLookupInfo(func_lookup, QualifiedName(local_entry.GetCatalog(), schema, func_lookup.GetEntryIdentifier())),
-		    OnEntryNotFound::RETURN_NULL);
+		auto entry = Catalog::GetEntry(binder.context,
+		                               EntryLookupInfo(func_lookup, QualifiedName(local_entry.GetCatalog(), schema,
+		                                                                          func_lookup.GetEntryIdentifier())),
+		                               OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 			auto &tf_entry = entry->Cast<TableFunctionCatalogEntry>();
 			bool is_set_returning = false;
