@@ -142,7 +142,7 @@ class UseGramPreviewEmitter:
         self.rule_capabilities = self.collect_rule_capabilities()
 
     def collect_syntax_only_rules(self):
-        result = set(self.excluded_rules)
+        result = {rule_name for rule_name in self.excluded_rules if rule_name not in self.rule_types}
         parsed_rules = {
             rule_name: tokens_to_ast(rule.tokens)
             for rule_name, rule in self.rules.items()
@@ -188,6 +188,10 @@ class UseGramPreviewEmitter:
         config = self.rule_config_entry(rule_name)
         return config is not None and config.mode == TrampolineRuleMode.MANUAL_FINALIZE
 
+    def is_forward_rule(self, rule_name):
+        config = self.rule_config_entry(rule_name)
+        return config is not None and config.mode == TrampolineRuleMode.FORWARD
+
     def emitted_rules(self):
         return [
             rule_name
@@ -215,6 +219,8 @@ class UseGramPreviewEmitter:
     def emit_header_declarations(self):
         lines = []
         for rule_name in self.emitted_rules():
+            if self.is_manual_rule(rule_name):
+                continue
             lines.append(
                 f"\tstatic void {self.initialize_hook(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
                 f"TransformStackFrame &frame);\n"
@@ -228,6 +234,8 @@ class UseGramPreviewEmitter:
     def classify_rule(self, rule_name, rule):
         if self.is_excluded_rule(rule_name):
             return RuleCapability(rule_name, RuleCapabilityStatus.EXCLUDED)
+        if self.is_manual_rule(rule_name):
+            return RuleCapability(rule_name, RuleCapabilityStatus.MANUAL)
         if rule_name.startswith("%"):
             return RuleCapability(rule_name, RuleCapabilityStatus.PROVIDED, "internal matcher rule")
         if rule_name in INTERNAL_GRAMMAR_RULES:
@@ -236,8 +244,6 @@ class UseGramPreviewEmitter:
             return RuleCapability(rule_name, RuleCapabilityStatus.PROVIDED, "provided by matcher_rule_overrides")
         if rule_name in self.excluded_rules:
             return RuleCapability(rule_name, RuleCapabilityStatus.EXCLUDED, "excluded by grammar_types.yml")
-        if self.is_manual_rule(rule_name):
-            return RuleCapability(rule_name, RuleCapabilityStatus.MANUAL)
         try:
             ast = tokens_to_ast(rule.tokens)
         except Exception as e:
@@ -343,6 +349,8 @@ class UseGramPreviewEmitter:
         return lines
 
     def emit_rule(self, rule_name, ast):
+        if self.is_forward_rule(rule_name):
+            return self.emit_forward_rule(rule_name, ast)
         if literal_string_values(ast) is not None:
             return self.emit_syntax_only_rule(rule_name)
         if isinstance(ast, ChoiceNode):
@@ -381,6 +389,28 @@ class UseGramPreviewEmitter:
         if self.by_value(rule_name):
             return f"std::move({var_name})"
         return var_name
+
+    def emit_forward_rule(self, rule_name, ast):
+        if not isinstance(ast, ReferenceNode):
+            raise NotImplementedError("forward rules must be a direct rule reference")
+        if ast.name not in self.rule_types:
+            raise NotImplementedError(f"forward child '{ast.name}' is missing from grammar_types.yml")
+        cpp_type = self.cpp_type(rule_name)
+        child_cpp_type = self.cpp_type(ast.name)
+        if child_cpp_type != cpp_type:
+            raise NotImplementedError(f"forward child '{ast.name}' has type '{child_cpp_type}', expected '{cpp_type}'")
+
+        lines = self.emit_sequence_initialize(rule_name, SequenceNode([ast]))
+        lines.append("")
+        lines.append(
+            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"TransformStack &stack, TransformStackFrame &frame) {{"
+        )
+        var_name = self.identifier_var_name(ast.name)
+        lines.append(f"\tauto {var_name} = frame.TakeResult<{child_cpp_type}>(0);")
+        lines.append(f"\treturn {typed_result_expr(cpp_type, var_name, self.by_value(rule_name))};")
+        lines.append("}")
+        return lines
 
     def emit_syntax_only_rule(self, rule_name):
         lines = self.emit_syntax_only_initialize(rule_name)

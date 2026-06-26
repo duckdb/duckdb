@@ -10,6 +10,7 @@ from grammar_types import load_grammar_types_yaml
 class TrampolineRuleMode(str, Enum):
     MANUAL = "manual"
     MANUAL_FINALIZE = "manual_finalize"
+    FORWARD = "forward"
     EXCLUDED = "excluded"
 
 
@@ -75,6 +76,9 @@ def load_transformer_trampoline_config(
                 errors.append(f"manual_finalize rule '{rule_name}' must not declare an init hook")
             if not finalize:
                 errors.append(f"manual_finalize rule '{rule_name}' must declare a finalize hook")
+        elif mode == TrampolineRuleMode.FORWARD:
+            if init or finalize:
+                errors.append(f"forward rule '{rule_name}' must not declare hooks")
         elif mode == TrampolineRuleMode.EXCLUDED:
             if init or finalize:
                 errors.append(f"excluded rule '{rule_name}' must not declare hooks")

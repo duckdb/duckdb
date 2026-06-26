@@ -19,6 +19,15 @@
 
 namespace duckdb {
 
+static const TransformFrameOps &GetExpressionTrampolineOps(const string &rule_name) {
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(rule_name);
+	if (ops_entry == ops_map.end()) {
+		throw NotImplementedException("No trampoline transformer for rule '%s'", rule_name);
+	}
+	return *ops_entry->second;
+}
+
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
                                                     vector<unique_ptr<ParsedExpression>> expression_alias) {
@@ -1344,6 +1353,70 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 	}
 	return expr;
 }
+
+void PEGTransformerFactory::InitializePrefixExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(1), GetExpressionTrampolineOps("BaseExpression"),
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+static string PrefixOperatorString(ParseResult &parse_result) {
+	if (parse_result.name == "MinusPrefixOperator") {
+		return "-";
+	}
+	if (parse_result.name == "PlusPrefixOperator") {
+		return "+";
+	}
+	if (parse_result.name == "TildePrefixOperator") {
+		return "~";
+	}
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	return PrefixOperatorString(choice_pr.GetResult());
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePrefixExpressionTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &prefix_opt = list_pr.Child<OptionalParseResult>(0);
+	auto &base_expr_pr = list_pr.Child<ListParseResult>(1);
+	auto expr = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
+
+	if (!prefix_opt.HasResult()) {
+		return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(expr));
+	}
+
+	auto &prefix_repeat = prefix_opt.GetResult().Cast<RepeatParseResult>();
+	vector<string> prefixes;
+	for (auto &child_ref : prefix_repeat.GetChildren()) {
+		prefixes.push_back(PrefixOperatorString(child_ref));
+	}
+
+	if (prefixes.size() == 1 && prefixes[0] == "-" && IsNumberLiteral(base_expr_pr)) {
+		auto result = ConvertNumberToValue("-" + GetRawText(base_expr_pr));
+		return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+	}
+
+	for (auto it = prefixes.rbegin(); it != prefixes.rend(); ++it) {
+		const string &prefix = *it;
+		if (prefix == "-" && expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+			auto &const_expr = expr->Cast<ConstantExpression>();
+			if (auto negated_expr = TryNegateValue(const_expr)) {
+				expr = std::move(negated_expr);
+				continue;
+			}
+		}
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(std::move(expr));
+		auto func_expr = make_uniq<FunctionExpression>(Identifier(prefix), std::move(children));
+		func_expr->IsOperatorMutable() = true;
+		expr = std::move(func_expr);
+	}
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(expr));
+}
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAnonymousParameter(PEGTransformer &transformer) {
 	// AnonymousParameter <- '?'
 	auto expr = make_uniq<ParameterExpression>();
@@ -1727,6 +1800,26 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformOverClause(PEGTrans
 	auto window_frame = transformer.Transform<unique_ptr<WindowExpression>>(list_pr.GetChild(1));
 	transformer.in_window_definition = false;
 	return window_frame;
+}
+
+void PEGTransformerFactory::InitializeOverClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	if (transformer.in_window_definition) {
+		throw ParserException("window functions are not allowed in window definitions");
+	}
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	transformer.in_window_definition = true;
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(1), GetExpressionTrampolineOps("WindowFrame"),
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOverClauseTrampoline(PEGTransformer &transformer,
+                                                                                     TransformStack &stack,
+                                                                                     TransformStackFrame &frame) {
+	auto result = frame.TakeResult<unique_ptr<WindowExpression>>(0);
+	transformer.in_window_definition = false;
+	return make_uniq<TypedTransformResult<unique_ptr<WindowExpression>>>(std::move(result));
 }
 
 unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrame(PEGTransformer &transformer,

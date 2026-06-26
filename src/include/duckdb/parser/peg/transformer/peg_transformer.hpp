@@ -133,11 +133,25 @@ struct TransformStackFrame {
 		return result;
 	}
 
+	template <class T>
+	T &GetResult(idx_t slot) {
+		if (slot >= child_results.size() || !child_results[slot]) {
+			throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
+		}
+		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(child_results[slot].get());
+		if (!typed_result) {
+			throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
+			                        ops.name);
+		}
+		return typed_result->value;
+	}
+
 	const transform_frame_index_t frame_index;
 	ParseResult &parse_result;
 	const TransformFrameOps &ops;
 	const optional<TransformFrameResultTarget> result_target;
 	TransformFrameState state = TransformFrameState::INITIALIZE;
+	idx_t manual_state = 0;
 	vector<unique_ptr<TransformResultValue>> child_results;
 };
 
@@ -403,6 +417,40 @@ public:
 	                                                               unique_ptr<AlterInfo> info_with_null_placeholder,
 	                                                               const string &column_name,
 	                                                               unique_ptr<ParsedExpression> expression);
+
+	static void InitializeCommentValueTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentValueTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializePrefixExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizePrefixExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeOverClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeOverClauseTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSelectStatementInternalTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                        TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeSelectStatementInternalTrampoline(PEGTransformer &transformer,
+	                                                                                  TransformStack &stack,
+	                                                                                  TransformStackFrame &frame);
+	static void InitializeSimpleSelectTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSimpleSelectTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeTableRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeTableRefTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeWithClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeWithClauseTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeWindowDefinitionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeWindowDefinitionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 
 	//===--------------------------------------------------------------------===//
 	// START GENERATED TRAMPOLINE RULES

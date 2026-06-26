@@ -88,8 +88,12 @@ unique_ptr<TransformResultValue> TransformStack::ExecuteInternal(ParseResult &pa
 		case TransformFrameState::WAITING: {
 			auto result = frame.ops.finalize(transformer, *this, frame);
 			if (!result) {
-				throw InternalException("Trampoline transformer finalize for rule '%s' returned nullptr",
-				                        frame.ops.name);
+				if (frame_stack.empty() || frame_stack.back() == frame_index) {
+					throw InternalException(
+					    "Trampoline transformer finalize for rule '%s' returned nullptr without pushing a child frame",
+					    frame.ops.name);
+				}
+				break;
 			}
 			frame_stack.pop_back();
 			if (!frame.result_target) {

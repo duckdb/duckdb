@@ -22,6 +22,45 @@ rules:
     init: InitializePivotStatementTrampoline
     finalize: FinalizePivotStatementTrampoline
 
+  CommentValue:
+    mode: manual
+    init: InitializeCommentValueTrampoline
+    finalize: FinalizeCommentValueTrampoline
+
+  Expression:
+    mode: forward
+
+  PrefixExpression:
+    mode: manual
+    init: InitializePrefixExpressionTrampoline
+    finalize: FinalizePrefixExpressionTrampoline
+
+  OverClause:
+    mode: manual
+    init: InitializeOverClauseTrampoline
+    finalize: FinalizeOverClauseTrampoline
+
+  SelectStatementInternal:
+    mode: manual
+    init: InitializeSelectStatementInternalTrampoline
+    finalize: FinalizeSelectStatementInternalTrampoline
+
   SimpleSelect:
-    mode: manual_finalize
+    mode: manual
+    init: InitializeSimpleSelectTrampoline
     finalize: FinalizeSimpleSelectTrampoline
+
+  TableRef:
+    mode: manual
+    init: InitializeTableRefTrampoline
+    finalize: FinalizeTableRefTrampoline
+
+  WithClause:
+    mode: manual
+    init: InitializeWithClauseTrampoline
+    finalize: FinalizeWithClauseTrampoline
+
+  WindowDefinition:
+    mode: manual
+    init: InitializeWindowDefinitionTrampoline
+    finalize: FinalizeWindowDefinitionTrampoline

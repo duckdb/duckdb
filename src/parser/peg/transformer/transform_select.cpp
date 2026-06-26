@@ -25,6 +25,15 @@
 
 namespace duckdb {
 
+static const TransformFrameOps &GetSelectTrampolineOps(const string &rule_name) {
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(rule_name);
+	if (ops_entry == ops_map.end()) {
+		throw NotImplementedException("No trampoline transformer for rule '%s'", rule_name);
+	}
+	return *ops_entry->second;
+}
+
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformSelectStatement(PEGTransformer &transformer,
                                                 unique_ptr<SelectStatement> select_statement_internal) {
@@ -66,6 +75,77 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectStatementInter
 		                      EnumUtil::ToString(show_ref.show_type));
 	}
 	return select_statement;
+}
+
+static void PushSelectStatementInternalRemainder(TransformStack &stack, TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &result_modifiers_opt = list_pr.Child<OptionalParseResult>(2);
+	if (result_modifiers_opt.HasResult()) {
+		stack.PushFrame(result_modifiers_opt.GetResult(), GetSelectTrampolineOps("ResultModifiers"),
+		                TransformFrameResultTarget(frame.frame_index, 2));
+	}
+	stack.PushFrame(list_pr.GetChild(1), GetSelectTrampolineOps("SelectSetOpChain"),
+	                TransformFrameResultTarget(frame.frame_index, 1));
+}
+
+void PEGTransformerFactory::InitializeSelectStatementInternalTrampoline(PEGTransformer &transformer,
+                                                                        TransformStack &stack,
+                                                                        TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(3);
+	auto &with_clause_opt = list_pr.Child<OptionalParseResult>(0);
+	if (with_clause_opt.HasResult()) {
+		frame.manual_state = 0;
+		stack.PushFrame(with_clause_opt.GetResult(), GetSelectTrampolineOps("WithClause"),
+		                TransformFrameResultTarget(frame.frame_index, 0));
+		return;
+	}
+	frame.manual_state = 1;
+	PushSelectStatementInternalRemainder(stack, frame);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeSelectStatementInternalTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	if (frame.manual_state == 0) {
+		auto &cte_map = frame.GetResult<CommonTableExpressionMap>(0);
+		if (!cte_map.map.empty()) {
+			transformer.stored_cte_map.push_back(cte_map);
+		}
+		frame.manual_state = 1;
+		PushSelectStatementInternalRemainder(stack, frame);
+		return nullptr;
+	}
+
+	CommonTableExpressionMap cte_map;
+	if (frame.child_results[0]) {
+		cte_map = frame.TakeResult<CommonTableExpressionMap>(0);
+	}
+	auto select_statement = frame.TakeResult<unique_ptr<SelectStatement>>(1);
+	if (!cte_map.map.empty()) {
+		select_statement->node->cte_map = std::move(cte_map);
+	}
+	if (frame.child_results[2]) {
+		auto result_modifiers = frame.TakeResult<vector<unique_ptr<ResultModifier>>>(2);
+		for (auto &result_modifier : result_modifiers) {
+			select_statement->node->modifiers.push_back(std::move(result_modifier));
+		}
+	}
+	if (select_statement->node->type == QueryNodeType::SELECT_NODE) {
+		auto &select_node = select_statement->node->Cast<SelectNode>();
+		if (select_node.from_table->type == TableReferenceType::SHOW_REF) {
+			auto &show_ref = select_node.from_table->Cast<ShowRef>();
+			if (!select_statement->node->cte_map.map.empty()) {
+				throw ParserException("%s with CTE not allowed - wrap the statement in a subquery instead",
+				                      EnumUtil::ToString(show_ref.show_type));
+			}
+			if (!select_statement->node->modifiers.empty()) {
+				throw ParserException("%s with ORDER BY not allowed - wrap the statement in a subquery instead",
+				                      EnumUtil::ToString(show_ref.show_type));
+			}
+		}
+	}
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(select_statement));
 }
 
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectSetOpChain(
@@ -211,6 +291,105 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 	return select_statement;
 }
 
+static void RegisterWindowClauses(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> window_functions) {
+	for (auto &window_func : window_functions) {
+		D_ASSERT(!window_func->GetAlias().empty());
+		auto window_name = window_func->GetAlias();
+		window_func->ClearAlias();
+		auto it = transformer.window_clauses.find(window_name);
+		if (it != transformer.window_clauses.end()) {
+			throw ParserException("window \"%s\" is already defined", window_name.GetIdentifierName());
+		}
+		auto window_function = unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(window_func));
+		transformer.window_clauses[window_name] = std::move(window_function);
+	}
+}
+
+static void PushSimpleSelectRemainder(TransformStack &stack, TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &sample_clause_opt = list_pr.Child<OptionalParseResult>(6);
+	if (sample_clause_opt.HasResult()) {
+		stack.PushFrame(sample_clause_opt.GetResult(), GetSelectTrampolineOps("SampleClause"),
+		                TransformFrameResultTarget(frame.frame_index, 6));
+	}
+	auto &qualify_clause_opt = list_pr.Child<OptionalParseResult>(5);
+	if (qualify_clause_opt.HasResult()) {
+		stack.PushFrame(qualify_clause_opt.GetResult(), GetSelectTrampolineOps("QualifyClause"),
+		                TransformFrameResultTarget(frame.frame_index, 5));
+	}
+	auto &having_clause_opt = list_pr.Child<OptionalParseResult>(3);
+	if (having_clause_opt.HasResult()) {
+		stack.PushFrame(having_clause_opt.GetResult(), GetSelectTrampolineOps("HavingClause"),
+		                TransformFrameResultTarget(frame.frame_index, 3));
+	}
+	auto &group_by_clause_opt = list_pr.Child<OptionalParseResult>(2);
+	if (group_by_clause_opt.HasResult()) {
+		stack.PushFrame(group_by_clause_opt.GetResult(), GetSelectTrampolineOps("GroupByClause"),
+		                TransformFrameResultTarget(frame.frame_index, 2));
+	}
+	auto &where_clause_opt = list_pr.Child<OptionalParseResult>(1);
+	if (where_clause_opt.HasResult()) {
+		stack.PushFrame(where_clause_opt.GetResult(), GetSelectTrampolineOps("WhereClause"),
+		                TransformFrameResultTarget(frame.frame_index, 1));
+	}
+	stack.PushFrame(list_pr.GetChild(0), GetSelectTrampolineOps("SelectFrom"),
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+void PEGTransformerFactory::InitializeSimpleSelectTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(7);
+	auto &window_clause_opt = list_pr.Child<OptionalParseResult>(4);
+	if (window_clause_opt.HasResult()) {
+		frame.manual_state = 0;
+		stack.PushFrame(window_clause_opt.GetResult(), GetSelectTrampolineOps("WindowClause"),
+		                TransformFrameResultTarget(frame.frame_index, 4));
+		return;
+	}
+	frame.manual_state = 1;
+	PushSimpleSelectRemainder(stack, frame);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSimpleSelectTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	if (frame.manual_state == 0) {
+		auto window_functions = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(4);
+		RegisterWindowClauses(transformer, std::move(window_functions));
+		frame.manual_state = 1;
+		PushSimpleSelectRemainder(stack, frame);
+		return nullptr;
+	}
+
+	auto select_node = frame.TakeResult<unique_ptr<SelectNode>>(0);
+	if (frame.child_results[1]) {
+		select_node->where_clause = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
+	}
+	if (frame.child_results[2]) {
+		auto group_by_node = frame.TakeResult<GroupByNode>(2);
+		if (group_by_node.group_expressions.size() == 1 && ExpressionIsEmptyStar(*group_by_node.group_expressions[0])) {
+			select_node->aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
+			group_by_node.group_expressions.clear();
+			group_by_node.grouping_sets.clear();
+		}
+		select_node->groups = std::move(group_by_node);
+	}
+	if (frame.child_results[3]) {
+		select_node->having = frame.TakeResult<unique_ptr<ParsedExpression>>(3);
+	}
+	if (frame.child_results[5]) {
+		select_node->qualify = frame.TakeResult<unique_ptr<ParsedExpression>>(5);
+	}
+	if (frame.child_results[6]) {
+		select_node->sample = frame.TakeResult<unique_ptr<SampleOptions>>(6);
+	}
+	auto select_statement = make_uniq<SelectStatement>();
+	select_statement->node = std::move(select_node);
+	transformer.window_clauses.clear();
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(select_statement));
+}
+
 FunctionArgument PEGTransformerFactory::TransformNamedFunctionArgument(PEGTransformer &transformer,
                                                                        MacroParameter named_parameter) {
 	named_parameter.expression->SetAlias(named_parameter.name);
@@ -345,6 +524,60 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableRef(PEGTransformer &tr
 		}
 	}
 	return inner_table_ref;
+}
+
+void PEGTransformerFactory::InitializeTableRefTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                         TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &join_or_pivot_opt = list_pr.Child<OptionalParseResult>(1);
+	idx_t join_count = 0;
+	if (join_or_pivot_opt.HasResult()) {
+		join_count = join_or_pivot_opt.GetResult().Cast<RepeatParseResult>().GetChildren().size();
+	}
+	frame.ReserveChildSlots(1 + join_count);
+	if (join_count > 0) {
+		auto repeat_children = join_or_pivot_opt.GetResult().Cast<RepeatParseResult>().GetChildren();
+		for (idx_t i = repeat_children.size(); i > 0; i--) {
+			auto child_idx = i - 1;
+			stack.PushFrame(repeat_children[child_idx].get(), GetSelectTrampolineOps("JoinOrPivot"),
+			                TransformFrameResultTarget(frame.frame_index, 1 + child_idx));
+		}
+	}
+	stack.PushFrame(list_pr.GetChild(0), GetSelectTrampolineOps("InnerTableRef"),
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTableRefTrampoline(PEGTransformer &transformer,
+                                                                                   TransformStack &stack,
+                                                                                   TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto inner_table_ref = frame.TakeResult<unique_ptr<TableRef>>(0);
+	auto &join_or_pivot_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!join_or_pivot_opt.HasResult()) {
+		return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(inner_table_ref));
+	}
+	auto &repeat_join_or_pivot = join_or_pivot_opt.GetResult().Cast<RepeatParseResult>();
+	auto repeat_children = repeat_join_or_pivot.GetChildren();
+	for (idx_t i = 0; i < repeat_children.size(); i++) {
+		auto transform_join_or_pivot = frame.TakeResult<unique_ptr<TableRef>>(1 + i);
+		if (transform_join_or_pivot->type == TableReferenceType::JOIN) {
+			auto &join_ref = transform_join_or_pivot->Cast<JoinRef>();
+			join_ref.left = std::move(inner_table_ref);
+			if (IsConditionlessJoin(join_ref) && RHSTableRefHasJoinOrPivot(repeat_children[i].get())) {
+				inner_table_ref = ReassociateJoins(std::move(transform_join_or_pivot));
+			} else {
+				inner_table_ref = std::move(transform_join_or_pivot);
+			}
+		} else if (transform_join_or_pivot->type == TableReferenceType::PIVOT) {
+			auto &pivot_ref = transform_join_or_pivot->Cast<PivotRef>();
+			pivot_ref.source = std::move(inner_table_ref);
+			inner_table_ref = std::move(transform_join_or_pivot);
+		} else {
+			throw NotImplementedException("Unsupported TableRef type encountered: %s",
+			                              EnumUtil::ToString(transform_join_or_pivot->type));
+		}
+	}
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(inner_table_ref));
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableUnpivotClauseBody(PEGTransformer &transformer,
@@ -852,7 +1085,7 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
                                                                     ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	bool is_recursive = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto with_statement_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
+	auto with_statement_list = PEGTransformerFactory::ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
 	CommonTableExpressionMap result;
 
 	for (idx_t entry_idx = 0; entry_idx < with_statement_list.size(); entry_idx++) {
@@ -883,6 +1116,49 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 		result.map.insert(with_entry.first, std::move(with_entry.second));
 	}
 	return result;
+}
+
+void PEGTransformerFactory::InitializeWithClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto with_statement_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
+	frame.ReserveChildSlots(with_statement_list.size());
+	for (idx_t i = with_statement_list.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		stack.PushFrame(with_statement_list[child_idx].get(), GetSelectTrampolineOps("WithStatement"),
+		                TransformFrameResultTarget(frame.frame_index, child_idx));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeWithClauseTrampoline(PEGTransformer &transformer,
+                                                                                     TransformStack &stack,
+                                                                                     TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	bool is_recursive = list_pr.Child<OptionalParseResult>(1).HasResult();
+	CommonTableExpressionMap result;
+	for (idx_t entry_idx = 0; entry_idx < frame.child_results.size(); entry_idx++) {
+		auto with_entry = frame.TakeResult<pair<Identifier, unique_ptr<CommonTableExpressionInfo>>>(entry_idx);
+		if (is_recursive) {
+			auto &query_node = with_entry.second->query_node;
+			if (!query_node) {
+				throw ParserException("Recursive CTEs with DML statements are not supported");
+			}
+			if (query_node->type == QueryNodeType::INSERT_QUERY_NODE ||
+			    query_node->type == QueryNodeType::UPDATE_QUERY_NODE ||
+			    query_node->type == QueryNodeType::DELETE_QUERY_NODE) {
+				throw ParserException("Recursive CTEs with DML statements are not supported");
+			}
+			query_node = ToRecursiveCTE(std::move(query_node), with_entry.first, with_entry.second->aliases,
+			                            with_entry.second->key_targets);
+		}
+		auto &cte_name = with_entry.first;
+		auto it = result.map.find(cte_name);
+		if (it != result.map.end()) {
+			throw ParserException("Duplicate CTE name \"%s\"", cte_name.GetIdentifierName());
+		}
+		result.map.insert(with_entry.first, std::move(with_entry.second));
+	}
+	return make_uniq<TypedTransformResult<CommonTableExpressionMap>>(std::move(result));
 }
 
 pair<Identifier, unique_ptr<CommonTableExpressionInfo>>
@@ -951,6 +1227,26 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWindowDefinition(PE
 	transformer.in_window_definition = false;
 	window_function->SetAlias(list_pr.Child<IdentifierParseResult>(0).identifier);
 	return std::move(window_function);
+}
+
+void PEGTransformerFactory::InitializeWindowDefinitionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	transformer.in_window_definition = true;
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(2), GetSelectTrampolineOps("WindowFrameDefinition"),
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeWindowDefinitionTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto window_function = frame.TakeResult<unique_ptr<WindowExpression>>(0);
+	transformer.in_window_definition = false;
+	window_function->SetAlias(list_pr.Child<IdentifierParseResult>(0).identifier);
+	unique_ptr<ParsedExpression> result = std::move(window_function);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
 unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleEntryFunction(

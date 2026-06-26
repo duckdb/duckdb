@@ -1744,6 +1744,5 @@ excluded_rules:
   - WindowDefinition
   - ExcludeOrExcept
   # expression.gram rules kept manual during incremental transformer generation migration
-  - Expression
   - OverClause
   - PrefixExpression
