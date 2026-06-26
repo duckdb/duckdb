@@ -37,8 +37,8 @@ void LogicalCreateIndex::ResolveTypes() {
 }
 
 TableCatalogEntry &LogicalCreateIndex::BindTable(ClientContext &context, CreateIndexInfo &info_p) {
-	auto &catalog = info_p.catalog;
-	auto &schema = info_p.schema;
+	auto &catalog = info_p.Catalog();
+	auto &schema = info_p.Schema();
 	auto &table_name = info_p.table;
 	return Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table_name);
 }

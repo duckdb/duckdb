@@ -12,7 +12,7 @@ CreateTriggerInfo::CreateTriggerInfo()
 unique_ptr<CreateInfo> CreateTriggerInfo::Copy() const {
 	auto result = make_uniq<CreateTriggerInfo>();
 	CopyProperties(*result);
-	result->trigger_name = trigger_name;
+	result->SetTriggerName(GetTriggerName());
 	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(base_table->Copy());
 	result->timing = timing;
 	result->event_type = event_type;
@@ -34,10 +34,10 @@ string CreateTriggerInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ss << "IF NOT EXISTS ";
 	}
-	if (!IsInvalidSchema(schema)) {
-		ss << SQLIdentifier(schema) << ".";
+	if (!IsInvalidSchema(Schema())) {
+		ss << SQLIdentifier(Schema()) << ".";
 	}
-	ss << SQLIdentifier(trigger_name);
+	ss << SQLIdentifier(GetTriggerName());
 	ss << " ";
 	ss << EnumUtil::ToString(timing);
 	ss << " ";

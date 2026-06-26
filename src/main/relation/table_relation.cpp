@@ -28,9 +28,9 @@ unique_ptr<QueryNode> TableRelation::GetQueryNode() {
 
 unique_ptr<TableRef> TableRelation::GetTableRef() {
 	auto table_ref = make_uniq<BaseTableRef>();
-	table_ref->schema_name = description->schema;
-	table_ref->table_name = description->table;
-	table_ref->catalog_name = description->database;
+	table_ref->SchemaMutable() = description->schema;
+	table_ref->TableMutable() = description->table;
+	table_ref->CatalogMutable() = description->database;
 	return std::move(table_ref);
 }
 

@@ -37,11 +37,15 @@
       {
         "id": 200,
         "name": "schema_name",
+        "serialize_property": "qualified_name.Schema()",
+        "deserialize_property": "qualified_name.SchemaMutable()",
         "type": "Identifier"
       },
       {
         "id": 201,
         "name": "table_name",
+        "serialize_property": "qualified_name.Name()",
+        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -52,6 +56,8 @@
       {
         "id": 203,
         "name": "catalog_name",
+        "serialize_property": "qualified_name.Catalog()",
+        "deserialize_property": "qualified_name.CatalogMutable()",
         "type": "Identifier"
       },
       {

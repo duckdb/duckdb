@@ -810,7 +810,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformRowTypeInternal(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformRowType(PEGTransformer &transformer,
-	                                                     const child_list_t<LogicalType> &col_id_type_list);
+	                                                     const optional<child_list_t<LogicalType>> &col_id_type_list);
 	static unique_ptr<TransformResultValue> TransformSetofTypeInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformSetofType(PEGTransformer &transformer, const LogicalType &type);
@@ -2410,12 +2410,21 @@ public:
 	static unique_ptr<TransformResultValue> TransformSimilarToTokenInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static string TransformSimilarToToken(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformRegexMatchTokenInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static string TransformRegexMatchToken(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformRegexInsensitiveMatchTokenInternal(PEGTransformer &transformer,
+	                                                                                    ParseResult &parse_result);
+	static string TransformRegexInsensitiveMatchToken(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformNotILikeOpInternal(PEGTransformer &transformer,
 	                                                                    ParseResult &parse_result);
 	static string TransformNotILikeOp(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformNotLikeOpInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static string TransformNotLikeOp(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformNotRegexInsensitiveMatchOpInternal(PEGTransformer &transformer,
+	                                                                                    ParseResult &parse_result);
+	static string TransformNotRegexInsensitiveMatchOp(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformNotSimilarToOpInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static string TransformNotSimilarToOp(PEGTransformer &transformer);

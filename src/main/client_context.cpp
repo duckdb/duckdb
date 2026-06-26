@@ -371,7 +371,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	// Refresh the logger
 	logger->Flush();
 	LoggingContext context(LogContextScope::CONNECTION);
-	context.connection_id = reinterpret_cast<idx_t>(this);
+	context.connection_id = connection_id;
 	logger = db->GetLogManager().CreateLogger(context, true);
 
 	// Notify any registered state of query end
@@ -737,6 +737,11 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	D_ASSERT(active_query->IsOpenResult(result));
 	bool invalidate_transaction = true;
 	try {
+		// Surface a pending interrupt even when this thread runs no task that reaches InterruptCheck.
+		// IsInterrupted() rather than InterruptCheck(): we must not enforce query_deadline here.
+		if (!dry_run && IsInterrupted()) {
+			throw InterruptException();
+		}
 		auto query_result = active_query->executor->ExecuteTask(dry_run);
 		if (active_query->progress_bar) {
 			auto is_finished = PendingQueryResult::IsResultReady(query_result);
@@ -1299,7 +1304,7 @@ void ClientContext::DisableProfiling() {
 void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 	RunFunctionInTransaction([&]() {
 		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(
-		    *this, Identifier::InvalidCatalog(), info.schema, info.name, OnEntryNotFound::RETURN_NULL);
+		    *this, Identifier::InvalidCatalog(), info.Schema(), info.GetFunctionName(), OnEntryNotFound::RETURN_NULL);
 		if (existing_function) {
 			auto &new_info = info.Cast<CreateScalarFunctionInfo>();
 			if (new_info.functions.MergeFunctionSet(existing_function->functions)) {
@@ -1535,6 +1540,7 @@ ParserOptions ClientContext::GetParserOptions() const {
 	ParserOptions options;
 	options.preserve_identifier_case = Settings::Get<PreserveIdentifierCaseSetting>(*this);
 	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
+	options.regex_match_operator_semantics = Settings::Get<RegexMatchOperatorSemanticsSetting>(*this);
 	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);

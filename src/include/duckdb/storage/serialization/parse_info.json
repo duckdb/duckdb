@@ -30,16 +30,22 @@
       {
         "id": 201,
         "name": "catalog",
+        "serialize_property": "qualified_name.Catalog()",
+        "deserialize_property": "qualified_name.CatalogMutable()",
         "type": "Identifier"
       },
       {
         "id": 202,
         "name": "schema",
+        "serialize_property": "qualified_name.Schema()",
+        "deserialize_property": "qualified_name.SchemaMutable()",
         "type": "Identifier"
       },
       {
         "id": 203,
         "name": "name",
+        "serialize_property": "qualified_name.Name()",
+        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -485,16 +491,22 @@
       {
         "id": 200,
         "name": "catalog",
+        "serialize_property": "qualified_name.Catalog()",
+        "deserialize_property": "qualified_name.CatalogMutable()",
         "type": "Identifier"
       },
       {
         "id": 201,
         "name": "schema",
+        "serialize_property": "qualified_name.Schema()",
+        "deserialize_property": "qualified_name.SchemaMutable()",
         "type": "Identifier"
       },
       {
         "id": 202,
         "name": "table",
+        "serialize_property": "qualified_name.Name()",
+        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -604,16 +616,22 @@
       {
         "id": 201,
         "name": "catalog",
+        "serialize_property": "qualified_name.Catalog()",
+        "deserialize_property": "qualified_name.CatalogMutable()",
         "type": "Identifier"
       },
       {
         "id": 202,
         "name": "schema",
+        "serialize_property": "qualified_name.Schema()",
+        "deserialize_property": "qualified_name.SchemaMutable()",
         "type": "Identifier"
       },
       {
         "id": 203,
         "name": "name",
+        "serialize_property": "qualified_name.Name()",
+        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {

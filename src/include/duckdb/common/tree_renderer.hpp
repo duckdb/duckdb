@@ -17,6 +17,8 @@
 
 namespace duckdb {
 
+class BaseResultRenderer;
+class ClientContext;
 class QueryProfiler;
 
 //! TreeRenderer renders a plan/operator tree (for EXPLAIN) or a query profiler's output in a particular format.
@@ -30,13 +32,21 @@ public:
 	}
 
 public:
-	void ToStream(RenderTree &root, std::ostream &ss);
-	virtual void ToStreamInternal(RenderTree &root, std::ostream &ss) = 0;
-	//! Create a TreeRenderer for the given format name (e.g. "json", "text"). The name is matched case-insensitively
-	//! and throws if it is not recognized. Returns nullptr for formats that render no output (i.e. "no_output").
-	//! This is the primary, name-based factory; new render formats are added here.
+	//! Render the tree into a BaseResultRenderer (e.g. a StringResultRenderer, or a highlighting-aware sink)
+	void ToStream(RenderTree &root, BaseResultRenderer &ss);
+	virtual void ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) = 0;
+
+	//! Returns the sink to render into when printing this format's output directly. Only invoked when we are about
+	//! to print (the default renderer writes straight to the output stream), so it is never created for the
+	//! string-producing paths. Formats can override this to provide a highlighting-aware sink.
+	virtual unique_ptr<BaseResultRenderer> GetPrintRenderer();
+	//! Create a renderer for the given format, consulting the pluggable registry and configuring built-ins from the
+	//! client's "profiling_renderer_settings". Matched case-insensitively; throws if unknown, nullptr for "no_output".
+	static unique_ptr<TreeRenderer> CreateRenderer(ClientContext &context, const string &name);
+	static unique_ptr<TreeRenderer> CreateRenderer(ClientContext &context, const ProfilerPrintFormat &format);
+
+	//! Create a built-in renderer without configuring it or consulting the registry (no ClientContext available)
 	static unique_ptr<TreeRenderer> CreateRenderer(const string &name);
-	//! Create a TreeRenderer for the given ProfilerPrintFormat (thin wrapper over the name-based factory).
 	static unique_ptr<TreeRenderer> CreateRenderer(const ProfilerPrintFormat &format);
 
 	//! Generic configuration of the renderer: passes renderer settings (e.g. from the "profiling_renderer_settings"
@@ -48,12 +58,12 @@ public:
 	virtual bool UsesRawKeyNames() {
 		return false;
 	}
-	virtual void Render(const ProfilingNode &op, std::ostream &ss) {
+	virtual void Render(const ProfilingNode &op, BaseResultRenderer &ss) {
 	}
 
-	//! Render the profiler's output in this format. Only called when profiling is enabled. The base implementation
-	//! renders the profiling node tree; formats with richer output (text, JSON) override this.
-	virtual string RenderProfiler(const QueryProfiler &profiler);
+	//! Render the profiler's output into the given sink. Only called when profiling is enabled. The base
+	//! implementation renders the profiling node tree; formats with richer output (text, JSON) override this.
+	virtual void RenderProfiler(const QueryProfiler &profiler, BaseResultRenderer &ss);
 	//! The message shown (in this format) when profiling is disabled.
 	virtual string RenderProfilerDisabled();
 };

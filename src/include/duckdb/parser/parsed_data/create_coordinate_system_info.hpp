@@ -19,7 +19,12 @@ struct CreateCoordinateSystemInfo : public CreateInfo {
 
 	//! The name of the coordinate system
 	//! This is typically in the format "AUTH:CODE", e.g. "OGC:CRS84"
-	Identifier name;
+	const Identifier &GetCoordinateSystemName() const {
+		return qualified_name.Name();
+	}
+	void SetCoordinateSystemName(Identifier name) {
+		qualified_name.NameMutable() = std::move(name);
+	}
 
 	//! The authority identifier of the coordinate system (e.g. "EPSG")
 	string authority;

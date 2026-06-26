@@ -10,7 +10,8 @@ WindowExpression::WindowExpression() : ParsedExpression(ExpressionType::INVALID,
 vector<unique_ptr<ParsedExpression>> WindowExpression::SerializedChildren(Serializer &serializer) const {
 	vector<unique_ptr<ParsedExpression>> result;
 	idx_t nargs = arguments.size();
-	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0) && (function_name == "lead" || function_name == "lag")) {
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0) &&
+	    (qualified_name.Name() == "lead" || qualified_name.Name() == "lag")) {
 		nargs = 1;
 	}
 
@@ -23,7 +24,7 @@ vector<unique_ptr<ParsedExpression>> WindowExpression::SerializedChildren(Serial
 
 unique_ptr<ParsedExpression> WindowExpression::SerializedOffset(Serializer &serializer) const {
 	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0) && arguments.size() > 1 &&
-	    (function_name == "lead" || function_name == "lag")) {
+	    (qualified_name.Name() == "lead" || qualified_name.Name() == "lag")) {
 		return arguments[1].GetExpression().Copy();
 	}
 
@@ -32,7 +33,7 @@ unique_ptr<ParsedExpression> WindowExpression::SerializedOffset(Serializer &seri
 
 unique_ptr<ParsedExpression> WindowExpression::SerializedDefault(Serializer &serializer) const {
 	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0) && arguments.size() > 2 &&
-	    (function_name == "lead" || function_name == "lag")) {
+	    (qualified_name.Name() == "lead" || qualified_name.Name() == "lag")) {
 		return arguments[2].GetExpression().Copy();
 	}
 
@@ -40,8 +41,9 @@ unique_ptr<ParsedExpression> WindowExpression::SerializedDefault(Serializer &ser
 }
 
 WindowExpression::WindowExpression(const string &catalog_name, const string &schema, const string &function_name)
-    : ParsedExpression(WindowToExpressionType(function_name), ExpressionClass::WINDOW), catalog(catalog_name),
-      schema(schema), function_name(StringUtil::Lower(function_name)), ignore_nulls(false), distinct(false) {
+    : ParsedExpression(WindowToExpressionType(function_name), ExpressionClass::WINDOW),
+      qualified_name {Identifier(catalog_name), Identifier(schema), Identifier(StringUtil::Lower(function_name))},
+      ignore_nulls(false), distinct(false) {
 }
 
 struct WindowFunctionDefinition {
@@ -87,13 +89,13 @@ string WindowExpression::ExpressionTypeToWindow(ExpressionType expression_type) 
 }
 
 void WindowExpression::SetFunctionName(const string &function_name_p) {
-	function_name = Identifier(function_name_p);
-	type = WindowToExpressionType(function_name.GetIdentifierName());
+	qualified_name.NameMutable() = Identifier(function_name_p);
+	type = WindowToExpressionType(qualified_name.Name().GetIdentifierName());
 }
 
 string WindowExpression::ToString() const {
-	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, schema.GetIdentifierName(),
-	                                                                 function_name.GetIdentifierName());
+	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, qualified_name.Schema().GetIdentifierName(),
+	                                                                 qualified_name.Name().GetIdentifierName());
 }
 
 bool WindowExpression::HasBoundedParts() const {
@@ -124,9 +126,9 @@ bool WindowExpression::HasBoundedParts() const {
 
 void WindowExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<Identifier>(200, "function_name", function_name);
-	serializer.WritePropertyWithDefault<Identifier>(201, "schema", schema);
-	serializer.WritePropertyWithDefault<Identifier>(202, "catalog", catalog);
+	serializer.WritePropertyWithDefault<Identifier>(200, "function_name", qualified_name.Name());
+	serializer.WritePropertyWithDefault<Identifier>(201, "schema", qualified_name.Schema());
+	serializer.WritePropertyWithDefault<Identifier>(202, "catalog", qualified_name.Catalog());
 
 	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		// Legacy serialization.
@@ -165,9 +167,9 @@ void WindowExpression::Serialize(Serializer &serializer) const {
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<WindowExpression>(new WindowExpression());
-	deserializer.ReadPropertyWithDefault<Identifier>(200, "function_name", result->function_name);
-	deserializer.ReadPropertyWithDefault<Identifier>(201, "schema", result->schema);
-	deserializer.ReadPropertyWithDefault<Identifier>(202, "catalog", result->catalog);
+	deserializer.ReadPropertyWithDefault<Identifier>(200, "function_name", result->qualified_name.NameMutable());
+	deserializer.ReadPropertyWithDefault<Identifier>(201, "schema", result->qualified_name.SchemaMutable());
+	deserializer.ReadPropertyWithDefault<Identifier>(202, "catalog", result->qualified_name.CatalogMutable());
 
 	// Legacy children deserialization
 	vector<unique_ptr<ParsedExpression>> children;
