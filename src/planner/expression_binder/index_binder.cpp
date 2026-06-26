@@ -61,8 +61,8 @@ void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, co
 
 	info.scan_types.emplace_back(LogicalType::ROW_TYPE);
 	info.names = get.names;
-	info.SchemaMutable() = Identifier(schema);
-	info.CatalogMutable() = get.GetTable()->catalog.GetName();
+	info.SetQualifiedName(
+	    QualifiedName(get.GetTable()->catalog.GetName(), Identifier(schema), info.GetQualifiedName().Name()));
 	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 }
 

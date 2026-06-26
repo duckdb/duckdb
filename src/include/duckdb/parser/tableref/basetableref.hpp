@@ -41,11 +41,8 @@ public:
 	QualifiedName &GetQualifiedNameMutable() {
 		return qualified_name;
 	}
-	Identifier &CatalogMutable() {
-		return qualified_name.CatalogMutable();
-	}
-	Identifier &SchemaMutable() {
-		return qualified_name.SchemaMutable();
+	void SetQualifiedName(QualifiedName name) {
+		qualified_name = std::move(name);
 	}
 	const Identifier &Table() const {
 		return qualified_name.Name();

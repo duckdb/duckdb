@@ -10,9 +10,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTypeStmt(PEGTr
                                                                            const QualifiedName &qualified_name,
                                                                            unique_ptr<CreateTypeInfo> create_type) {
 	auto result = make_uniq<CreateStatement>();
-	create_type->CatalogMutable() = qualified_name.Catalog();
-	create_type->SchemaMutable() = qualified_name.Schema();
-	create_type->SetTypeName(qualified_name.Name());
+	create_type->SetQualifiedName(qualified_name);
 	create_type->on_conflict =
 	    if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	result->info = std::move(create_type);

@@ -1,0 +1,180 @@
+From 803a06018519ba63303813fb4bca49a0ff990f1e Mon Sep 17 00:00:00 2001
+From: duckdb <x@x>
+Date: Fri, 26 Jun 2026 11:34:19 +0200
+Subject: [PATCH] 0026-setqualifiedname-getentry.patch
+
+---
+ src/functions/ducklake_add_data_files.cpp     |  6 +++---
+ src/functions/ducklake_flush_inlined_data.cpp | 16 +++++++++-------
+ src/functions/ducklake_set_option.cpp         |  6 +++---
+ src/storage/ducklake_catalog.cpp              | 12 ++++++++----
+ src/storage/ducklake_insert.cpp               | 13 +++++++------
+ 5 files changed, 30 insertions(+), 23 deletions(-)
+
+diff --git a/src/functions/ducklake_add_data_files.cpp b/src/functions/ducklake_add_data_files.cpp
+index 80770331..2abeaa68 100644
+--- a/src/functions/ducklake_add_data_files.cpp
++++ b/src/functions/ducklake_add_data_files.cpp
+@@ -42,9 +42,9 @@ static unique_ptr<FunctionData> DuckLakeAddDataFilesBind(ClientContext &context,
+ 	}
+ 	const auto table_name = StringValue::Get(input.inputs[1]);
+ 
+-	auto entry =
+-	    catalog.GetEntry<TableCatalogEntry>(context, Identifier(schema_name), Identifier(table_name),
+-	                                        OnEntryNotFound::THROW_EXCEPTION);
++	auto entry = catalog.GetEntry<TableCatalogEntry>(
++	    context, QualifiedName(catalog.GetName(), Identifier(schema_name), Identifier(table_name)),
++	    OnEntryNotFound::THROW_EXCEPTION);
+ 	auto &table = entry->Cast<DuckLakeTableEntry>();
+ 
+ 	auto result = make_uniq<DuckLakeAddDataFilesData>(catalog, table);
+diff --git a/src/functions/ducklake_flush_inlined_data.cpp b/src/functions/ducklake_flush_inlined_data.cpp
+index 325ce4a5..de15fac0 100644
+--- a/src/functions/ducklake_flush_inlined_data.cpp
++++ b/src/functions/ducklake_flush_inlined_data.cpp
+@@ -346,7 +346,8 @@ unique_ptr<LogicalOperator> DuckLakeDataFlusher::GenerateFlushCommand() {
+ 	// and instead pull the latest sort setting
+ 	// First, see if there are transaction local changes to the table
+ 	// Then fall back to latest snapshot if no local changes
+-	auto latest_entry = transaction.GetTransactionLocalEntry(CatalogType::TABLE_ENTRY, table.schema.name.GetIdentifierName(), table.name.GetIdentifierName());
++	auto latest_entry = transaction.GetTransactionLocalEntry(
++	    CatalogType::TABLE_ENTRY, table.schema.name.GetIdentifierName(), table.name.GetIdentifierName());
+ 	if (!latest_entry) {
+ 		auto latest_snapshot = transaction.GetSnapshot();
+ 		latest_entry = catalog.GetEntryById(transaction, latest_snapshot, table_id);
+@@ -630,9 +631,9 @@ static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context,
+ 		}
+ 	} else {
+ 		// specific table - fetch the table
+-		auto table_catalog_entry =
+-		    ducklake_catalog.GetEntry<TableCatalogEntry>(context, Identifier(schema), Identifier(table),
+-	                                                 OnEntryNotFound::THROW_EXCEPTION);
++		auto table_catalog_entry = ducklake_catalog.GetEntry<TableCatalogEntry>(
++		    context, QualifiedName(ducklake_catalog.GetName(), Identifier(schema), Identifier(table)),
++		    OnEntryNotFound::THROW_EXCEPTION);
+ 		auto &dl_schema = table_catalog_entry->schema.Cast<DuckLakeSchemaEntry>();
+ 		schema_table_map[dl_schema.Cast<DuckLakeSchemaEntry>().GetSchemaId().index].push_back(
+ 		    table_catalog_entry.get()->Cast<DuckLakeTableEntry>());
+@@ -706,7 +707,8 @@ static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context,
+ 
+ 	// Create SUM(rows_flushed) aggregate
+ 	auto &system_catalog = Catalog::GetSystemCatalog(context);
+-	auto &sum_entry = system_catalog.GetEntry<AggregateFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "sum");
++	auto &sum_entry = system_catalog.GetEntry<AggregateFunctionCatalogEntry>(
++	    context, QualifiedName(system_catalog.GetName(), Identifier::DefaultSchema(), "sum"));
+ 
+ 	vector<unique_ptr<Expression>> sum_args;
+ 	sum_args.push_back(make_uniq<BoundColumnRefExpression>(child->types[2], child_bindings[2]));
+@@ -739,8 +741,8 @@ static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context,
+ 	unique_ptr<Expression> sum_col_ref = make_uniq<BoundColumnRefExpression>(aggregate->types[2], agg_bindings[2]);
+ 	// Note: SUM(BIGINT) returns HUGEINT. We must use the its output type for the 0 constant
+ 	unique_ptr<Expression> zero_const = make_uniq<BoundConstantExpression>(Value::Numeric(aggregate->types[2], 0));
+-	unique_ptr<Expression> filter_expr =
+-	    BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHAN, std::move(sum_col_ref), std::move(zero_const));
++	unique_ptr<Expression> filter_expr = BoundComparisonExpression::Create(
++	    ExpressionType::COMPARE_GREATERTHAN, std::move(sum_col_ref), std::move(zero_const));
+ 
+ 	auto filter = make_uniq<LogicalFilter>(std::move(filter_expr));
+ 	filter->children.push_back(std::move(aggregate));
+diff --git a/src/functions/ducklake_set_option.cpp b/src/functions/ducklake_set_option.cpp
+index 55bdc595..80edd58a 100644
+--- a/src/functions/ducklake_set_option.cpp
++++ b/src/functions/ducklake_set_option.cpp
+@@ -117,9 +117,9 @@ static unique_ptr<FunctionData> DuckLakeSetOptionBind(ClientContext &context, Ta
+ 	}
+ 	if (!table.empty()) {
+ 		// find the scope
+-		auto table_catalog_entry =
+-		    catalog.GetEntry<TableCatalogEntry>(context, Identifier(schema), Identifier(table),
+-		                                                       OnEntryNotFound::THROW_EXCEPTION);
++		auto table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(
++		    context, QualifiedName(catalog.GetName(), Identifier(schema), Identifier(table)),
++		    OnEntryNotFound::THROW_EXCEPTION);
+ 		auto &ducklake_table = table_catalog_entry->Cast<DuckLakeTableEntry>();
+ 		config_option.table_id = ducklake_table.GetTableId();
+ 		if (IsTransactionLocal(config_option.table_id)) {
+diff --git a/src/storage/ducklake_catalog.cpp b/src/storage/ducklake_catalog.cpp
+index b37a6318..6df47edc 100644
+--- a/src/storage/ducklake_catalog.cpp
++++ b/src/storage/ducklake_catalog.cpp
+@@ -147,7 +147,8 @@ optional_ptr<CatalogEntry> DuckLakeCatalog::CreateSchema(CatalogTransaction tran
+ 	//! get a local table-id
+ 	auto schema_id = SchemaIndex(duck_transaction.GetLocalCatalogId());
+ 	auto schema_uuid = duck_transaction.GenerateUUID();
+-	auto schema_data_path = DataPath() + DuckLakeCatalog::GeneratePathFromName(schema_uuid, info.GetQualifiedName().Schema().GetIdentifierName());
++	auto schema_data_path = DataPath() + DuckLakeCatalog::GeneratePathFromName(
++	                                         schema_uuid, info.GetQualifiedName().Schema().GetIdentifierName());
+ 	auto schema_entry =
+ 	    make_uniq<DuckLakeSchemaEntry>(*this, info, schema_id, std::move(schema_uuid), std::move(schema_data_path));
+ 	auto result = schema_entry.get();
+@@ -327,7 +328,8 @@ unique_ptr<CreateMacroInfo> CreateMacroInfoFromDucklake(ClientContext &context,
+ 	}
+ 	auto macro_info = make_uniq<CreateMacroInfo>(type);
+ 	macro_info->SetFunctionName(Identifier(macro.macro_name));
+-	macro_info->SchemaMutable() = Identifier(schema_name);
++	macro_info->SetQualifiedName(QualifiedName(macro_info->GetQualifiedName().Catalog(), Identifier(schema_name),
++	                                           macro_info->GetQualifiedName().Name()));
+ 	macro_info->temporary = false;
+ 	macro_info->internal = false;
+ 	for (auto &impl : macro.implementations) {
+@@ -376,7 +378,8 @@ unique_ptr<DuckLakeCatalogSet> DuckLakeCatalog::LoadSchemaForSnapshot(DuckLakeTr
+ 	ducklake_entries_map_t schema_map;
+ 	for (auto &schema : catalog.schemas) {
+ 		CreateSchemaInfo schema_info;
+-		schema_info.SchemaMutable() = Identifier(schema.name);
++		schema_info.SetQualifiedName(QualifiedName(schema_info.GetQualifiedName().Catalog(), Identifier(schema.name),
++		                                           schema_info.GetQualifiedName().Name()));
+ 		auto schema_entry = make_uniq<DuckLakeSchemaEntry>(*this, schema_info, schema.id, std::move(schema.uuid),
+ 		                                                   std::move(schema.path));
+ 		schema_map.insert(make_pair(std::move(schema.name), std::move(schema_entry)));
+@@ -470,7 +473,8 @@ unique_ptr<DuckLakeCatalogSet> DuckLakeCatalog::LoadSchemaForSnapshot(DuckLakeTr
+ 			    macro.macro_name);
+ 		}
+ 		auto &schema_entry = entry->second.get();
+-		auto create_macro = CreateMacroInfoFromDucklake(*transaction.context.lock(), macro, schema_entry.name.GetIdentifierName());
++		auto create_macro =
++		    CreateMacroInfoFromDucklake(*transaction.context.lock(), macro, schema_entry.name.GetIdentifierName());
+ 		if (macro.implementations.front().type == "scalar") {
+ 			auto macro_catalog_entry =
+ 			    make_uniq<DuckLakeScalarMacroEntry>(*this, schema_entry, *create_macro, macro.macro_id);
+diff --git a/src/storage/ducklake_insert.cpp b/src/storage/ducklake_insert.cpp
+index 46ad9092..ee219890 100644
+--- a/src/storage/ducklake_insert.cpp
++++ b/src/storage/ducklake_insert.cpp
+@@ -279,9 +279,9 @@ CopyFunctionCatalogEntry &DuckLakeFunctions::GetCopyFunction(ClientContext &cont
+ 	D_ASSERT(!name.empty());
+ 	auto &system_catalog = Catalog::GetSystemCatalog(db);
+ 
+-	auto entry =
+-	    system_catalog.GetEntry<CopyFunctionCatalogEntry>(context, Identifier::DefaultSchema(), Identifier(name),
+-	                                                      OnEntryNotFound::RETURN_NULL);
++	auto entry = system_catalog.GetEntry<CopyFunctionCatalogEntry>(
++	    context, QualifiedName(system_catalog.GetName(), Identifier::DefaultSchema(), Identifier(name)),
++	    OnEntryNotFound::RETURN_NULL);
+ 	if (!entry) {
+ 		throw MissingExtensionException(
+ 		    "Could not load the copy function for \"%s\". Try explicitly loading the \"%s\" extension", name, name);
+@@ -550,7 +550,8 @@ DuckLakeCopyOptions DuckLakeInsert::GetCopyOptions(ClientContext &context, DuckL
+ 		}
+ 	}
+ 
+-	auto function_data = copy_fun.function.copy_to_bind(context, bind_input, StringsToIdentifiers(names_to_write), casted_types);
++	auto function_data =
++	    copy_fun.function.copy_to_bind(context, bind_input, StringsToIdentifiers(names_to_write), casted_types);
+ 
+ 	DuckLakeCopyOptions result(std::move(info), copy_fun.function);
+ 	result.bind_data = std::move(function_data);
+@@ -851,8 +852,8 @@ PhysicalOperator &DuckLakeCatalog::PlanCreateTableAs(ClientContext &context, Phy
+ 		DuckLakeTypes::CheckSupportedType(col.Type());
+ 	}
+ 	auto table_uuid = duck_transaction.GenerateUUID();
+-	auto table_data_path =
+-	    duck_schema.DataPath() + DuckLakeCatalog::GeneratePathFromName(table_uuid, create_info.GetTableName().GetIdentifierName());
++	auto table_data_path = duck_schema.DataPath() + DuckLakeCatalog::GeneratePathFromName(
++	                                                    table_uuid, create_info.GetTableName().GetIdentifierName());
+ 
+ 	DuckLakeCopyInput copy_input(context, duck_schema, columns, table_data_path);
+ 	auto &physical_copy = DuckLakeInsert::PlanCopyForInsert(context, planner, copy_input, root.get());
+-- 
+2.39.5 (Apple Git-154)
+

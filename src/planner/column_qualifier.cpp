@@ -300,8 +300,7 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	// we can! transform this into a function call on the column
 	// i.e. "x.lower()" becomes "lower(x)"
 	function.GetArgumentsMutable().insert(function.GetArgumentsMutable().begin(), std::move(new_colref));
-	function.CatalogMutable() = INVALID_CATALOG;
-	function.SchemaMutable() = INVALID_SCHEMA;
+	function.SetQualifiedName(QualifiedName(INVALID_CATALOG, INVALID_SCHEMA, function.GetQualifiedName().Name()));
 	return func;
 }
 

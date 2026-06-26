@@ -1,0 +1,79 @@
+From 36f6389ccecebaab6d2f925221bd1be7afeb194d Mon Sep 17 00:00:00 2001
+From: duckdb <x@x>
+Date: Fri, 26 Jun 2026 11:34:19 +0200
+Subject: [PATCH] 0009-setqualifiedname.patch
+
+---
+ src/statement_generator.cpp | 20 +++++++++++---------
+ 1 file changed, 11 insertions(+), 9 deletions(-)
+
+diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
+index c419987..856d762 100644
+--- a/src/statement_generator.cpp
++++ b/src/statement_generator.cpp
+@@ -260,8 +260,10 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
+ 	}
+ 	case 1: {
+ 		auto info = make_uniq<CreateTableInfo>();
+-		info->CatalogMutable() = Identifier::InvalidCatalog();
+-		info->SchemaMutable() = Identifier::DefaultSchema();
++		info->SetQualifiedName(QualifiedName(Identifier::InvalidCatalog(), info->GetQualifiedName().Schema(),
++		                                     info->GetQualifiedName().Name()));
++		info->SetQualifiedName(QualifiedName(info->GetQualifiedName().Catalog(), Identifier::DefaultSchema(),
++		                                     info->GetQualifiedName().Name()));
+ 		info->SetTableName(Identifier(GenerateTableIdentifier()));
+ 		if (RandomPercentage(50)) {
+ 			info->query = GenerateSelect();
+@@ -276,9 +278,11 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
+ 	}
+ 	case 2: {
+ 		auto info = make_uniq<CreateSchemaInfo>();
+-		info->CatalogMutable() = Identifier::InvalidCatalog();
++		info->SetQualifiedName(QualifiedName(Identifier::InvalidCatalog(), info->GetQualifiedName().Schema(),
++		                                     info->GetQualifiedName().Name()));
+ 		info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+-		info->SchemaMutable() = Identifier(GenerateSchemaIdentifier());
++		info->SetQualifiedName(QualifiedName(info->GetQualifiedName().Catalog(), Identifier(GenerateSchemaIdentifier()),
++		                                     info->GetQualifiedName().Name()));
+ 		return std::move(info);
+ 	}
+ 	case 3: {
+@@ -374,7 +378,7 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
+ 		GenerateCTEs(*setop);
+ 		setop->setop_type = Choose<SetOperationType>({SetOperationType::EXCEPT, SetOperationType::INTERSECT,
+ 		                                              SetOperationType::UNION, SetOperationType::UNION_BY_NAME});
+-		for(idx_t i = 0; i < 2; i++) {
++		for (idx_t i = 0; i < 2; i++) {
+ 			setop->children.push_back(GenerateQueryNode());
+ 		}
+ 		switch (setop->setop_type) {
+@@ -825,8 +829,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
+ 	}
+ 	// FIXME: add export_state
+ 	return make_uniq<FunctionExpression>(Identifier(std::move(name)), std::move(children), std::move(filter),
+-	                                     std::move(order_bys),
+-	                                     distinct);
++	                                     std::move(order_bys), distinct);
+ }
+ 
+ unique_ptr<OrderModifier> StatementGenerator::GenerateOrderByAll() {
+@@ -982,7 +985,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
+ 	}
+ 	WindowChecker checker(*this);
+ 	auto result = make_uniq<WindowExpression>(SYSTEM_CATALOG, DEFAULT_SCHEMA, std::move(name));
+-	auto params =  GenerateChildren(min_parameters, max_parameters);
++	auto params = GenerateChildren(min_parameters, max_parameters);
+ 	auto &args = result->GetArgumentsMutable();
+ 	for (auto &param : params) {
+ 		args.push_back(std::move(param));
+@@ -1253,7 +1256,6 @@ idx_t StatementGenerator::RandomValue(idx_t max) {
+ }
+ 
+ string StatementGenerator::RandomString(idx_t length) {
+-
+ 	const string charset = "$_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+ 	string result = "";
+ 	for (idx_t i = 0; i < length; ++i) {
+-- 
+2.39.5 (Apple Git-154)
+

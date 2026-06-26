@@ -38,8 +38,7 @@ unique_ptr<TableRef> ViewRelation::GetTableRef() {
 		return premade_tableref->Copy();
 	}
 	auto table_ref = make_uniq<BaseTableRef>();
-	table_ref->SchemaMutable() = schema_name;
-	table_ref->TableMutable() = view_name;
+	table_ref->SetQualifiedName(QualifiedName(table_ref->GetQualifiedName().Catalog(), schema_name, view_name));
 	return std::move(table_ref);
 }
 

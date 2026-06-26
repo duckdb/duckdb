@@ -1,0 +1,110 @@
+From 1c4ba9163952c034a6fec4ed6d4cf142c4080756 Mon Sep 17 00:00:00 2001
+From: duckdb <x@x>
+Date: Fri, 26 Jun 2026 11:34:19 +0200
+Subject: [PATCH] 0013-setqualifiedname-getentry.patch
+
+---
+ src/catalog/rest/iceberg_schema_set.cpp |  6 ++++--
+ src/common/iceberg_utils.cpp            | 21 +++++++++------------
+ src/planning/iceberg_optimizer.cpp      |  5 ++---
+ 3 files changed, 15 insertions(+), 17 deletions(-)
+
+diff --git a/src/catalog/rest/iceberg_schema_set.cpp b/src/catalog/rest/iceberg_schema_set.cpp
+index e481889d..2bcb1e0b 100644
+--- a/src/catalog/rest/iceberg_schema_set.cpp
++++ b/src/catalog/rest/iceberg_schema_set.cpp
+@@ -63,7 +63,8 @@ optional_ptr<CatalogEntry> IcebergSchemaSet::GetEntry(ClientContext &context, co
+ 				throw CatalogException("default schema '%s' does not exist", name);
+ 			}
+ 		}
+-		info.SchemaMutable() = Identifier(name);
++		info.SetQualifiedName(
++		    QualifiedName(info.GetQualifiedName().Catalog(), Identifier(name), info.GetQualifiedName().Name()));
+ 		info.internal = false;
+ 		auto schema_entry = make_uniq<IcebergSchemaEntry>(catalog, info);
+ 		// we will not create entries with empty names
+@@ -124,7 +125,8 @@ void IcebergSchemaSet::LoadEntries(ClientContext &context) {
+ 	auto schemas = IRCAPI::GetSchemas(context, ic_catalog, {});
+ 	for (const auto &schema : schemas) {
+ 		CreateSchemaInfo info;
+-		info.SchemaMutable() = Identifier(GetSchemaName(schema.items));
++		info.SetQualifiedName(QualifiedName(info.GetQualifiedName().Catalog(), Identifier(GetSchemaName(schema.items)),
++		                                    info.GetQualifiedName().Name()));
+ 		info.internal = false;
+ 		auto schema_entry = make_uniq<IcebergSchemaEntry>(catalog, info);
+ 		schema_entry->namespace_items = std::move(schema.items);
+diff --git a/src/common/iceberg_utils.cpp b/src/common/iceberg_utils.cpp
+index 4607f944..c9147e72 100644
+--- a/src/common/iceberg_utils.cpp
++++ b/src/common/iceberg_utils.cpp
+@@ -27,9 +27,9 @@ CopyFunctionCatalogEntry &IcebergUtils::GetCopyFunction(ClientContext &context,
+ 	D_ASSERT(!name.empty());
+ 	auto &system_catalog = Catalog::GetSystemCatalog(db);
+ 
+-	auto entry =
+-	    system_catalog.GetEntry<CopyFunctionCatalogEntry>(context, Identifier::DefaultSchema(), Identifier(name),
+-	                                                      OnEntryNotFound::RETURN_NULL);
++	auto entry = system_catalog.GetEntry<CopyFunctionCatalogEntry>(
++	    context, QualifiedName(system_catalog.GetName(), Identifier::DefaultSchema(), Identifier(name)),
++	    OnEntryNotFound::RETURN_NULL);
+ 	if (!entry) {
+ 		throw MissingExtensionException(
+ 		    "Could not load the copy function for \"%s\". Try explicitly loading the \"%s\" extension", name, name);
+@@ -102,22 +102,20 @@ optional_ptr<CatalogEntry> IcebergUtils::GetTableEntry(ClientContext &context, s
+ 	switch (qualified_name.size()) {
+ 	case 3: {
+ 		auto lookup_info = EntryLookupInfo(CatalogType::TABLE_ENTRY, Identifier(qualified_name[2]));
+-		auto table = Catalog::GetEntry(context, Identifier(qualified_name[0]), Identifier(qualified_name[1]), lookup_info,
+-		                               OnEntryNotFound::THROW_EXCEPTION);
++		auto table = Catalog::GetEntry(context, Identifier(qualified_name[0]), Identifier(qualified_name[1]),
++		                               lookup_info, OnEntryNotFound::THROW_EXCEPTION);
+ 		return table;
+ 	}
+ 	case 2: {
+ 		// make sure default catalog is iceberg
+ 		auto table_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, Identifier(qualified_name[0]),
+-		                                    Identifier(qualified_name[1]),
+-		                                    OnEntryNotFound::THROW_EXCEPTION);
++		                                    Identifier(qualified_name[1]), OnEntryNotFound::THROW_EXCEPTION);
+ 		return table_entry;
+ 	}
+ 	case 1: {
+ 		auto schema = catalog.GetDefaultSchema();
+ 		auto table_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, Identifier(schema),
+-		                                    Identifier(qualified_name[0]),
+-		                                    OnEntryNotFound::THROW_EXCEPTION);
++		                                    Identifier(qualified_name[0]), OnEntryNotFound::THROW_EXCEPTION);
+ 		return table_entry;
+ 	}
+ 	default:
+@@ -158,9 +156,8 @@ string IcebergUtils::GetStorageLocation(ClientContext &context, const string &in
+ 		}
+ 		//! Fully qualified table reference, let's do a lookup
+ 		EntryLookupInfo table_info(CatalogType::TABLE_ENTRY, Identifier(qualified_name[2]));
+-		auto catalog_entry =
+-		    Catalog::GetEntry(context, Identifier(qualified_name[0]), Identifier(qualified_name[1]), table_info,
+-		                              OnEntryNotFound::RETURN_NULL);
++		auto catalog_entry = Catalog::GetEntry(context, Identifier(qualified_name[0]), Identifier(qualified_name[1]),
++		                                       table_info, OnEntryNotFound::RETURN_NULL);
+ 		if (!catalog_entry) {
+ 			break;
+ 		}
+diff --git a/src/planning/iceberg_optimizer.cpp b/src/planning/iceberg_optimizer.cpp
+index f7ca9b23..968959fc 100644
+--- a/src/planning/iceberg_optimizer.cpp
++++ b/src/planning/iceberg_optimizer.cpp
+@@ -118,9 +118,8 @@ void GuaranteeEqualityDeleteColumnsOptimizer::VisitOperator(unique_ptr<LogicalOp
+ 		}
+ 
+ 		auto &catalog = Catalog::GetSystemCatalog(context);
+-		auto &fn_entry =
+-		    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(),
+-	                                                 "iceberg_verify_equality_deletes");
++		auto &fn_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
++		    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), "iceberg_verify_equality_deletes"));
+ 		FunctionBinder function_binder(context);
+ 		vector<LogicalType> arg_types;
+ 		for (auto &a : args) {
+-- 
+2.39.5 (Apple Git-154)
+
