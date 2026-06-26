@@ -1,0 +1,13 @@
+diff --git a/src/storage/sqlite_query.cpp b/src/storage/sqlite_query.cpp
+index 81d063d..8590423 100644
+--- a/src/storage/sqlite_query.cpp
++++ b/src/storage/sqlite_query.cpp
+@@ -49,7 +49,7 @@ static unique_ptr<FunctionData> SQLiteQueryBind(ClientContext &context, TableFun
+ 		if (struct_val.IsNull()) {
+ 			throw BinderException("Parameters to sqlite_query cannot be NULL");
+ 		}
+-		if (struct_val.type().id() != LogicalTypeId::STRUCT) {
++		if (struct_val.type().id() != LogicalTypeId::STRUCT && struct_val.type().id() != LogicalTypeId::TUPLE) {
+ 			throw BinderException("Query parameters must be specified in a STRUCT");
+ 		}
+ 		params = StructValue::GetChildren(struct_val);

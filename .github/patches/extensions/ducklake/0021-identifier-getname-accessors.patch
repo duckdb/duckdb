@@ -367,7 +367,7 @@ index e0a9338a..6c8d3a9a 100644
  	                                                TableFilterSet &filters) const override;
  
 diff --git a/src/include/storage/ducklake_multi_file_reader.hpp b/src/include/storage/ducklake_multi_file_reader.hpp
-index d89dccfd..0c90111d 100644
+index ff5a074d..5140fa9f 100644
 --- a/src/include/storage/ducklake_multi_file_reader.hpp
 +++ b/src/include/storage/ducklake_multi_file_reader.hpp
 @@ -36,12 +36,12 @@ public:
@@ -699,7 +699,7 @@ index 5f0c4b5c..5da2e91a 100644
  			}
  		}
 diff --git a/src/storage/ducklake_inlined_data_reader.cpp b/src/storage/ducklake_inlined_data_reader.cpp
-index 88f4f48a..49de243d 100644
+index c9f2d100..7d99e668 100644
 --- a/src/storage/ducklake_inlined_data_reader.cpp
 +++ b/src/storage/ducklake_inlined_data_reader.cpp
 @@ -69,7 +69,7 @@ bool DuckLakeInlinedDataReader::TryInitializeScan(ClientContext &context, Global
@@ -823,10 +823,10 @@ index 456cfb3f..bd557b54 100644
  	if (read_info.scan_type != DuckLakeScanType::SCAN_TABLE || !filters.HasFilters()) {
  		// filter pushdown is only supported when scanning full tables
 diff --git a/src/storage/ducklake_multi_file_reader.cpp b/src/storage/ducklake_multi_file_reader.cpp
-index 4fc11c8c..2b65dec7 100644
+index 5cb9a668..ce90eae7 100644
 --- a/src/storage/ducklake_multi_file_reader.cpp
 +++ b/src/storage/ducklake_multi_file_reader.cpp
-@@ -220,20 +220,20 @@ vector<MultiFileColumnDefinition> DuckLakeMultiFileReader::ColumnsFromFieldData(
+@@ -217,20 +217,20 @@ vector<MultiFileColumnDefinition> DuckLakeMultiFileReader::ColumnsFromFieldData(
  }
  
  bool DuckLakeMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
@@ -850,7 +850,7 @@ index 4fc11c8c..2b65dec7 100644
                                            MultiFileReaderBindData &bind_data) {
  }
  
-@@ -545,7 +545,7 @@ ReaderInitializeType DuckLakeMultiFileReader::CreateMapping(
+@@ -542,7 +542,7 @@ ReaderInitializeType DuckLakeMultiFileReader::CreateMapping(
  		vector<string> source_names;
  		vector<FieldIndex> target_field_ids;
  		for (idx_t i = 0; i < MinValue(file_columns.size(), global_columns.size()); i++) {
@@ -859,7 +859,7 @@ index 4fc11c8c..2b65dec7 100644
  			target_field_ids.emplace_back(global_columns[i].identifier.GetValue<idx_t>());
  		}
  		auto positional_map = DuckLakeNameMap::CreatePositionalMapping(source_names, target_field_ids);
-@@ -596,7 +596,7 @@ unique_ptr<Expression> DuckLakeMultiFileReader::GetVirtualColumnExpression(
+@@ -588,7 +588,7 @@ MultiFileReaderVirtualColumnBinding DuckLakeMultiFileReader::GetVirtualColumnExp
  
  		FunctionBinder binder(context);
  		ErrorData error;
