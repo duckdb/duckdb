@@ -227,8 +227,8 @@ BufferHandle StandardBufferManager::Allocate(QueryContext context, MemoryTag tag
 
 BufferHandle StandardBufferManager::Allocate(QueryContext context, MemoryTag tag, BlockManager *block_manager,
                                              bool can_destroy) {
-	auto block = RegisterMemory(tag, block_manager->GetBlockSize(), block_manager->GetBlockHeaderSize(), can_destroy,
-	                            context);
+	auto block =
+	    RegisterMemory(tag, block_manager->GetBlockSize(), block_manager->GetBlockHeaderSize(), can_destroy, context);
 
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
@@ -717,8 +717,8 @@ void StandardBufferManager::ReserveMemory(idx_t size) {
 		return;
 	}
 	auto reservation =
-	    EvictBlocksOrThrow(QueryContext(), MemoryTag::EXTENSION, size, nullptr, "failed to reserve memory data of size %s%s",
-	                       StringUtil::BytesToHumanReadableString(size));
+	    EvictBlocksOrThrow(QueryContext(), MemoryTag::EXTENSION, size, nullptr,
+	                       "failed to reserve memory data of size %s%s", StringUtil::BytesToHumanReadableString(size));
 	reservation.size = 0;
 }
 
@@ -734,9 +734,9 @@ void StandardBufferManager::FreeReservedMemory(idx_t size) {
 //===--------------------------------------------------------------------===//
 data_ptr_t StandardBufferManager::BufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
 	auto &data = private_data->Cast<BufferAllocatorData>();
-	auto reservation =
-	    data.manager.EvictBlocksOrThrow(QueryContext(), MemoryTag::ALLOCATOR, size, nullptr, "failed to allocate data of size %s%s",
-	                                    StringUtil::BytesToHumanReadableString(size));
+	auto reservation = data.manager.EvictBlocksOrThrow(QueryContext(), MemoryTag::ALLOCATOR, size, nullptr,
+	                                                   "failed to allocate data of size %s%s",
+	                                                   StringUtil::BytesToHumanReadableString(size));
 	// We rely on manual tracking of this one. :(
 	reservation.size = 0;
 	return Allocator::Get(data.manager.db).AllocateData(size);

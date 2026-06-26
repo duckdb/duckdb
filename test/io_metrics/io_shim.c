@@ -25,14 +25,14 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#define MAX_FDS 65536
+#define MAX_FDS    65536
 #define MAX_PREFIX 16
 
 static char g_prefix[MAX_PREFIX][4096];
-static int  g_nprefix = 0;
+static int g_nprefix = 0;
 static char g_exclude[MAX_PREFIX][4096];
-static int  g_nexclude = 0;
-static unsigned char g_counted[MAX_FDS];     /* 1 if fd refers to a target file */
+static int g_nexclude = 0;
+static unsigned char g_counted[MAX_FDS]; /* 1 if fd refers to a target file */
 static long long g_read = 0, g_write = 0;
 
 static int parse_prefixes(const char *env, char dst[][4096]) {
@@ -52,8 +52,7 @@ static int parse_prefixes(const char *env, char dst[][4096]) {
 	return n;
 }
 
-__attribute__((constructor))
-static void ioshim_init(void) {
+__attribute__((constructor)) static void ioshim_init(void) {
 	g_nprefix = parse_prefixes(getenv("IOSHIM_INCLUDE"), g_prefix);
 	g_nexclude = parse_prefixes(getenv("IOSHIM_EXCLUDE"), g_exclude);
 }
@@ -94,8 +93,7 @@ static inline void add_write(int fd, ssize_t r) {
 	}
 }
 
-__attribute__((destructor))
-static void ioshim_dump(void) {
+__attribute__((destructor)) static void ioshim_dump(void) {
 	const char *out = getenv("IOSHIM_OUT");
 	FILE *f = out ? fopen(out, "w") : stderr;
 	if (!f) {
@@ -171,10 +169,10 @@ static ssize_t my_pwrite(int fd, const void *b, size_t n, off_t o) {
 }
 
 #define INTERPOSE(newf, oldf)                                                                                          \
-	__attribute__((used)) static struct {                                                                            \
-		const void *n;                                                                                               \
-		const void *o;                                                                                               \
-	} _ip_##oldf __attribute__((section("__DATA,__interpose"))) = {(const void *)(uintptr_t)&newf,                   \
+	__attribute__((used)) static struct {                                                                              \
+		const void *n;                                                                                                 \
+		const void *o;                                                                                                 \
+	} _ip_##oldf __attribute__((section("__DATA,__interpose"))) = {(const void *)(uintptr_t)&newf,                     \
 	                                                               (const void *)(uintptr_t)&oldf};
 INTERPOSE(my_open, open)
 INTERPOSE(my_openat, openat)
@@ -204,10 +202,10 @@ static ssize_t (*REAL(pread64))(int, void *, size_t, off_t) = NULL;
 static ssize_t (*REAL(pwrite64))(int, const void *, size_t, off_t) = NULL;
 
 #define RESOLVE(name)                                                                                                  \
-	do {                                                                                                             \
-		if (!REAL(name)) {                                                                                          \
-			REAL(name) = dlsym(RTLD_NEXT, #name);                                                                 \
-		}                                                                                                          \
+	do {                                                                                                               \
+		if (!REAL(name)) {                                                                                             \
+			REAL(name) = dlsym(RTLD_NEXT, #name);                                                                      \
+		}                                                                                                              \
 	} while (0)
 
 int open(const char *path, int flags, ...) {

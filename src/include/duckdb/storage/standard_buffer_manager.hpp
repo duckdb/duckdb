@@ -166,8 +166,8 @@ protected:
 	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice
 	void VerifyZeroReaders(BlockLock &l, shared_ptr<BlockHandle> &handle);
 
-	void BatchRead(QueryContext context, vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
-	               block_id_t first_block, block_id_t last_block);
+	void BatchRead(QueryContext context, vector<shared_ptr<BlockHandle>> &handles,
+	               const map<block_id_t, idx_t> &load_map, block_id_t first_block, block_id_t last_block);
 
 	bool EncryptTemporaryFiles();
 

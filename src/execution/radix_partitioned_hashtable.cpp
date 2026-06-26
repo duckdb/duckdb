@@ -953,9 +953,9 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	partition.progress = 1;
 
 	// Move the combined data back to the partition
-	partition.data = make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(gstate.context),
-	                                                sink.radix_ht.GetLayoutPtr(), MemoryTag::HASH_TABLE, nullptr,
-	                                                gstate.context);
+	partition.data =
+	    make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(gstate.context), sink.radix_ht.GetLayoutPtr(),
+	                                   MemoryTag::HASH_TABLE, nullptr, gstate.context);
 	partition.data->Combine(*ht->AcquirePartitionedData()->GetPartitions()[0]);
 
 	// Update thread-global state
