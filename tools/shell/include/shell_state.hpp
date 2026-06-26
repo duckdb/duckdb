@@ -341,6 +341,8 @@ public:
 	vector<string> TableColumnList(const char *zTab);
 	SuccessState ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement);
 	static bool UseDescribeRenderMode(const duckdb::SQLStatement &stmt, string &describe_table_name);
+	//! Route EXPLAIN ANALYZE output through the shell's direct-printing renderer when on an interactive console
+	void SetupPrettyExplain(duckdb::SQLStatement &statement);
 	void RenderTableMetadata(vector<ShellTableInfo> &result);
 
 	void PrintDatabaseError(const string &zErr);

@@ -139,7 +139,7 @@ string_t SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_
 				}
 			}
 		}
-		while (!IsCharacter(input_data[start_pos])) {
+		while (start_pos < input_size && !IsCharacter(input_data[start_pos])) {
 			start_pos++;
 		}
 		while (end_pos < input_size && !IsCharacter(input_data[end_pos])) {

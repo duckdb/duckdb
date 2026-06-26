@@ -1,0 +1,46 @@
+# name: test/parquet/variant/variant_partial_stats.test
+# description: An unconvertible nested overlay leaves that node's stats unknown instead of marking the
+# group: [variant]
+
+#              whole variant column's statistics INCONSISTENT
+
+require parquet
+
+# A heterogeneous list of objects: auto-shredding produces a deeply-nested overlay column whose parquet
+# statistics cannot be converted (a value column with data but no min/max, across row groups). Before the
+# fix this discarded the statistics of the *entire* variant column (shredding_state = INCONSISTENT). Now
+# only that node is left unknown and the rest of the column keeps usable shredded statistics.
+statement ok
+COPY (SELECT [CASE WHEN i % 4 = 0 THEN {'v': {'like': 'x'}} ELSE {'other': i::INTEGER} END]::VARIANT AS j
+      FROM range(5000) t(i))
+TO '{TEST_DIR}/variant_partial_stats.parquet' (ROW_GROUP_SIZE 2048)
+
+# the column is SHREDDED (not INCONSISTENT), so shredded statistics are still produced
+query I
+SELECT DISTINCT stats(j).shredding_state::VARCHAR FROM '{TEST_DIR}/variant_partial_stats.parquet'
+----
+SHREDDED
+
+# the convertible 'other' field keeps usable min/max statistics
+query II
+SELECT stats(j).fully_shredded.child_stats.other.stats.min::INTEGER,
+       stats(j).fully_shredded.child_stats.other.stats.max::INTEGER
+FROM '{TEST_DIR}/variant_partial_stats.parquet' LIMIT 1
+----
+1	4999
+
+# the data still reads back correctly (the un-prunable overlay node does not corrupt results)
+query II
+SELECT count(*), count(*) FILTER (WHERE j::VARCHAR LIKE '%like%')
+FROM '{TEST_DIR}/variant_partial_stats.parquet'
+----
+5000	1250
+
+# a filter on the shredded field prunes correctly: an out-of-range predicate returns no rows, and an
+# in-range predicate returns the matching rows (pruning must never drop a matching row)
+query II
+SELECT
+  (SELECT count(*) FROM '{TEST_DIR}/variant_partial_stats.parquet' WHERE j::VARCHAR LIKE '%999999%'),
+  (SELECT count(*) FROM '{TEST_DIR}/variant_partial_stats.parquet' WHERE j::VARCHAR LIKE '%''other'': 4999%')
+----
+0	1

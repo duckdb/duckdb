@@ -904,20 +904,6 @@ public:
 		if (data.size() != 2) {
 			return;
 		}
-		if (duckdb::StringUtil::Equals(data[0], "logical_plan") || duckdb::StringUtil::Equals(data[0], "logical_opt") ||
-		    duckdb::StringUtil::Equals(data[0], "physical_plan")) {
-			out.Print("\n┌─────────────────────────────┐\n");
-			out.Print("│┌───────────────────────────┐│\n");
-			if (duckdb::StringUtil::Equals(data[0], "logical_plan")) {
-				out.Print("││ Unoptimized Logical Plan  ││\n");
-			} else if (duckdb::StringUtil::Equals(data[0], "logical_opt")) {
-				out.Print("││  Optimized Logical Plan   ││\n");
-			} else if (duckdb::StringUtil::Equals(data[0], "physical_plan")) {
-				out.Print("││       Physical Plan       ││\n");
-			}
-			out.Print("│└───────────────────────────┘│\n");
-			out.Print("└─────────────────────────────┘\n");
-		}
 		out.Print(data[1]);
 	}
 

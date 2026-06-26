@@ -982,8 +982,11 @@ String:
     - ILikeToken
     - GlobToken
     - SimilarToToken
+    - RegexMatchToken
+    - RegexInsensitiveMatchToken
     - NotILikeOp
     - NotLikeOp
+    - NotRegexInsensitiveMatchOp
     - NotSimilarToOp
     - QualifiedOperator
     - QualifiedOperatorContents
