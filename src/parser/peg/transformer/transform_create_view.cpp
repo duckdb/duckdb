@@ -73,7 +73,7 @@ void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, 
 	}
 
 	auto table_description =
-	    TableDescription(info->GetQualifiedName().Catalog(), info->GetQualifiedName().Schema(), info->GetViewName());
+	    TableDescription(QualifiedName(info->GetQualifiedName().Catalog(), info->GetQualifiedName().Schema(), info->GetViewName()));
 	outer_select->from_table = make_uniq<BaseTableRef>(table_description);
 
 	auto outer_select_statement = make_uniq<SelectStatement>();

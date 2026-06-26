@@ -8,8 +8,7 @@ namespace duckdb {
 
 void CreateInfo::CopyProperties(CreateInfo &other) const {
 	other.type = type;
-	other.CatalogMutable() = GetQualifiedName().Catalog();
-	other.SchemaMutable() = GetQualifiedName().Schema();
+	other.GetQualifiedNameMutable() = GetQualifiedName();
 	other.on_conflict = on_conflict;
 	other.temporary = temporary;
 	other.internal = internal;

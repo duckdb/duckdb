@@ -49,11 +49,11 @@ PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
 			}
 			if (col_expr.ColumnNames().size() == 3) {
 				auto table_description =
-				    TableDescription(col_expr.ColumnNames()[0], col_expr.ColumnNames()[1], col_expr.ColumnNames()[2]);
+				    TableDescription(QualifiedName(col_expr.ColumnNames()[0], col_expr.ColumnNames()[1], col_expr.ColumnNames()[2]));
 				select_node->from_table = make_uniq<BaseTableRef>(table_description);
 			} else if (col_expr.ColumnNames().size() == 2) {
 				auto table_description =
-				    TableDescription(INVALID_CATALOG, col_expr.ColumnNames()[0], col_expr.ColumnNames()[1]);
+				    TableDescription(QualifiedName(INVALID_CATALOG, col_expr.ColumnNames()[0], col_expr.ColumnNames()[1]));
 				select_node->from_table = make_uniq<BaseTableRef>(table_description);
 			}
 		} else {
@@ -326,10 +326,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			throw ParserException("Unknown ordered aggregate \"%s\".", qualified_function.Name());
 		}
 	}
-	auto result =
-	    make_uniq<FunctionExpression>(qualified_function.Catalog(), qualified_function.Schema(),
-	                                  Identifier(lowercase_name), std::move(function_children), std::move(filter_expr),
-	                                  std::move(order_modifier), distinct, false, export_clause);
+	auto result = make_uniq<FunctionExpression>(
+	    QualifiedName(qualified_function.Catalog(), qualified_function.Schema(), Identifier(lowercase_name)),
+	    std::move(function_children), std::move(filter_expr), std::move(order_modifier), distinct, false,
+	    export_clause);
 
 	return std::move(result);
 }
@@ -398,7 +398,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayBoundedListExp
     PEGTransformer &transformer, const bool &has_result, vector<unique_ptr<ParsedExpression>> bounded_list_expression) {
 	bool is_array = has_result;
 	if (!is_array) {
-		return make_uniq<FunctionExpression>(INVALID_CATALOG, "main", "list_value", std::move(bounded_list_expression));
+		return make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, "main", "list_value"),
+		                                     std::move(bounded_list_expression));
 	}
 	return make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR, std::move(bounded_list_expression));
 }
@@ -428,7 +429,7 @@ PEGTransformerFactory::TransformParenthesisExpression(PEGTransformer &transforme
 	if (expression.size() == 1) {
 		return std::move(expression[0]);
 	}
-	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(expression));
+	return make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "row"), std::move(expression));
 }
 
 void PEGTransformerFactory::RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr) {
@@ -534,7 +535,7 @@ PEGTransformerFactory::TransformArrayParensSelect(PEGTransformer &transformer,
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructExpression(PEGTransformer &transformer,
                                                                               vector<FunctionArgument> struct_field) {
 	auto func_name = "struct_pack";
-	return make_uniq<FunctionExpression>(INVALID_CATALOG, "main", func_name, std::move(struct_field));
+	return make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, "main", func_name), std::move(struct_field));
 }
 
 FunctionArgument PEGTransformerFactory::TransformStructField(PEGTransformer &transformer,
@@ -1202,9 +1203,9 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 				throw ParserException("Too many identifiers found, expected schema.operator or operator");
 			}
 
-			auto func_expr =
-			    make_uniq<FunctionExpression>(INVALID_CATALOG, Identifier(std::move(schema_name)),
-			                                  Identifier(std::move(func_name)), std::move(children_function));
+			auto func_expr = make_uniq<FunctionExpression>(
+			    QualifiedName(INVALID_CATALOG, Identifier(std::move(schema_name)), Identifier(std::move(func_name))),
+			    std::move(children_function));
 			func_expr->IsOperatorMutable() = true;
 			expr = std::move(func_expr);
 		}
@@ -1413,8 +1414,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAtTimeZoneExpressio
 		vector<unique_ptr<ParsedExpression>> time_zone_children;
 		time_zone_children.push_back(std::move(time_zone_expr));
 		time_zone_children.push_back(std::move(expr));
-		auto func_expr =
-		    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "timezone", std::move(time_zone_children));
+		auto func_expr = make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "timezone"),
+		                                               std::move(time_zone_children));
 		expr = std::move(func_expr);
 	}
 	return expr;
@@ -1677,7 +1678,7 @@ PEGTransformerFactory::TransformMethodExpression(PEGTransformer &transformer, co
 	if (method_expression_arguments.has_ignore_nulls) {
 		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
 	}
-	auto result = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, Identifier(col_label),
+	auto result = make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, Identifier(col_label)),
 	                                            std::move(method_expression_arguments.arguments));
 	result->DistinctMutable() = method_expression_arguments.distinct;
 	if (!method_expression_arguments.order_bys.empty()) {
@@ -2202,7 +2203,8 @@ PEGTransformerFactory::TransformColumnsExpression(PEGTransformer &transformer, c
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformExtractExpression(PEGTransformer &transformer,
                                                   vector<unique_ptr<ParsedExpression>> extract_arguments) {
-	return make_uniq<FunctionExpression>(INVALID_CATALOG, "main", "date_part", std::move(extract_arguments));
+	return make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, "main", "date_part"),
+	                                     std::move(extract_arguments));
 }
 
 vector<unique_ptr<ParsedExpression>>
@@ -2260,17 +2262,19 @@ unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformRowExpression(PEGTransformer &transformer,
                                               optional<vector<unique_ptr<ParsedExpression>>> expression) {
 	if (!expression) {
-		return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row",
+		return make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "row"),
 		                                     vector<unique_ptr<ParsedExpression>>());
 	}
-	auto func_expr = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(*expression));
+	auto func_expr =
+	    make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "row"), std::move(*expression));
 	return std::move(func_expr);
 }
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformSubstringExpression(PEGTransformer &transformer,
                                                     vector<unique_ptr<ParsedExpression>> substring_arguments) {
-	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "substring", std::move(substring_arguments));
+	return make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "substring"),
+	                                     std::move(substring_arguments));
 }
 
 vector<unique_ptr<ParsedExpression>>
@@ -2317,7 +2321,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTrimExpression(PEGT
 	if (trim_arguments.trim_direction) {
 		function_name = *trim_arguments.trim_direction;
 	}
-	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, Identifier(function_name),
+	return make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, Identifier(function_name)),
 	                                     std::move(trim_arguments.expressions));
 }
 
@@ -2358,7 +2362,8 @@ string PEGTransformerFactory::TransformTrimTrailing(PEGTransformer &transformer)
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformOverlayExpression(PEGTransformer &transformer,
                                                   vector<unique_ptr<ParsedExpression>> overlay_arguments) {
-	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "overlay", std::move(overlay_arguments));
+	return make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "overlay"),
+	                                     std::move(overlay_arguments));
 }
 
 vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformOverlayParameters(
@@ -2563,7 +2568,8 @@ bool PEGTransformerFactory::TransformSubqueryExists(PEGTransformer &transformer)
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformMapExpression(PEGTransformer &transformer,
                                               vector<unique_ptr<ParsedExpression>> map_struct_expression) {
-	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "map", std::move(map_struct_expression));
+	return make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "map"),
+	                                     std::move(map_struct_expression));
 }
 
 vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformMapStructExpression(
@@ -2578,8 +2584,10 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformMapStructEx
 		}
 	}
 	vector<unique_ptr<ParsedExpression>> result;
-	result.push_back(make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_value", std::move(keys)));
-	result.push_back(make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_value", std::move(values)));
+	result.push_back(
+	    make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "list_value"), std::move(keys)));
+	result.push_back(
+	    make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "list_value"), std::move(values)));
 	return result;
 }
 
@@ -2608,7 +2616,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionEx
 		apply_children.push_back(std::move(in_expr));
 		apply_children.push_back(std::move(lambda_expression));
 
-		return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_apply", std::move(apply_children));
+		return make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "list_apply"),
+		                                     std::move(apply_children));
 	}
 
 	auto filter_expr = std::move(*list_comprehension_filter);
@@ -2617,15 +2626,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionEx
 	vector<FunctionArgument> struct_children;
 	struct_children.emplace_back("filter", std::move(filter_expr));
 	struct_children.emplace_back("result", std::move(result_expr));
-	auto struct_pack =
-	    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "struct_pack", std::move(struct_children));
+	auto struct_pack = make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "struct_pack"),
+	                                                 std::move(struct_children));
 
 	auto stage1_lambda = make_uniq<LambdaExpression>(lambda_columns, std::move(struct_pack));
 	vector<unique_ptr<ParsedExpression>> stage1_apply_args;
 	stage1_apply_args.push_back(std::move(in_expr));
 	stage1_apply_args.push_back(std::move(stage1_lambda));
-	auto stage1_apply =
-	    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_apply", std::move(stage1_apply_args));
+	auto stage1_apply = make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "list_apply"),
+	                                                  std::move(stage1_apply_args));
 
 	// STAGE 2: list_filter(stage1, elem -> struct_extract(elem, 'filter'))
 	auto elem_ref_filter = make_uniq<ColumnRefExpression>("elem");
@@ -2633,15 +2642,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionEx
 	vector<unique_ptr<ParsedExpression>> extract_filter_args;
 	extract_filter_args.push_back(std::move(elem_ref_filter));
 	extract_filter_args.push_back(std::move(filter_const));
-	auto filter_extract = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "struct_extract",
-	                                                    std::move(extract_filter_args));
+	auto filter_extract = make_uniq<FunctionExpression>(
+	    QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "struct_extract"), std::move(extract_filter_args));
 
 	auto stage2_lambda = make_uniq<LambdaExpression>(vector<string> {"elem"}, std::move(filter_extract));
 	vector<unique_ptr<ParsedExpression>> stage2_filter_args;
 	stage2_filter_args.push_back(std::move(stage1_apply));
 	stage2_filter_args.push_back(std::move(stage2_lambda));
-	auto stage2_filter =
-	    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_filter", std::move(stage2_filter_args));
+	auto stage2_filter = make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "list_filter"),
+	                                                   std::move(stage2_filter_args));
 
 	// STAGE 3: list_apply(stage2, elem -> struct_extract(elem, 'result'))
 	auto elem_ref_result = make_uniq<ColumnRefExpression>("elem");
@@ -2649,15 +2658,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionEx
 	vector<unique_ptr<ParsedExpression>> extract_result_args;
 	extract_result_args.push_back(std::move(elem_ref_result));
 	extract_result_args.push_back(std::move(result_const));
-	auto result_extract = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "struct_extract",
-	                                                    std::move(extract_result_args));
+	auto result_extract = make_uniq<FunctionExpression>(
+	    QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "struct_extract"), std::move(extract_result_args));
 
 	auto stage3_lambda = make_uniq<LambdaExpression>(vector<string> {"elem"}, std::move(result_extract));
 	vector<unique_ptr<ParsedExpression>> stage3_apply_args;
 	stage3_apply_args.push_back(std::move(stage2_filter));
 	stage3_apply_args.push_back(std::move(stage3_lambda));
 
-	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "list_apply", std::move(stage3_apply_args));
+	return make_uniq<FunctionExpression>(QualifiedName(INVALID_CATALOG, DEFAULT_SCHEMA, "list_apply"),
+	                                     std::move(stage3_apply_args));
 }
 
 unique_ptr<ParsedExpression>

@@ -241,9 +241,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		}
 
 		ExportedTableData exported_data;
-		exported_data.database_name = Identifier(catalog);
-		exported_data.table_name = info->Table();
-		exported_data.schema_name = info->GetQualifiedName().Schema();
+		exported_data.qualified_name =
+		    QualifiedName(Identifier(catalog), info->GetQualifiedName().Schema(), info->Table());
 
 		exported_data.file_path = info->file_path;
 

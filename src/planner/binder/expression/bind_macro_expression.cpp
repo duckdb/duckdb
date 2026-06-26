@@ -134,9 +134,7 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 
 	// Transfer the macro function attributes
 	auto &window_expr = expr->Cast<WindowExpression>();
-	window_expr.CatalogMutable() = agg_fn_expr.GetQualifiedName().Catalog();
-	window_expr.SchemaMutable() = agg_fn_expr.GetQualifiedName().Schema();
-	window_expr.FunctionNameMutable() = agg_fn_expr.FunctionName();
+	window_expr.GetQualifiedNameMutable() = agg_fn_expr.GetQualifiedName();
 	window_expr.GetArgumentsMutable().clear();
 	for (auto &arg : agg_fn_expr.GetArgumentsMutable()) {
 		window_expr.GetArgumentsMutable().push_back(std::move(arg));

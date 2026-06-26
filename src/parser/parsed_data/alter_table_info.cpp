@@ -11,8 +11,9 @@ namespace duckdb {
 ChangeOwnershipInfo::ChangeOwnershipInfo(CatalogType entry_catalog_type, Identifier entry_catalog_p,
                                          Identifier entry_schema_p, Identifier entry_name_p, Identifier owner_schema_p,
                                          Identifier owner_name_p, OnEntryNotFound if_not_found)
-    : AlterInfo(AlterType::CHANGE_OWNERSHIP, std::move(entry_catalog_p), std::move(entry_schema_p),
-                std::move(entry_name_p), if_not_found),
+    : AlterInfo(AlterType::CHANGE_OWNERSHIP,
+                QualifiedName(std::move(entry_catalog_p), std::move(entry_schema_p), std::move(entry_name_p)),
+                if_not_found),
       entry_catalog_type(entry_catalog_type), owner_schema(std::move(owner_schema_p)),
       owner_name(std::move(owner_name_p)) {
 }
@@ -51,7 +52,8 @@ string ChangeOwnershipInfo::ToString() const {
 //===--------------------------------------------------------------------===//
 SetCommentInfo::SetCommentInfo(CatalogType entry_catalog_type, Identifier entry_catalog_p, Identifier entry_schema_p,
                                Identifier entry_name_p, Value new_comment_value_p, OnEntryNotFound if_not_found)
-    : AlterInfo(AlterType::SET_COMMENT, std::move(entry_catalog_p), std::move(entry_schema_p), std::move(entry_name_p),
+    : AlterInfo(AlterType::SET_COMMENT,
+                QualifiedName(std::move(entry_catalog_p), std::move(entry_schema_p), std::move(entry_name_p)),
                 if_not_found),
       entry_catalog_type(entry_catalog_type), comment_value(std::move(new_comment_value_p)) {
 }
@@ -90,9 +92,7 @@ AlterTableInfo::AlterTableInfo(AlterTableType type) : AlterInfo(AlterType::ALTER
 }
 
 AlterTableInfo::AlterTableInfo(AlterTableType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_TABLE, data.GetQualifiedName().Catalog(), data.GetQualifiedName().Schema(),
-                data.GetQualifiedName().Name(), data.if_not_found),
-      alter_table_type(type) {
+    : AlterInfo(AlterType::ALTER_TABLE, data.GetQualifiedName(), data.if_not_found), alter_table_type(type) {
 }
 AlterTableInfo::~AlterTableInfo() {
 }
@@ -536,9 +536,7 @@ AlterViewInfo::AlterViewInfo(AlterViewType type) : AlterInfo(AlterType::ALTER_VI
 }
 
 AlterViewInfo::AlterViewInfo(AlterViewType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_VIEW, data.GetQualifiedName().Catalog(), data.GetQualifiedName().Schema(),
-                data.GetQualifiedName().Name(), data.if_not_found),
-      alter_view_type(type) {
+    : AlterInfo(AlterType::ALTER_VIEW, data.GetQualifiedName(), data.if_not_found), alter_view_type(type) {
 }
 AlterViewInfo::~AlterViewInfo() {
 }

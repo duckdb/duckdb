@@ -63,8 +63,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	D_ASSERT(!create_index_info->GetIndexName().empty());
 
 	// Plan the table scan.
-	TableDescription table_description(table_info.GetQualifiedName().Catalog(), table_info.GetQualifiedName().Schema(),
-	                                   table_info.GetQualifiedName().Name());
+	TableDescription table_description(QualifiedName(table_info.GetQualifiedName().Catalog(), table_info.GetQualifiedName().Schema(), table_info.GetQualifiedName().Name()));
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {

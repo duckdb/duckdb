@@ -16,7 +16,7 @@ ExportedTableInfo::ExportedTableInfo(ClientContext &context, ExportedTableData t
 
 TableCatalogEntry &ExportedTableInfo::GetEntry(ClientContext &context, const ExportedTableData &table_data) {
 	return Catalog::GetEntry<TableCatalogEntry>(
-	    context, QualifiedName(table_data.database_name, table_data.schema_name, table_data.table_name));
+	    context, QualifiedName(table_data.qualified_name.Catalog(), table_data.qualified_name.Schema(), table_data.qualified_name.Name()));
 }
 
 } // namespace duckdb

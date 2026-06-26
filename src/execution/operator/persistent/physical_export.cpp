@@ -59,12 +59,12 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 	ss << "COPY ";
 
 	//! NOTE: The catalog is explicitly not set here
-	if (exported_table.schema_name != DEFAULT_SCHEMA && !exported_table.schema_name.empty()) {
-		ss << SQLIdentifier(exported_table.schema_name) << ".";
+	if (exported_table.qualified_name.Schema() != DEFAULT_SCHEMA && !exported_table.qualified_name.Schema().empty()) {
+		ss << SQLIdentifier(exported_table.qualified_name.Schema()) << ".";
 	}
 
 	auto file_path = StringUtil::Replace(exported_table.file_path, "\\", "/");
-	ss << StringUtil::Format("%s FROM %s (", SQLIdentifier(exported_table.table_name), SQLString(file_path));
+	ss << StringUtil::Format("%s FROM %s (", SQLIdentifier(exported_table.qualified_name.Name()), SQLString(file_path));
 	// write the copy options
 	ss << "FORMAT '" << info.format << "'";
 	if (info.format == "csv") {

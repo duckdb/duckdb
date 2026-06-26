@@ -4,13 +4,14 @@
 namespace duckdb {
 
 AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type)
-    : AlterInfo(AlterType::ALTER_DATABASE, Identifier(), Identifier(), Identifier(), OnEntryNotFound::THROW_EXCEPTION),
+    : AlterInfo(AlterType::ALTER_DATABASE, QualifiedName(), OnEntryNotFound::THROW_EXCEPTION),
       alter_database_type(alter_database_type) {
 }
 
 AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type, Identifier catalog_p,
                                      OnEntryNotFound if_not_found)
-    : AlterInfo(AlterType::ALTER_DATABASE, std::move(catalog_p), Identifier(), Identifier(), if_not_found),
+    : AlterInfo(AlterType::ALTER_DATABASE, QualifiedName(std::move(catalog_p), Identifier(), Identifier()),
+                if_not_found),
       alter_database_type(alter_database_type) {
 }
 

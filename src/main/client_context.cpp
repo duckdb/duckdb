@@ -1374,7 +1374,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const Identifier &database
 			return;
 		}
 		// Create the table description.
-		result = make_uniq<TableDescription>(database_name, schema_name, table_name);
+		result = make_uniq<TableDescription>(QualifiedName(database_name, schema_name, table_name));
 		auto &catalog = Catalog::GetCatalog(*this, database_name);
 		result->readonly = catalog.GetAttached().IsReadOnly();
 		for (auto &column : table->GetColumns().Logical()) {

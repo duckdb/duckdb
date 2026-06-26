@@ -81,8 +81,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::FUNCTION;
 
 public:
-	DUCKDB_API FunctionExpression(Identifier catalog_name, Identifier schema_name, const Identifier &function_name,
-	                              vector<unique_ptr<ParsedExpression>> children,
+	DUCKDB_API FunctionExpression(QualifiedName function_name, vector<unique_ptr<ParsedExpression>> children,
 	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
@@ -90,8 +89,8 @@ public:
 	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
-	DUCKDB_API FunctionExpression(Identifier catalog_name, Identifier schema_name, const Identifier &function_name,
-	                              vector<FunctionArgument> children, unique_ptr<ParsedExpression> filter = nullptr,
+	DUCKDB_API FunctionExpression(QualifiedName function_name, vector<FunctionArgument> children,
+	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
 	DUCKDB_API FunctionExpression(const Identifier &function_name, vector<FunctionArgument> children,

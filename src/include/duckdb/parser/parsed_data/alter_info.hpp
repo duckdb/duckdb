@@ -52,7 +52,7 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::ALTER_INFO;
 
 public:
-	AlterInfo(AlterType type, Identifier catalog, Identifier schema, Identifier name, OnEntryNotFound if_not_found);
+	AlterInfo(AlterType type, QualifiedName name, OnEntryNotFound if_not_found);
 	~AlterInfo() override;
 
 	AlterType type;
