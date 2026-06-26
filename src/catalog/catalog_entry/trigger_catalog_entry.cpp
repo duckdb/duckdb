@@ -62,7 +62,8 @@ string TriggerCatalogEntry::ToSQL() const {
 		}
 	}
 	ss << " ON ";
-	ss << ParseInfo::QualifierToString(base_table->GetQualifiedName().Catalog(), base_table->GetQualifiedName().Schema(), base_table->Table());
+	ss << ParseInfo::QualifierToString(base_table->GetQualifiedName().Catalog(),
+	                                   base_table->GetQualifiedName().Schema(), base_table->Table());
 	if (!referencing_new_table.empty() || !referencing_old_table.empty()) {
 		ss << " REFERENCING";
 		if (!referencing_new_table.empty()) {

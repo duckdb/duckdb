@@ -244,7 +244,8 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	if (Settings::Get<EnableViewDependenciesSetting>(context)) {
 		dependencies = base.dependencies;
 	}
-	BindView(context, *base.query, base.GetQualifiedName().Catalog(), base.GetQualifiedName().Schema(), dependencies, base.aliases, base.types, base.names);
+	BindView(context, *base.query, base.GetQualifiedName().Catalog(), base.GetQualifiedName().Schema(), dependencies,
+	         base.aliases, base.types, base.names);
 }
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
@@ -712,8 +713,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
 
 		// Plan the table scan.
-		TableDescription table_description(create_index_info.GetQualifiedName().Catalog(), create_index_info.GetQualifiedName().Schema(),
-		                                   create_index_info.table);
+		TableDescription table_description(create_index_info.GetQualifiedName().Catalog(),
+		                                   create_index_info.GetQualifiedName().Schema(), create_index_info.table);
 		auto table_ref = make_uniq<BaseTableRef>(table_description);
 		auto bound_table = Bind(*table_ref);
 		auto plan = std::move(bound_table.plan);

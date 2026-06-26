@@ -72,7 +72,8 @@ string CreateIndexInfo::ToString() const {
 	}
 	result += SQLIdentifier(GetIndexName());
 	result += " ON ";
-	result += QualifierToString(temporary ? Identifier() : GetQualifiedName().Catalog(), GetQualifiedName().Schema(), table);
+	result +=
+	    QualifierToString(temporary ? Identifier() : GetQualifiedName().Catalog(), GetQualifiedName().Schema(), table);
 	if (index_type != "ART") {
 		result += " USING ";
 		result += SQLIdentifier(index_type);

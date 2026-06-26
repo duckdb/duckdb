@@ -18,8 +18,8 @@ SetColumnCommentInfo::SetColumnCommentInfo(Identifier catalog, Identifier schema
 }
 
 unique_ptr<AlterInfo> SetColumnCommentInfo::Copy() const {
-	auto result =
-	    make_uniq<SetColumnCommentInfo>(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name(), column_name, comment_value, if_not_found);
+	auto result = make_uniq<SetColumnCommentInfo>(GetQualifiedName().Catalog(), GetQualifiedName().Schema(),
+	                                              GetQualifiedName().Name(), column_name, comment_value, if_not_found);
 	result->type = type;
 	return std::move(result);
 }
@@ -40,7 +40,9 @@ string SetColumnCommentInfo::ToString() const {
 optional_ptr<CatalogEntry> SetColumnCommentInfo::TryResolveCatalogEntry(CatalogEntryRetriever &retriever) {
 	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, QualifiedName(GetQualifiedName().Name()));
 	auto entry = retriever.GetEntry(
-	    EntryLookupInfo(lookup_info, QualifiedName(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), lookup_info.GetEntryIdentifier())), if_not_found);
+	    EntryLookupInfo(lookup_info, QualifiedName(GetQualifiedName().Catalog(), GetQualifiedName().Schema(),
+	                                               lookup_info.GetEntryIdentifier())),
+	    if_not_found);
 
 	if (entry) {
 		catalog_entry_type = entry->type;

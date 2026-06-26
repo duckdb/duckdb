@@ -25,8 +25,9 @@ CatalogType ChangeOwnershipInfo::GetCatalogType() const {
 }
 
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
-	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name(), owner_schema,
-	                                                      owner_name, if_not_found);
+	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, GetQualifiedName().Catalog(),
+	                                                      GetQualifiedName().Schema(), GetQualifiedName().Name(),
+	                                                      owner_schema, owner_name, if_not_found);
 }
 
 string ChangeOwnershipInfo::ToString() const {
@@ -60,8 +61,9 @@ CatalogType SetCommentInfo::GetCatalogType() const {
 }
 
 unique_ptr<AlterInfo> SetCommentInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetQualifiedName().Name(), comment_value,
-	                                                 if_not_found);
+	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, GetQualifiedName().Catalog(),
+	                                                 GetQualifiedName().Schema(), GetQualifiedName().Name(),
+	                                                 comment_value, if_not_found);
 }
 
 string SetCommentInfo::ToString() const {
@@ -88,8 +90,8 @@ AlterTableInfo::AlterTableInfo(AlterTableType type) : AlterInfo(AlterType::ALTER
 }
 
 AlterTableInfo::AlterTableInfo(AlterTableType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_TABLE, data.GetQualifiedName().Catalog(), data.GetQualifiedName().Schema(), data.GetQualifiedName().Name(),
-                data.if_not_found),
+    : AlterInfo(AlterType::ALTER_TABLE, data.GetQualifiedName().Catalog(), data.GetQualifiedName().Schema(),
+                data.GetQualifiedName().Name(), data.if_not_found),
       alter_table_type(type) {
 }
 AlterTableInfo::~AlterTableInfo() {
@@ -534,8 +536,8 @@ AlterViewInfo::AlterViewInfo(AlterViewType type) : AlterInfo(AlterType::ALTER_VI
 }
 
 AlterViewInfo::AlterViewInfo(AlterViewType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_VIEW, data.GetQualifiedName().Catalog(), data.GetQualifiedName().Schema(), data.GetQualifiedName().Name(),
-                data.if_not_found),
+    : AlterInfo(AlterType::ALTER_VIEW, data.GetQualifiedName().Catalog(), data.GetQualifiedName().Schema(),
+                data.GetQualifiedName().Name(), data.if_not_found),
       alter_view_type(type) {
 }
 AlterViewInfo::~AlterViewInfo() {

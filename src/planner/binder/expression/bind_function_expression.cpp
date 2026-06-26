@@ -256,8 +256,8 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 		// function was not found - check if we this is a table function (to throw a more helpful error message)
 		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
 		                                      error_context);
-		auto table_func =
-		    GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(), table_function_lookup, OnEntryNotFound::RETURN_NULL);
+		auto table_func = GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
+		                                  table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
 			throw BinderException(function,
 			                      "Function \"%s\" is a table function but it was used as a scalar function. This "
@@ -267,8 +267,8 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 		// not a table function - rebind to throw an error
 		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
 		                                error_context);
-		func =
-		    GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(), function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		func = GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
+		                       function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	return *func;
 }

@@ -39,7 +39,8 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	auto &table = entry.Cast<TableCatalogEntry>();
 	auto &column_list = table.GetColumns();
 
-	auto bound_constraint = BindUniqueConstraint(*constraint_info.constraint, table_info.GetQualifiedName().Name(), column_list);
+	auto bound_constraint =
+	    BindUniqueConstraint(*constraint_info.constraint, table_info.GetQualifiedName().Name(), column_list);
 	auto &bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
 
 	// Create the CreateIndexInfo.
@@ -50,7 +51,8 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 
 	for (const auto &physical_index : bound_unique.keys) {
 		auto &col = column_list.GetColumn(physical_index);
-		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.GetQualifiedName().Name());
+		unique_ptr<ParsedExpression> parsed =
+		    make_uniq<ColumnRefExpression>(col.GetName(), table_info.GetQualifiedName().Name());
 		create_index_info->expressions.push_back(parsed->Copy());
 		create_index_info->parsed_expressions.push_back(parsed->Copy());
 	}
@@ -61,7 +63,8 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	D_ASSERT(!create_index_info->GetIndexName().empty());
 
 	// Plan the table scan.
-	TableDescription table_description(table_info.GetQualifiedName().Catalog(), table_info.GetQualifiedName().Schema(), table_info.GetQualifiedName().Name());
+	TableDescription table_description(table_info.GetQualifiedName().Catalog(), table_info.GetQualifiedName().Schema(),
+	                                   table_info.GetQualifiedName().Name());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
@@ -127,10 +130,11 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	} else {
 		// For any other ALTER, we retrieve the catalog entry directly.
 		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), QualifiedName(stmt.info->GetQualifiedName().Name()));
-		entry = entry_retriever.GetEntry(
-		    EntryLookupInfo(lookup_info, QualifiedName(stmt.info->GetQualifiedName().Catalog(), stmt.info->GetQualifiedName().Schema(),
-		                                               lookup_info.GetEntryIdentifier())),
-		    stmt.info->if_not_found);
+		entry =
+		    entry_retriever.GetEntry(EntryLookupInfo(lookup_info, QualifiedName(stmt.info->GetQualifiedName().Catalog(),
+		                                                                        stmt.info->GetQualifiedName().Schema(),
+		                                                                        lookup_info.GetEntryIdentifier())),
+		                             stmt.info->if_not_found);
 	}
 
 	auto &properties = GetStatementProperties();

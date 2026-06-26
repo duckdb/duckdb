@@ -26,8 +26,8 @@ void Binder::BindDropTrigger(DropStatement &stmt, StatementProperties &propertie
 	Identifier schema_name = base_table_ref.GetQualifiedName().Schema();
 	BindSchemaOrCatalog(catalog_name, schema_name);
 	// IF EXISTS only guards the trigger, not the table (PostgreSQL-compatible behavior).
-	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
-	    context, QualifiedName(catalog_name, schema_name, base_table_ref.Table()));
+	auto &table_entry =
+	    Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(catalog_name, schema_name, base_table_ref.Table()));
 	stmt.info->CatalogMutable() = table_entry.ParentCatalog().GetName();
 	stmt.info->SchemaMutable() = table_entry.ParentSchema().name;
 	properties.RegisterDBModify(table_entry.ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);

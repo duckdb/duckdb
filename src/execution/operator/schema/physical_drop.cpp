@@ -38,7 +38,8 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		auto &current_schema = default_entry.schema;
 		D_ASSERT(info->Name() != DEFAULT_SCHEMA);
 
-		if (info->GetQualifiedName().Catalog() == current_catalog && current_schema == info->GetQualifiedName().Name()) {
+		if (info->GetQualifiedName().Catalog() == current_catalog &&
+		    current_schema == info->GetQualifiedName().Name()) {
 			// Reset the schema to default
 			SchemaSetting::SetLocal(context.client, DEFAULT_SCHEMA);
 		}
@@ -49,8 +50,8 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		D_ASSERT(info->extra_drop_info);
 		auto &extra_info = info->extra_drop_info->Cast<ExtraDropSecretInfo>();
 		SecretManager::Get(context.client)
-		    .DropSecretByName(context.client, info->GetQualifiedName().Name(), info->if_not_found, extra_info.persist_mode,
-		                      Identifier(extra_info.secret_storage));
+		    .DropSecretByName(context.client, info->GetQualifiedName().Name(), info->if_not_found,
+		                      extra_info.persist_mode, Identifier(extra_info.secret_storage));
 		break;
 	}
 	case CatalogType::TRIGGER_ENTRY: {
@@ -64,13 +65,14 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		}
 		auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
 		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
-		    context.client, QualifiedName(info->GetQualifiedName().Catalog(), info->GetQualifiedName().Schema(), base_table_ref.Table()));
+		    context.client, QualifiedName(info->GetQualifiedName().Catalog(), info->GetQualifiedName().Schema(),
+		                                  base_table_ref.Table()));
 		auto &duck_table = table_entry.Cast<DuckTableEntry>();
 		auto transaction = duck_table.catalog.GetCatalogTransaction(context.client);
 		if (!duck_table.DropTrigger(transaction, info->GetQualifiedName().Name(), info->cascade)) {
 			if (info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"", info->GetQualifiedName().Name(),
-				                       base_table_ref.Table());
+				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"",
+				                       info->GetQualifiedName().Name(), base_table_ref.Table());
 			}
 		}
 		break;

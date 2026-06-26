@@ -1304,7 +1304,8 @@ void ClientContext::DisableProfiling() {
 void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 	RunFunctionInTransaction([&]() {
 		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(
-		    *this, QualifiedName(Identifier::InvalidCatalog(), info.GetQualifiedName().Schema(), info.GetFunctionName()),
+		    *this,
+		    QualifiedName(Identifier::InvalidCatalog(), info.GetQualifiedName().Schema(), info.GetFunctionName()),
 		    OnEntryNotFound::RETURN_NULL);
 		if (existing_function) {
 			auto &new_info = info.Cast<CreateScalarFunctionInfo>();

@@ -265,8 +265,8 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
 	                                error_context);
-	auto func =
-	    binder.GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(), function_lookup, OnEntryNotFound::RETURN_NULL);
+	auto func = binder.GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
+	                                   function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (func) {
 		// found the function - we are done
 		return func;
@@ -290,7 +290,8 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	if (function.GetQualifiedName().Catalog().empty()) {
 		colref = make_uniq<ColumnRefExpression>(function.GetQualifiedName().Schema());
 	} else {
-		colref = make_uniq<ColumnRefExpression>(function.GetQualifiedName().Schema(), function.GetQualifiedName().Catalog());
+		colref =
+		    make_uniq<ColumnRefExpression>(function.GetQualifiedName().Schema(), function.GetQualifiedName().Catalog());
 	}
 	auto new_colref = QualifyColumnName(*colref, error);
 	if (!new_colref) {

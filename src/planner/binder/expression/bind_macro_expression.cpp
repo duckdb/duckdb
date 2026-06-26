@@ -105,7 +105,8 @@ void ExpressionBinder::FindAggregateExprs(unique_ptr<ParsedExpression> &expr,
 
 		// Look up the function in the catalog, check to see if it is actually an aggregate function
 		EntryLookupInfo fn_entry(CatalogType::AGGREGATE_FUNCTION_ENTRY, QualifiedName(fn_expr.FunctionName()));
-		auto entry = GetCatalogEntry(fn_expr.GetQualifiedName().Catalog(), fn_expr.GetQualifiedName().Schema(), fn_entry, OnEntryNotFound::RETURN_NULL);
+		auto entry = GetCatalogEntry(fn_expr.GetQualifiedName().Catalog(), fn_expr.GetQualifiedName().Schema(),
+		                             fn_entry, OnEntryNotFound::RETURN_NULL);
 
 		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			exprs.push_back(expr);
