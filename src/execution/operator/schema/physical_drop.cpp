@@ -36,7 +36,7 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		auto &default_entry = client_data.catalog_search_path->GetDefault();
 		auto &current_catalog = default_entry.GetCatalog();
 		auto &current_schema = default_entry.GetSchema();
-		D_ASSERT(info->Name() != DEFAULT_SCHEMA);
+		D_ASSERT(info->GetQualifiedName().Name() != DEFAULT_SCHEMA);
 
 		if (info->GetQualifiedName().Catalog() == current_catalog &&
 		    current_schema == info->GetQualifiedName().Name()) {
