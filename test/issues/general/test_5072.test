@@ -2,6 +2,9 @@
 # description: Issue 5072: CARDINALITY on NULL map results in non-deterministic result
 # group: [general]
 
+# the LIST(TUPLE) table below requires v2.0.0+ storage - use a persistent v2.0.0 database
+load {TEST_DIR}/test_5072.db readwrite v2.0.0
+
 query I
 SELECT CARDINALITY(CAST(NULL AS MAP(VARCHAR, INT)));
 ----

@@ -2,6 +2,9 @@
 # description: Test inserting structs with different names and unnamed structs
 # group: [struct]
 
+# TUPLE columns require v2.0.0+ storage - use a persistent v2.0.0 database
+load {TEST_DIR}/struct_different_names.db readwrite v2.0.0
+
 # an unnamed struct produces a TUPLE column, which is storable
 statement ok
 CREATE TABLE wrong AS FROM (VALUES (ROW(3)));

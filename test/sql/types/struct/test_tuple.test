@@ -173,7 +173,7 @@ SELECT e, typeof(e), one, typeof(one), two, typeof(two) FROM v2.tup;
 statement ok
 DETACH v2;
 
-# storage: TUPLE columns require v2.0.0+ - older engines store unnamed STRUCTs on disk but reject them as table columns
+# storage: TUPLE columns are not storable in older formats (older engines reject the unnamed STRUCT on disk)
 statement ok
 ATTACH '__TEST_DIR__/tuple_v15.db' AS v15 (STORAGE_VERSION 'v1.5.0');
 

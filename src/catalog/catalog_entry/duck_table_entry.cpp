@@ -75,7 +75,7 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 			}
 		} break;
 		case LogicalTypeId::TUPLE: {
-			// older engines store TUPLEs as unnamed STRUCTs, which they reject as table columns
+			// TUPLEs are stored as unnamed STRUCTs on disk, which older engines reject - gate them to v2.0.0+
 			const auto storage_version = db.GetStorageManager().GetStorageVersion();
 
 			if (storage_version < StorageVersion::V2_0_0) {
