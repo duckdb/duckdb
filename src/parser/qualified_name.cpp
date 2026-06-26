@@ -2,6 +2,7 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/planner/binding_alias.hpp"
 
 namespace duckdb {
 

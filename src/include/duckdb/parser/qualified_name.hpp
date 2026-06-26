@@ -9,11 +9,13 @@
 #pragma once
 
 #include "duckdb/common/string.hpp"
-#include "duckdb/planner/binding_alias.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+struct BindingAlias;
 
 //! Controls how QualifiedName::ToString renders the schema qualification
 enum class QualifiedNameToStringMode : uint8_t {
