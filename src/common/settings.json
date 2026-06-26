@@ -1208,6 +1208,13 @@
         "custom_implementation": true
     },
     {
+        "name": "read_ahead_depth",
+        "description": "Number of scan jobs the multi-file reader prefetches ahead of decoding. -1 = automatic (based on thread count), 0 = disabled.",
+        "type": "BIGINT",
+        "default_scope": "global",
+        "default_value": "-1"
+    },
+    {
         "name": "scalar_subquery_error_on_multiple_rows",
         "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
         "type": "BOOLEAN",
