@@ -12,6 +12,7 @@
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
+#include "duckdb/common/multi_file/multi_file_read_ahead.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
@@ -139,6 +140,7 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	explicit MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_list_p)
 	    : file_list(*owned_file_list_p), owned_file_list(std::move(owned_file_list_p)) {
 	}
+	~MultiFileGlobalState();
 
 	//! The file list to scan
 	MultiFileList &file_list;
@@ -172,6 +174,9 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	atomic<bool> finished {false};
 
 	unique_ptr<GlobalTableFunctionState> global_state;
+
+	//! Drives read-ahead I/O for the scan (claims + schedules jobs ahead of decoding), null when read-ahead is off
+	unique_ptr<MultiFileReadAhead> read_ahead;
 
 	optional_ptr<const PhysicalOperator> op;
 

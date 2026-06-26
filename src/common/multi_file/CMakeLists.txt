@@ -6,6 +6,7 @@ add_library_unity(
   multi_file_function.cpp
   multi_file_list.cpp
   multi_file_reader.cpp
+  multi_file_read_ahead.cpp
   multi_file_column_mapper.cpp
   union_by_name.cpp)
 set(ALL_OBJECT_FILES
