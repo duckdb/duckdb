@@ -173,20 +173,14 @@ SELECT e, typeof(e), one, typeof(one), two, typeof(two) FROM v2.tup;
 statement ok
 DETACH v2;
 
-# storage: older formats fall back to an unnamed STRUCT on disk, reconstructed as TUPLE on read
+# storage: TUPLE columns require v2.0.0+ - older engines store unnamed STRUCTs on disk but reject them as table columns
 statement ok
 ATTACH '__TEST_DIR__/tuple_v15.db' AS v15 (STORAGE_VERSION 'v1.5.0');
 
-statement ok
+statement error
 CREATE TABLE v15.tup AS SELECT row(2, 'b') AS two;
+----
+TUPLE columns are not supported in storage versions prior to v2.0.0
 
 statement ok
 DETACH v15;
-
-statement ok
-ATTACH '__TEST_DIR__/tuple_v15.db' AS v15 (READ_ONLY);
-
-query TT
-SELECT two, typeof(two) FROM v15.tup;
-----
-(2, b)	TUPLE(INTEGER, VARCHAR)

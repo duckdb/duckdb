@@ -98,6 +98,12 @@
       ]
     },
     {
+      "reason": "Tuples cannot be persisted on older storage",
+      "paths": [
+        "test/sql/types/struct/test_tuple.test"
+      ]
+    },
+    {
       "reason": "test_all_types() require latest storage",
       "paths": [
         "test/fuzzer/duckfuzz/arg_minmax_by_decimal.test",
