@@ -1,5 +1,4 @@
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/checked_integer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -19,7 +18,6 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/function/scalar/operator_functions.hpp"
@@ -1323,7 +1321,7 @@ double InterpolateOperator::Operation(const double &lo, const double d, const do
 
 template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi) {
-	return dtime_t(std::llround(static_cast<double>(lo.micros) * (1.0 - d) + static_cast<double>(hi.micros) * d));
+	return dtime_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
 }
 
 template <>
