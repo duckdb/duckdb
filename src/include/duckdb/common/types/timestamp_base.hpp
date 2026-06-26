@@ -63,10 +63,10 @@ struct timestamp_base_t { // NOLINT
 	// special values
 	static constexpr timestamp_base_t infinity() { // NOLINT
 		return timestamp_base_t(NumericLimits<int64_t>::Maximum());
-	}                                         // NOLINT
+	}                                               // NOLINT
 	static constexpr timestamp_base_t ninfinity() { // NOLINT
 		return timestamp_base_t(-NumericLimits<int64_t>::Maximum());
-	}                                            // NOLINT
+	}                                                  // NOLINT
 	static constexpr inline timestamp_base_t epoch() { // NOLINT
 		return timestamp_base_t(0);
 	} // NOLINT
