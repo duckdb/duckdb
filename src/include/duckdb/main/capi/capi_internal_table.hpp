@@ -48,6 +48,10 @@ struct CTableBindData : public TableFunctionData {
 	void *bind_data = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
 	unique_ptr<NodeStatistics> stats;
+
+	bool SupportStatementCache() const override {
+		return false;
+	}
 };
 
 struct CTableInternalBindInfo {

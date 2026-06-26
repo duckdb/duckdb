@@ -92,7 +92,13 @@ public:
 	vector<TableIndex> GetTableIndex() const override;
 	//! Skips the serialization check in VerifyPlan
 	bool SupportSerialization() const override {
-		return function.verify_serialization;
+		if (!function.verify_serialization) {
+			return false;
+		}
+		if (function.HasSerializationCallbacks()) {
+			return true;
+		}
+		return function.bind && (!bind_data || bind_data->SupportStatementCache());
 	}
 
 	void Serialize(Serializer &serializer) const override;
