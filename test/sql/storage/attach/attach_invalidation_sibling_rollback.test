@@ -53,12 +53,6 @@ SELECT COUNT(*) FROM a.tbl;
 ----
 <REGEX>:.*Database "a" has been invalidated because checkpointing failed.*
 
-statement ok con2
-PRAGMA debug_checkpoint_abort='none';
-
-statement ok con2
-SET wal_autocheckpoint='1TB';
-
 # con1 touched the invalidated "a", so its rollback fails
 statement error con1
 ROLLBACK;
