@@ -188,8 +188,8 @@ QualifiedName Binder::ResolveCatalog(ClientContext &context, const QualifiedName
 	if (IsInvalidCatalog(catalog)) {
 		// the leading component (if any) is a schema - resolve the catalog that holds it, else the default database
 		auto &search_path = ClientData::Get(context).catalog_search_path;
-		catalog = path.empty() ? search_path->GetDefault().GetCatalog()
-		                       : Identifier(search_path->GetDefaultCatalog(path[0]));
+		catalog =
+		    path.empty() ? search_path->GetDefault().GetCatalog() : Identifier(search_path->GetDefaultCatalog(path[0]));
 		if (IsInvalidCatalog(catalog)) {
 			catalog = DatabaseManager::GetDefaultDatabase(context);
 		}
