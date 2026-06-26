@@ -16,8 +16,6 @@
 #include "duckdb/storage/compression/patas/patas.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 
-#include <cmath>
-
 namespace duckdb {
 
 template <class T>
