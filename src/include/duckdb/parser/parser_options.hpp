@@ -20,7 +20,7 @@ struct ParserCache;
 struct ParserOptions {
 	bool preserve_identifier_case = true;
 	bool integer_division = false;
-	bool transformer_trampoline_style = false;
+	bool debug_transformer_trampoline_style = false;
 	idx_t max_expression_depth = 1000;
 	optional_ptr<const ExtensionCallbackManager> extensions;
 	AllowParserOverride parser_override_setting = AllowParserOverride::DEFAULT_OVERRIDE;

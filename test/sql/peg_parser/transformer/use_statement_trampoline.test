@@ -8,7 +8,7 @@ statement ok
 ATTACH ':memory:' AS trampoline_use_catalog
 
 statement ok
-SET transformer_trampoline_style=true
+SET debug_transformer_trampoline_style=true
 
 statement error
 SELECT 1;

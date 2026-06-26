@@ -219,7 +219,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 
 const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &
 PEGTransformerFactory::GetTransformFunctions(ParserOptions &options) {
-	if (options.transformer_trampoline_style) {
+	if (options.debug_transformer_trampoline_style) {
 		return trampoline_transform_functions;
 	}
 	return sql_transform_functions;
