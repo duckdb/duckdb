@@ -82,7 +82,7 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	// Deduplicate by catalog name.
 	identifier_set_t seen_remote_catalogs;
 	for (auto &entry : search_path) {
-		auto catalog_entry = Catalog::GetCatalogEntry(binder.context, entry.catalog);
+		auto catalog_entry = Catalog::GetCatalogEntry(binder.context, entry.GetCatalog());
 		if (!catalog_entry) {
 			continue;
 		}
@@ -619,10 +619,10 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	FindRemoteCatalogsInSearchPath();
 	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(func_expr.FunctionName()));
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
-		const Identifier &schema = schema_name.empty() ? local_entry.schema : schema_name;
+		const Identifier &schema = schema_name.empty() ? local_entry.GetSchema() : schema_name;
 		auto entry = Catalog::GetEntry(
 		    binder.context,
-		    EntryLookupInfo(func_lookup, QualifiedName(local_entry.catalog, schema, func_lookup.GetEntryIdentifier())),
+		    EntryLookupInfo(func_lookup, QualifiedName(local_entry.GetCatalog(), schema, func_lookup.GetEntryIdentifier())),
 		    OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 			auto &tf_entry = entry->Cast<TableFunctionCatalogEntry>();
@@ -785,9 +785,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		// If the ref specifies a schema, use it; otherwise use the search path schema
-		const auto &schema = schema_name.empty() ? local_entry.schema : schema_name;
+		const auto &schema = schema_name.empty() ? local_entry.GetSchema() : schema_name;
 		auto entry = Catalog::GetEntry(binder.context,
-		                               EntryLookupInfo(table_lookup, QualifiedName(local_entry.catalog, schema,
+		                               EntryLookupInfo(table_lookup, QualifiedName(local_entry.GetCatalog(), schema,
 		                                                                           table_lookup.GetEntryIdentifier())),
 		                               OnEntryNotFound::RETURN_NULL);
 		if (entry) {

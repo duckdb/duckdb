@@ -186,7 +186,7 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 			// We have a schema name, use default catalog
 			auto &client_data = ClientData::Get(context);
 			auto &default_entry = client_data.catalog_search_path->GetDefault();
-			catalog_name = default_entry.catalog;
+			catalog_name = default_entry.GetCatalog();
 			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
 			if (!schema_entry) {
 				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.",

@@ -512,8 +512,8 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		}
 		if (entries.empty()) {
 			auto &default_entry = search_path.GetDefault();
-			if (!IsInvalidCatalog(default_entry.catalog)) {
-				entries.emplace_back(default_entry.catalog, schema);
+			if (!IsInvalidCatalog(default_entry.GetCatalog())) {
+				entries.emplace_back(default_entry.GetCatalog(), schema);
 			} else {
 				entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
 			}
@@ -544,7 +544,7 @@ void FindMinimalQualification(CatalogEntryRetriever &retriever, const Identifier
 	bool found = false;
 	auto entries = GetCatalogEntries(retriever, Identifier::InvalidCatalog(), schema_name);
 	for (auto &entry : entries) {
-		if (entry.catalog == catalog_name && entry.schema == schema_name) {
+		if (entry.GetCatalog() == catalog_name && entry.GetSchema() == schema_name) {
 			found = true;
 			break;
 		}
@@ -558,7 +558,7 @@ void FindMinimalQualification(CatalogEntryRetriever &retriever, const Identifier
 	found = false;
 	entries = GetCatalogEntries(retriever, catalog_name, Identifier::InvalidSchema());
 	for (auto &entry : entries) {
-		if (entry.catalog == catalog_name && entry.schema == schema_name) {
+		if (entry.GetCatalog() == catalog_name && entry.GetSchema() == schema_name) {
 			found = true;
 			break;
 		}
@@ -850,7 +850,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		// try all schemas for this catalog
 		auto entries = GetCatalogEntries(retriever, GetName(), Identifier::InvalidSchema());
 		for (auto &entry : entries) {
-			auto &candidate_schema = entry.schema;
+			auto &candidate_schema = entry.GetSchema();
 			auto transaction = GetCatalogTransaction(context);
 			auto result = TryLookupEntryInternal(
 			    transaction, EntryLookupInfo(lookup_info, QualifiedName(GetName(), candidate_schema,
@@ -900,9 +900,9 @@ CatalogEntryLookup Catalog::TryLookupEntryAcrossCatalogs(CatalogEntryRetriever &
 	for (auto &entry : entries) {
 		optional_ptr<Catalog> catalog_entry;
 		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-			catalog_entry = Catalog::GetCatalogEntry(retriever, entry.catalog);
+			catalog_entry = Catalog::GetCatalogEntry(retriever, entry.GetCatalog());
 		} else {
-			catalog_entry = &Catalog::GetCatalog(retriever, entry.catalog);
+			catalog_entry = &Catalog::GetCatalog(retriever, entry.GetCatalog());
 		}
 		if (!catalog_entry) {
 			return {nullptr, nullptr, ErrorData()};
@@ -910,9 +910,9 @@ CatalogEntryLookup Catalog::TryLookupEntryAcrossCatalogs(CatalogEntryRetriever &
 		D_ASSERT(catalog_entry);
 		auto lookup_behavior = catalog_entry->CatalogTypeLookupRule(lookup_info.GetCatalogType());
 		if (lookup_behavior == CatalogLookupBehavior::STANDARD) {
-			lookups.emplace_back(*catalog_entry, entry.schema, lookup_info);
+			lookups.emplace_back(*catalog_entry, entry.GetSchema(), lookup_info);
 		} else if (lookup_behavior == CatalogLookupBehavior::LOWER_PRIORITY) {
-			final_lookups.emplace_back(*catalog_entry, entry.schema, lookup_info);
+			final_lookups.emplace_back(*catalog_entry, entry.GetSchema(), lookup_info);
 		}
 	}
 
@@ -1184,7 +1184,7 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(CatalogEntryRetriever &retri
 	auto &catalog_name = schema_lookup.GetCatalog();
 	auto entries = GetCatalogEntries(retriever, catalog_name, schema_lookup.GetEntryIdentifier());
 	for (idx_t i = 0; i < entries.size(); i++) {
-		auto catalog = Catalog::GetCatalogEntry(retriever, entries[i].catalog);
+		auto catalog = Catalog::GetCatalogEntry(retriever, entries[i].GetCatalog());
 		if (!catalog) {
 			// skip if it is not an attached database
 			continue;
@@ -1236,7 +1236,7 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(CatalogEntryRetriever 
 
 		auto &search_path = retriever.GetSearchPath();
 		for (auto &entry : search_path.Get()) {
-			auto &catalog = Catalog::GetCatalog(retriever, entry.catalog);
+			auto &catalog = Catalog::GetCatalog(retriever, entry.GetCatalog());
 			if (inserted_catalogs.find(catalog) != inserted_catalogs.end()) {
 				continue;
 			}

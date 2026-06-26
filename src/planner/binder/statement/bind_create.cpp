@@ -148,8 +148,8 @@ void Binder::SearchSchema(CreateInfo &info) {
 	auto &search_path = ClientData::Get(context).catalog_search_path;
 	if (IsInvalidCatalog(catalog) && IsInvalidSchema(schema)) {
 		auto &default_entry = search_path->GetDefault();
-		catalog = default_entry.catalog;
-		schema = default_entry.schema;
+		catalog = default_entry.GetCatalog();
+		schema = default_entry.GetSchema();
 	} else if (IsInvalidSchema(schema)) {
 		schema = Identifier(search_path->GetDefaultSchema(context, catalog));
 	} else if (IsInvalidCatalog(catalog)) {

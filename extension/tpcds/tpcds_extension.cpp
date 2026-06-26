@@ -27,7 +27,7 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunction
 	auto result = make_uniq<DSDGenFunctionData>();
 
 	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
-	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
+	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().GetSchema();
 	result->catalog = current_catalog;
 	result->schema = current_schema;
 
