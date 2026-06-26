@@ -6,9 +6,13 @@ namespace duckdb {
 
 SourceResultType PhysicalCreateTrigger::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                         OperatorSourceInput &input) const {
-	auto &catalog = Catalog::GetCatalog(context.client, info->Catalog());
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context.client, info->Catalog(), info->Schema(),
-	                                                   info->base_table->Table());
+	auto &catalog = Catalog::GetCatalog(context.client, info->GetQualifiedName().Catalog());
+	// The trigger inherits the catalog/schema of its base table, so reuse them to look up the table. The base table
+	// reference preserves the name exactly as written, which may be a two-part `catalog.table` reference that would
+	// otherwise be misread as `schema.table` here.
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(
+	    context.client, QualifiedName(info->GetQualifiedName().Catalog(), info->GetQualifiedName().Schema(),
+	                                  info->base_table->GetQualifiedName().Name()));
 	auto transaction = catalog.GetCatalogTransaction(context.client);
 	table.CreateTrigger(transaction, *info);
 

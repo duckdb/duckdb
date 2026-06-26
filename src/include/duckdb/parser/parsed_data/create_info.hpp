@@ -59,14 +59,8 @@ public:
 	QualifiedName &GetQualifiedNameMutable() {
 		return qualified_name;
 	}
-	const Identifier &Catalog() const {
-		return qualified_name.Catalog();
-	}
 	Identifier &CatalogMutable() {
 		return qualified_name.CatalogMutable();
-	}
-	const Identifier &Schema() const {
-		return qualified_name.Schema();
 	}
 	Identifier &SchemaMutable() {
 		return qualified_name.SchemaMutable();

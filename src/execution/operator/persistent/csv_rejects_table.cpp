@@ -9,15 +9,15 @@ namespace duckdb {
 
 TableCatalogEntry &CSVRejectsTable::GetErrorsTable(ClientContext &context) {
 	auto &temp_catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
-	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, Identifier::TempCatalog(),
-	                                                             Identifier::DefaultSchema(), Identifier(errors_table));
+	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(
+	    context, QualifiedName(Identifier::TempCatalog(), Identifier::DefaultSchema(), Identifier(errors_table)));
 	return table_entry;
 }
 
 TableCatalogEntry &CSVRejectsTable::GetScansTable(ClientContext &context) {
 	auto &temp_catalog = Catalog::GetCatalog(context, Identifier::TempCatalog());
-	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, Identifier::TempCatalog(),
-	                                                             Identifier::DefaultSchema(), Identifier(scan_table));
+	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(
+	    context, QualifiedName(Identifier::TempCatalog(), Identifier::DefaultSchema(), Identifier(scan_table)));
 	return table_entry;
 }
 

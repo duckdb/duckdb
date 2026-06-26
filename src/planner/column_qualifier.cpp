@@ -263,15 +263,16 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	QueryErrorContext error_context(function.GetQueryLocation());
 	binder.BindSchemaOrCatalog(function.GetQualifiedNameMutable());
 
-	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.FunctionName(), error_context);
-	auto func =
-	    binder.GetCatalogEntry(function.Catalog(), function.Schema(), function_lookup, OnEntryNotFound::RETURN_NULL);
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
+	                                error_context);
+	auto func = binder.GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
+	                                   function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (func) {
 		// found the function - we are done
 		return func;
 	}
 	// not a table function - check if the schema is set
-	if (function.Schema().empty()) {
+	if (function.GetQualifiedName().Schema().empty()) {
 		// schema is not set - leave it as-is
 		return nullptr;
 	}
@@ -286,10 +287,11 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	// the function exists in the system catalog - turn this into a dot call
 	ErrorData error;
 	unique_ptr<ColumnRefExpression> colref;
-	if (function.Catalog().empty()) {
-		colref = make_uniq<ColumnRefExpression>(function.Schema());
+	if (function.GetQualifiedName().Catalog().empty()) {
+		colref = make_uniq<ColumnRefExpression>(function.GetQualifiedName().Schema());
 	} else {
-		colref = make_uniq<ColumnRefExpression>(function.Schema(), function.Catalog());
+		colref =
+		    make_uniq<ColumnRefExpression>(function.GetQualifiedName().Schema(), function.GetQualifiedName().Catalog());
 	}
 	auto new_colref = QualifyColumnName(*colref, error);
 	if (!new_colref) {

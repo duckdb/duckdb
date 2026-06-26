@@ -27,7 +27,8 @@ public:
 	}
 	explicit BaseTableRef(const TableDescription &description)
 	    : TableRef(TableReferenceType::BASE_TABLE),
-	      qualified_name(description.database, description.schema, description.table) {
+	      qualified_name(description.qualified_name.Catalog(), description.qualified_name.Schema(),
+	                     description.qualified_name.Name()) {
 	}
 
 	//! The timestamp/version at which to read this table entry (if any)
@@ -40,14 +41,8 @@ public:
 	QualifiedName &GetQualifiedNameMutable() {
 		return qualified_name;
 	}
-	const Identifier &Catalog() const {
-		return qualified_name.Catalog();
-	}
 	Identifier &CatalogMutable() {
 		return qualified_name.CatalogMutable();
-	}
-	const Identifier &Schema() const {
-		return qualified_name.Schema();
 	}
 	Identifier &SchemaMutable() {
 		return qualified_name.SchemaMutable();

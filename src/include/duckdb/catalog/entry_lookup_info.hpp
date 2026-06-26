@@ -11,24 +11,41 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 class BoundAtClause;
 
 struct EntryLookupInfo {
 public:
-	EntryLookupInfo(CatalogType catalog_type, Identifier name, QueryErrorContext error_context = QueryErrorContext());
-	EntryLookupInfo(CatalogType catalog_type, Identifier name, optional_ptr<BoundAtClause> at_clause,
+	//! Look up a (possibly catalog/schema-qualified) entry. The catalog/schema qualification - if any - is carried in
+	//! the QualifiedName; an unqualified lookup passes a bare QualifiedName(name).
+	EntryLookupInfo(CatalogType catalog_type, QualifiedName name,
+	                QueryErrorContext error_context = QueryErrorContext());
+	EntryLookupInfo(CatalogType catalog_type, QualifiedName name, optional_ptr<BoundAtClause> at_clause,
 	                QueryErrorContext error_context);
-	EntryLookupInfo(const EntryLookupInfo &parent, Identifier name);
+	//! Deprecated: pass a QualifiedName instead (use QualifiedName(name) for an unqualified lookup)
+	[[deprecated("Pass a QualifiedName instead, e.g. QualifiedName(name)")]] EntryLookupInfo(
+	    CatalogType catalog_type, Identifier name, QueryErrorContext error_context = QueryErrorContext());
+	[[deprecated("Pass a QualifiedName instead, e.g. QualifiedName(name)")]] EntryLookupInfo(
+	    CatalogType catalog_type, Identifier name, optional_ptr<BoundAtClause> at_clause,
+	    QueryErrorContext error_context);
+	//! Re-use a parent lookup's type/at-clause/error-context with a different (re-qualified) name
+	EntryLookupInfo(const EntryLookupInfo &parent, QualifiedName name);
 	EntryLookupInfo(const EntryLookupInfo &parent, optional_ptr<BoundAtClause> at_clause);
 
 public:
 	CatalogType GetCatalogType() const;
+	//! The (optionally qualified) name being looked up
+	const QualifiedName &GetQualifiedName() const;
 	//! The identifier being looked up (the catalog stores/compares names case-insensitively).
 	const Identifier &GetEntryIdentifier() const;
 	//! The raw name of the identifier being looked up.
 	const string &GetEntryName() const;
+	//! The catalog qualification of the entry being looked up (empty if unqualified)
+	const Identifier &GetCatalog() const;
+	//! The schema qualification of the entry being looked up (empty if unqualified)
+	const Identifier &GetSchema() const;
 	const QueryErrorContext &GetErrorContext() const;
 	const optional_ptr<BoundAtClause> GetAtClause() const;
 
@@ -36,7 +53,7 @@ public:
 
 private:
 	CatalogType catalog_type;
-	Identifier name;
+	QualifiedName name;
 	optional_ptr<BoundAtClause> at_clause;
 	QueryErrorContext error_context;
 };

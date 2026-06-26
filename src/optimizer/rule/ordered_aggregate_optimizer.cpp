@@ -72,7 +72,8 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 	//  Look up the arg_xxx_name function in the catalog
 	QueryErrorContext error_context;
 	auto &func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
-	    context, Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier(arg_xxx_name), error_context);
+	    context, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier(arg_xxx_name)),
+	    error_context);
 	D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 	// bind the aggregate

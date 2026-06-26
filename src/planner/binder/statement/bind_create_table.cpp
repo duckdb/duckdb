@@ -58,9 +58,11 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 		auto logical_type = col.GetType();
 		if (logical_type.id() == LogicalTypeId::UNBOUND && logical_type.HasAlias()) {
 			// Resolve user type if possible
-			const auto type_entry =
-			    Catalog::GetEntry<TypeCatalogEntry>(context, Identifier::InvalidCatalog(), Identifier::InvalidSchema(),
-			                                        Identifier(logical_type.GetAlias()), OnEntryNotFound::RETURN_NULL);
+			const auto type_entry = Catalog::GetEntry<TypeCatalogEntry>(
+			    context,
+			    QualifiedName(Identifier::InvalidCatalog(), Identifier::InvalidSchema(),
+			                  Identifier(logical_type.GetAlias())),
+			    OnEntryNotFound::RETURN_NULL);
 			if (type_entry) {
 				logical_type = type_entry->user_type;
 			}
@@ -570,8 +572,9 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		    fk.info.schema.empty() ? schema.ParentCatalog().GetName() : Identifier::InvalidCatalog();
 		string fk_schema =
 		    fk.info.schema.empty() ? schema.name.GetIdentifierName() : fk.info.schema.GetIdentifierName();
-		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, fk.info.table);
-		auto table_entry = entry_retriever.GetEntry(fk_catalog, Identifier(fk_schema), table_lookup);
+		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(fk.info.table));
+		auto table_entry = entry_retriever.GetEntry(EntryLookupInfo(
+		    table_lookup, QualifiedName(fk_catalog, Identifier(fk_schema), table_lookup.GetEntryIdentifier())));
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
 			throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
 		}

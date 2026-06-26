@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 
 namespace duckdb {
@@ -37,11 +38,15 @@ public:
 
 struct ReplacementScanInput {
 public:
-	explicit ReplacementScanInput(const string &catalog_name, const string &schema_name, const string &table_name)
-	    : catalog_name(catalog_name), schema_name(schema_name), table_name(table_name) {
+	explicit ReplacementScanInput(QualifiedName name_p)
+	    : name(std::move(name_p)), catalog_name(name.Catalog().GetIdentifierName()),
+	      schema_name(name.Schema().GetIdentifierName()), table_name(name.Name().GetIdentifierName()) {
 	}
 
 public:
+	//! The (optionally qualified) name being looked up
+	QualifiedName name;
+	//! Backwards-compatible accessors pointing into the QualifiedName above
 	const string &catalog_name;
 	const string &schema_name;
 	const string &table_name;

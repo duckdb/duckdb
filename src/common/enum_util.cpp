@@ -189,6 +189,7 @@
 #include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/simplified_token.hpp"
@@ -4387,6 +4388,24 @@ const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport val
 template<>
 PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value) {
 	return static_cast<PushdownExtractSupport>(StringUtil::StringToEnum(GetPushdownExtractSupportValues(), 3, "PushdownExtractSupport", value));
+}
+
+const StringUtil::EnumStringLiteral *GetQualifiedNameToStringModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(QualifiedNameToStringMode::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA), "HIDE_DEFAULT_SCHEMA" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<QualifiedNameToStringMode>(QualifiedNameToStringMode value) {
+	return StringUtil::EnumToString(GetQualifiedNameToStringModeValues(), 2, "QualifiedNameToStringMode", static_cast<uint32_t>(value));
+}
+
+template<>
+QualifiedNameToStringMode EnumUtil::FromString<QualifiedNameToStringMode>(const char *value) {
+	return static_cast<QualifiedNameToStringMode>(StringUtil::StringToEnum(GetQualifiedNameToStringModeValues(), 2, "QualifiedNameToStringMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetQuantileSerializationTypeValues() {

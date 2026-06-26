@@ -30,12 +30,13 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 
 	// bind the pragma function
 	auto entry = Catalog::GetEntry<PragmaFunctionCatalogEntry>(
-	    context, Identifier::InvalidCatalog(), Identifier::DefaultSchema(), info.name, OnEntryNotFound::RETURN_NULL);
+	    context, QualifiedName(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), info.name),
+	    OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		// try to find whether a table entry might exist
-		auto table_entry = Catalog::GetEntry<TableFunctionCatalogEntry>(context, Identifier::InvalidCatalog(),
-		                                                                Identifier::DefaultSchema(), info.name,
-		                                                                OnEntryNotFound::RETURN_NULL);
+		auto table_entry = Catalog::GetEntry<TableFunctionCatalogEntry>(
+		    context, QualifiedName(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), info.name),
+		    OnEntryNotFound::RETURN_NULL);
 		if (table_entry) {
 			// there is a table entry with the same name, now throw more explicit error message
 			throw CatalogException("Pragma Function with name %s does not exist, but a table function with the same "
@@ -43,9 +44,9 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 			                       info.name, info.name);
 		}
 		// rebind to throw exception
-		entry = Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, Identifier::InvalidCatalog(),
-		                                                      Identifier::DefaultSchema(), info.name,
-		                                                      OnEntryNotFound::THROW_EXCEPTION);
+		entry = Catalog::GetEntry<PragmaFunctionCatalogEntry>(
+		    context, QualifiedName(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), info.name),
+		    OnEntryNotFound::THROW_EXCEPTION);
 	}
 
 	FunctionBinder function_binder(*this);

@@ -15,8 +15,20 @@
 
 namespace duckdb {
 
+//! Controls how QualifiedName::ToString renders the schema qualification
+enum class QualifiedNameToStringMode : uint8_t {
+	//! Always render every (non-empty) component
+	DEFAULT,
+	//! Omit the schema when it is a system schema (the default/"main" schema)
+	HIDE_DEFAULT_SCHEMA
+};
+
 struct QualifiedName {
 	QualifiedName() = default;
+	//! Construct an unqualified name (no catalog/schema). Implicit so that an Identifier can be passed wherever an
+	//! unqualified QualifiedName lookup is expected (also preserves backwards-compatibility for extensions).
+	QualifiedName(Identifier name_p) : name(std::move(name_p)) { // NOLINT: allow implicit conversion
+	}
 	QualifiedName(Identifier catalog_p, Identifier schema_p, Identifier name_p) : name(std::move(name_p)) {
 		// store the catalog/schema as a schema path - in preparation for multi-level schema support
 		// for now we only support a single schema level, so the path is at most [catalog, schema]
@@ -65,7 +77,7 @@ struct QualifiedName {
 	//! the schema will be set to INVALID_SCHEMA
 	static QualifiedName Parse(const string &input);
 	static vector<Identifier> ParseComponents(const string &input);
-	string ToString() const;
+	string ToString(QualifiedNameToStringMode mode = QualifiedNameToStringMode::DEFAULT) const;
 
 	hash_t Hash() const;
 	bool operator==(const QualifiedName &rhs) const;

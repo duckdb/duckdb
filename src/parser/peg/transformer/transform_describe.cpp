@@ -75,13 +75,13 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 
 			if (showref->show_type == ShowType::SHOW_FROM) {
 				// Logic for SHOW TABLES FROM [database].[schema]
-				if (IsInvalidSchema(base_table.Schema())) {
+				if (IsInvalidSchema(base_table.GetQualifiedName().Schema())) {
 					showref->schema_name = base_table.Table();
 				} else {
-					showref->catalog_name = base_table.Schema();
+					showref->catalog_name = base_table.GetQualifiedName().Schema();
 					showref->schema_name = base_table.Table();
 				}
-			} else if (IsInvalidSchema(base_table.Schema())) {
+			} else if (IsInvalidSchema(base_table.GetQualifiedName().Schema())) {
 				// Logic for unqualified relations (databases, tables, variables)
 				auto table_name = StringUtil::Lower(base_table.Table().GetIdentifierName());
 				if (table_name == "databases" || table_name == "tables" || table_name == "schemas" ||

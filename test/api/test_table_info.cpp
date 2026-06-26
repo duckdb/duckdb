@@ -15,7 +15,7 @@ TEST_CASE("Test table info api", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER)"));
 	info = con.TableInfo("test");
 	REQUIRE(info.get() != nullptr);
-	REQUIRE(info->table == "test");
+	REQUIRE(info->qualified_name.Name() == "test");
 	REQUIRE(info->columns.size() == 1);
 	REQUIRE(info->columns[0].Name() == "i");
 

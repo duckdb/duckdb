@@ -39,15 +39,6 @@ struct AlterEntryData {
 	    : qualified_name(std::move(qualified_name_p)), if_not_found(if_not_found) {
 	}
 
-	const Identifier &Catalog() const {
-		return qualified_name.Catalog();
-	}
-	const Identifier &Schema() const {
-		return qualified_name.Schema();
-	}
-	const Identifier &Name() const {
-		return qualified_name.Name();
-	}
 	const QualifiedName &GetQualifiedName() const {
 		return qualified_name;
 	}
@@ -61,8 +52,7 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::ALTER_INFO;
 
 public:
-	AlterInfo(AlterType type, Identifier catalog, Identifier schema, Identifier name, OnEntryNotFound if_not_found);
-	AlterInfo(AlterType type, QualifiedName qualified_name, OnEntryNotFound if_not_found);
+	AlterInfo(AlterType type, QualifiedName name, OnEntryNotFound if_not_found);
 	~AlterInfo() override;
 
 	AlterType type;
@@ -82,20 +72,11 @@ public:
 	QualifiedName &GetQualifiedNameMutable() {
 		return qualified_name;
 	}
-	const Identifier &Catalog() const {
-		return qualified_name.Catalog();
-	}
 	Identifier &CatalogMutable() {
 		return qualified_name.CatalogMutable();
 	}
-	const Identifier &Schema() const {
-		return qualified_name.Schema();
-	}
 	Identifier &SchemaMutable() {
 		return qualified_name.SchemaMutable();
-	}
-	const Identifier &Name() const {
-		return qualified_name.Name();
 	}
 	Identifier &NameMutable() {
 		return qualified_name.NameMutable();

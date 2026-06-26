@@ -5,8 +5,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // AlterTableFunctionInfo
 //===--------------------------------------------------------------------===//
-AlterTableFunctionInfo::AlterTableFunctionInfo(AlterTableFunctionType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_TABLE_FUNCTION, std::move(data.qualified_name), data.if_not_found),
+AlterTableFunctionInfo::AlterTableFunctionInfo(AlterTableFunctionType type, const AlterEntryData &data)
+    : AlterInfo(AlterType::ALTER_TABLE_FUNCTION, data.GetQualifiedName(), data.if_not_found),
       alter_table_function_type(type) {
 }
 AlterTableFunctionInfo::~AlterTableFunctionInfo() {
@@ -19,8 +19,8 @@ CatalogType AlterTableFunctionInfo::GetCatalogType() const {
 //===--------------------------------------------------------------------===//
 // AddTableFunctionOverloadInfo
 //===--------------------------------------------------------------------===//
-AddTableFunctionOverloadInfo::AddTableFunctionOverloadInfo(AlterEntryData data, TableFunctionSet new_overloads_p)
-    : AlterTableFunctionInfo(AlterTableFunctionType::ADD_FUNCTION_OVERLOADS, std::move(data)),
+AddTableFunctionOverloadInfo::AddTableFunctionOverloadInfo(const AlterEntryData &data, TableFunctionSet new_overloads_p)
+    : AlterTableFunctionInfo(AlterTableFunctionType::ADD_FUNCTION_OVERLOADS, data),
       new_overloads(std::move(new_overloads_p)) {
 	this->allow_internal = true;
 }

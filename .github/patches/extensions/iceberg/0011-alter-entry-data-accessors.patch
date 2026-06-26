@@ -1,5 +1,14 @@
+From 231190d924949453e6b7ca6aad2179470b3d537c Mon Sep 17 00:00:00 2001
+From: duckdb <x@x>
+Date: Thu, 25 Jun 2026 22:11:17 +0200
+Subject: [PATCH] 0011-alter-entry-data-accessors.patch
+
+---
+ src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
 diff --git a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
-index 73a96505..bcff33a7 100644
+index a3aec1e0..7f20f8e7 100644
 --- a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
 +++ b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
 @@ -278,7 +278,7 @@ IcebergColumnDefinition &ResolveColumn(T &alter_table_info, const shared_ptr<Ice
@@ -11,3 +20,6 @@ index 73a96505..bcff33a7 100644
  	}
  	auto &column = *column_p;
  	return column;
+-- 
+2.39.5 (Apple Git-154)
+

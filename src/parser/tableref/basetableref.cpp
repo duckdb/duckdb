@@ -8,9 +8,9 @@ namespace duckdb {
 
 string BaseTableRef::ToString() const {
 	string result;
-	result += Catalog().empty() ? "" : (SQLIdentifier(Catalog()) + ".");
-	result += Schema().empty() ? "" : (SQLIdentifier(Schema()) + ".");
-	result += SQLIdentifier(Table());
+	result += GetQualifiedName().Catalog().empty() ? "" : (SQLIdentifier(GetQualifiedName().Catalog()) + ".");
+	result += GetQualifiedName().Schema().empty() ? "" : (SQLIdentifier(GetQualifiedName().Schema()) + ".");
+	result += SQLIdentifier(GetQualifiedName().Name());
 	result += AliasToString(column_name_alias);
 	if (at_clause) {
 		result += " " + at_clause->ToString();
@@ -24,8 +24,10 @@ bool BaseTableRef::Equals(const TableRef &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<BaseTableRef>();
-	return other.Catalog() == Catalog() && other.Schema() == Schema() && other.Table() == Table() &&
-	       column_name_alias == other.column_name_alias && AtClause::Equals(at_clause.get(), other.at_clause.get());
+	return other.GetQualifiedName().Catalog() == GetQualifiedName().Catalog() &&
+	       other.GetQualifiedName().Schema() == GetQualifiedName().Schema() &&
+	       other.Table() == GetQualifiedName().Name() && column_name_alias == other.column_name_alias &&
+	       AtClause::Equals(at_clause.get(), other.at_clause.get());
 }
 
 unique_ptr<TableRef> BaseTableRef::Copy() {

@@ -50,8 +50,7 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 		return BoundStatement();
 	}
 	for (auto &scan : config.replacement_scans) {
-		ReplacementScanInput input(ref.Catalog().GetIdentifierName(), ref.Schema().GetIdentifierName(),
-		                           ref.Table().GetIdentifierName());
+		ReplacementScanInput input(ref.GetQualifiedName());
 		auto replacement_function = scan.function(context, input, scan.data.get());
 		if (!replacement_function) {
 			continue;
@@ -128,7 +127,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 	// CTE name should never be qualified (i.e. schema_name should be empty)
 	// unless we want to refer to the recurring table of "using key".
-	BindingAlias binding_alias(ref.Schema(), ref.Table());
+	BindingAlias binding_alias(ref.GetQualifiedName().Schema(), ref.Table());
 	auto ctebinding = GetCTEBinding(binding_alias);
 	if (ctebinding && ctebinding->CanBeReferenced()) {
 		ctebinding->Reference();
@@ -143,7 +142,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 		bind_context.AddGenericBinding(index, alias, names, ctebinding->GetColumnTypes());
 
-		bool is_recurring = ref.Schema() == "recurring";
+		bool is_recurring = ref.GetQualifiedName().Schema() == "recurring";
 
 		BoundStatement result;
 		result.types = ctebinding->GetColumnTypes();
@@ -156,10 +155,12 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	// extract a table or view from the catalog
 	auto at_clause = BindAtClause(ref.at_clause);
 	auto entry_at_clause = at_clause ? at_clause.get() : entry_retriever.GetAtClause();
-	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.Table(), entry_at_clause, error_context);
+	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, QualifiedName(ref.Table()), entry_at_clause, error_context);
 	BindSchemaOrCatalog(entry_retriever, ref.GetQualifiedNameMutable());
-	auto table_or_view =
-	    entry_retriever.GetEntry(ref.Catalog(), ref.Schema(), table_lookup, OnEntryNotFound::RETURN_NULL);
+	auto table_or_view = entry_retriever.GetEntry(
+	    EntryLookupInfo(table_lookup, QualifiedName(ref.GetQualifiedName().Catalog(), ref.GetQualifiedName().Schema(),
+	                                                table_lookup.GetEntryIdentifier())),
+	    OnEntryNotFound::RETURN_NULL);
 	// we still didn't find the table
 	if (GetBindingMode() == BindingMode::EXTRACT_NAMES || GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {
@@ -193,8 +194,9 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// Try autoloading an extension, then retry the replacement scan bind
-		auto full_path = ReplacementScan::GetFullPath(
-		    ref.Catalog().GetIdentifierName(), ref.Schema().GetIdentifierName(), ref.Table().GetIdentifierName());
+		auto full_path = ReplacementScan::GetFullPath(ref.GetQualifiedName().Catalog().GetIdentifierName(),
+		                                              ref.GetQualifiedName().Schema().GetIdentifierName(),
+		                                              ref.Table().GetIdentifierName());
 		auto extension_loaded = TryLoadExtensionForReplacementScan(context, full_path);
 		if (extension_loaded) {
 			replacement_scan_bind_result = BindWithReplacementScan(context, ref);
@@ -226,7 +228,10 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		// note: this will always throw when using DuckDB as a catalog, but a second look-up might succeed
 		// in catalogs that do not have transactional DDL
 		table_or_view =
-		    entry_retriever.GetEntry(ref.Catalog(), ref.Schema(), table_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		    entry_retriever.GetEntry(EntryLookupInfo(table_lookup, QualifiedName(ref.GetQualifiedName().Catalog(),
+		                                                                         ref.GetQualifiedName().Schema(),
+		                                                                         table_lookup.GetEntryIdentifier())),
+		                             OnEntryNotFound::THROW_EXCEPTION);
 	}
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {

@@ -40,7 +40,8 @@ const vector<ColumnDefinition> &DeleteRelation::Columns() {
 
 string DeleteRelation::ToString(idx_t depth) {
 	string str =
-	    RenderWhitespace(depth) + "DELETE FROM " + ParseInfo::QualifierToString(catalog_name, schema_name, table_name);
+	    RenderWhitespace(depth) + "DELETE FROM " +
+	    QualifiedName(catalog_name, schema_name, table_name).ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	if (condition) {
 		str += " WHERE " + condition->ToString();
 	}

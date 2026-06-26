@@ -24,7 +24,9 @@ unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
 
 string CreateTypeInfo::ToString() const {
 	string result = GetCreatePrefix("TYPE");
-	result += QualifierToString(temporary ? Identifier() : Catalog(), Schema(), GetTypeName());
+	result += QualifiedName(temporary ? Identifier() : GetQualifiedName().Catalog(), GetQualifiedName().Schema(),
+	                        GetTypeName())
+	              .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	if (type.id() == LogicalTypeId::ENUM) {
 		auto &values_insert_order = EnumType::GetValuesInsertOrder(type);
 		idx_t size = EnumType::GetSize(type);

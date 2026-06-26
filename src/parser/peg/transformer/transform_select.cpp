@@ -238,7 +238,7 @@ MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &tr
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformUnqualifiedBaseTableName(PEGTransformer &transformer,
                                                                                   const Identifier &table_name) {
-	const auto description = TableDescription(INVALID_CATALOG, INVALID_SCHEMA, table_name);
+	const auto description = TableDescription(QualifiedName(INVALID_CATALOG, INVALID_SCHEMA, table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 
@@ -580,9 +580,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(
 
 	result->with_ordinality =
 	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
-	result->function =
-	    make_uniq<FunctionExpression>(qualified_table_function.Catalog(), qualified_table_function.Schema(),
-	                                  qualified_table_function.Name(), std::move(table_function_arguments));
+	result->function = make_uniq<FunctionExpression>(qualified_table_function, std::move(table_function_arguments));
 	if (table_alias) {
 		result->alias = table_alias->name;
 		result->column_name_alias = table_alias->column_name_alias;
@@ -597,9 +595,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(
 	auto result = make_uniq<TableFunctionRef>();
 	result->with_ordinality =
 	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
-	result->function =
-	    make_uniq<FunctionExpression>(qualified_table_function.Catalog(), qualified_table_function.Schema(),
-	                                  qualified_table_function.Name(), std::move(table_function_arguments));
+	result->function = make_uniq<FunctionExpression>(qualified_table_function, std::move(table_function_arguments));
 	result->alias = table_alias_colon;
 	if (sample_clause) {
 		result->sample = std::move(*sample_clause);
@@ -1254,7 +1250,8 @@ PEGTransformerFactory::TransformUnpivotTargetList(PEGTransformer &transformer,
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformSchemaReservedTable(PEGTransformer &transformer,
                                                                              const Identifier &schema_qualification,
                                                                              const Identifier &reserved_table_name) {
-	const auto description = TableDescription(INVALID_CATALOG, schema_qualification, reserved_table_name);
+	const auto description =
+	    TableDescription(QualifiedName(INVALID_CATALOG, schema_qualification, reserved_table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 
@@ -1262,7 +1259,7 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformCatalogReservedSchemaTa
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_table_name) {
 	const auto description =
-	    TableDescription(catalog_qualification, reserved_schema_qualification, reserved_table_name);
+	    TableDescription(QualifiedName(catalog_qualification, reserved_schema_qualification, reserved_table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 
