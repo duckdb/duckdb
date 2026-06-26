@@ -69,7 +69,7 @@ string CreateTableInfo::ExtraOptionsToString() const {
 
 string CreateTableInfo::ToString() const {
 	string ret = GetCreatePrefix("TABLE");
-	ret += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	ret += QualifiedNameToString();
 
 	if (query != nullptr) {
 		ret += TableCatalogEntry::ColumnNamesToSQL(columns);

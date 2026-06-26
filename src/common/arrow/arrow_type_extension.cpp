@@ -7,8 +7,7 @@
 #include "duckdb/common/arrow/schema_metadata.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
-
-#include "yyjson.hpp"
+#include "duckdb/common/json_document.hpp"
 
 namespace duckdb {
 
@@ -381,44 +380,29 @@ struct ArrowGeometry {
 		unique_ptr<CoordinateReferenceSystem> duckdb_crs;
 
 		if (!extension_metadata.empty()) {
-			unique_ptr<duckdb_yyjson::yyjson_doc, void (*)(duckdb_yyjson::yyjson_doc *)> doc(
-			    duckdb_yyjson::yyjson_read(extension_metadata.data(), extension_metadata.size(),
-			                               duckdb_yyjson::YYJSON_READ_NOFLAG),
-			    duckdb_yyjson::yyjson_doc_free);
+			JSONParseError error;
+			auto doc = JSONDocument::TryParse(extension_metadata.data(), extension_metadata.size(), error);
 			if (!doc) {
 				throw SerializationException("Invalid JSON in GeoArrow metadata");
 			}
 
-			duckdb_yyjson::yyjson_val *val = yyjson_doc_get_root(doc.get());
-			if (!yyjson_is_obj(val)) {
+			auto val = doc->GetRoot();
+			if (!val.IsObject()) {
 				throw SerializationException("Invalid GeoArrow metadata: not a JSON object");
 			}
 
-			duckdb_yyjson::yyjson_val *edges = yyjson_obj_get(val, "edges");
-			if (edges && yyjson_is_str(edges) && std::strcmp(yyjson_get_str(edges), "planar") != 0) {
+			auto edges = val.GetMember("edges");
+			if (edges.IsString() && edges.GetString() != "planar") {
 				throw NotImplementedException("Can't import non-planar edges");
 			}
 
 			// Pick out the CRS if present
-			duckdb_yyjson::yyjson_val *crs = yyjson_obj_get(val, "crs");
-
-			if (crs) {
-				if (duckdb_yyjson::yyjson_is_str(crs)) {
-					const char *crs_str = duckdb_yyjson::yyjson_get_str(crs);
-					duckdb_crs = CoordinateReferenceSystem::TryIdentify(context, crs_str);
-				} else if (duckdb_yyjson::yyjson_is_obj(crs)) {
-					// Stringify the object
-					duckdb_yyjson::yyjson_write_flag write_flags = duckdb_yyjson::YYJSON_WRITE_NOFLAG;
-					size_t len = 0;
-					const auto crs_str = duckdb_yyjson::yyjson_val_write(crs, write_flags, &len);
-					if (crs_str) {
-						const auto str = string(crs_str, len);
-						free(crs_str);
-						duckdb_crs = CoordinateReferenceSystem::TryIdentify(context, str);
-					} else {
-						throw SerializationException("Could not serialize CRS object from GeoArrow metadata");
-					}
-				}
+			auto crs = val.GetMember("crs");
+			if (crs.IsString()) {
+				duckdb_crs = CoordinateReferenceSystem::TryIdentify(context, crs.GetString());
+			} else if (crs.IsObject()) {
+				// Stringify the object
+				duckdb_crs = CoordinateReferenceSystem::TryIdentify(context, crs.ToString(JSONWriteFlags::NONE));
 			}
 		}
 
@@ -439,7 +423,7 @@ struct ArrowGeometry {
 		throw InvalidInputException("Arrow extension type \"%s\" not supported for geoarrow.wkb", format.c_str());
 	}
 
-	static void WriteCRS(duckdb_yyjson::yyjson_mut_doc *doc, const CoordinateReferenceSystem &crs,
+	static void WriteCRS(JSONWriter &writer, JSONMutableValue &root, const CoordinateReferenceSystem &crs,
 	                     ClientContext &context) {
 		// Try to convert to preferred formats, in order
 		auto converted = CoordinateReferenceSystem::TryConvert(context, crs, CoordinateReferenceSystemType::PROJJSON);
@@ -459,35 +443,28 @@ struct ArrowGeometry {
 		const auto &crs_def = converted ? converted->GetDefinition() : crs.GetDefinition();
 		const auto &crs_type = converted ? converted->GetType() : crs.GetType();
 
-		const auto root = duckdb_yyjson::yyjson_mut_doc_get_root(doc);
-
 		switch (crs_type) {
 		case CoordinateReferenceSystemType::PROJJSON: {
-			const auto projjson_doc =
-			    duckdb_yyjson::yyjson_read(crs_def.c_str(), crs_def.size(), duckdb_yyjson::YYJSON_READ_NOFLAG);
+			JSONParseError error;
+			auto projjson_doc = JSONDocument::TryParse(crs_def.c_str(), crs_def.size(), error);
 			if (projjson_doc) {
-				const auto projjson_val = duckdb_yyjson::yyjson_doc_get_root(projjson_doc);
-				const auto projjson_obj = duckdb_yyjson::yyjson_val_mut_copy(doc, projjson_val);
-
-				duckdb_yyjson::yyjson_mut_obj_add_str(doc, root, "crs_type", "projjson");
-				duckdb_yyjson::yyjson_mut_obj_add_val(doc, root, "crs", projjson_obj);
-
-				duckdb_yyjson::yyjson_doc_free(projjson_doc);
+				root.AddString("crs_type", "projjson");
+				root.Add("crs", writer.CreateCopy(projjson_doc->GetRoot()));
 			} else {
 				throw SerializationException("Could not parse PROJJSON CRS for GeoArrow metadata");
 			}
 		} break;
 		case CoordinateReferenceSystemType::AUTH_CODE: {
-			duckdb_yyjson::yyjson_mut_obj_add_str(doc, root, "crs_type", "authority_code");
-			duckdb_yyjson::yyjson_mut_obj_add_str(doc, root, "crs", crs_def.c_str());
+			root.AddString("crs_type", "authority_code");
+			root.AddString("crs", crs_def);
 		} break;
 		case CoordinateReferenceSystemType::SRID: {
-			duckdb_yyjson::yyjson_mut_obj_add_str(doc, root, "crs_type", "srid");
-			duckdb_yyjson::yyjson_mut_obj_add_str(doc, root, "crs", crs_def.c_str());
+			root.AddString("crs_type", "srid");
+			root.AddString("crs", crs_def);
 		} break;
 		case CoordinateReferenceSystemType::WKT2_2019: {
-			duckdb_yyjson::yyjson_mut_obj_add_str(doc, root, "crs_type", "wkt2:2019");
-			duckdb_yyjson::yyjson_mut_obj_add_str(doc, root, "crs", crs_def.c_str());
+			root.AddString("crs_type", "wkt2:2019");
+			root.AddString("crs", crs_def);
 		} break;
 		default:
 			throw SerializationException("Could not serialize CRS of type %d for GeoArrow metadata",
@@ -502,29 +479,15 @@ struct ArrowGeometry {
 		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "geoarrow.wkb");
 
 		// Make a CRS entry if the type has a CRS
-		const auto doc = duckdb_yyjson::yyjson_mut_doc_new(nullptr);
-		const auto root = duckdb_yyjson::yyjson_mut_obj(doc);
-		duckdb_yyjson::yyjson_mut_doc_set_root(doc, root);
+		JSONWriter writer;
+		auto root = writer.CreateObject();
+		writer.SetRoot(root);
 
 		if (GeoType::HasCRS(type)) {
-			try {
-				WriteCRS(doc, GeoType::GetCRS(type), context);
-			} catch (...) {
-				duckdb_yyjson::yyjson_mut_doc_free(doc);
-				throw;
-			}
+			WriteCRS(writer, root, GeoType::GetCRS(type), context);
 		}
 
-		size_t json_size = 0;
-		const auto json_text = duckdb_yyjson::yyjson_mut_write(doc, duckdb_yyjson::YYJSON_WRITE_NOFLAG, &json_size);
-		if (json_text) {
-			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, json_text);
-			duckdb_yyjson::yyjson_mut_doc_free(doc);
-			free(json_text);
-		} else {
-			duckdb_yyjson::yyjson_mut_doc_free(doc);
-			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "{}");
-		}
+		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, writer.ToString(JSONWriteFlags::NONE));
 
 		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 		schema.metadata = root_holder.metadata_info.back().get();

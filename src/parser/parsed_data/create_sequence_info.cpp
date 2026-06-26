@@ -33,7 +33,7 @@ string CreateSequenceInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ss << " IF NOT EXISTS ";
 	}
-	ss << GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	ss << QualifiedNameToString();
 	ss << " INCREMENT BY " << increment;
 	ss << " MINVALUE " << min_value;
 	ss << " MAXVALUE " << max_value;

@@ -151,9 +151,10 @@ void RadixPartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAp
 //===--------------------------------------------------------------------===//
 RadixPartitionedTupleData::RadixPartitionedTupleData(BufferManager &buffer_manager,
                                                      shared_ptr<TupleDataLayout> layout_ptr, const MemoryTag tag,
-                                                     const idx_t radix_bits_p, const idx_t hash_col_idx_p)
-    : PartitionedTupleData(PartitionedTupleDataType::RADIX, buffer_manager, layout_ptr, tag), radix_bits(radix_bits_p),
-      hash_col_idx(hash_col_idx_p) {
+                                                     const idx_t radix_bits_p, const idx_t hash_col_idx_p,
+                                                     QueryContext context)
+    : PartitionedTupleData(PartitionedTupleDataType::RADIX, buffer_manager, layout_ptr, tag, context),
+      radix_bits(radix_bits_p), hash_col_idx(hash_col_idx_p) {
 	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	D_ASSERT(hash_col_idx < layout.GetTypes().size());
 	Initialize();

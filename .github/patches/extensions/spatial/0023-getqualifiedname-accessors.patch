@@ -4,8 +4,8 @@ Date: Thu, 25 Jun 2026 23:16:38 +0200
 Subject: [PATCH] 0023-getqualifiedname-accessors.patch
 
 ---
- src/spatial/index/rtree/rtree_index_create_logical.cpp | 4 ++--
- 1 file changed, 2 insertions(+), 2 deletions(-)
+ src/spatial/index/rtree/rtree_index_create_logical.cpp | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/src/spatial/index/rtree/rtree_index_create_logical.cpp b/src/spatial/index/rtree/rtree_index_create_logical.cpp
 index 2f4610a..7ec9e6e 100644
@@ -20,7 +20,8 @@ index 2f4610a..7ec9e6e 100644
 +	const auto &catalog = info->GetQualifiedName().Catalog();
 +	const auto &schema = info->GetQualifiedName().Schema();
  	const auto &table_name = info->table;
- 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table_name);
+-	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table_name);
++	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(catalog, schema, table_name));
  
 -- 
 2.39.5 (Apple Git-154)

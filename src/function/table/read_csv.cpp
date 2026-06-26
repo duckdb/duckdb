@@ -141,11 +141,36 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 	// return bind_data;
 }
 
+static bool PushdownProjectionExpression(ClientContext &context, const TableFunctionProjectionExpressionInput &input) {
+	if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
+		return false;
+	}
+	const auto &cast = input.expr.Cast<BoundCastExpression>();
+	const auto &target_type = cast.GetReturnType();
+	auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
+	// Hive-partition and filename columns are produced from the file path by
+	// separate finalize expressions, not parsed from the file. Retyping them
+	// here would desync those expressions, so leave the cast in place.
+	// See test/sql/copy/csv/csv_hive.test
+	for (const auto &partition : bind_data.reader_bind.hive_partitioning_indexes) {
+		if (partition.index == input.proj_index) {
+			return false;
+		}
+	}
+	if (bind_data.reader_bind.filename_idx.IsValid() &&
+	    bind_data.reader_bind.filename_idx.GetIndex() == input.proj_index) {
+		return false;
+	}
+	bind_data.types[input.proj_index] = target_type;
+	bind_data.columns[input.proj_index].type = target_type;
+	return true;
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
 	MultiFileFunction<CSVMultiFileInfo> read_csv("read_csv");
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.type_pushdown = MultiFileFunction<CSVMultiFileInfo>::PushdownType;
+	read_csv.projection_expression_pushdown = PushdownProjectionExpression;
 	ReadCSVAddNamedParameters(read_csv);
 	return static_cast<TableFunction>(read_csv);
 }

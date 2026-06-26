@@ -184,8 +184,31 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	}
 };
 
-//! Phase of the per-thread multi-file scan: we are either scheduling or decoding
+//! Phase of a scan job: we are either scheduling its I/O or decoding it
 enum class MultiFileScanPhase : uint8_t { SCHEDULE, DECODE };
+
+//! Outcome of decoding the current scan job (see MultiFileFunction::DecodeCurrentJob)
+enum class MultiFileDecodeResult : uint8_t {
+	CONTINUE,         //! keep looping
+	RETURN_TO_CALLER, //! return from the scan (a chunk was emitted, or the operator parked on async I/O)
+	JOB_FINISHED      //! job is done
+};
+
+//! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
+struct MultiFileScanJob {
+	//! The reader producing this job
+	shared_ptr<BaseFileReader> reader;
+	//! Per-file data for the reader
+	optional_ptr<MultiFileReaderData> reader_data;
+	//! The reader-specific scan state that ScheduleIO/Scan operate on
+	unique_ptr<LocalTableFunctionState> reader_scan_state;
+	//! Batch index of this job
+	idx_t batch_index = 0;
+	//! Index of the file this job belongs to
+	idx_t file_index = DConstants::INVALID_INDEX;
+	//! Whether this job still needs its I/O scheduled or is ready to decode
+	MultiFileScanPhase phase = MultiFileScanPhase::SCHEDULE;
+};
 
 struct MultiFileLocalState : public LocalTableFunctionState {
 public:
@@ -193,18 +216,14 @@ public:
 	}
 
 public:
-	shared_ptr<BaseFileReader> reader;
-	optional_ptr<MultiFileReaderData> reader_data;
-	bool is_parallel;
-	idx_t batch_index;
-	idx_t file_index = DConstants::INVALID_INDEX;
-	unique_ptr<LocalTableFunctionState> local_state;
+	//! The job currently being scanned by this thread
+	MultiFileScanJob job;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
 	DataChunk scan_chunk;
 	//! Set when the previous Scan() returned BLOCKED, so the next Scan() preserves the partial chunk
 	bool resuming_blocked_scan = false;
-	//! Whether the current batch still needs its I/O scheduled or is ready to decode
-	MultiFileScanPhase phase = MultiFileScanPhase::SCHEDULE;
+	//! The file index that scan_chunk is initialized for.
+	idx_t scan_chunk_file_index = DConstants::INVALID_INDEX;
 	//! The executor to transform scan_chunk into the final result with FinalizeChunk
 	ExpressionExecutor executor;
 	//! Number of rows scanned by this thread (for profiling)
