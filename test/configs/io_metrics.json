@@ -66,6 +66,20 @@
 			"check": ["read", "write"]
 		},
 		{
+			"name": "read_text",
+			"include": ["{dir}/in.txt"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.txt' (FORMAT csv)"],
+			"measure": ["SELECT sum(length(content)) FROM read_text('{dir}/in.txt')"],
+			"check": ["read", "write"]
+		},
+		{
+			"name": "read_blob",
+			"include": ["{dir}/in.bin"],
+			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.bin' (FORMAT csv)"],
+			"measure": ["SELECT sum(octet_length(content)) FROM read_blob('{dir}/in.bin')"],
+			"check": ["read", "write"]
+		},
+		{
 			"name": "csv_read",
 			"include": ["{dir}/in.csv"],
 			"prep": ["COPY (SELECT range i, range * 2 j, 'str' || range s FROM range(500000)) TO '{dir}/in.csv' (FORMAT csv)"],
