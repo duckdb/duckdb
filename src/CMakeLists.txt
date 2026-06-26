@@ -77,7 +77,6 @@ set(DUCKDB_LINK_LIBS
     duckdb_miniz
     duckdb_utf8proc
     duckdb_hyperloglog
-    duckdb_fastpforlib
     duckdb_skiplistlib
     duckdb_mbedtls
     duckdb_yyjson

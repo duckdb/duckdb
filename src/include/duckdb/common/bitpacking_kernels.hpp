@@ -1,11 +1,12 @@
- /**
--* This code is released under the
--* Apache License Version 2.0 http://www.apache.org/licenses/.
--*
--* (c) Daniel Lemire, http://lemire.me/en/
--*/
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/bitpacking_kernels.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
-#include "bitpacking.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -14,7 +15,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace duckdb_fastpforlib {
+namespace duckdb_bitpacking {
 namespace internal {
 
 static constexpr const uint32_t BITPACKING_GROUP_SIZE = 32;
@@ -117,15 +118,6 @@ template <uint32_t WIDTH, class OUT>
 static inline void UnpackBlock(const uint32_t *__restrict in, OUT *__restrict out) {
 	if constexpr (WIDTH == 0) {
 		std::memset(out, 0, BITPACKING_GROUP_SIZE * sizeof(OUT));
-	} else if constexpr (WIDTH == 4 && (std::is_same<OUT, uint8_t>::value || std::is_same<OUT, uint64_t>::value)) {
-		Unpack4(in, out);
-	} else if constexpr (WIDTH == 12 && (std::is_same<OUT, uint16_t>::value ||
-	                                     std::is_same<OUT, uint32_t>::value ||
-	                                     std::is_same<OUT, uint64_t>::value)) {
-		Unpack12(in, out);
-	} else if constexpr (WIDTH == 24 && (std::is_same<OUT, uint32_t>::value ||
-	                                     std::is_same<OUT, uint64_t>::value)) {
-		Unpack24(in, out);
 	} else if constexpr (WIDTH == 8 * sizeof(OUT)) {
 		std::memcpy(out, in, BITPACKING_GROUP_SIZE * sizeof(OUT));
 	} else {
@@ -335,4 +327,4 @@ inline void fastpack(const uint64_t *__restrict in, uint32_t *__restrict out, co
 	});
 }
 
-} // namespace duckdb_fastpforlib
+} // namespace duckdb_bitpacking
