@@ -91,8 +91,8 @@ string FunctionSignature::ToString() const {
 }
 
 string SimpleFunction::ToString() const {
-	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
-		return StringUtil::Format("%s.%s.%s%s", catalog_name, schema_name, name, signature.ToString());
+	if (RequiresCatalogAndSchemaNamePrefix(GetCatalogName(), GetSchemaName())) {
+		return StringUtil::Format("%s.%s.%s%s", GetCatalogName(), GetSchemaName(), name, signature.ToString());
 	}
 	return name + signature.ToString();
 }
@@ -106,7 +106,7 @@ SimpleNamedParameterFunction::~SimpleNamedParameterFunction() {
 }
 
 string SimpleNamedParameterFunction::ToString() const {
-	return Function::CallToString(catalog_name, schema_name, name, arguments, named_parameters);
+	return Function::CallToString(GetCatalogName(), GetSchemaName(), name, arguments, named_parameters);
 }
 
 bool SimpleNamedParameterFunction::HasNamedParameters() const {
