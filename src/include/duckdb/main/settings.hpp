@@ -629,6 +629,16 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugTransformerTrampolineStyleSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_transformer_trampoline_style";
+	static constexpr const char *Description = "Use the experimental trampoline-style parser transformer";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugVerificationModeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "debug_verification_mode";
@@ -1933,16 +1943,6 @@ struct TrackedMetricsSetting {
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
-};
-
-struct TransformerTrampolineStyleSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "transformer_trampoline_style";
-	static constexpr const char *Description = "Use the experimental trampoline-style parser transformer";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct UsernameSetting {
