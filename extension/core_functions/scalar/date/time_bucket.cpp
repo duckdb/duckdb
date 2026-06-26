@@ -1,5 +1,4 @@
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -8,12 +7,51 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "core_functions/scalar/date_functions.hpp"
 
 namespace duckdb {
 
 namespace {
+
+template <typename T>
+timestamp_t ToBucketTimestamp(const T &t) {
+	return Cast::template Operation<T, timestamp_t>(t);
+}
+
+template <>
+timestamp_t ToBucketTimestamp(const dtime_t &t) {
+	return Timestamp::FromDatetime(date_t::epoch(), t);
+}
+
+template <typename T>
+date_t ToBucketDate(const T &t) {
+	return Cast::template Operation<T, date_t>(t);
+}
+
+template <>
+date_t ToBucketDate(const dtime_t &t) {
+	return date_t::epoch();
+}
+
+template <typename T>
+T FromBucketTimestamp(const timestamp_t &t) {
+	return Cast::template Operation<timestamp_t, T>(t);
+}
+
+template <>
+dtime_t FromBucketTimestamp(const timestamp_t &t) {
+	return Timestamp::GetTime(t);
+}
+
+template <typename T>
+T FromBucketDate(const date_t &t) {
+	return Cast::template Operation<date_t, T>(t);
+}
+
+template <>
+dtime_t FromBucketDate(const date_t &t) {
+	return dtime_t(0);
+}
 
 struct TimeBucket {
 	// Use 2000-01-03 00:00:00 (Monday) as origin when bucket_width is days, hours, ... for TimescaleDB compatibility
@@ -100,8 +138,8 @@ struct TimeBucket {
 				return Cast::template Operation<TB, TR>(ts);
 			}
 			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
-			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(Cast::template Operation<TB, timestamp_t>(ts));
-			return Cast::template Operation<timestamp_t, TR>(
+			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(ToBucketTimestamp<TB>(ts));
+			return FromBucketTimestamp<TR>(
 			    WidthConvertibleToMicrosCommon(bucket_width_micros, ts_micros, DEFAULT_ORIGIN_MICROS));
 		}
 	};
@@ -112,8 +150,8 @@ struct TimeBucket {
 			if (!Value::IsFinite(ts)) {
 				return Cast::template Operation<TB, TR>(ts);
 			}
-			int32_t ts_months = EpochMonths(ts);
-			return Cast::template Operation<date_t, TR>(
+			int32_t ts_months = EpochMonths(ToBucketDate(ts));
+			return FromBucketDate<TR>(
 			    WidthConvertibleToMonthsCommon(bucket_width.months, ts_months, DEFAULT_ORIGIN_MONTHS));
 		}
 	};
@@ -140,9 +178,9 @@ struct TimeBucket {
 				return Cast::template Operation<TB, TR>(ts);
 			}
 			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
-			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(
-			    Interval::Add(Cast::template Operation<TB, timestamp_t>(ts), Interval::Invert(offset)));
-			return Cast::template Operation<timestamp_t, TR>(Interval::Add(
+			int64_t ts_micros =
+			    Timestamp::GetEpochMicroSeconds(Interval::Add(ToBucketTimestamp(ts), Interval::Invert(offset)));
+			return FromBucketTimestamp<TR>(Interval::Add(
 			    WidthConvertibleToMicrosCommon(bucket_width_micros, ts_micros, DEFAULT_ORIGIN_MICROS), offset));
 		}
 	};
@@ -153,10 +191,10 @@ struct TimeBucket {
 			if (!Value::IsFinite(ts)) {
 				return Cast::template Operation<TB, TR>(ts);
 			}
-			int32_t ts_months = EpochMonths(Interval::Add(ts, Interval::Invert(offset)));
-			return Interval::Add(Cast::template Operation<date_t, TR>(WidthConvertibleToMonthsCommon(
-			                         bucket_width.months, ts_months, DEFAULT_ORIGIN_MONTHS)),
-			                     offset);
+			int32_t ts_months = EpochMonths(Interval::Add(ToBucketTimestamp(ts), Interval::Invert(offset)));
+			return FromBucketTimestamp<TR>(Interval::Add(ToBucketTimestamp(WidthConvertibleToMonthsCommon(
+			                                                 bucket_width.months, ts_months, DEFAULT_ORIGIN_MONTHS)),
+			                                             offset));
 		}
 	};
 
@@ -184,9 +222,9 @@ struct TimeBucket {
 				return Cast::template Operation<TB, TR>(ts);
 			}
 			int64_t bucket_width_micros = Interval::GetMicro(bucket_width);
-			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(Cast::template Operation<TB, timestamp_t>(ts));
-			int64_t origin_micros = Timestamp::GetEpochMicroSeconds(Cast::template Operation<TB, timestamp_t>(origin));
-			return Cast::template Operation<timestamp_t, TR>(
+			int64_t ts_micros = Timestamp::GetEpochMicroSeconds(ToBucketTimestamp(ts));
+			int64_t origin_micros = Timestamp::GetEpochMicroSeconds(ToBucketTimestamp(origin));
+			return FromBucketTimestamp<TR>(
 			    WidthConvertibleToMicrosCommon(bucket_width_micros, ts_micros, origin_micros));
 		}
 	};
@@ -197,10 +235,9 @@ struct TimeBucket {
 			if (!Value::IsFinite(ts)) {
 				return Cast::template Operation<TB, TR>(ts);
 			}
-			int32_t ts_months = EpochMonths(ts);
-			int32_t origin_months = EpochMonths(origin);
-			return Cast::template Operation<date_t, TR>(
-			    WidthConvertibleToMonthsCommon(bucket_width.months, ts_months, origin_months));
+			int32_t ts_months = EpochMonths(ToBucketDate(ts));
+			int32_t origin_months = EpochMonths(ToBucketDate(origin));
+			return FromBucketDate<TR>(WidthConvertibleToMonthsCommon(bucket_width.months, ts_months, origin_months));
 		}
 	};
 
@@ -351,20 +388,34 @@ ScalarFunctionSet TimeBucketFun::GetFunctions() {
 	ScalarFunctionSet time_bucket;
 	time_bucket.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::DATE}, LogicalType::DATE, TimeBucketFunction<date_t>));
-	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
-	                                       TimeBucketFunction<timestamp_t>));
 	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::DATE, LogicalType::INTERVAL},
 	                                       LogicalType::DATE, TimeBucketOffsetFunction<date_t>));
-	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
-	                                       LogicalType::TIMESTAMP, TimeBucketOffsetFunction<timestamp_t>));
 	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::DATE, LogicalType::DATE},
 	                                       LogicalType::DATE, TimeBucketOriginFunction<date_t>));
+
+	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
+	                                       TimeBucketFunction<timestamp_t>));
+	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
+	                                       LogicalType::TIMESTAMP, TimeBucketOffsetFunction<timestamp_t>));
 	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP, LogicalType::TIMESTAMP},
 	                                       LogicalType::TIMESTAMP, TimeBucketOriginFunction<timestamp_t>));
+
 	for (auto &func : time_bucket.functions) {
-		func.SetFallible();
 		func.SetArgProperties(1, ArgProperties().NonDecreasing());
 	}
+
+	//	Not monotonic (wraps)
+	time_bucket.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::TIME}, LogicalType::TIME, TimeBucketFunction<dtime_t>));
+	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIME, LogicalType::INTERVAL},
+	                                       LogicalType::TIME, TimeBucketOffsetFunction<dtime_t>));
+	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIME, LogicalType::TIME},
+	                                       LogicalType::TIME, TimeBucketOriginFunction<dtime_t>));
+
+	for (auto &func : time_bucket.functions) {
+		func.SetFallible();
+	}
+
 	return time_bucket;
 }
 

@@ -595,7 +595,7 @@ void WindowGlobalSourceState::CreateTaskList() {
 
 	//	Schedule the largest group on as many threads as possible
 	auto &ts = TaskScheduler::GetScheduler(client);
-	const auto threads = NumericCast<idx_t>(ts.NumberOfThreads());
+	const auto threads = ts.NumberOfThreads();
 
 	const auto &max_block = partition_blocks.front();
 

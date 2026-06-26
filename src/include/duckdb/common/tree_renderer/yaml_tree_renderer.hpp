@@ -23,18 +23,18 @@ public:
 	string ToString(const ProfilingNode &op);
 	string ToString(const Pipeline &op);
 
-	void Render(const LogicalOperator &op, std::ostream &ss);
-	void Render(const PhysicalOperator &op, std::ostream &ss);
-	void Render(const ProfilingNode &op, std::ostream &ss) override;
-	void Render(const Pipeline &op, std::ostream &ss);
+	void Render(const LogicalOperator &op, BaseResultRenderer &ss);
+	void Render(const PhysicalOperator &op, BaseResultRenderer &ss);
+	void Render(const ProfilingNode &op, BaseResultRenderer &ss) override;
+	void Render(const Pipeline &op, BaseResultRenderer &ss);
 
-	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
+	void ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) override;
 	bool UsesRawKeyNames() override {
 		return false;
 	}
 
 private:
-	void RenderRecursive(RenderTree &node, std::ostream &ss, idx_t depth, idx_t x, idx_t y);
+	void RenderRecursive(RenderTree &node, BaseResultRenderer &ss, idx_t depth, idx_t x, idx_t y);
 };
 
 } // namespace duckdb

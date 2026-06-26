@@ -238,4 +238,4 @@ MERGE INTO row_target_2
     USING (SELECT 1 AS id) AS s ON (row_target_2.id = s.id)
     WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id);
 ----
-<REGEX>:Binder Error: FOR EACH ROW trigger "trg_row_merge" on table "row_target" must reference at least one NEW column.*
+<REGEX>:Binder Error: FOR EACH ROW trigger "trg_row_merge" on table "row_target" must reference at least one NEW or OLD column.*

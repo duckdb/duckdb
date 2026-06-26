@@ -1,5 +1,6 @@
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -50,7 +51,7 @@ void TextTreeRenderer::Configure(const unordered_map<string, Value> &settings) {
 	}
 }
 
-void TextTreeRenderer::RenderTopLayer(RenderTree &root, std::ostream &ss, idx_t y) {
+void TextTreeRenderer::RenderTopLayer(RenderTree &root, BaseResultRenderer &ss, idx_t y) {
 	for (idx_t x = 0; x < root.width; x++) {
 		if (x * config.node_render_width >= config.maximum_render_width) {
 			break;
@@ -110,7 +111,7 @@ static bool ShouldRenderWhitespace(RenderTree &root, idx_t x, idx_t y) {
 	return false;
 }
 
-void TextTreeRenderer::RenderBottomLayer(RenderTree &root, std::ostream &ss, idx_t y) {
+void TextTreeRenderer::RenderBottomLayer(RenderTree &root, BaseResultRenderer &ss, idx_t y) {
 	for (idx_t x = 0; x <= root.width; x++) {
 		if (x * config.node_render_width >= config.maximum_render_width) {
 			break;
@@ -219,7 +220,7 @@ string TextTreeRenderer::FormatNumber(const string &input) {
 	return result;
 }
 
-void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_t y) {
+void TextTreeRenderer::RenderBoxContent(RenderTree &root, BaseResultRenderer &ss, idx_t y) {
 	// we first need to figure out how high our boxes are going to be
 	vector<vector<string>> extra_info;
 	idx_t extra_height = 0;
@@ -329,8 +330,35 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 						}
 					}
 				}
+				// determine the type of this cell: the box title (render_y 0) is the operator name, the
+				// separator line between the title and the extra info is layout, everything else is a value
+				ResultRenderType content_type;
+				if (render_y == 0) {
+					content_type = ResultRenderType::COLUMN_NAME;
+				} else if (render_text == ExtraInfoSeparator()) {
+					content_type = ResultRenderType::LAYOUT;
+				} else {
+					content_type = ResultRenderType::VALUE;
+				}
+				// center the text in the box, rendering the surrounding padding as layout and the text with its type
 				render_text = AdjustTextForRendering(render_text, config.node_render_width - 2);
-				ss << render_text;
+				idx_t content_start = 0;
+				while (content_start < render_text.size() && render_text[content_start] == ' ') {
+					content_start++;
+				}
+				idx_t content_end = render_text.size();
+				while (content_end > content_start && render_text[content_end - 1] == ' ') {
+					content_end--;
+				}
+				if (content_start > 0) {
+					ss << render_text.substr(0, content_start);
+				}
+				if (content_end > content_start) {
+					ss.Render(content_type, render_text.substr(content_start, content_end - content_start));
+				}
+				if (content_end < render_text.size()) {
+					ss << render_text.substr(content_end);
+				}
 
 				if (render_y == halfway_point && NodeHasMultipleChildren(*node)) {
 					ss << config.LMIDDLE;
@@ -344,50 +372,50 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 }
 
 string TextTreeRenderer::ToString(const LogicalOperator &op) {
-	duckdb::stringstream ss;
+	StringResultRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string TextTreeRenderer::ToString(const PhysicalOperator &op) {
-	duckdb::stringstream ss;
+	StringResultRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string TextTreeRenderer::ToString(const ProfilingNode &op) {
-	duckdb::stringstream ss;
+	StringResultRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string TextTreeRenderer::ToString(const Pipeline &op) {
-	duckdb::stringstream ss;
+	StringResultRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
-void TextTreeRenderer::Render(const LogicalOperator &op, std::ostream &ss) {
+void TextTreeRenderer::Render(const LogicalOperator &op, BaseResultRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void TextTreeRenderer::Render(const PhysicalOperator &op, std::ostream &ss) {
+void TextTreeRenderer::Render(const PhysicalOperator &op, BaseResultRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void TextTreeRenderer::Render(const ProfilingNode &op, std::ostream &ss) {
+void TextTreeRenderer::Render(const ProfilingNode &op, BaseResultRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void TextTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
+void TextTreeRenderer::Render(const Pipeline &op, BaseResultRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void TextTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
+void TextTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) {
 	while (root.width * config.node_render_width > config.maximum_render_width) {
 		if (config.node_render_width - 2 < config.minimum_render_width) {
 			break;
@@ -552,9 +580,9 @@ string TextTreeRenderer::ExtraInfoSeparator() {
 	return StringUtil::Repeat(string(config.HORIZONTAL), (config.node_render_width - 9));
 }
 
-string TextTreeRenderer::RenderProfiler(const QueryProfiler &profiler) {
+void TextTreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseResultRenderer &ss) {
 	// the text profiler output is the framed query tree (header, total time, phase timings, operator tree)
-	return profiler.QueryTreeToString();
+	profiler.RenderQueryTree(ss);
 }
 
 } // namespace duckdb

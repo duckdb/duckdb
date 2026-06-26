@@ -119,7 +119,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 unique_ptr<GlobalTableFunctionState> PragmaStorageInfoInitGlobal(ClientContext &context,
                                                                  TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<PragmaStorageFunctionData>();
-	auto max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	auto max_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	auto gstate = make_uniq<PragmaStorageGlobalState>(max_threads);
 	gstate->scan_state.options = bind_data.options;
 	bind_data.table_entry.InitializeColumnSegmentInfoScan(gstate->scan_state);

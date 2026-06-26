@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -33,6 +32,8 @@ public:
 		this->bound_aggregate = false;
 		this->bound_columns.clear();
 	}
+
+	static bool IsFunctionallyDependent(const unique_ptr<Expression> &expr, const vector<reference<Expression>> &deps);
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
