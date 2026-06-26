@@ -990,10 +990,6 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 ** set via the supplied callback.
 */
 void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
-	if (!stdout_is_console) {
-		// only pretty-print to an interactive console - redirected output keeps the plain plan as a result value
-		return;
-	}
 	auto &explain = statement.Cast<duckdb::ExplainStatement>();
 	if (explain.format != duckdb::ProfilerPrintFormat::Default()) {
 		// the user explicitly requested an output format (e.g. EXPLAIN (FORMAT json))
@@ -1005,6 +1001,15 @@ void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 			// a custom profiler output format is configured - respect it
 			return;
 		}
+	}
+	// outside an interactive console session there is no ".last" to expand the tree, so always render it in full
+	if (!stdin_is_interactive || !stdout_is_console) {
+		duckdb::ClientConfig::GetConfig(*conn->context).profiling_renderer_settings["expand_all"] =
+		    duckdb::Value::BOOLEAN(true);
+	}
+	if (!stdout_is_console) {
+		// only pretty-print to an interactive console - redirected output keeps the plain plan as a result value
+		return;
 	}
 	// render the plan as a highlighted string (see RegisterProfilerHighlighting)
 	explain.format = duckdb::ProfilerPrintFormat("shell_explain_printer");
