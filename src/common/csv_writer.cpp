@@ -62,13 +62,13 @@ CSVWriter::CSVWriter(WriteStream &stream, vector<string> name_list, bool shared)
 }
 
 CSVWriter::CSVWriter(CSVReaderOptions &options_p, FileSystem &fs, const string &file_path,
-                     FileCompressionType compression, bool shared)
+                     FileCompressionOptions compression_options, bool shared)
     : options(options_p),
       writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
                      options.dialect_options.state_machine_options.quote.GetValue(), options.write_newline),
       file_writer(make_uniq<BufferedFileWriter>(fs, file_path,
                                                 FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
-                                                    FileLockType::WRITE_LOCK | compression)),
+                                                    FileLockType::WRITE_LOCK | compression_options)),
       write_stream(*file_writer), should_initialize(true), shared(shared) {
 	if (!shared) {
 		global_write_state = make_uniq<CSVWriterState>();
