@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/caching_file_system.hpp"
 #include "duckdb/storage/object_cache.hpp"
@@ -35,10 +36,42 @@ private:
 	string file_path;
 };
 
+//! A file system that returns no ETag and timestamp_t(0) for Last-Modified, simulating servers that do not
+//! provide cache-validation headers.
+class NoValidationMetadataFileSystem : public LocalFileSystem {
+public:
+	string GetName() const override {
+		return "NoValidationMetadataFileSystem";
+	}
+
+	bool CanHandleFile(const string &path) override {
+		return StringUtil::StartsWith(path, TestDirectoryPath());
+	}
+
+	bool CanSeek() override {
+		return true;
+	}
+
+	string GetVersionTag(FileHandle &handle) override {
+		return "";
+	}
+
+	timestamp_t GetLastModifiedTime(FileHandle &handle) override {
+		return timestamp_t(0);
+	}
+};
+
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
 	OpenFileInfo info(path);
 	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 	info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
+	return info;
+}
+
+OpenFileInfo MakeValidatingOpenFileInfo(const string &path) {
+	OpenFileInfo info(path);
+	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(true);
 	return info;
 }
 
@@ -175,6 +208,40 @@ TEST_CASE("Failed CachingFileHandle construction leaves evictable cached file en
 
 	EvictObjectCache(object_cache);
 	REQUIRE(cache.GetCachedFileCount() == 0);
+}
+
+TEST_CASE("No-metadata file is not cached and always returns fresh content", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto &cache = db_instance.GetExternalFileCache();
+
+	auto no_meta_fs = make_uniq<NoValidationMetadataFileSystem>();
+
+	const idx_t read_size = 16384;
+	const string content_a(read_size, 'A');
+	const string content_b(read_size * 2, 'B');
+	ExternalCacheTestFileGuard test_file("test_efc_no_metadata.bin", content_a);
+
+	CachingFileSystem cfs(*no_meta_fs, db_instance);
+
+	// First read: data is fetched from source. No ranges should be stored in the cache.
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(handle->GetFileSize() == content_a.size());
+		REQUIRE(ReadFull(*handle, read_size) == content_a);
+	}
+	REQUIRE(cache.GetCachedFileInformation().empty());
+
+	// Overwrite the file with larger content.
+	test_file.WriteContent(content_b);
+
+	// Second read: file size and content must reflect the new version, not the cached one.
+	{
+		auto handle = cfs.OpenFile(MakeValidatingOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(handle->GetFileSize() == content_b.size());
+		REQUIRE(ReadFull(*handle, content_b.size()) == content_b);
+	}
+	REQUIRE(cache.GetCachedFileInformation().empty());
 }
 
 } // namespace duckdb

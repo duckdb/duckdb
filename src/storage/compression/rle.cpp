@@ -274,7 +274,7 @@ struct RLEScanState : public SegmentScanState {
 			//! This would make the index_pointer start outside of the segment
 			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
 		}
-		if ((rle_count_offset - RLEConstants::RLE_HEADER_SIZE) / sizeof(T) > max_entry_pos) {
+		if (rle_count_offset > AlignValue(RLEConstants::RLE_HEADER_SIZE + max_entry_pos * sizeof(T))) {
 			//! This would make the indexing of the index_pointer[entry_pos] reach outside of the segment
 			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
 		}
