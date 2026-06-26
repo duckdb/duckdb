@@ -158,6 +158,8 @@ enum class CopyOverwriteMode : uint8_t;
 
 enum class CopyToType : uint8_t;
 
+enum class CryptoHashFunction : uint8_t;
+
 enum class DataFileType : uint8_t;
 
 enum class DateCastResult : uint8_t;
@@ -320,7 +322,11 @@ enum class Monotonicity : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
 
+enum class MultiFileDecodeResult : uint8_t;
+
 enum class MultiFileFileState : uint8_t;
+
+enum class MultiFileScanPhase : uint8_t;
 
 enum class NType : uint8_t;
 
@@ -405,6 +411,8 @@ enum class RecoveryMode : uint8_t;
 enum class RecursiveCTEInlineStageType : uint8_t;
 
 enum class RecursiveProbeSidePreference : uint8_t;
+
+enum class RegexMatchOperatorSemantics : uint8_t;
 
 enum class RelationType : uint8_t;
 
@@ -543,8 +551,6 @@ enum class VariantChildLookupMode : uint8_t;
 enum class VariantLogicalType : uint8_t;
 
 enum class VariantStatsShreddingState : uint8_t;
-
-enum class VariantValueType : uint8_t;
 
 enum class VectorBufferType : uint8_t;
 
@@ -753,6 +759,9 @@ const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value);
 
 template<>
 const char* EnumUtil::ToChars<CopyToType>(CopyToType value);
+
+template<>
+const char* EnumUtil::ToChars<CryptoHashFunction>(CryptoHashFunction value);
 
 template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
@@ -998,7 +1007,13 @@ template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
 
 template<>
+const char* EnumUtil::ToChars<MultiFileDecodeResult>(MultiFileDecodeResult value);
+
+template<>
 const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value);
+
+template<>
+const char* EnumUtil::ToChars<MultiFileScanPhase>(MultiFileScanPhase value);
 
 template<>
 const char* EnumUtil::ToChars<NType>(NType value);
@@ -1125,6 +1140,9 @@ const char* EnumUtil::ToChars<RecursiveCTEInlineStageType>(RecursiveCTEInlineSta
 
 template<>
 const char* EnumUtil::ToChars<RecursiveProbeSidePreference>(RecursiveProbeSidePreference value);
+
+template<>
+const char* EnumUtil::ToChars<RegexMatchOperatorSemantics>(RegexMatchOperatorSemantics value);
 
 template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
@@ -1332,9 +1350,6 @@ const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value);
 
 template<>
 const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingState value);
-
-template<>
-const char* EnumUtil::ToChars<VariantValueType>(VariantValueType value);
 
 template<>
 const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value);
@@ -1552,6 +1567,9 @@ CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value);
 
 template<>
 CopyToType EnumUtil::FromString<CopyToType>(const char *value);
+
+template<>
+CryptoHashFunction EnumUtil::FromString<CryptoHashFunction>(const char *value);
 
 template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);
@@ -1797,7 +1815,13 @@ template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
 
 template<>
+MultiFileDecodeResult EnumUtil::FromString<MultiFileDecodeResult>(const char *value);
+
+template<>
 MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value);
+
+template<>
+MultiFileScanPhase EnumUtil::FromString<MultiFileScanPhase>(const char *value);
 
 template<>
 NType EnumUtil::FromString<NType>(const char *value);
@@ -1924,6 +1948,9 @@ RecursiveCTEInlineStageType EnumUtil::FromString<RecursiveCTEInlineStageType>(co
 
 template<>
 RecursiveProbeSidePreference EnumUtil::FromString<RecursiveProbeSidePreference>(const char *value);
+
+template<>
+RegexMatchOperatorSemantics EnumUtil::FromString<RegexMatchOperatorSemantics>(const char *value);
 
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);
@@ -2131,9 +2158,6 @@ VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value);
 
 template<>
 VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(const char *value);
-
-template<>
-VariantValueType EnumUtil::FromString<VariantValueType>(const char *value);
 
 template<>
 VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);

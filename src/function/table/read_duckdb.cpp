@@ -308,7 +308,6 @@ bool DuckDBReader::TryInitializeScan(ClientContext &context, GlobalTableFunction
 
 AsyncResult DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
                                LocalTableFunctionState &lstate_p, DataChunk &chunk) {
-	chunk.Reset();
 	auto &lstate = lstate_p.Cast<DuckDBReadLocalState>();
 	TableFunctionInput input(bind_data.get(), lstate.local_state, global_state);
 

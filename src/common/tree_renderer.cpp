@@ -9,15 +9,22 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/client_config.hpp"
+#include "duckdb/main/profiler_extension.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // Profiler output (base implementations)
 //===--------------------------------------------------------------------===//
-string TreeRenderer::RenderProfiler(const QueryProfiler &profiler) {
+void TreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseResultRenderer &ss) {
 	// by default, render the profiling node tree using this renderer (covers HTML/GraphViz/Mermaid)
-	return profiler.RenderProfilingNodeTree(*this);
+	profiler.RenderProfilingNodeTree(*this, ss);
+}
+
+unique_ptr<BaseResultRenderer> TreeRenderer::GetPrintRenderer() {
+	return make_uniq<PrinterResultRenderer>();
 }
 
 string TreeRenderer::RenderProfilerDisabled() {
@@ -73,17 +80,29 @@ static const ProfilerPrintFormatEntry &LookupProfilerPrintFormat(const string &n
 	                            StringUtil::Join(options, ", "));
 }
 
-ProfilerPrintFormat ProfilerPrintFormat::FromString(const string &name) {
-	// return the canonical (lowercase) name for the matched entry
-	return ProfilerPrintFormat(LookupProfilerPrintFormat(name).name);
-}
-
 unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(const string &name) {
 	return LookupProfilerPrintFormat(name).create_renderer();
 }
 
 unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(const ProfilerPrintFormat &format) {
 	return CreateRenderer(format.ToString());
+}
+
+unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ClientContext &context, const string &name) {
+	// registered renderers take precedence over the built-in formats
+	auto extension = ProfilerExtension::Find(context, name);
+	if (extension && extension->create_renderer) {
+		return extension->create_renderer(context);
+	}
+	auto renderer = CreateRenderer(name);
+	if (renderer) {
+		renderer->Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
+	}
+	return renderer;
+}
+
+unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ClientContext &context, const ProfilerPrintFormat &format) {
+	return CreateRenderer(context, format.ToString());
 }
 
 } // namespace duckdb

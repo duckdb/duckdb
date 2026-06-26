@@ -1,5 +1,6 @@
 #include "duckdb/common/tree_renderer/json_tree_renderer.hpp"
 
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -11,112 +12,98 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "utf8proc_wrapper.hpp"
 
-#include "yyjson.hpp"
+#include "duckdb/common/json_document.hpp"
 
 #include <sstream>
-
-using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
 string JSONTreeRenderer::ToString(const LogicalOperator &op) {
-	duckdb::stringstream ss;
+	StringResultRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string JSONTreeRenderer::ToString(const PhysicalOperator &op) {
-	duckdb::stringstream ss;
+	StringResultRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string JSONTreeRenderer::ToString(const ProfilingNode &op) {
-	duckdb::stringstream ss;
+	StringResultRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string JSONTreeRenderer::ToString(const Pipeline &op) {
-	duckdb::stringstream ss;
+	StringResultRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
-void JSONTreeRenderer::Render(const LogicalOperator &op, std::ostream &ss) {
+void JSONTreeRenderer::Render(const LogicalOperator &op, BaseResultRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void JSONTreeRenderer::Render(const PhysicalOperator &op, std::ostream &ss) {
+void JSONTreeRenderer::Render(const PhysicalOperator &op, BaseResultRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void JSONTreeRenderer::Render(const ProfilingNode &op, std::ostream &ss) {
+void JSONTreeRenderer::Render(const ProfilingNode &op, BaseResultRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void JSONTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
+void JSONTreeRenderer::Render(const Pipeline &op, BaseResultRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-static yyjson_mut_val *RenderRecursive(yyjson_mut_doc *doc, RenderTree &tree, idx_t x, idx_t y) {
+static JSONMutableValue RenderRecursive(JSONWriter &writer, RenderTree &tree, idx_t x, idx_t y) {
 	auto node_p = tree.GetNode(x, y);
 	D_ASSERT(node_p);
 	auto &node = *node_p;
 
-	auto object = yyjson_mut_obj(doc);
-	auto children = yyjson_mut_arr(doc);
+	auto object = writer.CreateObject();
+	auto children = writer.CreateArray();
 	for (auto &child_pos : node.child_positions) {
-		auto child_object = RenderRecursive(doc, tree, child_pos.x, child_pos.y);
-		yyjson_mut_arr_append(children, child_object);
+		children.Append(RenderRecursive(writer, tree, child_pos.x, child_pos.y));
 	}
-	yyjson_mut_obj_add_str(doc, object, "name", node.name.c_str());
-	yyjson_mut_obj_add_val(doc, object, "children", children);
-	auto extra_info = yyjson_mut_obj(doc);
+	object.AddString("name", node.name);
+	object.Add("children", children);
+	auto extra_info = writer.CreateObject();
 	for (auto &it : node.extra_text) {
 		auto &key = it.first;
 		auto &value = it.second;
 		auto splits = StringUtil::Split(value, "\n");
 		if (splits.size() > 1) {
-			auto list_items = yyjson_mut_arr(doc);
+			auto list_items = writer.CreateArray();
 			for (auto &split : splits) {
-				yyjson_mut_arr_add_strcpy(doc, list_items, split.c_str());
+				list_items.AppendString(split);
 			}
-			yyjson_mut_obj_add_val(doc, extra_info, key.c_str(), list_items);
+			extra_info.Add(key, list_items);
 		} else {
-			yyjson_mut_obj_add_strcpy(doc, extra_info, key.c_str(), value.c_str());
+			extra_info.AddString(key, value);
 		}
 	}
-	yyjson_mut_obj_add_val(doc, object, "extra_info", extra_info);
+	object.Add("extra_info", extra_info);
 	return object;
 }
 
-void JSONTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
-	auto doc = yyjson_mut_doc_new(nullptr);
-	auto result_obj = yyjson_mut_arr(doc);
-	yyjson_mut_doc_set_root(doc, result_obj);
-
-	auto plan = RenderRecursive(doc, root, 0, 0);
-	yyjson_mut_arr_append(result_obj, plan);
-
-	auto data = yyjson_mut_val_write_opts(result_obj, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr,
-	                                      nullptr, nullptr);
-	if (!data) {
-		yyjson_mut_doc_free(doc);
-		throw InternalException("The plan could not be rendered as JSON, yyjson failed");
-	}
-	ss << string(data);
-	free(data);
-	yyjson_mut_doc_free(doc);
+void JSONTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) {
+	JSONWriter writer;
+	auto result_obj = writer.CreateArray();
+	result_obj.Append(RenderRecursive(writer, root, 0, 0));
+	writer.SetRoot(result_obj);
+	ss << writer.ToString(JSONWriteFlags::ALLOW_INF_AND_NAN | JSONWriteFlags::PRETTY);
 }
 
-string JSONTreeRenderer::RenderProfiler(const QueryProfiler &profiler) {
+void JSONTreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseResultRenderer &ss) {
 	// the JSON profiler output is the full query profile result tree (including query-level metrics)
-	return profiler.ToJSON();
+	ss << profiler.ToJSON();
 }
 
 string JSONTreeRenderer::RenderProfilerDisabled() {

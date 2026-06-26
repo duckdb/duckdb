@@ -259,26 +259,18 @@ bool PEGTransformerFactory::ExpressionIsEmptyStar(const ParsedExpression &expr) 
 }
 
 QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input) {
-	QualifiedName result;
 	if (input.empty()) {
 		throw InternalException("QualifiedName cannot be made with an empty input.");
 	}
 	if (input.size() == 1) {
-		result.catalog = Identifier::InvalidCatalog();
-		result.schema = Identifier::InvalidSchema();
-		result.name = Identifier(input[0]);
+		return QualifiedName(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), Identifier(input[0]));
 	} else if (input.size() == 2) {
-		result.catalog = Identifier::InvalidCatalog();
-		result.schema = Identifier(input[0]);
-		result.name = Identifier(input[1]);
+		return QualifiedName(Identifier::InvalidCatalog(), Identifier(input[0]), Identifier(input[1]));
 	} else if (input.size() == 3) {
-		result.catalog = Identifier(input[0]);
-		result.schema = Identifier(input[1]);
-		result.name = Identifier(input[2]);
+		return QualifiedName(Identifier(input[0]), Identifier(input[1]), Identifier(input[2]));
 	} else {
 		throw ParserException("Too many qualifications found - expected [catalog.schema.name] or [schema.name]");
 	}
-	return result;
 }
 
 LogicalType PEGTransformerFactory::GetIntervalTargetType(DatePartSpecifier date_part) {

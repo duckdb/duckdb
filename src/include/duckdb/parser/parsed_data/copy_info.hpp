@@ -10,6 +10,7 @@
 
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -27,12 +28,6 @@ public:
 public:
 	CopyInfo();
 
-	//! The catalog name to copy to/from
-	Identifier catalog;
-	//! The schema name to copy to/from
-	Identifier schema;
-	//! The table name to copy to/from
-	Identifier table;
 	//! List of columns to copy to/from
 	vector<Identifier> select_list;
 	//! Whether or not this is a copy to file (false) or copy from a file (true)
@@ -53,6 +48,32 @@ public:
 	unique_ptr<QueryNode> select_statement;
 
 public:
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+	QualifiedName &GetQualifiedNameMutable() {
+		return qualified_name;
+	}
+	const Identifier &Catalog() const {
+		return qualified_name.Catalog();
+	}
+	Identifier &CatalogMutable() {
+		return qualified_name.CatalogMutable();
+	}
+	const Identifier &Schema() const {
+		return qualified_name.Schema();
+	}
+	Identifier &SchemaMutable() {
+		return qualified_name.SchemaMutable();
+	}
+	const Identifier &Table() const {
+		return qualified_name.Name();
+	}
+	Identifier &TableMutable() {
+		return qualified_name.NameMutable();
+	}
+
+public:
 	string CopyOptionsToString() const;
 
 public:
@@ -62,6 +83,10 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+
+private:
+	//! Qualified name of the table to copy to/from (catalog.schema.table)
+	QualifiedName qualified_name;
 };
 
 } // namespace duckdb

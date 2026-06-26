@@ -27,15 +27,15 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer 
                                                                  const QualifiedName &qualified_name) {
 	auto showref = make_uniq<ShowRef>();
 	showref->show_type = ShowType::SHOW_FROM;
-	if (!IsInvalidCatalog(qualified_name.catalog)) {
+	if (!IsInvalidCatalog(qualified_name.Catalog())) {
 		throw ParserException("Expected \"SHOW TABLES FROM database\", \"SHOW TABLES FROM schema\", or "
 		                      "\"SHOW TABLES FROM database.schema\"");
 	}
-	if (IsInvalidSchema(qualified_name.schema)) {
-		showref->schema_name = qualified_name.name;
+	if (IsInvalidSchema(qualified_name.Schema())) {
+		showref->schema_name = qualified_name.Name();
 	} else {
-		showref->catalog_name = qualified_name.schema;
-		showref->schema_name = qualified_name.name;
+		showref->catalog_name = qualified_name.Schema();
+		showref->schema_name = qualified_name.Name();
 	}
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
@@ -75,15 +75,15 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 
 			if (showref->show_type == ShowType::SHOW_FROM) {
 				// Logic for SHOW TABLES FROM [database].[schema]
-				if (IsInvalidSchema(base_table.schema_name)) {
-					showref->schema_name = base_table.table_name;
+				if (IsInvalidSchema(base_table.Schema())) {
+					showref->schema_name = base_table.Table();
 				} else {
-					showref->catalog_name = base_table.schema_name;
-					showref->schema_name = base_table.table_name;
+					showref->catalog_name = base_table.Schema();
+					showref->schema_name = base_table.Table();
 				}
-			} else if (IsInvalidSchema(base_table.schema_name)) {
+			} else if (IsInvalidSchema(base_table.Schema())) {
 				// Logic for unqualified relations (databases, tables, variables)
-				auto table_name = StringUtil::Lower(base_table.table_name.GetIdentifierName());
+				auto table_name = StringUtil::Lower(base_table.Table().GetIdentifierName());
 				if (table_name == "databases" || table_name == "tables" || table_name == "schemas" ||
 				    table_name == "variables") {
 					showref->table_name = Identifier("\"" + table_name + "\"");
@@ -97,7 +97,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 			if (target.is_table_name) {
 				// Case: SHOW 'something' or DESCRIBE 'something'
 				auto table_ref = make_uniq<BaseTableRef>();
-				table_ref->table_name = target.table_name;
+				table_ref->TableMutable() = target.table_name;
 				show_select_node->from_table = std::move(table_ref);
 			} else {
 				// Case: A relation/table reference

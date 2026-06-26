@@ -29,7 +29,7 @@ void DuckCatalog::Initialize(bool load_builtin) {
 
 	// create the default schema
 	CreateSchemaInfo info;
-	info.schema = Identifier::DefaultSchema();
+	info.SchemaMutable() = Identifier::DefaultSchema();
 	info.internal = true;
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	CreateSchema(data, info);
@@ -63,29 +63,29 @@ optional_ptr<DependencyManager> DuckCatalog::GetDependencyManager() {
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo &info) {
 	LogicalDependencyList dependencies;
 
-	if (!info.internal && DefaultSchemaGenerator::IsDefaultSchema(info.schema)) {
+	if (!info.internal && DefaultSchemaGenerator::IsDefaultSchema(info.Schema())) {
 		return nullptr;
 	}
 	auto entry = make_uniq<DuckSchemaEntry>(*this, info);
 	auto result = entry.get();
-	if (!schemas->CreateEntry(transaction, info.schema, std::move(entry), dependencies)) {
+	if (!schemas->CreateEntry(transaction, info.Schema(), std::move(entry), dependencies)) {
 		return nullptr;
 	}
 	return result;
 }
 
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) {
-	D_ASSERT(!info.schema.empty());
+	D_ASSERT(!info.Schema().empty());
 	auto result = CreateSchemaInternal(transaction, info);
 	if (!result) {
 		switch (info.on_conflict) {
 		case OnCreateConflict::ERROR_ON_CONFLICT:
-			throw CatalogException::EntryAlreadyExists(CatalogType::SCHEMA_ENTRY, info.schema);
+			throw CatalogException::EntryAlreadyExists(CatalogType::SCHEMA_ENTRY, info.Schema());
 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
 			DropInfo drop_info;
 			drop_info.type = CatalogType::SCHEMA_ENTRY;
-			drop_info.catalog = info.catalog;
-			drop_info.name = info.schema;
+			drop_info.CatalogMutable() = info.Catalog();
+			drop_info.NameMutable() = info.Schema();
 			DropSchema(transaction, drop_info);
 			result = CreateSchemaInternal(transaction, info);
 			if (!result) {
@@ -104,10 +104,10 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 }
 
 void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
-	D_ASSERT(!info.name.empty());
-	if (!schemas->DropEntry(transaction, info.name, info.cascade)) {
+	D_ASSERT(!info.Name().empty());
+	if (!schemas->DropEntry(transaction, info.Name(), info.cascade)) {
 		if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, info.name, string());
+			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, info.Name(), string());
 		}
 	}
 }

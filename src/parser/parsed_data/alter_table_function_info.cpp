@@ -6,8 +6,7 @@ namespace duckdb {
 // AlterTableFunctionInfo
 //===--------------------------------------------------------------------===//
 AlterTableFunctionInfo::AlterTableFunctionInfo(AlterTableFunctionType type, AlterEntryData data)
-    : AlterInfo(AlterType::ALTER_TABLE_FUNCTION, std::move(data.catalog), std::move(data.schema), std::move(data.name),
-                data.if_not_found),
+    : AlterInfo(AlterType::ALTER_TABLE_FUNCTION, std::move(data.qualified_name), data.if_not_found),
       alter_table_function_type(type) {
 }
 AlterTableFunctionInfo::~AlterTableFunctionInfo() {

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/printer.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/list.hpp"
 #include "duckdb/common/column_data_collection_render_interface.hpp"
@@ -67,6 +68,22 @@ public:
 
 private:
 	string result;
+};
+
+//! A result renderer that prints directly to an output stream (stdout/stderr) as it renders.
+class PrinterResultRenderer : public BaseResultRenderer {
+public:
+	explicit PrinterResultRenderer(OutputStream stream = OutputStream::STREAM_STDERR);
+
+	void RenderLayout(const string &text) override;
+	void RenderColumnName(const string &text) override;
+	void RenderType(const string &text) override;
+	void RenderValue(const string &text, const LogicalType &type) override;
+	void RenderNull(const string &text, const LogicalType &type) override;
+	void RenderFooter(const string &text) override;
+
+private:
+	OutputStream stream;
 };
 
 enum class LargeNumberRendering {

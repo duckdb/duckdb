@@ -29,12 +29,17 @@ struct FunctionDescription {
 struct CreateFunctionInfo : public CreateInfo {
 	explicit CreateFunctionInfo(CatalogType type, Identifier schema = Identifier::DefaultSchema());
 
-	//! Function name
-	Identifier name;
 	//! The function name of which this function is an alias
 	Identifier alias_of;
 	//! Function description
 	vector<FunctionDescription> descriptions;
+
+	const Identifier &GetFunctionName() const {
+		return qualified_name.Name();
+	}
+	void SetFunctionName(Identifier name) {
+		qualified_name.NameMutable() = std::move(name);
+	}
 
 	DUCKDB_API void CopyFunctionProperties(CreateFunctionInfo &other) const;
 };

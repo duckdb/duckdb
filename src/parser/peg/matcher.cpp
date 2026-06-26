@@ -964,8 +964,8 @@ private:
 			return false;
 		}
 		// Exclude LIKE/SIMILAR operators — handled by LikeVariations at a higher precedence level
-		if (token_text == "~~" || token_text == "~~*" || token_text == "~~~" || token_text == "!~~" ||
-		    token_text == "!~~*" || token_text == "!~") {
+		if (token_text == "~~" || token_text == "~~*" || token_text == "~~~" || token_text == "~*" ||
+		    token_text == "!~~" || token_text == "!~~*" || token_text == "!~" || token_text == "!~*") {
 			return false;
 		}
 		for (auto &c : token_text) {

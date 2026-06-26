@@ -58,7 +58,7 @@ PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
 			}
 		} else {
 			auto base_table = make_uniq<BaseTableRef>();
-			base_table->table_name = col_expr.GetColumnName();
+			base_table->TableMutable() = col_expr.GetColumnName();
 			select_node->from_table = std::move(base_table);
 		}
 		select_node->select_list.push_back(make_uniq<StarExpression>());
@@ -174,7 +174,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		// COUNT(*) gets converted into COUNT()
 		function_children.clear();
 	}
-	auto lowercase_name = StringUtil::Lower(qualified_function.name.GetIdentifierName());
+	auto lowercase_name = StringUtil::Lower(qualified_function.Name().GetIdentifierName());
 
 	if (over_clause) {
 		if (transformer.in_window_definition) {
@@ -192,8 +192,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 
 		transformer.in_window_definition = true;
 		auto expr = std::move(*over_clause);
-		expr->CatalogMutable() = qualified_function.catalog;
-		expr->SchemaMutable() = qualified_function.schema;
+		expr->CatalogMutable() = qualified_function.Catalog();
+		expr->SchemaMutable() = qualified_function.Schema();
 		expr->SetFunctionName(lowercase_name);
 
 		for (auto &arg : function_children) {
@@ -323,12 +323,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			}
 			lowercase_name = "mode";
 		} else {
-			throw ParserException("Unknown ordered aggregate \"%s\".", qualified_function.name);
+			throw ParserException("Unknown ordered aggregate \"%s\".", qualified_function.Name());
 		}
 	}
-	auto result = make_uniq<FunctionExpression>(
-	    qualified_function.catalog, qualified_function.schema, Identifier(lowercase_name), std::move(function_children),
-	    std::move(filter_expr), std::move(order_modifier), distinct, false, export_clause);
+	auto result =
+	    make_uniq<FunctionExpression>(qualified_function.Catalog(), qualified_function.Schema(),
+	                                  Identifier(lowercase_name), std::move(function_children), std::move(filter_expr),
+	                                  std::move(order_modifier), distinct, false, export_clause);
 
 	return std::move(result);
 }
@@ -370,10 +371,7 @@ bool PEGTransformerFactory::TransformAllKeyword(PEGTransformer &transformer) {
 QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer &transformer,
                                                                  ParseResult &choice_result) {
 	if (choice_result.type == ParseResultType::IDENTIFIER) {
-		QualifiedName result;
-		result.catalog = INVALID_CATALOG;
-		result.schema = INVALID_SCHEMA;
-		result.name = choice_result.Cast<IdentifierParseResult>().identifier;
+		QualifiedName result(INVALID_CATALOG, INVALID_SCHEMA, choice_result.Cast<IdentifierParseResult>().identifier);
 		return result;
 	}
 	return transformer.Transform<QualifiedName>(choice_result);
@@ -382,26 +380,18 @@ QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedFunctionName(PEGTransformer &transformer,
                                                                          const Identifier &schema_qualification,
                                                                          const Identifier &reserved_function_name) {
-	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = schema_qualification;
-	result.name = reserved_function_name;
+	QualifiedName result(INVALID_CATALOG, schema_qualification, reserved_function_name);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaFunctionName(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const optional<Identifier> &reserved_schema_qualification, const Identifier &reserved_function_name) {
-	QualifiedName result;
 	if (reserved_schema_qualification) {
-		result.catalog = catalog_qualification;
-		result.schema = *reserved_schema_qualification;
+		return QualifiedName(catalog_qualification, *reserved_schema_qualification, reserved_function_name);
 	} else {
-		result.catalog = INVALID_CATALOG;
-		result.schema = catalog_qualification;
+		return QualifiedName(INVALID_CATALOG, catalog_qualification, reserved_function_name);
 	}
-	result.name = reserved_function_name;
-	return result;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayBoundedListExpression(
@@ -784,10 +774,148 @@ bool TryNegateLikeFunction(Identifier &function_name) {
 		return true;
 	} else if (function_name == "~~~") {
 		return false;
+	} else if (function_name == "regexp_matches") {
+		return false;
 	} else if (function_name == "regexp_full_match") {
 		return false;
 	}
 	return false;
+}
+
+static string RegexMatchOperatorFunctionName(PEGTransformer &transformer) {
+	if (transformer.options.regex_match_operator_semantics == RegexMatchOperatorSemantics::FULL) {
+		return "regexp_full_match";
+	}
+	return "regexp_matches";
+}
+
+static bool IsRegexMatchFunctionName(const string &function_name) {
+	auto name = function_name;
+	if (StringUtil::StartsWith(name, "!")) {
+		name = name.substr(1);
+	}
+	return name == "regexp_matches" || name == "regexp_full_match";
+}
+
+static bool TryRemoveRegexOperatorNegation(Identifier &function_name) {
+	if (function_name == "!regexp_matches") {
+		function_name = "regexp_matches";
+		return true;
+	}
+	if (function_name == "!regexp_full_match") {
+		function_name = "regexp_full_match";
+		return true;
+	}
+	return false;
+}
+
+static bool TryRemoveRegexCaseInsensitiveSuffix(string &function_name) {
+	static constexpr const char *REGEX_CASE_INSENSITIVE_SUFFIX = "__case_insensitive";
+	if (!StringUtil::EndsWith(function_name, REGEX_CASE_INSENSITIVE_SUFFIX)) {
+		return false;
+	}
+	function_name =
+	    function_name.substr(0, function_name.size() - std::char_traits<char>::length(REGEX_CASE_INSENSITIVE_SUFFIX));
+	return true;
+}
+
+static bool TryGetRegexMatchOperator(const string &op_string, PEGTransformer &transformer, string &function_name,
+                                     bool &negated, bool &case_insensitive) {
+	if (op_string == "~") {
+		function_name = RegexMatchOperatorFunctionName(transformer);
+		negated = false;
+		case_insensitive = false;
+		return true;
+	}
+	if (op_string == "!~") {
+		function_name = RegexMatchOperatorFunctionName(transformer);
+		negated = true;
+		case_insensitive = false;
+		return true;
+	}
+	if (op_string == "~*") {
+		function_name = RegexMatchOperatorFunctionName(transformer);
+		negated = false;
+		case_insensitive = true;
+		return true;
+	}
+	if (op_string == "!~*") {
+		function_name = RegexMatchOperatorFunctionName(transformer);
+		negated = true;
+		case_insensitive = true;
+		return true;
+	}
+	return false;
+}
+
+static unique_ptr<ParsedExpression> MakeFunctionExpression(const string &name,
+                                                           vector<unique_ptr<ParsedExpression>> children) {
+	return make_uniq<FunctionExpression>(Identifier(name), std::move(children));
+}
+
+static unique_ptr<ParsedExpression> MakeBooleanConstant(bool value) {
+	return make_uniq<ConstantExpression>(Value::BOOLEAN(value));
+}
+
+static unique_ptr<ParsedExpression> MakeListContains(unique_ptr<ParsedExpression> list, bool value) {
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(std::move(list));
+	children.push_back(MakeBooleanConstant(value));
+	return MakeFunctionExpression("list_contains", std::move(children));
+}
+
+static unique_ptr<ParsedExpression> MakeListHasNull(unique_ptr<ParsedExpression> list) {
+	auto is_null = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL,
+	                                             make_uniq<ColumnRefExpression>("__regex_match"));
+
+	auto null_check_lambda = make_uniq<LambdaExpression>(vector<string> {"__regex_match"}, std::move(is_null));
+	vector<unique_ptr<ParsedExpression>> filter_children;
+	filter_children.push_back(std::move(list));
+	filter_children.push_back(std::move(null_check_lambda));
+	auto null_matches = MakeFunctionExpression("list_filter", std::move(filter_children));
+
+	vector<unique_ptr<ParsedExpression>> length_children;
+	length_children.push_back(std::move(null_matches));
+	auto null_count = MakeFunctionExpression("len", std::move(length_children));
+
+	return make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN, std::move(null_count),
+	                                       make_uniq<ConstantExpression>(Value::INTEGER(0)));
+}
+
+static unique_ptr<ParsedExpression> TransformRegexAnyAllList(unique_ptr<ParsedExpression> left_expr,
+                                                             unique_ptr<ParsedExpression> right_expr,
+                                                             const string &function_name, bool negated,
+                                                             bool case_insensitive, bool is_any) {
+	vector<unique_ptr<ParsedExpression>> regex_children;
+	regex_children.push_back(std::move(left_expr));
+	regex_children.push_back(make_uniq<ColumnRefExpression>("__regex_pattern"));
+	if (case_insensitive) {
+		regex_children.push_back(make_uniq<ConstantExpression>(Value("i")));
+	}
+	unique_ptr<ParsedExpression> regex_match = MakeFunctionExpression(function_name, std::move(regex_children));
+	if (negated) {
+		regex_match = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(regex_match));
+	}
+
+	auto pattern_lambda = make_uniq<LambdaExpression>(vector<string> {"__regex_pattern"}, std::move(regex_match));
+	vector<unique_ptr<ParsedExpression>> transform_children;
+	transform_children.push_back(std::move(right_expr));
+	transform_children.push_back(std::move(pattern_lambda));
+	auto match_list = MakeFunctionExpression("list_transform", std::move(transform_children));
+
+	auto result = make_uniq<CaseExpression>();
+	CaseCheck has_decisive_value;
+	has_decisive_value.when_expr = MakeListContains(match_list->Copy(), is_any);
+	has_decisive_value.then_expr = MakeBooleanConstant(is_any);
+	result->CaseChecksMutable().push_back(std::move(has_decisive_value));
+
+	CaseCheck has_null_value;
+	has_null_value.when_expr = MakeListHasNull(match_list->Copy());
+	has_null_value.then_expr = make_uniq<ConstantExpression>(Value());
+	result->CaseChecksMutable().push_back(std::move(has_null_value));
+
+	result->ElseMutable() = MakeBooleanConstant(!is_any);
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression>
@@ -815,16 +943,17 @@ PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transfor
 		} else {
 			func_expr->GetArgumentsMutable().insert(func_expr->GetArgumentsMutable().begin(), std::move(expr));
 		}
+		auto regex_operator_negated = TryRemoveRegexOperatorNegation(func_expr->FunctionNameMutable());
 		if (has_not) {
-			if (!TryNegateLikeFunction(func_expr->FunctionNameMutable())) {
+			if (regex_operator_negated) {
+				expr = std::move(func_expr);
+			} else if (!TryNegateLikeFunction(func_expr->FunctionNameMutable())) {
 				// If it wasn't a special "Like" function, wrap it in a standard NOT operator
 				expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(func_expr));
 			} else {
 				expr = std::move(func_expr);
 			}
-		} else if (func_expr->FunctionName() == "!~") {
-			func_expr->FunctionNameMutable() = "regexp_full_match";
-			func_expr->IsOperatorMutable() = false;
+		} else if (regex_operator_negated) {
 			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(func_expr));
 		} else {
 			expr = std::move(func_expr);
@@ -911,8 +1040,14 @@ PEGTransformerFactory::TransformLikeClause(PEGTransformer &transformer, const st
                                            unique_ptr<ParsedExpression> other_operator_expression,
                                            optional<unique_ptr<ParsedExpression>> escape_clause) {
 	string like_variation = like_variations;
+	bool case_insensitive_regex = TryRemoveRegexCaseInsensitiveSuffix(like_variation);
+	bool is_regex_operator = IsRegexMatchFunctionName(like_variation);
 	vector<unique_ptr<ParsedExpression>> like_children;
 	like_children.push_back(std::move(other_operator_expression));
+	if (case_insensitive_regex && escape_clause) {
+		throw ParserException(
+		    "ESCAPE clause is not supported with case-insensitive regular expression match operators");
+	}
 	if (escape_clause) {
 		if (like_variation == "~~") {
 			like_variation = "like_escape";
@@ -921,8 +1056,11 @@ PEGTransformerFactory::TransformLikeClause(PEGTransformer &transformer, const st
 		}
 		like_children.push_back(std::move(*escape_clause));
 	}
+	if (case_insensitive_regex) {
+		like_children.push_back(make_uniq<ConstantExpression>(Value("i")));
+	}
 	auto result = make_uniq<FunctionExpression>(Identifier(like_variation), std::move(like_children));
-	if (like_variation != "regexp_full_match") {
+	if (!is_regex_operator) {
 		result->IsOperatorMutable() = true;
 	}
 	return std::move(result);
@@ -950,6 +1088,14 @@ string PEGTransformerFactory::TransformSimilarToToken(PEGTransformer &transforme
 	return "regexp_full_match";
 }
 
+string PEGTransformerFactory::TransformRegexMatchToken(PEGTransformer &transformer) {
+	return RegexMatchOperatorFunctionName(transformer);
+}
+
+string PEGTransformerFactory::TransformRegexInsensitiveMatchToken(PEGTransformer &transformer) {
+	return RegexMatchOperatorFunctionName(transformer) + "__case_insensitive";
+}
+
 string PEGTransformerFactory::TransformNotILikeOp(PEGTransformer &transformer) {
 	return "!~~*";
 }
@@ -958,8 +1104,12 @@ string PEGTransformerFactory::TransformNotLikeOp(PEGTransformer &transformer) {
 	return "!~~";
 }
 
+string PEGTransformerFactory::TransformNotRegexInsensitiveMatchOp(PEGTransformer &transformer) {
+	return "!" + RegexMatchOperatorFunctionName(transformer) + "__case_insensitive";
+}
+
 string PEGTransformerFactory::TransformNotSimilarToOp(PEGTransformer &transformer) {
-	return "!~";
+	return "!" + RegexMatchOperatorFunctionName(transformer);
 }
 
 unique_ptr<ParsedExpression>
@@ -999,6 +1149,15 @@ PEGTransformerFactory::TransformOtherOperatorExpression(PEGTransformer &transfor
 				}
 				expr = std::move(subquery_expr);
 			} else {
+				string regex_function_name;
+				bool regex_negated;
+				bool regex_case_insensitive;
+				if (TryGetRegexMatchOperator(op_string, transformer, regex_function_name, regex_negated,
+				                             regex_case_insensitive)) {
+					expr = TransformRegexAnyAllList(std::move(expr), std::move(right_expr), regex_function_name,
+					                                regex_negated, regex_case_insensitive, is_any);
+					continue;
+				}
 				// left=ANY(right)
 				// we turn this into left=ANY((SELECT UNNEST(right)))
 				if (expression_type == ExpressionType::INVALID) {

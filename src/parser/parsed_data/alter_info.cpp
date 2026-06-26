@@ -7,8 +7,13 @@ namespace duckdb {
 
 AlterInfo::AlterInfo(AlterType type, Identifier catalog_p, Identifier schema_p, Identifier name_p,
                      OnEntryNotFound if_not_found)
-    : ParseInfo(TYPE), type(type), if_not_found(if_not_found), catalog(std::move(catalog_p)),
-      schema(std::move(schema_p)), name(std::move(name_p)), allow_internal(false) {
+    : ParseInfo(TYPE), type(type), if_not_found(if_not_found), allow_internal(false),
+      qualified_name(std::move(catalog_p), std::move(schema_p), std::move(name_p)) {
+}
+
+AlterInfo::AlterInfo(AlterType type, QualifiedName qualified_name_p, OnEntryNotFound if_not_found)
+    : ParseInfo(TYPE), type(type), if_not_found(if_not_found), allow_internal(false),
+      qualified_name(std::move(qualified_name_p)) {
 }
 
 AlterInfo::AlterInfo(AlterType type) : ParseInfo(TYPE), type(type) {
@@ -18,12 +23,7 @@ AlterInfo::~AlterInfo() {
 }
 
 AlterEntryData AlterInfo::GetAlterEntryData() const {
-	AlterEntryData data;
-	data.catalog = catalog;
-	data.schema = schema;
-	data.name = name;
-	data.if_not_found = if_not_found;
-	return data;
+	return AlterEntryData(GetQualifiedName(), if_not_found);
 }
 
 bool AlterInfo::IsAddPrimaryKey() const {

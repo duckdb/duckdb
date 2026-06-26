@@ -19,7 +19,12 @@ struct CreateCollationInfo : public CreateInfo {
 	                               bool not_required_for_equality_p);
 
 	//! The name of the collation
-	Identifier name;
+	const Identifier &GetCollationName() const {
+		return qualified_name.Name();
+	}
+	void SetCollationName(Identifier name) {
+		qualified_name.NameMutable() = std::move(name);
+	}
 	//! The collation function to push in case collation is required
 	ScalarFunction function;
 	//! Whether or not the collation can be combined with other collations.

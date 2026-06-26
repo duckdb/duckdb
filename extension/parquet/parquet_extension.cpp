@@ -80,7 +80,7 @@
 #include "duckdb/storage/storage_info.hpp"
 #include "parquet_field_id.hpp"
 #include "parquet_types.h"
-#include "reader/variant/variant_shredded_conversion.hpp"
+#include "reader/variant/parquet_variant_iterator.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -973,7 +973,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 
 	// bytes_to_variant
-	loader.RegisterFunction(VariantShreddedConversion::GetBytesToVariantFunction());
+	loader.RegisterFunction(ParquetVariantConversion::GetBytesToVariantFunction());
 
 	CopyFunction function("parquet");
 	function.copy_to_select = ParquetWriteSelect;

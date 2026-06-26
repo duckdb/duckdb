@@ -14,5 +14,4 @@ SELECT subq_0.c2 AS c4 FROM (SELECT ref_1.fixed_nested_int_array AS c2 FROM main
 ----
 NULL
 [[4, 5, 6], [NULL, 2, 3], [4, 5, 6]]
-[[4, 5, 6], [NULL, 2, 3], [4, 5, 6]]
 [[NULL, 2, 3], NULL, [NULL, 2, 3]]

@@ -23,7 +23,12 @@ struct CreateTableInfo : public CreateInfo {
 	DUCKDB_API CreateTableInfo(SchemaCatalogEntry &schema, Identifier name);
 
 	//! Table name to insert to
-	Identifier table;
+	const Identifier &GetTableName() const {
+		return qualified_name.Name();
+	}
+	void SetTableName(Identifier name) {
+		qualified_name.NameMutable() = std::move(name);
+	}
 	//! List of columns of the table
 	ColumnList columns;
 	//! List of constraints on the table

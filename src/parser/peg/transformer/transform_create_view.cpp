@@ -66,13 +66,13 @@ void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, 
 
 	cte_info->query_node = std::move(inner_node);
 
-	outer_select->cte_map.map.insert(info->view_name, std::move(cte_info));
+	outer_select->cte_map.map.insert(info->GetViewName(), std::move(cte_info));
 
 	for (const auto &column : info->aliases) {
 		outer_select->select_list.push_back(make_uniq<ColumnRefExpression>(column));
 	}
 
-	auto table_description = TableDescription(info->catalog, info->schema, info->view_name);
+	auto table_description = TableDescription(info->Catalog(), info->Schema(), info->GetViewName());
 	outer_select->from_table = make_uniq<BaseTableRef>(table_description);
 
 	auto outer_select_statement = make_uniq<SelectStatement>();
@@ -82,7 +82,7 @@ void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, 
 
 void PEGTransformerFactory::ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> &node) {
 	vector<unique_ptr<ParsedExpression>> empty_key_targets;
-	auto result_node = ToRecursiveCTE(std::move(node), info->view_name, info->aliases, empty_key_targets);
+	auto result_node = ToRecursiveCTE(std::move(node), info->GetViewName(), info->aliases, empty_key_targets);
 	WrapRecursiveView(info, std::move(result_node));
 }
 
@@ -95,9 +95,9 @@ PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, cons
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateViewInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	info->catalog = qualified_name.catalog;
-	info->schema = qualified_name.schema;
-	info->view_name = qualified_name.name;
+	info->CatalogMutable() = qualified_name.Catalog();
+	info->SchemaMutable() = qualified_name.Schema();
+	info->SetViewName(qualified_name.Name());
 	if (insert_column_list) {
 		info->aliases = StringsToIdentifiers(*insert_column_list);
 	}

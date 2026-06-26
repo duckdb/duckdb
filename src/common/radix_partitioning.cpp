@@ -10,17 +10,8 @@ namespace duckdb {
 //! Templated radix partitioning constants, can be templated to the number of radix bits
 template <idx_t radix_bits>
 struct RadixPartitioningConstants {
-public:
-	//! Bitmask of the upper bits starting at the 5th byte
-	static constexpr idx_t NUM_PARTITIONS = RadixPartitioning::NumberOfPartitions(radix_bits);
-	static constexpr idx_t SHIFT = RadixPartitioning::Shift(radix_bits);
-	static constexpr hash_t MASK = RadixPartitioning::Mask(radix_bits);
-
-public:
-	//! Apply bitmask and right shift to get a number between 0 and NUM_PARTITIONS
 	static hash_t ApplyMask(const hash_t hash) {
-		D_ASSERT((hash & MASK) >> SHIFT < NUM_PARTITIONS);
-		return (hash & MASK) >> SHIFT;
+		return RadixPartitioning::ApplyMask(hash, radix_bits);
 	}
 };
 
@@ -160,9 +151,10 @@ void RadixPartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAp
 //===--------------------------------------------------------------------===//
 RadixPartitionedTupleData::RadixPartitionedTupleData(BufferManager &buffer_manager,
                                                      shared_ptr<TupleDataLayout> layout_ptr, const MemoryTag tag,
-                                                     const idx_t radix_bits_p, const idx_t hash_col_idx_p)
-    : PartitionedTupleData(PartitionedTupleDataType::RADIX, buffer_manager, layout_ptr, tag), radix_bits(radix_bits_p),
-      hash_col_idx(hash_col_idx_p) {
+                                                     const idx_t radix_bits_p, const idx_t hash_col_idx_p,
+                                                     QueryContext context)
+    : PartitionedTupleData(PartitionedTupleDataType::RADIX, buffer_manager, layout_ptr, tag, context),
+      radix_bits(radix_bits_p), hash_col_idx(hash_col_idx_p) {
 	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	D_ASSERT(hash_col_idx < layout.GetTypes().size());
 	Initialize();

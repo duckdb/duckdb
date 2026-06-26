@@ -9,9 +9,11 @@ namespace duckdb {
 
 TypeExpression::TypeExpression(Identifier catalog, Identifier schema, Identifier type_name,
                                vector<unique_ptr<ParsedExpression>> children_p)
-    : ParsedExpression(ExpressionType::TYPE, ExpressionClass::TYPE), catalog(std::move(catalog)),
-      schema(std::move(schema)), type_name(std::move(type_name)), children(std::move(children_p)) {
-	D_ASSERT(!this->type_name.empty());
+    : ParsedExpression(ExpressionType::TYPE, ExpressionClass::TYPE), qualified_name {std::move(catalog),
+                                                                                     std::move(schema),
+                                                                                     std::move(type_name)},
+      children(std::move(children_p)) {
+	D_ASSERT(!qualified_name.Name().empty());
 }
 
 TypeExpression::TypeExpression(Identifier type_name, vector<unique_ptr<ParsedExpression>> children)
@@ -28,11 +30,12 @@ TypeExpression::TypeExpression() : ParsedExpression(ExpressionType::TYPE, Expres
 
 string TypeExpression::ToString() const {
 	string result;
-	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog) + ".";
+	auto &type_name = qualified_name.Name();
+	if (!qualified_name.Catalog().empty()) {
+		result += SQLIdentifier(qualified_name.Catalog()) + ".";
 	}
-	if (!schema.empty()) {
-		result += SQLIdentifier(schema) + ".";
+	if (!qualified_name.Schema().empty()) {
+		result += SQLIdentifier(qualified_name.Schema()) + ".";
 	}
 
 	auto &params = children;
@@ -115,7 +118,7 @@ string TypeExpression::ToString() const {
 }
 
 void TypeExpression::Verify() const {
-	D_ASSERT(!type_name.empty());
+	D_ASSERT(!qualified_name.Name().empty());
 }
 
 } // namespace duckdb

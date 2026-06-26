@@ -1,0 +1,87 @@
+diff --git a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
+index 89854cdb..e51a5550 100644
+--- a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
++++ b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
+@@ -106,7 +106,7 @@ void IcebergSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
+ }
+ 
+ void IcebergSchemaEntry::DropEntry(ClientContext &context, DropInfo &info, bool delete_entry) {
+-	auto table_name = info.name;
++	auto table_name = info.Name();
+ 	// find if info has a table name, if so look for it in
+ 	auto table_info_it = tables.GetEntries().find(table_name.GetIdentifierName());
+ 	if (table_info_it == tables.GetEntries().end()) {
+@@ -292,10 +292,10 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 	auto &irc_transaction = GetICTransaction(transaction);
+ 	auto &context = transaction.GetContext();
+ 
+-	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, alter_table_info.name);
++	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, alter_table_info.Name());
+ 	auto catalog_entry = tables.GetEntry(context, lookup);
+ 	if (!catalog_entry) {
+-		throw CatalogException("Table with name \"%s\" does not exist!", alter_table_info.name);
++		throw CatalogException("Table with name \"%s\" does not exist!", alter_table_info.Name());
+ 	}
+ 	auto &table_entry = catalog_entry->Cast<IcebergTableEntry>();
+ 	auto &catalog_table_info = table_entry.table_info;
+@@ -334,7 +334,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 
+ 		auto &last_column_id = updated_table.table_metadata.last_column_id;
+ 		if (!last_column_id.IsValid()) {
+-			throw InternalException("No last_column_id when trying to ADD COLUMN %s", add_column_info.name);
++			throw InternalException("No last_column_id when trying to ADD COLUMN %s", add_column_info.Name());
+ 		}
+ 		auto field_id = last_column_id.GetIndex() + 1;
+ 		auto next_field_id = [&field_id]() -> idx_t {
+diff --git a/src/catalog/rest/iceberg_catalog.cpp b/src/catalog/rest/iceberg_catalog.cpp
+index 3fdf64b0..cbc40b82 100644
+--- a/src/catalog/rest/iceberg_catalog.cpp
++++ b/src/catalog/rest/iceberg_catalog.cpp
+@@ -111,21 +111,21 @@ void IcebergCatalog::DropSchema(ClientContext &context, DropInfo &info) {
+ 	}
+ 
+ 	// Verify schema existence on the server first
+-	bool schema_exists = IRCAPI::VerifySchemaExistence(context, *this, info.name.GetIdentifierName());
++	bool schema_exists = IRCAPI::VerifySchemaExistence(context, *this, info.Name().GetIdentifierName());
+ 
+ 	if (!schema_exists) {
+ 		if (info.if_not_found == OnEntryNotFound::RETURN_NULL) {
+ 			// remove the entry if it exists locally
+ 			// it could have been created during the bind phase.
+-			GetSchemas().RemoveEntry(info.name.GetIdentifierName());
++			GetSchemas().RemoveEntry(info.Name().GetIdentifierName());
+ 			return;
+ 		}
+-		throw CatalogException("Schema with name \"%s\" does not exist", info.name);
++		throw CatalogException("Schema with name \"%s\" does not exist", info.Name());
+ 	}
+ 
+ 	// Schema exists - defer the server deletion to commit
+ 	auto &iceberg_transaction = IcebergTransaction::Get(context, *this);
+-	iceberg_transaction.deleted_schemas.insert(info.name.GetIdentifierName());
++	iceberg_transaction.deleted_schemas.insert(info.Name().GetIdentifierName());
+ }
+ 
+ unique_ptr<LogicalOperator> IcebergCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
+diff --git a/src/catalog/rest/transaction/iceberg_transaction.cpp b/src/catalog/rest/transaction/iceberg_transaction.cpp
+index a6a54518..f3ee57bf 100644
+--- a/src/catalog/rest/transaction/iceberg_transaction.cpp
++++ b/src/catalog/rest/transaction/iceberg_transaction.cpp
+@@ -527,7 +527,7 @@ void IcebergTransaction::DoTableRename(IcebergTransactionRenameUpdate &rename_up
+ 	IRCAPI::CommitTableRename(context, catalog, transaction_json);
+ 
+ 	DropInfo drop_info;
+-	drop_info.name = Identifier(table_name);
++	drop_info.NameMutable() = Identifier(table_name);
+ 	drop_info.if_not_found = OnEntryNotFound::THROW_EXCEPTION;
+ 	schema.DropEntry(context, drop_info, true);
+ 
+@@ -551,7 +551,7 @@ void IcebergTransaction::DoTableDeletes(IcebergTransactionDeleteUpdate &delete_u
+ 	// remove the table entry from the catalog
+ 	auto &schema_entry = ic_catalog.schemas.GetEntry(schema_key.GetIdentifierName()).Cast<IcebergSchemaEntry>();
+ 	DropInfo drop_info;
+-	drop_info.name = Identifier(table_name);
++	drop_info.NameMutable() = Identifier(table_name);
+ 	drop_info.if_not_found = OnEntryNotFound::RETURN_NULL;
+ 	schema_entry.DropEntry(context, drop_info, true);
+ }

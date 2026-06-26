@@ -255,20 +255,14 @@ Identifier PEGTransformerFactory::TransformCatalogQualification(PEGTransformer &
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_identifier_or_string_literal) {
-	QualifiedName result;
-	result.catalog = catalog_qualification;
-	result.schema = reserved_schema_qualification;
-	result.name = reserved_identifier_or_string_literal;
+	QualifiedName result(catalog_qualification, reserved_schema_qualification, reserved_identifier_or_string_literal);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLiteral(
     PEGTransformer &transformer, const Identifier &schema_qualification,
     const Identifier &reserved_identifier_or_string_literal) {
-	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = schema_qualification;
-	result.name = reserved_identifier_or_string_literal;
+	QualifiedName result(INVALID_CATALOG, schema_qualification, reserved_identifier_or_string_literal);
 	return result;
 }
 
@@ -587,8 +581,8 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(
 	result->with_ordinality =
 	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
 	result->function =
-	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
-	                                  qualified_table_function.name, std::move(table_function_arguments));
+	    make_uniq<FunctionExpression>(qualified_table_function.Catalog(), qualified_table_function.Schema(),
+	                                  qualified_table_function.Name(), std::move(table_function_arguments));
 	if (table_alias) {
 		result->alias = table_alias->name;
 		result->column_name_alias = table_alias->column_name_alias;
@@ -604,8 +598,8 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(
 	result->with_ordinality =
 	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
 	result->function =
-	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
-	                                  qualified_table_function.name, std::move(table_function_arguments));
+	    make_uniq<FunctionExpression>(qualified_table_function.Catalog(), qualified_table_function.Schema(),
+	                                  qualified_table_function.Name(), std::move(table_function_arguments));
 	result->alias = table_alias_colon;
 	if (sample_clause) {
 		result->sample = std::move(*sample_clause);
@@ -1276,14 +1270,13 @@ QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransfor
                                                                      const optional<Identifier> &catalog_qualification,
                                                                      const optional<Identifier> &schema_qualification,
                                                                      const Identifier &table_function_name) {
-	QualifiedName result;
-	result.catalog = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
-	result.schema = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
-	if (!result.catalog.empty() && result.schema.empty()) {
-		result.schema = result.catalog;
-		result.catalog = INVALID_CATALOG;
+	QualifiedName result(catalog_qualification ? *catalog_qualification : INVALID_CATALOG,
+	                     schema_qualification ? *schema_qualification : INVALID_SCHEMA, Identifier());
+	if (!result.Catalog().empty() && result.Schema().empty()) {
+		result.SchemaMutable() = result.Catalog();
+		result.CatalogMutable() = INVALID_CATALOG;
 	}
-	result.name = table_function_name;
+	result.NameMutable() = table_function_name;
 	return result;
 }
 
@@ -1300,7 +1293,7 @@ TableAlias PEGTransformerFactory::TransformTableAliasAs(PEGTransformer &transfor
                                                         const QualifiedName &identifier_or_string_literal,
                                                         const optional<vector<string>> &column_aliases) {
 	TableAlias result;
-	result.name = identifier_or_string_literal.name;
+	result.name = identifier_or_string_literal.Name();
 	if (column_aliases) {
 		result.column_name_alias = StringsToIdentifiers(*column_aliases);
 	}

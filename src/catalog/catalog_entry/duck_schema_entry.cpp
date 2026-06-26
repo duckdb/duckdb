@@ -57,7 +57,7 @@ static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyT
 		}
 		auto &fk = cond->Cast<ForeignKeyConstraint>();
 		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-			AlterEntryData alter_data(catalog.GetName(), fk.info.schema, fk.info.table,
+			AlterEntryData alter_data(QualifiedName(catalog.GetName(), fk.info.schema, fk.info.table),
 			                          OnEntryNotFound::THROW_EXCEPTION);
 			fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), name, fk.pk_columns,
 			                                                   fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,
@@ -163,7 +163,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 
 		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info.name));
+		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info.Name()));
 	}
 	for (auto &dep : info.dependencies.Set()) {
 		table->dependencies.AddDependency(dep);
@@ -181,7 +181,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 	if (info.on_conflict == OnCreateConflict::ALTER_ON_CONFLICT) {
 		// check if the original entry exists
 		auto &catalog_set = GetCatalogSet(info.type);
-		auto current_entry = catalog_set.GetEntry(transaction, info.name);
+		auto current_entry = catalog_set.GetEntry(transaction, info.GetFunctionName());
 		if (current_entry) {
 			// the current entry exists - alter it instead
 			auto alter_info = info.GetAlterInfo();
@@ -255,8 +255,8 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(CatalogTransaction trans
 	// currently, we can not alter PK/FK/UNIQUE constraints
 	// concurrency-safe name checks against other INDEX catalog entries happens in the catalog
 	if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT &&
-	    !table.GetStorage().IndexNameIsUnique(info.index_name.GetIdentifierName())) {
-		throw CatalogException("An index with the name " + info.index_name + " already exists!");
+	    !table.GetStorage().IndexNameIsUnique(info.GetIndexName().GetIdentifierName())) {
+		throw CatalogException("An index with the name " + info.GetIndexName() + " already exists!");
 	}
 
 	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info, table);
@@ -307,7 +307,7 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 			throw CatalogException("Couldn't change ownership!");
 		}
 	} else {
-		auto &name = info.name;
+		auto &name = info.Name();
 		if (!set.AlterEntry(transaction, name, info)) {
 			throw CatalogException::MissingEntry(type, name, string());
 		}
@@ -333,12 +333,12 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 
 	// first find the entry
 	auto transaction = GetCatalogTransaction(context);
-	auto existing_entry = set.GetEntry(transaction, info.name);
+	auto existing_entry = set.GetEntry(transaction, info.Name());
 	if (!existing_entry) {
-		throw InternalException("Failed to drop entry \"%s\" - entry could not be found", info.name);
+		throw InternalException("Failed to drop entry \"%s\" - entry could not be found", info.Name());
 	}
 	if (existing_entry->type != info.type) {
-		throw CatalogException("Existing object %s is of type %s, trying to drop type %s", info.name,
+		throw CatalogException("Existing object %s is of type %s, trying to drop type %s", info.Name(),
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info.type));
 	}
 
@@ -350,7 +350,7 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 	}
 
 	OnDropEntry(transaction, *existing_entry);
-	if (!set.DropEntry(transaction, info.name, info.cascade, info.allow_drop_internal)) {
+	if (!set.DropEntry(transaction, info.Name(), info.cascade, info.allow_drop_internal)) {
 		throw InternalException("Could not drop element because of an internal error");
 	}
 

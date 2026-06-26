@@ -20,7 +20,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(
 	auto on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	auto info = make_uniq<CreateSecretInfo>(on_conflict, SecretPersistType::DEFAULT);
 	if (secret_name) {
-		info->name = *secret_name;
+		info->SetSecretName(*secret_name);
 	}
 	if (secret_storage_specifier) {
 		info->storage_type = Identifier(StringUtil::Lower(secret_storage_specifier->GetIdentifierName()));
@@ -44,7 +44,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(
 		}
 		info->options.insert({lower_name, option.GetFirstChildOrExpression()});
 	}
-	if (info->name.empty()) {
+	if (info->GetSecretName().empty()) {
 		if (!info->type) {
 			throw ParserException("Failed to create secret - secret must have a type defined");
 		}
@@ -54,7 +54,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(
 			    "Can not combine a non-constant expression for the secret type with a default-named secret. Either "
 			    "provide an explicit secret name or use a constant expression for the secret type.");
 		}
-		info->name = Identifier("__default_" + StringUtil::Lower(value.ToString()));
+		info->SetSecretName(Identifier("__default_" + StringUtil::Lower(value.ToString())));
 	}
 	result->info = std::move(info);
 	return result;

@@ -359,9 +359,9 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SelectNode &node) {
 CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(InsertQueryNode &node) {
 	// first bind the target table for the insert
 	BaseTableRef target_ref;
-	target_ref.catalog_name = node.catalog;
-	target_ref.schema_name = node.schema;
-	target_ref.table_name = node.table;
+	target_ref.CatalogMutable() = node.catalog;
+	target_ref.SchemaMutable() = node.schema;
+	target_ref.TableMutable() = node.table;
 
 	RemotePushdownOptimizer target_optimizer(this);
 	auto result = target_optimizer.Rewrite(target_ref);
@@ -697,7 +697,7 @@ void RemotePushdownOptimizer::TrackLocalTable(const BaseTableRef &ref) {
 	if (!ref.alias.empty()) {
 		local_table_names.insert(ref.alias);
 	} else {
-		local_table_names.insert(ref.table_name);
+		local_table_names.insert(ref.Table());
 	}
 }
 
@@ -731,14 +731,14 @@ bool RemotePushdownOptimizer::RefersToCTE(const Identifier &cte_name, CatalogPus
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Resolve schema_name-as-catalog ambiguity using the binder's own resolution logic
-	Identifier catalog_name = ref.catalog_name;
-	Identifier schema_name = ref.schema_name;
+	Identifier catalog_name = ref.Catalog();
+	Identifier schema_name = ref.Schema();
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
 	// Case 0: check if this is a CTE reference (must have no explicit catalog/schema)
 	if (catalog_name.empty() && schema_name.empty()) {
 		CatalogPushdownResult pushdown_result;
-		if (RefersToCTE(ref.table_name, pushdown_result)) {
+		if (RefersToCTE(ref.Table(), pushdown_result)) {
 			if (pushdown_result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
 				// Local/unknown CTE - track as local for correlated subquery detection
 				TrackLocalTable(ref);
@@ -753,7 +753,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
 			// verify the table actually exists in the remote catalog - if it does not, fall back
 			// to the binder so it can report a proper error message
-			EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name);
+			EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.Table());
 			const auto &schema = schema_name.empty() ? Identifier(DEFAULT_SCHEMA) : schema_name;
 			auto entry = Catalog::GetEntry(binder.context, catalog->GetName(), schema, table_lookup,
 			                               OnEntryNotFound::RETURN_NULL);
@@ -773,7 +773,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Case 2: no explicit catalog - lazily populate search path catalogs on first use
 	FindRemoteCatalogsInSearchPath();
 
-	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name);
+	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.Table());
 
 	if (pushdown_state.remote_catalogs_in_search_path.size() != 1) {
 		TrackLocalTable(ref);
@@ -1059,11 +1059,11 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const Identifier &
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE: {
 		auto &base = ref.Cast<BaseTableRef>();
-		if (base.catalog_name == catalog_name) {
-			base.catalog_name = "";
-		} else if (base.catalog_name.empty() && base.schema_name == catalog_name) {
+		if (base.Catalog() == catalog_name) {
+			base.CatalogMutable() = "";
+		} else if (base.Catalog().empty() && base.Schema() == catalog_name) {
 			// 2-part name (schema.table) where the schema is actually the catalog being pushed to
-			base.schema_name = "";
+			base.SchemaMutable() = "";
 		}
 		break;
 	}

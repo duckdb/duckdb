@@ -723,7 +723,7 @@ void WriteAheadLogDeserializer::ReplayCreateTable() {
 	}
 	// bind the constraints to the table again
 	auto binder = Binder::CreateBinder(context);
-	auto &schema = catalog.GetSchema(context, info->schema);
+	auto &schema = catalog.GetSchema(context, info->Schema());
 	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
 
 	catalog.CreateTable(context, *bound_info);
@@ -733,8 +733,8 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 	DropInfo info;
 
 	info.type = CatalogType::TABLE_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SchemaMutable() = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.NameMutable() = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -742,8 +742,8 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 	// Remove any replay indexes of this table.
 	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
 	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
-		                                              return replay_info.table_schema == info.schema &&
-		                                                     replay_info.table_name == info.name;
+		                                              return replay_info.table_schema == info.Schema() &&
+		                                                     replay_info.table_name == info.Name();
 	                                              }),
 	                               state.replay_index_infos.end());
 
@@ -806,7 +806,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
 
 	auto &table =
-	    catalog.GetEntry<TableCatalogEntry>(context, table_info.schema, table_info.name).Cast<DuckTableEntry>();
+	    catalog.GetEntry<TableCatalogEntry>(context, table_info.Schema(), table_info.Name()).Cast<DuckTableEntry>();
 	auto &column_list = table.GetColumns();
 
 	// Add the table to the bind context to bind the parsed expressions.
@@ -829,7 +829,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto logical_indexes = unique_info.GetLogicalIndexes(column_list);
 	for (const auto &logical_index : logical_indexes) {
 		auto &col = column_list.GetColumn(logical_index);
-		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.name);
+		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.Name());
 		unbound_expressions.push_back(idx_binder.Bind(parsed));
 	}
 
@@ -847,8 +847,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto index_instance = index_type->create_instance(input);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table_info.schema,
-	                                      table_info.name);
+	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table_info.Schema(),
+	                                      table_info.Name());
 
 	catalog.Alter(context, alter_info);
 }
@@ -867,8 +867,8 @@ void WriteAheadLogDeserializer::ReplayCreateView() {
 void WriteAheadLogDeserializer::ReplayDropView() {
 	DropInfo info;
 	info.type = CatalogType::VIEW_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SchemaMutable() = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.NameMutable() = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -880,7 +880,7 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSchema() {
 	CreateSchemaInfo info;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.SchemaMutable() = Identifier(deserializer.ReadProperty<string>(101, "schema"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -892,7 +892,7 @@ void WriteAheadLogDeserializer::ReplayDropSchema() {
 	DropInfo info;
 
 	info.type = CatalogType::SCHEMA_ENTRY;
-	info.name = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.NameMutable() = Identifier(deserializer.ReadProperty<string>(101, "schema"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -913,8 +913,8 @@ void WriteAheadLogDeserializer::ReplayDropType() {
 	DropInfo info;
 
 	info.type = CatalogType::TYPE_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SchemaMutable() = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.NameMutable() = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -932,8 +932,8 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 		return;
 	}
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, trigger_info.catalog, trigger_info.schema,
-	                                                   trigger_info.base_table->table_name);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, trigger_info.Catalog(), trigger_info.Schema(),
+	                                                   trigger_info.base_table->Table());
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
 	duck_table.CreateTrigger(transaction, trigger_info);
@@ -942,19 +942,20 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 void WriteAheadLogDeserializer::ReplayDropTrigger() {
 	DropInfo info;
 	info.type = CatalogType::TRIGGER_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SchemaMutable() = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.NameMutable() = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	auto table_name = deserializer.ReadPropertyWithDefault<Identifier>(103, "table");
 	if (DeserializeOnly()) {
 		return;
 	}
 	if (table_name.empty()) {
-		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger \"%s\"", info.name);
+		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger \"%s\"",
+		                        info.Name());
 	}
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.schema, table_name);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.Schema(), table_name);
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
-	duck_table.DropTrigger(transaction, info.name, info.cascade);
+	duck_table.DropTrigger(transaction, info.Name(), info.cascade);
 }
 
 //===--------------------------------------------------------------------===//
@@ -972,8 +973,8 @@ void WriteAheadLogDeserializer::ReplayCreateSequence() {
 void WriteAheadLogDeserializer::ReplayDropSequence() {
 	DropInfo info;
 	info.type = CatalogType::SEQUENCE_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SchemaMutable() = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.NameMutable() = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1012,8 +1013,8 @@ void WriteAheadLogDeserializer::ReplayCreateMacro() {
 void WriteAheadLogDeserializer::ReplayDropMacro() {
 	DropInfo info;
 	info.type = CatalogType::MACRO_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SchemaMutable() = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.NameMutable() = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1035,8 +1036,8 @@ void WriteAheadLogDeserializer::ReplayCreateTableMacro() {
 void WriteAheadLogDeserializer::ReplayDropTableMacro() {
 	DropInfo info;
 	info.type = CatalogType::TABLE_MACRO_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SchemaMutable() = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.NameMutable() = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1062,7 +1063,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 		info.index_type = ART::TYPE_NAME;
 	}
 
-	const auto schema_name = create_info->schema;
+	const auto schema_name = create_info->Schema();
 	const auto table_name = info.table;
 
 	auto &entry = catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
@@ -1083,8 +1084,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 void WriteAheadLogDeserializer::ReplayDropIndex() {
 	DropInfo info;
 	info.type = CatalogType::INDEX_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SchemaMutable() = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.NameMutable() = Identifier(deserializer.ReadProperty<string>(102, "name"));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1092,8 +1093,8 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 	// Remove the replay index, if any.
 	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
 	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
-		                                              return replay_info.table_schema == info.schema &&
-		                                                     replay_info.index->GetIndexName() == info.name;
+		                                              return replay_info.table_schema == info.Schema() &&
+		                                                     replay_info.index->GetIndexName() == info.Name();
 	                                              }),
 	                               state.replay_index_infos.end());
 

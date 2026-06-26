@@ -11,6 +11,7 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -26,18 +27,14 @@ public:
 public:
 	explicit CreateInfo(CatalogType type, Identifier schema = Identifier::DefaultSchema(),
 	                    Identifier catalog_p = Identifier::InvalidCatalog())
-	    : ParseInfo(TYPE), type(type), catalog(std::move(catalog_p)), schema(std::move(schema)),
-	      on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false), internal(false) {
+	    : ParseInfo(TYPE), type(type), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false),
+	      internal(false), qualified_name(std::move(catalog_p), std::move(schema), Identifier()) {
 	}
 	~CreateInfo() override {
 	}
 
 	//! The to-be-created catalog type
 	CatalogType type;
-	//! The catalog name of the entry
-	Identifier catalog;
-	//! The schema name of the entry
-	Identifier schema;
 	//! What to do on create conflict
 	OnCreateConflict on_conflict;
 	//! Whether or not the entry is temporary
@@ -56,6 +53,26 @@ public:
 	InsertionOrderPreservingMap<string> tags;
 
 public:
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+	QualifiedName &GetQualifiedNameMutable() {
+		return qualified_name;
+	}
+	const Identifier &Catalog() const {
+		return qualified_name.Catalog();
+	}
+	Identifier &CatalogMutable() {
+		return qualified_name.CatalogMutable();
+	}
+	const Identifier &Schema() const {
+		return qualified_name.Schema();
+	}
+	Identifier &SchemaMutable() {
+		return qualified_name.SchemaMutable();
+	}
+
+public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 
@@ -71,6 +88,10 @@ public:
 		throw NotImplementedException("ToString not supported for this type of CreateInfo: '%s'",
 		                              EnumUtil::ToString(info_type));
 	}
+
+protected:
+	//! Qualified name of the created entry (catalog.schema.name)
+	QualifiedName qualified_name;
 };
 
 } // namespace duckdb

@@ -1,4 +1,4 @@
-# name: test/sql/vector_types/list_vector_types.test_slow
+# name: test/sql/vector_types/list_vector_types.test
 # description: Vector Types test: lists
 # group: [vector_types]
 

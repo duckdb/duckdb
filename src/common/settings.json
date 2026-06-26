@@ -1215,6 +1215,13 @@
         "custom_implementation": true
     },
     {
+        "name": "regex_match_operator_semantics",
+        "description": "Configures whether regex match operators use partial or full string matching",
+        "type": "ENUM<RegexMatchOperatorSemantics>",
+        "default_scope": "local",
+        "default_value": "partial"
+    },
+    {
         "name": "scalar_subquery_error_on_multiple_rows",
         "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
         "type": "BOOLEAN",

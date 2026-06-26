@@ -266,7 +266,7 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(QueryContext con
 	return buffer;
 }
 
-void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t block_index,
+void TemporaryFileHandle::WriteTemporaryBuffer(QueryContext context, FileBuffer &buffer, const idx_t block_index,
                                                AllocatedData &compressed_buffer) const {
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
@@ -287,11 +287,11 @@ void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t b
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 		EncryptionEngine::EncryptTemporaryBuffer(db, write_buffer, write_size, encryption_metadata);
 
-		handle->Write(QueryContext(), encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, write_position);
-		handle->Write(QueryContext(), write_buffer, write_size, write_position + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
+		handle->Write(context, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, write_position);
+		handle->Write(context, write_buffer, write_size, write_position + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
 	} else {
 		// write file directly
-		handle->Write(QueryContext(), write_buffer, write_size, write_position);
+		handle->Write(context, write_buffer, write_size, write_position);
 	}
 }
 
@@ -501,7 +501,7 @@ TemporaryFileManager::~TemporaryFileManager() {
 TemporaryFileManager::TemporaryFileManagerLock::TemporaryFileManagerLock(mutex &mutex) : lock(mutex) {
 }
 
-idx_t TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) {
+idx_t TemporaryFileManager::WriteTemporaryBuffer(QueryContext context, block_id_t block_id, FileBuffer &buffer) {
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
 
@@ -541,7 +541,7 @@ idx_t TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer
 	D_ASSERT(handle);
 	D_ASSERT(index.IsValid());
 
-	handle->WriteTemporaryBuffer(buffer, index.block_index.GetIndex(), compressed_buffer);
+	handle->WriteTemporaryBuffer(context, buffer, index.block_index.GetIndex(), compressed_buffer);
 
 	compression_adaptivity.Update(compression_result.level, time_before_ns);
 	return static_cast<idx_t>(compression_result.size);

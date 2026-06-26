@@ -48,9 +48,7 @@ PEGTransformerFactory::TransformAlterTableStmt(PEGTransformer &transformer, cons
 	}
 	auto result = std::move(alter_table_options[0]);
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	result->catalog = base_table_name->catalog_name;
-	result->schema = base_table_name->schema_name;
-	result->name = base_table_name->table_name;
+	result->GetQualifiedNameMutable() = base_table_name->GetQualifiedName();
 
 	return std::move(result);
 }
@@ -72,9 +70,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
                                                                     unique_ptr<AlterTableInfo> rename_alter) {
 	auto rename_table = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(rename_alter));
 	auto result = make_uniq<RenameViewInfo>(AlterEntryData(), rename_table->new_table_name);
-	result->catalog = base_table_name->catalog_name;
-	result->schema = base_table_name->schema_name;
-	result->name = base_table_name->table_name;
+	result->GetQualifiedNameMutable() = base_table_name->GetQualifiedName();
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	return std::move(result);
 }
@@ -90,13 +86,13 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTrans
                                                                         const optional<bool> &if_exists,
                                                                         const QualifiedName &qualified_sequence_name,
                                                                         unique_ptr<AlterInfo> alter_sequence_options) {
-	if (qualified_sequence_name.schema.empty()) {
-		alter_sequence_options->schema = qualified_sequence_name.catalog;
+	if (qualified_sequence_name.Schema().empty()) {
+		alter_sequence_options->GetQualifiedNameMutable() =
+		    QualifiedName(INVALID_CATALOG, qualified_sequence_name.Catalog(), qualified_sequence_name.Name());
 	} else {
-		alter_sequence_options->catalog = qualified_sequence_name.catalog;
-		alter_sequence_options->schema = qualified_sequence_name.schema;
+		alter_sequence_options->GetQualifiedNameMutable() = QualifiedName(
+		    qualified_sequence_name.Catalog(), qualified_sequence_name.Schema(), qualified_sequence_name.Name());
 	}
-	alter_sequence_options->name = qualified_sequence_name.name;
 	alter_sequence_options->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	return alter_sequence_options;
 }
@@ -105,10 +101,8 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransform
                                                                     const optional<Identifier> &catalog_qualification,
                                                                     const optional<Identifier> &schema_qualification,
                                                                     const Identifier &sequence_name) {
-	QualifiedName result;
-	result.catalog = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
-	result.schema = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
-	result.name = sequence_name;
+	QualifiedName result(catalog_qualification ? *catalog_qualification : INVALID_CATALOG,
+	                     schema_qualification ? *schema_qualification : INVALID_SCHEMA, sequence_name);
 	return result;
 }
 
@@ -132,11 +126,11 @@ PEGTransformerFactory::TransformSetSequenceOption(PEGTransformer &transformer,
 			}
 			has_owned = true;
 			auto owned_by = unique_ptr_cast<SequenceOption, QualifiedSequenceOption>(std::move(seq_option.second));
-			auto schema =
-			    owned_by->qualified_name.schema.empty() ? Identifier::DefaultSchema() : owned_by->qualified_name.schema;
+			auto schema = owned_by->qualified_name.Schema().empty() ? Identifier::DefaultSchema()
+			                                                        : owned_by->qualified_name.Schema();
 			owned_info =
 			    make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, "", "", "", schema,
-			                                   owned_by->qualified_name.name, OnEntryNotFound::THROW_EXCEPTION);
+			                                   owned_by->qualified_name.Name(), OnEntryNotFound::THROW_EXCEPTION);
 		}
 	}
 	if (owned_info) {
@@ -161,9 +155,7 @@ void PEGTransformerFactory::AddUpdateToMultiStatement(const unique_ptr<MultiStat
 	node.prioritize_table_when_binding = true;
 
 	auto table_ref = make_uniq<BaseTableRef>();
-	table_ref->catalog_name = table_data.catalog;
-	table_ref->schema_name = table_data.schema;
-	table_ref->table_name = table_data.name;
+	table_ref->GetQualifiedNameMutable() = table_data.GetQualifiedName();
 	node.table = std::move(table_ref);
 
 	auto set_info = make_uniq<UpdateSetInfo>();
