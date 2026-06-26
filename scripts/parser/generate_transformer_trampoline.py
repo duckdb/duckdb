@@ -132,20 +132,22 @@ class RuleCapability:
 
 
 class UseGramPreviewEmitter:
-    def __init__(self, rules, rule_types, matcher_overrides, rule_config):
+    def __init__(self, rules, rule_types, excluded_rules, matcher_overrides, rule_config):
         self.rules = rules
         self.rule_types = rule_types
+        self.excluded_rules = excluded_rules
         self.matcher_overrides = matcher_overrides
         self.rule_config = rule_config
         self.syntax_only_rules = self.collect_syntax_only_rules()
         self.rule_capabilities = self.collect_rule_capabilities()
 
     def collect_syntax_only_rules(self):
-        result = set()
+        result = set(self.excluded_rules)
         parsed_rules = {
             rule_name: tokens_to_ast(rule.tokens)
             for rule_name, rule in self.rules.items()
             if rule_name not in self.matcher_overrides
+            and rule_name not in self.excluded_rules
             and not rule_name.startswith("%")
             and rule_name not in INTERNAL_GRAMMAR_RULES
         }
@@ -232,6 +234,8 @@ class UseGramPreviewEmitter:
             return RuleCapability(rule_name, RuleCapabilityStatus.PROVIDED, "internal matcher rule")
         if rule_name in self.matcher_overrides:
             return RuleCapability(rule_name, RuleCapabilityStatus.PROVIDED, "provided by matcher_rule_overrides")
+        if rule_name in self.excluded_rules:
+            return RuleCapability(rule_name, RuleCapabilityStatus.EXCLUDED, "excluded by grammar_types.yml")
         if self.is_manual_rule(rule_name):
             return RuleCapability(rule_name, RuleCapabilityStatus.MANUAL)
         try:
@@ -782,10 +786,10 @@ def main():
     config_file = type_dir / "transformer_trampoline.yml"
     rule_config = load_transformer_trampoline_config(config_file, all_rules.keys())
     grammar_types_file = type_dir / "grammar_types.yml"
-    rule_types, _ = load_grammar_types(grammar_types_file)
+    rule_types, excluded_rules = load_grammar_types(grammar_types_file)
     matcher_overrides = load_matcher_overrides(grammar_types_file)
 
-    emitter = UseGramPreviewEmitter(rules, rule_types, matcher_overrides, rule_config)
+    emitter = UseGramPreviewEmitter(rules, rule_types, excluded_rules, matcher_overrides, rule_config)
     if args.write:
         if grammar_files != DEFAULT_GRAMMAR_FILES:
             raise NotImplementedError("--write is currently restricted to the default grammar file set")
