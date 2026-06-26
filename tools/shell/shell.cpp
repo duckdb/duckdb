@@ -1002,10 +1002,11 @@ void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 			return;
 		}
 	}
-	// outside an interactive console session there is no ".last" to expand the tree, so always render it in full
-	if (!stdin_is_interactive || !stdout_is_console) {
+	// default to the full plan; only fold low-impact operators in an interactive console session, where the user
+	// can type ".last" to expand the tree again (batch/redirected output has no such affordance)
+	if (stdin_is_interactive && stdout_is_console) {
 		duckdb::ClientConfig::GetConfig(*conn->context).profiling_renderer_settings["expand_all"] =
-		    duckdb::Value::BOOLEAN(true);
+		    duckdb::Value::BOOLEAN(false);
 	}
 	if (!stdout_is_console) {
 		// only pretty-print to an interactive console - redirected output keeps the plain plan as a result value

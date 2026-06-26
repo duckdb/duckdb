@@ -30,8 +30,9 @@ struct TextTreeRendererConfig {
 	char thousand_separator = ',';
 	char decimal_separator = '.';
 
-	//! When set, render every operator as a full box (disable the timing-based folding/merging of operators)
-	bool expand_all = false;
+	//! When set, render every operator as a full box (disable the timing-based folding/merging of operators).
+	//! Defaults to the full plan; only the interactive CLI opts into folding (where ".last" can re-expand it).
+	bool expand_all = true;
 	//! When set, operator names are rendered raw/upper-case (e.g. HASH_JOIN) instead of title-cased (Hash Join)
 	bool upper_case_operators = false;
 

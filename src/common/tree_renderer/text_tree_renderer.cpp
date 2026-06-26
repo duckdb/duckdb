@@ -447,6 +447,37 @@ static string TruncateText(const string &text, idx_t max_width) {
 	return result + "…";
 }
 
+//! Truncate keeping the tail visible (e.g. a qualified name's final component - the table - is the most important).
+static string TruncateHead(const string &text, idx_t max_width) {
+	if (RenderLength(text) <= max_width) {
+		return text;
+	}
+	if (max_width <= 1) {
+		return "…";
+	}
+	// reserve one column for the leading ellipsis, then keep as many trailing characters as fit
+	idx_t budget = max_width - 1;
+	vector<idx_t> char_starts;
+	for (idx_t i = 0; i < text.size(); i++) {
+		if (IsCharacter(text[i])) {
+			char_starts.push_back(i);
+		}
+	}
+	char_starts.push_back(text.size());
+	idx_t n = char_starts.size() - 1;
+	idx_t width = 0;
+	idx_t start = n;
+	for (idx_t c = n; c-- > 0;) {
+		auto char_width = RenderLength(text.c_str() + char_starts[c], char_starts[c + 1] - char_starts[c]);
+		if (width + char_width > budget) {
+			break;
+		}
+		width += char_width;
+		start = c;
+	}
+	return "…" + text.substr(char_starts[start]);
+}
+
 static string CutToWidth(const string &text, idx_t width) {
 	if (RenderLength(text) <= width) {
 		return text;
@@ -624,6 +655,10 @@ private:
 
 	static bool DetailIsNarrow(const std::pair<string, vector<string>> &entry) {
 		if (entry.first == "Text") {
+			return false;
+		}
+		// the table name is always rendered inline ("Table: ...") so the qualified name stays identifiable
+		if (entry.first == "Table") {
 			return false;
 		}
 		idx_t compact = RenderLength(entry.first) + 2 + LongestValue(entry.second);
@@ -813,6 +848,17 @@ private:
 				continue;
 			}
 			bool has_key = entry.first != "Text";
+			if (entry.first == "Table" && !entry.second.empty()) {
+				// render the table name inline on a single line, truncating the (less important) catalog/schema
+				// prefix rather than the table name itself when the qualified name does not fit
+				string key = "Table: ";
+				idx_t key_width = RenderLength(key);
+				ExplainLine line;
+				line.emplace_back(key, TreeRenderType::KEY);
+				line.emplace_back(TruncateHead(entry.second.front(), content_width - key_width), TreeRenderType::VALUE);
+				content.push_back(std::move(line));
+				continue;
+			}
 			if (has_key && DetailIsNarrow(entry)) {
 				content.emplace_back();
 				content.back().emplace_back(TruncateText(entry.first, content_width), TreeRenderType::KEY);
