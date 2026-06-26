@@ -499,7 +499,10 @@ void Binder::BindLogicalType(LogicalType &type) {
 bool BoundBodyContainsTrigger(const LogicalOperator &op);
 
 SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
-	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres)
+	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres).
+	// Promote a catalog-qualified base table (e.g. attached_db.tbl) so downstream lookups carry the resolved
+	// catalog instead of a bare schema (matches the DROP TRIGGER path).
+	BindSchemaOrCatalog(create_trigger_info.base_table->GetQualifiedNameMutable());
 	TableDescription table_description(create_trigger_info.base_table->GetQualifiedName());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
