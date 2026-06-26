@@ -20,8 +20,7 @@ class TypeExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::TYPE;
 
-	TypeExpression(Identifier catalog, Identifier schema, Identifier type_name,
-	               vector<unique_ptr<ParsedExpression>> children);
+	TypeExpression(QualifiedName qualified_name, vector<unique_ptr<ParsedExpression>> children);
 	TypeExpression(Identifier type_name, vector<unique_ptr<ParsedExpression>> children);
 	TypeExpression(const string &type_name, vector<unique_ptr<ParsedExpression>> children);
 

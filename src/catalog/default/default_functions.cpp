@@ -251,7 +251,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(co
 	}
 	bind_info->macros = std::move(macro_info.macros);
 	bind_info->SetQualifiedName(
-	    QualifiedName(INVALID_CATALOG, Identifier(default_macro.schema), Identifier(default_macro.name)));
+	    QualifiedName({Identifier(default_macro.schema)}, Identifier(default_macro.name)));
 	bind_info->temporary = true;
 	bind_info->internal = true;
 	return bind_info;

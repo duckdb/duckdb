@@ -4,9 +4,7 @@
 
 namespace duckdb {
 
-DropInfo::DropInfo()
-    : ParseInfo(TYPE), cascade(false),
-      qualified_name(Identifier(INVALID_CATALOG), Identifier(INVALID_SCHEMA), Identifier()) {
+DropInfo::DropInfo() : ParseInfo(TYPE), cascade(false) {
 }
 
 DropInfo::DropInfo(const DropInfo &info)

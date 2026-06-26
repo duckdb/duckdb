@@ -21,7 +21,7 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::COPY_DATABASE_INFO;
 
 public:
-	explicit CopyDatabaseInfo() : ParseInfo(TYPE), target_database(INVALID_CATALOG) {
+	explicit CopyDatabaseInfo() : ParseInfo(TYPE) {
 	}
 
 	explicit CopyDatabaseInfo(const Identifier &target_database) : ParseInfo(TYPE), target_database(target_database) {

@@ -8,17 +8,16 @@ namespace duckdb {
 CreateTableInfo::CreateTableInfo() : CreateInfo(CatalogType::TABLE_ENTRY, Identifier::InvalidSchema()) {
 }
 
-CreateTableInfo::CreateTableInfo(Identifier catalog_p, Identifier schema_p, Identifier name_p)
-    : CreateInfo(CatalogType::TABLE_ENTRY, std::move(schema_p), std::move(catalog_p)) {
-	SetTableName(std::move(name_p));
+CreateTableInfo::CreateTableInfo(QualifiedName qualified_name_p) : CreateInfo(CatalogType::TABLE_ENTRY) {
+	SetQualifiedName(std::move(qualified_name_p));
 }
 
 CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, Identifier name_p)
-    : CreateTableInfo(schema.catalog.GetName(), schema.name, std::move(name_p)) {
+    : CreateTableInfo(QualifiedName(schema.catalog.GetName(), schema.name, std::move(name_p))) {
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
-	auto result = make_uniq<CreateTableInfo>(GetQualifiedName().Catalog(), GetQualifiedName().Schema(), GetTableName());
+	auto result = make_uniq<CreateTableInfo>(GetQualifiedName());
 	CopyProperties(*result);
 	result->columns = columns.Copy();
 	for (auto &constraint : constraints) {

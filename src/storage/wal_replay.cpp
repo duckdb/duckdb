@@ -735,7 +735,7 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 	info.type = CatalogType::TABLE_ENTRY;
 	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
 	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName(INVALID_CATALOG, std::move(schema), std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -875,7 +875,7 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 	info.type = CatalogType::VIEW_ENTRY;
 	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
 	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName(INVALID_CATALOG, std::move(schema), std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -887,8 +887,7 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSchema() {
 	CreateSchemaInfo info;
-	info.SetQualifiedName(
-	    QualifiedName(INVALID_CATALOG, Identifier(deserializer.ReadProperty<string>(101, "schema")), Identifier()));
+	info.SetQualifiedName(QualifiedName({Identifier(deserializer.ReadProperty<string>(101, "schema"))}, Identifier()));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -923,7 +922,7 @@ void WriteAheadLogDeserializer::ReplayDropType() {
 	info.type = CatalogType::TYPE_ENTRY;
 	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
 	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName(INVALID_CATALOG, std::move(schema), std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -954,7 +953,7 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 	info.type = CatalogType::TRIGGER_ENTRY;
 	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
 	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName(INVALID_CATALOG, std::move(schema), std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
 	auto table_name = deserializer.ReadPropertyWithDefault<Identifier>(103, "table");
 	if (DeserializeOnly()) {
 		return;
@@ -987,7 +986,7 @@ void WriteAheadLogDeserializer::ReplayDropSequence() {
 	info.type = CatalogType::SEQUENCE_ENTRY;
 	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
 	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName(INVALID_CATALOG, std::move(schema), std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1029,7 +1028,7 @@ void WriteAheadLogDeserializer::ReplayDropMacro() {
 	info.type = CatalogType::MACRO_ENTRY;
 	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
 	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName(INVALID_CATALOG, std::move(schema), std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1053,7 +1052,7 @@ void WriteAheadLogDeserializer::ReplayDropTableMacro() {
 	info.type = CatalogType::TABLE_MACRO_ENTRY;
 	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
 	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName(INVALID_CATALOG, std::move(schema), std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1103,7 +1102,7 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 	info.type = CatalogType::INDEX_ENTRY;
 	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
 	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName(INVALID_CATALOG, std::move(schema), std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
 	if (DeserializeOnly()) {
 		return;
 	}

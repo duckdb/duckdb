@@ -238,7 +238,7 @@ MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &tr
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformUnqualifiedBaseTableName(PEGTransformer &transformer,
                                                                                   const Identifier &table_name) {
-	const auto description = TableDescription(QualifiedName(INVALID_CATALOG, INVALID_SCHEMA, table_name));
+	const auto description = TableDescription(QualifiedName(table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 
@@ -262,7 +262,7 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(
 QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLiteral(
     PEGTransformer &transformer, const Identifier &schema_qualification,
     const Identifier &reserved_identifier_or_string_literal) {
-	QualifiedName result(INVALID_CATALOG, schema_qualification, reserved_identifier_or_string_literal);
+	QualifiedName result({schema_qualification}, reserved_identifier_or_string_literal);
 	return result;
 }
 
@@ -1250,8 +1250,7 @@ PEGTransformerFactory::TransformUnpivotTargetList(PEGTransformer &transformer,
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformSchemaReservedTable(PEGTransformer &transformer,
                                                                              const Identifier &schema_qualification,
                                                                              const Identifier &reserved_table_name) {
-	const auto description =
-	    TableDescription(QualifiedName(INVALID_CATALOG, schema_qualification, reserved_table_name));
+	const auto description = TableDescription(QualifiedName({schema_qualification}, reserved_table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 
@@ -1267,11 +1266,11 @@ QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransfor
                                                                      const optional<Identifier> &catalog_qualification,
                                                                      const optional<Identifier> &schema_qualification,
                                                                      const Identifier &table_function_name) {
-	Identifier catalog = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
-	Identifier schema = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
+	Identifier catalog = catalog_qualification ? *catalog_qualification : Identifier();
+	Identifier schema = schema_qualification ? *schema_qualification : Identifier();
 	if (!catalog.empty() && schema.empty()) {
 		schema = std::move(catalog);
-		catalog = INVALID_CATALOG;
+		catalog = Identifier();
 	}
 	return QualifiedName(std::move(catalog), std::move(schema), table_function_name);
 }

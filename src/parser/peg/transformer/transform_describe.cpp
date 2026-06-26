@@ -32,10 +32,10 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer 
 		                      "\"SHOW TABLES FROM database.schema\"");
 	}
 	if (IsInvalidSchema(qualified_name.Schema())) {
-		showref->schema_name = qualified_name.Name();
+		showref->SetSchemaName(qualified_name.Name());
 	} else {
-		showref->catalog_name = qualified_name.Schema();
-		showref->schema_name = qualified_name.Name();
+		showref->SetCatalogName(qualified_name.Schema());
+		showref->SetSchemaName(qualified_name.Name());
 	}
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
@@ -47,7 +47,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransform
                                                                     const ShowType &show_or_describe) {
 	auto result = make_uniq<ShowRef>();
 	// Legacy reasons, see bind_showref.cpp
-	result->table_name = "__show_tables_expanded";
+	result->SetTableName("__show_tables_expanded");
 	result->show_type = ShowType::SHOW_UNQUALIFIED;
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
@@ -68,7 +68,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 	if (target.is_table_name || target.table_ref) {
 		if (target.is_table_name) {
 			// Case: SHOW 'something' or DESCRIBE 'something'
-			showref->table_name = target.table_name;
+			showref->SetTableName(target.table_name);
 		} else {
 			// Case: A relation/table reference
 			auto &base_table = *target.table_ref;
@@ -76,22 +76,22 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 			if (showref->show_type == ShowType::SHOW_FROM) {
 				// Logic for SHOW TABLES FROM [database].[schema]
 				if (IsInvalidSchema(base_table.GetQualifiedName().Schema())) {
-					showref->schema_name = base_table.Table();
+					showref->SetSchemaName(base_table.Table());
 				} else {
-					showref->catalog_name = base_table.GetQualifiedName().Schema();
-					showref->schema_name = base_table.Table();
+					showref->SetCatalogName(base_table.GetQualifiedName().Schema());
+					showref->SetSchemaName(base_table.Table());
 				}
 			} else if (IsInvalidSchema(base_table.GetQualifiedName().Schema())) {
 				// Logic for unqualified relations (databases, tables, variables)
 				auto table_name = StringUtil::Lower(base_table.Table().GetIdentifierName());
 				if (table_name == "databases" || table_name == "tables" || table_name == "schemas" ||
 				    table_name == "variables") {
-					showref->table_name = Identifier("\"" + table_name + "\"");
+					showref->SetTableName(Identifier("\"" + table_name + "\""));
 					showref->show_type = ShowType::SHOW_UNQUALIFIED;
 				}
 			}
 		}
-		if (showref->table_name.empty() && showref->show_type != ShowType::SHOW_FROM) {
+		if (showref->GetTableName().empty() && showref->show_type != ShowType::SHOW_FROM) {
 			auto show_select_node = make_uniq<SelectNode>();
 			show_select_node->select_list.push_back(make_uniq<StarExpression>());
 			if (target.is_table_name) {
@@ -110,7 +110,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 		if (showref->show_type == ShowType::SUMMARY) {
 			throw ParserException("Expected table name with SUMMARIZE");
 		}
-		showref->table_name = "__show_tables_expanded";
+		showref->SetTableName("__show_tables_expanded");
 		showref->show_type = ShowType::SHOW_UNQUALIFIED;
 	}
 

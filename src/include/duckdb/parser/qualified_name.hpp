@@ -9,11 +9,13 @@
 #pragma once
 
 #include "duckdb/common/string.hpp"
-#include "duckdb/planner/binding_alias.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+struct BindingAlias;
 
 //! Controls how QualifiedName::ToString renders the schema qualification
 enum class QualifiedNameToStringMode : uint8_t {
@@ -38,6 +40,11 @@ struct QualifiedName {
 		} else if (!schema_p.empty()) {
 			schema_path.push_back(std::move(schema_p));
 		}
+	}
+	//! Construct from an explicit schema path (the catalog/schema components actually present) and a name. Use this to
+	//! avoid passing INVALID_CATALOG/INVALID_SCHEMA placeholders for components that are not set.
+	QualifiedName(vector<Identifier> schema_path_p, Identifier name_p)
+	    : schema_path(std::move(schema_path_p)), name(std::move(name_p)) {
 	}
 
 	//! The catalog is the first element of the schema path, but only when the path is fully qualified (size 2)

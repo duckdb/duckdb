@@ -48,7 +48,7 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
 
 unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateViewInfo>();
-	result->SetQualifiedName(QualifiedName(INVALID_CATALOG, schema.name, name));
+	result->SetQualifiedName(QualifiedName({schema.name}, name));
 	result->sql = sql;
 	result->query = query ? unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy()) : nullptr;
 	result->aliases = aliases;

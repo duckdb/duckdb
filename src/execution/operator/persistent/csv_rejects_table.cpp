@@ -87,8 +87,8 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 
 	// Create Rejects Scans Table
 	{
-		auto info =
-		    make_uniq<CreateTableInfo>(Identifier::TempCatalog(), Identifier::DefaultSchema(), Identifier(scan_table));
+		auto info = make_uniq<CreateTableInfo>(
+		    QualifiedName(Identifier::TempCatalog(), Identifier::DefaultSchema(), Identifier(scan_table)));
 		info->temporary = true;
 		info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		// 0. Scan ID
@@ -121,8 +121,8 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	}
 	{
 		// Create Rejects Error Table
-		auto info = make_uniq<CreateTableInfo>(Identifier::TempCatalog(), Identifier::DefaultSchema(),
-		                                       Identifier(errors_table));
+		auto info = make_uniq<CreateTableInfo>(
+		    QualifiedName(Identifier::TempCatalog(), Identifier::DefaultSchema(), Identifier(errors_table)));
 		info->temporary = true;
 		info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		// 0. Scan ID

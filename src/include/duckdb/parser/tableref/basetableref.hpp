@@ -21,9 +21,7 @@ public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::BASE_TABLE;
 
 public:
-	BaseTableRef()
-	    : TableRef(TableReferenceType::BASE_TABLE),
-	      qualified_name(Identifier(INVALID_CATALOG), Identifier(INVALID_SCHEMA), Identifier()) {
+	BaseTableRef() : TableRef(TableReferenceType::BASE_TABLE) {
 	}
 	explicit BaseTableRef(const TableDescription &description)
 	    : TableRef(TableReferenceType::BASE_TABLE),

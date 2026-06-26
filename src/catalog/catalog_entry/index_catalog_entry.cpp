@@ -21,7 +21,7 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
 
 unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateIndexInfo>();
-	result->SetQualifiedName(QualifiedName(INVALID_CATALOG, GetSchemaName(), name));
+	result->SetQualifiedName(QualifiedName({GetSchemaName()}, name));
 	result->table = GetTableName();
 
 	result->temporary = temporary;

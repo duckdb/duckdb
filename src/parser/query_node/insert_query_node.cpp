@@ -8,7 +8,7 @@
 namespace duckdb {
 
 InsertQueryNode::InsertQueryNode()
-    : QueryNode(QueryNodeType::INSERT_QUERY_NODE), qualified_name(INVALID_CATALOG, DEFAULT_SCHEMA, Identifier()),
+    : QueryNode(QueryNodeType::INSERT_QUERY_NODE), qualified_name({Identifier::DefaultSchema()}, Identifier()),
       column_order(InsertColumnOrder::INSERT_BY_POSITION) {
 }
 

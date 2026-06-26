@@ -1,0 +1,27 @@
+From 22c5f47e433d7348f2f371a084ace08e6f48cf61 Mon Sep 17 00:00:00 2001
+From: duckdb <x@x>
+Date: Fri, 26 Jun 2026 19:33:37 +0200
+Subject: [PATCH] 0027-catalogsearchentry-accessors.patch
+
+---
+ src/storage/ducklake_transaction.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/storage/ducklake_transaction.cpp b/src/storage/ducklake_transaction.cpp
+index ba545609..342c97ed 100644
+--- a/src/storage/ducklake_transaction.cpp
++++ b/src/storage/ducklake_transaction.cpp
+@@ -715,8 +715,8 @@ Connection &DuckLakeTransaction::GetConnection() {
+ 		// ensure we are only looking in the ducklake catalog schema during querying
+ 		CatalogSearchEntry metadata_entry(Identifier(ducklake_catalog.MetadataDatabaseName()),
+ 		                                  Identifier(ducklake_catalog.MetadataSchemaName()));
+-		if (metadata_entry.schema.empty()) {
+-			metadata_entry.schema = "main";
++		if (metadata_entry.GetSchema().empty()) {
++			metadata_entry.SetSchema("main");
+ 		}
+ 		client_data.catalog_search_path->Set(metadata_entry, CatalogSetPathType::SET_DIRECTLY);
+ 
+-- 
+2.39.5 (Apple Git-154)
+
