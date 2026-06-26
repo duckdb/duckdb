@@ -46,6 +46,8 @@ struct ExplainBlock {
 	vector<ExplainLine> lines;
 	idx_t width = 0;
 	idx_t spine = 0;
+	//! Whether this block is the build side of a hash join - its parent connector is drawn with a double line.
+	bool build_side = false;
 };
 
 static idx_t LineWidth(const ExplainLine &line) {
@@ -162,10 +164,47 @@ static void SetLayoutChar(ExplainLine &line, idx_t col, const char *replacement)
 	}
 }
 
+//! Map a light junction glyph to the heavy-line variant used where a hash join's build edge meets it.
+//! The build edge is drawn heavy (━┃) while the surrounding boxes/bus stay light, so each junction
+//! mixes weights: e.g. ╮ -> ┓ (sharp heavy corner), ├ -> ┝ (light bus, heavy branch to the right).
+static const char *HeavyLineVariant(const char *glyph) {
+	string g(glyph);
+	if (g == "╮") {
+		return "┓";
+	}
+	if (g == "╭") {
+		return "┏";
+	}
+	if (g == "├") {
+		return "┝";
+	}
+	if (g == "┤") {
+		return "┥";
+	}
+	if (g == "┬") {
+		return "┰";
+	}
+	if (g == "┴") {
+		return "┸";
+	}
+	return glyph;
+}
+
+//! Whether the routing column `col` is the spine of a build-side child (whose connector is drawn heavy).
+static bool IsBuildSpine(const vector<ExplainBlock> &children, const vector<idx_t> &spines, idx_t col) {
+	for (idx_t i = 0; i < children.size() && i < spines.size(); i++) {
+		if (spines[i] == col) {
+			return children[i].build_side;
+		}
+	}
+	return false;
+}
+
 //! Draw the upward connector (┴) onto a child's top border, where its parent connects down into it.
+//! For a hash join's build side the connector is drawn heavy (┸) so it joins the heavy build edge.
 static void DrawRoofConnector(ExplainBlock &child, idx_t col) {
 	if (!child.lines.empty() && RenderCharEquals(child.lines.front(), col, "─")) {
-		SetLayoutChar(child.lines.front(), col, "┴");
+		SetLayoutChar(child.lines.front(), col, child.build_side ? "┸" : "┴");
 	}
 }
 
@@ -537,12 +576,23 @@ public:
 	static constexpr double SIGNIFICANT_TIME_FRACTION = 0.05;
 
 	ExplainBoxRenderer(idx_t max_width, char thousand_separator, double total_time, ExplainAlignment alignment,
-	                   bool flatten, bool merge, bool upper_case)
+	                   bool flatten, bool merge, bool upper_case, bool expand_all)
 	    : max_width(MaxValue<idx_t>(max_width, MINIMUM_RENDER_WIDTH)), thousand_separator(thousand_separator),
 	      total_time(total_time), alignment(alignment),
 	      layout_width(MaxValue<idx_t>(MaxValue<idx_t>(max_width, MINIMUM_RENDER_WIDTH), MAX_TREE_WIDTH)),
-	      flatten(flatten), merge(merge), upper_case(upper_case), flatten_threshold(total_time * FLATTEN_TIME_FRACTION),
+	      flatten(flatten), merge(merge), upper_case(upper_case), expand_all(expand_all),
+	      flatten_threshold(total_time * FLATTEN_TIME_FRACTION),
 	      significant_threshold(total_time * SIGNIFICANT_TIME_FRACTION) {
+	}
+
+	//! Max number of wrapped lines shown per detail value (unbounded when expanding, so nothing is hidden behind "…")
+	idx_t MaxDetailLines() const {
+		return expand_all ? NumericLimits<idx_t>::Maximum() : MAX_DETAIL_LINES;
+	}
+	//! Max box content width - uncapped (up to the layout width) when expanding so long values are not truncated
+	idx_t MaxContentWidth() const {
+		idx_t available = layout_width >= 4 ? layout_width - 4 : layout_width;
+		return expand_all ? available : MinValue<idx_t>(available, MAX_BOX_CONTENT_WIDTH);
 	}
 
 	//! Whether the render condensed or merged any operators (i.e. a full render would show more)
@@ -592,7 +642,7 @@ private:
 	}
 
 	idx_t BoxContentWidth(const ExplainTreeNode &node) {
-		idx_t max_content = MinValue<idx_t>(layout_width - 4, MAX_BOX_CONTENT_WIDTH);
+		idx_t max_content = MaxContentWidth();
 		bool condensed = IsCondensed(node);
 		// reserve 2 extra columns so the operator name fits in the box border without being truncated
 		idx_t width = RenderLength(DisplayName(node.name, upper_case)) + 2;
@@ -759,7 +809,7 @@ private:
 			if (has_key && DetailIsNarrow(entry)) {
 				content.emplace_back();
 				content.back().emplace_back(TruncateText(entry.first, content_width), TreeRenderType::KEY);
-				for (auto &value_line : WrapValues(entry.second, content_width, MAX_DETAIL_LINES)) {
+				for (auto &value_line : WrapValues(entry.second, content_width, MaxDetailLines())) {
 					content.emplace_back();
 					content.back().emplace_back(std::move(value_line), TreeRenderType::VALUE);
 				}
@@ -771,7 +821,7 @@ private:
 				key = TruncateText(key, content_width >= 1 ? content_width - 1 : 1);
 				key_width = RenderLength(key);
 			}
-			auto value_lines = WrapValues(entry.second, content_width - key_width, MAX_DETAIL_LINES);
+			auto value_lines = WrapValues(entry.second, content_width - key_width, MaxDetailLines());
 			for (idx_t li = 0; li < value_lines.size(); li++) {
 				ExplainLine line;
 				if (li == 0 && has_key) {
@@ -975,6 +1025,8 @@ private:
 		for (auto &line : box.lines) {
 			result.lines.push_back(std::move(line));
 		}
+		// the build side is the right (last) child - its feed runs from the branch point to the build corner
+		bool has_build = !children.empty() && children.back().build_side;
 		string routing;
 		for (idx_t col = spines.front(); col <= spines.back(); col++) {
 			bool is_child_spine = std::find(spines.begin(), spines.end(), col) != spines.end();
@@ -985,6 +1037,14 @@ private:
 				c = "╮";
 			} else if (is_child_spine) {
 				c = "┬";
+			}
+			if (IsBuildSpine(children, spines, col)) {
+				c = HeavyLineVariant(c);
+			} else if (has_build && col == spines.front()) {
+				// branch point where the heavy build feed leaves the (light) bus
+				c = "┝";
+			} else if (has_build && col > spines.front() && col < spines.back() && string(c) == "─") {
+				c = "━";
 			}
 			routing += c;
 		}
@@ -1028,8 +1088,8 @@ private:
 		}
 		ExplainBlock result;
 		if (direct) {
-			for (auto spine : spines) {
-				SetLayoutChar(box.lines.back(), spine - box_offset, "┬");
+			for (idx_t i = 0; i < spines.size(); i++) {
+				SetLayoutChar(box.lines.back(), spines[i] - box_offset, children[i].build_side ? "┰" : "┬");
 			}
 		} else {
 			SetLayoutChar(box.lines.back(), box.spine, "┬");
@@ -1039,6 +1099,8 @@ private:
 			result.lines.push_back(std::move(line));
 		}
 		if (!direct) {
+			// the build side is the right (last) child - its feed runs from the parent branch to the build corner
+			bool has_build = !children.empty() && children.back().build_side;
 			string routing;
 			for (idx_t col = spines.front(); col <= spines.back(); col++) {
 				const char *c = "─";
@@ -1051,6 +1113,14 @@ private:
 					c = col == parent_spine ? "┼" : "┬";
 				} else if (col == parent_spine) {
 					c = "┴";
+				}
+				if (IsBuildSpine(children, spines, col)) {
+					c = HeavyLineVariant(c);
+				} else if (has_build && col == parent_spine && string(c) == "┴") {
+					// branch point where the heavy build feed leaves the (light) bus
+					c = "┶";
+				} else if (has_build && col > parent_spine && col < spines.back() && string(c) == "─") {
+					c = "━";
 				}
 				routing += c;
 			}
@@ -1094,6 +1164,10 @@ private:
 			idx_t child_chain = i == 0 ? chain_width : ChainWidth(*node.children[i]);
 			children.push_back(RenderNode(*node.children[i], child_chain));
 		}
+		// for a hash join the build side is the right (last) child - mark it so its connector is drawn double-lined
+		if (node.name == "HASH_JOIN") {
+			children.back().build_side = true;
+		}
 		return AttachHorizontal(std::move(box), children);
 	}
 
@@ -1106,6 +1180,7 @@ private:
 	bool flatten;
 	bool merge;
 	bool upper_case;
+	bool expand_all;
 	double flatten_threshold;
 	double significant_threshold;
 	idx_t tree_content_width = 0;
@@ -1178,7 +1253,7 @@ void TextTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) 
 	bool flatten = !config.expand_all && total_time > 0;
 	bool merge = flatten && plan->subtree_count >= MERGE_MIN_NODES;
 	ExplainBoxRenderer renderer(config.maximum_render_width, config.thousand_separator, total_time,
-	                            ExplainAlignment::LEFT, flatten, merge, config.upper_case_operators);
+	                            ExplainAlignment::LEFT, flatten, merge, config.upper_case_operators, config.expand_all);
 	auto lines = renderer.Render(*plan);
 	if (renderer.HidContent()) {
 		ss.hidden_content = true;
