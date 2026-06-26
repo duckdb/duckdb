@@ -23,9 +23,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTable(PEGTransform
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	auto base_table = std::move(base_table_name[0]);
-	info->CatalogMutable() = base_table->Catalog();
-	info->SchemaMutable() = base_table->Schema();
-	info->NameMutable() = base_table->Table();
+	info->GetQualifiedNameMutable() = base_table->GetQualifiedName();
 	info->type = table_or_view;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
@@ -53,9 +51,7 @@ PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer, c
 	if (table_function_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	info->NameMutable() = table_function_name[0];
-	info->CatalogMutable() = INVALID_CATALOG;
-	info->SchemaMutable() = INVALID_SCHEMA;
+	info->GetQualifiedNameMutable() = QualifiedName(INVALID_CATALOG, INVALID_SCHEMA, table_function_name[0]);
 	info->type = comment_macro_table;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
@@ -73,9 +69,7 @@ PEGTransformerFactory::TransformDropFunction(PEGTransformer &transformer, const 
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	const auto &function = function_identifier[0];
-	info->CatalogMutable() = function.Catalog().empty() ? INVALID_CATALOG : function.Catalog();
-	info->SchemaMutable() = function.Schema();
-	info->NameMutable() = function.Name();
+	info->GetQualifiedNameMutable() = function;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = catalog_type;
 	result->info = std::move(info);
@@ -101,18 +95,14 @@ PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer, const op
 
 QualifiedName PEGTransformerFactory::TransformQualifiedSchemaNameString(PEGTransformer &transformer,
                                                                         const Identifier &schema_name) {
-	QualifiedName result;
-	result.CatalogMutable() = INVALID_CATALOG;
-	result.SchemaMutable() = schema_name;
+	QualifiedName result(INVALID_CATALOG, schema_name, Identifier());
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchema(PEGTransformer &transformer,
                                                                     const Identifier &catalog_qualification,
                                                                     const Identifier &reserved_schema_name) {
-	QualifiedName result;
-	result.CatalogMutable() = catalog_qualification;
-	result.SchemaMutable() = reserved_schema_name;
+	QualifiedName result(catalog_qualification, reserved_schema_name, Identifier());
 	return result;
 }
 
@@ -124,10 +114,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransform
 	if (qualified_index_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	const auto &index = qualified_index_name[0];
-	info->CatalogMutable() = index.Catalog();
-	info->SchemaMutable() = index.Schema();
-	info->NameMutable() = index.Name();
+	info->GetQualifiedNameMutable() = qualified_index_name[0];
 	info->type = CatalogType::INDEX_ENTRY;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	result->info = std::move(info);
@@ -136,30 +123,21 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransform
 
 QualifiedName PEGTransformerFactory::TransformQualifiedIndexNameString(PEGTransformer &transformer,
                                                                        const Identifier &index_name) {
-	QualifiedName result;
-	result.CatalogMutable() = INVALID_CATALOG;
-	result.SchemaMutable() = INVALID_SCHEMA;
-	result.NameMutable() = index_name;
+	QualifiedName result(INVALID_CATALOG, INVALID_SCHEMA, index_name);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedIndex(PEGTransformer &transformer,
                                                                   const Identifier &schema_qualification,
                                                                   const Identifier &reserved_index_name) {
-	QualifiedName result;
-	result.CatalogMutable() = INVALID_CATALOG;
-	result.SchemaMutable() = schema_qualification;
-	result.NameMutable() = reserved_index_name;
+	QualifiedName result(INVALID_CATALOG, schema_qualification, reserved_index_name);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIndex(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_index_name) {
-	QualifiedName result;
-	result.CatalogMutable() = catalog_qualification;
-	result.SchemaMutable() = reserved_schema_qualification;
-	result.NameMutable() = reserved_index_name;
+	QualifiedName result(catalog_qualification, reserved_schema_qualification, reserved_index_name);
 	return result;
 }
 
@@ -173,12 +151,10 @@ PEGTransformerFactory::TransformDropSequence(PEGTransformer &transformer, const 
 	}
 	const auto &sequence = qualified_sequence_name[0];
 	if (sequence.Schema().empty()) {
-		info->SchemaMutable() = sequence.Catalog();
+		info->GetQualifiedNameMutable() = QualifiedName(INVALID_CATALOG, sequence.Catalog(), sequence.Name());
 	} else {
-		info->CatalogMutable() = sequence.Catalog();
-		info->SchemaMutable() = sequence.Schema();
+		info->GetQualifiedNameMutable() = sequence;
 	}
-	info->NameMutable() = sequence.Name();
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::SEQUENCE_ENTRY;
 	result->info = std::move(info);
@@ -220,12 +196,10 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransforme
 	}
 	const auto &type = qualified_type_name[0];
 	if (type.Schema().empty()) {
-		info->SchemaMutable() = type.Catalog();
+		info->GetQualifiedNameMutable() = QualifiedName(INVALID_CATALOG, type.Catalog(), type.Name());
 	} else {
-		info->CatalogMutable() = type.Catalog();
-		info->SchemaMutable() = type.Schema();
+		info->GetQualifiedNameMutable() = type;
 	}
-	info->NameMutable() = type.Name();
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::TYPE_ENTRY;
 	result->info = std::move(info);

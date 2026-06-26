@@ -178,7 +178,7 @@ protected:
 protected:
 	//! PartitionedTupleData can only be instantiated by derived classes
 	PartitionedTupleData(PartitionedTupleDataType type, BufferManager &buffer_manager,
-	                     shared_ptr<TupleDataLayout> &layout_ptr, MemoryTag tag);
+	                     shared_ptr<TupleDataLayout> &layout_ptr, MemoryTag tag, QueryContext context = QueryContext());
 	PartitionedTupleData(PartitionedTupleData &other);
 
 	//! Whether to use fixed size map or regular map
@@ -196,7 +196,7 @@ protected:
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection() {
-		return make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, tag, stl_allocator);
+		return make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, tag, stl_allocator, context);
 	}
 	//! Verify count/data size of this PartitionedTupleData
 	void Verify() const;
@@ -205,6 +205,8 @@ protected:
 	PartitionedTupleDataType type;
 
 	BufferManager &buffer_manager;
+	//! The query context, used to attribute eviction/spill I/O of the partitions to the query
+	QueryContext context;
 	shared_ptr<ArenaAllocator> stl_allocator;
 
 	shared_ptr<TupleDataLayout> layout_ptr;

@@ -20,9 +20,7 @@ UpdateRelation::UpdateRelation(shared_ptr<ClientContextWrapper> &context, unique
 
 BoundStatement UpdateRelation::Bind(Binder &binder) {
 	auto basetable = make_uniq<BaseTableRef>();
-	basetable->CatalogMutable() = catalog_name;
-	basetable->SchemaMutable() = schema_name;
-	basetable->TableMutable() = table_name;
+	basetable->GetQualifiedNameMutable() = QualifiedName(catalog_name, schema_name, table_name);
 
 	UpdateStatement stmt;
 	auto &node = *stmt.node;

@@ -6,7 +6,7 @@
 namespace duckdb {
 
 string QualifiedName::ToString() const {
-	return ParseInfo::QualifierToString(catalog, schema, name);
+	return ParseInfo::QualifierToString(Catalog(), Schema(), Name());
 }
 
 vector<Identifier> QualifiedName::ParseComponents(const string &input) {
@@ -50,14 +50,14 @@ end:
 }
 
 hash_t QualifiedName::Hash() const {
-	hash_t result = catalog.Hash();
-	result = CombineHash(result, schema.Hash());
-	result = CombineHash(result, name.Hash());
+	hash_t result = Catalog().Hash();
+	result = CombineHash(result, Schema().Hash());
+	result = CombineHash(result, Name().Hash());
 	return result;
 }
 
 bool QualifiedName::operator==(const QualifiedName &rhs) const {
-	return catalog == rhs.catalog && schema == rhs.schema && name == rhs.name;
+	return Catalog() == rhs.Catalog() && Schema() == rhs.Schema() && Name() == rhs.Name();
 }
 
 bool QualifiedName::operator!=(const QualifiedName &rhs) const {

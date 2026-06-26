@@ -57,7 +57,7 @@ static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyT
 		}
 		auto &fk = cond->Cast<ForeignKeyConstraint>();
 		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-			AlterEntryData alter_data(catalog.GetName(), fk.info.schema, fk.info.table,
+			AlterEntryData alter_data(QualifiedName(catalog.GetName(), fk.info.schema, fk.info.table),
 			                          OnEntryNotFound::THROW_EXCEPTION);
 			fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), name, fk.pk_columns,
 			                                                   fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,

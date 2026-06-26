@@ -56,7 +56,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::TYPE_ENTRY: {
-		BindSchemaOrCatalog(stmt.info->CatalogMutable(), stmt.info->SchemaMutable());
+		BindSchemaOrCatalog(stmt.info->GetQualifiedNameMutable());
 		auto catalog = Catalog::GetCatalogEntry(context, stmt.info->Catalog());
 		if (catalog) {
 			// mark catalog as accessed

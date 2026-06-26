@@ -17,9 +17,7 @@ DeleteRelation::DeleteRelation(shared_ptr<ClientContextWrapper> &context, unique
 
 BoundStatement DeleteRelation::Bind(Binder &binder) {
 	auto basetable = make_uniq<BaseTableRef>();
-	basetable->CatalogMutable() = catalog_name;
-	basetable->SchemaMutable() = schema_name;
-	basetable->TableMutable() = table_name;
+	basetable->GetQualifiedNameMutable() = QualifiedName(catalog_name, schema_name, table_name);
 
 	DeleteStatement stmt;
 	auto &node = *stmt.node;

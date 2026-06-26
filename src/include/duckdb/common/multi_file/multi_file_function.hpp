@@ -14,6 +14,8 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include <numeric>
 
 namespace duckdb {
@@ -289,8 +291,7 @@ public:
 
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
 	static bool TryOpenNextFile(ClientContext &context, const MultiFileBindData &bind_data,
-	                            MultiFileLocalState &scan_data, MultiFileGlobalState &global_state,
-	                            unique_lock<mutex> &parallel_lock) {
+	                            MultiFileGlobalState &global_state, unique_lock<mutex> &parallel_lock) {
 		if (!parallel_lock.owns_lock()) {
 			throw InternalException("parallel_lock is not held in TryOpenNextFile, this should not happen");
 		}
@@ -398,14 +399,14 @@ public:
 		}
 	}
 
-	static void InitializeFileScanState(ClientContext &context, MultiFileReaderData &reader_data,
-	                                    MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
-		lstate.reader_data = reader_data;
-		auto &reader = *lstate.reader;
+	static void InitializeDecodeChunk(ClientContext &context, MultiFileLocalState &lstate,
+	                                  vector<idx_t> &projection_ids) {
+		auto &reader = *lstate.job.reader;
+		auto &reader_data = *lstate.job.reader_data;
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
 		vector<LogicalType> intermediate_chunk_types;
 		auto &local_column_ids = reader.column_indexes;
-		auto &local_columns = lstate.reader->GetColumns();
+		auto &local_columns = reader.GetColumns();
 		for (idx_t i = 0; i < local_column_ids.size(); i++) {
 			auto &local_id = local_column_ids[i];
 
@@ -444,12 +445,11 @@ public:
 				executor.AddExpression(*expr);
 			}
 		}
+		lstate.scan_chunk_file_index = lstate.job.file_index;
 	}
 
-	// This function looks for the next available row group. If not available, it will open files from bind_data.files
-	// until there is a row group available for scanning or the files runs out
-	static bool TryInitializeNextBatch(ClientContext &context, const MultiFileBindData &bind_data,
-	                                   MultiFileLocalState &scan_data, MultiFileGlobalState &gstate) {
+	static bool ClaimNextJob(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &gstate,
+	                         MultiFileScanJob &job) {
 		unique_lock<mutex> parallel_lock(gstate.lock);
 
 		while (true) {
@@ -459,29 +459,26 @@ public:
 
 			//! If we don't have a file to read, and the MultiFileList has no new file for us - end the scan
 			if (!HasFilesToRead(gstate, parallel_lock) && !TryGetNextFile(gstate, parallel_lock)) {
-				bind_data.interface->FinishReading(context, *gstate.global_state, *scan_data.local_state);
+				bind_data.interface->FinishReading(context, *gstate.global_state, *job.reader_scan_state);
 				return false;
 			}
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
 				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state,
-				                                                  *scan_data.local_state)) {
-					scan_data.reader = current_reader_data.reader;
-					if (!scan_data.reader) {
+				                                                  *job.reader_scan_state)) {
+					job.reader = current_reader_data.reader;
+					if (!job.reader) {
 						throw InternalException("MultiFileReader was moved");
 					}
 					// The current reader has data left to be scanned
-					scan_data.batch_index = gstate.batch_index++;
-					auto old_file_index = scan_data.file_index;
-					scan_data.file_index = gstate.file_index;
+					job.reader_data = current_reader_data;
+					job.batch_index = gstate.batch_index++;
+					job.file_index = gstate.file_index;
 					parallel_lock.unlock();
-					scan_data.reader->PrepareScan(context, *gstate.global_state, *scan_data.local_state);
-					if (old_file_index != scan_data.file_index) {
-						InitializeFileScanState(context, current_reader_data, scan_data, gstate.projection_ids);
-					}
-					// Initializing a batch is always a schedule phase
-					scan_data.phase = MultiFileScanPhase::SCHEDULE;
+					job.reader->PrepareScan(context, *gstate.global_state, *job.reader_scan_state);
+					// A freshly claimed job always starts in the schedule phase
+					job.phase = MultiFileScanPhase::SCHEDULE;
 					return true;
 				} else {
 					// Set state to the next file
@@ -503,7 +500,7 @@ public:
 				continue;
 			}
 
-			if (TryOpenNextFile(context, bind_data, scan_data, gstate, parallel_lock)) {
+			if (TryOpenNextFile(context, bind_data, gstate, parallel_lock)) {
 				continue;
 			}
 
@@ -524,11 +521,10 @@ public:
 		}
 
 		auto result = make_uniq<MultiFileLocalState>(context.client);
-		result->is_parallel = true;
-		result->batch_index = 0;
-		result->local_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
+		result->job.batch_index = 0;
+		result->job.reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
 
-		if (!TryInitializeNextBatch(context.client, bind_data, *result, gstate)) {
+		if (!ClaimNextJob(context.client, bind_data, gstate, result->job)) {
 			return nullptr;
 		}
 		return std::move(result);
@@ -657,8 +653,8 @@ public:
 		auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
 		auto &data = input.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
-		OperatorPartitionData partition_data(data.batch_index);
-		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, *data.reader_data,
+		OperatorPartitionData partition_data(data.job.batch_index);
+		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, *data.job.reader_data,
 		                                              gstate.multi_file_reader_state, input.partition_info,
 		                                              partition_data);
 		return partition_data;
@@ -693,58 +689,53 @@ public:
 
 	static bool SchedulePhase(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
 	                          MultiFileGlobalState &gstate) {
-		auto scheduled = data.reader->ScheduleIO(context, *gstate.global_state, *data.local_state);
-		data.phase = MultiFileScanPhase::DECODE;
+		auto scheduled = data.job.reader->ScheduleIO(context, *gstate.global_state, *data.job.reader_scan_state);
+		data.job.phase = MultiFileScanPhase::DECODE;
 		if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
 			return HandleBlocked(data_p, scheduled);
 		}
 		return false;
 	}
 
-	static bool DecodePhase(ClientContext &context, TableFunctionInput &data_p, MultiFileLocalState &data,
-	                        MultiFileGlobalState &gstate, MultiFileBindData &bind_data, DataChunk &output) {
+	static MultiFileDecodeResult DecodeCurrentJob(ClientContext &context, TableFunctionInput &data_p,
+	                                              MultiFileLocalState &data, MultiFileGlobalState &gstate,
+	                                              MultiFileBindData &bind_data, DataChunk &output) {
+		if (data.scan_chunk_file_index != data.job.file_index) {
+			// if the file changes we need to initialize the chunk again
+			InitializeDecodeChunk(context, data, gstate.projection_ids);
+		}
 		auto &scan_chunk = data.scan_chunk;
 		if (!data.resuming_blocked_scan) {
 			// A BLOCKED scan leaves partial data in the chunk (e.g. filter prefetch from parquet) that the resume must
 			// keep. Hence, we only reset if we are not resuming from a blocked scan.
 			scan_chunk.Reset();
 		}
-		auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
+		auto res = data.job.reader->Scan(context, *gstate.global_state, *data.job.reader_scan_state, scan_chunk);
 
 		data.resuming_blocked_scan = res.GetResultType() == AsyncResultType::BLOCKED;
 		if (res.GetResultType() == AsyncResultType::BLOCKED) {
-			return HandleBlocked(data_p, res);
+			return HandleBlocked(data_p, res) ? MultiFileDecodeResult::RETURN_TO_CALLER
+			                                  : MultiFileDecodeResult::CONTINUE;
 		}
 
 		output.SetChildCardinality(scan_chunk.size());
-
 		if (scan_chunk.size() > 0) {
 			data.rows_scanned += scan_chunk.size();
-			bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data, scan_chunk,
-			                                           output, data.executor, gstate.multi_file_reader_state);
+			bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.job.reader, *data.job.reader_data,
+			                                           scan_chunk, output, data.executor,
+			                                           gstate.multi_file_reader_state);
 			output.SetChildCardinality(output.size());
 		}
 		if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
 			// More chunks left on this batch, lets keep going
-			return EmitOutput(data_p, output);
+			return EmitOutput(data_p, output) ? MultiFileDecodeResult::RETURN_TO_CALLER
+			                                  : MultiFileDecodeResult::CONTINUE;
 		}
-
 		if (res.GetResultType() != AsyncResultType::FINISHED) {
 			throw InternalException("Unexpected result in MultiFileScan, must be FINISHED, is %s",
 			                        EnumUtil::ToChars(res.GetResultType()));
 		}
-
-		// We are done with this batch
-		if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
-			if (output.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
-				gstate.finished = true;
-				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
-			} else {
-				data_p.async_result = SourceResultType::FINISHED;
-			}
-			return true;
-		}
-		return EmitOutput(data_p, output);
+		return MultiFileDecodeResult::JOB_FINISHED;
 	}
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -762,15 +753,34 @@ public:
 		}
 
 		do {
-			switch (data.phase) {
+			switch (data.job.phase) {
 			case MultiFileScanPhase::SCHEDULE:
 				if (SchedulePhase(context, data_p, data, gstate)) {
 					return;
 				}
 				break;
 			case MultiFileScanPhase::DECODE:
-				if (DecodePhase(context, data_p, data, gstate, bind_data, output)) {
+				switch (DecodeCurrentJob(context, data_p, data, gstate, bind_data, output)) {
+				case MultiFileDecodeResult::CONTINUE:
+					break;
+				case MultiFileDecodeResult::RETURN_TO_CALLER:
 					return;
+				case MultiFileDecodeResult::JOB_FINISHED:
+					// done with this job, gotta claim the next one
+					if (!ClaimNextJob(context, bind_data, gstate, data.job)) {
+						if (output.size() > 0 &&
+						    data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+							gstate.finished = true;
+							data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+						} else {
+							data_p.async_result = SourceResultType::FINISHED;
+						}
+						return;
+					}
+					if (EmitOutput(data_p, output)) {
+						return;
+					}
+					break;
 				}
 				break;
 			default:
@@ -998,13 +1008,15 @@ public:
 		}
 	}
 
-	static void PushdownType(ClientContext &context, optional_ptr<FunctionData> bind_data_p,
-	                         const unordered_map<idx_t, LogicalType> &new_column_types) {
-		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
-		for (auto &type : new_column_types) {
-			bind_data.types[type.first] = type.second;
-			bind_data.columns[type.first].type = type.second;
+	static bool PushdownProjectionExpression(ClientContext &context, TableFunctionProjectionExpressionInput &input) {
+		if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
+			return false;
 		}
+		auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
+		const auto &cast = input.expr.Cast<BoundCastExpression>();
+		bind_data.types[input.proj_index] = cast.GetReturnType();
+		bind_data.columns[input.proj_index].type = cast.GetReturnType();
+		return true;
 	}
 
 private:

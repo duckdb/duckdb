@@ -11,9 +11,10 @@ namespace duckdb {
 // Remove this when we switch C++17: https://stackoverflow.com/a/53350948
 constexpr FileOpenFlags BufferedFileWriter::DEFAULT_OPEN_FLAGS;
 
-BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, FileOpenFlags open_flags)
+BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, FileOpenFlags open_flags,
+                                       QueryContext context_p)
     : fs(fs), path(path_p), data(make_unsafe_uniq_array_uninitialized<data_t>(FILE_BUFFER_SIZE)), offset(0),
-      total_written(0) {
+      total_written(0), context(context_p) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
 }
 
@@ -40,8 +41,8 @@ void BufferedFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 			Flush(); // Flush buffer before writing every things else
 		}
 		idx_t remaining_to_write = write_size - to_copy;
-		fs.Write(*handle, const_cast<data_ptr_t>(buffer + to_copy), // NOLINT: wrong API in Write
-		         UnsafeNumericCast<int64_t>(remaining_to_write));
+		handle->Write(context, const_cast<data_ptr_t>(buffer + to_copy), // NOLINT: wrong API in Write
+		              remaining_to_write);
 		total_written += remaining_to_write;
 	} else {
 		// first copy anything we can from the buffer
@@ -63,7 +64,7 @@ void BufferedFileWriter::Flush() {
 	if (offset == 0) {
 		return;
 	}
-	fs.Write(*handle, data.get(), UnsafeNumericCast<int64_t>(offset));
+	handle->Write(context, data.get(), offset);
 	total_written += offset;
 	offset = 0;
 }

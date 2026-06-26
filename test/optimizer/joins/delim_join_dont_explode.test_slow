@@ -3,6 +3,9 @@
 # group: [joins]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 create table big_table (id integer);
 
 statement ok

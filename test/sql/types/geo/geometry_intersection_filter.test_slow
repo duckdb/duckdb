@@ -4,17 +4,19 @@
 load {TEST_DIR}/test_geo_storage.db readwrite v1.5.0
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 create table t1 as
 	select
 		(x + y * 1000) as id,
 		printf('POINT(%d %d)', x, y)::GEOMETRY as g
 	from range(1000) xx(x), range(100) yy(y);
 
-
 query II
 explain select * from t1 where g && 'POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))';
 ----
-physical_plan	<REGEX>:.*Filters:.*
+physical_plan	<REGEX>:(?s).*Filters.*g &&.*
 
 query II rowsort res_1
 select * from t1 where g && 'POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))' order by id;
@@ -35,7 +37,6 @@ query II
 explain select * from t1 where g && 'POLYGON((0 0, 2000 0, 2000 2000, 0 2000, 0 0))';
 ----
 physical_plan	<!REGEX>:.*Filters:.*
-
 
 # If the polygon is does not intersect any points, no filtering should occur either
 query II

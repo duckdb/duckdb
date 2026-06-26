@@ -185,10 +185,7 @@ PEGTransformerFactory::TransformCreateTableConstraint(PEGTransformer &transforme
 
 QualifiedName PEGTransformerFactory::TransformIdentifierOrStringLiteral(PEGTransformer &transformer,
                                                                         const string &child) {
-	QualifiedName result;
-	result.CatalogMutable() = INVALID_CATALOG;
-	result.SchemaMutable() = INVALID_SCHEMA;
-	result.NameMutable() = Identifier(child);
+	QualifiedName result(INVALID_CATALOG, INVALID_SCHEMA, Identifier(child));
 	return result;
 }
 

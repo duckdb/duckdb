@@ -40,10 +40,7 @@ PEGTransformerFactory::TransformUseTargetCatalogSchema(PEGTransformer &transform
 	if (dot_identifier && !dot_identifier->empty()) {
 		throw ParserException("Expected \"USE database\" or \"USE database.schema\"");
 	}
-	QualifiedName result;
-	result.CatalogMutable() = Identifier::InvalidCatalog();
-	result.SchemaMutable() = catalog_name;
-	result.NameMutable() = reserved_schema_name;
+	QualifiedName result(Identifier::InvalidCatalog(), catalog_name, reserved_schema_name);
 	return result;
 }
 

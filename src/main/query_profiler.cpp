@@ -529,30 +529,6 @@ string QueryProfiler::QueryTreeToString() const {
 	return ss.str();
 }
 
-// renders a centered line: the surrounding box-drawing and padding is layout, the text itself is a value
-static void RenderPaddedValue(BaseTreeRenderer &ss, const string &border_left, const string &padded,
-                              const string &border_right) {
-	idx_t start = 0;
-	while (start < padded.size() && padded[start] == ' ') {
-		start++;
-	}
-	idx_t end = padded.size();
-	while (end > start && padded[end - 1] == ' ') {
-		end--;
-	}
-	ss << border_left;
-	if (start > 0) {
-		ss << padded.substr(0, start);
-	}
-	if (end > start) {
-		ss.Render(padded.substr(start, end - start), TreeRenderType::VALUE);
-	}
-	if (end < padded.size()) {
-		ss << padded.substr(end);
-	}
-	ss << border_right;
-}
-
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	StringTreeRenderer renderer;
 	RenderQueryTree(renderer);

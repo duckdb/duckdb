@@ -1,0 +1,13 @@
+diff --git a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
+index 73a96505..bcff33a7 100644
+--- a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
++++ b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
+@@ -278,7 +278,7 @@ IcebergColumnDefinition &ResolveColumn(T &alter_table_info, const shared_ptr<Ice
+ 	auto column_p = new_schema->GetMutableFromPath({column_name}, nullptr);
+ 	if (!column_p) {
+ 		throw CatalogException("Column with name '%s' does not exist on the table '%s'", column_name,
+-		                       alter_table_info.GetAlterEntryData().name);
++		                       alter_table_info.GetAlterEntryData().Name());
+ 	}
+ 	auto &column = *column_p;
+ 	return column;

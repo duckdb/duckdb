@@ -76,14 +76,29 @@ public:
 		}
 		return result;
 	}
+	BufferHandle Allocate(QueryContext context, MemoryTag tag, idx_t block_size, bool can_destroy = true) override {
+		auto result = buffer_manager.Allocate(context, tag, block_size, can_destroy);
+		if (result.GetBlockHandle()) {
+			TrackMemoryAllocation(result.GetBlockHandle()->GetMemory().GetMemoryUsage());
+		}
+		return result;
+	}
+	BufferHandle Allocate(QueryContext context, MemoryTag tag, BlockManager *block_manager,
+	                      bool can_destroy = true) override {
+		auto result = buffer_manager.Allocate(context, tag, block_manager, can_destroy);
+		if (result.GetBlockHandle()) {
+			TrackMemoryAllocation(result.GetBlockHandle()->GetMemory().GetMemoryUsage());
+		}
+		return result;
+	}
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) override {
 		return Pin(QueryContext(), handle);
 	}
 	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) override {
 		return buffer_manager.Pin(context, handle);
 	}
-	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) override {
-		return buffer_manager.Prefetch(handles);
+	void Prefetch(QueryContext context, vector<shared_ptr<BlockHandle>> &handles) override {
+		return buffer_manager.Prefetch(context, handles);
 	}
 	void Unpin(shared_ptr<BlockHandle> &handle) override {
 		return buffer_manager.Unpin(handle);
@@ -193,8 +208,8 @@ public:
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle) override {
 		return buffer_manager.AddToEvictionQueue(handle);
 	}
-	void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) override {
-		return buffer_manager.WriteTemporaryBuffer(tag, block_id, buffer);
+	void WriteTemporaryBuffer(QueryContext context, MemoryTag tag, block_id_t block_id, FileBuffer &buffer) override {
+		return buffer_manager.WriteTemporaryBuffer(context, tag, block_id, buffer);
 	}
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
 	                                           unique_ptr<FileBuffer> buffer) override {

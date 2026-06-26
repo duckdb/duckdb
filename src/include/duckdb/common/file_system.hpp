@@ -149,6 +149,10 @@ public:
 	FileOpenFlags flags;
 
 	shared_ptr<Logger> logger;
+	//! Whether reads/writes through this handle are counted in the query's I/O metrics. Set to false for
+	//! wrapper handles (e.g. compressed files) that delegate the real on-disk I/O to a child handle, so that
+	//! the bytes are attributed to the child handle (the actual disk I/O) and not double-counted.
+	bool track_io = true;
 };
 
 class FileSystem {
