@@ -34,7 +34,18 @@ public:
 	}
 
 	optional_idx GetEstimatedCacheMemory() const override {
-		return cached_file->path.size() * 2;
+		idx_t file_size = 0;
+		{
+			const annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
+			file_size = cached_file->file_size;
+		}
+		const idx_t block_size = cache.GetCacheBlockSize(cached_file->path);
+		const idx_t num_blocks = (file_size + block_size - 1) / block_size;
+		// Estimated memory consumption for each block metadata.
+		static constexpr idx_t BLOCK_METADATA_SIZE = sizeof(CacheBlock);
+		// Filepath is stored at two places: in the object cache key and in the cached file object.
+		// We do over-estimation on memory consumption, which assumes the whole file is cached.
+		return cached_file->path.size() * 2 + num_blocks * BLOCK_METADATA_SIZE;
 	}
 
 	shared_ptr<CachedFile> GetCachedFile() const {
