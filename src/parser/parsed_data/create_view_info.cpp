@@ -10,7 +10,7 @@ namespace duckdb {
 
 CreateViewInfo::CreateViewInfo() : CreateInfo(CatalogType::VIEW_ENTRY, Identifier::InvalidSchema()) {
 }
-CreateViewInfo::CreateViewInfo(QualifiedName view_name)
+CreateViewInfo::CreateViewInfo(const QualifiedName &view_name)
     : CreateInfo(CatalogType::VIEW_ENTRY, view_name.Schema(), view_name.Catalog()) {
 	SetViewName(view_name.Name());
 }

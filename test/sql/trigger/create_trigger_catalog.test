@@ -177,3 +177,42 @@ DROP TABLE b CASCADE;
 
 statement ok
 DROP TABLE log_ab;
+
+# --- Trigger created with a two-part catalog-qualified table name (catalog.table) ---
+statement ok
+ATTACH ':memory:' AS trig_cat;
+
+statement ok
+CREATE TABLE trig_cat.t_base (id INTEGER);
+
+statement ok
+CREATE TABLE trig_cat.t_audit (msg VARCHAR);
+
+# `trig_cat.t_base` is a catalog-qualified reference; it must not be misread as schema.table
+statement ok
+CREATE TRIGGER cat_qualified_trigger AFTER INSERT ON trig_cat.t_base FOR EACH STATEMENT
+    INSERT INTO trig_cat.t_audit VALUES ('fired');
+
+# The base table reference is preserved exactly as written
+query TT
+SELECT trigger_name, sql FROM duckdb_triggers() WHERE trigger_name = 'cat_qualified_trigger';
+----
+cat_qualified_trigger	CREATE TRIGGER cat_qualified_trigger AFTER INSERT ON trig_cat.t_base FOR EACH STATEMENT INSERT INTO trig_cat.t_audit (VALUES ('fired'));
+
+# The trigger fires
+statement ok
+INSERT INTO trig_cat.t_base VALUES (1);
+
+query I
+SELECT msg FROM trig_cat.t_audit;
+----
+fired
+
+statement ok
+DROP TABLE trig_cat.t_base CASCADE;
+
+statement ok
+DROP TABLE trig_cat.t_audit;
+
+statement ok
+DETACH trig_cat;
