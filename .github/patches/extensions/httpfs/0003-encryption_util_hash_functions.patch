@@ -1,0 +1,587 @@
+diff --git a/src/crypto.cpp b/src/crypto.cpp
+index 5665873..807e2ea 100644
+--- a/src/crypto.cpp
++++ b/src/crypto.cpp
+@@ -1,18 +1,19 @@
+ #include "crypto.hpp"
+-#include "hash_functions.hpp"
+-#include "mbedtls_wrapper.hpp"
+-#include <iostream>
++
+ #include "duckdb/common/common.hpp"
++#include "duckdb/common/exception.hpp"
++
++#include <iostream>
++#include <mutex>
+ #include <stdio.h>
+ 
+ #define CPPHTTPLIB_OPENSSL_SUPPORT
+ 
+-#include "include/crypto.hpp"
+-
+ #include "re2/re2.h"
+ 
+ #include <openssl/err.h>
+ #include <openssl/evp.h>
++#include <openssl/hmac.h>
+ #include <openssl/ssl.h>
+ #include <openssl/x509v3.h>
+ #include <openssl/rand.h>
+@@ -26,6 +27,60 @@ using EncryptionVersion = duckdb::EncryptionTypes::EncryptionVersion;
+ using MainHeader = duckdb::MainHeader;
+ using Mode = duckdb::EncryptionTypes::Mode;
+ 
++static const EVP_MD *GetOpenSSLHashFunction(duckdb::CryptoHashFunction function) {
++	switch (function) {
++	case duckdb::CryptoHashFunction::MD5:
++		return EVP_md5();
++	case duckdb::CryptoHashFunction::SHA1:
++		return EVP_sha1();
++	case duckdb::CryptoHashFunction::SHA256:
++		return EVP_sha256();
++	default:
++		throw duckdb::InternalException("Unsupported crypto hash function");
++	}
++}
++
++static void CheckOpenSSLHashLength(duckdb::CryptoHashFunction function, unsigned int actual_size) {
++	if (actual_size != duckdb::CryptoHash::GetDigestSize(function)) {
++		throw duckdb::InternalException("OpenSSL returned an unexpected hash length");
++	}
++}
++
++class OpenSSLCryptoHashState : public duckdb::CryptoHashState {
++public:
++	explicit OpenSSLCryptoHashState(duckdb::CryptoHashFunction function)
++	    : duckdb::CryptoHashState(function), context(EVP_MD_CTX_new()) {
++		if (!context) {
++			throw duckdb::InternalException("OpenSSL failed with initializing hash context");
++		}
++		auto message_digest = GetOpenSSLHashFunction(function);
++		if (!EVP_DigestInit_ex(context, message_digest, nullptr)) {
++			throw duckdb::InternalException("OpenSSL failed to initialize hash");
++		}
++	}
++
++	~OpenSSLCryptoHashState() override {
++		EVP_MD_CTX_free(context);
++	}
++
++	void Hash(duckdb::const_data_ptr_t input, duckdb::idx_t input_len, duckdb::data_ptr_t output) override {
++		unsigned int output_size = 0;
++		if (!EVP_DigestInit_ex(context, nullptr, nullptr)) {
++			throw duckdb::InternalException("OpenSSL failed to initialize hash");
++		}
++		if (!EVP_DigestUpdate(context, input, input_len)) {
++			throw duckdb::InternalException("OpenSSL failed to update hash");
++		}
++		if (!EVP_DigestFinal_ex(context, output, &output_size)) {
++			throw duckdb::InternalException("OpenSSL failed to finalize hash");
++		}
++		CheckOpenSSLHashLength(GetFunction(), output_size);
++	}
++
++private:
++	EVP_MD_CTX *context;
++};
++
+ namespace duckdb {
+ 
+ AESStateSSL::AESStateSSL(unique_ptr<EncryptionStateMetadata> metadata)
+@@ -240,6 +295,72 @@ size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_
+ 
+ } // namespace duckdb
+ 
++AESStateSSLFactory::AESStateSSLFactory() {
++	static std::once_flag rand_init;
++	std::call_once(rand_init, []() {
++		// Force OpenSSL's DRBG to initialize single-threadedly. In OpenSSL 3.0/3.1,
++		// the first RAND_bytes call lazily initializes internal provider state via ossl_ht.
++		// Concurrent first calls (e.g. parallel ATTACH) race on that hash table.
++		unsigned char dummy;
++		RAND_bytes(&dummy, 1);
++	});
++}
++
++duckdb::shared_ptr<duckdb::EncryptionState>
++AESStateSSLFactory::CreateEncryptionState(duckdb::unique_ptr<duckdb::EncryptionStateMetadata> metadata) const {
++	return duckdb::make_shared_ptr<duckdb::AESStateSSL>(std::move(metadata));
++}
++
++duckdb::unique_ptr<duckdb::CryptoHashState>
++AESStateSSLFactory::CreateHashState(duckdb::CryptoHashFunction function) const {
++	return duckdb::make_uniq<OpenSSLCryptoHashState>(function);
++}
++
++void AESStateSSLFactory::Hash(duckdb::CryptoHashFunction function, duckdb::const_data_ptr_t input,
++                              duckdb::idx_t input_len, duckdb::data_ptr_t output) const {
++	unsigned int output_size = 0;
++	if (!EVP_Digest(input, input_len, output, &output_size, GetOpenSSLHashFunction(function), nullptr)) {
++		throw duckdb::InternalException("OpenSSL failed to compute hash");
++	}
++	CheckOpenSSLHashLength(function, output_size);
++}
++
++void AESStateSSLFactory::Hmac(duckdb::CryptoHashFunction function, duckdb::const_data_ptr_t key, duckdb::idx_t key_len,
++                              duckdb::const_data_ptr_t input, duckdb::idx_t input_len,
++                              duckdb::data_ptr_t output) const {
++	if (function != duckdb::CryptoHashFunction::SHA256) {
++		throw duckdb::NotImplementedException("OpenSSL HMAC currently only supports SHA256");
++	}
++	if (key_len > duckdb::NumericLimits<int>::Maximum()) {
++		throw duckdb::InvalidInputException("HMAC key length exceeds OpenSSL limit");
++	}
++
++	unsigned int output_size = 0;
++	if (!HMAC(GetOpenSSLHashFunction(function), key, static_cast<int>(key_len), input, input_len, output,
++	          &output_size)) {
++		throw duckdb::InternalException("OpenSSL failed to compute HMAC");
++	}
++	CheckOpenSSLHashLength(function, output_size);
++}
++
++bool AESStateSSLFactory::SupportsHash(duckdb::CryptoHashFunction function) const {
++	switch (function) {
++	case duckdb::CryptoHashFunction::MD5:
++	case duckdb::CryptoHashFunction::SHA1:
++	case duckdb::CryptoHashFunction::SHA256:
++		return true;
++	default:
++		return false;
++	}
++}
++
++bool AESStateSSLFactory::SupportsHmac(duckdb::CryptoHashFunction function) const {
++	return function == duckdb::CryptoHashFunction::SHA256;
++}
++
++AESStateSSLFactory::~AESStateSSLFactory() {
++}
++
+ extern "C" {
+ 
+ // Call the member function through the factory object
+diff --git a/src/hash_functions.cpp b/src/hash_functions.cpp
+index 1e6bb8f..314d60b 100644
+--- a/src/hash_functions.cpp
++++ b/src/hash_functions.cpp
+@@ -1,28 +1,25 @@
+-#include "mbedtls_wrapper.hpp"
+ #include "hash_functions.hpp"
+ 
+ namespace duckdb {
+ 
+-void sha256(const char *in, size_t in_len, hash_bytes &out) {
+-	duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(in, in_len, (char *)out);
++void sha256(EncryptionUtil &encryption_util, const char *in, size_t in_len, hash_bytes &out) {
++	D_ASSERT(CryptoHash::GetDigestSize(CryptoHashFunction::SHA256) == sizeof(hash_bytes));
++	encryption_util.Hash(CryptoHashFunction::SHA256, const_data_ptr_cast(in), in_len, out);
+ }
+ 
+-void hmac256(const std::string &message, const char *secret, size_t secret_len, hash_bytes &out) {
+-	duckdb_mbedtls::MbedTlsWrapper::Hmac256(secret, secret_len, message.data(), message.size(), (char *)out);
++void hmac256(EncryptionUtil &encryption_util, const std::string &message, const char *secret, size_t secret_len,
++             hash_bytes &out) {
++	D_ASSERT(CryptoHash::GetDigestSize(CryptoHashFunction::SHA256) == sizeof(hash_bytes));
++	encryption_util.Hmac(CryptoHashFunction::SHA256, const_data_ptr_cast(secret), secret_len,
++	                     const_data_ptr_cast(message.data()), message.size(), out);
+ }
+ 
+-void hmac256(std::string message, hash_bytes secret, hash_bytes &out) {
+-	hmac256(message, (char *)secret, sizeof(hash_bytes), out);
++void hmac256(EncryptionUtil &encryption_util, std::string message, hash_bytes secret, hash_bytes &out) {
++	hmac256(encryption_util, message, reinterpret_cast<const char *>(secret), sizeof(hash_bytes), out);
+ }
+ 
+ void hex256(hash_bytes &in, hash_str &out) {
+-	const char *hex = "0123456789abcdef";
+-	unsigned char *pin = in;
+-	unsigned char *pout = out;
+-	for (; pin < in + sizeof(in); pout += 2, pin++) {
+-		pout[0] = hex[(*pin >> 4) & 0xF];
+-		pout[1] = hex[*pin & 0xF];
+-	}
++	CryptoHash::ToHex(in, sizeof(hash_bytes), reinterpret_cast<char *>(out));
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/httpfs_extension.cpp b/src/httpfs_extension.cpp
+index f4361e2..a7dd819 100644
+--- a/src/httpfs_extension.cpp
++++ b/src/httpfs_extension.cpp
+@@ -10,6 +10,8 @@
+ #include "duckdb/main/client_context_file_opener.hpp"
+ #ifdef OVERRIDE_ENCRYPTION_UTILS
+ #include "crypto.hpp"
++#elif defined(EMSCRIPTEN)
++#include "mbedtls_wrapper.hpp"
+ #endif // OVERRIDE_ENCRYPTION_UTILS
+ 
+ #ifndef EMSCRIPTEN
+@@ -195,6 +197,10 @@ static void LoadInternal(ExtensionLoader &loader) {
+ #ifdef OVERRIDE_ENCRYPTION_UTILS
+ 	// set pointer to OpenSSL encryption state
+ 	config.encryption_util = make_shared_ptr<AESStateSSLFactory>();
++#elif defined(EMSCRIPTEN)
++	if (!config.encryption_util) {
++		config.encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
++	}
+ #endif // OVERRIDE_ENCRYPTION_UTILS
+ }
+ void HttpfsExtension::Load(ExtensionLoader &loader) {
+diff --git a/src/include/crypto.hpp b/src/include/crypto.hpp
+index 6df3234..a10e322 100644
+--- a/src/include/crypto.hpp
++++ b/src/include/crypto.hpp
+@@ -5,25 +5,12 @@
+ #include "duckdb/common/helper.hpp"
+ 
+ #include <openssl/rand.h>
+-#include <stddef.h>
+-#include <string>
+ 
+ typedef struct evp_cipher_ctx_st EVP_CIPHER_CTX;
+ typedef struct evp_cipher_st EVP_CIPHER;
+ 
+ namespace duckdb {
+ 
+-typedef unsigned char hash_bytes[32];
+-typedef unsigned char hash_str[64];
+-
+-void sha256(const char *in, size_t in_len, hash_bytes &out);
+-
+-void hmac256(const std::string &message, const char *secret, size_t secret_len, hash_bytes &out);
+-
+-void hmac256(std::string message, hash_bytes secret, hash_bytes &out);
+-
+-void hex256(hash_bytes &in, hash_str &out);
+-
+ class DUCKDB_EXTENSION_API AESStateSSL : public EncryptionState {
+ 
+ public:
+@@ -55,20 +42,18 @@ extern "C" {
+ 
+ class DUCKDB_EXTENSION_API AESStateSSLFactory : public duckdb::EncryptionUtil {
+ public:
+-	explicit AESStateSSLFactory() {
+-		// Force OpenSSL's DRBG to initialize single-threadedly. In OpenSSL 3.0/3.1,
+-		// the first RAND_bytes call lazily initializes internal provider state via ossl_ht.
+-		// Concurrent first calls (e.g. parallel ATTACH) race on that hash table.
+-		unsigned char dummy;
+-		RAND_bytes(&dummy, 1);
+-	}
++	explicit AESStateSSLFactory();
+ 
+ 	duckdb::shared_ptr<duckdb::EncryptionState>
+-	CreateEncryptionState(duckdb::unique_ptr<duckdb::EncryptionStateMetadata> metadata) const override {
+-		return duckdb::make_shared_ptr<duckdb::AESStateSSL>(std::move(metadata));
+-	}
+-
+-	~AESStateSSLFactory() override {
+-	}
++	CreateEncryptionState(duckdb::unique_ptr<duckdb::EncryptionStateMetadata> metadata) const override;
++	duckdb::unique_ptr<duckdb::CryptoHashState> CreateHashState(duckdb::CryptoHashFunction function) const override;
++	void Hash(duckdb::CryptoHashFunction function, duckdb::const_data_ptr_t input, duckdb::idx_t input_len,
++	          duckdb::data_ptr_t output) const override;
++	void Hmac(duckdb::CryptoHashFunction function, duckdb::const_data_ptr_t key, duckdb::idx_t key_len,
++	          duckdb::const_data_ptr_t input, duckdb::idx_t input_len, duckdb::data_ptr_t output) const override;
++	bool SupportsHash(duckdb::CryptoHashFunction function) const override;
++	bool SupportsHmac(duckdb::CryptoHashFunction function) const override;
++
++	~AESStateSSLFactory() override;
+ };
+ }
+diff --git a/src/include/hash_functions.hpp b/src/include/hash_functions.hpp
+index bfefe79..74a030f 100644
+--- a/src/include/hash_functions.hpp
++++ b/src/include/hash_functions.hpp
+@@ -1,17 +1,21 @@
+ #pragma once
+ 
++#include "duckdb/common/encryption_state.hpp"
+ #include "duckdb/common/helper.hpp"
+ 
++#include <string>
++
+ namespace duckdb {
+ 
+ typedef unsigned char hash_bytes[32];
+ typedef unsigned char hash_str[64];
+ 
+-void sha256(const char *in, size_t in_len, hash_bytes &out);
++void sha256(EncryptionUtil &encryption_util, const char *in, size_t in_len, hash_bytes &out);
+ 
+-void hmac256(const std::string &message, const char *secret, size_t secret_len, hash_bytes &out);
++void hmac256(EncryptionUtil &encryption_util, const std::string &message, const char *secret, size_t secret_len,
++             hash_bytes &out);
+ 
+-void hmac256(std::string message, hash_bytes secret, hash_bytes &out);
++void hmac256(EncryptionUtil &encryption_util, std::string message, hash_bytes secret, hash_bytes &out);
+ 
+ void hex256(hash_bytes &in, hash_str &out);
+ 
+diff --git a/src/include/s3fs.hpp b/src/include/s3fs.hpp
+index 6e9ea8a..4658e95 100644
+--- a/src/include/s3fs.hpp
++++ b/src/include/s3fs.hpp
+@@ -194,6 +194,7 @@ public:
+ 
+ 	//! Wrapper around BufferManager::Allocate to limit the number of buffers
+ 	BufferHandle Allocate(idx_t part_size, uint16_t max_threads);
++	EncryptionUtil &GetEncryptionUtil();
+ 
+ 	//! S3 is object storage so directories effectively always exist
+ 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr) override {
+@@ -229,15 +230,16 @@ protected:
+ 
+ // Helper class to do s3 ListObjectV2 api call https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+ struct AWSListObjectV2 {
+-	static string Request(const string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
+-	                      string &continuation_token, bool use_delimiter = false,
++	static string Request(EncryptionUtil &encryption_util, const string &path, HTTPParams &http_params,
++	                      S3AuthParams &s3_auth_params, string &continuation_token, bool use_delimiter = false,
+ 	                      optional_idx max_keys = optional_idx());
+ 	static void ParseFileList(string &aws_response, vector<OpenFileInfo> &result);
+ 	static vector<string> ParseCommonPrefix(string &aws_response);
+ 	static string ParseContinuationToken(string &aws_response);
+ };
+ 
+-HTTPHeaders CreateS3Header(string url, string query, string host, string service, string method,
+-                           const S3AuthParams &auth_params, string date_now = "", string datetime_now = "",
+-                           string payload_hash = "", string content_type = "", string content_md5 = "");
++HTTPHeaders CreateS3Header(EncryptionUtil &encryption_util, string url, string query, string host, string service,
++                           string method, const S3AuthParams &auth_params, string date_now = "",
++                           string datetime_now = "", string payload_hash = "", string content_type = "",
++                           string content_md5 = "");
+ } // namespace duckdb
+diff --git a/src/s3fs.cpp b/src/s3fs.cpp
+index ca1ea8e..656518b 100644
+--- a/src/s3fs.cpp
++++ b/src/s3fs.cpp
+@@ -1,5 +1,5 @@
+ #include "s3fs.hpp"
+-#include "crypto.hpp"
++#include "hash_functions.hpp"
+ #include "duckdb.hpp"
+ #include "duckdb/common/exception/http_exception.hpp"
+ #include "duckdb/logging/log_type.hpp"
+@@ -26,9 +26,9 @@
+ 
+ namespace duckdb {
+ 
+-HTTPHeaders CreateS3Header(string url, string query, string host, string service, string method,
+-                           const S3AuthParams &auth_params, string date_now, string datetime_now, string payload_hash,
+-                           string content_type, string content_md5) {
++HTTPHeaders CreateS3Header(EncryptionUtil &encryption_util, string url, string query, string host, string service,
++                           string method, const S3AuthParams &auth_params, string date_now, string datetime_now,
++                           string payload_hash, string content_type, string content_md5) {
+ 
+ 	HTTPHeaders res;
+ 	res["Host"] = host;
+@@ -112,7 +112,7 @@ HTTPHeaders CreateS3Header(string url, string query, string host, string service
+ 
+ 	canonical_request += "\n\n" + signed_headers + "\n" + payload_hash;
+ 
+-	sha256(canonical_request.c_str(), canonical_request.length(), canonical_request_hash);
++	sha256(encryption_util, canonical_request.c_str(), canonical_request.length(), canonical_request_hash);
+ 
+ 	hex256(canonical_request_hash, canonical_request_hash_str);
+ 	auto string_to_sign = "AWS4-HMAC-SHA256\n" + datetime_now + "\n" + date_now + "/" + auth_params.region + "/" +
+@@ -121,11 +121,11 @@ HTTPHeaders CreateS3Header(string url, string query, string host, string service
+ 	hash_bytes k_date, k_region, k_service, signing_key, signature;
+ 	hash_str signature_str;
+ 	auto sign_key = "AWS4" + auth_params.secret_access_key;
+-	hmac256(date_now, sign_key.c_str(), sign_key.length(), k_date);
+-	hmac256(auth_params.region, k_date, k_region);
+-	hmac256(service, k_region, k_service);
+-	hmac256("aws4_request", k_service, signing_key);
+-	hmac256(string_to_sign, signing_key, signature);
++	hmac256(encryption_util, date_now, sign_key.c_str(), sign_key.length(), k_date);
++	hmac256(encryption_util, auth_params.region, k_date, k_region);
++	hmac256(encryption_util, service, k_region, k_service);
++	hmac256(encryption_util, "aws4_request", k_service, signing_key);
++	hmac256(encryption_util, string_to_sign, signing_key, signature);
+ 	hex256(signature, signature_str);
+ 
+ 	res["Authorization"] = "AWS4-HMAC-SHA256 Credential=" + auth_params.access_key_id + "/" + date_now + "/" +
+@@ -512,11 +512,19 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, const S3AuthParams &params) {
+ 	return {http_proto, prefix, host, bucket, key, path, query_param, trimmed_s3_url};
+ }
+ 
++EncryptionUtil &S3FileSystem::GetEncryptionUtil() {
++	auto &config = DBConfig::GetConfig(buffer_manager.GetDatabase());
++	if (!config.encryption_util) {
++		throw InternalException("HTTPFS encryption util has not been initialized");
++	}
++	return *config.encryption_util;
++}
++
+ string S3FileSystem::GetPayloadHash(char *buffer, idx_t buffer_len) {
+ 	if (buffer_len > 0) {
+ 		hash_bytes payload_hash_bytes;
+ 		hash_str payload_hash_str;
+-		sha256(buffer, buffer_len, payload_hash_bytes);
++		sha256(GetEncryptionUtil(), buffer, buffer_len, payload_hash_bytes);
+ 		hex256(payload_hash_bytes, payload_hash_str);
+ 		return string((char *)payload_hash_str, sizeof(payload_hash_str));
+ 	} else {
+@@ -549,8 +557,8 @@ unique_ptr<HTTPResponse> S3FileSystem::PostRequest(HTTPInput &input, string url,
+ 	} else {
+ 		// Use existing S3 authentication
+ 		auto payload_hash = GetPayloadHash(buffer_in, buffer_in_len);
+-		headers = CreateS3Header(parsed_s3_url.path, http_params, parsed_s3_url.host, "s3", "POST", auth_params, "", "",
+-		                         payload_hash, "application/octet-stream");
++		headers = CreateS3Header(GetEncryptionUtil(), parsed_s3_url.path, http_params, parsed_s3_url.host, "s3", "POST",
++		                         auth_params, "", "", payload_hash, "application/octet-stream");
+ 	}
+ 
+ 	return HTTPFileSystem::PostRequest(input, http_url, headers, result, buffer_in, buffer_in_len);
+@@ -573,8 +581,8 @@ unique_ptr<HTTPResponse> S3FileSystem::PutRequest(HTTPInput &input, string url,
+ 	} else {
+ 		// Use existing S3 authentication
+ 		auto payload_hash = GetPayloadHash(buffer_in, buffer_in_len);
+-		headers = CreateS3Header(parsed_s3_url.path, http_params, parsed_s3_url.host, "s3", "PUT", auth_params, "", "",
+-		                         payload_hash, content_type);
++		headers = CreateS3Header(GetEncryptionUtil(), parsed_s3_url.path, http_params, parsed_s3_url.host, "s3", "PUT",
++		                         auth_params, "", "", payload_hash, content_type);
+ 	}
+ 
+ 	return HTTPFileSystem::PutRequest(input, http_url, headers, buffer_in, buffer_in_len);
+@@ -592,7 +600,8 @@ unique_ptr<HTTPResponse> S3FileSystem::HeadRequest(FileHandle &handle, string s3
+ 		headers["Host"] = parsed_s3_url.host;
+ 	} else {
+ 		// Use existing S3 authentication
+-		headers = CreateS3Header(parsed_s3_url.path, "", parsed_s3_url.host, "s3", "HEAD", auth_params, "", "", "", "");
++		headers = CreateS3Header(GetEncryptionUtil(), parsed_s3_url.path, "", parsed_s3_url.host, "s3", "HEAD",
++		                         auth_params, "", "", "", "");
+ 	}
+ 
+ 	return HTTPFileSystem::HeadRequest(handle, http_url, headers);
+@@ -617,8 +626,8 @@ unique_ptr<HTTPResponse> S3FileSystem::GetRequest(FileHandle &handle, string s3_
+ 		headers["Host"] = parsed_s3_url.host;
+ 	} else {
+ 		// Use existing S3 authentication
+-		headers = CreateS3Header(parsed_s3_url.path, query_string, parsed_s3_url.host, "s3", "GET", auth_params, "", "",
+-		                         "", "");
++		headers = CreateS3Header(GetEncryptionUtil(), parsed_s3_url.path, query_string, parsed_s3_url.host, "s3", "GET",
++		                         auth_params, "", "", "", "");
+ 	}
+ 
+ 	return HTTPFileSystem::GetRequest(handle, http_url, headers);
+@@ -644,8 +653,8 @@ unique_ptr<HTTPResponse> S3FileSystem::GetRangeRequest(FileHandle &handle, strin
+ 		headers["Host"] = parsed_s3_url.host;
+ 	} else {
+ 		// Use existing S3 authentication
+-		headers = CreateS3Header(parsed_s3_url.path, query_string, parsed_s3_url.host, "s3", "GET", auth_params, "", "",
+-		                         "", "");
++		headers = CreateS3Header(GetEncryptionUtil(), parsed_s3_url.path, query_string, parsed_s3_url.host, "s3", "GET",
++		                         auth_params, "", "", "", "");
+ 	}
+ 
+ 	return HTTPFileSystem::GetRangeRequest(handle, http_url, headers, file_offset, buffer_out, buffer_out_len);
+@@ -663,8 +672,8 @@ unique_ptr<HTTPResponse> S3FileSystem::DeleteRequest(FileHandle &handle, string
+ 		headers["Host"] = parsed_s3_url.host;
+ 	} else {
+ 		// Use existing S3 authentication
+-		headers =
+-		    CreateS3Header(parsed_s3_url.path, "", parsed_s3_url.host, "s3", "DELETE", auth_params, "", "", "", "");
++		headers = CreateS3Header(GetEncryptionUtil(), parsed_s3_url.path, "", parsed_s3_url.host, "s3", "DELETE",
++		                         auth_params, "", "", "", "");
+ 	}
+ 
+ 	return HTTPFileSystem::DeleteRequest(handle, http_url, headers);
+@@ -870,8 +879,9 @@ void S3FileSystem::RemoveFiles(const vector<string> &paths, optional_ptr<FileOpe
+ 			const string http_query_param_for_url = "delete";
+ 			auto payload_hash = GetPayloadHash(const_cast<char *>(body.data()), body.length());
+ 
+-			auto headers = CreateS3Header(url_info.path, http_query_param_for_sig, url_info.host, "s3", "POST",
+-			                              url_info.auth_params, "", "", payload_hash, "application/xml", content_md5);
++			auto headers =
++			    CreateS3Header(GetEncryptionUtil(), url_info.path, http_query_param_for_sig, url_info.host, "s3",
++			                   "POST", url_info.auth_params, "", "", payload_hash, "application/xml", content_md5);
+ 
+ 			string http_url = url_info.http_proto + url_info.host + S3FileSystem::UrlEncode(url_info.path) + "?" +
+ 			                  http_query_param_for_url;
+@@ -991,12 +1001,13 @@ enum GlobType { HIERARCHICAL, LISTING, UNKNOWN };
+ 
+ struct S3GlobResult : public LazyMultiFileList {
+ public:
+-	S3GlobResult(S3FileSystem &fs, const string &path, optional_ptr<FileOpener> opener);
++	S3GlobResult(S3FileSystem &fs_p, const string &path, optional_ptr<FileOpener> opener);
+ 
+ protected:
+ 	bool ExpandNextPath() const override;
+ 
+ private:
++	S3FileSystem &fs;
+ 	string glob_pattern;
+ 	optional_ptr<FileOpener> opener;
+ 	mutable bool finished = false;
+@@ -1010,8 +1021,9 @@ private:
+ 	mutable GlobType glob_type {UNKNOWN};
+ };
+ 
+-S3GlobResult::S3GlobResult(S3FileSystem &fs, const string &glob_pattern_p, optional_ptr<FileOpener> opener)
+-    : LazyMultiFileList(FileOpener::TryGetClientContext(opener)), glob_pattern(glob_pattern_p), opener(opener) {
++S3GlobResult::S3GlobResult(S3FileSystem &fs_p, const string &glob_pattern_p, optional_ptr<FileOpener> opener)
++    : LazyMultiFileList(FileOpener::TryGetClientContext(opener)), fs(fs_p), glob_pattern(glob_pattern_p),
++      opener(opener) {
+ 	if (!opener) {
+ 		throw InternalException("Cannot S3 Glob without FileOpener");
+ 	}
+@@ -1064,8 +1076,8 @@ bool S3GlobResult::ExpandNextPath() const {
+ 		    Match(key_splits.begin(), key_splits.end(), pattern_splits.begin(), pattern_splits.end(), false);
+ 		if (is_match) {
+ 			prefix_path = S3FileSystem::UrlDecode(prefix_path);
+-			auto prefix_res = AWSListObjectV2::Request(prefix_path, *http_params, s3_auth_params,
+-			                                           common_prefix_continuation_token, true);
++			auto prefix_res = AWSListObjectV2::Request(fs.GetEncryptionUtil(), prefix_path, *http_params,
++			                                           s3_auth_params, common_prefix_continuation_token, true);
+ 
+ 			AWSListObjectV2::ParseFileList(prefix_res, s3_keys);
+ 			auto more_prefixes = AWSListObjectV2::ParseCommonPrefix(prefix_res);
+@@ -1104,8 +1116,8 @@ bool S3GlobResult::ExpandNextPath() const {
+ 		bool perform_listing = (glob_type != GlobType::HIERARCHICAL);
+ 
+ 		// First perform listing once (default will get back up to 1000 elements)
+-		string response_str = AWSListObjectV2::Request(shared_path, *http_params, s3_auth_params,
+-		                                               main_continuation_token, !perform_listing);
++		string response_str = AWSListObjectV2::Request(fs.GetEncryptionUtil(), shared_path, *http_params,
++		                                               s3_auth_params, main_continuation_token, !perform_listing);
+ 
+ 		string next_continuation_token = AWSListObjectV2::ParseContinuationToken(response_str);
+ 
+@@ -1135,8 +1147,8 @@ bool S3GlobResult::ExpandNextPath() const {
+ 				// 1. clear keys
+ 				s3_keys_tmp.clear();
+ 				// 2. do request again, now passing true
+-				response_str =
+-				    AWSListObjectV2::Request(shared_path, *http_params, s3_auth_params, main_continuation_token, true);
++				response_str = AWSListObjectV2::Request(fs.GetEncryptionUtil(), shared_path, *http_params,
++				                                        s3_auth_params, main_continuation_token, true);
+ 
+ 				// 3. now set next_continuation_token
+ 				next_continuation_token = AWSListObjectV2::ParseContinuationToken(response_str);
+@@ -1346,8 +1358,9 @@ HTTPException S3FileSystem::GetHTTPError(FileHandle &handle, const HTTPResponse
+ 	return GetS3Error(s3_handle.auth_params, response, url);
+ }
+ 
+-string AWSListObjectV2::Request(const string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
+-                                string &continuation_token, bool use_delimiter, optional_idx max_keys) {
++string AWSListObjectV2::Request(EncryptionUtil &encryption_util, const string &path, HTTPParams &http_params,
++                                S3AuthParams &s3_auth_params, string &continuation_token, bool use_delimiter,
++                                optional_idx max_keys) {
+ 	const idx_t MAX_RETRIES = 1;
+ 	for (idx_t it = 0; it <= MAX_RETRIES; it++) {
+ 		auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);
+@@ -1380,8 +1393,8 @@ string AWSListObjectV2::Request(const string &path, HTTPParams &http_params, S3A
+ 			// Remove last '&'
+ 			encoded_params.pop_back();
+ 		}
+-		auto header_map =
+-		    CreateS3Header(req_path, encoded_params, parsed_url.host, "s3", "GET", s3_auth_params, "", "", "", "");
++		auto header_map = CreateS3Header(encryption_util, req_path, encoded_params, parsed_url.host, "s3", "GET",
++		                                 s3_auth_params, "", "", "", "");
+ 
+ 		// Get requests use fresh connection
+ 		string full_host = parsed_url.http_proto + parsed_url.host;

@@ -480,11 +480,15 @@ private:
 	                                                TableCatalogEntry &table, TriggerEventType event_type);
 	BoundStatement ExpandRowTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
 	                                 const TableCatalogEntry &table,
-	                                 const vector<const_reference<TriggerCatalogEntry>> &triggers);
-	//! Registers NEW as a generic binding so child binders resolve NEW.col at depth=1. The returned binder is
-	//! pushed onto GetActiveBinders(). the caller must keep it alive until the matching pop_back().
-	unique_ptr<ExpressionBinder> SetupNewRowScope(TableIndex table_index, const vector<Identifier> &col_names,
-	                                              const vector<LogicalType> &col_types);
+	                                 const vector<const_reference<TriggerCatalogEntry>> &triggers,
+	                                 TriggerEventType event_type);
+	//! Registers a row scope binding (named "new" for INSERT, "old" for DELETE) so child binders resolve
+	//! NEW.col / OLD.col at depth=1. The returned binder is pushed onto GetActiveBinders().
+	//! The caller must keep it alive until the matching pop_back().
+	unique_ptr<ExpressionBinder> SetupRowScope(TableIndex table_index, const vector<Identifier> &col_names,
+	                                           const vector<LogicalType> &col_types, const string &scope_name);
+	//! Returns the correlated-column scope name for a given event type ("new" for INSERT, "old" for DELETE).
+	static string RowScopeName(TriggerEventType event_type);
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 	BoundStatement BindNode(MergeQueryNode &node);

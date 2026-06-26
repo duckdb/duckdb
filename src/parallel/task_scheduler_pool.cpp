@@ -54,10 +54,10 @@ TaskSchedulerPool::~TaskSchedulerPool() {
 }
 
 void TaskSchedulerPool::SetThreads(idx_t n) {
-	requested_thread_count = NumericCast<int32_t>(n);
+	requested_thread_count = n;
 }
 
-int32_t TaskSchedulerPool::NumberOfThreads() {
+idx_t TaskSchedulerPool::NumberOfThreads() {
 	return current_thread_count.load();
 }
 
@@ -126,7 +126,7 @@ static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker, c
 void TaskSchedulerPool::RelaunchThreads(TaskScheduler &scheduler, bool destroy) {
 #ifndef DUCKDB_NO_THREADS
 	auto &config = DBConfig::GetConfig(db);
-	auto new_thread_count = NumericCast<idx_t>(destroy ? 0 : requested_thread_count.load());
+	auto new_thread_count = destroy ? 0 : requested_thread_count.load();
 
 	idx_t external_threads = 0;
 	ThreadPinMode pin_thread_mode = ThreadPinMode::AUTO;
@@ -137,8 +137,7 @@ void TaskSchedulerPool::RelaunchThreads(TaskScheduler &scheduler, bool destroy) 
 	}
 
 	if (threads.size() == new_thread_count) {
-		current_thread_count =
-		    NumericCast<int32_t>(threads.size() + (pool_type == TaskSchedulerType::REGULAR ? external_threads : 0));
+		current_thread_count = threads.size() + (pool_type == TaskSchedulerType::REGULAR ? external_threads : 0);
 		return;
 	}
 	if (threads.size() != new_thread_count) {
@@ -190,8 +189,7 @@ void TaskSchedulerPool::RelaunchThreads(TaskScheduler &scheduler, bool destroy) 
 			markers.push_back(std::move(marker));
 		}
 	}
-	current_thread_count =
-	    NumericCast<int32_t>(threads.size() + (pool_type == TaskSchedulerType::REGULAR ? external_threads : 0));
+	current_thread_count = threads.size() + (pool_type == TaskSchedulerType::REGULAR ? external_threads : 0);
 	BlockAllocator::Get(db).FlushAll();
 #endif
 }

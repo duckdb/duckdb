@@ -546,8 +546,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		throw NotImplementedException("BEFORE FOR EACH ROW triggers are not yet supported");
 	}
 	if (create_trigger_info.for_each == TriggerForEach::ROW &&
-	    create_trigger_info.event_type != TriggerEventType::INSERT_EVENT) {
-		throw NotImplementedException("UPDATE and DELETE FOR EACH ROW triggers are not yet supported");
+	    create_trigger_info.event_type == TriggerEventType::UPDATE_EVENT) {
+		throw NotImplementedException("UPDATE FOR EACH ROW triggers are not yet supported");
 	}
 	if ((!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty()) &&
 	    create_trigger_info.timing != TriggerTiming::AFTER) {
@@ -601,8 +601,8 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			body_copy->cte_map.map[alias] = MakeTriggerValidationCTE(table);
 		}
 	}
-	// For FOR EACH ROW: register NEW as a generic binding so BindCorrelatedColumns can resolve NEW.col column
-	// references.
+	// For FOR EACH ROW: register NEW (INSERT) or OLD (DELETE) as a generic binding so BindCorrelatedColumns can
+	// resolve NEW.col / OLD.col references.
 	unique_ptr<ExpressionBinder> row_scope_binder;
 	if (create_trigger_info.for_each == TriggerForEach::ROW) {
 		if (table.HasGeneratedColumns()) {
@@ -619,14 +619,15 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			col_types.push_back(col.GetType());
 		}
 		auto new_idx = validation_binder->GenerateTableIndex();
-		row_scope_binder = validation_binder->SetupNewRowScope(new_idx, col_names, col_types);
+		auto scope_name = Binder::RowScopeName(create_trigger_info.event_type);
+		row_scope_binder = validation_binder->SetupRowScope(new_idx, col_names, col_types, scope_name);
 	}
 	if (row_scope_binder) {
 		auto body_binder = Binder::CreateBinder(context, validation_binder.get());
 		auto bound_body = body_binder->Bind(*body_copy);
 		validation_binder->GetActiveBinders().pop_back();
 		if (body_binder->correlated_columns.empty()) {
-			throw BinderException("FOR EACH ROW trigger \"%s\" on table \"%s\" must reference at least one NEW "
+			throw BinderException("FOR EACH ROW trigger \"%s\" on table \"%s\" must reference at least one NEW or OLD "
 			                      "column in the trigger body (use FOR EACH STATEMENT if row data is not needed)",
 			                      create_trigger_info.GetTriggerName(), table.name);
 		}

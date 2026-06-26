@@ -311,8 +311,8 @@ public:
 	explicit CopyFileLifecycleExecutor(ClientContext &context_p)
 	    : context(context_p), executor(context_p, TaskSchedulerType::ASYNC) {
 		auto &scheduler = TaskScheduler::GetScheduler(context);
-		async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
-		auto regular_threads = NumericCast<idx_t>(scheduler.NumberOfThreads());
+		async_threads = scheduler.NumberOfAsyncThreads();
+		auto regular_threads = scheduler.NumberOfThreads();
 		max_pending_tasks = MaxValue<idx_t>(MIN_PENDING_TASKS, (async_threads + regular_threads) * 4);
 	}
 
@@ -2353,7 +2353,7 @@ void PartitionedCopyState::CreateTaskList() {
 	auto &ts = TaskScheduler::GetScheduler(partitioned_copy.context);
 	const auto &max_block = partition_blocks.front();
 
-	const auto threads = MinValue<idx_t>(locals, NumericCast<idx_t>(ts.NumberOfThreads()));
+	const auto threads = MinValue<idx_t>(locals, ts.NumberOfThreads());
 	const auto aligned_scale = MaxValue<idx_t>(ValidityMask::BITS_PER_VALUE / STANDARD_VECTOR_SIZE, 1);
 	const auto aligned_count = PartitionedCopyHashGroup::BinValue(max_block.first, aligned_scale);
 	const auto per_thread = aligned_scale * PartitionedCopyHashGroup::BinValue(aligned_count, threads);
