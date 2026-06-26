@@ -539,7 +539,6 @@ public:
 //===--------------------------------------------------------------------===//
 enum class PartitionedCopyStage : uint8_t { SORT, MATERIALIZE, MASK, BATCH, PREPARE, FLUSH, DONE };
 enum class FileCreationReason : uint8_t { NORMAL, SORTED_RUN_BOUNDARY, ROTATION };
-enum class PartitionedCopyFinalizeTrigger : uint8_t { PARTITION_RUN_DONE, FINAL_PARTITION_DRAIN_DONE };
 
 struct PartitionedCopyTask {
 	PartitionedCopyStage stage = PartitionedCopyStage::DONE;
@@ -1310,8 +1309,7 @@ public:
 	void RequestPartitionFileState(FileStateHandle &file_state, const vector<Value> &values,
 	                               FileCreationReason reason = FileCreationReason::NORMAL)
 	    DUCKDB_EXCLUDES(copy_gstate.lock);
-	void TryFinalizePartitionWrite(const vector<Value> &values, PartitionedCopyFinalizeTrigger trigger)
-	    DUCKDB_EXCLUDES(copy_gstate.lock);
+	void TryFinalizePartitionWrite(const vector<Value> &values) DUCKDB_EXCLUDES(copy_gstate.lock);
 	void FinalizeActiveWrites() DUCKDB_EXCLUDES(copy_gstate.lock);
 	void FinalizeFileStates(vector<FileStateHandle> files_to_finalize) DUCKDB_EXCLUDES(copy_gstate.lock);
 
@@ -2306,7 +2304,7 @@ void PartitionedCopyHashGroup::Flush(ExecutionContext &execution_context, Interr
 	partitioned_copy.FlushPreparedPartitionRun(flush_action.values, *flush_action.write_lease,
 	                                           std::move(flush_action.batches));
 	flush_action.write_lease.Reset();
-	partitioned_copy.TryFinalizePartitionWrite(flush_action.values, PartitionedCopyFinalizeTrigger::PARTITION_RUN_DONE);
+	partitioned_copy.TryFinalizePartitionWrite(flush_action.values);
 }
 
 //===--------------------------------------------------------------------===//
@@ -2458,7 +2456,7 @@ void PartitionedCopyState::ExecuteTask(ExecutionContext &execution_context, cons
 	}
 	auto partitions_to_finalize = FinishTask(task);
 	for (const auto &values : partitions_to_finalize) {
-		partitioned_copy.TryFinalizePartitionWrite(values, PartitionedCopyFinalizeTrigger::FINAL_PARTITION_DRAIN_DONE);
+		partitioned_copy.TryFinalizePartitionWrite(values);
 	}
 }
 
@@ -3089,7 +3087,7 @@ void PartitionedCopy::FlushPartitionCollection(ExecutionContext &execution_conte
 
 		auto next = delayed_guard.Complete();
 		if (!next) {
-			TryFinalizePartitionWrite(flush.values, PartitionedCopyFinalizeTrigger::FINAL_PARTITION_DRAIN_DONE);
+			TryFinalizePartitionWrite(flush.values);
 			return;
 		}
 		flush = std::move(*next);
@@ -3190,11 +3188,8 @@ void PartitionedCopy::EnsureFreshPartitionFile(PartitionWriteInfo &write_info, c
 	copy_gstate.FinalizeFileState(std::move(old_file_state));
 }
 
-void PartitionedCopy::TryFinalizePartitionWrite(const vector<Value> &values, PartitionedCopyFinalizeTrigger trigger) {
+void PartitionedCopy::TryFinalizePartitionWrite(const vector<Value> &values) {
 	if (!finalized.load(std::memory_order_relaxed)) {
-		return;
-	}
-	if (trigger == PartitionedCopyFinalizeTrigger::PARTITION_RUN_DONE && RequiresSerializedPartitionWrites()) {
 		return;
 	}
 	{
