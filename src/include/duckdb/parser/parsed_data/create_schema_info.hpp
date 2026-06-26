@@ -15,6 +15,10 @@ namespace duckdb {
 struct CreateSchemaInfo : public CreateInfo {
 	CreateSchemaInfo();
 
+	//! The full schema path serialized for storage version v2.0.0 and higher (so nested schemas round-trip). Only
+	//! populated during deserialization; the canonical path lives in CreateInfo::qualified_name.
+	QualifiedName serialized_qualified_name;
+
 public:
 	//! The qualified name encodes the full path as [catalog, parent_schemas..., new_schema] (name is unused). These
 	//! helpers interpret it. For a top-level schema the path is [catalog, new_schema].

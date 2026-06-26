@@ -325,6 +325,7 @@ supported_member_entries = [
     'deserialize_property',
     'base',
     'default',
+    'deserialize_default',
     'status',
     'version',
     'required_until',
@@ -395,9 +396,14 @@ class MemberVariable:
             self.serialize_property = entry['serialize_property']
         if 'deserialize_property' in entry:
             self.deserialize_property = entry['deserialize_property']
+        self.deserialize_default = None
         if 'default' in entry:
             self.has_default = True
             self.default = entry['default']
+        if 'deserialize_default' in entry:
+            # A default used by the deserialize side only (e.g. tolerate a newer property being absent in an older
+            # file). The serialize side is unaffected: without 'default' it keeps writing the property unconditionally.
+            self.deserialize_default = entry['deserialize_default']
         if 'status' in entry:
             self.status = parse_status(entry['status'])
         if self.default is None:
@@ -561,8 +567,8 @@ class SerializableClass:
             property_key,
             property_id,
             property_type,
-            entry.has_default,
-            entry.default,
+            entry.has_default or entry.deserialize_default is not None,
+            entry.deserialize_default if entry.deserialize_default is not None else entry.default,
             entry.status,
             pointer_type,
         )
@@ -848,8 +854,8 @@ def generate_class_code(class_entry: SerializableClass):
                 entry.name,
                 entry.id,
                 type_name,
-                entry.has_default,
-                entry.default,
+                entry.has_default or entry.deserialize_default is not None,
+                entry.deserialize_default if entry.deserialize_default is not None else entry.default,
                 entry.status,
                 class_entry.pointer_type,
             )

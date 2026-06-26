@@ -524,6 +524,11 @@ void CheckpointReader::ReadSchema(CatalogTransaction transaction, Deserializer &
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "schema");
 	auto &schema_info = info->Cast<CreateSchemaInfo>();
 
+	// storage version v2.0.0 and higher persist the full (possibly nested) schema path - prefer it when present
+	if (!schema_info.serialized_qualified_name.SchemaPath().empty()) {
+		schema_info.SetQualifiedName(std::move(schema_info.serialized_qualified_name));
+	}
+
 	// we set create conflict to IGNORE_ON_CONFLICT, so that we can ignore a failure when recreating the main schema
 	schema_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateSchema(transaction, schema_info);

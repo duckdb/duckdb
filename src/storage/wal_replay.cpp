@@ -886,9 +886,18 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 // Replay Schema
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSchema() {
+	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	auto parent_schemas =
+	    deserializer.ReadPropertyWithExplicitDefault<vector<Identifier>>(102, "parent_schemas", vector<Identifier>());
 	CreateSchemaInfo info;
-	info.SetQualifiedName(
-	    QualifiedName({Identifier(deserializer.ReadProperty<string>(101, "schema"))}, Identifier()));
+	// build the canonical path [catalog, parent schemas..., new schema]
+	vector<Identifier> path;
+	path.push_back(catalog.GetName());
+	for (auto &parent : parent_schemas) {
+		path.push_back(parent);
+	}
+	path.push_back(std::move(schema));
+	info.SetQualifiedName(QualifiedName(std::move(path), Identifier()));
 	if (DeserializeOnly()) {
 		return;
 	}

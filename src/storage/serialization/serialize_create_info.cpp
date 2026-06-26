@@ -139,10 +139,14 @@ unique_ptr<CreateInfo> CreateMacroInfo::Deserialize(Deserializer &deserializer) 
 
 void CreateSchemaInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WriteProperty<QualifiedName>(200, "qualified_name", GetQualifiedName());
+	}
 }
 
 unique_ptr<CreateInfo> CreateSchemaInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateSchemaInfo>(new CreateSchemaInfo());
+	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(200, "qualified_name", result->serialized_qualified_name, QualifiedName());
 	return std::move(result);
 }
 

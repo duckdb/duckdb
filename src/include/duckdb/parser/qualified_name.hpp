@@ -16,6 +16,8 @@
 
 namespace duckdb {
 struct BindingAlias;
+class Serializer;
+class Deserializer;
 
 //! Controls how QualifiedName::ToString renders the schema qualification
 enum class QualifiedNameToStringMode : uint8_t {
@@ -89,6 +91,9 @@ struct QualifiedName {
 	hash_t Hash() const;
 	bool operator==(const QualifiedName &rhs) const;
 	bool operator!=(const QualifiedName &rhs) const;
+
+	void Serialize(Serializer &serializer) const;
+	static QualifiedName Deserialize(Deserializer &deserializer);
 
 private:
 	//! Normalize the schema path to be fully qualified ([catalog, schema]) so that CatalogMutable()/SchemaMutable()

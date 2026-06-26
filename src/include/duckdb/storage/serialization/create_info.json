@@ -193,6 +193,15 @@
       "duckdb/parser/parsed_data/create_schema_info.hpp"
     ],
     "members": [
+      {
+        "id": 200,
+        "name": "qualified_name",
+        "serialize_property": "GetQualifiedName()",
+        "deserialize_property": "serialized_qualified_name",
+        "type": "QualifiedName",
+        "deserialize_default": "QualifiedName()",
+        "version": "v2.0.0"
+      }
     ]
   },
   {
