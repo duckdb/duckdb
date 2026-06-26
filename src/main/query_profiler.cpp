@@ -576,20 +576,34 @@ void QueryProfiler::RenderQueryTree(BaseTreeRenderer &ss) const {
 
 	// summary box, styled to match the operator boxes (rounded corners, title in the top border)
 	const string title = "Summary";
-	const string total_label = "Total Time: ";
-	string timing = RenderTiming(query_metrics.GetStringMetricInSeconds("query.total_time"));
-	idx_t total_width = total_label.size() + timing.size();
-	idx_t content_width = MaxValue<idx_t>(title.size() + 2, total_width);
+	vector<pair<string, string>> rows;
+	rows.emplace_back("Total Time: ", RenderTiming(query_metrics.GetStringMetricInSeconds("query.total_time")));
+	auto bytes_read = query_metrics.GetBytesRead();
+	if (bytes_read > 0) {
+		rows.emplace_back("Data Read: ", StringUtil::BytesToHumanReadableString(bytes_read, 1000));
+	}
+	auto bytes_written = query_metrics.GetBytesWritten();
+	if (bytes_written > 0) {
+		rows.emplace_back("Data Written: ", StringUtil::BytesToHumanReadableString(bytes_written, 1000));
+	}
+	idx_t content_width = title.size() + 2;
+	for (auto &row : rows) {
+		content_width = MaxValue<idx_t>(content_width, row.first.size() + row.second.size());
+	}
 	idx_t box_width = content_width + 4;
 	// top border: ╭─ Summary ─╮
 	ss << "╭─ ";
 	ss.Render(title, TreeRenderType::HEADER);
 	ss << " " + StringUtil::Repeat("─", box_width - 5 - title.size()) + "╮\n";
-	// content row: │ Total Time: 0.0017s │
-	ss << "│ ";
-	ss.Render(total_label, TreeRenderType::KEY);
-	ss.Render(timing, TreeRenderType::VALUE);
-	ss << string(content_width - total_width + 1, ' ') + "│\n";
+	// content rows with the values right-aligned (pad between the key and the value)
+	for (auto &row : rows) {
+		idx_t row_width = row.first.size() + row.second.size();
+		ss << "│ ";
+		ss.Render(row.first, TreeRenderType::KEY);
+		ss << string(content_width - row_width, ' ');
+		ss.Render(row.second, TreeRenderType::VALUE);
+		ss << " │\n";
+	}
 	// bottom border
 	ss << "╰" + StringUtil::Repeat("─", box_width - 2) + "╯\n";
 	// render the main operator tree
