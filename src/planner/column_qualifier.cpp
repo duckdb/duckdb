@@ -261,7 +261,7 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	D_ASSERT(!ExpressionBinder::IsUnnestFunction(function.FunctionName()));
 	// lookup the function in the catalog
 	QueryErrorContext error_context(function.GetQueryLocation());
-	binder.BindSchemaOrCatalog(function.CatalogMutable(), function.SchemaMutable());
+	binder.BindSchemaOrCatalog(function.GetQualifiedNameMutable());
 
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.FunctionName(), error_context);
 	auto func =

@@ -35,14 +35,24 @@ enum class AlterBindMode { BIND_ON_ALTER, SKIP_BINDING };
 struct AlterEntryData {
 	AlterEntryData() {
 	}
-	AlterEntryData(Identifier catalog_p, Identifier schema_p, Identifier name_p, OnEntryNotFound if_not_found)
-	    : catalog(std::move(catalog_p)), schema(std::move(schema_p)), name(std::move(name_p)),
-	      if_not_found(if_not_found) {
+	AlterEntryData(QualifiedName qualified_name_p, OnEntryNotFound if_not_found)
+	    : qualified_name(std::move(qualified_name_p)), if_not_found(if_not_found) {
 	}
 
-	Identifier catalog;
-	Identifier schema;
-	Identifier name;
+	const Identifier &Catalog() const {
+		return qualified_name.Catalog();
+	}
+	const Identifier &Schema() const {
+		return qualified_name.Schema();
+	}
+	const Identifier &Name() const {
+		return qualified_name.Name();
+	}
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+
+	QualifiedName qualified_name;
 	OnEntryNotFound if_not_found;
 };
 
@@ -52,6 +62,7 @@ public:
 
 public:
 	AlterInfo(AlterType type, Identifier catalog, Identifier schema, Identifier name, OnEntryNotFound if_not_found);
+	AlterInfo(AlterType type, QualifiedName qualified_name, OnEntryNotFound if_not_found);
 	~AlterInfo() override;
 
 	AlterType type;

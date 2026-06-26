@@ -157,7 +157,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	auto at_clause = BindAtClause(ref.at_clause);
 	auto entry_at_clause = at_clause ? at_clause.get() : entry_retriever.GetAtClause();
 	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.Table(), entry_at_clause, error_context);
-	BindSchemaOrCatalog(entry_retriever, ref.CatalogMutable(), ref.SchemaMutable());
+	BindSchemaOrCatalog(entry_retriever, ref.GetQualifiedNameMutable());
 	auto table_or_view =
 	    entry_retriever.GetEntry(ref.Catalog(), ref.Schema(), table_lookup, OnEntryNotFound::RETURN_NULL);
 	// we still didn't find the table

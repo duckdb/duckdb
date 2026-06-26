@@ -526,7 +526,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	auto &bound_insert = insert_statement.plan->Cast<LogicalInsert>();
 
 	// lookup the table to copy into
-	BindSchemaOrCatalog(stmt.info->CatalogMutable(), stmt.info->SchemaMutable());
+	BindSchemaOrCatalog(stmt.info->GetQualifiedNameMutable());
 	auto &table =
 	    Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->Catalog(), stmt.info->Schema(), stmt.info->Table());
 	physical_index_vector_t<idx_t> column_index_map;
@@ -655,9 +655,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
 		auto ref = make_uniq<BaseTableRef>();
-		ref->CatalogMutable() = stmt.info->Catalog();
-		ref->SchemaMutable() = stmt.info->Schema();
-		ref->TableMutable() = stmt.info->Table();
+		ref->GetQualifiedNameMutable() = stmt.info->GetQualifiedName();
 
 		auto statement = make_uniq<SelectNode>();
 		statement->from_table = std::move(ref);
