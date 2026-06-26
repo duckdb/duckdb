@@ -130,7 +130,10 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, const idx_t location) {
 	BufferHandle result;
-	if (!external_file_cache.IsEnabled()) {
+	// Only cache when file metadata is available.
+	const bool no_validation_metadata =
+	    Validate() && version_tag.empty() && (!Timestamp::IsFinite(last_modified) || last_modified == timestamp_t(0));
+	if (!external_file_cache.IsEnabled() || no_validation_metadata) {
 		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		buffer = result.Ptr();
 		GetFileHandle().Read(context, buffer, nr_bytes, location);
@@ -181,9 +184,13 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 	BufferHandle result;
 
+	// Only cache when file metadata is available.
+	const bool no_validation_metadata =
+	    Validate() && version_tag.empty() && (!Timestamp::IsFinite(last_modified) || last_modified == timestamp_t(0));
+
 	// If we can't seek, we can't use the cache for these calls,
 	// because we won't be able to seek over any parts we skipped by reading from the cache
-	if (!external_file_cache.IsEnabled() || !CanSeek()) {
+	if (!external_file_cache.IsEnabled() || !CanSeek() || no_validation_metadata) {
 		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		buffer = result.Ptr();
 		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buffer, nr_bytes));
