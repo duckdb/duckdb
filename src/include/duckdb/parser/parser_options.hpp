@@ -21,6 +21,7 @@ struct ParserCache;
 struct ParserOptions {
 	bool preserve_identifier_case = true;
 	bool integer_division = false;
+	bool debug_transformer_trampoline_style = false;
 	RegexMatchOperatorSemantics regex_match_operator_semantics = RegexMatchOperatorSemantics::PARTIAL;
 	idx_t max_expression_depth = 1000;
 	optional_ptr<const ExtensionCallbackManager> extensions;

@@ -5921,6 +5921,24 @@ TransactionType EnumUtil::FromString<TransactionType>(const char *value) {
 	return static_cast<TransactionType>(StringUtil::StringToEnum(GetTransactionTypeValues(), 4, "TransactionType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetTransformFrameStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TransformFrameState::INITIALIZE), "INITIALIZE" },
+		{ static_cast<uint32_t>(TransformFrameState::WAITING), "WAITING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TransformFrameState>(TransformFrameState value) {
+	return StringUtil::EnumToString(GetTransformFrameStateValues(), 2, "TransformFrameState", static_cast<uint32_t>(value));
+}
+
+template<>
+TransformFrameState EnumUtil::FromString<TransformFrameState>(const char *value) {
+	return static_cast<TransformFrameState>(StringUtil::StringToEnum(GetTransformFrameStateValues(), 2, "TransformFrameState", value));
+}
+
 const StringUtil::EnumStringLiteral *GetTriggerEventTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TriggerEventType::INSERT_EVENT), "INSERT" },
