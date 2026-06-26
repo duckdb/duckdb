@@ -2396,7 +2396,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	if (radix_bits != 0) {
 		radix_bits = 0;
 		sink_collection = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
-		                                                       idx_t(0), layout_ptr->ColumnCount() - 1);
+		                                                       idx_t(0), layout_ptr->ColumnCount() - 1, context);
 	} else {
 		sink_collection->Reset();
 	}
