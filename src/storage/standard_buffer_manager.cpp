@@ -168,12 +168,12 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size,
-                                                              bool can_destroy) {
+                                                              bool can_destroy, QueryContext context) {
 	auto alloc_size = GetAllocSize(block_size + block_header_size);
 
 	// Evict blocks until there is enough memory to store the buffer.
 	unique_ptr<FileBuffer> reusable_buffer;
-	auto res = EvictBlocksOrThrow(QueryContext(), tag, alloc_size, &reusable_buffer, "could not allocate block of size %s%s",
+	auto res = EvictBlocksOrThrow(context, tag, alloc_size, &reusable_buffer, "could not allocate block of size %s%s",
 	                              StringUtil::BytesToHumanReadableString(alloc_size));
 
 	// Create a new buffer and a block to hold the buffer.
@@ -213,6 +213,28 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 	WriteGarbageIntoBuffer(*block);
 #endif
 	return Pin(block);
+}
+
+BufferHandle StandardBufferManager::Allocate(QueryContext context, MemoryTag tag, idx_t block_size, bool can_destroy) {
+	auto block = RegisterMemory(tag, block_size, Storage::DEFAULT_BLOCK_HEADER_SIZE, can_destroy, context);
+
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+	// Initialize the memory with garbage data
+	WriteGarbageIntoBuffer(*block);
+#endif
+	return Pin(context, block);
+}
+
+BufferHandle StandardBufferManager::Allocate(QueryContext context, MemoryTag tag, BlockManager *block_manager,
+                                             bool can_destroy) {
+	auto block = RegisterMemory(tag, block_manager->GetBlockSize(), block_manager->GetBlockHeaderSize(), can_destroy,
+	                            context);
+
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+	// Initialize the memory with garbage data
+	WriteGarbageIntoBuffer(*block);
+#endif
+	return Pin(context, block);
 }
 
 void StandardBufferManager::BatchRead(QueryContext context, vector<shared_ptr<BlockHandle>> &handles,

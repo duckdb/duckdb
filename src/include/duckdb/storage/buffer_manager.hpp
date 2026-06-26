@@ -54,6 +54,11 @@ public:
 	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) = 0;
 	//! Allocate block-based memory and pin it.
 	virtual BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) = 0;
+	//! Allocate variants that attribute the (possible) eviction/spill I/O to a query. The base implementations
+	//! ignore the context and delegate to the variants above; StandardBufferManager threads it through.
+	virtual BufferHandle Allocate(QueryContext context, MemoryTag tag, idx_t block_size, bool can_destroy = true);
+	virtual BufferHandle Allocate(QueryContext context, MemoryTag tag, BlockManager *block_manager,
+	                              bool can_destroy = true);
 	//! Pin a block handle.
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
 	virtual BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) = 0;
