@@ -1,5 +1,5 @@
 # name: test/optimizer/pushdown/join_filter_pushdown.test
-# description: Test sampling of larger relations
+# description: Test join filter pushdown
 # group: [pushdown]
 
 statement ok
@@ -19,3 +19,128 @@ statement ok
 SELECT t1.s
 FROM t1
 LEFT JOIN t2 ON t1.i = t2.v;
+
+# Join filters should push the join keys that can reach a scan, even when
+# another join key is a projection expression such as a constant UNION label.
+statement ok
+CREATE TABLE jfpp_post AS SELECT i::BIGINT AS messageid FROM range(1, 1001) t(i);
+
+statement ok
+CREATE TABLE jfpp_comment AS SELECT (i + 1000)::BIGINT AS messageid FROM range(1, 1001) t(i);
+
+query II
+EXPLAIN ANALYZE
+WITH limited(label, messageid) AS MATERIALIZED (
+	VALUES ('Post', 11::BIGINT), ('Post', 101::BIGINT), ('Comment', 1503::BIGINT), ('Comment', 1907::BIGINT)
+)
+SELECT COUNT(*)
+FROM limited l
+JOIN (
+	SELECT 'Post' AS label, messageid FROM jfpp_post
+	UNION ALL
+	SELECT 'Comment' AS label, messageid FROM jfpp_comment
+) x ON x.label = l.label AND x.messageid = l.messageid;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*messageid IN.*
+
+query I
+WITH limited(label, messageid) AS MATERIALIZED (
+	VALUES ('Post', 11::BIGINT), ('Post', 101::BIGINT), ('Comment', 1503::BIGINT), ('Comment', 1907::BIGINT)
+)
+SELECT COUNT(*)
+FROM limited l
+JOIN (
+	SELECT 'Post' AS label, messageid FROM jfpp_post
+	UNION ALL
+	SELECT 'Comment' AS label, messageid FROM jfpp_comment
+) x ON x.label = l.label AND x.messageid = l.messageid;
+----
+4
+
+# One pushable join key should still be pushed when multiple other join keys
+# are projection expressions that cannot be pushed through the UNION branches.
+query II
+EXPLAIN ANALYZE
+WITH limited(label, source, messageid) AS MATERIALIZED (
+	VALUES ('Post', 'Forum', 11::BIGINT), ('Post', 'Forum', 101::BIGINT),
+	       ('Comment', 'Forum', 1503::BIGINT), ('Comment', 'Forum', 1907::BIGINT)
+)
+SELECT COUNT(*)
+FROM limited l
+JOIN (
+	SELECT 'Post' AS label, 'Forum' AS source, messageid FROM jfpp_post
+	UNION ALL
+	SELECT 'Comment' AS label, 'Forum' AS source, messageid FROM jfpp_comment
+) x ON x.label = l.label AND x.source = l.source AND x.messageid = l.messageid;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*messageid IN.*
+
+query I
+WITH limited(label, source, messageid) AS MATERIALIZED (
+	VALUES ('Post', 'Forum', 11::BIGINT), ('Post', 'Forum', 101::BIGINT),
+	       ('Comment', 'Forum', 1503::BIGINT), ('Comment', 'Forum', 1907::BIGINT)
+)
+SELECT COUNT(*)
+FROM limited l
+JOIN (
+	SELECT 'Post' AS label, 'Forum' AS source, messageid FROM jfpp_post
+	UNION ALL
+	SELECT 'Comment' AS label, 'Forum' AS source, messageid FROM jfpp_comment
+) x ON x.label = l.label AND x.source = l.source AND x.messageid = l.messageid;
+----
+4
+
+statement ok
+CREATE TABLE jfpp_multi_post AS SELECT i::BIGINT AS messageid, (i % 97)::BIGINT AS creatorid FROM range(1, 1001) t(i);
+
+statement ok
+CREATE TABLE jfpp_multi_comment AS SELECT (i + 1000)::BIGINT AS messageid, (i % 89)::BIGINT AS creatorid FROM range(1, 1001) t(i);
+
+# Multiple pushable join keys should be pushed independently when multiple
+# other join keys cannot be pushed through the UNION branch projections.
+query II
+EXPLAIN ANALYZE
+WITH limited(label, source, messageid, creatorid) AS MATERIALIZED (
+	VALUES ('Post', 'Forum', 11::BIGINT, 11::BIGINT), ('Post', 'Forum', 101::BIGINT, 4::BIGINT),
+	       ('Comment', 'Forum', 1503::BIGINT, 58::BIGINT), ('Comment', 'Forum', 1907::BIGINT, 17::BIGINT)
+)
+SELECT COUNT(*)
+FROM limited l
+JOIN (
+	SELECT 'Post' AS label, 'Forum' AS source, messageid, creatorid FROM jfpp_multi_post
+	UNION ALL
+	SELECT 'Comment' AS label, 'Forum' AS source, messageid, creatorid FROM jfpp_multi_comment
+) x ON x.label = l.label AND x.source = l.source AND x.messageid = l.messageid AND x.creatorid = l.creatorid;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*messageid IN.*
+
+query II
+EXPLAIN ANALYZE
+WITH limited(label, source, messageid, creatorid) AS MATERIALIZED (
+	VALUES ('Post', 'Forum', 11::BIGINT, 11::BIGINT), ('Post', 'Forum', 101::BIGINT, 4::BIGINT),
+	       ('Comment', 'Forum', 1503::BIGINT, 58::BIGINT), ('Comment', 'Forum', 1907::BIGINT, 17::BIGINT)
+)
+SELECT COUNT(*)
+FROM limited l
+JOIN (
+	SELECT 'Post' AS label, 'Forum' AS source, messageid, creatorid FROM jfpp_multi_post
+	UNION ALL
+	SELECT 'Comment' AS label, 'Forum' AS source, messageid, creatorid FROM jfpp_multi_comment
+) x ON x.label = l.label AND x.source = l.source AND x.messageid = l.messageid AND x.creatorid = l.creatorid;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*creatorid IN.*
+
+query I
+WITH limited(label, source, messageid, creatorid) AS MATERIALIZED (
+	VALUES ('Post', 'Forum', 11::BIGINT, 11::BIGINT), ('Post', 'Forum', 101::BIGINT, 4::BIGINT),
+	       ('Comment', 'Forum', 1503::BIGINT, 58::BIGINT), ('Comment', 'Forum', 1907::BIGINT, 17::BIGINT)
+)
+SELECT COUNT(*)
+FROM limited l
+JOIN (
+	SELECT 'Post' AS label, 'Forum' AS source, messageid, creatorid FROM jfpp_multi_post
+	UNION ALL
+	SELECT 'Comment' AS label, 'Forum' AS source, messageid, creatorid FROM jfpp_multi_comment
+) x ON x.label = l.label AND x.source = l.source AND x.messageid = l.messageid AND x.creatorid = l.creatorid;
+----
+4

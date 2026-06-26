@@ -125,6 +125,21 @@ bool JoinFilterPushdownUtil::JoinTypeIsSupported(JoinType join_type) {
 	}
 }
 
+static void PushdownProjectionColumns(LogicalProjection &proj, const vector<JoinFilterPushdownColumn> &columns,
+                                      vector<JoinFilterPushdownColumn> &projected_columns) {
+	for (auto &filter : columns) {
+		if (filter.probe_column_index.table_index != proj.table_index) {
+			continue;
+		}
+		auto candidate = filter;
+		auto &expr = proj.GetExpression(candidate.probe_column_index);
+		if (!JoinFilterPushdownUtil::PushdownJoinFilterExpression(expr, candidate)) {
+			continue;
+		}
+		projected_columns.push_back(std::move(candidate));
+	}
+}
+
 void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
                                                            vector<JoinFilterPushdownColumn> columns,
                                                            vector<PushdownFilterTarget> &targets) {
@@ -160,23 +175,24 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_UNION: {
 		auto &setop = probe_child.Cast<LogicalSetOperation>();
-		// union
-		// check if the filters apply to this table index
-		for (auto &filter : columns) {
-			if (filter.probe_column_index.table_index != setop.table_index) {
-				// the filter does not apply to the union - bail-out
-				return;
-			}
-		}
 		for (auto &child : probe_child.children) {
 			// rewrite the filters for each of the children of the union
 			vector<JoinFilterPushdownColumn> child_columns;
 			auto child_bindings = child->GetColumnBindings();
 			child_columns.reserve(columns.size());
 			for (auto &child_column : columns) {
+				if (child_column.probe_column_index.table_index != setop.table_index) {
+					continue;
+				}
 				auto new_col = child_column;
 				new_col.probe_column_index = child_bindings[child_column.probe_column_index.column_index];
 				child_columns.push_back(new_col);
+			}
+			if (child_columns.empty()) {
+				if (probe_child.type == LogicalOperatorType::LOGICAL_EXCEPT) {
+					break;
+				}
+				continue;
 			}
 			// then recurse into the child
 			GetPushdownFilterTargets(*child, std::move(child_columns), targets);
@@ -220,20 +236,14 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		// projection - check if we all of the expressions are only column references
 		auto &proj = probe_child.Cast<LogicalProjection>();
-		for (auto &filter : columns) {
-			if (filter.probe_column_index.table_index != proj.table_index) {
-				// index does not belong to this projection - bail-out
-				return;
-			}
-			auto &expr = proj.GetExpression(filter.probe_column_index);
-			if (!JoinFilterPushdownUtil::PushdownJoinFilterExpression(expr, filter)) {
-				// cannot push through this expression - bail-out
-				return;
-			}
+		vector<JoinFilterPushdownColumn> projected_columns;
+		projected_columns.reserve(columns.size());
+		PushdownProjectionColumns(proj, columns, projected_columns);
+		if (projected_columns.empty()) {
+			return;
 		}
-		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(projected_columns), targets);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
@@ -314,6 +324,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 			continue;
 		}
 
+		pushdown_col.join_filter_idx = pushdown_info->join_condition.size();
 		pushdown_columns.push_back(pushdown_col);
 		pushdown_info->join_condition.push_back(cond_idx);
 	}
