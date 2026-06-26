@@ -110,8 +110,8 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 				while (remaining_bytes > 0) {
 					const auto bytes_to_read = MinValue(remaining_bytes, MAX_READ_SIZE);
 					state.stream->GrowCapacity(bytes_to_read);
-					idx_t actually_read = NumericCast<idx_t>(
-					    file_handle->Read(state.stream->GetData() + state.stream->GetPosition(), bytes_to_read));
+					idx_t actually_read = NumericCast<idx_t>(file_handle->Read(
+					    context, state.stream->GetData() + state.stream->GetPosition(), bytes_to_read));
 					state.stream->SetPosition(state.stream->GetPosition() + actually_read);
 					AssertMaxFileSize(file.path, state.stream->GetPosition());
 

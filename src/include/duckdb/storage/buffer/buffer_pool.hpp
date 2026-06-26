@@ -89,10 +89,11 @@ protected:
 		bool success;
 		TempBufferPoolReservation reservation;
 	};
-	virtual EvictionResult EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
+	virtual EvictionResult EvictBlocks(QueryContext context, MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
 	                                   unique_ptr<FileBuffer> *buffer = nullptr);
-	virtual EvictionResult EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
-	                                           idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
+	virtual EvictionResult EvictBlocksInternal(QueryContext context, EvictionQueue &queue, MemoryTag tag,
+	                                           idx_t extra_memory, idx_t memory_limit,
+	                                           unique_ptr<FileBuffer> *buffer = nullptr);
 
 	//! Evict object cache entries if needed.
 	EvictionResult EvictObjectCacheEntries(MemoryTag tag, idx_t extra_memory, idx_t memory_limit);

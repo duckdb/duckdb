@@ -1,5 +1,5 @@
 diff --git a/src/include/planning/iceberg_multi_file_reader.hpp b/src/include/planning/iceberg_multi_file_reader.hpp
-index 983239df..35caaefc 100644
+index 679128c..eb79aae 100644
 --- a/src/include/planning/iceberg_multi_file_reader.hpp
 +++ b/src/include/planning/iceberg_multi_file_reader.hpp
 @@ -75,11 +75,10 @@ public:
@@ -17,8 +17,21 @@ index 983239df..35caaefc 100644
  
  public:
  	shared_ptr<TableFunctionInfo> function_info;
+diff --git a/src/planning/iceberg_multi_file_list.cpp b/src/planning/iceberg_multi_file_list.cpp
+index 9af1973..4f95470 100644
+--- a/src/planning/iceberg_multi_file_list.cpp
++++ b/src/planning/iceberg_multi_file_list.cpp
+@@ -1315,7 +1315,7 @@ void IcebergMultiFileList::ScanDeleteFile(const BoundIcebergManifestEntry &bound
+ 			result.Reset();
+ 			delete_scan_function.function(context, function_input, result);
+ 			result.Flatten();
+-			ScanEqualityDeleteFile(bound_manifest_entry, result, multi_file_local_state.reader->columns, global_columns,
++			ScanEqualityDeleteFile(bound_manifest_entry, result, multi_file_local_state.job.reader->columns, global_columns,
+ 			                       global_column_ids, projection_ids);
+ 		} while (result.size() != 0);
+ 	}
 diff --git a/src/planning/iceberg_multi_file_reader.cpp b/src/planning/iceberg_multi_file_reader.cpp
-index 3ac91158..5b2faae0 100644
+index f21ca88..9a3b33c 100644
 --- a/src/planning/iceberg_multi_file_reader.cpp
 +++ b/src/planning/iceberg_multi_file_reader.cpp
 @@ -511,10 +511,9 @@ static unique_ptr<Expression> ConstructVirtualRowIdExpression(ClientContext &con
@@ -122,7 +135,7 @@ index 3ac91158..5b2faae0 100644
  
  vector<PartitionStatistics> IcebergMultiFileReader::IcebergGetPartitionStats(ClientContext &context,
 diff --git a/src/planning/metadata_io/manifest_list/iceberg_manifest_list_reader.cpp b/src/planning/metadata_io/manifest_list/iceberg_manifest_list_reader.cpp
-index 3c6ef640..f057805a 100644
+index 3c6ef64..f057805 100644
 --- a/src/planning/metadata_io/manifest_list/iceberg_manifest_list_reader.cpp
 +++ b/src/planning/metadata_io/manifest_list/iceberg_manifest_list_reader.cpp
 @@ -175,9 +175,9 @@ void ManifestListReader::ReadChunk(DataChunk &chunk, idx_t iceberg_version, vect
@@ -139,7 +152,7 @@ index 3c6ef640..f057805a 100644
  			}
  		}
 diff --git a/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test b/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test
-index 3ce08b8b..1a22d863 100644
+index 3ce08b8..1a22d86 100644
 --- a/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test
 +++ b/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test
 @@ -22,14 +22,20 @@ DROP TABLE IF EXISTS my_datalake.default.v2_to_v3_upgrade;
@@ -192,7 +205,7 @@ index 3ce08b8b..1a22d863 100644
  # 10 rows total: 5 pre-upgrade + 5 post-upgrade
  query II
 diff --git a/test/sql/local/catalog_test_config_setup/catalog_agnostic/test_row_lineage_read_from_upgraded.test b/test/sql/local/catalog_test_config_setup/catalog_agnostic/test_row_lineage_read_from_upgraded.test
-index f5c7d910..c648d64a 100644
+index f5c7d91..c648d64 100644
 --- a/test/sql/local/catalog_test_config_setup/catalog_agnostic/test_row_lineage_read_from_upgraded.test
 +++ b/test/sql/local/catalog_test_config_setup/catalog_agnostic/test_row_lineage_read_from_upgraded.test
 @@ -2,9 +2,6 @@
