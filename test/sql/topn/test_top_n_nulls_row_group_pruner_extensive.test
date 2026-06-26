@@ -2,6 +2,9 @@
 # description: More extensive persisted row group pruner coverage for null-only and mixed-null row groups
 # group: [topn]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 # Alternative verify disables the offset pruning in the optimizer rule
 require no_alternative_verify
 
@@ -140,7 +143,7 @@ ATTACH '{TEST_DIR}/top_n_nulls_row_group_pruner_extensive_data.duckdb' AS db
 query II
 EXPLAIN ANALYZE SELECT i FROM db.ints ORDER BY i NULLS LAST LIMIT 2
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*4,096 rows.*
 
 query I
 SELECT i FROM db.ints ORDER BY i NULLS LAST LIMIT 2
@@ -151,7 +154,7 @@ SELECT i FROM db.ints ORDER BY i NULLS LAST LIMIT 2
 query II
 EXPLAIN ANALYZE SELECT i FROM db.ints ORDER BY i DESC NULLS LAST LIMIT 3
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*6,144 rows.*
 
 query I
 SELECT i FROM db.ints ORDER BY i DESC NULLS LAST LIMIT 3
@@ -163,7 +166,7 @@ SELECT i FROM db.ints ORDER BY i DESC NULLS LAST LIMIT 3
 query II
 EXPLAIN ANALYZE SELECT i FROM db.ints ORDER BY i NULLS FIRST LIMIT 1
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*8,192 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*8,192 rows.*
 
 query I
 SELECT i FROM db.ints ORDER BY i NULLS FIRST LIMIT 1
@@ -178,7 +181,7 @@ NULL
 query II
 EXPLAIN ANALYZE SELECT s FROM db.strings ORDER BY s NULLS LAST LIMIT 2
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*4,096 rows.*
 
 query T
 SELECT s FROM db.strings ORDER BY s NULLS LAST LIMIT 2
@@ -189,7 +192,7 @@ a
 query II
 EXPLAIN ANALYZE SELECT s FROM db.strings ORDER BY s DESC NULLS LAST LIMIT 3
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*6,144 rows.*
 
 query T
 SELECT s FROM db.strings ORDER BY s DESC NULLS LAST LIMIT 3
@@ -201,7 +204,7 @@ i
 query II
 EXPLAIN ANALYZE SELECT s FROM db.strings ORDER BY s NULLS FIRST LIMIT 1
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*8,192 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*8,192 rows.*
 
 query T
 SELECT s FROM db.strings ORDER BY s NULLS FIRST LIMIT 1
@@ -216,7 +219,7 @@ NULL
 query II
 EXPLAIN ANALYZE SELECT i FROM db.offset_boundary ORDER BY i NULLS LAST LIMIT 1 OFFSET 6144
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*4,096 rows.*
 
 query I
 SELECT i FROM db.offset_boundary ORDER BY i NULLS LAST LIMIT 1 OFFSET 6144
@@ -226,7 +229,7 @@ NULL
 query II
 EXPLAIN ANALYZE SELECT v FROM db.null_prefix_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
 
 query I
 SELECT v FROM db.null_prefix_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
@@ -236,7 +239,7 @@ SELECT v FROM db.null_prefix_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
 query II
 EXPLAIN ANALYZE SELECT v FROM db.null_prefix_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
 
 query T
 SELECT v FROM db.null_prefix_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
@@ -246,7 +249,7 @@ SELECT v FROM db.null_prefix_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
 query II
 EXPLAIN ANALYZE SELECT v FROM db.null_then_values_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
 
 query I
 SELECT v FROM db.null_then_values_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
@@ -256,7 +259,7 @@ SELECT v FROM db.null_then_values_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4
 query II
 EXPLAIN ANALYZE SELECT v FROM db.null_then_values_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 6144
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
 
 query I
 SELECT v FROM db.null_then_values_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 6144
@@ -266,7 +269,7 @@ SELECT v FROM db.null_then_values_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 6
 query II
 EXPLAIN ANALYZE SELECT v FROM db.null_then_values_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
 
 query T
 SELECT v FROM db.null_then_values_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
@@ -276,7 +279,7 @@ SELECT v FROM db.null_then_values_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 
 query II
 EXPLAIN ANALYZE SELECT v FROM db.null_then_values_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 6144
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
 
 query T
 SELECT v FROM db.null_then_values_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 6144
@@ -286,7 +289,7 @@ SELECT v FROM db.null_then_values_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 
 query II
 EXPLAIN ANALYZE SELECT v FROM db.null_mixed_value_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 2048
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*4,096 rows.*
 
 query I
 SELECT v FROM db.null_mixed_value_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 2048
@@ -296,7 +299,7 @@ NULL
 query II
 EXPLAIN ANALYZE SELECT v FROM db.null_mixed_value_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 2048
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*4,096 rows.*
 
 query T
 SELECT v FROM db.null_mixed_value_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 2048
@@ -306,7 +309,7 @@ NULL
 query II
 EXPLAIN ANALYZE SELECT v FROM db.scattered_nulls_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*4,096 rows.*
 
 query I
 SELECT v FROM db.scattered_nulls_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
@@ -316,7 +319,7 @@ NULL
 query II
 EXPLAIN ANALYZE SELECT v FROM db.scattered_nulls_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*4,096 rows.*
 
 query T
 SELECT v FROM db.scattered_nulls_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
@@ -330,7 +333,7 @@ FROM db.all_null_offset_BIGINT
 ORDER BY i NULLS FIRST
 LIMIT 1 OFFSET 4096;
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
 
 query I
 SELECT i
@@ -347,7 +350,7 @@ FROM db.all_null_offset_BIGINT
 ORDER BY i NULLS FIRST
 LIMIT 1 OFFSET 4095;
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*4,096 rows.*
 
 query I
 SELECT i
@@ -364,7 +367,7 @@ FROM db.all_null_offset_VARCHAR
 ORDER BY i NULLS FIRST
 LIMIT 1 OFFSET 4096;
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
 
 query I
 SELECT i
@@ -381,7 +384,7 @@ FROM db.all_null_offset_VARCHAR
 ORDER BY i NULLS FIRST
 LIMIT 1 OFFSET 4095;
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*4,096 rows.*
 
 query I
 SELECT i

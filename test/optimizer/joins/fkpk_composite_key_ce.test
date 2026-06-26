@@ -2,6 +2,9 @@
 # description: Cardinality estimation for composite FK/PK joins with transitive equality conditions
 # group: [joins]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require vector_size 2048
 
 statement ok

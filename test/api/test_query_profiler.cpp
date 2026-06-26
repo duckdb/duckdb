@@ -21,12 +21,11 @@ TEST_CASE("Test query profiler", "[api]") {
 
 	output = con.GetProfilingInformation();
 	REQUIRE(output.size() > 0);
-	bool query_found_in_output = output.find(query) != std::string::npos;
-	REQUIRE(query_found_in_output);
+	// the text profiler output renders only the operator tree (the query SQL is no longer included)
 
 	output = con.GetProfilingInformation(ProfilerPrintFormat::JSON());
 	REQUIRE(output.size() > 0);
-	query_found_in_output = output.find(query) != std::string::npos;
+	bool query_found_in_output = output.find(query) != std::string::npos;
 	REQUIRE(query_found_in_output);
 }
 

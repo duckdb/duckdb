@@ -3,71 +3,74 @@
 # group: [optimizer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 PRAGMA explain_output='optimized_only';
 
 ### constant comparison [=, >, >=] followed by j >= i #########################
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0=5 AND col1 >= col0
 ----
-logical_opt	<REGEX>:.*\(col1 >= 5\).*
+logical_opt	<REGEX>:.*col1 >= 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0>5 AND col1 >= col0
 ----
-logical_opt	<REGEX>:.*\(col1 > 5\).*
+logical_opt	<REGEX>:.*col1 > 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0>=5 AND col1 >= col0
 ----
-logical_opt	<REGEX>:.*\(col1 >= 5\).*
+logical_opt	<REGEX>:.*col1 >= 5.*
 
 ### constant comparison [=, >, >=] followed by j > i #########################
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0=5 AND col1 > col0
 ----
-logical_opt	<REGEX>:.*\(col1 > 5\).*
+logical_opt	<REGEX>:.*col1 > 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0>5 AND col1 > col0
 ----
-logical_opt	<REGEX>:.*\(col1 > 5\).*
+logical_opt	<REGEX>:.*col1 > 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0>=5 AND col1 > col0
 ----
-logical_opt	<REGEX>:.*\(col1 > 5\).*
+logical_opt	<REGEX>:.*col1 > 5.*
 
 ### constant comparison [=, <, <=] followed by j <= i #########################
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0=5 AND col1 <= col0
 ----
-logical_opt	<REGEX>:.*\(col1 <= 5\).*
+logical_opt	<REGEX>:.*col1 <= 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0<5 AND col1 <= col0
 ----
-logical_opt	<REGEX>:.*\(col1 < 5\).*
+logical_opt	<REGEX>:.*col1 < 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0<=5 AND col1 <= col0
 ----
-logical_opt	<REGEX>:.*\(col1 <= 5\).*
+logical_opt	<REGEX>:.*col1 <= 5.*
 
 ### constant comparison [=, <, <=] followed by j < i #########################
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0=5 AND col1 < col0
 ----
-logical_opt	<REGEX>:.*\(col1 < 5\).*
+logical_opt	<REGEX>:.*col1 < 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0<5 AND col1 < col0
 ----
-logical_opt	<REGEX>:.*\(col1 < 5\).*
+logical_opt	<REGEX>:.*col1 < 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col0<=5 AND col1 < col0
 ----
-logical_opt	<REGEX>:.*\(col1 < 5\).*
+logical_opt	<REGEX>:.*col1 < 5.*
 
 #################################################################################################
 # Non-scalar comparisons followed by simple constant comparisons
@@ -77,65 +80,65 @@ logical_opt	<REGEX>:.*\(col1 < 5\).*
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 >= col0 AND col0=5
 ----
-logical_opt	<REGEX>:.*\(col1 >= 5\).*
+logical_opt	<REGEX>:.*col1 >= 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 >= col0 AND col0>5
 ----
-logical_opt	<REGEX>:.*\(col1 > 5\).*
+logical_opt	<REGEX>:.*col1 > 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 >= col0 AND col0>=5
 ----
-logical_opt	<REGEX>:.*\(col1 >= 5\).*
+logical_opt	<REGEX>:.*col1 >= 5.*
 
 ### j > i followed by constant comparison [=, >, >=]  #########################
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 > col0 AND col0=5
 ----
-logical_opt	<REGEX>:.*\(col1 > 5\).*
+logical_opt	<REGEX>:.*col1 > 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 > col0 AND col0>5
 ----
-logical_opt	<REGEX>:.*\(col1 > 5\).*
+logical_opt	<REGEX>:.*col1 > 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 > col0 AND col0>=5
 ----
-logical_opt	<REGEX>:.*\(col1 > 5\).*
+logical_opt	<REGEX>:.*col1 > 5.*
 
 ### j <= i followed by constant comparison [=, <, <=]  #########################
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 <= col0 AND col0=5
 ----
-logical_opt	<REGEX>:.*\(col1 <= 5\).*
+logical_opt	<REGEX>:.*col1 <= 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 <= col0 AND col0<5
 ----
-logical_opt	<REGEX>:.*\(col1 < 5\).*
+logical_opt	<REGEX>:.*col1 < 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 <= col0 AND col0<=5
 ----
-logical_opt	<REGEX>:.*\(col1 <= 5\).*
+logical_opt	<REGEX>:.*col1 <= 5.*
 
 ### j < i followed by constant comparison [=, <, <=]  #########################
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 < col0 AND col0=5
 ----
-logical_opt	<REGEX>:.*\(col1 < 5\).*
+logical_opt	<REGEX>:.*col1 < 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 < col0 AND col0<5
 ----
-logical_opt	<REGEX>:.*\(col1 < 5\).*
+logical_opt	<REGEX>:.*col1 < 5.*
 
 query II
 EXPLAIN SELECT * FROM (VALUES(5,5)) tbl(col0, col1) WHERE col1 < col0 AND col0<=5
 ----
-logical_opt	<REGEX>:.*\(col1 < 5\).*
+logical_opt	<REGEX>:.*col1 < 5.*
 
 
 # FIXME - disabled because of bugs in the filter combiner

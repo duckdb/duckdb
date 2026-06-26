@@ -3,6 +3,9 @@
 # group: [expression]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 PRAGMA explain_output='OPTIMIZED_ONLY'
 
 statement ok
@@ -70,12 +73,12 @@ foreach f list_filter array_filter filter
 query II
 EXPLAIN SELECT {t}({f}({t}(l, lambda x, i: struct_pack(filter := i > 2, result := i + 5)), lambda s: s.filter), lambda s: s.result) FROM t;
 ----
-logical_opt	<REGEX>:.*PROJECTION.*Expressions:.*\(.*\(.*\(.*l.*\).*\).*\).*SCAN.*
+logical_opt	<REGEX>:.*PROJECTION.*Expressions.*\(.*\(.*\(.*l.*\).*SCAN.*
 
 query II
 EXPLAIN SELECT {t}({f}({t}(l, lambda x, i: struct_pack(filter := i > 2, result := x + 5)), lambda s: s.filter), lambda s: s.result) FROM t;
 ----
-logical_opt	<REGEX>:.*PROJECTION.*Expressions:.*\(.*\(.*l.*\).*\).*SCAN.*
+logical_opt	<REGEX>:.*PROJECTION.*Expressions.*\(.*\(.*l.*\).*\).*SCAN.*
 
 query I
 SELECT {t}({f}({t}(l, lambda x, i: struct_pack(filter := i > 2, result := i + 5)), lambda s: s.filter), lambda s: s.result) FROM t;

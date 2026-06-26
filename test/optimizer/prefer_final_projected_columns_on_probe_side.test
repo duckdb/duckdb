@@ -3,6 +3,9 @@
 # group: [optimizer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 create table t(ts_start timestamptz, ts_stop timestamptz, id text);
 
 statement ok

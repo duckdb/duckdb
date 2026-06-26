@@ -3,6 +3,9 @@
 # group: [optimizer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE t (a INTEGER, b INTEGER, c INTEGER);
 
 statement ok
@@ -127,4 +130,4 @@ SELECT t.a, t.b, t.c, s.x, s.y FROM t, s WHERE (t.a=1 AND s.x=1 AND t.b>3) OR (t
 query II
 EXPLAIN SELECT t.a, t.b, t.c, s.x, s.y FROM t, s WHERE (t.a=1 AND s.x=1 AND t.b>3) OR (t.a=1 AND s.x=1 AND s.y<20)
 ----
-physical_plan	<REGEX>:.*Filters:.*x = 1.*Filters:.*a = 1.*
+physical_plan	<REGEX>:.*Filters:.*a = 1.*Filters:.*x = 1.*

@@ -1,6 +1,9 @@
 # name: test/sql/types/geo/geometry_intersection_filter_parquet.test
 # group: [geo]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require parquet
 
 statement ok
@@ -15,7 +18,7 @@ COPY (
 query II
 explain select * from '{TEST_DIR}/points.parquet' where g && 'POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))';
 ----
-physical_plan	<REGEX>:.*Filters:.*
+physical_plan	<REGEX>:.*Filters.*
 
 query II rowsort res_1
 select * from '{TEST_DIR}/points.parquet' where g && 'POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))' order by id;

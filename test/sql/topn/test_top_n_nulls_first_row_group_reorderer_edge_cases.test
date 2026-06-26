@@ -2,6 +2,9 @@
 # description: Edge cases for NULLS FIRST row group reorderer when no ordered row groups remain
 # group: [topn]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require no_alternative_verify
 
 statement ok
@@ -41,7 +44,7 @@ ATTACH '{TEST_DIR}/top_n_nulls_first_row_group_reorderer_edge_cases_data.duckdb'
 query II
 EXPLAIN ANALYZE SELECT i FROM db.null_only_ints ORDER BY i NULLS FIRST LIMIT 1
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
 
 query I
 SELECT i FROM db.null_only_ints ORDER BY i NULLS FIRST LIMIT 1
@@ -51,7 +54,7 @@ NULL
 query II
 EXPLAIN ANALYZE SELECT i FROM db.mixed_ints ORDER BY i NULLS FIRST LIMIT 1
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
 
 query I
 SELECT i FROM db.mixed_ints ORDER BY i NULLS FIRST LIMIT 1 OFFSET 1023
@@ -61,7 +64,7 @@ SELECT i FROM db.mixed_ints ORDER BY i NULLS FIRST LIMIT 1 OFFSET 1023
 query II
 EXPLAIN ANALYZE SELECT s FROM db.null_only_strings ORDER BY s NULLS FIRST LIMIT 1
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
 
 query T
 SELECT s FROM db.null_only_strings ORDER BY s NULLS FIRST LIMIT 1
@@ -71,7 +74,7 @@ NULL
 query II
 EXPLAIN ANALYZE SELECT s FROM db.mixed_strings ORDER BY s NULLS FIRST LIMIT 1
 ----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+analyzed_plan	<REGEX>:.*Table Scan.*2,048 rows.*
 
 query T
 SELECT s FROM db.mixed_strings ORDER BY s NULLS FIRST LIMIT 1 OFFSET 1023

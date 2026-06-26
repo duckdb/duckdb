@@ -2,6 +2,9 @@
 # description: Test Top N Optimization for Parquet
 # group: [parquet]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require parquet
 
 statement ok

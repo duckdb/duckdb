@@ -2,6 +2,9 @@
 # description: Test partitioned aggregates
 # group: [partitioned]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require no_vector_verification # query plans are not robust against VERIFY_VECTOR operator
 
 require parquet

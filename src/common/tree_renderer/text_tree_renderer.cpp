@@ -196,10 +196,15 @@ static void ComputeSubtreeStats(ExplainTreeNode &node) {
 
 //! The operator name as shown in a box title - underscores become spaces and the result is title-cased
 //! (e.g. HASH_JOIN -> Hash Join)
-static string DisplayName(const string &name) {
+static string DisplayName(const string &name, bool upper_case) {
+	if (upper_case) {
+		// keep the raw operator name (e.g. HASH_JOIN)
+		return name;
+	}
 	auto result = StringUtil::Title(StringUtil::Replace(name, "_", " "));
-	// keep known acronyms capitalized (title-casing turns "CTE" into "Cte")
+	// keep known acronyms capitalized (title-casing turns "CTE" into "Cte" and "IE" into "Ie")
 	result = StringUtil::Replace(result, "Cte", "CTE");
+	result = StringUtil::Replace(result, "Ie Join", "IE Join");
 	return result;
 }
 
@@ -532,11 +537,11 @@ public:
 	static constexpr double SIGNIFICANT_TIME_FRACTION = 0.05;
 
 	ExplainBoxRenderer(idx_t max_width, char thousand_separator, double total_time, ExplainAlignment alignment,
-	                   bool flatten, bool merge)
+	                   bool flatten, bool merge, bool upper_case)
 	    : max_width(MaxValue<idx_t>(max_width, MINIMUM_RENDER_WIDTH)), thousand_separator(thousand_separator),
 	      total_time(total_time), alignment(alignment),
 	      layout_width(MaxValue<idx_t>(MaxValue<idx_t>(max_width, MINIMUM_RENDER_WIDTH), MAX_TREE_WIDTH)),
-	      flatten(flatten), merge(merge), flatten_threshold(total_time * FLATTEN_TIME_FRACTION),
+	      flatten(flatten), merge(merge), upper_case(upper_case), flatten_threshold(total_time * FLATTEN_TIME_FRACTION),
 	      significant_threshold(total_time * SIGNIFICANT_TIME_FRACTION) {
 	}
 
@@ -589,7 +594,8 @@ private:
 	idx_t BoxContentWidth(const ExplainTreeNode &node) {
 		idx_t max_content = MinValue<idx_t>(layout_width - 4, MAX_BOX_CONTENT_WIDTH);
 		bool condensed = IsCondensed(node);
-		idx_t width = RenderLength(node.name);
+		// reserve 2 extra columns so the operator name fits in the box border without being truncated
+		idx_t width = RenderLength(DisplayName(node.name, upper_case)) + 2;
 		for (auto &entry : node.details) {
 			if (condensed && !IsEssentialDetail(entry)) {
 				continue;
@@ -680,7 +686,7 @@ private:
 	}
 
 	string GroupedRowName(const ExplainTreeNode &node) {
-		string name = DisplayName(node.name);
+		string name = DisplayName(node.name, upper_case);
 		for (auto &entry : node.details) {
 			if (entry.first == "Table" && !entry.second.empty()) {
 				const string &table = entry.second.front();
@@ -795,7 +801,7 @@ private:
 			content.push_back(std::move(line));
 		}
 
-		string title = TruncateText(DisplayName(node.name), content_width >= 2 ? content_width - 2 : 1);
+		string title = TruncateText(DisplayName(node.name, upper_case), content_width >= 2 ? content_width - 2 : 1);
 		idx_t title_width = RenderLength(title);
 		idx_t box_width = content_width + 4;
 
@@ -1099,6 +1105,7 @@ private:
 	idx_t layout_width;
 	bool flatten;
 	bool merge;
+	bool upper_case;
 	double flatten_threshold;
 	double significant_threshold;
 	idx_t tree_content_width = 0;
@@ -1171,7 +1178,7 @@ void TextTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) 
 	bool flatten = !config.expand_all && total_time > 0;
 	bool merge = flatten && plan->subtree_count >= MERGE_MIN_NODES;
 	ExplainBoxRenderer renderer(config.maximum_render_width, config.thousand_separator, total_time,
-	                            ExplainAlignment::LEFT, flatten, merge);
+	                            ExplainAlignment::LEFT, flatten, merge, config.upper_case_operators);
 	auto lines = renderer.Render(*plan);
 	if (renderer.HidContent()) {
 		ss.hidden_content = true;
@@ -1209,6 +1216,16 @@ void TextTreeRenderer::Configure(const unordered_map<string, Value> &settings) {
 			config.decimal_separator = separator[0];
 		} else if (name == "expand_all") {
 			config.expand_all = value.DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>();
+		} else if (name == "operator_casing") {
+			auto casing = StringUtil::Lower(value.ToString());
+			if (casing == "upper") {
+				config.upper_case_operators = true;
+			} else if (casing == "title") {
+				config.upper_case_operators = false;
+			} else {
+				throw InvalidInputException("Renderer setting \"%s\" must be either 'title' or 'upper', got \"%s\"",
+				                            name, casing);
+			}
 		}
 		// unrecognized settings are ignored - they may be intended for a different renderer
 	}

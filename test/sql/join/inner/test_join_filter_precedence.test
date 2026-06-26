@@ -3,6 +3,9 @@
 # group: [inner]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 PRAGMA threads=1;
 
 statement ok
@@ -27,7 +30,7 @@ JOIN single_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:.*Dynamic.*Filters:.*\(k.*=.*1000000000042\).*
+analyzed_plan	<REGEX>:.*Dynamic.*Filters:.*k.*=.*1000000000042.*
 
 query II
 EXPLAIN ANALYZE
@@ -81,7 +84,7 @@ JOIN exact_prf_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters:.*optional:.*\(k.*IN.*IN.*PRF.*\(k\).*
+analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*optional:.*\(k.*IN.*IN.*PRF.*\(k\).*
 
 query II
 EXPLAIN ANALYZE
@@ -123,7 +126,7 @@ JOIN in_filter_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters:.*optional.*\(k.*IN.*\(.*IN.*BF.*\(k.*
+analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*optional.*\(k.*IN.*\(.*IN.*BF.*\(k.*
 
 query II
 EXPLAIN ANALYZE
@@ -167,7 +170,7 @@ JOIN bloom_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters:.*optional:.*\(k.*>=.*
+analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*optional:.*\(k.*>=.*
 
 query II
 EXPLAIN ANALYZE
@@ -177,7 +180,7 @@ JOIN bloom_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters:.*optional:.*\(k.*<=.*
+analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*optional:.*\(k.*<=.*
 
 query II
 EXPLAIN ANALYZE
@@ -228,7 +231,7 @@ JOIN inequality_build b
   ON p.k >= b.k
  AND p.g = b.g;
 ----
-analyzed_plan	<REGEX>:.*Dynamic.*Filters:.*optional:.*\(k.*>=.*
+analyzed_plan	<REGEX>:.*Dynamic.*Filters.*optional:.*\(k.*>=.*
 
 query II
 EXPLAIN ANALYZE
@@ -292,7 +295,7 @@ JOIN dense_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters:.*optional:.*\(k.*>=.*
+analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*optional:.*\(k.*>=.*
 
 query II
 EXPLAIN ANALYZE
@@ -302,7 +305,7 @@ JOIN dense_build b
   ON p.k = b.k
  AND p.g >= b.g;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters:.*optional:.*\(k.*<=.*
+analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*optional:.*\(k.*<=.*
 
 # Multiple equality keys make PRF and Bloom filters ineligible; min/max is used for each key.
 statement ok
@@ -328,7 +331,7 @@ JOIN multi_build b
   ON p.k1 = b.k1
  AND p.k2 = b.k2;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters:.*optional:.*\(k1.*>=.*
+analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*optional:.*\(k1.*>=.*
 
 query II
 EXPLAIN ANALYZE
@@ -338,7 +341,7 @@ JOIN multi_build b
   ON p.k1 = b.k1
  AND p.k2 = b.k2;
 ----
-analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters:.*optional:.*\(k1.*<=.*
+analyzed_plan	<REGEX>:(?s).*Dynamic.*Filters.*optional:.*\(k1.*<=.*
 
 query II
 EXPLAIN ANALYZE

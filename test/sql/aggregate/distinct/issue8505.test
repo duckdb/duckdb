@@ -3,6 +3,9 @@
 # group: [distinct]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 create table test (id int, provider int, record_key int, record_rank int, record_date int)
 
 # this subquery was fast, we select only record_key from it so it's equivalent to the next query

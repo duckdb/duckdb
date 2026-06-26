@@ -3,6 +3,9 @@
 # group: [expression]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TYPE sym_enum AS ENUM (
 	SELECT i::VARCHAR 
 	FROM range(10) tbl(i)

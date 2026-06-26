@@ -3,6 +3,9 @@
 # group: [optimizer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE OR REPLACE TABLE foo AS SELECT range a FROM range(130000);
 
 # Check that row_number is not accessible

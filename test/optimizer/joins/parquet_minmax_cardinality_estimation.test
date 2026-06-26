@@ -2,6 +2,9 @@
 # description: Use Parquet min/max as a local join-order distinct-count proxy
 # group: [joins]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require parquet
 
 statement ok

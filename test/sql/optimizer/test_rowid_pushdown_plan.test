@@ -1,6 +1,9 @@
 # name: test/sql/optimizer/test_rowid_pushdown_plan.test
 # group: [optimizer]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 set variable sf 0.01
 
 include test/sql/tpch/tpch_setup.test_template

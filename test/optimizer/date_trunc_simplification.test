@@ -3,6 +3,9 @@
 # group: [optimizer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 statement ok
@@ -72,42 +75,42 @@ select * from test where date_trunc('day', d) is distinct from '2025-01-10';
 query II
 explain analyze select * from test where date_trunc('day', d) < '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*.*d < '2025.*$
+analyzed_plan	<REGEX>:.*Filters[ \t\n│]*.*d < '2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) <= '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*.*d < '2025.*$
+analyzed_plan	<REGEX>:.*Filters[ \t\n│]*.*d < '2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) > '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*.*d >= '2025.*$
+analyzed_plan	<REGEX>:.*Filters[ \t\n│]*.*d >= '2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) >= '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*.*d >= '2025.*$
+analyzed_plan	<REGEX>:.*Filters[ \t\n│]*.*d >= '2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) = '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*.*d >= '2025.*AND.*d <.*'2025.*$
+analyzed_plan	<REGEX>:.*Filters[ \t\n│]*.*d >= '2025.*AND.*d <.*'2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) != '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*FILTER[ \t\n│─]*\(\(d >= '2025.*OR.*\(d <[ \t\n│─]*'2025.*$
+analyzed_plan	<REGEX>:.*FILTER.*\(d >= '2025.*OR.*\(d <[ \t\n│─]*'2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) is not distinct from '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*.*d >= '2025.*AND.*d <.*'2025.*$
+analyzed_plan	<REGEX>:.*Filters[ \t\n│]*.*d >= '2025.*AND.*d <.*'2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) is distinct from '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│─]*\(\(d >= '2025.*OR.*\(d <[ \t\n│─]*'2025.*$
+analyzed_plan	<REGEX>:.*Filters[ \t\n│─]*\(d >= '2025.*OR.*\(d <[ \t\n│─]*'2025.*$
 
 #
 # check correctness of simple optimizations, column on rhs

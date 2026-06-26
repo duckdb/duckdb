@@ -3,6 +3,9 @@
 # group: [pushdown]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 PRAGMA explain_output='OPTIMIZED_ONLY';
 
 # disable this (for now - could be fixed by pushing casts instead of internal compress functions if possible)
@@ -19,7 +22,7 @@ CREATE TABLE build_bigint AS SELECT b::BIGINT AS b FROM (VALUES (10), (20), (30)
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_bigint ON t.a = build_bigint.b;
 ----
-analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<REGEX>:.*Dynamic Filters.*
 
 query I
 SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_bigint ON t.a = build_bigint.b;
@@ -41,7 +44,7 @@ CREATE TABLE build_overflow AS SELECT b::BIGINT AS b FROM (VALUES (5), (10), (99
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_overflow ON t.a = build_overflow.b;
 ----
-analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<REGEX>:.*Dynamic Filters.*
 
 # 9999999999 overflows INT32 — only 5 and 10 should match
 query I
@@ -56,7 +59,7 @@ CREATE TABLE build_all_overflow AS SELECT b::BIGINT AS b FROM (VALUES (999999999
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_all_overflow ON t.a = build_all_overflow.b;
 ----
-analyzed_plan	<!REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<!REGEX>:.*Dynamic Filters.*
 
 query I
 SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_all_overflow ON t.a = build_all_overflow.b;
@@ -73,7 +76,7 @@ CREATE TABLE build_for_tiny AS SELECT b::BIGINT AS b FROM (VALUES (1), (100), (2
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_tiny) t JOIN build_for_tiny ON t.a = build_for_tiny.b;
 ----
-analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<REGEX>:.*Dynamic Filters.*
 
 # 200 does not fit in TINYINT — only 1 and 100 match
 query I
@@ -91,7 +94,7 @@ CREATE TABLE build_for_small AS SELECT b::INT AS b FROM (VALUES (100), (40000)) 
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::INT AS a FROM probe_small) t JOIN build_for_small ON t.a = build_for_small.b;
 ----
-analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<REGEX>:.*Dynamic Filters.*
 
 query I
 SELECT COUNT(*) FROM (SELECT a::INT AS a FROM probe_small) t JOIN build_for_small ON t.a = build_for_small.b;
@@ -105,7 +108,7 @@ CREATE TABLE build_with_nulls AS SELECT b::BIGINT AS b FROM (VALUES (10), (NULL)
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_with_nulls ON t.a = build_with_nulls.b;
 ----
-analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<REGEX>:.*Dynamic Filters.*
 
 query I
 SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_with_nulls ON t.a = build_with_nulls.b;
@@ -136,7 +139,7 @@ CREATE TABLE build_double AS SELECT v::DOUBLE AS b FROM (VALUES (1.0), (2.0)) t(
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_double JOIN build_double ON probe_double.a = build_double.b;
 ----
-analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<REGEX>:.*Dynamic Filters.*
 
 query I
 SELECT COUNT(*) FROM probe_double JOIN build_double ON probe_double.a = build_double.b;
@@ -153,7 +156,7 @@ CREATE TABLE build_hugeint AS SELECT v::HUGEINT AS b FROM (VALUES (1), (2)) t(v)
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::HUGEINT AS a FROM probe_bigint_for_huge) t JOIN build_hugeint ON t.a = build_hugeint.b;
 ----
-analyzed_plan	<!REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<!REGEX>:.*Dynamic Filters.*
 
 query I
 SELECT COUNT(*) FROM (SELECT a::HUGEINT AS a FROM probe_bigint_for_huge) t JOIN build_hugeint ON t.a = build_hugeint.b;
@@ -170,7 +173,7 @@ CREATE TABLE build_neg AS SELECT b::BIGINT AS b FROM (VALUES (5), (-1), (10)) t(
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_ubigint) t JOIN build_neg ON t.a = build_neg.b;
 ----
-analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<REGEX>:.*Dynamic Filters.*
 
 # -1 cannot be cast to UBIGINT — only 5 and 10 match
 query I
@@ -194,7 +197,7 @@ INSERT INTO build_direct VALUES (10), (20);
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_direct JOIN build_direct ON probe_direct.a = build_direct.b;
 ----
-analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<REGEX>:.*Dynamic Filters.*
 
 query I
 SELECT COUNT(*) FROM probe_direct JOIN build_direct ON probe_direct.a = build_direct.b;
@@ -208,7 +211,7 @@ INSERT INTO build_direct VALUES (9999999999);
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_direct JOIN build_direct ON probe_direct.a = build_direct.b;
 ----
-analyzed_plan	<!REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<!REGEX>:.*Dynamic Filters.*
 
 query I
 SELECT COUNT(*) FROM probe_direct JOIN build_direct ON probe_direct.a = build_direct.b;
@@ -233,7 +236,7 @@ SELECT COUNT(*) FROM (
     SELECT a::BIGINT AS a FROM t_union_small
 ) sub JOIN build_union ON sub.a = build_union.b;
 ----
-analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<REGEX>:.*Dynamic Filters.*
 
 query I
 SELECT COUNT(*) FROM (

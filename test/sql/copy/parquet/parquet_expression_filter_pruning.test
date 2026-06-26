@@ -2,6 +2,9 @@
 # description: Test row group pruning with arithmetic expression filters
 # group: [parquet]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require parquet
 
 # 10 row groups of 10240 rows (multiple of vector size -> deterministic boundaries)
