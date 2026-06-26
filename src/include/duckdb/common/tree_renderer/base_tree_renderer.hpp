@@ -41,9 +41,7 @@ enum class TreeRenderType : uint8_t {
 	TIMING_MODERATE,
 	TIMING_LOW,
 	//! A section / plan header
-	HEADER,
-	//! A "[Subtree #N]" reference box
-	SUBTREE_REFERENCE
+	HEADER
 };
 
 //! Sink that a TreeRenderer renders into. Each segment carries a TreeRenderType describing what it represents, so

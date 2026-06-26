@@ -41,8 +41,6 @@ static HighlightElementType ToHighlightElement(duckdb::TreeRenderType type) {
 		return HighlightElementType::EXPLAIN_TIMING_LOW;
 	case duckdb::TreeRenderType::HEADER:
 		return HighlightElementType::EXPLAIN_HEADER;
-	case duckdb::TreeRenderType::SUBTREE_REFERENCE:
-		return HighlightElementType::EXPLAIN_SUBTREE_REF;
 	default:
 		return HighlightElementType::EXPLAIN_LAYOUT;
 	}

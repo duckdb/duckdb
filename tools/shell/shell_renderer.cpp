@@ -909,7 +909,7 @@ public:
 		// only shown in interactive mode (where the user can type ".last") and only when something was folded
 		if (out.SupportsHighlight() && state.stdin_is_interactive && state.stdout_is_console &&
 		    state.last_explain_hid_content && data[0].GetString() == "analyzed_plan") {
-			string hint = "type .last to view the full query tree";
+			string hint = "\ntype .last to view the full query tree\n";
 			ShellHighlight highlight(state);
 			highlight.PrintText(hint, PrintOutput::STDOUT, HighlightElementType::FOOTER);
 		}

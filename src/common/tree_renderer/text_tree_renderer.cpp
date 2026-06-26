@@ -197,7 +197,10 @@ static void ComputeSubtreeStats(ExplainTreeNode &node) {
 //! The operator name as shown in a box title - underscores become spaces and the result is title-cased
 //! (e.g. HASH_JOIN -> Hash Join)
 static string DisplayName(const string &name) {
-	return StringUtil::Title(StringUtil::Replace(name, "_", " "));
+	auto result = StringUtil::Title(StringUtil::Replace(name, "_", " "));
+	// keep known acronyms capitalized (title-casing turns "CTE" into "Cte")
+	result = StringUtil::Replace(result, "Cte", "CTE");
+	return result;
 }
 
 static TreeRenderType GetOperatorType(const ExplainTreeNode &node) {
@@ -526,7 +529,6 @@ public:
 	static constexpr double FLATTEN_TIME_FRACTION = 0.01;
 	static constexpr idx_t MIN_FLATTEN_NODES = 2;
 	static constexpr idx_t MIN_GROUP_NODES = 2;
-	static constexpr idx_t MAX_GROUP_ROWS = 8;
 	static constexpr double SIGNIFICANT_TIME_FRACTION = 0.05;
 
 	ExplainBoxRenderer(idx_t max_width, char thousand_separator, double total_time, ExplainAlignment alignment,
@@ -544,33 +546,12 @@ public:
 	}
 
 	vector<ExplainLine> Render(const ExplainTreeNode &root) {
-		next_subtree = 0;
-		pending.clear();
-		pending.push_back({0, &root});
-
-		vector<ExplainLine> result;
-		for (idx_t i = 0; i < pending.size(); i++) {
-			auto entry = pending[i];
-			tree_content_width = MaxValue<idx_t>(TreeContentWidth(*entry.second), 6);
-			auto block = RenderNode(*entry.second, layout_width, ChainWidth(*entry.second));
-			if (entry.first != 0) {
-				result.emplace_back(); // blank separating line
-				ExplainLine header;
-				header.emplace_back(SubtreeLabel(entry.first), TreeRenderType::SUBTREE_REFERENCE);
-				result.push_back(std::move(header));
-			}
-			for (auto &line : block.lines) {
-				result.push_back(std::move(line));
-			}
-		}
-		return result;
+		tree_content_width = MaxValue<idx_t>(TreeContentWidth(root), 6);
+		auto block = RenderNode(root, ChainWidth(root));
+		return std::move(block.lines);
 	}
 
 private:
-	static string SubtreeLabel(idx_t number) {
-		return "[Subtree #" + std::to_string(number) + "]";
-	}
-
 	static idx_t LongestValue(const vector<string> &values) {
 		idx_t longest = 0;
 		for (auto &value : values) {
@@ -722,10 +703,6 @@ private:
 		return width;
 	}
 
-	idx_t PlaceholderContentWidth() const {
-		return alignment == ExplainAlignment::LEFT ? RenderLength(string("[Subtree #00]")) : tree_content_width;
-	}
-
 	struct BoxMetrics {
 		ExplainLine left;
 		ExplainLine right;
@@ -875,22 +852,8 @@ private:
 		block.lines.emplace_back();
 		block.lines.back().emplace_back("╭" + StringUtil::Repeat("─", box_width - 2) + "╮", TreeRenderType::LAYOUT);
 
-		idx_t shown = MinValue<idx_t>(nodes.size(), MAX_GROUP_ROWS);
-		for (idx_t i = 0; i < shown; i++) {
+		for (idx_t i = 0; i < nodes.size(); i++) {
 			AddGroupedRow(block, GroupedRowName(*nodes[i]), GetOperatorType(*nodes[i]), GroupedMetrics(*nodes[i]),
-			              content_width);
-		}
-		if (nodes.size() > shown) {
-			idx_t more = nodes.size() - shown;
-			double remaining = 0;
-			for (idx_t i = shown; i < nodes.size(); i++) {
-				remaining += nodes[i]->timing > 0 ? nodes[i]->timing : 0;
-			}
-			ExplainLine metrics;
-			if (remaining > 0) {
-				metrics.push_back(TimingSpan(remaining, total_time));
-			}
-			AddGroupedRow(block, "… " + std::to_string(more) + " more", TreeRenderType::KEY, std::move(metrics),
 			              content_width);
 		}
 
@@ -1099,127 +1062,7 @@ private:
 		return result;
 	}
 
-	idx_t PlaceholderWidth() const {
-		return PlaceholderContentWidth() + 4;
-	}
-
-	ExplainBlock BuildLabelBox(const string &label) {
-		idx_t content_width = MaxValue<idx_t>(PlaceholderContentWidth(), RenderLength(label) + 2);
-		string title = TruncateText(label, content_width >= 2 ? content_width - 2 : 1);
-		idx_t title_width = RenderLength(title);
-		idx_t box_width = content_width + 4;
-
-		ExplainBlock block;
-		ExplainLine top;
-		top.emplace_back("╭─ ", TreeRenderType::LAYOUT);
-		top.emplace_back(std::move(title), TreeRenderType::SUBTREE_REFERENCE);
-		top.emplace_back(" " + StringUtil::Repeat("─", box_width - 5 - title_width) + "╮", TreeRenderType::LAYOUT);
-		block.lines.push_back(std::move(top));
-		ExplainLine bottom;
-		bottom.emplace_back("╰" + StringUtil::Repeat("─", box_width - 2) + "╯", TreeRenderType::LAYOUT);
-		block.lines.push_back(std::move(bottom));
-		block.width = box_width;
-		block.spine = box_width / 2;
-		return block;
-	}
-
-	struct Extent {
-		idx_t width = 0;
-		idx_t spine = 0;
-	};
-
-	static Extent StackExtent(Extent box, Extent child) {
-		idx_t target = MaxValue<idx_t>(box.spine, child.spine);
-		idx_t box_offset = target - box.spine;
-		idx_t child_offset = target - child.spine;
-		return {MaxValue<idx_t>(box_offset + box.width, child_offset + child.width), target};
-	}
-
-	Extent ForkExtent(Extent box, const vector<Extent> &children) {
-		idx_t row_width = 0;
-		vector<idx_t> spines;
-		for (idx_t i = 0; i < children.size(); i++) {
-			spines.push_back(row_width + children[i].spine);
-			row_width += children[i].width + (i + 1 < children.size() ? HORIZONTAL_GAP : 0);
-		}
-		if (alignment == ExplainAlignment::LEFT) {
-			return {MaxValue<idx_t>(box.width, row_width), box.spine};
-		}
-		idx_t parent_spine = (spines.front() + spines.back()) / 2;
-		idx_t box_offset = 0;
-		idx_t row_offset = 0;
-		if (parent_spine > box.spine) {
-			box_offset = parent_spine - box.spine;
-		} else {
-			row_offset = box.spine - parent_spine;
-		}
-		return {MaxValue<idx_t>(box_offset + box.width, row_offset + row_width), box_offset + box.spine};
-	}
-
-	Extent BoxExtent(idx_t chain_width) {
-		idx_t box_width = EffectiveWidth(chain_width) + 4;
-		return {box_width, box_width / 2};
-	}
-
-	vector<bool> DecideDeferred(Extent box, const vector<Extent> &child_extents, const vector<bool> &has_children,
-	                            Extent placeholder, idx_t avail) {
-		vector<bool> deferred(child_extents.size(), false);
-		while (true) {
-			vector<Extent> row;
-			for (idx_t i = 0; i < child_extents.size(); i++) {
-				row.push_back(deferred[i] ? placeholder : child_extents[i]);
-			}
-			if (ForkExtent(box, row).width <= avail) {
-				break;
-			}
-			idx_t best = child_extents.size();
-			for (idx_t i = 0; i < child_extents.size(); i++) {
-				if (!deferred[i] && has_children[i] &&
-				    (best == child_extents.size() || child_extents[i].width > child_extents[best].width)) {
-					best = i;
-				}
-			}
-			if (best == child_extents.size()) {
-				break;
-			}
-			deferred[best] = true;
-		}
-		return deferred;
-	}
-
-	Extent EstimateLayout(const ExplainTreeNode &node, idx_t avail, idx_t chain_width) {
-		avail = MaxValue<idx_t>(avail, MINIMUM_RENDER_WIDTH);
-		if (IsCollapsible(node)) {
-			return BoxExtent(chain_width);
-		}
-		if (node.children.size() == 1) {
-			idx_t run = GroupRunLength(node);
-			const ExplainTreeNode &next = run >= MIN_GROUP_NODES ? GroupRunAfter(node, run) : *node.children[0];
-			return StackExtent(BoxExtent(chain_width), EstimateLayout(next, avail, chain_width));
-		}
-		Extent box = BoxExtent(chain_width);
-		if (node.children.empty()) {
-			return box;
-		}
-		vector<Extent> child_extents;
-		vector<bool> has_children;
-		for (idx_t i = 0; i < node.children.size(); i++) {
-			auto &child = node.children[i];
-			idx_t child_chain = i == 0 ? chain_width : ChainWidth(*child);
-			child_extents.push_back(EstimateLayout(*child, avail, child_chain));
-			has_children.push_back(!child->children.empty());
-		}
-		Extent placeholder = {PlaceholderWidth(), PlaceholderWidth() / 2};
-		auto deferred = DecideDeferred(box, child_extents, has_children, placeholder, avail);
-		vector<Extent> row;
-		for (idx_t i = 0; i < child_extents.size(); i++) {
-			row.push_back(deferred[i] ? placeholder : child_extents[i]);
-		}
-		return ForkExtent(box, row);
-	}
-
-	ExplainBlock RenderNode(const ExplainTreeNode &node, idx_t avail, idx_t chain_width) {
-		avail = MaxValue<idx_t>(avail, MINIMUM_RENDER_WIDTH);
+	ExplainBlock RenderNode(const ExplainTreeNode &node, idx_t chain_width) {
 		if (IsCollapsible(node)) {
 			hid_content = true;
 			vector<const ExplainTreeNode *> nodes;
@@ -1232,33 +1075,18 @@ private:
 				hid_content = true;
 				auto &after = GroupRunAfter(node, run);
 				return StackChain(BuildGroupedBox(GroupRunNodes(node, run), chain_width),
-				                  RenderNode(after, avail, chain_width));
+				                  RenderNode(after, chain_width));
 			}
-			return StackChain(BuildBox(node, chain_width), RenderNode(*node.children[0], avail, chain_width));
+			return StackChain(BuildBox(node, chain_width), RenderNode(*node.children[0], chain_width));
 		}
 		auto box = BuildBox(node, chain_width);
 		if (node.children.empty()) {
 			return box;
 		}
-		vector<idx_t> child_chains;
-		vector<Extent> child_extents;
-		vector<bool> has_children;
-		for (idx_t i = 0; i < node.children.size(); i++) {
-			child_chains.push_back(i == 0 ? chain_width : ChainWidth(*node.children[i]));
-			child_extents.push_back(EstimateLayout(*node.children[i], avail, child_chains[i]));
-			has_children.push_back(!node.children[i]->children.empty());
-		}
-		Extent placeholder = {PlaceholderWidth(), PlaceholderWidth() / 2};
-		auto deferred = DecideDeferred(BoxExtent(chain_width), child_extents, has_children, placeholder, avail);
 		vector<ExplainBlock> children;
 		for (idx_t i = 0; i < node.children.size(); i++) {
-			if (deferred[i]) {
-				idx_t number = ++next_subtree;
-				pending.push_back({number, node.children[i].get()});
-				children.push_back(BuildLabelBox(SubtreeLabel(number)));
-			} else {
-				children.push_back(RenderNode(*node.children[i], avail, child_chains[i]));
-			}
+			idx_t child_chain = i == 0 ? chain_width : ChainWidth(*node.children[i]);
+			children.push_back(RenderNode(*node.children[i], child_chain));
 		}
 		return AttachHorizontal(std::move(box), children);
 	}
@@ -1274,8 +1102,6 @@ private:
 	double flatten_threshold;
 	double significant_threshold;
 	idx_t tree_content_width = 0;
-	idx_t next_subtree = 0;
-	vector<std::pair<idx_t, const ExplainTreeNode *>> pending;
 	bool hid_content = false;
 };
 

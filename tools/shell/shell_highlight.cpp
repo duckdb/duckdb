@@ -60,7 +60,6 @@ static HighlightElement highlight_elements[] = {
     {"explain_detail_key", PrintColor::GRAY, PrintIntensity::STANDARD},
     {"explain_detail_value", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"explain_header", PrintColor::STANDARD, PrintIntensity::BOLD},
-    {"explain_subtree_ref", PrintColor::CYAN, PrintIntensity::STANDARD},
     {"explain_timing_critical", PrintColor::RED, PrintIntensity::BOLD},
     {"explain_timing_high", PrintColor::YELLOW, PrintIntensity::STANDARD},
     {"explain_timing_moderate", PrintColor::STANDARD, PrintIntensity::STANDARD},
