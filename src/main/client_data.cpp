@@ -76,6 +76,21 @@ public:
 		}
 		return result;
 	}
+	BufferHandle Allocate(QueryContext context, MemoryTag tag, idx_t block_size, bool can_destroy = true) override {
+		auto result = buffer_manager.Allocate(context, tag, block_size, can_destroy);
+		if (result.GetBlockHandle()) {
+			TrackMemoryAllocation(result.GetBlockHandle()->GetMemory().GetMemoryUsage());
+		}
+		return result;
+	}
+	BufferHandle Allocate(QueryContext context, MemoryTag tag, BlockManager *block_manager,
+	                      bool can_destroy = true) override {
+		auto result = buffer_manager.Allocate(context, tag, block_manager, can_destroy);
+		if (result.GetBlockHandle()) {
+			TrackMemoryAllocation(result.GetBlockHandle()->GetMemory().GetMemoryUsage());
+		}
+		return result;
+	}
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) override {
 		return Pin(QueryContext(), handle);
 	}
