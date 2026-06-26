@@ -213,6 +213,8 @@ struct MultiFileScanJob {
 	idx_t file_index = DConstants::INVALID_INDEX;
 	//! Whether this job still needs its I/O scheduled or is ready to decode
 	MultiFileScanPhase phase = MultiFileScanPhase::SCHEDULE;
+	//! Number of read-ahead I/O tasks for this job that have not completed yet.
+	shared_ptr<atomic<idx_t>> io_tasks_pending;
 };
 
 struct MultiFileLocalState : public LocalTableFunctionState {

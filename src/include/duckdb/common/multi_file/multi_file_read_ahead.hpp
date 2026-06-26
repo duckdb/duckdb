@@ -16,13 +16,15 @@
 
 namespace duckdb {
 class ClientContext;
+class TaskExecutor;
 class AsyncTask;
 struct MultiFileScanJob;
 
 //! Drives read-ahead for the multi-file scan, it's purpose is to keep several scan jobs scheduled ahead of decoding
 class MultiFileReadAhead {
 public:
-	MultiFileReadAhead(idx_t read_ahead_depth);
+	MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth);
+	~MultiFileReadAhead();
 
 public:
 	//! Maximum number of jobs we try keep scheduled.
@@ -36,7 +38,7 @@ public:
 	void SetDone();
 	bool IsDone() const;
 
-	//! Schedule and put the job in a queue
+	//! Schedule the job's I/O and put it in the queue
 	void PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks);
 
 	//! Pop the oldest queued job
@@ -52,6 +54,8 @@ private:
 	deque<unique_ptr<MultiFileScanJob>> ready_queue;
 	atomic<idx_t> active_jobs {0};
 	atomic<bool> done {false};
+	//! Async I/O executor (async pool).
+	unique_ptr<TaskExecutor> executor;
 };
 
 } // namespace duckdb
