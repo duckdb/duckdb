@@ -8,6 +8,11 @@
     "includes": [
       "duckdb/parser/parsed_data/create_info.hpp"
     ],
+    "finalize_deserialization": [
+      "if (!qualified_name.SchemaPath().empty() || !qualified_name.Name().empty()) {",
+      "\tresult->qualified_name = std::move(qualified_name);",
+      "}"
+    ],
     "members": [
       {
         "id": 100,
@@ -71,6 +76,16 @@
         "id": 110,
         "name": "extension_name",
         "type": "Identifier"
+      },
+      {
+        "id": 111,
+        "name": "qualified_name",
+        "serialize_property": "qualified_name",
+        "deserialize_property": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "deserialize_default": "QualifiedName()",
+        "deserialize_skip_assign": true
       }
     ]
   },
@@ -193,15 +208,6 @@
       "duckdb/parser/parsed_data/create_schema_info.hpp"
     ],
     "members": [
-      {
-        "id": 200,
-        "name": "qualified_name",
-        "serialize_property": "GetQualifiedName()",
-        "deserialize_property": "serialized_qualified_name",
-        "type": "QualifiedName",
-        "deserialize_default": "QualifiedName()",
-        "version": "v2.0.0"
-      }
     ]
   },
   {

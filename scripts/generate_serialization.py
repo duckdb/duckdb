@@ -326,6 +326,7 @@ supported_member_entries = [
     'base',
     'default',
     'deserialize_default',
+    'deserialize_skip_assign',
     'status',
     'version',
     'required_until',
@@ -397,6 +398,9 @@ class MemberVariable:
         if 'deserialize_property' in entry:
             self.deserialize_property = entry['deserialize_property']
         self.deserialize_default = None
+        # When set, the property is still read into a local during deserialization, but the generated code does not
+        # auto-assign it to the result. Use together with finalize_deserialization to apply the value conditionally.
+        self.deserialize_skip_assign = entry.get('deserialize_skip_assign', False)
         if 'default' in entry:
             self.has_default = True
             self.default = entry['default']
@@ -688,6 +692,8 @@ def generate_base_class_code(base_class: SerializableClass):
     assign_entries = []
     for entry in base_class.members:
         skip = False
+        if entry.deserialize_skip_assign:
+            skip = True
         for check_entry in [entry.name, entry.serialize_property]:
             if check_entry in base_class.set_parameter_names:
                 skip = True
