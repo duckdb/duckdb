@@ -66,9 +66,19 @@ public:
 
 template <class T>
 unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
+	auto &storage_manager = col_data.GetStorageManager();
+	auto &block_manager = storage_manager.GetBlockManager();
+
+	if (block_manager.GetBlockSize() + block_manager.GetBlockHeaderSize() < DEFAULT_BLOCK_ALLOC_SIZE) {
+		if (storage_manager.GetStorageVersion() < 7) {
+			// Before v1.5.0, blocks cannot use uncompressed-vector fallback
+			return nullptr;
+		}
+	}
+
+	CompressionInfo info(block_manager);
 	auto state = make_uniq<AlpAnalyzeState<T>>(info);
-	state->storage_version = col_data.GetStorageManager().GetStorageVersion();
+	state->storage_version = storage_manager.GetStorageVersion();
 	return unique_ptr<AnalyzeState>(std::move(state));
 }
 
@@ -77,10 +87,6 @@ unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type)
  */
 template <class T>
 bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	if (state.info.GetBlockSize() + state.info.GetBlockHeaderSize() < DEFAULT_BLOCK_ALLOC_SIZE) {
-		return false;
-	}
-
 	auto &analyze_state = state.Cast<AlpAnalyzeState<T>>();
 
 	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(
@@ -146,7 +152,7 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
  */
 template <class T>
 idx_t AlpFinalAnalyze(AnalyzeState &state) {
-	auto &analyze_state = (AlpAnalyzeState<T> &)state;
+	auto &analyze_state = state.Cast<AlpAnalyzeState<T>>();
 
 	// Finding the Top K combinations of Exponent and Factor
 	alp::AlpCompression<T, true>::FindTopKCombinations(analyze_state.rowgroup_sample, analyze_state.compression_data);

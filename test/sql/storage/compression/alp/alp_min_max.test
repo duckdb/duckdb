@@ -1,7 +1,7 @@
 # name: test/sql/storage/compression/alp/alp_min_max.test
 # group: [alp]
 
-load __TEST_DIR__/alp_min_max.db
+load __TEST_DIR__/alp_min_max.db readwrite v1.5.0
 
 statement ok
 PRAGMA enable_verification
