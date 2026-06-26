@@ -325,11 +325,18 @@ static unique_ptr<ExplainTreeNode> BuildExplainTree(RenderTree &tree, idx_t x, i
 			continue;
 		}
 		if (key == RenderTreeNode::CARDINALITY) {
-			node->rows = idx_t(std::strtoull(value.c_str(), nullptr, 10));
+			// a huge (e.g. overflowed cross-product) estimate can parse to the invalid sentinel - treat it as unknown
+			auto parsed = idx_t(std::strtoull(value.c_str(), nullptr, 10));
+			if (parsed != DConstants::INVALID_INDEX) {
+				node->rows = parsed;
+			}
 			continue;
 		}
 		if (key == RenderTreeNode::ESTIMATED_CARDINALITY) {
-			node->estimated_rows = idx_t(std::strtoull(value.c_str(), nullptr, 10));
+			auto parsed = idx_t(std::strtoull(value.c_str(), nullptr, 10));
+			if (parsed != DConstants::INVALID_INDEX) {
+				node->estimated_rows = parsed;
+			}
 			continue;
 		}
 		if (key == RenderTreeNode::TIMING) {
