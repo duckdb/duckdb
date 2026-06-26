@@ -10,6 +10,24 @@ static const TransformFrameOps CHECKPOINT_STATEMENT_OPS = {
 static const TransformFrameOps CHECKPOINT_FORCE_OPS = {"CheckpointForce",
                                                        &PEGTransformerFactory::InitializeCheckpointForceTrampoline,
                                                        &PEGTransformerFactory::FinalizeCheckpointForceTrampoline};
+static const TransformFrameOps CONNECT_STATEMENT_OPS = {"ConnectStatement",
+                                                        &PEGTransformerFactory::InitializeConnectStatementTrampoline,
+                                                        &PEGTransformerFactory::FinalizeConnectStatementTrampoline};
+static const TransformFrameOps DISCONNECT_STATEMENT_OPS = {
+    "DisconnectStatement", &PEGTransformerFactory::InitializeDisconnectStatementTrampoline,
+    &PEGTransformerFactory::FinalizeDisconnectStatementTrampoline};
+static const TransformFrameOps SESSION_TARGET_OPS = {"SessionTarget",
+                                                     &PEGTransformerFactory::InitializeSessionTargetTrampoline,
+                                                     &PEGTransformerFactory::FinalizeSessionTargetTrampoline};
+static const TransformFrameOps LOCAL_SESSION_TARGET_OPS = {
+    "LocalSessionTarget", &PEGTransformerFactory::InitializeLocalSessionTargetTrampoline,
+    &PEGTransformerFactory::FinalizeLocalSessionTargetTrampoline};
+static const TransformFrameOps STRING_SESSION_TARGET_OPS = {
+    "StringSessionTarget", &PEGTransformerFactory::InitializeStringSessionTargetTrampoline,
+    &PEGTransformerFactory::FinalizeStringSessionTargetTrampoline};
+static const TransformFrameOps CATALOG_SESSION_TARGET_OPS = {
+    "CatalogSessionTarget", &PEGTransformerFactory::InitializeCatalogSessionTargetTrampoline,
+    &PEGTransformerFactory::FinalizeCatalogSessionTargetTrampoline};
 static const TransformFrameOps DEALLOCATE_STATEMENT_OPS = {
     "DeallocateStatement", &PEGTransformerFactory::InitializeDeallocateStatementTrampoline,
     &PEGTransformerFactory::FinalizeDeallocateStatementTrampoline};
@@ -60,6 +78,12 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	static const case_insensitive_map_t<const TransformFrameOps *> result = {
 	    {"CheckpointStatement", &CHECKPOINT_STATEMENT_OPS},
 	    {"CheckpointForce", &CHECKPOINT_FORCE_OPS},
+	    {"ConnectStatement", &CONNECT_STATEMENT_OPS},
+	    {"DisconnectStatement", &DISCONNECT_STATEMENT_OPS},
+	    {"SessionTarget", &SESSION_TARGET_OPS},
+	    {"LocalSessionTarget", &LOCAL_SESSION_TARGET_OPS},
+	    {"StringSessionTarget", &STRING_SESSION_TARGET_OPS},
+	    {"CatalogSessionTarget", &CATALOG_SESSION_TARGET_OPS},
 	    {"DeallocateStatement", &DEALLOCATE_STATEMENT_OPS},
 	    {"DeallocatePrepare", &DEALLOCATE_PREPARE_OPS},
 	    {"TransactionStatement", &TRANSACTION_STATEMENT_OPS},
@@ -118,6 +142,101 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCheckpointForceT
                                                                                           TransformStackFrame &frame) {
 	auto result = PEGTransformerFactory::TransformCheckpointForce(transformer);
 	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeConnectStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	auto &session_target_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (session_target_opt.HasResult()) {
+		stack.PushFrame(session_target_opt.GetResult(), SESSION_TARGET_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeConnectStatementTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	optional<unique_ptr<ConnectInfo>> session_target {};
+	if (frame.child_results[0]) {
+		session_target = std::move(frame.TakeResult<unique_ptr<ConnectInfo>>(0));
+	}
+	auto result = PEGTransformerFactory::TransformConnectStatement(transformer, std::move(session_target));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeDisconnectStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDisconnectStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformDisconnectStatement(transformer);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeSessionTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSessionTargetTrampoline(PEGTransformer &transformer,
+                                                                                        TransformStack &stack,
+                                                                                        TransformStackFrame &frame) {
+	auto result = frame.TakeResult<unique_ptr<ConnectInfo>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<ConnectInfo>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeLocalSessionTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeLocalSessionTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformLocalSessionTarget(transformer);
+	return make_uniq<TypedTransformResult<unique_ptr<ConnectInfo>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeStringSessionTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeStringSessionTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto string_literal = PEGTransformerFactory::TransformStringLiteral(transformer, list_pr.GetChild(0));
+	auto result = PEGTransformerFactory::TransformStringSessionTarget(transformer, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<ConnectInfo>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeCatalogSessionTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                     TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCatalogSessionTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto catalog_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
+	auto result = PEGTransformerFactory::TransformCatalogSessionTarget(transformer, catalog_name);
+	return make_uniq<TypedTransformResult<unique_ptr<ConnectInfo>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeDeallocateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,

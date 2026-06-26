@@ -228,6 +228,13 @@ class DirectParseArg:
 
 
 @dataclass
+class DirectTerminalArg:
+    parse_expr: str
+    rule_name: str
+    var_name: str
+
+
+@dataclass
 class DirectRepeatArg:
     parse_expr: str
     rule_name: str
@@ -342,7 +349,7 @@ def _single_semantic_child_plan(node, source_expr_template, syntax_only_rules):
         semantic = []
         for child_idx, child in enumerate(node.children):
             child_expr_template, child = _sequence_child_expr_template(source_expr_template, child_idx, child)
-            if isinstance(child, LiteralNode) or is_syntax_only_node(child, syntax_only_rules):
+            if isinstance(child, LiteralNode) or is_syntax_only_child(child, syntax_only_rules):
                 continue
             if isinstance(child, ReferenceNode):
                 semantic.append((child.name, child_expr_template))
@@ -361,21 +368,45 @@ def _sequence_child_expr_template(source_expr_template, child_idx, child):
     return child_expr_template, child
 
 
-def is_syntax_only_node(node, syntax_only_rules):
+def is_syntax_only_rule_body(node, syntax_only_rules):
+    """Return true when an entire untyped rule has no semantic value."""
+    if literal_string_values(node) is not None:
+        return True
+    if isinstance(node, ReferenceNode):
+        return node.name in syntax_only_rules
+    if isinstance(node, OptionalNode):
+        return is_syntax_only_rule_body(node.child, syntax_only_rules)
+    if isinstance(node, RepeatNode):
+        return is_syntax_only_rule_body(node.child, syntax_only_rules)
+    if isinstance(node, ChoiceNode):
+        return all(is_syntax_only_rule_body(alternative, syntax_only_rules) for alternative in node.alternatives)
+    if isinstance(node, SequenceNode):
+        return all(is_syntax_only_rule_body(child, syntax_only_rules) for child in node.children)
+    if isinstance(node, ParensNode):
+        return is_syntax_only_rule_body(node.inner, syntax_only_rules)
+    return False
+
+
+def is_syntax_only_child(node, syntax_only_rules):
+    """Return true when a sequence child can be ignored without losing presence information."""
     if literal_string_values(node) is not None:
         return True
     if isinstance(node, ReferenceNode):
         return node.name in syntax_only_rules
     if isinstance(node, ChoiceNode):
-        return all(is_syntax_only_node(alternative, syntax_only_rules) for alternative in node.alternatives)
+        return all(is_syntax_only_child(alternative, syntax_only_rules) for alternative in node.alternatives)
     if isinstance(node, SequenceNode):
-        return all(is_syntax_only_node(child, syntax_only_rules) for child in node.children)
+        return all(is_syntax_only_child(child, syntax_only_rules) for child in node.children)
     if isinstance(node, ParensNode):
-        return is_syntax_only_node(node.inner, syntax_only_rules)
+        return is_syntax_only_child(node.inner, syntax_only_rules)
     return False
 
 
 def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None):
+    return plan_trampoline_sequence_rule_with_terminals(ast, identifier_rules, {}, syntax_only_rules)
+
+
+def plan_trampoline_sequence_rule_with_terminals(ast, identifier_rules, terminal_rules, syntax_only_rules=None):
     syntax_only_rules = syntax_only_rules or set()
     direct_args = []
     direct_optional_args = []
@@ -394,9 +425,9 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
     children = ast.children if isinstance(ast, SequenceNode) else [ast]
     for child_idx, child in enumerate(children):
         parse_expr, child = _trampoline_parse_expr(child_idx, child)
-        if isinstance(child, LiteralNode) or is_syntax_only_node(child, syntax_only_rules):
+        if isinstance(child, LiteralNode) or is_syntax_only_child(child, syntax_only_rules):
             continue
-        if isinstance(child, OptionalNode) and is_syntax_only_node(child.child, syntax_only_rules):
+        if isinstance(child, OptionalNode) and is_syntax_only_child(child.child, syntax_only_rules):
             var_name = "has_result" if len(direct_optional_presence_args) == 0 else f"has_result_{child_idx}"
             arg = DirectOptionalPresenceArg(parse_expr, var_name)
             direct_optional_presence_args.append(arg)
@@ -408,6 +439,9 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
                     to_snake_case(child.name),
                     f"{parse_expr}.Cast<IdentifierParseResult>().identifier",
                 )
+                direct_args.append(arg)
+            elif child.name in terminal_rules:
+                arg = DirectTerminalArg(parse_expr, child.name, to_snake_case(child.name))
                 direct_args.append(arg)
             else:
                 if (
@@ -426,6 +460,8 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
             if child.child.name in identifier_rules:
                 arg = DirectOptionalArg(parse_expr, child.child.name, to_snake_case(child.child.name))
                 direct_optional_args.append(arg)
+            elif child.child.name in terminal_rules:
+                raise NotImplementedError("optional terminal override child is currently unsupported")
             else:
                 if (
                     list_child is not None
@@ -450,6 +486,8 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
             rule_name, result_expr_template = optional_stack_plan
             if rule_name in identifier_rules:
                 raise NotImplementedError("wrapped optional identifier child is currently unsupported")
+            if rule_name in terminal_rules:
+                raise NotImplementedError("wrapped optional terminal override child is currently unsupported")
             if (
                 list_child is not None
                 or repeat_child is not None
@@ -476,6 +514,9 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
                     f"{child_parse_expr}.Cast<IdentifierParseResult>().identifier",
                 )
                 direct_args.append(arg)
+            elif rule_name in terminal_rules:
+                arg = DirectTerminalArg(child_parse_expr, rule_name, to_snake_case(rule_name))
+                direct_args.append(arg)
             else:
                 if (
                     list_child is not None
@@ -497,6 +538,8 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
                     direct_repeat_args.append(arg)
                     finalize_args.append(arg)
                     continue
+                if repeat_node.name in terminal_rules:
+                    raise NotImplementedError("terminal override repeat is currently unsupported")
                 if repeat_child is not None:
                     raise NotImplementedError("only one repeat child is currently supported")
                 repeat_child = RepeatStackChild(parse_expr, repeat_node.name, next_slot)
@@ -507,6 +550,8 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
             if isinstance(list_node, ReferenceNode):
                 if list_node.name in identifier_rules:
                     raise NotImplementedError("optional identifier list is currently unsupported")
+                if list_node.name in terminal_rules:
+                    raise NotImplementedError("optional terminal override list is currently unsupported")
                 if (
                     list_child is not None
                     or repeat_child is not None
@@ -522,6 +567,8 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
         if isinstance(child, RepeatNode) and isinstance(child.child, ReferenceNode):
             if child.child.name in identifier_rules:
                 raise NotImplementedError("required identifier repeat is currently unsupported")
+            if child.child.name in terminal_rules:
+                raise NotImplementedError("required terminal override repeat is currently unsupported")
             if (
                 list_child is not None
                 or repeat_child is not None
@@ -538,6 +585,8 @@ def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None)
                 direct_list_args.append(arg)
                 finalize_args.append(arg)
                 continue
+            if child.inner.name in terminal_rules:
+                raise NotImplementedError("terminal override list is currently unsupported")
             if (
                 list_child is not None
                 or repeat_child is not None

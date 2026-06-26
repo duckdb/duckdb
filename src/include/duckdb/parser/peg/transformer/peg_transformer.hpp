@@ -416,6 +416,34 @@ public:
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeCheckpointForceTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeConnectStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeConnectStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDisconnectStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeDisconnectStatementTrampoline(PEGTransformer &transformer,
+	                                                                              TransformStack &stack,
+	                                                                              TransformStackFrame &frame);
+	static void InitializeSessionTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSessionTargetTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeLocalSessionTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                   TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeLocalSessionTargetTrampoline(PEGTransformer &transformer,
+	                                                                             TransformStack &stack,
+	                                                                             TransformStackFrame &frame);
+	static void InitializeStringSessionTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeStringSessionTargetTrampoline(PEGTransformer &transformer,
+	                                                                              TransformStack &stack,
+	                                                                              TransformStackFrame &frame);
+	static void InitializeCatalogSessionTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                     TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeCatalogSessionTargetTrampoline(PEGTransformer &transformer,
+	                                                                               TransformStack &stack,
+	                                                                               TransformStackFrame &frame);
 	static void InitializeDeallocateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                    TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeDeallocateStatementTrampoline(PEGTransformer &transformer,
