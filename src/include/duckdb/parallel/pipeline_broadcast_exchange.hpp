@@ -80,8 +80,8 @@ public:
 
 private:
 	struct ChunkPool;
-	struct ConsumerSpool;
-	struct ConsumerSpoolReader;
+	struct BroadcastSpool;
+	struct BroadcastSpoolReader;
 
 	struct BufferedChunk {
 		shared_ptr<DataChunk> chunk;
@@ -101,9 +101,11 @@ private:
 		bool active = true;
 		bool direct = false;
 		bool detached = false;
-		unique_ptr<ConsumerSpool> detached_buffer;
-		unique_ptr<ConsumerSpoolReader> shared_reader;
-		unique_ptr<ConsumerSpoolReader> detached_reader;
+		bool read_in_progress = false;
+		idx_t read_position = 0;
+		shared_ptr<BroadcastSpool> detached_spool;
+		shared_ptr<BroadcastSpoolReader> shared_reader;
+		shared_ptr<BroadcastSpoolReader> detached_reader;
 	};
 
 public:
@@ -124,7 +126,6 @@ private:
 	bool ShouldThrottleProducerLocked() const;
 	bool HasActiveSharedConsumersLocked() const;
 	bool UseSharedSpoolLocked() const;
-	idx_t ThrottledBufferedBytesLocked() const;
 	void DetachLaggingConsumersLocked();
 	void DetachConsumerLocked(ConsumerState &consumer);
 	void RetireChunksLocked();
@@ -146,7 +147,7 @@ private:
 
 	mutable mutex lock;
 	deque<BufferedChunk> chunks;
-	unique_ptr<ConsumerSpool> shared_spool;
+	shared_ptr<BroadcastSpool> shared_spool;
 	vector<ConsumerState> consumers;
 	vector<reference<Pipeline>> direct_pipelines;
 	vector<InterruptState> blocked_readers;
@@ -155,7 +156,6 @@ private:
 	idx_t next_position = 0;
 	idx_t active_consumers = 0;
 	idx_t shared_buffered_bytes = 0;
-	idx_t detached_buffered_bytes = 0;
 	atomic<idx_t> produced_rows {0};
 	atomic<bool> direct_consumer_progress {false};
 	bool producer_finished = false;

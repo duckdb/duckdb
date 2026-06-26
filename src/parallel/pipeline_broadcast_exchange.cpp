@@ -106,38 +106,46 @@ struct PipelineBroadcastExchange::ChunkPool : public enable_shared_from_this<Pip
 	idx_t cached_bytes = 0;
 };
 
-struct PipelineBroadcastExchange::ConsumerSpoolReader {
-	explicit ConsumerSpoolReader(ConsumerSpool &spool);
+struct PipelineBroadcastExchange::BroadcastSpoolReader {
+	explicit BroadcastSpoolReader(BroadcastSpool &spool);
+
+	bool Contains(idx_t row_idx) const {
+		return scan_state.current_row_index <= row_idx && row_idx < scan_state.next_row_index;
+	}
 
 	ColumnDataScanState scan_state;
 	DataChunk scan_chunk;
+	idx_t observed_generation = 0;
 };
 
-struct PipelineBroadcastExchange::ConsumerSpool {
+struct PipelineBroadcastExchange::BroadcastSpool {
 	struct ChunkEntry {
 		idx_t row_offset;
 		idx_t row_count;
 		idx_t bytes;
 	};
 
-	ConsumerSpool(ClientContext &context, const vector<LogicalType> &types, idx_t base_position_p)
+	BroadcastSpool(ClientContext &context, const vector<LogicalType> &types, idx_t base_position_p)
 	    : collection(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), base_position(base_position_p),
 	      next_position(base_position_p) {
 		collection.InitializeAppend(append_state);
 	}
 
 	void Append(DataChunk &chunk, idx_t bytes_p) {
+		lock_guard<mutex> guard(lock);
 		D_ASSERT(chunk.size() > 0);
 		auto row_offset = collection.Count();
 		collection.Append(append_state, chunk);
 		chunks.push_back(ChunkEntry {row_offset, chunk.size(), bytes_p});
-		buffered_bytes += bytes_p;
 		next_position++;
+		append_generation++;
 	}
 
-	void Fetch(idx_t position, DataChunk &result, ConsumerSpoolReader &reader) {
-		D_ASSERT(position >= base_position);
-		D_ASSERT(position < next_position);
+	void Read(idx_t position, DataChunk &result, BroadcastSpoolReader &reader) {
+		lock_guard<mutex> guard(lock);
+		if (position < base_position || position >= next_position) {
+			throw InternalException("Attempted to read retired pipeline broadcast spool chunk");
+		}
 		auto chunk_idx = position - base_position;
 		D_ASSERT(chunk_idx < chunks.size());
 		auto &entry = chunks[chunk_idx];
@@ -146,11 +154,16 @@ struct PipelineBroadcastExchange::ConsumerSpool {
 		idx_t rows_read = 0;
 		while (rows_read < entry.row_count) {
 			auto row_idx = entry.row_offset + rows_read;
+			if (reader.observed_generation != append_generation && !reader.Contains(row_idx)) {
+				ResetReaderLocked(reader);
+			}
 			if (!collection.Seek(row_idx, reader.scan_state, reader.scan_chunk)) {
-				collection.InitializeScan(reader.scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
-				if (!collection.Seek(row_idx, reader.scan_state, reader.scan_chunk)) {
-					throw InternalException("Failed to read pipeline broadcast spool chunk");
-				}
+				throw InternalException(
+				    "Failed to read pipeline broadcast spool chunk (position=%llu, base=%llu, next=%llu, row=%llu, "
+				    "row_offset=%llu, row_count=%llu, current=%llu, next_row=%llu, generation=%llu, observed=%llu)",
+				    position, base_position, next_position, row_idx, entry.row_offset, entry.row_count,
+				    reader.scan_state.current_row_index, reader.scan_state.next_row_index, append_generation,
+				    reader.observed_generation);
 			}
 			D_ASSERT(reader.scan_state.current_row_index <= row_idx);
 			auto offset = row_idx - reader.scan_state.current_row_index;
@@ -162,47 +175,49 @@ struct PipelineBroadcastExchange::ConsumerSpool {
 		}
 	}
 
-	idx_t Retire(idx_t position) {
+	idx_t RetireBefore(idx_t position) {
+		lock_guard<mutex> guard(lock);
 		idx_t retired_bytes = 0;
 		while (!chunks.empty() && base_position < position) {
 			retired_bytes += chunks.front().bytes;
-			buffered_bytes -= MinValue(buffered_bytes, chunks.front().bytes);
 			chunks.pop_front();
 			base_position++;
 		}
 		return retired_bytes;
 	}
 
-	idx_t Clear() {
-		auto result = buffered_bytes;
-		buffered_bytes = 0;
+	void Clear() {
+		lock_guard<mutex> guard(lock);
 		chunks.clear();
-		return result;
 	}
 
-	idx_t Bytes() const {
-		return buffered_bytes;
+	bool HasPosition(idx_t position) {
+		lock_guard<mutex> guard(lock);
+		return position >= base_position && position < next_position;
 	}
 
-	bool HasChunk(idx_t position) const {
-		return position < next_position;
+	void InitializeReader(BroadcastSpoolReader &reader) {
+		lock_guard<mutex> guard(lock);
+		ResetReaderLocked(reader);
+		collection.InitializeScanChunk(reader.scan_state, reader.scan_chunk);
 	}
 
-	bool Empty() const {
-		return chunks.empty();
+	void ResetReaderLocked(BroadcastSpoolReader &reader) {
+		collection.InitializeScan(reader.scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
+		reader.observed_generation = append_generation;
 	}
 
+	mutex lock;
 	ColumnDataCollection collection;
 	ColumnDataAppendState append_state;
 	deque<ChunkEntry> chunks;
 	idx_t base_position;
 	idx_t next_position;
-	idx_t buffered_bytes = 0;
+	idx_t append_generation = 0;
 };
 
-PipelineBroadcastExchange::ConsumerSpoolReader::ConsumerSpoolReader(ConsumerSpool &spool) {
-	spool.collection.InitializeScan(scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
-	spool.collection.InitializeScanChunk(scan_state, scan_chunk);
+PipelineBroadcastExchange::BroadcastSpoolReader::BroadcastSpoolReader(BroadcastSpool &spool) {
+	spool.InitializeReader(*this);
 }
 
 PipelineBroadcastExchange::ConsumerState::ConsumerState() = default;
@@ -272,6 +287,8 @@ bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, id
 	consumer.active = false;
 	consumer.position = base_position;
 	consumer.detached = false;
+	consumer.read_in_progress = false;
+	consumer.read_position = base_position;
 	consumer.shared_reader.reset();
 	ClearDetachedBufferLocked(consumer);
 	direct_pipelines.push_back(pipeline);
@@ -288,7 +305,6 @@ void PipelineBroadcastExchange::Reset() {
 		base_position = 0;
 		next_position = 0;
 		shared_buffered_bytes = 0;
-		detached_buffered_bytes = 0;
 		produced_rows.store(0, std::memory_order_relaxed);
 		direct_consumer_progress.store(false, std::memory_order_relaxed);
 		producer_finished = false;
@@ -302,6 +318,8 @@ void PipelineBroadcastExchange::Reset() {
 				active_consumers++;
 			}
 			consumer.detached = false;
+			consumer.read_in_progress = false;
+			consumer.read_position = base_position;
 			consumer.shared_reader.reset();
 			ClearDetachedBufferLocked(consumer);
 		}
@@ -461,7 +479,7 @@ SinkResultType PipelineBroadcastExchange::Append(DataChunk &chunk, const Interru
 		BufferedChunk buffered {copy, bytes};
 		if (UseSharedSpoolLocked()) {
 			if (!shared_spool) {
-				shared_spool = make_uniq<ConsumerSpool>(context, types, next_position);
+				shared_spool = make_shared_ptr<BroadcastSpool>(context, types, next_position);
 			}
 			shared_spool->Append(*copy, bytes);
 			shared_buffered_bytes += bytes;
@@ -473,9 +491,8 @@ SinkResultType PipelineBroadcastExchange::Append(DataChunk &chunk, const Interru
 			if (!consumer.active || !consumer.detached) {
 				continue;
 			}
-			D_ASSERT(consumer.detached_buffer);
-			consumer.detached_buffer->Append(*copy, bytes);
-			detached_buffered_bytes += bytes;
+			D_ASSERT(consumer.detached_spool);
+			consumer.detached_spool->Append(*copy, bytes);
 		}
 		if (active_consumers > 0) {
 			next_position++;
@@ -531,9 +548,22 @@ void PipelineBroadcastExchange::Cancel() {
 SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &chunk,
                                                  shared_ptr<DataChunk> &current_chunk,
                                                  const InterruptState &interrupt_state) {
+	struct SpoolReadReservation {
+		shared_ptr<BroadcastSpool> spool;
+		shared_ptr<BroadcastSpoolReader> reader;
+		idx_t position = 0;
+		bool detached = false;
+
+		bool IsSet() const {
+			return spool != nullptr;
+		}
+	};
+
 	vector<InterruptState> writers;
+	vector<InterruptState> readers;
 	auto result = SourceResultType::HAVE_MORE_OUTPUT;
 	shared_ptr<DataChunk> next_chunk;
+	SpoolReadReservation spool_read;
 	{
 		lock_guard<mutex> guard(lock);
 		D_ASSERT(consumer_idx < consumers.size());
@@ -541,31 +571,44 @@ SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &
 		if (!consumer.active || cancelled) {
 			return SourceResultType::FINISHED;
 		}
-		if (consumer.detached && consumer.detached_buffer->HasChunk(consumer.position)) {
+		if (consumer.read_in_progress) {
+			blocked_readers.push_back(interrupt_state);
+			result = SourceResultType::BLOCKED;
+		} else if (consumer.detached && consumer.detached_spool &&
+		           consumer.detached_spool->HasPosition(consumer.position)) {
 			if (!consumer.detached_reader) {
-				consumer.detached_reader = make_uniq<ConsumerSpoolReader>(*consumer.detached_buffer);
+				consumer.detached_reader = make_shared_ptr<BroadcastSpoolReader>(*consumer.detached_spool);
 			}
-			consumer.detached_buffer->Fetch(consumer.position, chunk, *consumer.detached_reader);
-			consumer.position++;
-			consumer.rows_read += chunk.size();
-			RetireDetachedBufferLocked(consumer);
-			WakeWritersLocked(writers);
+			consumer.read_in_progress = true;
+			consumer.read_position = consumer.position;
+			spool_read.spool = consumer.detached_spool;
+			spool_read.reader = consumer.detached_reader;
+			spool_read.position = consumer.position;
+			spool_read.detached = true;
 		} else if (!consumer.detached && consumer.position < next_position) {
 			if (shared_spool) {
-				if (!consumer.shared_reader) {
-					consumer.shared_reader = make_uniq<ConsumerSpoolReader>(*shared_spool);
+				if (!shared_spool->HasPosition(consumer.position)) {
+					throw InternalException("Pipeline broadcast shared spool chunk was retired before it was read");
 				}
-				shared_spool->Fetch(consumer.position, chunk, *consumer.shared_reader);
+				if (!consumer.shared_reader) {
+					consumer.shared_reader = make_shared_ptr<BroadcastSpoolReader>(*shared_spool);
+				}
+				consumer.read_in_progress = true;
+				consumer.read_position = consumer.position;
+				spool_read.spool = shared_spool;
+				spool_read.reader = consumer.shared_reader;
+				spool_read.position = consumer.position;
+				spool_read.detached = false;
 			} else {
 				D_ASSERT(consumer.position >= base_position);
 				auto chunk_idx = consumer.position - base_position;
 				D_ASSERT(chunk_idx < chunks.size());
 				next_chunk = chunks[chunk_idx].chunk;
+				consumer.position++;
+				consumer.rows_read += next_chunk->size();
+				RetireChunksLocked();
+				WakeWritersLocked(writers);
 			}
-			consumer.position++;
-			consumer.rows_read += shared_spool ? chunk.size() : next_chunk->size();
-			RetireChunksLocked();
-			WakeWritersLocked(writers);
 		} else if (producer_finished) {
 			consumer.active = false;
 			D_ASSERT(active_consumers > 0);
@@ -580,6 +623,42 @@ SourceResultType PipelineBroadcastExchange::Scan(idx_t consumer_idx, DataChunk &
 			result = SourceResultType::BLOCKED;
 		}
 	}
+
+	if (spool_read.IsSet()) {
+		spool_read.spool->Read(spool_read.position, chunk, *spool_read.reader);
+		auto rows_read = chunk.size();
+		{
+			lock_guard<mutex> guard(lock);
+			D_ASSERT(consumer_idx < consumers.size());
+			auto &consumer = consumers[consumer_idx];
+			D_ASSERT(consumer.read_in_progress);
+			D_ASSERT(consumer.read_position == spool_read.position);
+			consumer.read_in_progress = false;
+			if (!consumer.active || cancelled) {
+				chunk.Reset();
+				result = SourceResultType::FINISHED;
+				consumer.shared_reader.reset();
+				RetireChunksLocked();
+				ClearDetachedBufferLocked(consumer);
+				consumer.detached = false;
+				WakeWritersLocked(writers, true);
+				WakeReadersLocked(readers);
+			} else {
+				D_ASSERT(consumer.position == spool_read.position);
+				consumer.position++;
+				consumer.rows_read += rows_read;
+				if (spool_read.detached) {
+					RetireDetachedBufferLocked(consumer);
+				} else {
+					RetireChunksLocked();
+				}
+				WakeWritersLocked(writers);
+				WakeReadersLocked(readers);
+			}
+		}
+	}
+
+	CallbackAll(readers);
 	CallbackAll(writers);
 	if (next_chunk) {
 		current_chunk = std::move(next_chunk);
@@ -602,9 +681,11 @@ void PipelineBroadcastExchange::UnregisterConsumer(idx_t consumer_idx) {
 		}
 		consumer.active = false;
 		consumer.position = next_position;
-		consumer.detached = false;
-		consumer.shared_reader.reset();
-		ClearDetachedBufferLocked(consumer);
+		if (!consumer.read_in_progress) {
+			consumer.detached = false;
+			consumer.shared_reader.reset();
+			ClearDetachedBufferLocked(consumer);
+		}
 		D_ASSERT(active_consumers > 0);
 		active_consumers--;
 		RetireChunksLocked();
@@ -701,7 +782,7 @@ bool PipelineBroadcastExchange::ShouldThrottleProducerLocked() const {
 	if (UseSharedSpoolLocked()) {
 		return false;
 	}
-	return active_consumers > 0 && ThrottledBufferedBytesLocked() >= high_watermark;
+	return active_consumers > 0 && shared_buffered_bytes >= high_watermark;
 }
 
 bool PipelineBroadcastExchange::HasActiveSharedConsumersLocked() const {
@@ -715,10 +796,6 @@ bool PipelineBroadcastExchange::HasActiveSharedConsumersLocked() const {
 
 bool PipelineBroadcastExchange::UseSharedSpoolLocked() const {
 	return direct_pipelines.empty() && consumers.size() > 1;
-}
-
-idx_t PipelineBroadcastExchange::ThrottledBufferedBytesLocked() const {
-	return shared_buffered_bytes;
 }
 
 void PipelineBroadcastExchange::DetachLaggingConsumersLocked() {
@@ -759,30 +836,32 @@ void PipelineBroadcastExchange::DetachConsumerLocked(ConsumerState &consumer) {
 	D_ASSERT(!consumer.detached);
 	D_ASSERT(consumer.position >= base_position);
 	consumer.detached = true;
-	consumer.detached_buffer = make_uniq<ConsumerSpool>(context, types, consumer.position);
+	consumer.detached_spool = make_shared_ptr<BroadcastSpool>(context, types, consumer.position);
 
 	auto start_offset = consumer.position - base_position;
 	for (idx_t chunk_idx = start_offset; chunk_idx < chunks.size(); chunk_idx++) {
-		consumer.detached_buffer->Append(*chunks[chunk_idx].chunk, chunks[chunk_idx].bytes);
+		consumer.detached_spool->Append(*chunks[chunk_idx].chunk, chunks[chunk_idx].bytes);
 	}
-	detached_buffered_bytes += consumer.detached_buffer->Bytes();
 }
 
 void PipelineBroadcastExchange::RetireChunksLocked() {
 	if (shared_spool) {
 		idx_t min_position = next_position;
-		bool found_active = false;
+		bool found_reader = false;
 		for (auto &consumer : consumers) {
-			if (!consumer.active || consumer.detached) {
-				continue;
+			if (consumer.read_in_progress && !consumer.detached) {
+				found_reader = true;
+				min_position = MinValue(min_position, consumer.read_position);
 			}
-			found_active = true;
-			min_position = MinValue(min_position, consumer.position);
+			if (consumer.active && !consumer.detached) {
+				found_reader = true;
+				min_position = MinValue(min_position, consumer.position);
+			}
 		}
-		if (!found_active) {
+		if (!found_reader) {
 			min_position = next_position;
 		}
-		auto retired_bytes = shared_spool->Retire(min_position);
+		auto retired_bytes = shared_spool->RetireBefore(min_position);
 		shared_buffered_bytes -= MinValue(shared_buffered_bytes, retired_bytes);
 		base_position = MaxValue(base_position, min_position);
 		return;
@@ -810,21 +889,22 @@ void PipelineBroadcastExchange::RetireChunksLocked() {
 }
 
 void PipelineBroadcastExchange::RetireDetachedBufferLocked(ConsumerState &consumer) {
-	if (!consumer.detached_buffer) {
+	if (!consumer.detached_spool || consumer.read_in_progress) {
 		return;
 	}
-	auto retired_bytes = consumer.detached_buffer->Retire(consumer.position);
-	detached_buffered_bytes -= MinValue(detached_buffered_bytes, retired_bytes);
+	consumer.detached_spool->RetireBefore(consumer.position);
 }
 
 void PipelineBroadcastExchange::ClearDetachedBufferLocked(ConsumerState &consumer) {
-	consumer.detached_reader.reset();
-	if (!consumer.detached_buffer) {
+	if (consumer.read_in_progress) {
 		return;
 	}
-	auto cleared_bytes = consumer.detached_buffer->Clear();
-	detached_buffered_bytes -= MinValue(detached_buffered_bytes, cleared_bytes);
-	consumer.detached_buffer.reset();
+	consumer.detached_reader.reset();
+	if (!consumer.detached_spool) {
+		return;
+	}
+	consumer.detached_spool->Clear();
+	consumer.detached_spool.reset();
 }
 
 void PipelineBroadcastExchange::WakeReadersLocked(vector<InterruptState> &readers) {
@@ -833,7 +913,7 @@ void PipelineBroadcastExchange::WakeReadersLocked(vector<InterruptState> &reader
 }
 
 void PipelineBroadcastExchange::WakeWritersLocked(vector<InterruptState> &writers, bool force) {
-	if (!force && ThrottledBufferedBytesLocked() > low_watermark && !cancelled && !ShouldStopProducerLocked() &&
+	if (!force && shared_buffered_bytes > low_watermark && !cancelled && !ShouldStopProducerLocked() &&
 	    !producer_finished) {
 		return;
 	}
