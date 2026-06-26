@@ -10,7 +10,7 @@ TimePoint TimePoint::Tick() {
 	return TimePoint(steady_clock::now());
 }
 
-int64_t TimePoint::GetCurrentMillis() {
+int64_t TimePoint::GetTickMs() {
 	return std::chrono::duration_cast<std::chrono::milliseconds>(steady_clock::now().time_since_epoch()).count();
 }
 
