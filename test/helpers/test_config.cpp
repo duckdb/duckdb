@@ -395,8 +395,7 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 		// read the config file
 		auto buffer = ReadFileToString(config_path);
 		// parse json
-		auto json = StringUtil::ParseJSONMap(buffer);
-		auto json_values = json->Flatten();
+		auto json_values = StringUtil::ParseJSONMap(buffer);
 
 		auto extends_it = json_values.find("extends");
 		if (extends_it != json_values.end()) {
@@ -409,6 +408,14 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 				}
 				LoadConfig(path);
 			}
+		}
+
+		// load the base config (if any) before processing the rest, so that this config's options
+		// and skip_tests are layered on top of the base instead of depending on map iteration order
+		auto base_it = json_values.find("base_config");
+		if (base_it != json_values.end()) {
+			LoadConfig(base_it->second);
+			json_values.erase(base_it);
 		}
 
 		for (auto &entry : json_values) {
