@@ -148,12 +148,7 @@ PEGTransformerFactory::TransformDropSequence(PEGTransformer &transformer, const 
 	if (qualified_sequence_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	const auto &sequence = qualified_sequence_name[0];
-	if (sequence.Schema().empty()) {
-		info->SetQualifiedName(QualifiedName(Identifier(), sequence.Catalog(), sequence.Name()));
-	} else {
-		info->SetQualifiedName(sequence);
-	}
+	info->SetQualifiedName(qualified_sequence_name[0]);
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::SEQUENCE_ENTRY;
 	result->info = std::move(info);
@@ -193,12 +188,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransforme
 	if (qualified_type_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	const auto &type = qualified_type_name[0];
-	if (type.Schema().empty()) {
-		info->SetQualifiedName(QualifiedName(Identifier(), type.Catalog(), type.Name()));
-	} else {
-		info->SetQualifiedName(type);
-	}
+	info->SetQualifiedName(qualified_type_name[0]);
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = CatalogType::TYPE_ENTRY;
 	result->info = std::move(info);

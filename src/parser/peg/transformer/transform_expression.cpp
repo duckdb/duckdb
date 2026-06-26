@@ -53,7 +53,7 @@ PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
 				select_node->from_table = make_uniq<BaseTableRef>(table_description);
 			} else if (col_expr.ColumnNames().size() == 2) {
 				auto table_description =
-				    TableDescription(QualifiedName(Identifier(), col_expr.ColumnNames()[0], col_expr.ColumnNames()[1]));
+				    TableDescription(QualifiedName({col_expr.ColumnNames()[0]}, col_expr.ColumnNames()[1]));
 				select_node->from_table = make_uniq<BaseTableRef>(table_description);
 			}
 		} else {
