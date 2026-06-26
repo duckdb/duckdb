@@ -172,45 +172,36 @@ void Binder::SearchSchema(CreateInfo &info) {
 	}
 }
 
-void Binder::BindCreateSchema(CreateSchemaInfo &info) {
-	// the qualified name carries the raw dotted path as the schema path, with the new schema as the last component.
-	// resolve the leading components into a catalog + parent-schema chain
-	auto path = info.GetQualifiedName().SchemaPath();
-	D_ASSERT(!path.empty());
-	auto new_schema = path.back();
-	vector<Identifier> prefix(path.begin(), path.end() - 1);
-
+QualifiedName Binder::ResolveCatalog(ClientContext &context, const QualifiedName &name) {
+	auto path = name.SchemaPath();
 	Identifier catalog;
-	if (!prefix.empty()) {
-		// determine whether the leading component is a catalog or a (parent) schema
-		Identifier candidate_catalog;
-		Identifier candidate_schema = prefix[0];
-		BindSchemaOrCatalog(context, candidate_catalog, candidate_schema);
-		if (!candidate_catalog.empty()) {
-			catalog = std::move(candidate_catalog);
-			prefix.erase(prefix.begin());
-		}
-	}
-	auto &search_path = ClientData::Get(context).catalog_search_path;
-	if (IsInvalidCatalog(catalog)) {
-		if (!prefix.empty()) {
-			// the leading component is a parent schema - resolve the catalog that contains it
-			catalog = Identifier(search_path->GetDefaultCatalog(prefix[0]));
-		} else {
-			catalog = search_path->GetDefault().GetCatalog();
+	if (!path.empty()) {
+		// try to interpret the leading component as a catalog (i.e. an attached database)
+		Identifier candidate;
+		Identifier first = path[0];
+		BindSchemaOrCatalog(context, candidate, first);
+		if (!candidate.empty()) {
+			catalog = std::move(candidate);
+			path.erase(path.begin());
 		}
 	}
 	if (IsInvalidCatalog(catalog)) {
-		catalog = DatabaseManager::GetDefaultDatabase(context);
+		// the leading component (if any) is a schema - resolve the catalog that holds it, else the default database
+		auto &search_path = ClientData::Get(context).catalog_search_path;
+		catalog = path.empty() ? search_path->GetDefault().GetCatalog()
+		                       : Identifier(search_path->GetDefaultCatalog(path[0]));
+		if (IsInvalidCatalog(catalog)) {
+			catalog = DatabaseManager::GetDefaultDatabase(context);
+		}
 	}
-	// canonical path: [catalog, parent schemas..., new schema]
-	vector<Identifier> canonical;
-	canonical.push_back(std::move(catalog));
-	for (auto &parent : prefix) {
-		canonical.push_back(parent);
-	}
-	canonical.push_back(std::move(new_schema));
-	info.SetQualifiedName(QualifiedName(std::move(canonical), Identifier()));
+	path.insert(path.begin(), std::move(catalog));
+	return QualifiedName(std::move(path), name.Name());
+}
+
+void Binder::BindCreateSchema(CreateSchemaInfo &info) {
+	// the qualified name carries the dotted path with the new schema as the last component; resolve its leading
+	// component into a catalog (prepending the default catalog when it is a schema)
+	info.SetQualifiedName(ResolveCatalog(context, info.GetQualifiedName()));
 
 	if (info.IsNested()) {
 		// nested schemas can only be persisted with storage version v2.0.0 or higher
