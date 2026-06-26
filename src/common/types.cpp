@@ -528,7 +528,6 @@ string LogicalType::ToString() const {
 		return EnumUtil::ToString(id_);
 	}
 }
-// LCOV_EXCL_STOP
 
 LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
 	auto type = DefaultTypeGenerator::GetDefaultType(Identifier(str));

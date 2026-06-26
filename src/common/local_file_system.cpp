@@ -299,7 +299,7 @@ static FileMetadata StatsInternal(int fd, const string &path) {
 		                  strerror(errno));
 	}
 	return StatsFromStruct(s);
-} // LCOV_EXCL_STOP
+}
 
 #if __APPLE__ && !TARGET_OS_IPHONE
 
