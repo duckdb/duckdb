@@ -10,6 +10,12 @@ static const TransformFrameOps CHECKPOINT_STATEMENT_OPS = {
 static const TransformFrameOps CHECKPOINT_FORCE_OPS = {"CheckpointForce",
                                                        &PEGTransformerFactory::InitializeCheckpointForceTrampoline,
                                                        &PEGTransformerFactory::FinalizeCheckpointForceTrampoline};
+static const TransformFrameOps DEALLOCATE_STATEMENT_OPS = {
+    "DeallocateStatement", &PEGTransformerFactory::InitializeDeallocateStatementTrampoline,
+    &PEGTransformerFactory::FinalizeDeallocateStatementTrampoline};
+static const TransformFrameOps DEALLOCATE_PREPARE_OPS = {"DeallocatePrepare",
+                                                         &PEGTransformerFactory::InitializeDeallocatePrepareTrampoline,
+                                                         &PEGTransformerFactory::FinalizeDeallocatePrepareTrampoline};
 static const TransformFrameOps TRANSACTION_STATEMENT_OPS = {
     "TransactionStatement", &PEGTransformerFactory::InitializeTransactionStatementTrampoline,
     &PEGTransformerFactory::FinalizeTransactionStatementTrampoline};
@@ -54,6 +60,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	static const case_insensitive_map_t<const TransformFrameOps *> result = {
 	    {"CheckpointStatement", &CHECKPOINT_STATEMENT_OPS},
 	    {"CheckpointForce", &CHECKPOINT_FORCE_OPS},
+	    {"DeallocateStatement", &DEALLOCATE_STATEMENT_OPS},
+	    {"DeallocatePrepare", &DEALLOCATE_PREPARE_OPS},
 	    {"TransactionStatement", &TRANSACTION_STATEMENT_OPS},
 	    {"BeginTransaction", &BEGIN_TRANSACTION_OPS},
 	    {"RollbackTransaction", &ROLLBACK_TRANSACTION_OPS},
@@ -109,6 +117,42 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCheckpointForceT
                                                                                           TransformStack &stack,
                                                                                           TransformStackFrame &frame) {
 	auto result = PEGTransformerFactory::TransformCheckpointForce(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeDeallocateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	auto &deallocate_prepare_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (deallocate_prepare_opt.HasResult()) {
+		stack.PushFrame(deallocate_prepare_opt.GetResult(), DEALLOCATE_PREPARE_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDeallocateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	optional<bool> deallocate_prepare {};
+	if (frame.child_results[0]) {
+		deallocate_prepare = frame.TakeResult<bool>(0);
+	}
+	auto identifier = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;
+	auto result = PEGTransformerFactory::TransformDeallocateStatement(transformer, deallocate_prepare, identifier);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeDeallocatePrepareTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDeallocatePrepareTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformDeallocatePrepare(transformer);
 	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
