@@ -1,0 +1,25 @@
+From 25a215ccf98b38df82962ab3833cac09dfe71a95 Mon Sep 17 00:00:00 2001
+From: duckdb <x@x>
+Date: Fri, 26 Jun 2026 19:33:25 +0200
+Subject: [PATCH] 0012-createtableinfo-qualifiedname.patch
+
+---
+ src/include/storage/postgres_table_entry.hpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/include/storage/postgres_table_entry.hpp b/src/include/storage/postgres_table_entry.hpp
+index 3d55982..60d4214 100644
+--- a/src/include/storage/postgres_table_entry.hpp
++++ b/src/include/storage/postgres_table_entry.hpp
+@@ -20,7 +20,7 @@ struct PostgresTableInfo {
+ 		create_info->columns.SetAllowDuplicates(true);
+ 	}
+ 	PostgresTableInfo(const string &schema, const string &table) {
+-		create_info = make_uniq<CreateTableInfo>(Identifier(), Identifier(schema), Identifier(table));
++		create_info = make_uniq<CreateTableInfo>(QualifiedName(Identifier(), Identifier(schema), Identifier(table)));
+ 		create_info->columns.SetAllowDuplicates(true);
+ 	}
+ 	PostgresTableInfo(const SchemaCatalogEntry &schema, const string &table) {
+-- 
+2.39.5 (Apple Git-154)
+

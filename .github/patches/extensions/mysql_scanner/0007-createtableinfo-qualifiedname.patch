@@ -1,0 +1,25 @@
+From bda2ccf48ee5a27155a2f877427be0f252ec1366 Mon Sep 17 00:00:00 2001
+From: duckdb <x@x>
+Date: Fri, 26 Jun 2026 19:33:30 +0200
+Subject: [PATCH] 0007-createtableinfo-qualifiedname.patch
+
+---
+ src/include/storage/mysql_table_entry.hpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/include/storage/mysql_table_entry.hpp b/src/include/storage/mysql_table_entry.hpp
+index 3834253..d457d61 100644
+--- a/src/include/storage/mysql_table_entry.hpp
++++ b/src/include/storage/mysql_table_entry.hpp
+@@ -19,7 +19,7 @@ struct MySQLTableInfo {
+ 		create_info = make_uniq<CreateTableInfo>();
+ 	}
+ 	MySQLTableInfo(const string &schema, const string &table) {
+-		create_info = make_uniq<CreateTableInfo>(Identifier(), Identifier(schema), Identifier(table));
++		create_info = make_uniq<CreateTableInfo>(QualifiedName(Identifier(), Identifier(schema), Identifier(table)));
+ 	}
+ 	MySQLTableInfo(const SchemaCatalogEntry &schema, const string &table) {
+ 		create_info = make_uniq<CreateTableInfo>((SchemaCatalogEntry &)schema, Identifier(table));
+-- 
+2.39.5 (Apple Git-154)
+
