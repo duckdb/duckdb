@@ -1,5 +1,7 @@
 import argparse
 import sys
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -10,11 +12,12 @@ from transformer_plan import (
     ChoiceNode,
     DirectOptionalArg,
     DirectListArg,
+    DirectMatcherArg,
     DirectParseArg,
     DirectRepeatArg,
-    DirectTerminalArg,
     ListMacroNode,
     ListStackChild,
+    MatcherOverride,
     OptionalListStackChild,
     OptionalStackChild,
     ParensNode,
@@ -27,7 +30,6 @@ from transformer_plan import (
     TrailingOptionalStackChild,
     is_syntax_only_rule_body,
     literal_string_values,
-    plan_trampoline_sequence_rule,
     plan_trampoline_sequence_rule_with_terminals,
     to_snake_case,
     tokens_to_ast,
@@ -94,20 +96,13 @@ def load_grammar_rules(gram_files):
     return rules
 
 
-def identifier_override_rules(grammar_types_file):
-    result = set()
-    for rule_name, override in load_matcher_rule_overrides(grammar_types_file).items():
-        if override.get("matcher") in ("identifier", "reserved_identifier"):
-            result.add(rule_name)
-    return result
-
-
-def terminal_override_rules(grammar_types_file):
+def load_matcher_overrides(grammar_types_file):
     result = {}
     for rule_name, override in load_matcher_rule_overrides(grammar_types_file).items():
         matcher = override.get("matcher")
-        if matcher in ("number_literal", "string_literal", "operator"):
-            result[rule_name] = matcher
+        matcher_override = MatcherOverride(rule_name, matcher)
+        if matcher_override.is_identifier() or matcher_override.is_terminal():
+            result[rule_name] = matcher_override
     return result
 
 
@@ -118,21 +113,39 @@ def typed_result_expr(cpp_type, expr, by_value):
     return f"make_uniq<TypedTransformResult<{cpp_type}>>({move_expr})"
 
 
+class RuleCapabilityStatus(Enum):
+    EXCLUDED = "excluded"
+    GENERATED = "generated"
+    MANUAL = "manual"
+    MANUAL_FINALIZE = "manual_finalize"
+    PROVIDED = "provided"
+    SYNTAX_ONLY = "syntax_only"
+    UNSUPPORTED = "unsupported"
+
+
+@dataclass
+class RuleCapability:
+    rule_name: str
+    status: RuleCapabilityStatus
+    reason: str = ""
+    ast: object = None
+
+
 class UseGramPreviewEmitter:
-    def __init__(self, rules, rule_types, identifier_rules, terminal_rules, rule_config):
+    def __init__(self, rules, rule_types, matcher_overrides, rule_config):
         self.rules = rules
         self.rule_types = rule_types
-        self.identifier_rules = identifier_rules
-        self.terminal_rules = terminal_rules
+        self.matcher_overrides = matcher_overrides
         self.rule_config = rule_config
         self.syntax_only_rules = self.collect_syntax_only_rules()
+        self.rule_capabilities = self.collect_rule_capabilities()
 
     def collect_syntax_only_rules(self):
         result = set()
         parsed_rules = {
             rule_name: tokens_to_ast(rule.tokens)
             for rule_name, rule in self.rules.items()
-            if rule_name not in self.terminal_rules
+            if rule_name not in self.matcher_overrides
             and not rule_name.startswith("%")
             and rule_name not in INTERNAL_GRAMMAR_RULES
         }
@@ -142,12 +155,15 @@ class UseGramPreviewEmitter:
             for rule_name, ast in parsed_rules.items():
                 if rule_name in result:
                     continue
-                if rule_name in self.terminal_rules:
+                if rule_name in self.matcher_overrides:
                     continue
                 if rule_name not in self.rule_types and is_syntax_only_rule_body(ast, result):
                     result.add(rule_name)
                     changed = True
         return result
+
+    def collect_rule_capabilities(self):
+        return {rule_name: self.classify_rule(rule_name, rule) for rule_name, rule in self.rules.items()}
 
     def cpp_type(self, rule_name):
         return self.rule_types[rule_name].cpp_type
@@ -173,13 +189,13 @@ class UseGramPreviewEmitter:
     def emitted_rules(self):
         return [
             rule_name
-            for rule_name in self.rules
-            if not self.is_excluded_rule(rule_name)
-            and not rule_name.startswith("%")
-            and rule_name not in INTERNAL_GRAMMAR_RULES
-            and rule_name not in self.identifier_rules
-            and rule_name not in self.terminal_rules
-            and not (rule_name in self.syntax_only_rules and rule_name not in self.rule_types)
+            for rule_name, capability in self.rule_capabilities.items()
+            if capability.status
+            in (
+                RuleCapabilityStatus.GENERATED,
+                RuleCapabilityStatus.MANUAL,
+                RuleCapabilityStatus.MANUAL_FINALIZE,
+            )
         ]
 
     def initialize_hook(self, rule_name):
@@ -207,46 +223,61 @@ class UseGramPreviewEmitter:
             )
         return "".join(lines)
 
-    def rule_status(self, rule_name, rule):
+    def classify_rule(self, rule_name, rule):
         if self.is_excluded_rule(rule_name):
-            return "excluded", ""
+            return RuleCapability(rule_name, RuleCapabilityStatus.EXCLUDED)
         if rule_name.startswith("%"):
-            return "provided", "internal matcher rule"
+            return RuleCapability(rule_name, RuleCapabilityStatus.PROVIDED, "internal matcher rule")
         if rule_name in INTERNAL_GRAMMAR_RULES:
-            return "provided", "internal matcher rule"
-        if rule_name in self.identifier_rules:
-            return "provided", "provided by matcher_rule_overrides"
-        if rule_name in self.terminal_rules:
-            return "provided", "provided by matcher_rule_overrides"
+            return RuleCapability(rule_name, RuleCapabilityStatus.PROVIDED, "internal matcher rule")
+        if rule_name in self.matcher_overrides:
+            return RuleCapability(rule_name, RuleCapabilityStatus.PROVIDED, "provided by matcher_rule_overrides")
         if self.is_manual_rule(rule_name):
-            return "manual", ""
+            return RuleCapability(rule_name, RuleCapabilityStatus.MANUAL)
         try:
             ast = tokens_to_ast(rule.tokens)
         except Exception as e:
-            return "unsupported", f"AST parse error: {e}"
+            return RuleCapability(rule_name, RuleCapabilityStatus.UNSUPPORTED, f"AST parse error: {e}")
         if is_syntax_only_rule_body(ast, self.syntax_only_rules) and rule_name not in self.rule_types:
-            return "syntax_only", ""
+            return RuleCapability(rule_name, RuleCapabilityStatus.SYNTAX_ONLY, ast=ast)
         if literal_string_values(ast) is None and rule_name not in self.rule_types:
-            return "unsupported", "no return type in grammar_types.yml"
+            return RuleCapability(
+                rule_name, RuleCapabilityStatus.UNSUPPORTED, "no return type in grammar_types.yml", ast
+            )
         if self.is_manual_finalize_rule(rule_name):
             try:
                 self.emit_initialize_rule(rule_name, ast)
             except NotImplementedError as e:
-                return "unsupported", f"manual_finalize initialize: {e}"
-            return "manual_finalize", ""
+                return RuleCapability(
+                    rule_name,
+                    RuleCapabilityStatus.UNSUPPORTED,
+                    f"manual_finalize initialize: {e}",
+                    ast,
+                )
+            return RuleCapability(rule_name, RuleCapabilityStatus.MANUAL_FINALIZE, ast=ast)
         try:
             self.emit_rule(rule_name, ast)
         except KeyError as e:
-            return "unsupported", f"child rule '{e.args[0]}' is missing from grammar_types.yml"
+            return RuleCapability(
+                rule_name,
+                RuleCapabilityStatus.UNSUPPORTED,
+                f"child rule '{e.args[0]}' is missing from grammar_types.yml",
+                ast,
+            )
         except NotImplementedError as e:
-            return "unsupported", str(e)
-        return "generated", ""
+            return RuleCapability(rule_name, RuleCapabilityStatus.UNSUPPORTED, str(e), ast)
+        return RuleCapability(rule_name, RuleCapabilityStatus.GENERATED, ast=ast)
+
+    def rule_status(self, rule_name, rule):
+        capability = self.rule_capabilities[rule_name]
+        return capability.status.value, capability.reason
 
     def emit_report(self):
         rows = []
         counts = {}
-        for rule_name, rule in self.rules.items():
-            status, reason = self.rule_status(rule_name, rule)
+        for rule_name, capability in self.rule_capabilities.items():
+            status = capability.status.value
+            reason = capability.reason
             counts[status] = counts.get(status, 0) + 1
             rows.append((rule_name, status, reason))
 
@@ -274,9 +305,8 @@ class UseGramPreviewEmitter:
         lines.extend(self.emit_ops_lookup())
         lines.append("")
         for rule_name, rule in self.rules.items():
-            if self.is_excluded_rule(rule_name) or self.is_manual_rule(rule_name):
-                continue
-            if rule_name in self.syntax_only_rules and rule_name not in self.rule_types:
+            capability = self.rule_capabilities[rule_name]
+            if capability.status not in (RuleCapabilityStatus.GENERATED, RuleCapabilityStatus.MANUAL_FINALIZE):
                 continue
             lines.extend(self.emit_rule(rule_name, tokens_to_ast(rule.tokens)))
             lines.append("")
@@ -415,9 +445,7 @@ class UseGramPreviewEmitter:
         lines = self.emit_sequence_initialize(rule_name, ast)
         if self.is_manual_finalize_rule(rule_name):
             return lines
-        plan = plan_trampoline_sequence_rule_with_terminals(
-            ast, self.identifier_rules, self.terminal_rules, self.syntax_only_rules
-        )
+        plan = plan_trampoline_sequence_rule_with_terminals(ast, self.matcher_overrides, self.syntax_only_rules)
         cpp_type = self.cpp_type(rule_name)
         by_value = self.by_value(rule_name)
 
@@ -431,7 +459,7 @@ class UseGramPreviewEmitter:
                 arg,
                 (
                     DirectParseArg,
-                    DirectTerminalArg,
+                    DirectMatcherArg,
                     DirectOptionalArg,
                     DirectOptionalPresenceArg,
                     DirectRepeatArg,
@@ -449,8 +477,8 @@ class UseGramPreviewEmitter:
             if isinstance(arg, DirectParseArg):
                 lines.append(f"\tauto {arg.var_name} = {arg.parse_expr};")
                 arg_names.append(arg.var_name)
-            elif isinstance(arg, DirectTerminalArg):
-                lines.append(f"\tauto {arg.var_name} = {self.terminal_transform_expr(arg.rule_name, arg.parse_expr)};")
+            elif isinstance(arg, DirectMatcherArg):
+                lines.append(f"\tauto {arg.var_name} = {self.matcher_transform_expr(arg.rule_name, arg.parse_expr)};")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, arg.var_name))
             elif isinstance(arg, DirectOptionalArg):
                 lines.append(f"\toptional<Identifier> {arg.var_name} {{}};")
@@ -603,9 +631,7 @@ class UseGramPreviewEmitter:
         return lines
 
     def emit_sequence_initialize(self, rule_name, ast):
-        plan = plan_trampoline_sequence_rule_with_terminals(
-            ast, self.identifier_rules, self.terminal_rules, self.syntax_only_rules
-        )
+        plan = plan_trampoline_sequence_rule_with_terminals(ast, self.matcher_overrides, self.syntax_only_rules)
         lines = []
         lines.append(
             f"void PEGTransformerFactory::{init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
@@ -726,15 +752,15 @@ class UseGramPreviewEmitter:
         lines.append("}")
         return lines
 
-    def terminal_transform_expr(self, rule_name, parse_expr):
-        matcher = self.terminal_rules[rule_name]
+    def matcher_transform_expr(self, rule_name, parse_expr):
+        matcher = self.matcher_overrides[rule_name].matcher
         if matcher == "string_literal":
             return f"PEGTransformerFactory::TransformStringLiteral(transformer, {parse_expr})"
         if matcher == "number_literal":
             return f"PEGTransformerFactory::TransformNumberLiteral(transformer, {parse_expr})"
         if matcher == "operator":
             return f"{parse_expr}.Cast<OperatorParseResult>().operator_token"
-        raise NotImplementedError(f"unsupported terminal matcher override: {matcher}")
+        raise NotImplementedError(f"unsupported matcher override: {matcher}")
 
 
 def main():
@@ -757,10 +783,9 @@ def main():
     rule_config = load_transformer_trampoline_config(config_file, all_rules.keys())
     grammar_types_file = type_dir / "grammar_types.yml"
     rule_types, _ = load_grammar_types(grammar_types_file)
-    identifier_rules = identifier_override_rules(grammar_types_file)
-    terminal_rules = terminal_override_rules(grammar_types_file)
+    matcher_overrides = load_matcher_overrides(grammar_types_file)
 
-    emitter = UseGramPreviewEmitter(rules, rule_types, identifier_rules, terminal_rules, rule_config)
+    emitter = UseGramPreviewEmitter(rules, rule_types, matcher_overrides, rule_config)
     if args.write:
         if grammar_files != DEFAULT_GRAMMAR_FILES:
             raise NotImplementedError("--write is currently restricted to the default grammar file set")

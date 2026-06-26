@@ -222,13 +222,25 @@ def classify_choice_alternatives(alternatives, rule_types, excluded_rules, ident
 
 
 @dataclass
+class MatcherOverride:
+    rule_name: str
+    matcher: str
+
+    def is_identifier(self):
+        return self.matcher in ("identifier", "reserved_identifier")
+
+    def is_terminal(self):
+        return self.matcher in ("number_literal", "string_literal", "operator")
+
+
+@dataclass
 class DirectParseArg:
     var_name: str
     parse_expr: str
 
 
 @dataclass
-class DirectTerminalArg:
+class DirectMatcherArg:
     parse_expr: str
     rule_name: str
     var_name: str
@@ -402,11 +414,21 @@ def is_syntax_only_child(node, syntax_only_rules):
     return False
 
 
-def plan_trampoline_sequence_rule(ast, identifier_rules, syntax_only_rules=None):
-    return plan_trampoline_sequence_rule_with_terminals(ast, identifier_rules, {}, syntax_only_rules)
+def _is_identifier_override(rule_name, matcher_overrides):
+    override = matcher_overrides.get(rule_name)
+    return override is not None and override.is_identifier()
 
 
-def plan_trampoline_sequence_rule_with_terminals(ast, identifier_rules, terminal_rules, syntax_only_rules=None):
+def _is_terminal_override(rule_name, matcher_overrides):
+    override = matcher_overrides.get(rule_name)
+    return override is not None and override.is_terminal()
+
+
+def plan_trampoline_sequence_rule(ast, matcher_overrides, syntax_only_rules=None):
+    return plan_trampoline_sequence_rule_with_terminals(ast, matcher_overrides, syntax_only_rules)
+
+
+def plan_trampoline_sequence_rule_with_terminals(ast, matcher_overrides, syntax_only_rules=None):
     syntax_only_rules = syntax_only_rules or set()
     direct_args = []
     direct_optional_args = []
@@ -434,14 +456,14 @@ def plan_trampoline_sequence_rule_with_terminals(ast, identifier_rules, terminal
             finalize_args.append(arg)
             continue
         if isinstance(child, ReferenceNode):
-            if child.name in identifier_rules:
+            if _is_identifier_override(child.name, matcher_overrides):
                 arg = DirectParseArg(
                     to_snake_case(child.name),
                     f"{parse_expr}.Cast<IdentifierParseResult>().identifier",
                 )
                 direct_args.append(arg)
-            elif child.name in terminal_rules:
-                arg = DirectTerminalArg(parse_expr, child.name, to_snake_case(child.name))
+            elif _is_terminal_override(child.name, matcher_overrides):
+                arg = DirectMatcherArg(parse_expr, child.name, to_snake_case(child.name))
                 direct_args.append(arg)
             else:
                 if (
@@ -457,10 +479,10 @@ def plan_trampoline_sequence_rule_with_terminals(ast, identifier_rules, terminal
             finalize_args.append(arg)
             continue
         if isinstance(child, OptionalNode) and isinstance(child.child, ReferenceNode):
-            if child.child.name in identifier_rules:
+            if _is_identifier_override(child.child.name, matcher_overrides):
                 arg = DirectOptionalArg(parse_expr, child.child.name, to_snake_case(child.child.name))
                 direct_optional_args.append(arg)
-            elif child.child.name in terminal_rules:
+            elif _is_terminal_override(child.child.name, matcher_overrides):
                 raise NotImplementedError("optional terminal override child is currently unsupported")
             else:
                 if (
@@ -484,9 +506,9 @@ def plan_trampoline_sequence_rule_with_terminals(ast, identifier_rules, terminal
             optional_stack_plan = _single_semantic_child_plan(child.child, "{opt}.GetResult()", syntax_only_rules)
         if optional_stack_plan is not None:
             rule_name, result_expr_template = optional_stack_plan
-            if rule_name in identifier_rules:
+            if _is_identifier_override(rule_name, matcher_overrides):
                 raise NotImplementedError("wrapped optional identifier child is currently unsupported")
-            if rule_name in terminal_rules:
+            if _is_terminal_override(rule_name, matcher_overrides):
                 raise NotImplementedError("wrapped optional terminal override child is currently unsupported")
             if (
                 list_child is not None
@@ -508,14 +530,14 @@ def plan_trampoline_sequence_rule_with_terminals(ast, identifier_rules, terminal
         transparent_child_plan = _single_semantic_child_plan(child, parse_expr, syntax_only_rules)
         if transparent_child_plan is not None and not isinstance(child, ReferenceNode):
             rule_name, child_parse_expr = transparent_child_plan
-            if rule_name in identifier_rules:
+            if _is_identifier_override(rule_name, matcher_overrides):
                 arg = DirectParseArg(
                     to_snake_case(rule_name),
                     f"{child_parse_expr}.Cast<IdentifierParseResult>().identifier",
                 )
                 direct_args.append(arg)
-            elif rule_name in terminal_rules:
-                arg = DirectTerminalArg(child_parse_expr, rule_name, to_snake_case(rule_name))
+            elif _is_terminal_override(rule_name, matcher_overrides):
+                arg = DirectMatcherArg(child_parse_expr, rule_name, to_snake_case(rule_name))
                 direct_args.append(arg)
             else:
                 if (
@@ -533,12 +555,12 @@ def plan_trampoline_sequence_rule_with_terminals(ast, identifier_rules, terminal
         if isinstance(child, OptionalNode) and isinstance(child.child, RepeatNode):
             repeat_node = child.child.child
             if isinstance(repeat_node, ReferenceNode):
-                if repeat_node.name in identifier_rules:
+                if _is_identifier_override(repeat_node.name, matcher_overrides):
                     arg = DirectRepeatArg(parse_expr, repeat_node.name, to_snake_case(repeat_node.name))
                     direct_repeat_args.append(arg)
                     finalize_args.append(arg)
                     continue
-                if repeat_node.name in terminal_rules:
+                if _is_terminal_override(repeat_node.name, matcher_overrides):
                     raise NotImplementedError("terminal override repeat is currently unsupported")
                 if repeat_child is not None:
                     raise NotImplementedError("only one repeat child is currently supported")
@@ -548,9 +570,9 @@ def plan_trampoline_sequence_rule_with_terminals(ast, identifier_rules, terminal
         if isinstance(child, OptionalNode) and isinstance(child.child, ListMacroNode):
             list_node = child.child.inner
             if isinstance(list_node, ReferenceNode):
-                if list_node.name in identifier_rules:
+                if _is_identifier_override(list_node.name, matcher_overrides):
                     raise NotImplementedError("optional identifier list is currently unsupported")
-                if list_node.name in terminal_rules:
+                if _is_terminal_override(list_node.name, matcher_overrides):
                     raise NotImplementedError("optional terminal override list is currently unsupported")
                 if (
                     list_child is not None
@@ -565,9 +587,9 @@ def plan_trampoline_sequence_rule_with_terminals(ast, identifier_rules, terminal
                 finalize_args.append(optional_list_child)
                 continue
         if isinstance(child, RepeatNode) and isinstance(child.child, ReferenceNode):
-            if child.child.name in identifier_rules:
+            if _is_identifier_override(child.child.name, matcher_overrides):
                 raise NotImplementedError("required identifier repeat is currently unsupported")
-            if child.child.name in terminal_rules:
+            if _is_terminal_override(child.child.name, matcher_overrides):
                 raise NotImplementedError("required terminal override repeat is currently unsupported")
             if (
                 list_child is not None
@@ -580,12 +602,12 @@ def plan_trampoline_sequence_rule_with_terminals(ast, identifier_rules, terminal
             finalize_args.append(required_repeat_child)
             continue
         if isinstance(child, ListMacroNode) and isinstance(child.inner, ReferenceNode):
-            if child.inner.name in identifier_rules:
+            if _is_identifier_override(child.inner.name, matcher_overrides):
                 arg = DirectListArg(parse_expr, child.inner.name, to_snake_case(child.inner.name))
                 direct_list_args.append(arg)
                 finalize_args.append(arg)
                 continue
-            if child.inner.name in terminal_rules:
+            if _is_terminal_override(child.inner.name, matcher_overrides):
                 raise NotImplementedError("terminal override list is currently unsupported")
             if (
                 list_child is not None
