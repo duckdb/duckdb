@@ -1279,8 +1279,8 @@ bool JoinFilterPushdownInfo::CanUseInFilter(const ClientContext &context, option
 	return ht && ht->Count() > 1 && ht->Count() <= dynamic_or_filter_threshold && cmp == ExpressionType::COMPARE_EQUAL;
 }
 
-bool JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
-                                          const PhysicalOperator &op, idx_t filter_idx,
+bool JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, const JoinFilterPushdownColumn &column,
+                                          JoinHashTable &ht, const PhysicalOperator &op, idx_t filter_idx,
                                           ProjectionIndex filter_col_idx) const {
 	// generate a "OR" filter (i.e. x=1 OR x=535 OR x=997)
 	// first scan the entire vector at the probe side
@@ -1297,8 +1297,7 @@ bool JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	for (idx_t k = 0; k < key_count; k++) {
 		// Cast to storage type, only insert if it succeeds
 		auto value = build_vector.GetValue(k);
-		if (info.columns[filter_idx].storage_type.IsValid() &&
-		    !value.DefaultTryCastAs(info.columns[filter_idx].storage_type)) {
+		if (column.storage_type.IsValid() && !value.DefaultTryCastAs(column.storage_type)) {
 			return false; // it's all or nothing sadly
 		}
 		unique_ht_values.insert(value);
@@ -1315,9 +1314,8 @@ bool JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	// we push the OR filter as an OptionalFilter so that we can use it for zonemap pruning only
 	// the IN-list is expensive to execute otherwise
 	auto in_expr = ExpressionFilter::CreateInExpression(
-	    make_uniq<BoundReferenceExpression>(info.columns[filter_idx].storage_type, idx_t(0)), std::move(in_list));
-	auto filter = make_uniq<ExpressionFilter>(
-	    CreateOptionalFilterExpression(std::move(in_expr), info.columns[filter_idx].storage_type));
+	    make_uniq<BoundReferenceExpression>(column.storage_type, idx_t(0)), std::move(in_list));
+	auto filter = make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(in_expr), column.storage_type));
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 	return true;
 }
@@ -1408,36 +1406,37 @@ static unique_ptr<Expression> CreateRuntimeFilterInputExpression(ClientContext &
 }
 
 void JoinFilterPushdownInfo::PushBloomFilter(ClientContext &context, const PhysicalOperator &op, JoinHashTable &ht,
-                                             const JoinFilterPushdownFilter &info, idx_t filter_idx,
+                                             const JoinFilterPushdownFilter &info,
+                                             const JoinFilterPushdownColumn &column,
                                              ProjectionIndex filter_col_idx) const {
 	// If the nulls are equal, we let nulls pass. If not, we filter them
 	auto filters_null_values = !ht.NullValuesAreEqual(0);
 	const auto key_name = ht.conditions[0].GetRHS().ToString();
 	const auto key_type = ht.conditions[0].GetLHS().GetReturnType();
-	auto filter_input_type = GetRuntimeFilterInputType(info.columns[filter_idx], key_type);
+	auto filter_input_type = GetRuntimeFilterInputType(column, key_type);
 	ht.SetBuildBloomFilter(true);
 	float selectivity_threshold;
 	idx_t n_vectors_to_check;
 	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::BF, selectivity_threshold, n_vectors_to_check);
 	vector<unique_ptr<Expression>> children;
-	children.push_back(CreateRuntimeFilterInputExpression(context, info.columns[filter_idx], key_type));
+	children.push_back(CreateRuntimeFilterInputExpression(context, column, key_type));
 	auto filter_expr = make_uniq<BoundFunctionExpression>(
 	    BoundScalarFunction(BloomFilterScalarFun::GetFunction(filter_input_type)), std::move(children),
 	    make_uniq<BloomFilterFunctionData>(ht.GetBloomFilter(), filters_null_values, key_name, key_type,
 	                                       selectivity_threshold, n_vectors_to_check));
 	info.dynamic_filters->PushFilter(op, filter_col_idx,
 	                                 CreateSelectivityOptionalExpressionFilter(std::move(filter_expr),
-	                                                                           info.columns[filter_idx].storage_type,
+	                                                                           column.storage_type,
 	                                                                           SelectivityOptionalFilterType::BF));
 }
 
 bool JoinFilterPushdownInfo::TryRegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context,
                                                           JoinHashTable &ht, const PhysicalOperator &op,
-                                                          idx_t filter_idx, ProjectionIndex filter_col_idx,
-                                                          const Value &min_val, const Value &max_val,
-                                                          idx_t max_bits) const {
+                                                          const JoinFilterPushdownColumn &column,
+                                                          ProjectionIndex filter_col_idx, const Value &min_val,
+                                                          const Value &max_val, idx_t max_bits) const {
 	const auto key_type = ht.conditions[0].GetLHS().GetReturnType();
-	auto filter_input_type = GetRuntimeFilterInputType(info.columns[filter_idx], key_type);
+	auto filter_input_type = GetRuntimeFilterInputType(column, key_type);
 	if (!ht.GetPrefixRangeFilter()) {
 		auto prefix_filter = PrefixRangeFilter::CreatePrefixRangeFilter(key_type);
 		prefix_filter->Initialize(context, ht.Count(), min_val, max_val, max_bits);
@@ -1450,14 +1449,14 @@ bool JoinFilterPushdownInfo::TryRegisterPrefixRangeFilter(const JoinFilterPushdo
 	idx_t n_vectors_to_check;
 	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::PRF, selectivity_threshold, n_vectors_to_check);
 	vector<unique_ptr<Expression>> children;
-	children.push_back(CreateRuntimeFilterInputExpression(context, info.columns[filter_idx], key_type));
+	children.push_back(CreateRuntimeFilterInputExpression(context, column, key_type));
 	auto filter_expr = make_uniq<BoundFunctionExpression>(
 	    BoundScalarFunction(PrefixRangeScalarFun::GetFunction(filter_input_type)), std::move(children),
 	    make_uniq<PrefixRangeFunctionData>(ht.GetPrefixRangeFilter(), key_name, key_type, selectivity_threshold,
 	                                       n_vectors_to_check));
 	info.dynamic_filters->PushFilter(op, filter_col_idx,
 	                                 CreateSelectivityOptionalExpressionFilter(std::move(filter_expr),
-	                                                                           info.columns[filter_idx].storage_type,
+	                                                                           column.storage_type,
 	                                                                           SelectivityOptionalFilterType::PRF));
 	return true;
 }
@@ -1576,11 +1575,13 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 		return final_min_max; // There are no table sources in which we can push down filters
 	}
 
-	// create a filter for each of the aggregates
-	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
-		const auto cmp = op.conditions[join_condition[filter_idx]].GetComparisonType();
-		for (auto &info : probe_info) {
-			const auto &pushdown_column = info.columns[filter_idx];
+	// create a filter for each column that reached a table scan
+	for (auto &info : probe_info) {
+		for (auto &pushdown_column : info.columns) {
+			auto filter_idx = pushdown_column.join_filter_idx;
+			D_ASSERT(filter_idx != DConstants::INVALID_INDEX);
+			D_ASSERT(filter_idx < join_condition.size());
+			const auto cmp = op.conditions[join_condition[filter_idx]].GetComparisonType();
 			auto &filter_col_idx = pushdown_column.probe_column_index.column_index;
 			auto min_idx = filter_idx * 2;
 			auto max_idx = min_idx + 1;
@@ -1645,12 +1646,12 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 
 				bool pushed_in_filter = false;
 				if (CanUseInFilter(context, ht, cmp)) {
-					pushed_in_filter = PushInFilter(info, *ht, op, filter_idx, filter_col_idx);
+					pushed_in_filter = PushInFilter(info, pushdown_column, *ht, op, filter_idx, filter_col_idx);
 				}
 
 				static constexpr idx_t SMALL_EXACT_PRF_BITS = 1ULL << 26;
 				if (can_emit_prf && span < SMALL_EXACT_PRF_BITS &&
-				    TryRegisterPrefixRangeFilter(info, context, *ht, op, filter_idx, filter_col_idx,
+				    TryRegisterPrefixRangeFilter(info, context, *ht, op, pushdown_column, filter_col_idx,
 				                                 min_val_before_cast, max_val_before_cast, SMALL_EXACT_PRF_BITS)) {
 					continue;
 				}
@@ -1662,7 +1663,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					}
 					const auto bloom_filter_bits = BloomFilterBitBudget(build_count);
 					if (span <= bloom_filter_bits &&
-					    TryRegisterPrefixRangeFilter(info, context, *ht, op, filter_idx, filter_col_idx,
+					    TryRegisterPrefixRangeFilter(info, context, *ht, op, pushdown_column, filter_col_idx,
 					                                 min_val_before_cast, max_val_before_cast, bloom_filter_bits)) {
 						continue;
 					}
@@ -1673,7 +1674,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 					                           max_val, condition_type, reconstruct_filter_expression, false);
 				}
 				if (allow_bloom_filters && can_emit_runtime_filters && ht && CanUseBloomFilter(context, op, cmp, ht)) {
-					PushBloomFilter(context, op, *ht, info, filter_idx, filter_col_idx);
+					PushBloomFilter(context, op, *ht, info, pushdown_column, filter_col_idx);
 				}
 			}
 		}
