@@ -81,8 +81,8 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 		// create the "finalize" expression
 		vector<unique_ptr<Expression>> finalize_children;
 		finalize_children.push_back(std::move(aggr_state_ref));
-		auto &finalize_function =
-		    system_catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "finalize");
+		auto &finalize_function = system_catalog.GetEntry<ScalarFunctionCatalogEntry>(
+		    context, QualifiedName(system_catalog.GetName(), DEFAULT_SCHEMA, "finalize"));
 		auto result =
 		    function_binder.BindScalarFunction(finalize_function, std::move(finalize_children), error, false, *this);
 		if (!result) {
@@ -90,7 +90,8 @@ bool Binder::DebugAggregateStateExportVerify(BoundSelectNode &statement, unique_
 		}
 
 		// create the "first" expression
-		auto &first_function = system_catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "first");
+		auto &first_function = system_catalog.GetEntry<AggregateFunctionCatalogEntry>(
+		    context, QualifiedName(system_catalog.GetName(), DEFAULT_SCHEMA, "first"));
 		auto finalize_ref = make_uniq<BoundColumnRefExpression>(
 		    result->GetReturnType(),
 		    ColumnBinding(intermediate_proj_index, ProjectionIndex(finalize_expressions.size())));

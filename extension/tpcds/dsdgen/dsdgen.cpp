@@ -22,9 +22,7 @@ template <class T>
 static void CreateTPCDSTable(ClientContext &context, const Identifier &catalog_name, const Identifier &schema,
                              string suffix, bool keys, bool overwrite) {
 	auto info = make_uniq<CreateTableInfo>();
-	info->CatalogMutable() = catalog_name;
-	info->SchemaMutable() = schema;
-	info->SetTableName(Identifier(T::Name + suffix));
+	info->SetQualifiedName(QualifiedName(catalog_name, schema, Identifier(T::Name + suffix)));
 	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
@@ -98,7 +96,8 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, const Identifie
 		auto table_def = GetTDefByNumber(table_id);
 		auto table_name = table_def.name + suffix;
 		assert(table_def.name);
-		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, Identifier(table_name));
+		auto &table_entry =
+		    catalog.GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(), schema, Identifier(table_name)));
 
 		if (!table_entry.IsDuckTable()) {
 			throw InvalidInputException("dsdgen is only supported for DuckDB database files");

@@ -808,8 +808,9 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
 
 	auto &table = catalog
-	                  .GetEntry<TableCatalogEntry>(context, table_info.GetQualifiedName().Schema(),
-	                                               table_info.GetQualifiedName().Name())
+	                  .GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(),
+	                                                                      table_info.GetQualifiedName().Schema(),
+	                                                                      table_info.GetQualifiedName().Name()))
 	                  .Cast<DuckTableEntry>();
 	auto &column_list = table.GetColumns();
 
@@ -1006,7 +1007,8 @@ void WriteAheadLogDeserializer::ReplaySequenceValue() {
 	}
 
 	// fetch the sequence from the catalog
-	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(context, Identifier(schema), Identifier(name));
+	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(
+	    context, QualifiedName(catalog.GetName(), Identifier(schema), Identifier(name)));
 	seq.ReplayValue(usage_count, counter, last_value);
 }
 
@@ -1080,7 +1082,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	const auto schema_name = create_info->GetQualifiedName().Schema();
 	const auto table_name = info.table;
 
-	auto &entry = catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
+	auto &entry =
+	    catalog.GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(), schema_name, table_name));
 	auto &table = entry.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
 	auto &io_manager = TableIOManager::Get(storage);
@@ -1126,7 +1129,8 @@ void WriteAheadLogDeserializer::ReplayUseTable() {
 	if (DeserializeOnly()) {
 		return;
 	}
-	state.current_table = &catalog.GetEntry<DuckTableEntry>(context, schema_name, table_name);
+	state.current_table =
+	    &catalog.GetEntry<DuckTableEntry>(context, QualifiedName(catalog.GetName(), schema_name, table_name));
 }
 
 void WriteAheadLogDeserializer::ReplayInsert() {

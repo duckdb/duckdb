@@ -108,12 +108,6 @@ public:
 	void SetQualifiedName(QualifiedName name) {
 		qualified_name = std::move(name);
 	}
-	Identifier &CatalogMutable() {
-		return qualified_name.CatalogMutable();
-	}
-	Identifier &SchemaMutable() {
-		return qualified_name.SchemaMutable();
-	}
 	const Identifier &FunctionName() const {
 		return qualified_name.Name();
 	}

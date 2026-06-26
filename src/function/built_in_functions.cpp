@@ -122,8 +122,8 @@ static unique_ptr<Expression> BindExtensionFunction(FunctionBindExpressionInput 
 
 	// now find the function in the catalog
 	auto &catalog = Catalog::GetSystemCatalog(db);
-	auto &function_entry =
-	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), bound_function.GetName());
+	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
+	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), bound_function.GetName()));
 
 	// override the function with the extension function
 	const auto &func = function_entry.functions.GetFunctionByArguments(context, bound_function.GetArguments());
