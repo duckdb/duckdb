@@ -309,9 +309,8 @@ void WriteAheadLog::WriteDropTable(const TableCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateSchema(const SchemaCatalogEntry &entry) {
 	WriteAheadLogSerializer serializer(*this, WALType::CREATE_SCHEMA);
-	serializer.WriteProperty(101, "schema", entry.name);
-	// for storage v2.0.0 and higher, also persist the parent schema chain (for nested schemas)
 	if (StorageManager::TargetAtLeastVersion(StorageVersion::V2_0_0, storage_manager.GetStorageVersion())) {
+		// serialize the schema as a QualifiedName: parent schemas form the path, the schema name is the name
 		vector<Identifier> parent_schemas;
 		auto parent = entry.GetParentSchema();
 		while (parent) {
@@ -319,7 +318,10 @@ void WriteAheadLog::WriteCreateSchema(const SchemaCatalogEntry &entry) {
 			parent = parent->GetParentSchema();
 		}
 		std::reverse(parent_schemas.begin(), parent_schemas.end());
-		serializer.WriteProperty(102, "parent_schemas", parent_schemas);
+		serializer.WriteProperty(102, "qualified_name", QualifiedName(std::move(parent_schemas), entry.name));
+	} else {
+		// older storage versions only support top-level schemas - serialize just the schema name
+		serializer.WriteProperty(101, "schema", entry.name);
 	}
 	serializer.End();
 }

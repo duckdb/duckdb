@@ -327,6 +327,7 @@ supported_member_entries = [
     'default',
     'deserialize_default',
     'deserialize_skip_assign',
+    'serialize_until',
     'status',
     'version',
     'required_until',
@@ -401,6 +402,9 @@ class MemberVariable:
         # When set, the property is still read into a local during deserialization, but the generated code does not
         # auto-assign it to the result. Use together with finalize_deserialization to apply the value conditionally.
         self.deserialize_skip_assign = entry.get('deserialize_skip_assign', False)
+        # When set, the property is only serialized for storage versions older than this version (newer versions use
+        # a replacement property). Deserialization is unaffected - the property is still read (with a default).
+        self.serialize_until = entry.get('serialize_until', None)
         if 'default' in entry:
             self.has_default = True
             self.default = entry['default']
@@ -602,6 +606,14 @@ class SerializableClass:
             property_default=default_argument,
             assignment=assignment,
         )
+
+        if entry.serialize_until is not None:
+            # Only serialize for storage versions older than serialize_until (newer versions use a replacement
+            # property). Deserialization is unaffected.
+            serialize_until_enum = version_string_to_storage_version_enum(entry.serialize_until)
+            return (
+                f'\tif (!serializer.ShouldSerialize({serialize_until_enum})) {{\n' f'\t{serialization_code}' f'\t}}\n'
+            )
 
         if entry.required_until is not None:
             # Write as a required property for versions older than required_until (so older releases can read it),

@@ -62,13 +62,14 @@ CREATE SCHEMA s1.child;
 ----
 <REGEX>:.*already exists.*
 
-# creating a nested schema whose parent does not exist fails
+# a nested schema whose root component is neither a catalog nor a schema
 statement error
 CREATE SCHEMA does_not_exist.child;
 ----
-<REGEX>:.*(does not exist|not found).*
+<REGEX>:.*"does_not_exist" is not a catalog or schema.*
 
+# a deeper parent schema that does not exist (s1 exists, missing does not)
 statement error
 CREATE SCHEMA s1.missing.grandchild;
 ----
-<REGEX>:.*(does not exist|not found).*
+<REGEX>:.*parent schema "missing" does not exist.*

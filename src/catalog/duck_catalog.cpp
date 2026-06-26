@@ -78,13 +78,17 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction 
 	}
 	// nested schema: navigate to the deepest parent schema, then create the schema inside it
 	optional_ptr<CatalogEntry> parent_entry = schemas->GetEntry(transaction, parents[0]);
-	for (idx_t i = 1; parent_entry && i < parents.size(); i++) {
+	if (!parent_entry) {
+		// the root component was not a catalog (otherwise it would have been resolved as one) nor an existing schema
+		throw CatalogException("\"%s\" is not a catalog or schema", parents[0].GetIdentifierName());
+	}
+	for (idx_t i = 1; i < parents.size(); i++) {
 		auto &duck_parent = parent_entry->Cast<DuckSchemaEntry>();
 		parent_entry = duck_parent.GetCatalogSet(CatalogType::SCHEMA_ENTRY).GetEntry(transaction, parents[i]);
-	}
-	if (!parent_entry) {
-		throw CatalogException("Cannot create nested schema \"%s\": a parent schema does not exist",
-		                       info.SchemaName().GetIdentifierName());
+		if (!parent_entry) {
+			throw CatalogException("Cannot create nested schema \"%s\": parent schema \"%s\" does not exist",
+			                       info.SchemaName().GetIdentifierName(), parents[i].GetIdentifierName());
+		}
 	}
 	return parent_entry->Cast<DuckSchemaEntry>().CreateSchema(transaction, info);
 }

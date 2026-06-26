@@ -24,14 +24,16 @@
         "name": "catalog",
         "serialize_property": "qualified_name.Catalog()",
         "deserialize_property": "qualified_name.CatalogMutable()",
-        "type": "Identifier"
+        "type": "Identifier",
+        "serialize_until": "v2.0.0"
       },
       {
         "id": 102,
         "name": "schema",
         "serialize_property": "qualified_name.Schema()",
         "deserialize_property": "qualified_name.SchemaMutable()",
-        "type": "Identifier"
+        "type": "Identifier",
+        "serialize_until": "v2.0.0"
       },
       {
         "id": 103,
