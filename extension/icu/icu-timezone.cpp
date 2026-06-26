@@ -163,7 +163,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		CalendarPtr calendar(info.calendar->clone());
 
 		UnaryExecutor::Execute<SRC, DST>(source, result, count, [&](SRC input) {
-			using NAIVE = timebase_t<DST::PRECISION, false>;
+			using NAIVE = timestamp_base_t<DST::PRECISION, false>;
 			return Operation(calendar.get(), Cast::Operation<SRC, NAIVE>(input));
 		});
 		return true;
@@ -277,7 +277,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		CalendarPtr calendar(info.calendar->clone());
 
 		UnaryExecutor::Execute<SRC, DST>(source, result, count, [&](SRC input) {
-			using NAIVE = timebase_t<SRC::PRECISION, false>;
+			using NAIVE = timestamp_base_t<SRC::PRECISION, false>;
 			return Cast::Operation<NAIVE, DST>(Operation(calendar.get(), input));
 		});
 		return true;

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/timebase.hpp"
+#include "duckdb/common/types/timestamp_base.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
