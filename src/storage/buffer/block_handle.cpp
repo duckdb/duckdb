@@ -235,8 +235,7 @@ BufferHandle BlockHandle::Load(QueryContext context, unique_ptr<FileBuffer> reus
 		}
 		auto &buffer_manager = memory.GetBufferManager();
 		auto &buffer = memory.GetBuffer();
-		buffer = buffer_manager.ReadTemporaryBuffer(QueryContext(), memory.GetMemoryTag(), *this,
-		                                            std::move(reusable_buffer));
+		buffer = buffer_manager.ReadTemporaryBuffer(context, memory.GetMemoryTag(), *this, std::move(reusable_buffer));
 	}
 	memory.SetState(BlockState::BLOCK_LOADED);
 	memory.SetReaders(1);
