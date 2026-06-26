@@ -1,0 +1,69 @@
+From 8bac5aeb00d327780455e6f60ee4a99c1824c65f Mon Sep 17 00:00:00 2001
+From: duckdb <x@x>
+Date: Fri, 26 Jun 2026 11:34:19 +0200
+Subject: [PATCH] 0006-setqualifiedname.patch
+
+---
+ src/storage/mysql_index.cpp      | 6 ++++--
+ src/storage/mysql_index_set.cpp  | 3 ++-
+ src/storage/mysql_schema_set.cpp | 6 ++++--
+ 3 files changed, 10 insertions(+), 5 deletions(-)
+
+diff --git a/src/storage/mysql_index.cpp b/src/storage/mysql_index.cpp
+index becd94f..f151b9c 100644
+--- a/src/storage/mysql_index.cpp
++++ b/src/storage/mysql_index.cpp
+@@ -18,8 +18,10 @@ MySQLCreateIndex::MySQLCreateIndex(PhysicalPlan &physical_plan, unique_ptr<Creat
+ SourceResultType MySQLCreateIndex::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                    OperatorSourceInput &input) const {
+ 	auto &catalog = table.catalog;
+-	if (info->GetQualifiedName().Catalog() == INVALID_CATALOG && info->GetQualifiedName().Schema() == catalog.GetName()) {
+-		info->SchemaMutable() = Identifier::DefaultSchema();
++	if (info->GetQualifiedName().Catalog() == INVALID_CATALOG &&
++	    info->GetQualifiedName().Schema() == catalog.GetName()) {
++		info->SetQualifiedName(QualifiedName(info->GetQualifiedName().Catalog(), Identifier::DefaultSchema(),
++		                                     info->GetQualifiedName().Name()));
+ 	}
+ 	auto &schema = catalog.GetSchema(context.client, info->GetQualifiedName().Schema());
+ 	schema.CreateIndex(context.client, *info, table);
+diff --git a/src/storage/mysql_index_set.cpp b/src/storage/mysql_index_set.cpp
+index d70e91e..a225e23 100644
+--- a/src/storage/mysql_index_set.cpp
++++ b/src/storage/mysql_index_set.cpp
+@@ -43,7 +43,8 @@ WHERE TABLE_SCHEMA = 'mysqlscanner';
+ 		auto table_name = result->GetString(0);
+ 		auto index_name = result->GetString(1);
+ 		CreateIndexInfo info;
+-		info.SchemaMutable() = schema.name;
++		info.SetQualifiedName(
++		    QualifiedName(info.GetQualifiedName().Catalog(), schema.name, info.GetQualifiedName().Name()));
+ 		info.table = Identifier(table_name);
+ 		info.SetIndexName(Identifier(index_name));
+ 		auto index_entry = make_uniq<MySQLIndexEntry>(catalog, schema, info, table_name);
+diff --git a/src/storage/mysql_schema_set.cpp b/src/storage/mysql_schema_set.cpp
+index cdbbac4..c74665c 100644
+--- a/src/storage/mysql_schema_set.cpp
++++ b/src/storage/mysql_schema_set.cpp
+@@ -24,7 +24,8 @@ FROM information_schema.schemata;
+ 	auto result = transaction.Query(query);
+ 	while (result->Next()) {
+ 		CreateSchemaInfo info;
+-		info.SchemaMutable() = Identifier(result->GetString(0));
++		info.SetQualifiedName(QualifiedName(info.GetQualifiedName().Catalog(), Identifier(result->GetString(0)),
++		                                    info.GetQualifiedName().Name()));
+ 		info.internal = MySQLSchemaIsInternal(info.GetQualifiedName().Schema().GetIdentifierName());
+ 		auto schema = make_uniq<MySQLSchemaEntry>(catalog, info);
+ 		CreateEntry(std::move(schema));
+@@ -34,7 +35,8 @@ FROM information_schema.schemata;
+ optional_ptr<CatalogEntry> MySQLSchemaSet::CreateSchema(ClientContext &context, CreateSchemaInfo &info) {
+ 	auto &transaction = MySQLTransaction::Get(context, catalog);
+ 
+-	string create_sql = "CREATE SCHEMA " + MySQLUtils::WriteIdentifier(info.GetQualifiedName().Schema().GetIdentifierName());
++	string create_sql =
++	    "CREATE SCHEMA " + MySQLUtils::WriteIdentifier(info.GetQualifiedName().Schema().GetIdentifierName());
+ 	transaction.Query(create_sql);
+ 	auto schema_entry = make_uniq<MySQLSchemaEntry>(catalog, info);
+ 	return CreateEntry(std::move(schema_entry));
+-- 
+2.39.5 (Apple Git-154)
+

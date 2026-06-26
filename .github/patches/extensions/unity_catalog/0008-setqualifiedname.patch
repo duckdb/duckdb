@@ -1,0 +1,26 @@
+From 18822a64fe516d77bd1cb0a479411eb9df48cd7c Mon Sep 17 00:00:00 2001
+From: duckdb <x@x>
+Date: Fri, 26 Jun 2026 11:34:19 +0200
+Subject: [PATCH] 0008-setqualifiedname.patch
+
+---
+ src/storage/uc_schema_set.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/storage/uc_schema_set.cpp b/src/storage/uc_schema_set.cpp
+index 70bb408..e2518fc 100644
+--- a/src/storage/uc_schema_set.cpp
++++ b/src/storage/uc_schema_set.cpp
+@@ -22,7 +22,8 @@ void UCSchemaSet::LoadEntries(ClientContext &context) {
+ 
+ 	for (const auto &schema : tables) {
+ 		CreateSchemaInfo info;
+-		info.SchemaMutable() = Identifier(schema.schema_name);
++		info.SetQualifiedName(QualifiedName(info.GetQualifiedName().Catalog(), Identifier(schema.schema_name),
++		                                    info.GetQualifiedName().Name()));
+ 		info.internal = IsInternalTable(schema.catalog_name, schema.schema_name);
+ 		auto schema_entry = make_uniq<UCSchemaEntry>(catalog, info);
+ 		schema_entry->schema_data = make_uniq<UCAPISchema>(schema);
+-- 
+2.39.5 (Apple Git-154)
+

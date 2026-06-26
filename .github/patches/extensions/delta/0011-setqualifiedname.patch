@@ -1,0 +1,39 @@
+From 4ae195000e641eb0ead91a061089dceed3199183 Mon Sep 17 00:00:00 2001
+From: duckdb <x@x>
+Date: Fri, 26 Jun 2026 11:34:18 +0200
+Subject: [PATCH] 0011-setqualifiedname.patch
+
+---
+ src/delta_macros.cpp | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/src/delta_macros.cpp b/src/delta_macros.cpp
+index 42838c3..729bb11 100644
+--- a/src/delta_macros.cpp
++++ b/src/delta_macros.cpp
+@@ -66,7 +66,8 @@ void DeltaMacros::RegisterTableMacro(ExtensionLoader &loader, const string &name
+ 	}
+ 
+ 	CreateMacroInfo info(CatalogType::TABLE_MACRO_ENTRY);
+-	info.SchemaMutable() = Identifier::DefaultSchema();
++	info.SetQualifiedName(
++	    QualifiedName(info.GetQualifiedName().Catalog(), Identifier::DefaultSchema(), info.GetQualifiedName().Name()));
+ 	info.SetFunctionName(Identifier(name));
+ 	info.temporary = true;
+ 	info.internal = true;
+@@ -76,9 +77,9 @@ void DeltaMacros::RegisterTableMacro(ExtensionLoader &loader, const string &name
+ }
+ 
+ static DefaultMacro delta_macros[] = {
+-    {DEFAULT_SCHEMA,
+-     "parse_delta_filter_logline",
+-     "(x) AS x::STRUCT(path VARCHAR, type VARCHAR, filters_before VARCHAR[], filters_after VARCHAR[], files_before BIGINT, "
++    {DEFAULT_SCHEMA, "parse_delta_filter_logline",
++     "(x) AS x::STRUCT(path VARCHAR, type VARCHAR, filters_before VARCHAR[], filters_after VARCHAR[], files_before "
++     "BIGINT, "
+      "files_after BIGINT)"},
+ };
+ 
+-- 
+2.39.5 (Apple Git-154)
+
