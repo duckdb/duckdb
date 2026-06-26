@@ -933,7 +933,7 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 	}
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, trigger_info.Catalog(), trigger_info.Schema(),
-	                                                   trigger_info.base_table->table_name);
+	                                                   trigger_info.base_table->Table());
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
 	duck_table.CreateTrigger(transaction, trigger_info);

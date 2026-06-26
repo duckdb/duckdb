@@ -8,7 +8,7 @@ SourceResultType PhysicalCreateTrigger::GetDataInternal(ExecutionContext &contex
                                                         OperatorSourceInput &input) const {
 	auto &catalog = Catalog::GetCatalog(context.client, info->Catalog());
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context.client, info->Catalog(), info->Schema(),
-	                                                   info->base_table->table_name);
+	                                                   info->base_table->Table());
 	auto transaction = catalog.GetCatalogTransaction(context.client);
 	table.CreateTrigger(transaction, *info);
 

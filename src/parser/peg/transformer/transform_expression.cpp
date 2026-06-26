@@ -58,7 +58,7 @@ PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
 			}
 		} else {
 			auto base_table = make_uniq<BaseTableRef>();
-			base_table->table_name = col_expr.GetColumnName();
+			base_table->TableMutable() = col_expr.GetColumnName();
 			select_node->from_table = std::move(base_table);
 		}
 		select_node->select_list.push_back(make_uniq<StarExpression>());

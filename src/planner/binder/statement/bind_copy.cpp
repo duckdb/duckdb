@@ -655,9 +655,9 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
 		auto ref = make_uniq<BaseTableRef>();
-		ref->catalog_name = stmt.info->Catalog();
-		ref->schema_name = stmt.info->Schema();
-		ref->table_name = stmt.info->Table();
+		ref->CatalogMutable() = stmt.info->Catalog();
+		ref->SchemaMutable() = stmt.info->Schema();
+		ref->TableMutable() = stmt.info->Table();
 
 		auto statement = make_uniq<SelectNode>();
 		statement->from_table = std::move(ref);

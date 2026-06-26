@@ -38,7 +38,7 @@ bool ShellState::UseDescribeRenderMode(const duckdb::SQLStatement &statement, st
 		auto &show_select = showref.query->Cast<duckdb::SelectNode>();
 		if (show_select.from_table->type == duckdb::TableReferenceType::BASE_TABLE) {
 			auto &base_table = show_select.from_table->Cast<duckdb::BaseTableRef>();
-			describe_table_name = base_table.table_name.GetIdentifierName();
+			describe_table_name = base_table.Table().GetIdentifierName();
 		}
 	}
 	return true;
