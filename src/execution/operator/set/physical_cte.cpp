@@ -280,7 +280,7 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 		result["Consumers"] = StringUtil::Format("%llu", consumer_count);
 		result["Direct Consumers"] = StringUtil::Format("%llu", direct_count);
 		result["Buffered Consumers"] = StringUtil::Format("%llu", buffered_count);
-		result["Chunk Storage"] = "POOLED";
+		result["Chunk Storage"] = buffered_count == 0 ? "NONE" : "POOLED/COLUMN_DATA";
 	}
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;

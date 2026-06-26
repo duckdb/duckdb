@@ -80,6 +80,8 @@ public:
 
 private:
 	struct ChunkPool;
+	struct ConsumerSpool;
+	struct ConsumerSpoolReader;
 
 	struct BufferedChunk {
 		shared_ptr<DataChunk> chunk;
@@ -87,16 +89,25 @@ private:
 	};
 
 	struct ConsumerState {
+		ConsumerState();
+		~ConsumerState();
+		ConsumerState(ConsumerState &&other) noexcept;
+		ConsumerState &operator=(ConsumerState &&other) noexcept;
+		ConsumerState(const ConsumerState &other) = delete;
+		ConsumerState &operator=(const ConsumerState &other) = delete;
+
 		idx_t position = 0;
 		idx_t rows_read = 0;
 		bool active = true;
 		bool direct = false;
 		bool detached = false;
-		deque<BufferedChunk> backlog;
-		idx_t backlog_base_position = 0;
-		idx_t backlog_next_position = 0;
-		idx_t backlog_bytes = 0;
+		unique_ptr<ConsumerSpool> detached_buffer;
+		unique_ptr<ConsumerSpoolReader> shared_reader;
+		unique_ptr<ConsumerSpoolReader> detached_reader;
 	};
+
+public:
+	~PipelineBroadcastExchange();
 
 private:
 	SinkResultType Append(DataChunk &chunk, const InterruptState &interrupt_state);
@@ -112,15 +123,19 @@ private:
 	bool ShouldStopProducerLocked() const;
 	bool ShouldThrottleProducerLocked() const;
 	bool HasActiveSharedConsumersLocked() const;
+	bool UseSharedSpoolLocked() const;
+	idx_t ThrottledBufferedBytesLocked() const;
 	void DetachLaggingConsumersLocked();
 	void DetachConsumerLocked(ConsumerState &consumer);
 	void RetireChunksLocked();
-	void RetireBacklogLocked(ConsumerState &consumer);
+	void RetireDetachedBufferLocked(ConsumerState &consumer);
+	void ClearDetachedBufferLocked(ConsumerState &consumer);
 	void WakeReadersLocked(vector<InterruptState> &readers);
 	void WakeWritersLocked(vector<InterruptState> &writers, bool force = false);
 	static void CallbackAll(vector<InterruptState> &interrupts);
 
 private:
+	ClientContext &context;
 	vector<LogicalType> types;
 	bool run_to_completion;
 	idx_t row_width;
@@ -131,6 +146,7 @@ private:
 
 	mutable mutex lock;
 	deque<BufferedChunk> chunks;
+	unique_ptr<ConsumerSpool> shared_spool;
 	vector<ConsumerState> consumers;
 	vector<reference<Pipeline>> direct_pipelines;
 	vector<InterruptState> blocked_readers;
@@ -138,7 +154,8 @@ private:
 	idx_t base_position = 0;
 	idx_t next_position = 0;
 	idx_t active_consumers = 0;
-	idx_t buffered_bytes = 0;
+	idx_t shared_buffered_bytes = 0;
+	idx_t detached_buffered_bytes = 0;
 	atomic<idx_t> produced_rows {0};
 	atomic<bool> direct_consumer_progress {false};
 	bool producer_finished = false;
