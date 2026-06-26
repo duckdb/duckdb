@@ -132,8 +132,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				throw BinderException("Database \"%s\" is already attached in %s mode, cannot re-attach in %s mode",
 				                      info.name, existing_mode_str, attached_mode);
 			}
-			if (!options.default_table.name.empty()) {
-				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+			if (!options.default_table.Name().empty()) {
+				existing_db->GetCatalog().SetDefaultTable(options.default_table.Schema(), options.default_table.Name());
 			}
 			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 				// we require the vacuuming threshold for indexed tables to be the same as the already attached db
@@ -214,8 +214,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		attached_db->Initialize(context);
 	} else {
 		attached_db->Initialize(context);
-		if (!options.default_table.name.empty()) {
-			attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+		if (!options.default_table.Name().empty()) {
+			attached_db->GetCatalog().SetDefaultTable(options.default_table.Schema(), options.default_table.Name());
 		}
 		attached_db->FinalizeLoad(context);
 	}
@@ -289,7 +289,7 @@ void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
 	switch (db_info.alter_database_type) {
 	case AlterDatabaseType::RENAME_DATABASE: {
 		auto &rename_info = db_info.Cast<RenameDatabaseInfo>();
-		RenameDatabase(context, db_info.catalog, rename_info.new_name, db_info.if_not_found);
+		RenameDatabase(context, db_info.Catalog(), rename_info.new_name, db_info.if_not_found);
 		break;
 	}
 	default:

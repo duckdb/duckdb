@@ -265,10 +265,10 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	// Create a new binder because we dont need (or want) these bindings in this scope
 	auto binder = Binder::CreateBinder(context);
 	binder->SetCatalogLookupCallback(entry_retriever.GetCallback());
-	binder->bind_context.AddGenericBinding(table_index, base.table, names, types);
+	binder->bind_context.AddGenericBinding(table_index, base.GetTableName(), names, types);
 	auto expr_binder = ExpressionBinder(*binder, context);
 	ErrorData ignore;
-	auto table_binding = binder->bind_context.GetBinding(base.table, ignore);
+	auto table_binding = binder->bind_context.GetBinding(base.GetTableName(), ignore);
 	D_ASSERT(table_binding && !ignore.HasError());
 
 	auto bind_order = info.column_dependency_manager.GetBindOrder(base.columns);
@@ -556,7 +556,7 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		FindForeignKeyIndexes(create_info.columns, fk.fk_columns, fk.info.fk_keys);
 
 		// Resolve the self-reference.
-		if (create_info.table == fk.info.table) {
+		if (create_info.GetTableName() == fk.info.table) {
 			fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
 			FindMatchingPrimaryKeyColumns(create_info.columns, create_info.constraints, fk);
 			FindForeignKeyIndexes(create_info.columns, fk.pk_columns, fk.info.pk_keys);
@@ -692,7 +692,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (AnyConstraintReferencesGeneratedColumn(base)) {
 			throw BinderException("Constraints on generated columns are not supported yet");
 		}
-		bound_constraints = BindNewConstraints(base.constraints, base.table, base.columns);
+		bound_constraints = BindNewConstraints(base.constraints, base.GetTableName(), base.columns);
 		if (bind_mode != AlterBindMode::SKIP_BINDING) {
 			// bind the default values
 			auto &catalog_name = schema.ParentCatalog().GetName();
@@ -706,7 +706,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		throw BinderException("Creating a table without physical (non-generated) columns is not supported");
 	}
 
-	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
+	result->dependencies.VerifyDependencies(schema.catalog, result->Base().GetTableName());
 
 #ifdef DEBUG
 	// Ensure all types are bound

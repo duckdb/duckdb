@@ -266,23 +266,23 @@ PEGTransformerFactory::TransformQualifiedSimpleType(PEGTransformer &transformer,
                                                     const QualifiedName &qualified_type_name,
                                                     optional<vector<unique_ptr<ParsedExpression>>> type_modifiers) {
 	auto result = qualified_type_name;
-	if (result.schema.empty()) {
-		result.schema = result.catalog;
-		result.catalog = INVALID_CATALOG;
+	if (result.Schema().empty()) {
+		result.SchemaMutable() = result.Catalog();
+		result.CatalogMutable() = INVALID_CATALOG;
 	}
 	vector<unique_ptr<ParsedExpression>> modifiers;
 	if (type_modifiers) {
 		modifiers = std::move(*type_modifiers);
 	}
-	return make_uniq<TypeExpression>(result.catalog, result.schema, result.name, std::move(modifiers));
+	return make_uniq<TypeExpression>(result.Catalog(), result.Schema(), result.Name(), std::move(modifiers));
 }
 
 QualifiedName PEGTransformerFactory::TransformTypeNameAsQualifiedName(PEGTransformer &transformer,
                                                                       const Identifier &type_name) {
 	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = INVALID_SCHEMA;
-	result.name = type_name;
+	result.CatalogMutable() = INVALID_CATALOG;
+	result.SchemaMutable() = INVALID_SCHEMA;
+	result.NameMutable() = type_name;
 	return result;
 }
 
@@ -290,9 +290,9 @@ QualifiedName PEGTransformerFactory::TransformSchemaReservedTypeName(PEGTransfor
                                                                      const Identifier &schema_qualification,
                                                                      const Identifier &reserved_type_name) {
 	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = schema_qualification;
-	result.name = reserved_type_name;
+	result.CatalogMutable() = INVALID_CATALOG;
+	result.SchemaMutable() = schema_qualification;
+	result.NameMutable() = reserved_type_name;
 	return result;
 }
 
@@ -300,9 +300,9 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaTypeName(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_type_name) {
 	QualifiedName result;
-	result.catalog = catalog_qualification;
-	result.schema = reserved_schema_qualification;
-	result.name = reserved_type_name;
+	result.CatalogMutable() = catalog_qualification;
+	result.SchemaMutable() = reserved_schema_qualification;
+	result.NameMutable() = reserved_type_name;
 	return result;
 }
 
@@ -319,13 +319,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapType(PEGTransfor
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformRowType(PEGTransformer &transformer,
-                                        const child_list_t<LogicalType> &col_id_type_list) {
+                                        const optional<child_list_t<LogicalType>> &col_id_type_list) {
 	vector<unique_ptr<ParsedExpression>> struct_children;
-	for (auto &child : col_id_type_list) {
-		auto &type_expr = UnboundType::GetTypeExpression(child.second);
-		auto new_type_expr = type_expr->Copy();
-		new_type_expr->SetAlias(child.first);
-		struct_children.push_back(std::move(new_type_expr));
+	if (col_id_type_list) {
+		for (auto &child : *col_id_type_list) {
+			auto &type_expr = UnboundType::GetTypeExpression(child.second);
+			auto new_type_expr = type_expr->Copy();
+			new_type_expr->SetAlias(child.first);
+			struct_children.push_back(std::move(new_type_expr));
+		}
 	}
 	return make_uniq<TypeExpression>(Identifier("STRUCT"), std::move(struct_children));
 }

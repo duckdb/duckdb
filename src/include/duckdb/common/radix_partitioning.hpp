@@ -51,6 +51,14 @@ public:
 		return (hash_t(1 << radix_bits) - 1) << Shift(radix_bits);
 	}
 
+	//! Apply the radix mask to a hash and return the partition index
+	static inline idx_t ApplyMask(const hash_t hash, idx_t radix_bits) {
+		D_ASSERT(radix_bits <= MAX_RADIX_BITS);
+		const auto result = (hash & Mask(radix_bits)) >> Shift(radix_bits);
+		D_ASSERT(result < NumberOfPartitions(radix_bits));
+		return result;
+	}
+
 	//! Select using a cutoff on the radix bits of the hash
 	static idx_t Select(const Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits,
 	                    const ValidityMask &partition_mask, SelectionVector *true_sel, SelectionVector *false_sel);

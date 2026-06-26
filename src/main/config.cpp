@@ -219,6 +219,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProfilingOutputSetting),
     DUCKDB_LOCAL(ProfilingRendererSettingsSetting),
     DUCKDB_LOCAL(ProgressBarTimeSetting),
+    DUCKDB_SETTING_CALLBACK(RegexMatchOperatorSemanticsSetting),
     DUCKDB_SETTING(ScalarSubqueryErrorOnMultipleRowsSetting),
     DUCKDB_SETTING(SchedulerProcessPartialSetting),
     DUCKDB_LOCAL(SchemaSetting),
@@ -249,9 +250,9 @@ static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("confi
                                                      DUCKDB_SETTING_ALIAS("memory_limit", 127),
                                                      DUCKDB_SETTING_ALIAS("null_order", 60),
                                                      DUCKDB_SETTING_ALIAS("profile_output", 150),
-                                                     DUCKDB_SETTING_ALIAS("user", 167),
+                                                     DUCKDB_SETTING_ALIAS("user", 168),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 28),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 165),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 166),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

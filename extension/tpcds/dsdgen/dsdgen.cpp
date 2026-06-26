@@ -22,9 +22,9 @@ template <class T>
 static void CreateTPCDSTable(ClientContext &context, const Identifier &catalog_name, const Identifier &schema,
                              string suffix, bool keys, bool overwrite) {
 	auto info = make_uniq<CreateTableInfo>();
-	info->catalog = catalog_name;
-	info->schema = schema;
-	info->table = Identifier(T::Name + suffix);
+	info->CatalogMutable() = catalog_name;
+	info->SchemaMutable() = schema;
+	info->SetTableName(Identifier(T::Name + suffix));
 	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {

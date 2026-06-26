@@ -18,7 +18,7 @@ CreateMacroInfo::CreateMacroInfo(CatalogType type, unique_ptr<MacroFunction> fun
 
 string CreateMacroInfo::ToString() const {
 	auto prefix = GetCreatePrefix("MACRO");
-	prefix += QualifierToString(temporary ? Identifier() : catalog, schema, name) + " ";
+	prefix += QualifierToString(temporary ? Identifier() : Catalog(), Schema(), GetFunctionName()) + " ";
 	string definitions;
 	for (auto &function : macros) {
 		if (!definitions.empty()) {
@@ -34,7 +34,7 @@ unique_ptr<CreateInfo> CreateMacroInfo::Copy() const {
 	for (auto &macro : macros) {
 		result->macros.push_back(macro->Copy());
 	}
-	result->name = name;
+	result->SetFunctionName(GetFunctionName());
 	CopyFunctionProperties(*result);
 	return std::move(result);
 }

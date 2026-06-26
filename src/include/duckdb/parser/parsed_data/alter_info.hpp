@@ -11,6 +11,7 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 
@@ -56,18 +57,38 @@ public:
 	AlterType type;
 	//! if exists
 	OnEntryNotFound if_not_found;
-	//! Catalog name to alter
-	Identifier catalog;
-	//! Schema name to alter
-	Identifier schema;
-	//! Entry name to alter
-	Identifier name;
 	//! Allow altering internal entries
 	bool allow_internal;
 	//! Determine whether to skip Bind
 	AlterBindMode bind_mode = AlterBindMode::BIND_ON_ALTER;
 	//! New dependencies for the altered entry (set during binding)
 	unique_ptr<LogicalDependencyList> new_dependencies;
+
+public:
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+	QualifiedName &GetQualifiedNameMutable() {
+		return qualified_name;
+	}
+	const Identifier &Catalog() const {
+		return qualified_name.Catalog();
+	}
+	Identifier &CatalogMutable() {
+		return qualified_name.CatalogMutable();
+	}
+	const Identifier &Schema() const {
+		return qualified_name.Schema();
+	}
+	Identifier &SchemaMutable() {
+		return qualified_name.SchemaMutable();
+	}
+	const Identifier &Name() const {
+		return qualified_name.Name();
+	}
+	Identifier &NameMutable() {
+		return qualified_name.NameMutable();
+	}
 
 public:
 	virtual CatalogType GetCatalogType() const = 0;
@@ -86,6 +107,9 @@ public:
 
 protected:
 	explicit AlterInfo(AlterType type);
+
+	//! Qualified name of the entry to alter (catalog.schema.name)
+	QualifiedName qualified_name;
 };
 
 } // namespace duckdb

@@ -3,7 +3,6 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -13,7 +12,6 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
@@ -21,7 +19,8 @@
 
 namespace duckdb {
 
-static bool IsFunctionallyDependent(const unique_ptr<Expression> &expr, const vector<reference<Expression>> &deps) {
+bool BaseSelectBinder::IsFunctionallyDependent(const unique_ptr<Expression> &expr,
+                                               const vector<reference<Expression>> &deps) {
 	//	Volatile expressions can't depend on anything else
 	if (expr->IsVolatile()) {
 		return false;

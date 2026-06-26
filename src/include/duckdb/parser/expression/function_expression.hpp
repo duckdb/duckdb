@@ -11,6 +11,7 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
@@ -99,26 +100,32 @@ public:
 	                              bool is_operator = false, bool export_state = false);
 
 public:
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+	QualifiedName &GetQualifiedNameMutable() {
+		return qualified_name;
+	}
 	const Identifier &Catalog() const {
-		return catalog;
+		return qualified_name.Catalog();
 	}
 	Identifier &CatalogMutable() {
-		return catalog;
+		return qualified_name.CatalogMutable();
 	}
 	const Identifier &Schema() const {
-		return schema;
+		return qualified_name.Schema();
 	}
 	Identifier &SchemaMutable() {
-		return schema;
+		return qualified_name.SchemaMutable();
 	}
 	const Identifier &FunctionName() const {
-		return function_name;
+		return qualified_name.Name();
 	}
 	Identifier &FunctionNameMutable() {
-		return function_name;
+		return qualified_name.NameMutable();
 	}
 	void SetFunctionName(string function_name_p) {
-		function_name = Identifier(std::move(function_name_p));
+		qualified_name.NameMutable() = Identifier(std::move(function_name_p));
 	}
 	bool IsOperator() const {
 		return is_operator;
@@ -178,12 +185,8 @@ public:
 	}
 
 private:
-	//! Catalog of the function
-	Identifier catalog;
-	//! Schema of the function
-	Identifier schema;
-	//! Function name
-	Identifier function_name;
+	//! Qualified name of the function (catalog.schema.name)
+	QualifiedName qualified_name;
 	//! Whether or not the function is an operator, only used for rendering
 	bool is_operator;
 	//! List of arguments to the function

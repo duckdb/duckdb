@@ -1196,7 +1196,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeModifiersIn
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRowTypeInternal(PEGTransformer &transformer,
                                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	child_list_t<LogicalType> col_id_type_list {};
+	optional<child_list_t<LogicalType>> col_id_type_list {};
 	auto &col_id_type_list_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (col_id_type_list_opt.HasResult()) {
 		auto col_id_type_list_value =
@@ -5868,6 +5868,19 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSimilarToTokenI
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRegexMatchTokenInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto result = TransformRegexMatchToken(transformer);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformRegexInsensitiveMatchTokenInternal(PEGTransformer &transformer,
+                                                                   ParseResult &parse_result) {
+	auto result = TransformRegexInsensitiveMatchToken(transformer);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNotILikeOpInternal(PEGTransformer &transformer,
                                                                                     ParseResult &parse_result) {
 	auto result = TransformNotILikeOp(transformer);
@@ -5877,6 +5890,13 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNotILikeOpInter
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNotLikeOpInternal(PEGTransformer &transformer,
                                                                                    ParseResult &parse_result) {
 	auto result = TransformNotLikeOp(transformer);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformNotRegexInsensitiveMatchOpInternal(PEGTransformer &transformer,
+                                                                   ParseResult &parse_result) {
+	auto result = TransformNotRegexInsensitiveMatchOp(transformer);
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -10558,8 +10578,11 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ILikeToken", &PEGTransformerFactory::TransformILikeTokenInternal},
 	    {"GlobToken", &PEGTransformerFactory::TransformGlobTokenInternal},
 	    {"SimilarToToken", &PEGTransformerFactory::TransformSimilarToTokenInternal},
+	    {"RegexMatchToken", &PEGTransformerFactory::TransformRegexMatchTokenInternal},
+	    {"RegexInsensitiveMatchToken", &PEGTransformerFactory::TransformRegexInsensitiveMatchTokenInternal},
 	    {"NotILikeOp", &PEGTransformerFactory::TransformNotILikeOpInternal},
 	    {"NotLikeOp", &PEGTransformerFactory::TransformNotLikeOpInternal},
+	    {"NotRegexInsensitiveMatchOp", &PEGTransformerFactory::TransformNotRegexInsensitiveMatchOpInternal},
 	    {"NotSimilarToOp", &PEGTransformerFactory::TransformNotSimilarToOpInternal},
 	    {"InClause", &PEGTransformerFactory::TransformInClauseInternal},
 	    {"InExpression", &PEGTransformerFactory::TransformInExpressionInternal},

@@ -20,7 +20,12 @@ struct CreateTriggerInfo : public CreateInfo {
 	CreateTriggerInfo();
 
 	//! Trigger name
-	Identifier trigger_name;
+	const Identifier &GetTriggerName() const {
+		return qualified_name.Name();
+	}
+	void SetTriggerName(Identifier name) {
+		qualified_name.NameMutable() = std::move(name);
+	}
 	//! The table the trigger is on
 	unique_ptr<BaseTableRef> base_table;
 	//! When the trigger fires (BEFORE/AFTER/INSTEAD OF)

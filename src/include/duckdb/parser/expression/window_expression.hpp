@@ -67,23 +67,29 @@ public:
 	static ExpressionType WindowToExpressionType(const string &fun_name);
 
 public:
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+	QualifiedName &GetQualifiedNameMutable() {
+		return qualified_name;
+	}
 	const Identifier &Catalog() const {
-		return catalog;
+		return qualified_name.Catalog();
 	}
 	Identifier &CatalogMutable() {
-		return catalog;
+		return qualified_name.CatalogMutable();
 	}
 	const Identifier &Schema() const {
-		return schema;
+		return qualified_name.Schema();
 	}
 	Identifier &SchemaMutable() {
-		return schema;
+		return qualified_name.SchemaMutable();
 	}
 	const Identifier &FunctionName() const {
-		return function_name;
+		return qualified_name.Name();
 	}
 	Identifier &FunctionNameMutable() {
-		return function_name;
+		return qualified_name.NameMutable();
 	}
 	const vector<unique_ptr<ParsedExpression>> &Partitions() const {
 		return partitions;
@@ -374,12 +380,8 @@ public:
 	}
 
 private:
-	//! Catalog of the aggregate function
-	Identifier catalog;
-	//! Schema of the aggregate function
-	Identifier schema;
-	//! Name of the aggregate function
-	Identifier function_name;
+	//! Qualified name of the aggregate function (catalog.schema.name)
+	QualifiedName qualified_name;
 	//! The child expression of the main window function
 	vector<FunctionArgument> arguments;
 	//! The set of expressions to partition by
