@@ -116,7 +116,7 @@ private:
 class RadixPartitionedTupleData : public PartitionedTupleData {
 public:
 	RadixPartitionedTupleData(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr, MemoryTag tag,
-	                          idx_t radix_bits_p, idx_t hash_col_idx_p);
+	                          idx_t radix_bits_p, idx_t hash_col_idx_p, QueryContext context = QueryContext());
 	RadixPartitionedTupleData(RadixPartitionedTupleData &other);
 	~RadixPartitionedTupleData() override;
 
