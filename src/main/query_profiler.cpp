@@ -18,12 +18,9 @@
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
-#include "yyjson.hpp"
-#include "yyjson_utils.hpp"
+#include "duckdb/common/json_document.hpp"
 
 #include <utility>
-
-using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
@@ -773,55 +770,53 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	return result;
 }
 
-static yyjson_mut_val *ValueToJSON(yyjson_mut_doc *doc, const Value &val) {
+static JSONMutableValue ValueToJSON(JSONWriter &writer, const Value &val) {
 	if (val.IsNull()) {
-		return yyjson_mut_null(doc);
+		return writer.CreateNull();
 	}
 	auto &type = val.type();
 	if (type.id() == LogicalTypeId::MAP) {
 		// MAP values (e.g. extra_info) become JSON objects; multiline string values become arrays
-		auto obj = yyjson_mut_obj(doc);
+		auto obj = writer.CreateObject();
 		for (auto &child : MapValue::GetChildren(val)) {
 			auto kv = StructValue::GetChildren(child);
 			auto k = kv[0].GetValue<string>();
 			auto v = kv[1].GetValue<string>();
-			auto key_ptr = yyjson_mut_get_str(yyjson_mut_strcpy(doc, k.c_str()));
 			auto splits = StringUtil::Split(v, "\n");
 			if (splits.size() > 1) {
-				auto arr = yyjson_mut_arr(doc);
+				auto arr = writer.CreateArray();
 				for (auto &s : splits) {
-					yyjson_mut_arr_add_strcpy(doc, arr, s.c_str());
+					arr.AppendString(s);
 				}
-				yyjson_mut_obj_add_val(doc, obj, key_ptr, arr);
+				obj.Add(k, arr);
 			} else {
-				yyjson_mut_obj_add_strcpy(doc, obj, key_ptr, v.c_str());
+				obj.AddString(k, v);
 			}
 		}
 		return obj;
 	}
 	if (type.IsIntegral()) {
-		return yyjson_mut_uint(doc, val.GetValue<uint64_t>());
+		return writer.CreateUnsignedInteger(val.GetValue<uint64_t>());
 	}
 	if (type.IsNumeric()) {
-		return yyjson_mut_real(doc, val.GetValue<double>());
+		return writer.CreateDouble(val.GetValue<double>());
 	}
-	auto str = val.GetValue<string>();
-	return yyjson_mut_strncpy(doc, str.c_str(), str.size());
+	return writer.CreateString(val.GetValue<string>());
 }
 
-static yyjson_mut_val *QueryProfileResultToJSON(yyjson_mut_doc *doc, const QueryProfileResult &node) {
+static JSONMutableValue QueryProfileResultToJSON(JSONWriter &writer, const QueryProfileResult &node) {
 	switch (node.kind) {
 	case QueryProfileResultKind::VALUE:
-		return ValueToJSON(doc, node.value);
+		return ValueToJSON(writer, node.value);
 	case QueryProfileResultKind::LIST: {
-		auto arr = yyjson_mut_arr(doc);
+		auto arr = writer.CreateArray();
 		for (auto &child : node.children) {
-			yyjson_mut_arr_add_val(arr, QueryProfileResultToJSON(doc, *child));
+			arr.Append(QueryProfileResultToJSON(writer, *child));
 		}
 		return arr;
 	}
 	case QueryProfileResultKind::OBJECT: {
-		auto obj = yyjson_mut_obj(doc);
+		auto obj = writer.CreateObject();
 		// Sort children alphabetically by key for deterministic output
 		vector<reference<const QueryProfileResult>> sorted_children;
 		sorted_children.reserve(node.children.size());
@@ -837,24 +832,13 @@ static yyjson_mut_val *QueryProfileResultToJSON(yyjson_mut_doc *doc, const Query
 		          });
 		for (const QueryProfileResult &child : sorted_children) {
 			D_ASSERT(!child.key.empty());
-			auto key_ptr = yyjson_mut_get_str(yyjson_mut_strcpy(doc, child.key.c_str()));
-			yyjson_mut_obj_add_val(doc, obj, key_ptr, QueryProfileResultToJSON(doc, child));
+			obj.Add(child.key, QueryProfileResultToJSON(writer, child));
 		}
 		return obj;
 	}
 	default:
 		throw InternalException("Unknown QueryProfileResultKind");
 	}
-}
-
-static string StringifyAndFree(ConvertedJSONHolder &json_holder, yyjson_mut_val *object) {
-	json_holder.stringified_json = yyjson_mut_val_write_opts(
-	    object, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr, nullptr, nullptr);
-	if (!json_holder.stringified_json) {
-		throw InternalException("The plan could not be rendered as JSON, yyjson failed");
-	}
-	auto result = string(json_holder.stringified_json);
-	return result;
 }
 
 void QueryProfiler::ToLogInternal() const {
@@ -1030,12 +1014,10 @@ bool QueryProfiler::HasRoot() const {
 
 string QueryProfiler::ToJSON() const {
 	lock_guard<std::mutex> guard(lock);
-	ConvertedJSONHolder json_holder;
-	json_holder.doc = yyjson_mut_doc_new(nullptr);
+	JSONWriter writer;
 	auto result = ToResultTree();
-	auto root_val = QueryProfileResultToJSON(json_holder.doc, *result);
-	yyjson_mut_doc_set_root(json_holder.doc, root_val);
-	return StringifyAndFree(json_holder, root_val);
+	writer.SetRoot(QueryProfileResultToJSON(writer, *result));
+	return writer.ToString(JSONWriteFlags::ALLOW_INF_AND_NAN | JSONWriteFlags::PRETTY);
 }
 
 void QueryProfiler::WriteToFile(const char *path, string &info) const {
