@@ -63,29 +63,43 @@ optional_ptr<DependencyManager> DuckCatalog::GetDependencyManager() {
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo &info) {
 	LogicalDependencyList dependencies;
 
-	if (!info.internal && DefaultSchemaGenerator::IsDefaultSchema(info.GetQualifiedName().Schema())) {
-		return nullptr;
+	auto parents = info.ParentSchemas();
+	if (parents.empty()) {
+		// top-level schema
+		if (!info.internal && DefaultSchemaGenerator::IsDefaultSchema(info.SchemaName())) {
+			return nullptr;
+		}
+		auto entry = make_uniq<DuckSchemaEntry>(*this, info);
+		auto result = entry.get();
+		if (!schemas->CreateEntry(transaction, info.SchemaName(), std::move(entry), dependencies)) {
+			return nullptr;
+		}
+		return result;
 	}
-	auto entry = make_uniq<DuckSchemaEntry>(*this, info);
-	auto result = entry.get();
-	if (!schemas->CreateEntry(transaction, info.GetQualifiedName().Schema(), std::move(entry), dependencies)) {
-		return nullptr;
+	// nested schema: navigate to the deepest parent schema, then create the schema inside it
+	optional_ptr<CatalogEntry> parent_entry = schemas->GetEntry(transaction, parents[0]);
+	for (idx_t i = 1; parent_entry && i < parents.size(); i++) {
+		auto &duck_parent = parent_entry->Cast<DuckSchemaEntry>();
+		parent_entry = duck_parent.GetCatalogSet(CatalogType::SCHEMA_ENTRY).GetEntry(transaction, parents[i]);
 	}
-	return result;
+	if (!parent_entry) {
+		throw CatalogException("Cannot create nested schema \"%s\": a parent schema does not exist",
+		                       info.SchemaName().GetIdentifierName());
+	}
+	return parent_entry->Cast<DuckSchemaEntry>().CreateSchema(transaction, info);
 }
 
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) {
-	D_ASSERT(!info.Schema().empty());
+	D_ASSERT(!info.SchemaName().empty());
 	auto result = CreateSchemaInternal(transaction, info);
 	if (!result) {
 		switch (info.on_conflict) {
 		case OnCreateConflict::ERROR_ON_CONFLICT:
-			throw CatalogException::EntryAlreadyExists(CatalogType::SCHEMA_ENTRY, info.GetQualifiedName().Schema());
+			throw CatalogException::EntryAlreadyExists(CatalogType::SCHEMA_ENTRY, info.SchemaName());
 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
 			DropInfo drop_info;
 			drop_info.type = CatalogType::SCHEMA_ENTRY;
-			drop_info.SetQualifiedName(
-			    QualifiedName(info.GetQualifiedName().Catalog(), INVALID_SCHEMA, info.GetQualifiedName().Schema()));
+			drop_info.SetQualifiedName(QualifiedName(info.SchemaName()));
 			DropSchema(transaction, drop_info);
 			result = CreateSchemaInternal(transaction, info);
 			if (!result) {
@@ -116,13 +130,37 @@ void DuckCatalog::DropSchema(ClientContext &context, DropInfo &info) {
 	DropSchema(GetCatalogTransaction(context), info);
 }
 
+static void ScanNestedSchemas(ClientContext &context, SchemaCatalogEntry &schema,
+                              const std::function<void(SchemaCatalogEntry &)> &callback) {
+	schema.Scan(context, CatalogType::SCHEMA_ENTRY, [&](CatalogEntry &entry) {
+		auto &nested = entry.Cast<SchemaCatalogEntry>();
+		callback(nested);
+		ScanNestedSchemas(context, nested, callback);
+	});
+}
+
+static void ScanNestedSchemas(SchemaCatalogEntry &schema, const std::function<void(SchemaCatalogEntry &)> &callback) {
+	schema.Scan(CatalogType::SCHEMA_ENTRY, [&](CatalogEntry &entry) {
+		auto &nested = entry.Cast<SchemaCatalogEntry>();
+		callback(nested);
+		ScanNestedSchemas(nested, callback);
+	});
+}
+
 void DuckCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) {
-	schemas->Scan(GetCatalogTransaction(context),
-	              [&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
+	schemas->Scan(GetCatalogTransaction(context), [&](CatalogEntry &entry) {
+		auto &schema = entry.Cast<SchemaCatalogEntry>();
+		callback(schema);
+		ScanNestedSchemas(context, schema, callback);
+	});
 }
 
 void DuckCatalog::ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback) {
-	schemas->Scan([&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
+	schemas->Scan([&](CatalogEntry &entry) {
+		auto &schema = entry.Cast<SchemaCatalogEntry>();
+		callback(schema);
+		ScanNestedSchemas(schema, callback);
+	});
 }
 
 CatalogSet &DuckCatalog::GetSchemaCatalogSet() {

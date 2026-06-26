@@ -42,6 +42,12 @@ static unique_ptr<FunctionData> DuckDBSchemasBind(ClientContext &context, TableF
 	names.emplace_back("sql");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("parent_schema");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("parent_schema_oid");
+	return_types.emplace_back(LogicalType::BIGINT);
+
 	return nullptr;
 }
 
@@ -80,6 +86,10 @@ void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, D
 	auto &internal = output.data[6];
 	// sql, VARCHAR
 	auto &sql = output.data[7];
+	// parent_schema, VARCHAR
+	auto &parent_schema = output.data[8];
+	// parent_schema_oid, BIGINT
+	auto &parent_schema_oid = output.data[9];
 
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset].get();
@@ -92,6 +102,14 @@ void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, D
 		tags.Append(Value::MAP(entry.tags));
 		internal.Append(Value::BOOLEAN(entry.internal));
 		sql.Append(Value());
+		auto parent = entry.GetParentSchema();
+		if (parent) {
+			parent_schema.Append(Value(parent->name));
+			parent_schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(parent->oid)));
+		} else {
+			parent_schema.Append(Value());
+			parent_schema_oid.Append(Value());
+		}
 
 		data.offset++;
 		count++;
