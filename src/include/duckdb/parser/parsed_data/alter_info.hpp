@@ -62,6 +62,7 @@ public:
 
 public:
 	AlterInfo(AlterType type, Identifier catalog, Identifier schema, Identifier name, OnEntryNotFound if_not_found);
+	AlterInfo(AlterType type, QualifiedName qualified_name, OnEntryNotFound if_not_found);
 	~AlterInfo() override;
 
 	AlterType type;

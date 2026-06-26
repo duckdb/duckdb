@@ -11,6 +11,11 @@ AlterInfo::AlterInfo(AlterType type, Identifier catalog_p, Identifier schema_p, 
       qualified_name(std::move(catalog_p), std::move(schema_p), std::move(name_p)) {
 }
 
+AlterInfo::AlterInfo(AlterType type, QualifiedName qualified_name_p, OnEntryNotFound if_not_found)
+    : ParseInfo(TYPE), type(type), if_not_found(if_not_found), allow_internal(false),
+      qualified_name(std::move(qualified_name_p)) {
+}
+
 AlterInfo::AlterInfo(AlterType type) : ParseInfo(TYPE), type(type) {
 }
 
