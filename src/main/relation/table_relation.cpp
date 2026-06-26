@@ -28,7 +28,8 @@ unique_ptr<QueryNode> TableRelation::GetQueryNode() {
 
 unique_ptr<TableRef> TableRelation::GetTableRef() {
 	auto table_ref = make_uniq<BaseTableRef>();
-	table_ref->GetQualifiedNameMutable() = QualifiedName(description->database, description->schema, description->table);
+	table_ref->GetQualifiedNameMutable() =
+	    QualifiedName(description->database, description->schema, description->table);
 	return std::move(table_ref);
 }
 

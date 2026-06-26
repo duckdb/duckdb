@@ -1270,7 +1270,8 @@ QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransfor
                                                                      const optional<Identifier> &catalog_qualification,
                                                                      const optional<Identifier> &schema_qualification,
                                                                      const Identifier &table_function_name) {
-	QualifiedName result(catalog_qualification ? *catalog_qualification : INVALID_CATALOG, schema_qualification ? *schema_qualification : INVALID_SCHEMA, Identifier());
+	QualifiedName result(catalog_qualification ? *catalog_qualification : INVALID_CATALOG,
+	                     schema_qualification ? *schema_qualification : INVALID_SCHEMA, Identifier());
 	if (!result.Catalog().empty() && result.Schema().empty()) {
 		result.SchemaMutable() = result.Catalog();
 		result.CatalogMutable() = INVALID_CATALOG;
