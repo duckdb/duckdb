@@ -206,6 +206,8 @@ public:
 	bool run_init = true;
 	unique_ptr<duckdb::MaterializedQueryResult> last_result;
 	bool last_result_referenced = false;
+	//! Whether the last EXPLAIN ANALYZE tree folded any operators (so ".last" has a fuller tree to show)
+	bool last_explain_hid_content = false;
 	//! If the following flag is set, then command execution stops at an error
 	BailOnError bail = BailOnError::AUTOMATIC;
 	//! Controls automatic SQL formatting before execution

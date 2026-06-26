@@ -138,7 +138,8 @@ public:
 
 	DUCKDB_API string QueryTreeToString() const;
 	DUCKDB_API void QueryTreeToStream(std::ostream &str) const;
-	//! Render the framed query tree (header, total time, phase timings, operator tree) into the given sink.
+	//! Render the framed query tree (total time + operator tree) into the given sink. Folding/expansion of the tree is
+	//! controlled by the renderer (configured via the profiling renderer settings), not here.
 	DUCKDB_API void RenderQueryTree(BaseTreeRenderer &ss) const;
 	DUCKDB_API void Print();
 

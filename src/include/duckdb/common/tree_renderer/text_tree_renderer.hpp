@@ -30,6 +30,9 @@ struct TextTreeRendererConfig {
 	char thousand_separator = ',';
 	char decimal_separator = '.';
 
+	//! When set, render every operator as a full box (disable the timing-based folding/merging of operators)
+	bool expand_all = false;
+
 #ifndef DUCKDB_ASCII_TREE_RENDERER
 	const char *LTCORNER = "\342\224\214"; // NOLINT "┌";
 	const char *RTCORNER = "\342\224\220"; // NOLINT "┐";

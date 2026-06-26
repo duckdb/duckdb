@@ -14,4 +14,4 @@ PREPARE query AS SELECT * FROM integers
 query II
 EXPLAIN EXECUTE query
 ----
-physical_plan	<REGEX>:.*SEQ.SCAN.*
+physical_plan	<REGEX>:.*Seq.Scan.*

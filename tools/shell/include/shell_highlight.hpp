@@ -80,6 +80,11 @@ enum class HighlightElementType : uint32_t {
 //! Registers a ProfilerExtension that highlights the CLI "query_tree" profiler output
 void RegisterProfilerHighlighting(duckdb::DBConfig &config);
 
+//! Re-renders the last query's profiler tree fully expanded (no folding), highlighted for the console, and prints it
+//! (through the pager when it is large). Returns false if there is no query tree available (so the caller can fall
+//! back to rendering the last result).
+bool RenderExpandedQueryTree(ShellState &state);
+
 struct HighlightColorInfo {
 	const char *color_name;
 	uint8_t code;

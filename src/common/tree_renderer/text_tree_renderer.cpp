@@ -194,11 +194,10 @@ static void ComputeSubtreeStats(ExplainTreeNode &node) {
 	}
 }
 
-//! The operator name as shown in a box title - underscores are turned into spaces (e.g. HASH_JOIN -> HASH JOIN)
+//! The operator name as shown in a box title - underscores become spaces and the result is title-cased
+//! (e.g. HASH_JOIN -> Hash Join)
 static string DisplayName(const string &name) {
-	string result = name;
-	std::replace(result.begin(), result.end(), '_', ' ');
-	return result;
+	return StringUtil::Title(StringUtil::Replace(name, "_", " "));
 }
 
 static TreeRenderType GetOperatorType(const ExplainTreeNode &node) {
@@ -539,6 +538,11 @@ public:
 	      significant_threshold(total_time * SIGNIFICANT_TIME_FRACTION) {
 	}
 
+	//! Whether the render condensed or merged any operators (i.e. a full render would show more)
+	bool HidContent() const {
+		return hid_content;
+	}
+
 	vector<ExplainLine> Render(const ExplainTreeNode &root) {
 		next_subtree = 0;
 		pending.clear();
@@ -765,6 +769,7 @@ private:
 		bool condensed = IsCondensed(node);
 		for (auto &entry : node.details) {
 			if (condensed && !IsEssentialDetail(entry)) {
+				hid_content = true;
 				continue;
 			}
 			bool has_key = entry.first != "Text";
@@ -1216,6 +1221,7 @@ private:
 	ExplainBlock RenderNode(const ExplainTreeNode &node, idx_t avail, idx_t chain_width) {
 		avail = MaxValue<idx_t>(avail, MINIMUM_RENDER_WIDTH);
 		if (IsCollapsible(node)) {
+			hid_content = true;
 			vector<const ExplainTreeNode *> nodes;
 			CollectSubtreeNodes(node, nodes);
 			return BuildGroupedBox(nodes, chain_width);
@@ -1223,6 +1229,7 @@ private:
 		if (node.children.size() == 1) {
 			idx_t run = GroupRunLength(node);
 			if (run >= MIN_GROUP_NODES) {
+				hid_content = true;
 				auto &after = GroupRunAfter(node, run);
 				return StackChain(BuildGroupedBox(GroupRunNodes(node, run), chain_width),
 				                  RenderNode(after, avail, chain_width));
@@ -1269,6 +1276,7 @@ private:
 	idx_t tree_content_width = 0;
 	idx_t next_subtree = 0;
 	vector<std::pair<idx_t, const ExplainTreeNode *>> pending;
+	bool hid_content = false;
 };
 
 //! Several operators are only merged into one node for plans with at least this many operators.
@@ -1333,11 +1341,16 @@ void TextTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) 
 	ComputeSubtreeStats(*plan);
 	double total_time = SumOperatorTimings(*plan);
 	// condense low-impact operators when we have timing (EXPLAIN ANALYZE); merge sub-trees only for large plans
-	bool flatten = total_time > 0;
+	// (unless expand_all is set, in which case every operator is rendered as a full box)
+	bool flatten = !config.expand_all && total_time > 0;
 	bool merge = flatten && plan->subtree_count >= MERGE_MIN_NODES;
 	ExplainBoxRenderer renderer(config.maximum_render_width, config.thousand_separator, total_time,
 	                            ExplainAlignment::LEFT, flatten, merge);
-	for (auto &line : renderer.Render(*plan)) {
+	auto lines = renderer.Render(*plan);
+	if (renderer.HidContent()) {
+		ss.hidden_content = true;
+	}
+	for (auto &line : lines) {
 		for (auto &span : line) {
 			ss.Render(span.text, span.type);
 		}
@@ -1365,6 +1378,8 @@ void TextTreeRenderer::Configure(const unordered_map<string, Value> &settings) {
 				                            separator);
 			}
 			config.decimal_separator = separator[0];
+		} else if (name == "expand_all") {
+			config.expand_all = value.DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>();
 		}
 		// unrecognized settings are ignored - they may be intended for a different renderer
 	}

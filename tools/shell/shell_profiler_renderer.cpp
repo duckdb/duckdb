@@ -132,11 +132,52 @@ public:
 	void RenderProfiler(const duckdb::QueryProfiler &profiler, duckdb::BaseTreeRenderer &ss) override {
 		HighlightStringRenderer highlighted;
 		profiler.RenderQueryTree(highlighted);
+		// remember whether the tree folded anything, so the shell only offers ".last" when there is more to show
+		ShellState::Get().last_explain_hid_content = highlighted.hidden_content;
 		ss << highlighted.str();
 	}
 };
 
 } // namespace
+
+bool RenderExpandedQueryTree(ShellState &state) {
+	if (!state.stdout_is_console || !state.conn) {
+		return false;
+	}
+	auto &context = *state.conn->context;
+	auto &profiler = duckdb::QueryProfiler::Get(context);
+	if (!profiler.HasRoot()) {
+		return false;
+	}
+	// force the renderer to expand every operator for this render (disable timing-based folding)
+	auto &settings = duckdb::ClientConfig::GetConfig(context).profiling_renderer_settings;
+	auto saved_settings = settings;
+	settings["expand_all"] = duckdb::Value::BOOLEAN(true);
+
+	HighlightStringRenderer sink;
+	try {
+		profiler.RenderQueryTree(sink);
+	} catch (...) {
+		settings = std::move(saved_settings);
+		throw;
+	}
+	settings = std::move(saved_settings);
+
+	const string &rendered = sink.str();
+	idx_t line_count = 0;
+	for (auto c : rendered) {
+		if (c == '\n') {
+			line_count++;
+		}
+	}
+	// materialized first, so we know the total size - page it when it does not fit on screen
+	duckdb::unique_ptr<PagerState> pager;
+	if (state.ShouldUsePager(line_count)) {
+		pager = state.SetupPager();
+	}
+	state.Print(PrintOutput::STDOUT, rendered);
+	return true;
+}
 
 void RegisterProfilerHighlighting(duckdb::DBConfig &config) {
 	// PRAGMA enable_profiling output (printed directly to stderr)

@@ -905,6 +905,18 @@ public:
 			return;
 		}
 		out.Print(data[1]);
+		// the pretty EXPLAIN ANALYZE tree folds low-impact operators - point users at the full (expanded) tree.
+		// only shown in interactive mode (where the user can type ".last") and only when something was folded
+		if (out.SupportsHighlight() && state.stdin_is_interactive && state.stdout_is_console &&
+		    state.last_explain_hid_content && data[0].GetString() == "analyzed_plan") {
+			const char *hint = "type .last to view the full query tree";
+			if (state.HighlightResults()) {
+				out.Print("\n" + ShellHighlight::TerminalCode(PrintColor::GRAY, PrintIntensity::STANDARD) + hint +
+				          ShellHighlight::ResetTerminalCode() + "\n");
+			} else {
+				out.Print(string("\n") + hint + "\n");
+			}
+		}
 	}
 
 	bool RequireMaterializedResult() const override {
