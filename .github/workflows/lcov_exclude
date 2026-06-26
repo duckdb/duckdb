@@ -1,4 +1,5 @@
 /usr*
+/opt/*
 */cl.hpp
 */tools/shell/*
 */tools/sqlite3_api_wrapper/*
