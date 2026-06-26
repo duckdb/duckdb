@@ -130,7 +130,7 @@ public:
 	//! Add the block handle to the eviction queue.
 	virtual void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 	//! Write a temporary file buffer.
-	virtual void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer);
+	virtual void WriteTemporaryBuffer(QueryContext context, MemoryTag tag, block_id_t block_id, FileBuffer &buffer);
 	//! Read a temporary buffer.
 	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
 	                                                   unique_ptr<FileBuffer> buffer);

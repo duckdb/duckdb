@@ -124,7 +124,7 @@ bool BlockMemory::CanUnload() const {
 	return true;
 }
 
-unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l) {
+unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l, QueryContext context) {
 	VerifyMutex(l);
 
 	if (GetState() == BlockState::BLOCK_UNLOADED) {
@@ -137,15 +137,15 @@ unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l) {
 	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
 		// This is a temporary block that cannot be destroyed upon evict/unpin.
 		// Thus, we write to it to a temporary file.
-		buffer_manager.WriteTemporaryBuffer(GetMemoryTag(), BlockId(), *GetBuffer());
+		buffer_manager.WriteTemporaryBuffer(context, GetMemoryTag(), BlockId(), *GetBuffer());
 	}
 	memory_charge.Resize(0);
 	SetState(BlockState::BLOCK_UNLOADED);
 	return std::move(GetBuffer());
 }
 
-void BlockMemory::Unload(BlockLock &l) {
-	auto block = UnloadAndTakeBlock(l);
+void BlockMemory::Unload(BlockLock &l, QueryContext context) {
+	auto block = UnloadAndTakeBlock(l, context);
 	block.reset();
 }
 
