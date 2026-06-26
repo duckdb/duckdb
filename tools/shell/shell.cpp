@@ -84,6 +84,7 @@
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
 #endif
+#include "terminal.hpp"
 
 #include "duckdb.hpp"
 #include "shell_renderer.hpp"
@@ -1416,6 +1417,31 @@ bool ShellState::ShouldUsePager(idx_t line_count) {
 		}
 	}
 	return true;
+}
+
+idx_t ShellState::GetScreenHeight() {
+	auto size = duckdb::Terminal::GetTerminalSize();
+	return size.ws_row > 0 ? idx_t(size.ws_row) : 0;
+}
+
+bool ShellState::ShouldUsePagerForSize(idx_t line_count, idx_t render_width) {
+	if (!ShouldUsePager()) {
+		return false;
+	}
+	if (pager_mode != PagerMode::PAGER_AUTOMATIC) {
+		// PAGER_ON (PAGER_OFF was already rejected by ShouldUsePager())
+		return true;
+	}
+	// in automatic mode we page when the output does not fit on the screen - either too tall or too wide
+	idx_t screen_rows = GetScreenHeight();
+	idx_t row_threshold = screen_rows > 0 ? screen_rows : pager_min_rows;
+	if (line_count >= row_threshold) {
+		return true;
+	}
+	if (render_width > GetMaxRenderWidth()) {
+		return true;
+	}
+	return false;
 }
 
 bool ShellState::ShouldUsePager(ShellRenderer &renderer, RenderingQueryResult &result) {

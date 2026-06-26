@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/printer.hpp"
 
@@ -57,6 +58,9 @@ public:
 	//! Set by the renderer when it omitted content that a full (unfolded) render would include - i.e. it condensed or
 	//! merged low-impact operators. Lets a caller offer an "expand" affordance only when there is more to show.
 	bool hidden_content = false;
+	//! Set by the renderer to the widest rendered line (in display columns). Lets a caller decide whether the output
+	//! fits on screen horizontally.
+	idx_t max_render_width = 0;
 
 	//! Convenience for emitting layout (box-drawing / padding) text
 	BaseTreeRenderer &operator<<(const string &text) {

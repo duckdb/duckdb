@@ -1350,12 +1350,15 @@ void TextTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) 
 	if (renderer.HidContent()) {
 		ss.hidden_content = true;
 	}
+	idx_t max_width = 0;
 	for (auto &line : lines) {
+		max_width = MaxValue<idx_t>(max_width, LineWidth(line));
 		for (auto &span : line) {
 			ss.Render(span.text, span.type);
 		}
 		ss << "\n";
 	}
+	ss.max_render_width = MaxValue<idx_t>(ss.max_render_width, max_width);
 }
 
 void TextTreeRenderer::Configure(const unordered_map<string, Value> &settings) {

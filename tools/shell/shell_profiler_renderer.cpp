@@ -125,6 +125,8 @@ public:
 	void ToStreamInternal(duckdb::RenderTree &root, duckdb::BaseTreeRenderer &ss) override {
 		HighlightStringRenderer highlighted;
 		duckdb::TextTreeRenderer::ToStreamInternal(root, highlighted);
+		// remember the rendered width so the shell can page when the tree is too wide for the terminal
+		ShellState::Get().last_explain_width = highlighted.max_render_width;
 		ss << highlighted.str();
 	}
 
@@ -132,8 +134,10 @@ public:
 	void RenderProfiler(const duckdb::QueryProfiler &profiler, duckdb::BaseTreeRenderer &ss) override {
 		HighlightStringRenderer highlighted;
 		profiler.RenderQueryTree(highlighted);
-		// remember whether the tree folded anything, so the shell only offers ".last" when there is more to show
+		// remember whether the tree folded anything (so ".last" is only offered when there is more to show) and its
+		// rendered width (so the shell can page when it is too wide for the terminal)
 		ShellState::Get().last_explain_hid_content = highlighted.hidden_content;
+		ShellState::Get().last_explain_width = highlighted.max_render_width;
 		ss << highlighted.str();
 	}
 };
@@ -170,9 +174,9 @@ bool RenderExpandedQueryTree(ShellState &state) {
 			line_count++;
 		}
 	}
-	// materialized first, so we know the total size - page it when it does not fit on screen
+	// materialized first, so we know the total size - page it when it does not fit on screen (too tall or too wide)
 	duckdb::unique_ptr<PagerState> pager;
-	if (state.ShouldUsePager(line_count)) {
+	if (state.ShouldUsePagerForSize(line_count, sink.max_render_width)) {
 		pager = state.SetupPager();
 	}
 	state.Print(PrintOutput::STDOUT, rendered);
