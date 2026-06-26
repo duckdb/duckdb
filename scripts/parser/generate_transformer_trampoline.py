@@ -627,9 +627,8 @@ class UseGramPreviewEmitter:
                 arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
             else:
                 raise NotImplementedError(f"unsupported finalize argument: {type(arg).__name__}")
-        lines.append(
-            f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer, {', '.join(arg_names)});"
-        )
+        transform_args = ["transformer"] + arg_names
+        lines.append(f"\tauto result = PEGTransformerFactory::Transform{rule_name}({', '.join(transform_args)});")
         lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', by_value)};")
         lines.append("}")
         return lines
