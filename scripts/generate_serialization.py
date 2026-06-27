@@ -50,9 +50,7 @@ def get_file_list():
             file_list.append(
                 {
                     "source": os.path.join(source_base, fname),
-                    "target": os.path.join(
-                        target_base, "serialize_" + fname.replace(".json", ".cpp")
-                    ),
+                    "target": os.path.join(target_base, "serialize_" + fname.replace(".json", ".cpp")),
                 }
             )
     return file_list
@@ -67,9 +65,7 @@ version_map = json.load(version_map_file)
 def verify_serialization_versions(version_map):
     serialization = version_map["serialization"]["values"]
     if list(serialization.keys())[-1] != "latest":
-        print(
-            f"The version map ({version_map_path}) for serialization versions must end in 'latest'!"
-        )
+        print(f"The version map ({version_map_path}) for serialization versions must end in 'latest'!")
         exit(1)
 
 
@@ -145,7 +141,9 @@ void {class_name}::Serialize(Serializer &serializer) const {{
 {members}}}
 """
 
-SERIALIZE_ELEMENT_FORMAT = '\tserializer.WriteProperty<{property_type}>({property_id}, "{property_key}", {property_name}{property_default});\n'
+SERIALIZE_ELEMENT_FORMAT = (
+    '\tserializer.WriteProperty<{property_type}>({property_id}, "{property_key}", {property_name}{property_default});\n'
+)
 
 BASE_SERIALIZE_FORMAT = "\t{base_class_name}::Serialize(serializer);\n"
 
@@ -163,9 +161,7 @@ SWITCH_CODE_FORMAT = """\tswitch ({switch_variable}) {{
 \t}}
 """
 
-SET_DESERIALIZE_PARAMETER_FORMAT = (
-    "\tdeserializer.Set<{property_type}>({property_name});\n"
-)
+SET_DESERIALIZE_PARAMETER_FORMAT = "\tdeserializer.Set<{property_type}>({property_name});\n"
 UNSET_DESERIALIZE_PARAMETER_FORMAT = "\tdeserializer.Unset<{property_type}>();\n"
 GET_DESERIALIZE_PARAMETER_FORMAT = "deserializer.Get<{property_type}>()"
 TRY_GET_DESERIALIZE_PARAMETER_FORMAT = "deserializer.TryGet<{property_type}>()"
@@ -234,11 +230,7 @@ def replace_pointer(type):
 
 
 def get_default_argument(default_value):
-    return (
-        f"{default_value}".lower()
-        if type(default_value) == bool
-        else f"{default_value}"
-    )
+    return f"{default_value}".lower() if type(default_value) == bool else f"{default_value}"
 
 
 def get_deserialize_element_template(
@@ -258,9 +250,7 @@ def get_deserialize_element_template(
 
     # read_method = 'ReadProperty'
     assignment = "." if pointer_type == "none" else "->"
-    default_argument = (
-        "" if default_value is None else f", {get_default_argument(default_value)}"
-    )
+    default_argument = "" if default_value is None else f", {get_default_argument(default_value)}"
     if status == MemberVariableStatus.DELETED:
         template = template.replace(", result{assignment}{property_name}", "").replace(
             "ReadProperty", "ReadDeletedProperty"
@@ -291,9 +281,7 @@ def deserialize_local_name(entry):
     return entry.deserialize_property.replace(".", "_")
 
 
-def get_deserialize_assignment(
-    property_name, property_type, pointer_type, local_name=None
-):
+def get_deserialize_assignment(property_name, property_type, pointer_type, local_name=None):
     assignment = "." if pointer_type == "none" else "->"
     # local_name is the variable the property was read into; accessor-call properties (containing '(')
     # are not valid identifiers, so callers pass the member name instead.
@@ -314,9 +302,7 @@ def get_deserialize_method_calls(class_entry, members, pointer_type):
         for arg_name in arg_names:
             member = member_by_name.get(arg_name)
             if member is not None and (
-                member.type in MOVE_LIST
-                or is_container(member.type)
-                or is_pointer(member.type)
+                member.type in MOVE_LIST or is_container(member.type) or is_pointer(member.type)
             ):
                 args.append(f"std::move({arg_name})")
             else:
@@ -347,9 +333,7 @@ def parse_status(status: str):
         return MemberVariableStatus.EXISTING
     valid_options = ["deleted", "read_only", "existing"]
     valid_options_string = ", ".join(valid_options)
-    print(
-        f"Invalid 'status' ('{status}') encountered, valid options are: {valid_options_string}"
-    )
+    print(f"Invalid 'status' ('{status}') encountered, valid options are: {valid_options_string}")
     exit(1)
 
 
@@ -506,9 +490,7 @@ class ClangTidyIgnoreRule:
     @classmethod
     def from_dict(cls, entry: dict) -> "ClangTidyIgnoreRule":
         if "name" not in entry or "reason" not in entry:
-            raise ValueError(
-                "Each entry in 'ignore_clang_tidy_rules' must have both 'name' and 'reason' fields"
-            )
+            raise ValueError("Each entry in 'ignore_clang_tidy_rules' must have both 'name' and 'reason' fields")
         return cls(name=entry["name"], reason=entry["reason"])
 
     @classmethod
@@ -546,9 +528,7 @@ class SerializableClass:
         if "use_legacy_serialization" in entry:
             self.use_legacy_serialization = entry["use_legacy_serialization"]
         if "ignore_clang_tidy_rules" in entry:
-            self.ignore_clang_tidy_rules = ClangTidyIgnoreRule.from_entries(
-                entry["ignore_clang_tidy_rules"]
-            )
+            self.ignore_clang_tidy_rules = ClangTidyIgnoreRule.from_entries(entry["ignore_clang_tidy_rules"])
         if "finalize_deserialization" in entry:
             self.finalize_deserialization = entry["finalize_deserialization"]
         if self.is_base_class:
@@ -564,9 +544,7 @@ class SerializableClass:
         if "constructor" in entry:
             self.constructor = entry["constructor"]
             if not isinstance(self.constructor, list):
-                print(
-                    f"constructor for {self.name}, must be of type [], but is of type {str(type(self.constructor))}"
-                )
+                print(f"constructor for {self.name}, must be of type [], but is of type {str(type(self.constructor))}")
                 exit(1)
         if "constructor_method" in entry:
             self.constructor_method = entry["constructor_method"]
@@ -594,9 +572,7 @@ class SerializableClass:
                         found = True
                         break
                 if not found:
-                    raise Exception(
-                        f"Set parameter {set_parameter_name} not found in member list"
-                    )
+                    raise Exception(f"Set parameter {set_parameter_name} not found in member list")
         for key in entry.keys():
             if key not in supported_serialize_entries:
                 print(
@@ -628,9 +604,7 @@ class SerializableClass:
         property_name = deserialize_local_name(entry)
         template = DESERIALIZE_ELEMENT_FORMAT
         if base:
-            template = DESERIALIZE_ELEMENT_BASE_FORMAT.replace(
-                "{base_property}", base.replace("*", "")
-            )
+            template = DESERIALIZE_ELEMENT_BASE_FORMAT.replace("{base_property}", base.replace("*", ""))
 
         return get_deserialize_element_template(
             template,
@@ -639,11 +613,7 @@ class SerializableClass:
             property_id,
             property_type,
             entry.has_default or entry.deserialize_default is not None,
-            (
-                entry.deserialize_default
-                if entry.deserialize_default is not None
-                else entry.default
-            ),
+            (entry.deserialize_default if entry.deserialize_default is not None else entry.default),
             entry.status,
             pointer_type,
         )
@@ -656,17 +626,12 @@ class SerializableClass:
         default_value = entry.default
 
         assignment = "." if self.pointer_type == "none" else "->"
-        default_argument = (
-            "" if default_value is None else f", {get_default_argument(default_value)}"
-        )
+        default_argument = "" if default_value is None else f", {get_default_argument(default_value)}"
         storage_version = lookup_serialization_version(entry.version)
         conditional_serialization = storage_version != 1
         storage_version_enum = version_string_to_storage_version_enum(entry.version)
         template = SERIALIZE_ELEMENT_FORMAT
-        if (
-            entry.status != MemberVariableStatus.EXISTING
-            and not conditional_serialization
-        ):
+        if entry.status != MemberVariableStatus.EXISTING and not conditional_serialization:
             template = '\t/* [Deleted] ({property_type}) "{property_name}" */\n'
         elif entry.has_default:
             template = template.replace("WriteProperty", "WritePropertyWithDefault")
@@ -682,21 +647,15 @@ class SerializableClass:
         if entry.serialize_until is not None:
             # Only serialize for storage versions older than serialize_until (newer versions use a replacement
             # property). Deserialization is unaffected.
-            serialize_until_enum = version_string_to_storage_version_enum(
-                entry.serialize_until
-            )
+            serialize_until_enum = version_string_to_storage_version_enum(entry.serialize_until)
             return (
-                f"\tif (!serializer.ShouldSerialize({serialize_until_enum})) {{\n"
-                f"\t{serialization_code}"
-                f"\t}}\n"
+                f"\tif (!serializer.ShouldSerialize({serialize_until_enum})) {{\n" f"\t{serialization_code}" f"\t}}\n"
             )
 
         if entry.required_until is not None:
             # Write as a required property for versions older than required_until (so older releases can read it),
             # and as the optional property above (skipped when default) from required_until onwards.
-            required_until_enum = version_string_to_storage_version_enum(
-                entry.required_until
-            )
+            required_until_enum = version_string_to_storage_version_enum(entry.required_until)
             required_code = SERIALIZE_ELEMENT_FORMAT.format(
                 property_name=property_name,
                 property_type=property_type,
@@ -717,14 +676,10 @@ class SerializableClass:
             code = []
             if entry.status != MemberVariableStatus.EXISTING:
                 # conditional delete
-                code.append(
-                    f"\tif (!serializer.ShouldSerialize({storage_version_enum})) {{"
-                )
+                code.append(f"\tif (!serializer.ShouldSerialize({storage_version_enum})) {{")
             else:
                 # conditional serialization
-                code.append(
-                    f"\tif (serializer.ShouldSerialize({storage_version_enum})) {{"
-                )
+                code.append(f"\tif (serializer.ShouldSerialize({storage_version_enum})) {{")
             code.append("\t" + serialization_code)
 
             result = "\n".join(code) + "\t}\n"
@@ -765,9 +720,7 @@ def generate_base_class_code(base_class: SerializableClass):
             property_type=entry.type, property_name=entry.name
         )
 
-    base_class_deserialize += (
-        f"\t{base_class.pointer_type}<{base_class.name}> result;\n"
-    )
+    base_class_deserialize += f"\t{base_class.pointer_type}<{base_class.name}> result;\n"
     switch_cases = ""
     for expr in expressions:
         enum_value = expr[0]
@@ -779,12 +732,7 @@ def generate_base_class_code(base_class: SerializableClass):
                 class_deserialize=child_data.name,
             )
             switch_cases += "\n".join(
-                [
-                    "\t\t" + x
-                    for x in child_data.custom_switch_code.replace("\\n", "\n").split(
-                        "\n"
-                    )
-                ]
+                ["\t\t" + x for x in child_data.custom_switch_code.replace("\\n", "\n").split("\n")]
             )
             switch_cases += "\n"
             continue
@@ -813,14 +761,10 @@ def generate_base_class_code(base_class: SerializableClass):
         base_class=base_class.name,
     )
 
-    deserialize_return = get_return_value(
-        base_class.pointer_type, base_class.return_type
-    )
+    deserialize_return = get_return_value(base_class.pointer_type, base_class.return_type)
 
     for entry in base_class.set_parameters:
-        base_class_deserialize += UNSET_DESERIALIZE_PARAMETER_FORMAT.format(
-            property_type=entry.type
-        )
+        base_class_deserialize += UNSET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.type)
 
     for entry in assign_entries:
         if entry.status != MemberVariableStatus.EXISTING:
@@ -833,23 +777,13 @@ def generate_base_class_code(base_class: SerializableClass):
             continue
         local = deserialize_local_name(entry)
         move = False
-        if (
-            entry.type in MOVE_LIST
-            or is_container(entry.type)
-            or is_pointer(entry.type)
-        ):
+        if entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type):
             move = True
         if move:
-            base_class_deserialize += (
-                f"\tresult->{entry.deserialize_property} = std::move({local});\n"
-            )
+            base_class_deserialize += f"\tresult->{entry.deserialize_property} = std::move({local});\n"
         else:
-            base_class_deserialize += (
-                f"\tresult->{entry.deserialize_property} = {local};\n"
-            )
-    base_class_deserialize += get_deserialize_method_calls(
-        base_class, base_class.members, base_class.pointer_type
-    )
+            base_class_deserialize += f"\tresult->{entry.deserialize_property} = {local};\n"
+    base_class_deserialize += get_deserialize_method_calls(base_class, base_class.members, base_class.pointer_type)
     if base_class.finalize_deserialization is not None:
         for line in base_class.finalize_deserialization:
             base_class_deserialize += "\t" + line + "\n"
@@ -915,13 +849,9 @@ def generate_class_code(class_entry: SerializableClass):
                     if entry_idx > last_constructor_index:
                         last_constructor_index = entry_idx
                     type_name = replace_pointer(entry.type)
-                    entry.deserialize_property = entry.deserialize_property.replace(
-                        ".", "_"
-                    )
+                    entry.deserialize_property = entry.deserialize_property.replace(".", "_")
                     if requires_move(type_name) and not is_reference:
-                        constructor_parameters.append(
-                            f"std::move({entry.deserialize_property})"
-                        )
+                        constructor_parameters.append(f"std::move({entry.deserialize_property})")
                     else:
                         constructor_parameters.append(entry.deserialize_property)
                     found = True
@@ -937,25 +867,17 @@ def generate_class_code(class_entry: SerializableClass):
                     get_format = GET_DESERIALIZE_PARAMETER_FORMAT
                     if param_type in REFERENCE_LIST:
                         param_type += " &"
-                constructor_parameters.append(
-                    get_format.format(property_type=param_type)
-                )
+                constructor_parameters.append(get_format.format(property_type=param_type))
                 found = True
 
             if class_entry.base_object is not None:
                 for entry in class_entry.base_object.set_parameters:
                     if entry.name == constructor_entry:
-                        constructor_parameters.append(
-                            GET_DESERIALIZE_PARAMETER_FORMAT.format(
-                                property_type=entry.type
-                            )
-                        )
+                        constructor_parameters.append(GET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.type))
                         found = True
                         break
             if not found:
-                print(
-                    f'Constructor member "{constructor_entry}" was not found in members list'
-                )
+                print(f'Constructor member "{constructor_entry}" was not found in members list')
                 exit(1)
     elif class_entry.constructor_method is not None:
         for entry_idx, entry in enumerate(class_entry.members):
@@ -967,23 +889,17 @@ def generate_class_code(class_entry: SerializableClass):
             type_name = replace_pointer(entry.type)
             entry.deserialize_property = entry.deserialize_property.replace(".", "_")
             if requires_move(type_name):
-                constructor_parameters.append(
-                    f"std::move({entry.deserialize_property})"
-                )
+                constructor_parameters.append(f"std::move({entry.deserialize_property})")
             else:
                 constructor_parameters.append(entry.deserialize_property)
 
     if class_entry.base is not None:
-        class_serialize += BASE_SERIALIZE_FORMAT.format(
-            base_class_name=class_entry.base
-        )
+        class_serialize += BASE_SERIALIZE_FORMAT.format(base_class_name=class_entry.base)
     for entry_idx in range(last_constructor_index + 1):
         entry = class_entry.members[entry_idx]
         if entry.serialize_skip:
             continue
-        class_deserialize += class_entry.get_deserialize_element(
-            entry, base=entry.base, pointer_type="unique_ptr"
-        )
+        class_deserialize += class_entry.get_deserialize_element(entry, base=entry.base, pointer_type="unique_ptr")
 
     class_deserialize += class_entry.generate_constructor(constructor_parameters)
     if class_entry.members is None:
@@ -1029,17 +945,12 @@ def generate_class_code(class_entry: SerializableClass):
                 class_entry.pointer_type,
                 deserialize_local_name(entry),
             )
-        if (
-            entry.name in class_entry.set_parameter_names
-            and entry.status == MemberVariableStatus.EXISTING
-        ):
+        if entry.name in class_entry.set_parameter_names and entry.status == MemberVariableStatus.EXISTING:
             class_deserialize += SET_DESERIALIZE_PARAMETER_FORMAT.format(
                 property_type=entry.type, property_name=entry.name
             )
 
-    class_deserialize += get_deserialize_method_calls(
-        class_entry, class_entry.members, class_entry.pointer_type
-    )
+    class_deserialize += get_deserialize_method_calls(class_entry, class_entry.members, class_entry.pointer_type)
     for entry in class_entry.set_parameters:
         class_deserialize += UNSET_DESERIALIZE_PARAMETER_FORMAT.format(
             property_type=entry.type, property_name=entry.name
@@ -1050,9 +961,7 @@ def generate_class_code(class_entry: SerializableClass):
         for line in class_entry.finalize_deserialization:
             class_deserialize += "\t" + line + "\n"
     class_deserialize += generate_return(class_entry)
-    deserialize_return = get_return_value(
-        class_entry.pointer_type, class_entry.return_type
-    )
+    deserialize_return = get_return_value(class_entry.pointer_type, class_entry.return_type)
 
     class_generation = ""
     pattern = re.compile(r"<\w+>")
@@ -1061,15 +970,11 @@ def generate_class_code(class_entry: SerializableClass):
     # Check if is a templated class
     is_templated = pattern.search(class_entry.name)
     if is_templated:
-        templated_type = TEMPLATED_BASE_FORMAT.format(
-            template_name=is_templated.group()[1:-1]
-        )
+        templated_type = TEMPLATED_BASE_FORMAT.format(template_name=is_templated.group()[1:-1])
 
     legacy_serialize_preamble = ""
     if class_entry.use_legacy_serialization is not None:
-        storage_version_enum = version_string_to_storage_version_enum(
-            class_entry.use_legacy_serialization
-        )
+        storage_version_enum = version_string_to_storage_version_enum(class_entry.use_legacy_serialization)
         legacy_serialize_preamble = (
             f"\tif (!serializer.ShouldSerialize({storage_version_enum}) && UseLegacySerialization()) {{\n"
             f"\t\tLegacySerialize(serializer);\n"
@@ -1089,9 +994,7 @@ def generate_class_code(class_entry: SerializableClass):
     return class_generation
 
 
-def check_children_for_duplicate_members(
-    node: SerializableClass, parents: list, seen_names: set, seen_ids: set
-):
+def check_children_for_duplicate_members(node: SerializableClass, parents: list, seen_names: set, seen_ids: set):
     # Check for duplicate names
     if node.members is not None:
         for member in node.members:
@@ -1109,9 +1012,7 @@ def check_children_for_duplicate_members(
 
     # Recurse
     for child in node.children.values():
-        check_children_for_duplicate_members(
-            child, parents + [node], seen_names.copy(), seen_ids.copy()
-        )
+        check_children_for_duplicate_members(child, parents + [node], seen_names.copy(), seen_ids.copy())
 
 
 file_list = get_file_list()
@@ -1137,9 +1038,7 @@ for entry in file_list:
     for entry in json_data:
         if "includes" in entry:
             if type(entry["includes"]) != type([]):
-                print(
-                    f"Include list must be a list, found {type(entry['includes'])} (in {str(entry)})"
-                )
+                print(f"Include list must be a list, found {type(entry['includes'])} (in {str(entry)})")
                 exit(1)
             for include_entry in entry["includes"]:
                 if include_entry not in include_list:
@@ -1156,9 +1055,7 @@ for entry in file_list:
         if new_class.base is not None:
             # this class inherits from a base class - add the enum value
             if new_class.base not in base_class_data:
-                raise Exception(
-                    f'Unknown base class "{new_class.base}" for entry "{new_class.name}"'
-                )
+                raise Exception(f'Unknown base class "{new_class.base}" for entry "{new_class.name}"')
             base_class_object = base_class_data[new_class.base]
             new_class.inherit(base_class_object)
             for enum_entry in new_class.enum_entries:
@@ -1173,9 +1070,7 @@ for entry in file_list:
             check_children_for_duplicate_members(base_class, [], set(), set())
 
     with open(target_path, "w+") as f:
-        include_list = "".join(
-            [INCLUDE_FORMAT.format(filename=x) for x in include_list]
-        )
+        include_list = "".join([INCLUDE_FORMAT.format(filename=x) for x in include_list])
         header = HEADER.format(include_list=include_list)
         f.write(header)
 
@@ -1191,9 +1086,7 @@ for entry in file_list:
         classes = sorted(classes, key=lambda x: x.name)
         for class_entry in classes:
             class_generation = generate_class_code(class_entry)
-            class_generation = wrap_with_clang_tidy_ignore(
-                class_generation, class_entry.ignore_clang_tidy_rules
-            )
+            class_generation = wrap_with_clang_tidy_ignore(class_generation, class_entry.ignore_clang_tidy_rules)
             if class_generation is None:
                 continue
             f.write(class_generation)
