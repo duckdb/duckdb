@@ -82,7 +82,7 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	// Deduplicate by catalog name.
 	identifier_set_t seen_remote_catalogs;
 	for (auto &entry : search_path) {
-		auto catalog_entry = Catalog::GetCatalogEntry(binder.context, entry.catalog);
+		auto catalog_entry = Catalog::GetCatalogEntry(binder.context, entry.GetCatalog());
 		if (!catalog_entry) {
 			continue;
 		}
@@ -359,9 +359,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(SelectNode &node) {
 CatalogPushdownResult RemotePushdownOptimizer::RewriteNode(InsertQueryNode &node) {
 	// first bind the target table for the insert
 	BaseTableRef target_ref;
-	target_ref.CatalogMutable() = node.qualified_name.Catalog();
-	target_ref.SchemaMutable() = node.qualified_name.Schema();
-	target_ref.TableMutable() = node.qualified_name.Name();
+	target_ref.SetQualifiedName(node.qualified_name);
 
 	RemotePushdownOptimizer target_optimizer(this);
 	auto result = target_optimizer.Rewrite(target_ref);
@@ -621,11 +619,11 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteTableFunctionOnly(TableFun
 	FindRemoteCatalogsInSearchPath();
 	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(func_expr.FunctionName()));
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
-		const Identifier &schema = schema_name.empty() ? local_entry.schema : schema_name;
-		auto entry = Catalog::GetEntry(
-		    binder.context,
-		    EntryLookupInfo(func_lookup, QualifiedName(local_entry.catalog, schema, func_lookup.GetEntryIdentifier())),
-		    OnEntryNotFound::RETURN_NULL);
+		const Identifier &schema = schema_name.empty() ? local_entry.GetSchema() : schema_name;
+		auto entry = Catalog::GetEntry(binder.context,
+		                               EntryLookupInfo(func_lookup, QualifiedName(local_entry.GetCatalog(), schema,
+		                                                                          func_lookup.GetEntryIdentifier())),
+		                               OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 			auto &tf_entry = entry->Cast<TableFunctionCatalogEntry>();
 			bool is_set_returning = false;
@@ -787,9 +785,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		// If the ref specifies a schema, use it; otherwise use the search path schema
-		const auto &schema = schema_name.empty() ? local_entry.schema : schema_name;
+		const auto &schema = schema_name.empty() ? local_entry.GetSchema() : schema_name;
 		auto entry = Catalog::GetEntry(binder.context,
-		                               EntryLookupInfo(table_lookup, QualifiedName(local_entry.catalog, schema,
+		                               EntryLookupInfo(table_lookup, QualifiedName(local_entry.GetCatalog(), schema,
 		                                                                           table_lookup.GetEntryIdentifier())),
 		                               OnEntryNotFound::RETURN_NULL);
 		if (entry) {
@@ -1068,10 +1066,12 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const Identifier &
 	case TableReferenceType::BASE_TABLE: {
 		auto &base = ref.Cast<BaseTableRef>();
 		if (base.GetQualifiedName().Catalog() == catalog_name) {
-			base.CatalogMutable() = "";
+			base.SetQualifiedName(
+			    QualifiedName(Identifier(), base.GetQualifiedName().Schema(), base.GetQualifiedName().Name()));
 		} else if (base.GetQualifiedName().Catalog().empty() && base.GetQualifiedName().Schema() == catalog_name) {
 			// 2-part name (schema.table) where the schema is actually the catalog being pushed to
-			base.SchemaMutable() = "";
+			base.SetQualifiedName(
+			    QualifiedName(base.GetQualifiedName().Catalog(), Identifier(), base.GetQualifiedName().Name()));
 		}
 		break;
 	}
@@ -1139,17 +1139,21 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Ide
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func = expr.Cast<FunctionExpression>();
 		if (func.GetQualifiedName().Catalog() == catalog_name) {
-			func.CatalogMutable() = "";
+			func.SetQualifiedName(
+			    QualifiedName(Identifier(), func.GetQualifiedName().Schema(), func.GetQualifiedName().Name()));
 		} else if (func.GetQualifiedName().Catalog().empty() && func.GetQualifiedName().Schema() == catalog_name) {
-			func.SchemaMutable() = "";
+			func.SetQualifiedName(
+			    QualifiedName(func.GetQualifiedName().Catalog(), Identifier(), func.GetQualifiedName().Name()));
 		}
 		// Fall through to EnumerateChildren to also strip catalog refs inside arguments
 	} else if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
 		auto &win = expr.Cast<WindowExpression>();
 		if (win.GetQualifiedName().Catalog() == catalog_name) {
-			win.CatalogMutable() = "";
+			win.SetQualifiedName(
+			    QualifiedName(Identifier(), win.GetQualifiedName().Schema(), win.GetQualifiedName().Name()));
 		} else if (win.GetQualifiedName().Catalog().empty() && win.GetQualifiedName().Schema() == catalog_name) {
-			win.SchemaMutable() = "";
+			win.SetQualifiedName(
+			    QualifiedName(win.GetQualifiedName().Catalog(), Identifier(), win.GetQualifiedName().Name()));
 		}
 		// Fall through to EnumerateChildren to strip catalog refs inside partitions/orders/children
 	} else if (expr.GetExpressionClass() == ExpressionClass::CAST) {
@@ -1253,9 +1257,11 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const Identifier
 		}
 		// Strip from the target table's catalog/schema fields (these are what ToString() serializes)
 		if (insert.qualified_name.Catalog() == catalog_name) {
-			insert.qualified_name.CatalogMutable() = Identifier();
+			insert.qualified_name =
+			    QualifiedName(Identifier(), insert.qualified_name.Schema(), insert.qualified_name.Name());
 		} else if (insert.qualified_name.Catalog().empty() && insert.qualified_name.Schema() == catalog_name) {
-			insert.qualified_name.SchemaMutable() = Identifier();
+			insert.qualified_name =
+			    QualifiedName(insert.qualified_name.Catalog(), Identifier(), insert.qualified_name.Name());
 		}
 		if (insert.select_statement) {
 			StripCatalogName(*insert.select_statement->node, catalog_name);

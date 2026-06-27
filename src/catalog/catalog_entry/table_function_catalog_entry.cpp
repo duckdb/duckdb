@@ -13,8 +13,8 @@ TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog &catalog, SchemaCat
     : FunctionEntry(CatalogType::TABLE_FUNCTION_ENTRY, catalog, schema, info), functions(std::move(info.functions)) {
 	D_ASSERT(this->functions.Size() > 0);
 	for (auto &function : functions.functions) {
-		function.catalog_name = catalog.GetAttached().GetName();
-		function.schema_name = schema.name;
+		function.SetCatalogName(catalog.GetAttached().GetName());
+		function.SetSchemaName(schema.name);
 	}
 }
 

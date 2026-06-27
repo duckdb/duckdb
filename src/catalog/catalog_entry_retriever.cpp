@@ -100,7 +100,8 @@ const CatalogSearchPath &CatalogEntryRetriever::GetSearchPath() const {
 void CatalogEntryRetriever::SetSearchPath(vector<CatalogSearchEntry> entries) {
 	vector<CatalogSearchEntry> new_path;
 	for (auto &entry : entries) {
-		if (IsInvalidCatalog(entry.catalog) || entry.catalog == SYSTEM_CATALOG || entry.catalog == TEMP_CATALOG) {
+		if (IsInvalidCatalog(entry.GetCatalog()) || entry.GetCatalog() == SYSTEM_CATALOG ||
+		    entry.GetCatalog() == TEMP_CATALOG) {
 			continue;
 		}
 		new_path.push_back(std::move(entry));
@@ -113,8 +114,8 @@ void CatalogEntryRetriever::SetSearchPath(vector<CatalogSearchEntry> entries) {
 	auto &client_search_path = *ClientData::Get(context).catalog_search_path;
 	auto &set_paths = client_search_path.GetSetPaths();
 	for (auto path : set_paths) {
-		if (IsInvalidCatalog(path.catalog)) {
-			path.catalog = DatabaseManager::GetDefaultDatabase(context);
+		if (IsInvalidCatalog(path.GetCatalog())) {
+			path.SetCatalog(DatabaseManager::GetDefaultDatabase(context));
 		}
 		new_path.push_back(std::move(path));
 	}

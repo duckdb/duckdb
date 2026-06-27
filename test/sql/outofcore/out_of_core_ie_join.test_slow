@@ -7,6 +7,9 @@ require tpch
 load {TEST_DIR}/out_of_core_ie_join.db
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CALL dbgen(sf=1);
 
 query I

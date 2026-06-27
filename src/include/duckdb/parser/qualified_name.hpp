@@ -9,11 +9,13 @@
 #pragma once
 
 #include "duckdb/common/string.hpp"
-#include "duckdb/planner/binding_alias.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+struct BindingAlias;
 
 //! Controls how QualifiedName::ToString renders the schema qualification
 enum class QualifiedNameToStringMode : uint8_t {
@@ -27,50 +29,47 @@ struct QualifiedName {
 	QualifiedName() = default;
 	//! Construct an unqualified name (no catalog/schema). Implicit so that an Identifier can be passed wherever an
 	//! unqualified QualifiedName lookup is expected (also preserves backwards-compatibility for extensions).
-	QualifiedName(Identifier name_p) : name(std::move(name_p)) { // NOLINT: allow implicit conversion
+	QualifiedName(Identifier name_p) { // NOLINT: allow implicit conversion
+		path.push_back(std::move(name_p));
 	}
-	QualifiedName(Identifier catalog_p, Identifier schema_p, Identifier name_p) : name(std::move(name_p)) {
-		// store the catalog/schema as a schema path - in preparation for multi-level schema support
-		// for now we only support a single schema level, so the path is at most [catalog, schema]
+	QualifiedName(Identifier catalog_p, Identifier schema_p, Identifier name_p) {
+		// store the catalog/schema/name as a single path - in preparation for multi-level schema support
+		// for now we only support a single schema level, so the path is at most [catalog, schema, name]
 		if (!catalog_p.empty()) {
-			schema_path.push_back(std::move(catalog_p));
-			schema_path.push_back(std::move(schema_p));
+			path.push_back(std::move(catalog_p));
+			path.push_back(std::move(schema_p));
 		} else if (!schema_p.empty()) {
-			schema_path.push_back(std::move(schema_p));
+			path.push_back(std::move(schema_p));
 		}
+		path.push_back(std::move(name_p));
+	}
+	//! Construct from an explicit schema path (the catalog/schema components actually present) and a name. Use this to
+	//! avoid passing INVALID_CATALOG/INVALID_SCHEMA placeholders for components that are not set.
+	QualifiedName(vector<Identifier> schema_path_p, Identifier name_p) : path(std::move(schema_path_p)) {
+		path.push_back(std::move(name_p));
 	}
 
-	//! The catalog is the first element of the schema path, but only when the path is fully qualified (size 2)
+	//! The catalog is the first element of the path, but only when the path is fully qualified ([catalog, schema,
+	//! name])
 	const Identifier &Catalog() const {
-		return schema_path.size() == 2 ? schema_path[0] : empty;
+		return path.size() == 3 ? path[0] : empty;
 	}
-	Identifier &CatalogMutable() {
-		EnsureQualified();
-		return schema_path[0];
-	}
-	//! The schema is the last element of the schema path (or empty if there is no schema)
+	//! The schema is the element directly before the name (or empty if there is no schema)
 	const Identifier &Schema() const {
-		if (schema_path.size() == 1) {
-			return schema_path[0];
-		}
-		if (schema_path.size() == 2) {
-			return schema_path[1];
-		}
-		return empty;
+		return path.size() >= 2 ? path[path.size() - 2] : empty;
 	}
-	Identifier &SchemaMutable() {
-		EnsureQualified();
-		return schema_path[1];
-	}
+	//! The name is the last element of the path
 	const Identifier &Name() const {
-		return name;
+		return path.empty() ? empty : path.back();
 	}
-	Identifier &NameMutable() {
-		return name;
+
+	//! Return a copy of this name with the name replaced, keeping the catalog/schema qualification
+	QualifiedName WithName(Identifier name) const {
+		return QualifiedName(Catalog(), Schema(), std::move(name));
 	}
-	//! The full schema path of the qualified name (catalog/schema components)
-	const vector<Identifier> &SchemaPath() const {
-		return schema_path;
+	//! Return a copy of this name with the catalog/schema qualification replaced by the given path, keeping the name
+	QualifiedName WithQualification(vector<Identifier> schema_path) const {
+		return QualifiedName(std::move(schema_path), Name());
 	}
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
@@ -84,22 +83,10 @@ struct QualifiedName {
 	bool operator!=(const QualifiedName &rhs) const;
 
 private:
-	//! Normalize the schema path to be fully qualified ([catalog, schema]) so that CatalogMutable()/SchemaMutable()
-	//! return stable references - the catalog lives at [0] and the schema at [1]
-	void EnsureQualified() {
-		if (schema_path.empty()) {
-			schema_path.resize(2);
-		} else if (schema_path.size() == 1) {
-			schema_path.insert(schema_path.begin(), Identifier());
-		}
-	}
-
-private:
-	//! The schema path (catalog/schema). For now at most [catalog, schema] (single schema level).
-	vector<Identifier> schema_path;
-	//! The name of the entry
-	Identifier name;
-	//! Always-empty identifier, returned by the accessors when a catalog/schema component is absent
+	//! The full path (catalog/schema/name). The name is always the last element; the catalog/schema components that
+	//! are actually present precede it. For now at most [catalog, schema, name] (single schema level).
+	vector<Identifier> path;
+	//! Always-empty identifier, returned by the accessors when a catalog/schema/name component is absent
 	Identifier empty;
 };
 

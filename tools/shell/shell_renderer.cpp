@@ -905,6 +905,14 @@ public:
 			return;
 		}
 		out.Print(data[1]);
+		// the pretty EXPLAIN ANALYZE tree folds low-impact operators - point users at the full (expanded) tree.
+		// only shown in interactive mode (where the user can type ".last") and only when something was folded
+		if (out.SupportsHighlight() && state.stdin_is_interactive && state.stdout_is_console &&
+		    state.last_explain_hid_content && data[0].GetString() == "analyzed_plan") {
+			string hint = "\ntype .last to view the full query tree\n";
+			ShellHighlight highlight(state);
+			highlight.PrintText(hint, PrintOutput::STDOUT, HighlightElementType::FOOTER);
+		}
 	}
 
 	bool RequireMaterializedResult() const override {
@@ -913,6 +921,9 @@ public:
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
 		if (global_mode == PagerMode::PAGER_ON) {
 			return true;
+		}
+		// load the (materialized) result so we can measure the rendered tree height
+		while (result.TryConvertChunk()) {
 		}
 		idx_t row_count = 0;
 		for (auto &chunk : result.chunks) {
@@ -930,7 +941,8 @@ public:
 				}
 			}
 		}
-		return row_count >= state.pager_min_rows;
+		// page the tree when it does not fit on the screen (too tall, or too wide for the terminal)
+		return state.ShouldUsePagerForSize(row_count, state.last_explain_width);
 	}
 };
 

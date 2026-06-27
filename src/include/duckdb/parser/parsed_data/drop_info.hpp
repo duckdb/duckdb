@@ -45,14 +45,20 @@ public:
 	QualifiedName &GetQualifiedNameMutable() {
 		return qualified_name;
 	}
-	Identifier &CatalogMutable() {
-		return qualified_name.CatalogMutable();
+	void SetQualifiedName(QualifiedName name) {
+		qualified_name = std::move(name);
 	}
-	Identifier &SchemaMutable() {
-		return qualified_name.SchemaMutable();
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
 	}
-	Identifier &NameMutable() {
-		return qualified_name.NameMutable();
+	void SetName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
+	}
+	void SetSchema(Identifier schema) {
+		qualified_name = QualifiedName(qualified_name.Catalog(), std::move(schema), qualified_name.Name());
+	}
+	void SetCatalog(Identifier catalog) {
+		qualified_name = QualifiedName(std::move(catalog), qualified_name.Schema(), qualified_name.Name());
 	}
 
 public:

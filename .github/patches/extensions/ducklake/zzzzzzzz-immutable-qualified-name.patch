@@ -1,0 +1,26 @@
+diff --git a/src/storage/ducklake_catalog.cpp b/src/storage/ducklake_catalog.cpp
+index 6df47ed..c9f0ef9 100644
+--- a/src/storage/ducklake_catalog.cpp
++++ b/src/storage/ducklake_catalog.cpp
+@@ -140,7 +140,7 @@ optional_ptr<CatalogEntry> DuckLakeCatalog::CreateSchema(CatalogTransaction tran
+ 		// drop the existing entry
+ 		DropInfo drop_info;
+ 		drop_info.type = CatalogType::SCHEMA_ENTRY;
+-		drop_info.NameMutable() = info.GetQualifiedName().Schema();
++		drop_info.SetName(info.GetQualifiedName().Schema());
+ 		DropSchema(transaction.GetContext(), drop_info);
+ 	}
+ 	auto &duck_transaction = transaction.transaction->Cast<DuckLakeTransaction>();
+diff --git a/src/storage/ducklake_schema_entry.cpp b/src/storage/ducklake_schema_entry.cpp
+index 7a828ff..69379a0 100644
+--- a/src/storage/ducklake_schema_entry.cpp
++++ b/src/storage/ducklake_schema_entry.cpp
+@@ -51,7 +51,7 @@ bool DuckLakeSchemaEntry::HandleCreateConflict(CatalogTransaction transaction, C
+ 		// try to drop the entry prior to creating
+ 		DropInfo info;
+ 		info.type = catalog_type;
+-		info.NameMutable() = Identifier(entry_name);
++		info.SetName(Identifier(entry_name));
+ 		DropEntry(transaction.GetContext(), info);
+ 		break;
+ 	}

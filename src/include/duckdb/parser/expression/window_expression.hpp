@@ -73,17 +73,14 @@ public:
 	QualifiedName &GetQualifiedNameMutable() {
 		return qualified_name;
 	}
-	Identifier &CatalogMutable() {
-		return qualified_name.CatalogMutable();
+	void SetQualifiedName(QualifiedName name) {
+		qualified_name = std::move(name);
 	}
-	Identifier &SchemaMutable() {
-		return qualified_name.SchemaMutable();
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
 	}
 	const Identifier &FunctionName() const {
 		return qualified_name.Name();
-	}
-	Identifier &FunctionNameMutable() {
-		return qualified_name.NameMutable();
 	}
 	const vector<unique_ptr<ParsedExpression>> &Partitions() const {
 		return partitions;

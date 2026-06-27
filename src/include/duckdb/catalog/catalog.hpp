@@ -313,24 +313,19 @@ public:
 	         const EntryLookupInfo &lookup_info);
 
 	template <class T>
-	optional_ptr<T> GetEntry(ClientContext &context, const Identifier &schema_name, const Identifier &name,
-	                         OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext()) {
-		EntryLookupInfo lookup_info(T::Type, QualifiedName(GetName(), schema_name, name), error_context);
-		auto entry = GetEntry(context, lookup_info, if_not_found);
-		if (!entry) {
-			return nullptr;
-		}
-		if (entry->type != T::Type) {
-			throw CatalogException(error_context, "%s is not an %s", name, T::Name);
-		}
-		return &entry->template Cast<T>();
+	[[deprecated("Fold the catalog/schema into a QualifiedName and use GetEntry<T>(context, QualifiedName, ...) "
+	             "instead")]] optional_ptr<T>
+	GetEntry(ClientContext &context, const Identifier &schema_name, const Identifier &name,
+	         OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext()) {
+		return GetEntry<T>(context, QualifiedName(GetName(), schema_name, name), if_not_found, error_context);
 	}
 
 	template <class T>
-	T &GetEntry(ClientContext &context, const Identifier &schema_name, const Identifier &name,
-	            QueryErrorContext error_context = QueryErrorContext()) {
-		auto entry = GetEntry<T>(context, schema_name, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
-		return *entry;
+	[[deprecated("Fold the catalog/schema into a QualifiedName and use GetEntry<T>(context, QualifiedName, ...) "
+	             "instead")]] T &
+	GetEntry(ClientContext &context, const Identifier &schema_name, const Identifier &name,
+	         QueryErrorContext error_context = QueryErrorContext()) {
+		return GetEntry<T>(context, QualifiedName(GetName(), schema_name, name), error_context);
 	}
 
 	//! Gets the "catalog.schema.name" entry of the specified type from a QualifiedName

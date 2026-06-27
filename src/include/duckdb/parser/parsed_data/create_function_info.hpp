@@ -38,7 +38,7 @@ struct CreateFunctionInfo : public CreateInfo {
 		return qualified_name.Name();
 	}
 	void SetFunctionName(Identifier name) {
-		qualified_name.NameMutable() = std::move(name);
+		qualified_name = qualified_name.WithName(std::move(name));
 	}
 
 	DUCKDB_API void CopyFunctionProperties(CreateFunctionInfo &other) const;

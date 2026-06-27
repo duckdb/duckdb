@@ -1,0 +1,42 @@
+From e72db772d7040a5c34787cc1ee5aff4cb494f318 Mon Sep 17 00:00:00 2001
+From: duckdb <x@x>
+Date: Fri, 26 Jun 2026 19:33:37 +0200
+Subject: [PATCH] 0009-encapsulate-accessors.patch
+
+---
+ src/functions/uc_checkpoint.cpp        | 4 ++--
+ src/include/storage/uc_table_entry.hpp | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/functions/uc_checkpoint.cpp b/src/functions/uc_checkpoint.cpp
+index 7fbc218..44dfa25 100644
+--- a/src/functions/uc_checkpoint.cpp
++++ b/src/functions/uc_checkpoint.cpp
+@@ -29,9 +29,9 @@ static CheckpointTableBindData ResolveTableName(ClientContext &context, const st
+ 
+ 	CheckpointTableBindData result;
+ 	result.catalog_name =
+-	    qname.Catalog().empty() ? search_path.catalog.GetIdentifierName() : qname.Catalog().GetIdentifierName();
++	    qname.Catalog().empty() ? search_path.GetCatalog().GetIdentifierName() : qname.Catalog().GetIdentifierName();
+ 	result.schema_name =
+-	    qname.Schema().empty() ? search_path.schema.GetIdentifierName() : qname.Schema().GetIdentifierName();
++	    qname.Schema().empty() ? search_path.GetSchema().GetIdentifierName() : qname.Schema().GetIdentifierName();
+ 	result.table_name = qname.Name().GetIdentifierName();
+ 
+ 	if (result.catalog_name.empty()) {
+diff --git a/src/include/storage/uc_table_entry.hpp b/src/include/storage/uc_table_entry.hpp
+index bf78745..28a2acd 100644
+--- a/src/include/storage/uc_table_entry.hpp
++++ b/src/include/storage/uc_table_entry.hpp
+@@ -22,7 +22,7 @@ struct UCTableInfo {
+ 		create_info = make_uniq<CreateTableInfo>();
+ 	}
+ 	UCTableInfo(const string &schema, const string &table) {
+-		create_info = make_uniq<CreateTableInfo>(Identifier(), Identifier(schema), Identifier(table));
++		create_info = make_uniq<CreateTableInfo>(QualifiedName(Identifier(), Identifier(schema), Identifier(table)));
+ 	}
+ 	UCTableInfo(const SchemaCatalogEntry &schema, const string &table) {
+ 		create_info = make_uniq<CreateTableInfo>((SchemaCatalogEntry &)schema, Identifier(table));
+-- 
+2.39.5 (Apple Git-154)
+

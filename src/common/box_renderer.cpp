@@ -103,33 +103,6 @@ const string &StringResultRenderer::str() {
 	return result;
 }
 
-PrinterResultRenderer::PrinterResultRenderer(OutputStream stream) : stream(stream) {
-}
-
-void PrinterResultRenderer::RenderLayout(const string &text) {
-	Printer::RawPrint(stream, text);
-}
-
-void PrinterResultRenderer::RenderColumnName(const string &text) {
-	Printer::RawPrint(stream, text);
-}
-
-void PrinterResultRenderer::RenderType(const string &text) {
-	Printer::RawPrint(stream, text);
-}
-
-void PrinterResultRenderer::RenderValue(const string &text, const LogicalType &type) {
-	Printer::RawPrint(stream, text);
-}
-
-void PrinterResultRenderer::RenderNull(const string &text, const LogicalType &type) {
-	Printer::RawPrint(stream, text);
-}
-
-void PrinterResultRenderer::RenderFooter(const string &text) {
-	Printer::RawPrint(stream, text);
-}
-
 //===--------------------------------------------------------------------===//
 // Box Renderer Implementation
 //===--------------------------------------------------------------------===//

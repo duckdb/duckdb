@@ -21,9 +21,7 @@ public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::BASE_TABLE;
 
 public:
-	BaseTableRef()
-	    : TableRef(TableReferenceType::BASE_TABLE),
-	      qualified_name(Identifier(INVALID_CATALOG), Identifier(INVALID_SCHEMA), Identifier()) {
+	BaseTableRef() : TableRef(TableReferenceType::BASE_TABLE) {
 	}
 	explicit BaseTableRef(const TableDescription &description)
 	    : TableRef(TableReferenceType::BASE_TABLE),
@@ -41,17 +39,17 @@ public:
 	QualifiedName &GetQualifiedNameMutable() {
 		return qualified_name;
 	}
-	Identifier &CatalogMutable() {
-		return qualified_name.CatalogMutable();
+	void SetQualifiedName(QualifiedName name) {
+		qualified_name = std::move(name);
 	}
-	Identifier &SchemaMutable() {
-		return qualified_name.SchemaMutable();
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
 	}
 	const Identifier &Table() const {
 		return qualified_name.Name();
 	}
-	Identifier &TableMutable() {
-		return qualified_name.NameMutable();
+	void SetTable(Identifier table) {
+		qualified_name = qualified_name.WithName(std::move(table));
 	}
 
 public:

@@ -82,11 +82,11 @@ BoundStatement Binder::BindSummarize(ShowRef &ref) {
 	if (ref.query) {
 		query = std::move(ref.query);
 	} else {
-		auto table_name = QualifiedName::Parse(ref.table_name.GetIdentifierName());
+		auto table_name = QualifiedName::Parse(ref.GetTableName().GetIdentifierName());
 		auto node = make_uniq<SelectNode>();
 		node->select_list.push_back(make_uniq<StarExpression>());
 		auto basetableref = make_uniq<BaseTableRef>();
-		basetableref->GetQualifiedNameMutable() = table_name;
+		basetableref->SetQualifiedName(table_name);
 		node->from_table = std::move(basetableref);
 		query = std::move(node);
 	}

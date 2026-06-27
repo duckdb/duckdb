@@ -164,8 +164,8 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		// We can only alter temporary tables and views in read-only mode.
 		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
 	}
-	stmt.info->CatalogMutable() = catalog.GetName();
-	stmt.info->SchemaMutable() = entry->ParentSchema().name;
+	stmt.info->SetQualifiedName(
+	    QualifiedName(catalog.GetName(), entry->ParentSchema().name, stmt.info->GetQualifiedName().Name()));
 
 	if (!stmt.info->IsAddPrimaryKey()) {
 		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
