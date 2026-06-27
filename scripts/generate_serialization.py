@@ -353,6 +353,7 @@ supported_member_entries = [
     "serialize_until",
     "status",
     "version",
+    "serialize_condition",
     "required_until",
     # equality/hash generation annotations (used by generate_util.py)
     "equals_skip",
@@ -428,6 +429,10 @@ class MemberVariable:
         # When set, the property is only serialized for storage versions older than this version (newer versions use
         # a replacement property). Deserialization is unaffected - the property is still read (with a default).
         self.serialize_until = entry.get("serialize_until", None)
+        # An extra C++ boolean expression that, when true, forces the property to be serialized even when the
+        # version gate (above) would skip it. Used e.g. to always serialize a value that an older format cannot
+        # otherwise represent (nested schema paths).
+        self.serialize_condition = entry.get("serialize_condition", None)
         if "default" in entry:
             self.has_default = True
             self.default = entry["default"]
@@ -679,7 +684,10 @@ class SerializableClass:
                 code.append(f"\tif (!serializer.ShouldSerialize({storage_version_enum})) {{")
             else:
                 # conditional serialization
-                code.append(f"\tif (serializer.ShouldSerialize({storage_version_enum})) {{")
+                condition = f"serializer.ShouldSerialize({storage_version_enum})"
+                if entry.serialize_condition is not None:
+                    condition = f"{condition} || ({entry.serialize_condition})"
+                code.append(f"\tif ({condition}) {{")
             code.append("\t" + serialization_code)
 
             result = "\n".join(code) + "\t}\n"

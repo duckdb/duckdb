@@ -35,7 +35,7 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
 	}
 	serializer.WritePropertyWithDefault<Identifier>(110, "extension_name", extension_name);
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (qualified_name.Path().size() > 3)) {
 		serializer.WriteProperty<QualifiedName>(111, "qualified_name", qualified_name);
 	}
 }

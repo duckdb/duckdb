@@ -1,5 +1,5 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
-#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
 
@@ -44,10 +44,6 @@ string CreateSchemaInfo::ToString() const {
 	auto &path = GetQualifiedName().Path();
 	// the last element is the (empty) trailing name slot - the schema itself is the element before it
 	for (idx_t i = 0; i + 1 < path.size(); i++) {
-		// hide the temp catalog when it is the leading (catalog) component
-		if (i == 0 && path.size() >= 3 && path[i] == TEMP_CATALOG) {
-			continue;
-		}
 		if (!qualified.empty()) {
 			qualified += ".";
 		}
