@@ -1,6 +1,5 @@
 #include "duckdb/common/tree_renderer/yaml_tree_renderer.hpp"
 
-#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -11,50 +10,50 @@
 namespace duckdb {
 
 string YAMLTreeRenderer::ToString(const LogicalOperator &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string YAMLTreeRenderer::ToString(const PhysicalOperator &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string YAMLTreeRenderer::ToString(const ProfilingNode &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string YAMLTreeRenderer::ToString(const Pipeline &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
-void YAMLTreeRenderer::Render(const LogicalOperator &op, BaseResultRenderer &ss) {
+void YAMLTreeRenderer::Render(const LogicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void YAMLTreeRenderer::Render(const PhysicalOperator &op, BaseResultRenderer &ss) {
+void YAMLTreeRenderer::Render(const PhysicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void YAMLTreeRenderer::Render(const ProfilingNode &op, BaseResultRenderer &ss) {
+void YAMLTreeRenderer::Render(const ProfilingNode &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void YAMLTreeRenderer::Render(const Pipeline &op, BaseResultRenderer &ss) {
+void YAMLTreeRenderer::Render(const Pipeline &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void YAMLTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) {
+void YAMLTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) {
 	RenderRecursive(root, ss, 0, 0, 0);
 }
 
@@ -96,7 +95,7 @@ static string EscapedString(const string &str) {
 	return out;
 }
 
-void YAMLTreeRenderer::RenderRecursive(RenderTree &node, BaseResultRenderer &ss, idx_t indent, idx_t x, idx_t y) {
+void YAMLTreeRenderer::RenderRecursive(RenderTree &node, BaseTreeRenderer &ss, idx_t indent, idx_t x, idx_t y) {
 	auto node_p = node.GetNode(x, y);
 	D_ASSERT(node_p);
 	auto &current_node = *node_p;

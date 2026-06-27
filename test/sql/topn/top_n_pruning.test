@@ -2,6 +2,9 @@
 # description: Test Top N with ordered row groups and row limits
 # group: [topn]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 # Alternative verify disables the offset pruning in the optimizer rule
 require no_alternative_verify
 
