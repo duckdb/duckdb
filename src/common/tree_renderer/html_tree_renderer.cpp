@@ -65,37 +65,42 @@ static const char *HTML_TEMPLATE = R"DUCKDBHTML(
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --mono: "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
 }
+/* Palette mirrors duckdb.org: grey scale (grey-05..grey-100), brand yellow #fff100, accents from the site's blue/red. */
 html[data-theme="light"] {
-    --bg: #f4f5f7;
-    --bg-grid: #e7e9ee;
+    --bg: #f2f2f2;
+    --bg-grid: #e6e6e6;
     --panel: #ffffff;
-    --panel-2: #f7f8fa;
-    --border: #e2e5ea;
-    --border-strong: #cbd1da;
-    --text: #1c2127;
-    --text-muted: #6b7382;
-    --text-faint: #9aa1ad;
-    --accent: #1a1a1a;
-    --connector: #c2c8d2;
-    --shadow: 0 1px 2px rgba(16,22,34,.06), 0 4px 12px rgba(16,22,34,.06);
-    --shadow-hover: 0 2px 6px rgba(16,22,34,.10), 0 12px 28px rgba(16,22,34,.14);
-    --duck: #fff000;
+    --panel-2: #fafafa;
+    --border: #e6e6e6;
+    --border-strong: #cccccc;
+    --text: #0d0d0d;
+    --text-muted: #666666;
+    --text-faint: #999999;
+    --accent: #0d0d0d;
+    --accent-on: #ffffff;
+    --connector: #cccccc;
+    --shadow: 0 1px 2px rgba(13,13,13,.05), 0 4px 12px rgba(13,13,13,.06);
+    --shadow-hover: 0 2px 6px rgba(13,13,13,.09), 0 12px 28px rgba(13,13,13,.13);
+    --duck: #fff100;
+    --match: #2eafff;
 }
 html[data-theme="dark"] {
-    --bg: #16191f;
-    --bg-grid: #1d2128;
-    --panel: #232830;
-    --panel-2: #1c2027;
-    --border: #333a45;
-    --border-strong: #424b59;
-    --text: #e7eaee;
-    --text-muted: #9aa3b1;
-    --text-faint: #6b7382;
-    --accent: #fff000;
-    --connector: #3a414d;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 16px rgba(0,0,0,.35);
-    --shadow-hover: 0 2px 8px rgba(0,0,0,.4), 0 16px 32px rgba(0,0,0,.5);
-    --duck: #fff000;
+    --bg: #0d0d0d;
+    --bg-grid: #1a1a1a;
+    --panel: #1a1a1a;
+    --panel-2: #141414;
+    --border: #333333;
+    --border-strong: #4c4c4c;
+    --text: #f2f2f2;
+    --text-muted: #b2b2b2;
+    --text-faint: #808080;
+    --accent: #fff100;
+    --accent-on: #0d0d0d;
+    --connector: #4c4c4c;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 16px rgba(0,0,0,.45);
+    --shadow-hover: 0 2px 8px rgba(0,0,0,.5), 0 16px 32px rgba(0,0,0,.6);
+    --duck: #fff100;
+    --match: #2eafff;
 }
 * { box-sizing: border-box; }
 html, body {
@@ -150,8 +155,7 @@ html, body {
     user-select: none;
 }
 .btn:hover { background: var(--bg-grid); border-color: var(--text-faint); }
-.btn.active { background: var(--accent); color: var(--panel); border-color: var(--accent); }
-html[data-theme="dark"] .btn.active { color: #16191f; }
+.btn.active { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
 .btn svg { display: block; }
 .group { display: inline-flex; align-items: center; }
 .group .btn { border-radius: 0; border-right-width: 0; }
@@ -212,7 +216,7 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
 .node:hover { box-shadow: var(--shadow-hover); border-color: var(--border-strong); }
 .node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow-hover); }
 .node.dim { opacity: .32; }
-.node.match { border-color: #f5a623; box-shadow: 0 0 0 2px rgba(245,166,35,.6), var(--shadow); }
+.node.match { border-color: var(--match); box-shadow: 0 0 0 2px color-mix(in srgb, var(--match) 60%, transparent), var(--shadow); }
 
 /* kind accent stripe on the left */
 .node .accent { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--k-color, var(--border-strong)); }
@@ -272,20 +276,53 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
     border-radius: 9px; padding: 1px 7px; white-space: nowrap; display: none; z-index: 4;
 }
 
-/* heatmap mode: tint the card AND outline heavy hitters so the whole box reads as hot */
+/* heatmap mode: tint the card AND outline heavy hitters so the whole box reads as hot (DuckDB red/orange/gold) */
 .tree.heat .node.heat-critical {
-    --k-color: #e5484d; background: color-mix(in srgb, #e5484d 10%, var(--panel));
-    border-color: #e5484d; border-width: 2px;
-    box-shadow: 0 0 0 3px color-mix(in srgb, #e5484d 22%, transparent), var(--shadow);
+    --k-color: #cc0000; background: color-mix(in srgb, #cc0000 10%, var(--panel));
+    border-color: #cc0000; border-width: 2px;
+    box-shadow: 0 0 0 3px color-mix(in srgb, #cc0000 22%, transparent), var(--shadow);
 }
 .tree.heat .node.heat-high {
-    --k-color: #f76808; background: color-mix(in srgb, #f76808 9%, var(--panel));
-    border-color: #f76808; border-width: 2px;
-    box-shadow: 0 0 0 2px color-mix(in srgb, #f76808 16%, transparent), var(--shadow);
+    --k-color: #ff6900; background: color-mix(in srgb, #ff6900 9%, var(--panel));
+    border-color: #ff6900; border-width: 2px;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #ff6900 16%, transparent), var(--shadow);
 }
 .tree.heat .node.heat-moderate {
-    --k-color: #ffb224; background: color-mix(in srgb, #ffb224 10%, var(--panel));
-    border-color: #ffb224; border-width: 2px;
+    --k-color: #ccbd00; background: color-mix(in srgb, #ccbd00 12%, var(--panel));
+    border-color: #ccbd00; border-width: 2px;
+}
+
+/* ---------- Condensed low-impact chain ---------- */
+.group > .node-wrap > .group-stack { display: none; }
+.group.expanded > .node-wrap > .group-card { display: none; }
+.group.expanded > .node-wrap > .group-stack { display: flex; flex-direction: column; align-items: center; }
+.group-card {
+    min-width: 168px; max-width: 300px; cursor: pointer;
+    background: var(--panel-2); border: 1.5px dashed var(--border-strong);
+    border-radius: 10px; box-shadow: var(--shadow);
+    transition: border-color .15s, box-shadow .15s;
+}
+.group-card:hover { border-color: var(--accent); box-shadow: var(--shadow-hover); }
+.group-card .gc-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.group-card .gc-title { flex: 1; font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
+.group-card .gc-badge { font-size: 10px; font-weight: 700; color: var(--text-muted); background: var(--panel); border: 1px solid var(--border); border-radius: 9px; padding: 1px 7px; }
+.group-card .gc-list { padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+.group-card .gc-op { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); }
+.group-card .gc-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--text-faint); }
+.group-card .gc-nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-card .gc-hint { font-size: 10px; color: var(--text-faint); text-align: center; padding: 2px 0 8px; }
+.group-recollapse {
+    font-size: 10.5px; font-weight: 700; color: var(--text-muted); cursor: pointer;
+    padding: 3px 11px; margin-bottom: 6px;
+    border: 1px solid var(--border-strong); border-radius: 8px; background: var(--panel);
+    text-transform: uppercase; letter-spacing: .4px;
+}
+.group-recollapse:hover { border-color: var(--accent); color: var(--text); }
+.group-stack-item { position: relative; }
+.group-stack-item + .group-stack-item { margin-top: 24px; }
+.group-stack-item + .group-stack-item::before {
+    content: ""; position: absolute; top: -24px; left: 50%; transform: translateX(-50%);
+    width: 2px; height: 24px; background: var(--connector);
 }
 
 /* ---------- Legend ---------- */
@@ -367,10 +404,7 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
         <button class="btn" id="zoom-fit" title="Fit to screen">Fit</button>
         <button class="btn icon-btn-only" id="zoom-in" title="Zoom in">+</button>
     </div>
-    <div class="group">
-        <button class="btn" id="expand-all" title="Expand all">Expand</button>
-        <button class="btn" id="collapse-all" title="Collapse to top levels">Collapse</button>
-    </div>
+    <button class="btn" id="collapse-all" title="Collapse all subtrees and chains">Collapse all</button>
     <button class="btn" id="heat-toggle" title="Toggle time heatmap">Heatmap</button>
     <button class="btn icon-btn-only" id="theme-toggle" title="Toggle theme">◐</button>
 </div>
@@ -396,28 +430,53 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
     var ANALYZE = !!PLAN.analyze;
     var TOTAL_TIME = PLAN.total_time || 0;
 
+    // For EXPLAIN ANALYZE the real plan is wrapped in RESULT_COLLECTOR -> EXPLAIN_ANALYZE; drop that scaffolding so the
+    // displayed root is the query's top operator (and the result rows are its cardinality).
+    (function () {
+        var r = PLAN.root;
+        while (r && r.children && r.children.length === 1 &&
+               (r.name === "RESULT_COLLECTOR" || r.name === "EXPLAIN_ANALYZE")) {
+            r = r.children[0];
+        }
+        PLAN.root = r;
+    })();
+
     var KINDS = {
-        scan:      { color: "#30a46c", label: "Scan" },
-        join:      { color: "#8e4ec6", label: "Join" },
-        aggregate: { color: "#0091ff", label: "Aggregate" },
-        order:     { color: "#f76808", label: "Order / Top-N" },
-        generic:   { color: "#8b94a3", label: "Other" }
+        scan:       { color: "#00c770", label: "Scan" },        // DuckDB green
+        join:       { color: "#7d66ff", label: "Join" },        // DuckDB purple
+        aggregate:  { color: "#2eafff", label: "Aggregate" },   // DuckDB blue
+        order:      { color: "#ff8733", label: "Order / Top-N" }, // DuckDB orange
+        projection: { color: "#ff3333", label: "Projection" },  // DuckDB red
+        generic:    { color: "#808080", label: "Other" }        // DuckDB grey
     };
 
-    // The scanned table / table-function for a scan node, used as a subtitle and in the time breakdown.
+    // The scanned table / table-function for a scan node, used as the title and in the time breakdown.
+    // Catalog/schema qualifiers are stripped from table names (e.g. "tpch.sf1.partsupp" -> "partsupp").
     function nodeSource(data) {
         var dl = data.details || [];
         for (var i = 0; i < dl.length; i++) {
-            if (dl[i].key === "Table" || dl[i].key === "Function") {
+            if (dl[i].key === "Table") {
+                var v = (dl[i].values || [])[0] || "";
+                var parts = v.split(".");
+                return parts[parts.length - 1];
+            }
+            if (dl[i].key === "Function") {
                 return (dl[i].values || [])[0] || "";
             }
         }
         return "";
     }
-    // A human label for an operator: name plus its source table where there is one.
+    // Title-case an operator name ("TABLE_SCAN" -> "Table Scan"), keeping known acronyms capitalized.
+    function prettyName(name) {
+        var t = name.toLowerCase().split("_").map(function (w) {
+            return w ? w.charAt(0).toUpperCase() + w.slice(1) : w;
+        }).join(" ");
+        return t.replace(/\bCte\b/g, "CTE").replace(/\bIe Join\b/g, "IE Join");
+    }
+    // A human label for an operator: source table (where there is one) plus the operator type.
     function displayLabel(data) {
         var s = nodeSource(data);
-        return s ? data.name + " · " + s : data.name;
+        return s ? s + " · " + prettyName(data.name) : prettyName(data.name);
     }
 
     // ---------- number / time formatting ----------
@@ -447,20 +506,23 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
         return "";
     }
     function heatColor(frac) {
-        if (frac >= 0.25) return "#e5484d";
-        if (frac >= 0.10) return "#f76808";
-        if (frac >= 0.01) return "#ffb224";
+        if (frac >= 0.25) return "#cc0000";
+        if (frac >= 0.10) return "#ff6900";
+        if (frac >= 0.01) return "#ccbd00";
         return "var(--text-muted)";
     }
 
     // ---------- build DOM ----------
-    var allNodes = [];
-    function makeNode(data, depth) {
-        var li = document.createElement("li");
-        var hasChildren = data.children && data.children.length > 0;
+    var allNodes = [];           // every rendered operator card (used by search / legend / pie)
+    var groups = [];             // condensed-chain <li> elements
+    var GROUPING = false;        // whether low-impact chains are condensed (decided after a trial layout)
+    var FLATTEN_FRACTION = 0.01; // operators below this share of total time are eligible to be condensed
+    var MIN_GROUP = 2;           // only condense a chain of at least this many operators
 
+    // Build the operator card (.node) for a plan node: heading, metrics, timing bar and collapsible details.
+    function buildCard(data) {
         var node = document.createElement("div");
-        node.className = "node" + (hasChildren ? " has-children" : "");
+        node.className = "node";
         var kind = KINDS[data.kind] || KINDS.generic;
         node.style.setProperty("--k-color", kind.color);
 
@@ -471,7 +533,6 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
             node.style.setProperty("--t-color", heatColor(frac));
         }
 
-        // accent stripe
         var accent = document.createElement("div");
         accent.className = "accent";
         node.appendChild(accent);
@@ -481,23 +542,22 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
         head.className = "node-head";
         var dot = document.createElement("span"); dot.className = "node-kind-dot";
         var headings = document.createElement("span"); headings.className = "node-headings";
-        var title = document.createElement("span"); title.className = "node-title"; title.textContent = data.name;
-        headings.appendChild(title);
         var src = nodeSource(data);
+        var title = document.createElement("span"); title.className = "node-title"; title.textContent = src || prettyName(data.name);
+        headings.appendChild(title);
         if (src) {
-            var srcEl = document.createElement("span"); srcEl.className = "node-source"; srcEl.textContent = src;
+            var srcEl = document.createElement("span"); srcEl.className = "node-source"; srcEl.textContent = prettyName(data.name);
             headings.appendChild(srcEl);
         }
         head.appendChild(dot); head.appendChild(headings);
         node.appendChild(head);
 
-        // assemble detail rows; for ANALYZE the estimated cardinality lives here rather than in the headline metrics
+        // detail rows; for ANALYZE the estimated cardinality lives here rather than in the headline metrics
         var details = (data.details || []).slice();
         if (ANALYZE && data.estimated_cardinality != null) {
             details.push({ key: "Estimated Cardinality", values: [fmtInt(data.estimated_cardinality)] });
         }
 
-        // metrics
         var metrics = document.createElement("div");
         metrics.className = "node-metrics";
         if (data.cardinality != null) {
@@ -513,20 +573,16 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
         }
         if (metrics.children.length) node.appendChild(metrics);
 
-        // time bar
         if (ANALYZE && data.timing != null && TOTAL_TIME > 0) {
             var bar = document.createElement("div"); bar.className = "timebar";
             var fill = document.createElement("i"); fill.style.width = Math.max(2, frac * 100).toFixed(1) + "%";
             bar.appendChild(fill); node.appendChild(bar);
         }
 
-        // details
         if (details.length) {
-            node.classList.add("has-details");
             var caret = document.createElement("span"); caret.className = "details-caret";
             caret.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg>';
             head.appendChild(caret);
-
             var dwrap = document.createElement("div");
             dwrap.className = "node-details";
             details.forEach(function (d) {
@@ -541,49 +597,134 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
             node.appendChild(dwrap);
         }
 
-        // clicking anywhere on the card selects it and toggles its details
         node.addEventListener("click", function () {
             select(node);
             if (details.length) node.classList.toggle("open-details");
         });
+        return node;
+    }
+
+    // Render a plan node (and its subtree) as a normal operator <li>. Returns its rec.
+    function makeNode(data) {
+        var li = document.createElement("li");
+        var hasChildren = data.children && data.children.length > 0;
+        var node = buildCard(data);
 
         var wrap = document.createElement("div");
         wrap.className = "node-wrap";
         wrap.appendChild(node);
         li.appendChild(wrap);
 
-        var rec = { li: li, node: node, data: data, descendants: 0, handle: null, count: null };
+        var rec = { li: li, node: node, data: data, size: 1, handle: null, count: null, groupLi: null };
         li._rec = rec;
         allNodes.push(rec);
 
-        // children
         if (hasChildren) {
             var ul = document.createElement("ul");
-            var cnt = 0;
+            var sub = 0;
             data.children.forEach(function (c) {
-                var childRec = makeNode(c, depth + 1);
-                ul.appendChild(childRec.li);
-                cnt += 1 + childRec.descendants;
+                var r = renderSubtree(c);
+                ul.appendChild(r.li);
+                sub += r.size;
             });
             li.appendChild(ul);
-            rec.descendants = cnt;
+            rec.size += sub;
 
-            // collapse control sits on the connector line below the card
             var handle = document.createElement("div");
             handle.className = "collapse-handle";
-            handle.textContent = "−"; // minus
+            handle.textContent = "−";
             handle.title = "Collapse / expand subtree";
             var countEl = document.createElement("div");
             countEl.className = "collapse-count";
-            countEl.textContent = cnt + " hidden";
+            countEl.textContent = sub + " hidden";
             wrap.appendChild(handle);
             wrap.appendChild(countEl);
             rec.handle = handle;
             rec.count = countEl;
             handle.addEventListener("click", function (e) { e.stopPropagation(); toggleCollapse(rec); });
         }
-
         return rec;
+    }
+
+    // True when a node takes a negligible share of the total query time.
+    function lowImpact(d) { return TOTAL_TIME > 0 && (d.timing || 0) / TOTAL_TIME < FLATTEN_FRACTION; }
+
+    // Collect a maximal chain of consecutive low-impact, single-child operators starting at "data".
+    function collectRun(data) {
+        var run = [], cur = data;
+        while (cur && lowImpact(cur) && cur.children && cur.children.length === 1) {
+            run.push(cur);
+            cur = cur.children[0];
+        }
+        return run;
+    }
+
+    function setGroupExpanded(li, expanded) { li.classList.toggle("expanded", !!expanded); }
+
+    // Render a condensed chain: a placeholder card listing the operator names that expands into the real cards.
+    function makeGroup(run) {
+        var li = document.createElement("li");
+        li.className = "group";
+        var continuation = run[run.length - 1].children[0];
+
+        var wrap = document.createElement("div");
+        wrap.className = "node-wrap group-wrap";
+
+        // collapsed view: a dashed card listing the condensed operators
+        var card = document.createElement("div");
+        card.className = "group-card";
+        var gh = document.createElement("div"); gh.className = "gc-head";
+        var gt = document.createElement("span"); gt.className = "gc-title"; gt.textContent = "Low-impact chain";
+        var gb = document.createElement("span"); gb.className = "gc-badge"; gb.textContent = run.length + " ops";
+        gh.appendChild(gt); gh.appendChild(gb); card.appendChild(gh);
+        var glist = document.createElement("div"); glist.className = "gc-list";
+        run.forEach(function (d) {
+            var op = document.createElement("div"); op.className = "gc-op";
+            var gdot = document.createElement("span"); gdot.className = "gc-dot";
+            gdot.style.setProperty("background", (KINDS[d.kind] || KINDS.generic).color);
+            var gnm = document.createElement("span"); gnm.className = "gc-nm"; gnm.textContent = displayLabel(d);
+            op.appendChild(gdot); op.appendChild(gnm); glist.appendChild(op);
+        });
+        card.appendChild(glist);
+        var hint = document.createElement("div"); hint.className = "gc-hint"; hint.textContent = "click to expand";
+        card.appendChild(hint);
+        card.addEventListener("click", function () { setGroupExpanded(li, true); });
+        wrap.appendChild(card);
+
+        // expanded view: the individual operator cards stacked vertically
+        var stack = document.createElement("div");
+        stack.className = "group-stack";
+        var recollapse = document.createElement("div"); recollapse.className = "group-recollapse"; recollapse.textContent = "⤡ condense chain";
+        recollapse.addEventListener("click", function (e) { e.stopPropagation(); setGroupExpanded(li, false); });
+        stack.appendChild(recollapse);
+        run.forEach(function (d) {
+            var item = document.createElement("div"); item.className = "group-stack-item";
+            var node = buildCard(d);
+            item.appendChild(node);
+            stack.appendChild(item);
+            allNodes.push({ li: li, node: node, data: d, size: 1, handle: null, count: null, groupLi: li });
+        });
+        wrap.appendChild(stack);
+        li.appendChild(wrap);
+
+        var ul = document.createElement("ul");
+        var cont = renderSubtree(continuation);
+        ul.appendChild(cont.li);
+        li.appendChild(ul);
+
+        groups.push(li);
+        setGroupExpanded(li, false);
+        return { li: li, size: run.length + cont.size };
+    }
+
+    // Render a node, condensing it into a group when grouping is on and it starts a qualifying chain.
+    function renderSubtree(data) {
+        if (GROUPING && ANALYZE && TOTAL_TIME > 0) {
+            var run = collectRun(data);
+            if (run.length >= MIN_GROUP) return makeGroup(run);
+        }
+        var rec = makeNode(data);
+        return { li: rec.li, size: rec.size };
     }
 
     function metric(label, value, cls, tooltip) {
@@ -617,12 +758,21 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
     }
 
     var tree = document.getElementById("tree");
-    var rootRec = makeNode(PLAN.root, 0);
-    tree.appendChild(rootRec.li);
+    var rootRender = null;
+
+    // (Re)build the operator tree from PLAN.root, resetting the node/group bookkeeping.
+    function buildTree() {
+        allNodes.length = 0;
+        groups.length = 0;
+        tree.innerHTML = "";
+        rootRender = renderSubtree(PLAN.root);
+        tree.appendChild(rootRender.li);
+    }
 
     // ---------- summary header ----------
-    (function () {
+    function buildSummary() {
         var stats = document.getElementById("stats");
+        stats.innerHTML = "";
         document.getElementById("brand-sub").textContent = ANALYZE ? "Query Profile" : "Query Plan";
         function addStat(k, v) {
             var s = document.createElement("div"); s.className = "stat";
@@ -634,10 +784,10 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
             addStat("Total Time", fmtTime(TOTAL_TIME));
             if (PLAN.root && PLAN.root.cardinality != null) addStat("Result Rows", fmtInt(PLAN.root.cardinality));
         }
-    })();
+    }
 
     // ---------- legend + time-breakdown pie ----------
-    (function () {
+    function buildLegendPie() {
         // aggregate time and members per operator kind
         var kindStats = {};
         Object.keys(KINDS).forEach(function (k) { kindStats[k] = { time: 0, recs: [] }; });
@@ -753,7 +903,7 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
             lg.style.display = "";
             clearKind();
         });
-    })();
+    }
 
     // ---------- pan & zoom ----------
     var viewport = document.getElementById("viewport");
@@ -774,6 +924,7 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
     }
     viewport.addEventListener("wheel", function (e) {
         e.preventDefault();
+        canvas.style.transition = "";
         var rect = viewport.getBoundingClientRect();
         var factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
         zoomAt(e.clientX - rect.left, e.clientY - rect.top, factor);
@@ -782,6 +933,7 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
     var dragging = false, sx = 0, sy = 0, stx = 0, sty = 0;
     viewport.addEventListener("mousedown", function (e) {
         if (e.button !== 0) return;
+        canvas.style.transition = "";
         dragging = true; sx = e.clientX; sy = e.clientY; stx = tx; sty = ty;
         viewport.classList.add("panning");
     });
@@ -805,7 +957,18 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
         applyTransform();
     }
 
+    // Smoothly bring a node to the centre of the viewport, keeping the current zoom.
+    function panToNode(node) {
+        var vp = viewport.getBoundingClientRect();
+        var r = node.getBoundingClientRect();
+        tx += (vp.left + vp.width / 2) - (r.left + r.width / 2);
+        ty += (vp.top + vp.height / 2) - (r.top + r.height / 2);
+        canvas.style.transition = "transform .28s ease";
+        applyTransform();
+    }
+
     document.getElementById("zoom-in").addEventListener("click", function () {
+        canvas.style.transition = "";
         zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, 1.2);
     });
     document.getElementById("zoom-out").addEventListener("click", function () {
@@ -813,47 +976,69 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
     });
     document.getElementById("zoom-fit").addEventListener("click", fit);
 
-    // ---------- expand / collapse all ----------
-    document.getElementById("expand-all").addEventListener("click", function () {
-        allNodes.forEach(function (r) { setCollapsed(r, false); });
-    });
+    // ---------- collapse all ----------
     document.getElementById("collapse-all").addEventListener("click", function () {
-        // collapse every node that has children, except the root
         allNodes.forEach(function (r) {
-            if (r.descendants > 0 && r !== rootRec) setCollapsed(r, true);
+            // collapse every subtree except the root's
+            if (r.handle && r.li.parentElement !== tree) setCollapsed(r, true);
         });
+        groups.forEach(function (g) { setGroupExpanded(g, false); });
     });
 
     // ---------- search ----------
     var search = document.getElementById("search");
     var searchCount = document.getElementById("search-count");
-    search.addEventListener("input", function () {
+    var matches = [], matchIdx = -1;
+
+    // Reveal a node by expanding any collapsed ancestors and the group it may live in.
+    function revealRec(r) {
+        if (r.groupLi) setGroupExpanded(r.groupLi, true);
+        var p = r.li.parentElement;
+        while (p && p !== tree) {
+            if (p.tagName === "LI" && p._rec) setCollapsed(p._rec, false);
+            p = p.parentElement;
+        }
+    }
+    function gotoMatch(i) {
+        if (!matches.length) return;
+        matchIdx = (i + matches.length) % matches.length;
+        var r = matches[matchIdx];
+        revealRec(r);
+        searchCount.textContent = (matchIdx + 1) + "/" + matches.length;
+        requestAnimationFrame(function () { panToNode(r.node); });
+    }
+    function runSearch() {
         var q = search.value.trim().toLowerCase();
+        matches = [];
         if (!q) {
             allNodes.forEach(function (r) { r.node.classList.remove("match", "dim"); });
             searchCount.textContent = "";
+            matchIdx = -1;
             return;
         }
-        var hits = 0;
         allNodes.forEach(function (r) {
-            var hay = r.data.name.toLowerCase();
+            var hay = r.data.name.toLowerCase() + " " + prettyName(r.data.name).toLowerCase();
             (r.data.details || []).forEach(function (d) {
                 hay += " " + d.key.toLowerCase() + " " + (d.values || []).join(" ").toLowerCase();
             });
             var m = hay.indexOf(q) >= 0;
             r.node.classList.toggle("match", m);
             r.node.classList.toggle("dim", !m);
-            if (m) {
-                hits++;
-                // reveal matches by expanding ancestors
-                var p = r.li.parentElement;
-                while (p && p !== tree) {
-                    if (p.tagName === "LI" && p._rec) setCollapsed(p._rec, false);
-                    p = p.parentElement;
-                }
-            }
+            if (m) matches.push(r);
         });
-        searchCount.textContent = hits ? hits : "0";
+        if (matches.length) {
+            gotoMatch(0); // jump to the first hit while typing
+        } else {
+            searchCount.textContent = "0";
+            matchIdx = -1;
+        }
+    }
+    search.addEventListener("input", runSearch);
+    search.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && matches.length) {
+            e.preventDefault();
+            gotoMatch(matchIdx + (e.shiftKey ? -1 : 1)); // Enter: next, Shift+Enter: previous
+        }
     });
 
     // ---------- heatmap toggle ----------
@@ -871,6 +1056,16 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
     });
 
     // ---------- init ----------
+    // Build once; if the result does not comfortably fit on screen, condense low-impact chains and rebuild.
+    buildTree();
+    fit();
+    if (ANALYZE && TOTAL_TIME > 0 && scale < 1) {
+        GROUPING = true;
+        buildTree();
+        fit();
+    }
+    buildSummary();
+    buildLegendPie();
     if (ANALYZE) setHeat(true);
     requestAnimationFrame(fit);
     window.addEventListener("resize", function () { /* keep current transform */ });
@@ -895,6 +1090,9 @@ static const char *ClassifyKind(const string &name, bool is_leaf, const Insertio
 	}
 	if (StringUtil::Contains(name, "ORDER_BY") || StringUtil::Contains(name, "TOP_N")) {
 		return "order";
+	}
+	if (StringUtil::Contains(name, "PROJECTION")) {
+		return "projection";
 	}
 	if (is_leaf) {
 		for (auto &entry : extra) {
