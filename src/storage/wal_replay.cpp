@@ -30,6 +30,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/storage/wal_entry.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
@@ -717,7 +718,8 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 // Replay Table
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateTable() {
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "table");
+	auto entry = WALCreateTable::Deserialize(deserializer);
+	auto info = std::move(entry.table);
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -730,12 +732,11 @@ void WriteAheadLogDeserializer::ReplayCreateTable() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropTable() {
+	auto entry = WALDropTable::Deserialize(deserializer);
 	DropInfo info;
 
 	info.type = CatalogType::TABLE_ENTRY;
-	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -863,7 +864,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 // Replay View
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateView() {
-	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "view");
+	auto wal_entry = WALCreateView::Deserialize(deserializer);
+	auto &entry = wal_entry.view;
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -871,11 +873,10 @@ void WriteAheadLogDeserializer::ReplayCreateView() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropView() {
+	auto entry = WALDropView::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::VIEW_ENTRY;
-	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -886,8 +887,9 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 // Replay Schema
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSchema() {
+	auto entry = WALCreateSchema::Deserialize(deserializer);
 	CreateSchemaInfo info;
-	info.SetQualifiedName(QualifiedName({Identifier(deserializer.ReadProperty<string>(101, "schema"))}, Identifier()));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, Identifier()));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -896,10 +898,11 @@ void WriteAheadLogDeserializer::ReplayCreateSchema() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropSchema() {
+	auto entry = WALDropSchema::Deserialize(deserializer);
 	DropInfo info;
 
 	info.type = CatalogType::SCHEMA_ENTRY;
-	info.NameMutable() = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.NameMutable() = std::move(entry.schema);
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -911,18 +914,21 @@ void WriteAheadLogDeserializer::ReplayDropSchema() {
 // Replay Custom Type
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateType() {
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "type");
+	auto wal_entry = WALCreateType::Deserialize(deserializer);
+	auto &info = wal_entry.type;
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	if (DeserializeOnly()) {
+		return;
+	}
 	catalog.CreateType(context, info->Cast<CreateTypeInfo>());
 }
 
 void WriteAheadLogDeserializer::ReplayDropType() {
+	auto entry = WALDropType::Deserialize(deserializer);
 	DropInfo info;
 
 	info.type = CatalogType::TYPE_ENTRY;
-	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -934,7 +940,8 @@ void WriteAheadLogDeserializer::ReplayDropType() {
 // Replay Trigger
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateTrigger() {
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "trigger");
+	auto wal_entry = WALCreateTrigger::Deserialize(deserializer);
+	auto &info = wal_entry.trigger;
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	if (DeserializeOnly()) {
 		return;
@@ -949,12 +956,11 @@ void WriteAheadLogDeserializer::ReplayCreateTrigger() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropTrigger() {
+	auto entry = WALDropTrigger::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::TRIGGER_ENTRY;
-	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
-	auto table_name = deserializer.ReadPropertyWithDefault<Identifier>(103, "table");
+	auto table_name = std::move(entry.table);
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -973,7 +979,8 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 // Replay Sequence
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSequence() {
-	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "sequence");
+	auto wal_entry = WALCreateSequence::Deserialize(deserializer);
+	auto &entry = wal_entry.sequence;
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -982,11 +989,10 @@ void WriteAheadLogDeserializer::ReplayCreateSequence() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropSequence() {
+	auto entry = WALDropSequence::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::SEQUENCE_ENTRY;
-	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -995,10 +1001,8 @@ void WriteAheadLogDeserializer::ReplayDropSequence() {
 }
 
 void WriteAheadLogDeserializer::ReplaySequenceValue() {
-	auto schema = deserializer.ReadProperty<string>(101, "schema");
-	auto name = deserializer.ReadProperty<string>(102, "name");
-	auto usage_count = deserializer.ReadProperty<uint64_t>(103, "usage_count");
-	auto counter = deserializer.ReadProperty<int64_t>(104, "counter");
+	auto entry = WALSequenceValue::Deserialize(deserializer);
+	// last_value (id 105) is read manually, preserving its tolerant (optional) decoding for older WALs
 	auto last_value = deserializer.ReadPropertyWithDefault<optional<int64_t>>(105, "last_value");
 
 	if (DeserializeOnly()) {
@@ -1007,15 +1011,16 @@ void WriteAheadLogDeserializer::ReplaySequenceValue() {
 
 	// fetch the sequence from the catalog
 	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(
-	    context, QualifiedName(catalog.GetName(), Identifier(schema), Identifier(name)));
-	seq.ReplayValue(usage_count, counter, last_value);
+	    context, QualifiedName(catalog.GetName(), std::move(entry.schema), std::move(entry.name)));
+	seq.ReplayValue(entry.usage_count, entry.counter, last_value);
 }
 
 //===--------------------------------------------------------------------===//
 // Replay Macro
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateMacro() {
-	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "macro");
+	auto wal_entry = WALCreateMacro::Deserialize(deserializer);
+	auto &entry = wal_entry.macro;
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1024,11 +1029,10 @@ void WriteAheadLogDeserializer::ReplayCreateMacro() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropMacro() {
+	auto entry = WALDropMacro::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::MACRO_ENTRY;
-	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1040,7 +1044,8 @@ void WriteAheadLogDeserializer::ReplayDropMacro() {
 // Replay Table Macro
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateTableMacro() {
-	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "table_macro");
+	auto wal_entry = WALCreateTableMacro::Deserialize(deserializer);
+	auto &entry = wal_entry.table_macro;
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1048,11 +1053,10 @@ void WriteAheadLogDeserializer::ReplayCreateTableMacro() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropTableMacro() {
+	auto entry = WALDropTableMacro::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::TABLE_MACRO_ENTRY;
-	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1098,11 +1102,10 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {
+	auto entry = WALDropIndex::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::INDEX_ENTRY;
-	auto schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	auto name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	info.SetQualifiedName(QualifiedName({std::move(schema)}, std::move(name)));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1123,13 +1126,12 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 // Replay Data
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayUseTable() {
-	auto schema_name = deserializer.ReadProperty<Identifier>(101, "schema");
-	auto table_name = deserializer.ReadProperty<Identifier>(102, "table");
+	auto entry = WALUseTable::Deserialize(deserializer);
 	if (DeserializeOnly()) {
 		return;
 	}
-	state.current_table =
-	    &catalog.GetEntry<DuckTableEntry>(context, QualifiedName(catalog.GetName(), schema_name, table_name));
+	state.current_table = &catalog.GetEntry<DuckTableEntry>(
+	    context, QualifiedName(catalog.GetName(), std::move(entry.schema), std::move(entry.table)));
 }
 
 void WriteAheadLogDeserializer::ReplayInsert() {
@@ -1259,7 +1261,8 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 }
 
 void WriteAheadLogDeserializer::ReplayCheckpoint() {
-	state.checkpoint_id = deserializer.ReadProperty<MetaBlockPointer>(101, "meta_block");
+	auto entry = WALCheckpoint::Deserialize(deserializer);
+	state.checkpoint_id = entry.meta_block;
 	state.checkpoint_position = state.current_position;
 }
 
