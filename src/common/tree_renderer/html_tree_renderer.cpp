@@ -194,14 +194,15 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
     position: relative; display: flex; flex-direction: column; align-items: center;
     padding: 28px 14px 0;
 }
+/* connector thickness (--edge-w on each li, --drop-w on each ul) scales with the rows flowing through the edge */
 /* riser: vertical line from the sibling bus down into this node's card */
 .tree li::after {
     content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-    width: 2px; height: 28px; background: var(--connector);
+    width: var(--edge-w, 2px); height: 28px; background: var(--connector); border-radius: 2px;
 }
 /* bus: horizontal line spanning the siblings */
 .tree li::before {
-    content: ""; position: absolute; top: 0; height: 2px; background: var(--connector);
+    content: ""; position: absolute; top: 0; height: var(--edge-w, 2px); background: var(--connector); border-radius: 2px;
 }
 .tree li:first-child::before { left: 50%; right: 0; }
 .tree li:last-child::before { left: 0; right: 50%; }
@@ -210,7 +211,7 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
 /* drop: vertical line from a parent card down to its children's bus */
 .tree ul::before {
     content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-    width: 2px; height: 28px; background: var(--connector);
+    width: var(--drop-w, 2px); height: 28px; background: var(--connector); border-radius: 2px;
 }
 /* root node: no incoming connector */
 .tree > li { padding-top: 0; }
@@ -356,40 +357,76 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
 #legend .lg-row .pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
 #legend .sw { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
 
-/* ---------- Time-breakdown pie ---------- */
-#pie-panel {
-    position: fixed; bottom: 14px; left: 14px; z-index: 17;
+/* ---------- Legend drill-down (operators of a category) ---------- */
+#legend .lg-row.clickable { cursor: pointer; padding: 2px 4px; margin: 0 -4px; border-radius: 6px; }
+#legend .lg-row.clickable:hover { background: var(--panel-2); color: var(--text); }
+#legend .lg-back { cursor: pointer; color: var(--text-faint); font-size: 15px; line-height: 1; margin-left: auto; padding: 0 3px; border-radius: 5px; }
+#legend .lg-back:hover { background: var(--bg-grid); color: var(--text); }
+#legend .lg-title .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
+#legend .lg-oplist { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; max-height: 260px; overflow-y: auto; }
+.lg-op { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-muted); padding: 3px 5px; margin: 0 -4px; border-radius: 6px; }
+.lg-op.clickable { cursor: pointer; }
+.lg-op.clickable:hover { background: var(--panel-2); color: var(--text); }
+.lg-op .nm { flex: 1; font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-op .pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+
+/* ---------- Phase timings panel ---------- */
+#timings-panel {
+    position: fixed; bottom: 14px; left: 14px; z-index: 17; display: none;
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-    box-shadow: var(--shadow-hover); padding: 14px; width: 272px; display: none;
+    box-shadow: var(--shadow-hover); padding: 10px 12px 12px; width: 280px;
 }
-#pie-panel.show { display: block; }
-.pie-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.pie-head .t { font-size: 12.5px; font-weight: 700; }
-.pie-close { cursor: pointer; color: var(--text-faint); font-size: 17px; line-height: 1; padding: 0 5px; border-radius: 6px; }
-.pie-close:hover { background: var(--bg-grid); color: var(--text); }
-.pie-wrap { display: flex; justify-content: center; margin: 6px 0 12px; }
-.pie-slice { cursor: pointer; transition: opacity .12s; stroke: var(--panel); stroke-width: 2; }
-.pie-slice:hover { opacity: .82; }
-.pie-slice.sel { stroke: var(--text); stroke-width: 3; }
-.pie-rows, .pie-brows { display: flex; flex-direction: column; gap: 3px; }
-.pie-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-muted); cursor: pointer; padding: 3px 5px; border-radius: 6px; }
-.pie-row:hover { background: var(--panel-2); }
-.pie-row.sel { background: var(--panel-2); color: var(--text); }
-.pie-row .sw { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
-.pie-row .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pie-row .pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
-.pie-break { margin-top: 11px; border-top: 1px solid var(--border); padding-top: 9px; display: none; }
-.pie-break.show { display: block; }
-.pie-break .bt { font-size: 9.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-faint); font-weight: 700; margin-bottom: 6px; }
-.pie-brow { display: flex; gap: 8px; font-size: 11px; color: var(--text-muted); padding: 3px 5px; border-radius: 6px; }
-.pie-brow.clickable { cursor: pointer; }
-.pie-brow.clickable:hover { background: var(--panel-2); color: var(--text); }
-.pie-brow .nm { flex: 1; font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pie-brow .pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+#timings-panel.show { display: block; }
+.tm-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.tm-head .t { font-size: 12.5px; font-weight: 700; }
+.tm-close { cursor: pointer; color: var(--text-faint); font-size: 17px; line-height: 1; padding: 0 5px; border-radius: 6px; }
+.tm-close:hover { background: var(--bg-grid); color: var(--text); }
+.tm-row { display: flex; align-items: center; gap: 7px; padding: 3px 6px 3px 0; border-radius: 6px; font-size: 11.5px; color: var(--text-muted); }
+.tm-row.clickable { cursor: pointer; }
+.tm-row.clickable:hover { background: var(--panel-2); color: var(--text); }
+.tm-caret { width: 10px; font-size: 8px; color: var(--text-faint); flex-shrink: 0; }
+.tm-nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-pc { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+
+/* ---------- SQL preview ---------- */
+#sql-chip {
+    display: flex; align-items: center; gap: 7px; max-width: 320px; height: 30px; padding: 0 10px;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+    overflow: hidden; transition: border-color .12s;
+}
+#sql-chip:hover { border-color: var(--border-strong); }
+#sql-chip .sql-ico { font-size: 9.5px; font-weight: 800; letter-spacing: .5px; color: var(--accent-on); background: var(--accent); padding: 2px 5px; border-radius: 4px; flex-shrink: 0; }
+#sql-preview { font-family: var(--mono); font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sql-panel {
+    position: fixed; top: 60px; left: 16px; z-index: 18; display: none;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow-hover); width: min(640px, calc(100vw - 32px)); max-height: 60vh; overflow: hidden;
+}
+#sql-panel.show { display: flex; flex-direction: column; }
+.sql-head { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+.sql-head .t { font-size: 12.5px; font-weight: 700; }
+.sql-close { cursor: pointer; color: var(--text-faint); font-size: 17px; line-height: 1; padding: 0 5px; border-radius: 6px; }
+.sql-close:hover { background: var(--bg-grid); color: var(--text); }
+#sql-body { margin: 0; padding: 12px 14px; overflow: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--text); }
+.sql-kw { color: var(--accent); font-weight: 700; }
+html[data-theme="light"] .sql-kw { color: #0070d2; }
+.sql-str { color: #00a36c; }
+.sql-num { color: #d2691e; }
 
 /* nodes highlighted by a selected pie slice */
 .node.kind-dim { opacity: .22; }
 .node.kind-sel { border-color: var(--k-color, var(--accent)); box-shadow: 0 0 0 2px var(--k-color, var(--accent)), var(--shadow-hover); }
+/* other operators belonging to the same CTE as the selected one */
+.node.cte-linked { border-color: #a855f7; box-shadow: 0 0 0 2px #a855f7, var(--shadow-hover); }
+/* build / probe side labels shown on a selected hash join or CTE */
+.side-badge {
+    position: absolute; top: -9px; right: 10px; z-index: 6;
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+    padding: 1px 7px; border-radius: 8px; border: 1px solid; white-space: nowrap;
+    box-shadow: var(--shadow);
+}
+.side-badge.build { background: #7d66ff; color: #fff; border-color: #7d66ff; }
+.side-badge.probe { background: var(--panel); color: var(--text-muted); border-color: var(--border-strong); }
 
 /* ---------- Zoom indicator ---------- */
 #zoom-ind {
@@ -408,8 +445,10 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
 <body>
 <div id="toolbar">
     <div id="brand"><span class="logo"><svg viewBox="0 0 100 100" width="15" height="15" aria-label="DuckDB"><path fill="#0d0d0d" d="M50,1C22.9,1,1,22.9,1,50c0,27.1,21.9,49,49,49s49-21.9,49-49C99,22.9,77.1,1,50,1z M38.3,70.3C27.1,70.3,18,61.2,18,50 s9.1-20.3,20.3-20.3S58.6,38.8,58.6,50S49.5,70.3,38.3,70.3z M74.7,57.2h-9.6V42.7h9.6c4,0,7.3,3.2,7.3,7.2S78.7,57.2,74.7,57.2z"/></svg></span><span>DuckDB</span><span class="sub" id="brand-sub">Query Plan</span></div>
+    <div id="sql-chip" title="Show query"><span class="sql-ico">SQL</span><span id="sql-preview"></span></div>
     <div id="stats"></div>
     <div class="spacer"></div>
+    <button class="btn" id="timings-toggle" title="Show parser / planner / optimizer timings">Timings</button>
     <div class="search-wrap">
         <span class="icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
         <input id="search" type="text" placeholder="Search nodes…" autocomplete="off" spellcheck="false">
@@ -430,12 +469,8 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
 </div>
 
 <div id="legend"></div>
-<div id="pie-panel">
-    <div class="pie-head"><span class="t">Time by operator</span><span class="pie-close" id="pie-close">×</span></div>
-    <div class="pie-wrap"><svg id="pie-svg" width="180" height="180" viewBox="0 0 180 180"></svg></div>
-    <div class="pie-rows" id="pie-rows"></div>
-    <div class="pie-break" id="pie-break"><div class="bt" id="pie-break-title"></div><div class="pie-brows" id="pie-brows"></div></div>
-</div>
+<div id="timings-panel"></div>
+<div id="sql-panel"><div class="sql-head"><span class="t">Query</span><span class="sql-close" id="sql-close">×</span></div><pre id="sql-body"></pre></div>
 <div id="zoom-ind">100%</div>
 
 <script id="plan-data" type="application/json">__PLAN_JSON__</script>
@@ -458,13 +493,15 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
     })();
 
     var KINDS = {
-        scan:       { color: "#00c770", label: "Scan" },        // DuckDB green
-        join:       { color: "#7d66ff", label: "Join" },        // DuckDB purple
-        aggregate:  { color: "#2eafff", label: "Aggregate" },   // DuckDB blue
+        scan:       { color: "#00c770", label: "Scan" },         // DuckDB green
+        join:       { color: "#7d66ff", label: "Join" },         // DuckDB purple
+        aggregate:  { color: "#2eafff", label: "Aggregate" },    // DuckDB blue
+        window:     { color: "#e93d82", label: "Window" },       // pink
         order:      { color: "#ff8733", label: "Order / Top-N" }, // DuckDB orange
-        union:      { color: "#12a594", label: "Union" },       // teal
-        projection: { color: "#808080", label: "Projection" },  // grey
-        generic:    { color: "#b0b0b0", label: "Other" }        // light grey
+        union:      { color: "#12a594", label: "Union" },        // teal
+        cte:        { color: "#bf7d3a", label: "CTE" },          // bronze
+        projection: { color: "#808080", label: "Projection" },   // grey
+        generic:    { color: "#b0b0b0", label: "Other" }         // light grey
     };
 
     // First value for a detail key, or "" if absent.
@@ -475,6 +512,12 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
         }
         return "";
     }
+    // Rows flowing out of a node (actual when profiled, else estimated) — drives connector thickness.
+    function rowsOf(d) { return d.cardinality != null ? d.cardinality : (d.estimated_cardinality != null ? d.estimated_cardinality : 0); }
+    var MAX_ROWS = 0;
+    (function scanRows(n) { if (!n) return; var r = rowsOf(n); if (r > MAX_ROWS) MAX_ROWS = r; (n.children || []).forEach(scanRows); })(PLAN.root);
+    function edgeWidth(d) { return MAX_ROWS > 0 ? 1.6 + Math.sqrt(rowsOf(d) / MAX_ROWS) * 6 : 2; }
+
     // Map of CTE table-index -> CTE name, so a CTE_SCAN can show the name of the CTE it scans.
     var CTE_NAMES = {};
     (function collectCTEs(n) {
@@ -658,18 +701,21 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
         wrap.appendChild(node);
         li.appendChild(wrap);
 
-        var rec = { li: li, node: node, data: data, hl: card.hl, size: 1, handle: null, count: null, groupLi: null };
-        li._rec = rec;
+        var rec = { li: li, node: node, data: data, hl: card.hl, size: 1, handle: null, count: null, groupLi: null, childHeads: [] };
+        li._rec = rec; node._rec = rec;
         allNodes.push(rec);
 
         if (hasChildren) {
             var ul = document.createElement("ul");
-            var sub = 0;
+            var sub = 0, maxW = 2;
             data.children.forEach(function (c) {
                 var r = renderSubtree(c);
                 ul.appendChild(r.li);
                 sub += r.size;
+                if (r.edgeW > maxW) maxW = r.edgeW;
+                rec.childHeads.push(r.head);
             });
+            ul.style.setProperty("--drop-w", maxW.toFixed(1) + "px");
             li.appendChild(ul);
             rec.size += sub;
 
@@ -742,10 +788,12 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
         stack.appendChild(recollapse);
         run.forEach(function (d) {
             var item = document.createElement("div"); item.className = "group-stack-item";
-            var card = buildCard(d);
-            item.appendChild(card.node);
+            var c = buildCard(d);
+            item.appendChild(c.node);
             stack.appendChild(item);
-            allNodes.push({ li: li, node: card.node, data: d, hl: card.hl, size: 1, handle: null, count: null, groupLi: li });
+            var srec = { li: li, node: c.node, data: d, hl: c.hl, size: 1, handle: null, count: null, groupLi: li, childHeads: [] };
+            c.node._rec = srec;
+            allNodes.push(srec);
         });
         wrap.appendChild(stack);
         li.appendChild(wrap);
@@ -753,21 +801,26 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
         var ul = document.createElement("ul");
         var cont = renderSubtree(continuation);
         ul.appendChild(cont.li);
+        ul.style.setProperty("--drop-w", cont.edgeW.toFixed(1) + "px");
         li.appendChild(ul);
 
         groups.push(li);
         setGroupExpanded(li, false);
-        return { li: li, size: run.length + cont.size };
+        return { li: li, size: run.length + cont.size, head: card };
     }
 
     // Render a node, condensing it into a group when grouping is on and it starts a qualifying chain.
+    // Returns { li, size, head, edgeW } where head is the top card element (for build/probe badges).
     function renderSubtree(data) {
+        var res = null;
         if (GROUPING && ANALYZE && TOTAL_TIME > 0) {
             var run = collectRun(data);
-            if (run.length >= MIN_GROUP) return makeGroup(run);
+            if (run.length >= MIN_GROUP) res = makeGroup(run);
         }
-        var rec = makeNode(data);
-        return { li: rec.li, size: rec.size };
+        if (!res) { var rec = makeNode(data); res = { li: rec.li, size: rec.size, head: rec.node }; }
+        res.edgeW = edgeWidth(data);
+        res.li.style.setProperty("--edge-w", res.edgeW.toFixed(1) + "px");
+        return res;
     }
 
     function metric(label, value, cls, tooltip) {
@@ -794,10 +847,51 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
         applyTransform();
     }
 
+    // The CTE table-index a node belongs to (CTE materialization or any of its scans), or "".
+    function cteIndexOf(d) {
+        if (d.kind !== "cte") return "";
+        return detailVal(d, "CTE Index") || detailVal(d, "Table Index") || "";
+    }
+
+    var sideBadges = [];
+    function clearSideBadges() {
+        sideBadges.forEach(function (b) { if (b.parentElement) b.parentElement.removeChild(b); });
+        sideBadges = [];
+    }
+    function addSideBadge(head, text, cls) {
+        if (!head || !head.parentElement) return;
+        var b = document.createElement("div"); b.className = "side-badge " + cls; b.textContent = text;
+        head.parentElement.appendChild(b); // append to the (un-clipped) wrap, not the card
+        sideBadges.push(b);
+    }
+    // For a selected hash join / CTE, label which child is the build side.
+    function updateSideBadges(rec) {
+        clearSideBadges();
+        if (!rec || !rec.childHeads || rec.childHeads.length !== 2) return;
+        if (rec.data.kind === "join" && rec.data.name.indexOf("HASH_JOIN") >= 0) {
+            addSideBadge(rec.childHeads[0], "Probe", "probe");
+            addSideBadge(rec.childHeads[1], "Build", "build");
+        } else if (rec.data.kind === "cte" && rec.data.name === "CTE") {
+            addSideBadge(rec.childHeads[0], "Build", "build");
+            addSideBadge(rec.childHeads[1], "Main", "probe");
+        }
+    }
+    // Highlight the other operators of the same CTE (same index) in a distinct colour.
+    function updateCTELink(rec) {
+        allNodes.forEach(function (r) { r.node.classList.remove("cte-linked"); });
+        if (!rec) return;
+        var idx = cteIndexOf(rec.data);
+        if (!idx) return;
+        allNodes.forEach(function (r) { if (r.node !== rec.node && cteIndexOf(r.data) === idx) r.node.classList.add("cte-linked"); });
+    }
+
     var selected = null;
     function select(node) {
         if (selected) selected.classList.remove("selected");
         selected = node; node.classList.add("selected");
+        var rec = node._rec;
+        updateSideBadges(rec);
+        updateCTELink(rec);
     }
 
     var tree = document.getElementById("tree");
@@ -834,9 +928,19 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
         }
     }
 
-    // ---------- legend + time-breakdown pie ----------
-    function buildLegendPie() {
-        // aggregate time and members per operator kind
+    // ---------- legend (drill-down: categories -> operators) ----------
+    function pctOf(t) { return TOTAL_TIME > 0 ? t / TOTAL_TIME * 100 : 0; }
+    function highlightKind(k) {
+        groups.forEach(function (g) { setGroupExpanded(g, true); }); // show the actual operators, not the condensed chains
+        allNodes.forEach(function (r) {
+            var rk = KINDS[r.data.kind] ? r.data.kind : "generic";
+            r.node.classList.toggle("kind-sel", rk === k);
+            r.node.classList.toggle("kind-dim", rk !== k);
+        });
+    }
+    function clearKindHighlight() { allNodes.forEach(function (r) { r.node.classList.remove("kind-sel", "kind-dim"); }); }
+
+    function buildLegend() {
         var kindStats = {};
         Object.keys(KINDS).forEach(function (k) { kindStats[k] = { time: 0, recs: [] }; });
         allNodes.forEach(function (r) {
@@ -846,115 +950,50 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
         });
         var presentKinds = Object.keys(KINDS).filter(function (k) { return kindStats[k].recs.length > 0; });
         var hasTime = ANALYZE && TOTAL_TIME > 0;
-        function pct(t) { return TOTAL_TIME > 0 ? t / TOTAL_TIME * 100 : 0; }
-
-        // --- legend ---
         var lg = document.getElementById("legend");
-        var html = '<div class="lg-head"><span class="lg-title">Operators</span>' +
-                   (hasTime ? '<span class="lg-hint">click for pie ▸</span>' : '') + '</div>';
-        presentKinds.forEach(function (k) {
-            var pctStr = hasTime ? Math.round(pct(kindStats[k].time)) + "%" : "";
-            html += '<div class="lg-row"><span class="sw" style="background:' + KINDS[k].color + '"></span>' +
-                    '<span class="nm">' + KINDS[k].label + '</span><span class="pct">' + pctStr + '</span></div>';
-        });
-        lg.innerHTML = html;
-        if (!hasTime) { return; }
 
-        // --- pie ---
-        var SVGNS = "http://www.w3.org/2000/svg";
-        function svgEl(tag, attrs) { var e = document.createElementNS(SVGNS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; }
-        function polar(cx, cy, r, deg) { var a = (deg - 90) * Math.PI / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; }
-        function arcPath(cx, cy, r, start, end) {
-            var s = polar(cx, cy, r, end), e = polar(cx, cy, r, start);
-            var large = (end - start) <= 180 ? 0 : 1;
-            return "M " + cx + " " + cy + " L " + s[0] + " " + s[1] + " A " + r + " " + r + " 0 " + large + " 0 " + e[0] + " " + e[1] + " Z";
+        function showCategories() {
+            clearKindHighlight();
+            lg.innerHTML = "";
+            var head = document.createElement("div"); head.className = "lg-head";
+            head.innerHTML = '<span class="lg-title">Operators</span>' + (hasTime ? '<span class="lg-hint">click to drill in</span>' : '');
+            lg.appendChild(head);
+            presentKinds.forEach(function (k) {
+                var row = document.createElement("div"); row.className = "lg-row" + (hasTime ? " clickable" : "");
+                var sw = document.createElement("span"); sw.className = "sw"; sw.style.setProperty("background", KINDS[k].color);
+                var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = KINDS[k].label + " (" + kindStats[k].recs.length + ")";
+                var pc = document.createElement("span"); pc.className = "pct"; pc.textContent = hasTime ? Math.round(pctOf(kindStats[k].time)) + "%" : "";
+                row.appendChild(sw); row.appendChild(nm); row.appendChild(pc);
+                if (hasTime) row.addEventListener("click", function () { showOperators(k); });
+                lg.appendChild(row);
+            });
         }
 
-        var pieSlices = {}, pieRows = {}, currentKind = null;
-        var svg = document.getElementById("pie-svg");
-        var rowsBox = document.getElementById("pie-rows");
-        var pieKinds = presentKinds.filter(function (k) { return kindStats[k].time > 0; })
-                                   .sort(function (a, b) { return kindStats[b].time - kindStats[a].time; });
-        var sum = pieKinds.reduce(function (acc, k) { return acc + kindStats[k].time; }, 0);
-
-        var angle = 0;
-        pieKinds.forEach(function (k) {
-            var frac = sum > 0 ? kindStats[k].time / sum : 0;
-            var sweep = frac * 360;
-            var shape;
-            if (pieKinds.length === 1) {
-                shape = svgEl("circle", { cx: 90, cy: 90, r: 80, fill: KINDS[k].color });
-            } else {
-                shape = svgEl("path", { d: arcPath(90, 90, 80, angle, angle + sweep), fill: KINDS[k].color });
-            }
-            shape.setAttribute("class", "pie-slice");
-            shape.addEventListener("click", function () { selectKind(k); });
-            svg.appendChild(shape);
-            pieSlices[k] = shape;
-            angle += sweep;
-
-            var row = document.createElement("div"); row.className = "pie-row";
-            var sw = document.createElement("span"); sw.className = "sw"; sw.style.setProperty("background", KINDS[k].color);
-            var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = KINDS[k].label;
-            var pc = document.createElement("span"); pc.className = "pct"; pc.textContent = pct(kindStats[k].time).toFixed(1) + "%";
-            row.appendChild(sw); row.appendChild(nm); row.appendChild(pc);
-            row.addEventListener("click", function () { selectKind(k); });
-            rowsBox.appendChild(row);
-            pieRows[k] = row;
-        });
-
-        function selectKind(k) {
-            if (currentKind === k) { clearKind(); return; }
-            currentKind = k;
-            // show the actual operators (no condensing) while a division is being inspected
-            groups.forEach(function (g) { setGroupExpanded(g, true); });
-            Object.keys(pieSlices).forEach(function (kk) { pieSlices[kk].classList.toggle("sel", kk === k); });
-            Object.keys(pieRows).forEach(function (kk) { pieRows[kk].classList.toggle("sel", kk === k); });
-            allNodes.forEach(function (r) {
-                var rk = KINDS[r.data.kind] ? r.data.kind : "generic";
-                r.node.classList.toggle("kind-sel", rk === k);
-                r.node.classList.toggle("kind-dim", rk !== k);
-            });
-            var brk = document.getElementById("pie-break");
-            document.getElementById("pie-break-title").textContent = KINDS[k].label + " — operators by time";
-            var brows = document.getElementById("pie-brows");
-            brows.innerHTML = "";
-            var members = kindStats[k].recs.filter(function (r) { return (r.data.timing || 0) > 0; })
-                                           .sort(function (a, b) { return (b.data.timing || 0) - (a.data.timing || 0); });
-            if (!members.length) {
-                var none = document.createElement("div"); none.className = "pie-brow";
-                var nnm = document.createElement("span"); nnm.className = "nm"; nnm.textContent = "No measured time"; none.appendChild(nnm);
-                brows.appendChild(none);
-            }
+        function showOperators(k) {
+            highlightKind(k);
+            lg.innerHTML = "";
+            var head = document.createElement("div"); head.className = "lg-head";
+            var back = document.createElement("span"); back.className = "lg-back"; back.textContent = "×";
+            back.title = "Back to operators"; back.addEventListener("click", function () { showCategories(); });
+            var title = document.createElement("span"); title.className = "lg-title";
+            title.innerHTML = '<span class="sw" style="background:' + KINDS[k].color + '"></span>' + KINDS[k].label;
+            var pc = document.createElement("span"); pc.className = "pct"; pc.textContent = Math.round(pctOf(kindStats[k].time)) + "%";
+            head.appendChild(title); head.appendChild(pc); head.appendChild(back);
+            lg.appendChild(head);
+            var list = document.createElement("div"); list.className = "lg-oplist"; lg.appendChild(list);
+            var members = kindStats[k].recs.slice().sort(function (a, b) { return (b.data.timing || 0) - (a.data.timing || 0); });
             members.forEach(function (r) {
-                var row = document.createElement("div"); row.className = "pie-brow clickable";
+                var row = document.createElement("div"); row.className = "lg-op clickable";
                 var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = displayLabel(r.data);
-                var pc = document.createElement("span"); pc.className = "pct"; pc.textContent = pct(r.data.timing || 0).toFixed(1) + "%";
-                row.appendChild(nm); row.appendChild(pc);
+                var pc2 = document.createElement("span"); pc2.className = "pct"; pc2.textContent = (r.data.timing != null) ? fmtTime(r.data.timing) : "";
+                row.appendChild(nm); row.appendChild(pc2);
                 row.title = "Pan to this operator";
                 row.addEventListener("click", function () { revealRec(r); select(r.node); panToNode(r.node); });
-                brows.appendChild(row);
+                list.appendChild(row);
             });
-            brk.classList.add("show");
-        }
-        function clearKind() {
-            currentKind = null;
-            Object.keys(pieSlices).forEach(function (kk) { pieSlices[kk].classList.remove("sel"); });
-            Object.keys(pieRows).forEach(function (kk) { pieRows[kk].classList.remove("sel"); });
-            allNodes.forEach(function (r) { r.node.classList.remove("kind-sel", "kind-dim"); });
-            document.getElementById("pie-break").classList.remove("show");
         }
 
-        lg.classList.add("clickable");
-        lg.addEventListener("click", function () {
-            lg.style.display = "none";
-            document.getElementById("pie-panel").classList.add("show");
-        });
-        document.getElementById("pie-close").addEventListener("click", function () {
-            document.getElementById("pie-panel").classList.remove("show");
-            lg.style.display = "";
-            clearKind();
-        });
+        showCategories();
     }
 
     // ---------- pan & zoom ----------
@@ -1162,6 +1201,89 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
         applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
     });
 
+    // ---------- SQL preview ----------
+    function formatSQL(sql) {
+        var s = sql.replace(/\s+/g, " ").trim();
+        return s.replace(/\s+\b(FROM|WHERE|GROUP BY|ORDER BY|HAVING|LIMIT|OFFSET|UNION ALL|UNION|EXCEPT|INTERSECT|LEFT JOIN|RIGHT JOIN|INNER JOIN|FULL JOIN|JOIN|ON)\b/gi, "\n$1");
+    }
+    var SQL_KW = /^(SELECT|FROM|WHERE|GROUP|ORDER|BY|HAVING|LIMIT|OFFSET|JOIN|LEFT|RIGHT|FULL|INNER|OUTER|CROSS|ON|USING|AND|OR|NOT|IN|AS|WITH|RECURSIVE|MATERIALIZED|UNION|ALL|EXCEPT|INTERSECT|DISTINCT|CASE|WHEN|THEN|ELSE|END|ASC|DESC|NULL|IS|LIKE|BETWEEN|EXISTS|EXTRACT|CAST|OVER|PARTITION|TRUE|FALSE)$/i;
+    function highlightSQL(sql) {
+        var re = /('(?:[^']|'')*'|"(?:[^"]|"")*")|(\b\d+(?:\.\d+)?\b)|([A-Za-z_][A-Za-z0-9_]*)|(\s+)|([^\sA-Za-z0-9_'"]+)/g;
+        var out = "", m;
+        while ((m = re.exec(sql))) {
+            if (m[1]) out += '<span class="sql-str">' + escHtml(m[1]) + "</span>";
+            else if (m[2]) out += '<span class="sql-num">' + escHtml(m[2]) + "</span>";
+            else if (m[3]) out += SQL_KW.test(m[3]) ? '<span class="sql-kw">' + escHtml(m[3]) + "</span>" : escHtml(m[3]);
+            else if (m[4]) out += m[4];
+            else out += escHtml(m[5]);
+        }
+        return out;
+    }
+    function buildSQL() {
+        var sql = (PLAN.query && PLAN.query.sql) ? PLAN.query.sql : "";
+        // drop a leading EXPLAIN [ANALYZE] [(...)] wrapper so the real query is shown
+        sql = sql.replace(/^\s*EXPLAIN\s+ANALYZE\s*(\([^)]*\))?\s*/i, "").replace(/^\s*EXPLAIN\s*(\([^)]*\))?\s*/i, "");
+        var chip = document.getElementById("sql-chip");
+        if (!sql) { chip.style.display = "none"; return; }
+        var oneLine = sql.replace(/\s+/g, " ").trim();
+        document.getElementById("sql-preview").textContent = oneLine.length > 52 ? oneLine.slice(0, 52) + "…" : oneLine;
+        document.getElementById("sql-body").innerHTML = highlightSQL(formatSQL(sql));
+        var panel = document.getElementById("sql-panel");
+        chip.addEventListener("click", function () { panel.classList.toggle("show"); });
+        document.getElementById("sql-close").addEventListener("click", function () { panel.classList.remove("show"); });
+    }
+
+    // ---------- phase timings (cascaded) ----------
+    function buildTimings() {
+        var btn = document.getElementById("timings-toggle");
+        var panel = document.getElementById("timings-panel");
+        var timings = (PLAN.query && PLAN.query.timings) ? PLAN.query.timings : [];
+        var map = {};
+        timings.forEach(function (t) { map[t.key] = t.seconds; });
+        var phases = [{ key: "parser", label: "Parser" }, { key: "planner", label: "Planner" },
+                      { key: "optimizer", label: "Optimizer" }, { key: "physical_planner", label: "Physical Planner" }];
+        function val(k) { return map[k] || 0; }
+        var planTotal = phases.reduce(function (a, p) { return a + val(p.key + ".total_time"); }, 0);
+        if (planTotal <= 0) { btn.style.display = "none"; return; }
+
+        var planNode = { label: "Plan Time", secs: planTotal, children: phases.map(function (p) {
+            var subs = timings.filter(function (t) { return t.key.indexOf(p.key + ".") === 0 && t.key !== p.key + ".total_time" && t.seconds > 0; })
+                              .sort(function (a, b) { return b.seconds - a.seconds; })
+                              .map(function (t) { return { label: t.key.split(".").slice(1).join("."), secs: t.seconds, children: [] }; });
+            return { label: p.label, secs: val(p.key + ".total_time"), children: subs };
+        }) };
+
+        function renderTNode(node, depth) {
+            var wrap = document.createElement("div");
+            var row = document.createElement("div"); row.className = "tm-row"; row.style.paddingLeft = (10 + depth * 15) + "px";
+            var hasKids = node.children && node.children.length;
+            var caret = document.createElement("span"); caret.className = "tm-caret"; caret.textContent = hasKids ? "▸" : "";
+            var nm = document.createElement("span"); nm.className = "tm-nm"; nm.textContent = node.label;
+            var pc = document.createElement("span"); pc.className = "tm-pc"; pc.textContent = fmtTime(node.secs);
+            row.appendChild(caret); row.appendChild(nm); row.appendChild(pc);
+            wrap.appendChild(row);
+            if (hasKids) {
+                var kids = document.createElement("div"); kids.className = "tm-kids";
+                node.children.forEach(function (c) { kids.appendChild(renderTNode(c, depth + 1)); });
+                wrap.appendChild(kids);
+                var open = depth === 0;
+                kids.style.display = open ? "block" : "none"; caret.textContent = open ? "▾" : "▸";
+                row.classList.add("clickable");
+                row.addEventListener("click", function () {
+                    var o = kids.style.display === "none"; kids.style.display = o ? "block" : "none"; caret.textContent = o ? "▾" : "▸";
+                });
+            }
+            return wrap;
+        }
+        panel.innerHTML = "";
+        var head = document.createElement("div"); head.className = "tm-head";
+        head.innerHTML = '<span class="t">Phase timings</span><span class="tm-close" id="tm-close">×</span>';
+        panel.appendChild(head);
+        panel.appendChild(renderTNode(planNode, 0));
+        btn.addEventListener("click", function () { panel.classList.toggle("show"); btn.classList.toggle("active"); });
+        document.getElementById("tm-close").addEventListener("click", function () { panel.classList.remove("show"); btn.classList.remove("active"); });
+    }
+
     // ---------- init ----------
     // Build once; if the result does not comfortably fit on screen, condense low-impact chains and rebuild.
     buildTree();
@@ -1172,7 +1294,9 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
         fit();
     }
     buildSummary();
-    buildLegendPie();
+    buildLegend();
+    buildSQL();
+    buildTimings();
     if (ANALYZE) setHeat(true);
     requestAnimationFrame(fit);
     window.addEventListener("resize", function () { /* keep current transform */ });
@@ -1185,14 +1309,21 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
 //! Map an operator name (and, for leaves, its details) to a coarse "kind" used for colour-coding in the UI. Mirrors
 //! the classification used by the text renderer.
 static const char *ClassifyKind(const string &name, bool is_leaf, const InsertionOrderPreservingMap<string> &extra) {
+	// CTE first: CTE_SCAN contains "SCAN" but should be classified as a CTE operator
+	if (StringUtil::Contains(name, "CTE")) {
+		return "cte";
+	}
 	if (StringUtil::Contains(name, "SCAN") || StringUtil::Contains(name, "GET")) {
 		return "scan";
 	}
 	if (StringUtil::Contains(name, "JOIN") || name == "CROSS_PRODUCT") {
 		return "join";
 	}
+	if (StringUtil::Contains(name, "WINDOW")) {
+		return "window";
+	}
 	if (StringUtil::Contains(name, "AGGREGATE") || StringUtil::Contains(name, "GROUP_BY") ||
-	    StringUtil::Contains(name, "DISTINCT") || StringUtil::Contains(name, "WINDOW")) {
+	    StringUtil::Contains(name, "DISTINCT")) {
 		return "aggregate";
 	}
 	if (StringUtil::Contains(name, "ORDER_BY") || StringUtil::Contains(name, "TOP_N")) {
@@ -1296,6 +1427,15 @@ void HTMLTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) 
 		query.Add("cpu_time", writer.CreateDouble(query_cpu_time));
 		query.Add("bytes_read", writer.CreateUnsignedInteger(query_bytes_read));
 		query.Add("bytes_written", writer.CreateUnsignedInteger(query_bytes_written));
+		query.AddString("sql", query_sql);
+		auto timings = writer.CreateArray();
+		for (auto &entry : query_timings) {
+			auto t = writer.CreateObject();
+			t.AddString("key", entry.first);
+			t.Add("seconds", writer.CreateDouble(entry.second));
+			timings.Append(t);
+		}
+		query.Add("timings", timings);
 		doc.Add("query", query);
 	}
 	doc.Add("root", root_node);
@@ -1317,6 +1457,11 @@ void HTMLTreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseTreeRen
 	query_cpu_time = qm.GetStringMetricInSeconds("query.cpu_time");
 	query_bytes_read = qm.GetBytesRead();
 	query_bytes_written = qm.GetBytesWritten();
+	query_sql = qm.query_sql;
+	query_timings.clear();
+	for (auto &entry : qm.GetMetricTimings()) {
+		query_timings.emplace_back(entry.first, static_cast<double>(entry.second) / 1e9);
+	}
 	has_query_metrics = true;
 	profiler.RenderProfilingNodeTree(*this, ss);
 }

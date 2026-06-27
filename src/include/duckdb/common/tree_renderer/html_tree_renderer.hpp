@@ -10,6 +10,8 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/string.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/render_tree.hpp"
@@ -58,6 +60,10 @@ private:
 	double query_cpu_time = 0;
 	idx_t query_bytes_read = 0;
 	idx_t query_bytes_written = 0;
+	//! The query text, shown as an (expandable) preview.
+	string query_sql;
+	//! All string-keyed phase timings (parser/planner/optimizer/physical_planner/...), in seconds; cascaded in the UI.
+	vector<std::pair<string, double>> query_timings;
 };
 
 } // namespace duckdb
