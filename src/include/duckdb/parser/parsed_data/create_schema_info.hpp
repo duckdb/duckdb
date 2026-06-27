@@ -16,8 +16,9 @@ struct CreateSchemaInfo : public CreateInfo {
 	CreateSchemaInfo();
 
 public:
-	//! The qualified name encodes the full path as [catalog, parent_schemas..., new_schema] (name is unused). These
-	//! helpers interpret it. For a top-level schema the path is [catalog, new_schema].
+	//! The qualified name encodes the full path as [catalog, parent_schemas..., new_schema, <empty name>]. The empty
+	//! trailing name keeps the new schema in the Schema() slot (so catalog/schema serialization stays correct). These
+	//! helpers interpret it. For a top-level schema the path is [catalog, new_schema, <empty name>].
 	//! The name of the schema being created (the last component of the path)
 	const Identifier &SchemaName() const;
 	//! The catalog the schema is created in (empty if the path carries no catalog component)

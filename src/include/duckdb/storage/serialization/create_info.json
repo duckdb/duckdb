@@ -9,7 +9,7 @@
       "duckdb/parser/parsed_data/create_info.hpp"
     ],
     "finalize_deserialization": [
-      "if (!qualified_name.SchemaPath().empty() || !qualified_name.Name().empty()) {",
+      "if (!qualified_name.Path().empty()) {",
       "\tresult->qualified_name = std::move(qualified_name);",
       "}"
     ],
@@ -23,7 +23,6 @@
         "id": 101,
         "name": "catalog",
         "serialize_property": "qualified_name.Catalog()",
-        "deserialize_property": "qualified_name.CatalogMutable()",
         "type": "Identifier",
         "serialize_until": "v2.0.0"
       },
@@ -31,7 +30,6 @@
         "id": 102,
         "name": "schema",
         "serialize_property": "qualified_name.Schema()",
-        "deserialize_property": "qualified_name.SchemaMutable()",
         "type": "Identifier",
         "serialize_until": "v2.0.0"
       },
@@ -61,7 +59,7 @@
         "type": "Value",
         "default": "Value()"
       },
-	  {
+      {
         "id": 108,
         "name": "tags",
         "type": "InsertionOrderPreservingMap<string>",
@@ -73,7 +71,7 @@
         "type": "LogicalDependencyList",
         "default": "LogicalDependencyList()",
         "version": "v0.10.3"
-	  },
+      },
       {
         "id": 110,
         "name": "extension_name",
@@ -89,7 +87,13 @@
         "deserialize_default": "QualifiedName()",
         "deserialize_skip_assign": true
       }
-    ]
+    ],
+    "methods": {
+      "SetQualification": [
+        "catalog",
+        "schema"
+      ]
+    }
   },
   {
     "class": "CreateIndexInfo",
@@ -103,7 +107,6 @@
         "id": 200,
         "name": "name",
         "serialize_property": "qualified_name.Name()",
-        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -153,7 +156,12 @@
         "type": "string",
         "property": "index_type"
       }
-    ]
+    ],
+    "methods": {
+      "SetName": [
+        "name"
+      ]
+    }
   },
   {
     "class": "CreateTableInfo",
@@ -167,7 +175,6 @@
         "id": 200,
         "name": "table",
         "serialize_property": "qualified_name.Name()",
-        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -200,7 +207,12 @@
         "name": "options",
         "type": "case_insensitive_map_t<ParsedExpression*>"
       }
-    ]
+    ],
+    "methods": {
+      "SetName": [
+        "table"
+      ]
+    }
   },
   {
     "class": "CreateSchemaInfo",
@@ -209,8 +221,7 @@
     "includes": [
       "duckdb/parser/parsed_data/create_schema_info.hpp"
     ],
-    "members": [
-    ]
+    "members": []
   },
   {
     "class": "CreateViewInfo",
@@ -224,7 +235,6 @@
         "id": 200,
         "name": "view_name",
         "serialize_property": "qualified_name.Name()",
-        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -263,7 +273,16 @@
         "version": "v1.5.0"
       }
     ],
-    "constructor": ["names", "column_comments", "column_comments_map"]
+    "constructor": [
+      "names",
+      "column_comments",
+      "column_comments_map"
+    ],
+    "methods": {
+      "SetName": [
+        "view_name"
+      ]
+    }
   },
   {
     "class": "CreateTypeInfo",
@@ -277,7 +296,6 @@
         "id": 200,
         "name": "name",
         "serialize_property": "qualified_name.Name()",
-        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -286,12 +304,20 @@
         "property": "type",
         "type": "LogicalType"
       }
-    ]
+    ],
+    "methods": {
+      "SetName": [
+        "name"
+      ]
+    }
   },
   {
     "class": "CreateMacroInfo",
     "base": "CreateInfo",
-    "enum": ["MACRO_ENTRY", "TABLE_MACRO_ENTRY"],
+    "enum": [
+      "MACRO_ENTRY",
+      "TABLE_MACRO_ENTRY"
+    ],
     "includes": [
       "duckdb/parser/parsed_data/create_macro_info.hpp"
     ],
@@ -300,7 +326,6 @@
         "id": 200,
         "name": "name",
         "serialize_property": "qualified_name.Name()",
-        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -316,7 +341,16 @@
         "serialize_property": "GetAllButFirstFunction()"
       }
     ],
-    "constructor": ["$CatalogType", "function", "extra_functions"]
+    "constructor": [
+      "$CatalogType",
+      "function",
+      "extra_functions"
+    ],
+    "methods": {
+      "SetName": [
+        "name"
+      ]
+    }
   },
   {
     "class": "CreateSequenceInfo",
@@ -330,7 +364,6 @@
         "id": 200,
         "name": "name",
         "serialize_property": "qualified_name.Name()",
-        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -369,7 +402,12 @@
         "type": "optional<int64_t>",
         "version": "v2.0.0"
       }
-    ]
+    ],
+    "methods": {
+      "SetName": [
+        "name"
+      ]
+    }
   },
   {
     "class": "CreateTriggerInfo",
@@ -383,7 +421,6 @@
         "id": 200,
         "name": "trigger_name",
         "serialize_property": "qualified_name.Name()",
-        "deserialize_property": "qualified_name.NameMutable()",
         "type": "Identifier"
       },
       {
@@ -427,6 +464,11 @@
         "name": "referencing_old_table",
         "type": "Identifier"
       }
-    ]
+    ],
+    "methods": {
+      "SetName": [
+        "trigger_name"
+      ]
+    }
   }
 ]

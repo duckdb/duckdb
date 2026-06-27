@@ -34,6 +34,9 @@ public:
 	void SetQualifiedName(QualifiedName name) {
 		qualified_name = std::move(name);
 	}
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
+	}
 	const Identifier &GetTypeName() const {
 		return qualified_name.Name();
 	}
@@ -41,13 +44,13 @@ public:
 		return qualified_name.Schema();
 	}
 	void SetSchema(Identifier new_schema) {
-		qualified_name.SchemaMutable() = std::move(new_schema);
+		qualified_name = QualifiedName(qualified_name.Catalog(), std::move(new_schema), qualified_name.Name());
 	}
 	const Identifier &GetCatalog() const {
 		return qualified_name.Catalog();
 	}
 	void SetCatalog(Identifier new_catalog) {
-		qualified_name.CatalogMutable() = std::move(new_catalog);
+		qualified_name = QualifiedName(std::move(new_catalog), qualified_name.Schema(), qualified_name.Name());
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
 		return children;

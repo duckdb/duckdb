@@ -7,28 +7,30 @@ CreateSchemaInfo::CreateSchemaInfo() : CreateInfo(CatalogType::SCHEMA_ENTRY) {
 }
 
 const Identifier &CreateSchemaInfo::SchemaName() const {
-	return GetQualifiedName().SchemaPath().back();
+	// the new schema is stored in the Schema() slot (the element before the empty trailing name)
+	return GetQualifiedName().Schema();
 }
 
 const Identifier &CreateSchemaInfo::SchemaCatalog() const {
 	static const Identifier EMPTY;
-	auto &path = GetQualifiedName().SchemaPath();
-	// the catalog is the leading component, but only when the path also carries the schema name
-	return path.size() >= 2 ? path[0] : EMPTY;
+	auto &path = GetQualifiedName().Path();
+	// the catalog is the leading component once the path carries [catalog, schema, <empty name>]
+	return path.size() >= 3 ? path[0] : EMPTY;
 }
 
 vector<Identifier> CreateSchemaInfo::ParentSchemas() const {
-	auto &path = GetQualifiedName().SchemaPath();
+	auto &path = GetQualifiedName().Path();
 	vector<Identifier> result;
-	// everything between the (optional) catalog and the new schema is a parent schema
-	for (idx_t i = 1; i + 1 < path.size(); i++) {
+	// everything between the catalog and the new schema is a parent schema (the last two slots are
+	// the new schema and the empty trailing name)
+	for (idx_t i = 1; i + 2 < path.size(); i++) {
 		result.push_back(path[i]);
 	}
 	return result;
 }
 
 bool CreateSchemaInfo::IsNested() const {
-	return GetQualifiedName().SchemaPath().size() > 2;
+	return GetQualifiedName().Path().size() > 3;
 }
 
 unique_ptr<CreateInfo> CreateSchemaInfo::Copy() const {
@@ -39,10 +41,11 @@ unique_ptr<CreateInfo> CreateSchemaInfo::Copy() const {
 
 string CreateSchemaInfo::ToString() const {
 	string qualified;
-	auto &path = GetQualifiedName().SchemaPath();
-	for (idx_t i = 0; i < path.size(); i++) {
+	auto &path = GetQualifiedName().Path();
+	// the last element is the (empty) trailing name slot - the schema itself is the element before it
+	for (idx_t i = 0; i + 1 < path.size(); i++) {
 		// hide the temp catalog when it is the leading (catalog) component
-		if (i == 0 && path.size() >= 2 && path[i] == TEMP_CATALOG) {
+		if (i == 0 && path.size() >= 3 && path[i] == TEMP_CATALOG) {
 			continue;
 		}
 		if (!qualified.empty()) {

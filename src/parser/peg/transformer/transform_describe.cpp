@@ -97,7 +97,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 			if (target.is_table_name) {
 				// Case: SHOW 'something' or DESCRIBE 'something'
 				auto table_ref = make_uniq<BaseTableRef>();
-				table_ref->TableMutable() = target.table_name;
+				table_ref->SetTable(target.table_name);
 				show_select_node->from_table = std::move(table_ref);
 			} else {
 				// Case: A relation/table reference

@@ -8,11 +8,10 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSchemaStmt(PEG
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateSchemaInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	// Store the full dotted path as the schema path (the new schema is the last component). The leading components
-	// are resolved into a catalog + parent-schema chain during binding (see Binder::BindCreateSchema).
-	auto components = qualified_name.SchemaPath();
-	components.push_back(qualified_name.Name());
-	info->SetQualifiedName(QualifiedName(std::move(components), Identifier()));
+	// Store the full dotted path, with an empty trailing name so the new schema lands in the Schema() slot (keeping
+	// catalog/schema serialization correct). The leading components are resolved into a catalog + parent-schema chain
+	// during binding (see Binder::BindCreateSchema).
+	info->SetQualifiedName(QualifiedName(qualified_name.Path(), Identifier()));
 
 	result->info = std::move(info);
 	return result;

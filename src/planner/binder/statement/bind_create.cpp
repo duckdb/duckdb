@@ -173,7 +173,13 @@ void Binder::SearchSchema(CreateInfo &info) {
 }
 
 QualifiedName Binder::ResolveCatalog(ClientContext &context, const QualifiedName &name) {
-	auto path = name.SchemaPath();
+	auto path = name.Path();
+	if (path.empty()) {
+		return name;
+	}
+	// split off the trailing name; the remaining components are the qualification to resolve
+	Identifier trailing = std::move(path.back());
+	path.pop_back();
 	Identifier catalog;
 	if (!path.empty()) {
 		// try to interpret the leading component as a catalog (i.e. an attached database)
@@ -195,7 +201,7 @@ QualifiedName Binder::ResolveCatalog(ClientContext &context, const QualifiedName
 		}
 	}
 	path.insert(path.begin(), std::move(catalog));
-	return QualifiedName(std::move(path), name.Name());
+	return QualifiedName(std::move(path), std::move(trailing));
 }
 
 void Binder::BindCreateSchema(CreateSchemaInfo &info) {

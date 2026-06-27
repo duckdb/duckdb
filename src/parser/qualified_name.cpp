@@ -9,14 +9,13 @@
 namespace duckdb {
 
 void QualifiedName::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<vector<Identifier>>(100, "schema_path", schema_path);
-	serializer.WritePropertyWithDefault<Identifier>(101, "name", name);
+	serializer.WritePropertyWithDefault<vector<Identifier>>(100, "path", path);
 }
 
 QualifiedName QualifiedName::Deserialize(Deserializer &deserializer) {
-	auto schema_path = deserializer.ReadPropertyWithDefault<vector<Identifier>>(100, "schema_path");
-	auto name = deserializer.ReadPropertyWithDefault<Identifier>(101, "name");
-	return QualifiedName(std::move(schema_path), std::move(name));
+	QualifiedName result;
+	result.path = deserializer.ReadPropertyWithDefault<vector<Identifier>>(100, "path");
+	return result;
 }
 
 string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
@@ -32,7 +31,7 @@ string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
 	           !(mode == QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA && schema == DEFAULT_SCHEMA)) {
 		result += SQLIdentifier(schema) + ".";
 	}
-	result += SQLIdentifier(name);
+	result += SQLIdentifier(Name());
 	return result;
 }
 

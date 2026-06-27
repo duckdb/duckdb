@@ -29,7 +29,7 @@ public:
 		return qualified_name.Name();
 	}
 	void SetViewName(Identifier name) {
-		qualified_name.NameMutable() = std::move(name);
+		qualified_name = qualified_name.WithName(std::move(name));
 	}
 	//! Aliases of the view
 	vector<Identifier> aliases;

@@ -60,7 +60,7 @@ struct CreateTypeInfo : public CreateInfo {
 		return qualified_name.Name();
 	}
 	void SetTypeName(Identifier name) {
-		qualified_name.NameMutable() = std::move(name);
+		qualified_name = qualified_name.WithName(std::move(name));
 	}
 	//! Logical Type
 	LogicalType type;
