@@ -123,8 +123,9 @@ html, body {
 #brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px; letter-spacing: -.2px; white-space: nowrap; }
 #brand .logo {
     width: 22px; height: 22px; border-radius: 6px; background: var(--duck);
-    display: flex; align-items: center; justify-content: center; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
 }
+#brand .logo svg { display: block; }
 #brand .sub { color: var(--text-muted); font-weight: 500; }
 #stats { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
 .stat {
@@ -142,9 +143,19 @@ html, body {
     background: var(--panel-2); color: var(--text); font-size: 13px; font-family: var(--font);
     outline: none; transition: border-color .15s, box-shadow .15s;
 }
+#search { padding-right: 50px; }
 #search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 .search-wrap .icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--text-faint); pointer-events: none; }
-#search-count { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+#search-count { position: absolute; right: 26px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; pointer-events: none; }
+#search-clear {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    width: 18px; height: 18px; display: none; align-items: center; justify-content: center;
+    border-radius: 50%; color: var(--text-faint); font-size: 16px; line-height: 1; cursor: pointer;
+}
+#search-clear.show { display: flex; }
+#search-clear:hover { background: var(--bg-grid); color: var(--text); }
+/* matched-substring highlight inside titles / details */
+mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: inherit; border-radius: 2px; padding: 0 1px; }
 .btn {
     height: 32px; min-width: 32px; padding: 0 10px;
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -171,7 +182,10 @@ html, body {
     background-size: 22px 22px;
 }
 #viewport.panning { cursor: grabbing; }
-#canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; padding: 48px; will-change: transform; }
+/* No permanent will-change: a promoted layer gets bitmap-scaled (blurry) when zoomed in. We enable it only
+   while actively panning/zooming (see JS) so text stays crisp at rest. */
+#canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; padding: 48px; }
+#canvas.interacting { will-change: transform; }
 
 /* ---------- Tree (nested ul/li with connectors) ---------- */
 .tree, .tree ul { position: relative; padding: 0; margin: 0; list-style: none; }
@@ -367,7 +381,9 @@ html, body {
 .pie-break { margin-top: 11px; border-top: 1px solid var(--border); padding-top: 9px; display: none; }
 .pie-break.show { display: block; }
 .pie-break .bt { font-size: 9.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-faint); font-weight: 700; margin-bottom: 6px; }
-.pie-brow { display: flex; gap: 8px; font-size: 11px; color: var(--text-muted); padding: 2px 5px; }
+.pie-brow { display: flex; gap: 8px; font-size: 11px; color: var(--text-muted); padding: 3px 5px; border-radius: 6px; }
+.pie-brow.clickable { cursor: pointer; }
+.pie-brow.clickable:hover { background: var(--panel-2); color: var(--text); }
 .pie-brow .nm { flex: 1; font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pie-brow .pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
 
@@ -391,20 +407,20 @@ html, body {
 </head>
 <body>
 <div id="toolbar">
-    <div id="brand"><span class="logo">🦆</span><span>DuckDB</span><span class="sub" id="brand-sub">Query Plan</span></div>
+    <div id="brand"><span class="logo"><svg viewBox="0 0 100 100" width="15" height="15" aria-label="DuckDB"><path fill="#0d0d0d" d="M50,1C22.9,1,1,22.9,1,50c0,27.1,21.9,49,49,49s49-21.9,49-49C99,22.9,77.1,1,50,1z M38.3,70.3C27.1,70.3,18,61.2,18,50 s9.1-20.3,20.3-20.3S58.6,38.8,58.6,50S49.5,70.3,38.3,70.3z M74.7,57.2h-9.6V42.7h9.6c4,0,7.3,3.2,7.3,7.2S78.7,57.2,74.7,57.2z"/></svg></span><span>DuckDB</span><span class="sub" id="brand-sub">Query Plan</span></div>
     <div id="stats"></div>
     <div class="spacer"></div>
     <div class="search-wrap">
         <span class="icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
         <input id="search" type="text" placeholder="Search nodes…" autocomplete="off" spellcheck="false">
         <span id="search-count"></span>
+        <span id="search-clear" title="Clear search">×</span>
     </div>
     <div class="group">
         <button class="btn icon-btn-only" id="zoom-out" title="Zoom out">−</button>
         <button class="btn" id="zoom-fit" title="Fit to screen">Fit</button>
         <button class="btn icon-btn-only" id="zoom-in" title="Zoom in">+</button>
     </div>
-    <button class="btn" id="collapse-all" title="Collapse all subtrees and chains">Collapse all</button>
     <button class="btn" id="heat-toggle" title="Toggle time heatmap">Heatmap</button>
     <button class="btn icon-btn-only" id="theme-toggle" title="Toggle theme">◐</button>
 </div>
@@ -446,23 +462,38 @@ html, body {
         join:       { color: "#7d66ff", label: "Join" },        // DuckDB purple
         aggregate:  { color: "#2eafff", label: "Aggregate" },   // DuckDB blue
         order:      { color: "#ff8733", label: "Order / Top-N" }, // DuckDB orange
-        projection: { color: "#ff3333", label: "Projection" },  // DuckDB red
-        generic:    { color: "#808080", label: "Other" }        // DuckDB grey
+        union:      { color: "#12a594", label: "Union" },       // teal
+        projection: { color: "#808080", label: "Projection" },  // grey
+        generic:    { color: "#b0b0b0", label: "Other" }        // light grey
     };
 
-    // The scanned table / table-function for a scan node, used as the title and in the time breakdown.
+    // First value for a detail key, or "" if absent.
+    function detailVal(data, key) {
+        var dl = data.details || [];
+        for (var i = 0; i < dl.length; i++) {
+            if (dl[i].key === key) return (dl[i].values || [])[0] || "";
+        }
+        return "";
+    }
+    // Map of CTE table-index -> CTE name, so a CTE_SCAN can show the name of the CTE it scans.
+    var CTE_NAMES = {};
+    (function collectCTEs(n) {
+        if (!n) return;
+        var name = detailVal(n, "CTE Name"), ti = detailVal(n, "Table Index");
+        if (name && ti) CTE_NAMES[ti] = name;
+        (n.children || []).forEach(collectCTEs);
+    })(PLAN.root);
+
+    // The identifying name shown as a node's title: scanned table/function, or the CTE name for CTE / CTE_SCAN nodes.
     // Catalog/schema qualifiers are stripped from table names (e.g. "tpch.sf1.partsupp" -> "partsupp").
     function nodeSource(data) {
         var dl = data.details || [];
         for (var i = 0; i < dl.length; i++) {
-            if (dl[i].key === "Table") {
-                var v = (dl[i].values || [])[0] || "";
-                var parts = v.split(".");
-                return parts[parts.length - 1];
-            }
-            if (dl[i].key === "Function") {
-                return (dl[i].values || [])[0] || "";
-            }
+            var k = dl[i].key, v = (dl[i].values || [])[0] || "";
+            if (k === "Table") { var parts = v.split("."); return parts[parts.length - 1]; }
+            if (k === "Function") return v;
+            if (k === "CTE Name") return v;
+            if (k === "CTE Index") return CTE_NAMES[v] || "";
         }
         return "";
     }
@@ -499,6 +530,13 @@ html, body {
         if (s > 0) return (s * 1e6).toFixed(0) + "µs";
         return "0";
     }
+    function fmtBytes(n) {
+        if (n === null || n === undefined) return "–";
+        if (n < 1024) return n + " B";
+        var u = ["KB", "MB", "GB", "TB", "PB"], i = -1, v = n;
+        do { v /= 1024; i++; } while (v >= 1024 && i < u.length - 1);
+        return v.toFixed(v >= 100 || i === 0 ? 0 : 1) + " " + u[i];
+    }
     function heatClass(frac) {
         if (frac >= 0.25) return "heat-critical";
         if (frac >= 0.10) return "heat-high";
@@ -520,7 +558,9 @@ html, body {
     var MIN_GROUP = 2;           // only condense a chain of at least this many operators
 
     // Build the operator card (.node) for a plan node: heading, metrics, timing bar and collapsible details.
+    // Returns { node, hl } where hl lists the text spans that search can highlight.
     function buildCard(data) {
+        var hl = [];
         var node = document.createElement("div");
         node.className = "node";
         var kind = KINDS[data.kind] || KINDS.generic;
@@ -544,10 +584,10 @@ html, body {
         var headings = document.createElement("span"); headings.className = "node-headings";
         var src = nodeSource(data);
         var title = document.createElement("span"); title.className = "node-title"; title.textContent = src || prettyName(data.name);
-        headings.appendChild(title);
+        headings.appendChild(title); hl.push({ el: title, text: title.textContent });
         if (src) {
             var srcEl = document.createElement("span"); srcEl.className = "node-source"; srcEl.textContent = prettyName(data.name);
-            headings.appendChild(srcEl);
+            headings.appendChild(srcEl); hl.push({ el: srcEl, text: srcEl.textContent });
         }
         head.appendChild(dot); head.appendChild(headings);
         node.appendChild(head);
@@ -588,9 +628,11 @@ html, body {
             details.forEach(function (d) {
                 var dd = document.createElement("div"); dd.className = "detail";
                 var dk = document.createElement("div"); dk.className = "dk"; dk.textContent = d.key;
+                hl.push({ el: dk, text: dk.textContent });
                 var dv = document.createElement("div"); dv.className = "dv";
                 (d.values || []).forEach(function (v) {
                     var r = document.createElement("span"); r.className = "row"; r.textContent = v; dv.appendChild(r);
+                    hl.push({ el: r, text: v });
                 });
                 dd.appendChild(dk); dd.appendChild(dv); dwrap.appendChild(dd);
             });
@@ -601,21 +643,22 @@ html, body {
             select(node);
             if (details.length) node.classList.toggle("open-details");
         });
-        return node;
+        return { node: node, hl: hl };
     }
 
     // Render a plan node (and its subtree) as a normal operator <li>. Returns its rec.
     function makeNode(data) {
         var li = document.createElement("li");
         var hasChildren = data.children && data.children.length > 0;
-        var node = buildCard(data);
+        var card = buildCard(data);
+        var node = card.node;
 
         var wrap = document.createElement("div");
         wrap.className = "node-wrap";
         wrap.appendChild(node);
         li.appendChild(wrap);
 
-        var rec = { li: li, node: node, data: data, size: 1, handle: null, count: null, groupLi: null };
+        var rec = { li: li, node: node, data: data, hl: card.hl, size: 1, handle: null, count: null, groupLi: null };
         li._rec = rec;
         allNodes.push(rec);
 
@@ -699,10 +742,10 @@ html, body {
         stack.appendChild(recollapse);
         run.forEach(function (d) {
             var item = document.createElement("div"); item.className = "group-stack-item";
-            var node = buildCard(d);
-            item.appendChild(node);
+            var card = buildCard(d);
+            item.appendChild(card.node);
             stack.appendChild(item);
-            allNodes.push({ li: li, node: node, data: d, size: 1, handle: null, count: null, groupLi: li });
+            allNodes.push({ li: li, node: card.node, data: d, hl: card.hl, size: 1, handle: null, count: null, groupLi: li });
         });
         wrap.appendChild(stack);
         li.appendChild(wrap);
@@ -781,8 +824,13 @@ html, body {
         }
         addStat("Operators", allNodes.length);
         if (ANALYZE) {
-            addStat("Total Time", fmtTime(TOTAL_TIME));
+            var qm = PLAN.query || {};
+            // real (wall-clock) time from the query metrics; CPU time is the cumulative operator timing
+            if (qm.real_time != null) addStat("Total Time", fmtTime(qm.real_time));
+            addStat("Total CPU Time", fmtTime(TOTAL_TIME));
             if (PLAN.root && PLAN.root.cardinality != null) addStat("Result Rows", fmtInt(PLAN.root.cardinality));
+            if (qm.bytes_read) addStat("Data Read", fmtBytes(qm.bytes_read));
+            if (qm.bytes_written) addStat("Data Written", fmtBytes(qm.bytes_written));
         }
     }
 
@@ -858,6 +906,8 @@ html, body {
         function selectKind(k) {
             if (currentKind === k) { clearKind(); return; }
             currentKind = k;
+            // show the actual operators (no condensing) while a division is being inspected
+            groups.forEach(function (g) { setGroupExpanded(g, true); });
             Object.keys(pieSlices).forEach(function (kk) { pieSlices[kk].classList.toggle("sel", kk === k); });
             Object.keys(pieRows).forEach(function (kk) { pieRows[kk].classList.toggle("sel", kk === k); });
             allNodes.forEach(function (r) {
@@ -877,10 +927,12 @@ html, body {
                 brows.appendChild(none);
             }
             members.forEach(function (r) {
-                var row = document.createElement("div"); row.className = "pie-brow";
+                var row = document.createElement("div"); row.className = "pie-brow clickable";
                 var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = displayLabel(r.data);
                 var pc = document.createElement("span"); pc.className = "pct"; pc.textContent = pct(r.data.timing || 0).toFixed(1) + "%";
                 row.appendChild(nm); row.appendChild(pc);
+                row.title = "Pan to this operator";
+                row.addEventListener("click", function () { revealRec(r); select(r.node); panToNode(r.node); });
                 brows.appendChild(row);
             });
             brk.classList.add("show");
@@ -922,18 +974,26 @@ html, body {
         scale = ns;
         applyTransform();
     }
+    // Promote the canvas to its own layer only while interacting, then drop it so text re-rasterizes sharply.
+    var idleTimer = null;
+    function beginInteract() { canvas.classList.add("interacting"); if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } }
+    function endInteractSoon() { if (idleTimer) clearTimeout(idleTimer); idleTimer = setTimeout(function () { canvas.classList.remove("interacting"); }, 200); }
+
     viewport.addEventListener("wheel", function (e) {
         e.preventDefault();
         canvas.style.transition = "";
+        beginInteract();
         var rect = viewport.getBoundingClientRect();
         var factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
         zoomAt(e.clientX - rect.left, e.clientY - rect.top, factor);
+        endInteractSoon();
     }, { passive: false });
 
     var dragging = false, sx = 0, sy = 0, stx = 0, sty = 0;
     viewport.addEventListener("mousedown", function (e) {
         if (e.button !== 0) return;
         canvas.style.transition = "";
+        beginInteract();
         dragging = true; sx = e.clientX; sy = e.clientY; stx = tx; sty = ty;
         viewport.classList.add("panning");
     });
@@ -942,7 +1002,7 @@ html, body {
         tx = stx + (e.clientX - sx); ty = sty + (e.clientY - sy);
         applyTransform();
     });
-    window.addEventListener("mouseup", function () { dragging = false; viewport.classList.remove("panning"); });
+    window.addEventListener("mouseup", function () { dragging = false; viewport.classList.remove("panning"); endInteractSoon(); });
 
     function fit() {
         // reset transform to measure natural size
@@ -964,7 +1024,10 @@ html, body {
         tx += (vp.left + vp.width / 2) - (r.left + r.width / 2);
         ty += (vp.top + vp.height / 2) - (r.top + r.height / 2);
         canvas.style.transition = "transform .28s ease";
+        beginInteract();
         applyTransform();
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(function () { canvas.classList.remove("interacting"); }, 350);
     }
 
     document.getElementById("zoom-in").addEventListener("click", function () {
@@ -976,19 +1039,26 @@ html, body {
     });
     document.getElementById("zoom-fit").addEventListener("click", fit);
 
-    // ---------- collapse all ----------
-    document.getElementById("collapse-all").addEventListener("click", function () {
-        allNodes.forEach(function (r) {
-            // collapse every subtree except the root's
-            if (r.handle && r.li.parentElement !== tree) setCollapsed(r, true);
-        });
-        groups.forEach(function (g) { setGroupExpanded(g, false); });
-    });
-
     // ---------- search ----------
     var search = document.getElementById("search");
     var searchCount = document.getElementById("search-count");
-    var matches = [], matchIdx = -1;
+    var clearBtn = document.getElementById("search-clear");
+    var matches = [], matchIdx = -1, autoOpened = null;
+
+    function escHtml(s) { return s.replace(/[&<>]/g, function (c) { return c === "&" ? "&amp;" : c === "<" ? "&lt;" : "&gt;"; }); }
+    function highlightHtml(text, q) {
+        var lower = text.toLowerCase(), i = lower.indexOf(q);
+        if (i < 0) return escHtml(text);
+        var out = "", from = 0;
+        while (i >= 0) {
+            out += escHtml(text.slice(from, i)) + '<mark class="hl">' + escHtml(text.slice(i, i + q.length)) + "</mark>";
+            from = i + q.length;
+            i = lower.indexOf(q, from);
+        }
+        return out + escHtml(text.slice(from));
+    }
+    function applyHighlight(rec, q) { rec.hl.forEach(function (h) { h.el.innerHTML = highlightHtml(h.text, q); }); }
+    function clearHighlight(rec) { rec.hl.forEach(function (h) { h.el.textContent = h.text; }); }
 
     // Reveal a node by expanding any collapsed ancestors and the group it may live in.
     function revealRec(r) {
@@ -999,47 +1069,76 @@ html, body {
             p = p.parentElement;
         }
     }
+    // Close the details we opened for a detail-only match (unless the user already had them open).
+    function closeAutoOpened() {
+        if (autoOpened && !autoOpened.hadOpen) autoOpened.node.classList.remove("open-details");
+        autoOpened = null;
+    }
     function gotoMatch(i) {
         if (!matches.length) return;
         matchIdx = (i + matches.length) % matches.length;
-        var r = matches[matchIdx];
-        revealRec(r);
+        var m = matches[matchIdx];
+        revealRec(m.rec);
+        closeAutoOpened();
+        if (m.detailOnly) {
+            // temporarily open the details so the matched (and highlighted) row is visible
+            var hadOpen = m.rec.node.classList.contains("open-details");
+            m.rec.node.classList.add("open-details");
+            autoOpened = { node: m.rec.node, hadOpen: hadOpen };
+        }
         searchCount.textContent = (matchIdx + 1) + "/" + matches.length;
-        requestAnimationFrame(function () { panToNode(r.node); });
+        requestAnimationFrame(function () { panToNode(m.rec.node); });
     }
     function runSearch() {
         var q = search.value.trim().toLowerCase();
+        clearBtn.classList.toggle("show", search.value.length > 0);
+        closeAutoOpened();
         matches = [];
+        matchIdx = -1;
         if (!q) {
-            allNodes.forEach(function (r) { r.node.classList.remove("match", "dim"); });
+            allNodes.forEach(function (r) { r.node.classList.remove("match", "dim"); clearHighlight(r); });
             searchCount.textContent = "";
-            matchIdx = -1;
             return;
         }
+        // rank title/name matches ahead of detail-only matches
+        var titleHits = [], detailHits = [];
         allNodes.forEach(function (r) {
-            var hay = r.data.name.toLowerCase() + " " + prettyName(r.data.name).toLowerCase();
+            var titleHay = (r.data.name + " " + prettyName(r.data.name) + " " + nodeSource(r.data)).toLowerCase();
+            var detailHay = "";
             (r.data.details || []).forEach(function (d) {
-                hay += " " + d.key.toLowerCase() + " " + (d.values || []).join(" ").toLowerCase();
+                detailHay += " " + d.key.toLowerCase() + " " + (d.values || []).join(" ").toLowerCase();
             });
-            var m = hay.indexOf(q) >= 0;
-            r.node.classList.toggle("match", m);
-            r.node.classList.toggle("dim", !m);
-            if (m) matches.push(r);
+            var nameMatch = titleHay.indexOf(q) >= 0;
+            var detailMatch = detailHay.indexOf(q) >= 0;
+            var matched = nameMatch || detailMatch;
+            r.node.classList.toggle("match", matched);
+            r.node.classList.toggle("dim", !matched);
+            if (matched) {
+                applyHighlight(r, q);
+                (nameMatch ? titleHits : detailHits).push({ rec: r, detailOnly: !nameMatch });
+            } else {
+                clearHighlight(r);
+            }
         });
+        matches = titleHits.concat(detailHits);
         if (matches.length) {
-            gotoMatch(0); // jump to the first hit while typing
+            gotoMatch(0); // jump to the first (title) hit while typing
         } else {
             searchCount.textContent = "0";
-            matchIdx = -1;
         }
     }
+    function clearSearch() { search.value = ""; runSearch(); search.focus(); }
     search.addEventListener("input", runSearch);
     search.addEventListener("keydown", function (e) {
         if (e.key === "Enter" && matches.length) {
             e.preventDefault();
             gotoMatch(matchIdx + (e.shiftKey ? -1 : 1)); // Enter: next, Shift+Enter: previous
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            clearSearch();
         }
     });
+    clearBtn.addEventListener("click", clearSearch);
 
     // ---------- heatmap toggle ----------
     var heatBtn = document.getElementById("heat-toggle");
@@ -1049,10 +1148,18 @@ html, body {
     }
     heatBtn.addEventListener("click", function () { setHeat(!tree.classList.contains("heat")); });
 
-    // ---------- theme toggle ----------
+    // ---------- theme: follow the OS setting unless the user toggles it ----------
+    var themeMedia = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+    var manualTheme = false;
+    function applyTheme(t) { document.documentElement.setAttribute("data-theme", t); }
+    function systemTheme() { return (themeMedia && themeMedia.matches) ? "dark" : "light"; }
+    applyTheme(systemTheme());
+    if (themeMedia && themeMedia.addEventListener) {
+        themeMedia.addEventListener("change", function () { if (!manualTheme) applyTheme(systemTheme()); });
+    }
     document.getElementById("theme-toggle").addEventListener("click", function () {
-        var html = document.documentElement;
-        html.setAttribute("data-theme", html.getAttribute("data-theme") === "dark" ? "light" : "dark");
+        manualTheme = true;
+        applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
     });
 
     // ---------- init ----------
@@ -1093,6 +1200,9 @@ static const char *ClassifyKind(const string &name, bool is_leaf, const Insertio
 	}
 	if (StringUtil::Contains(name, "PROJECTION")) {
 		return "projection";
+	}
+	if (StringUtil::Contains(name, "UNION")) {
+		return "union";
 	}
 	if (is_leaf) {
 		for (auto &entry : extra) {
@@ -1180,6 +1290,14 @@ void HTMLTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) 
 	auto doc = writer.CreateObject();
 	doc.Add("analyze", writer.CreateBoolean(has_timing));
 	doc.Add("total_time", writer.CreateDouble(total_time));
+	if (has_query_metrics) {
+		auto query = writer.CreateObject();
+		query.Add("real_time", writer.CreateDouble(query_real_time));
+		query.Add("cpu_time", writer.CreateDouble(query_cpu_time));
+		query.Add("bytes_read", writer.CreateUnsignedInteger(query_bytes_read));
+		query.Add("bytes_written", writer.CreateUnsignedInteger(query_bytes_written));
+		doc.Add("query", query);
+	}
 	doc.Add("root", root_node);
 	writer.SetRoot(doc);
 
@@ -1191,6 +1309,16 @@ void HTMLTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) 
 	string html = HTML_TEMPLATE;
 	html = StringUtil::Replace(html, "__PLAN_JSON__", json);
 	ss << html;
+}
+
+void HTMLTreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseTreeRenderer &ss) {
+	auto &qm = profiler.GetQueryMetrics();
+	query_real_time = qm.GetStringMetricInSeconds("query.total_time");
+	query_cpu_time = qm.GetStringMetricInSeconds("query.cpu_time");
+	query_bytes_read = qm.GetBytesRead();
+	query_bytes_written = qm.GetBytesWritten();
+	has_query_metrics = true;
+	profiler.RenderProfilingNodeTree(*this, ss);
 }
 
 string HTMLTreeRenderer::RenderProfilerDisabled() {

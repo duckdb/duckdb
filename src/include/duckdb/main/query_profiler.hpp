@@ -210,6 +210,10 @@ public:
 	const TreeMap &GetTreeMap() const {
 		return tree_map;
 	}
+	//! Top-level query metrics (total/CPU time, bytes read/written, ...), for renderers that surface a query summary.
+	const QueryMetrics &GetQueryMetrics() const {
+		return query_metrics;
+	}
 
 private:
 	void FinalizeMetricsInternal();

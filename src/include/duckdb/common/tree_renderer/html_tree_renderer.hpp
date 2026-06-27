@@ -40,6 +40,9 @@ public:
 
 	void ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) override;
 
+	//! Capture the query-level summary metrics (real/CPU time, bytes read/written) before rendering the node tree.
+	void RenderProfiler(const QueryProfiler &profiler, BaseTreeRenderer &ss) override;
+
 	//! Keep the internal "__cardinality__"/"__timing__"/"__estimated_cardinality__" keys raw so they can be surfaced
 	//! as dedicated metrics in the viewer rather than as generic detail rows.
 	bool UsesRawKeyNames() override {
@@ -47,6 +50,14 @@ public:
 	}
 
 	string RenderProfilerDisabled() override;
+
+private:
+	//! Query-level summary, populated by RenderProfiler (EXPLAIN ANALYZE / profiling) and shown in the header.
+	bool has_query_metrics = false;
+	double query_real_time = 0;
+	double query_cpu_time = 0;
+	idx_t query_bytes_read = 0;
+	idx_t query_bytes_written = 0;
 };
 
 } // namespace duckdb
