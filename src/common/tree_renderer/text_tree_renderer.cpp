@@ -923,7 +923,8 @@ private:
 			}
 			if (has_key && DetailIsNarrow(entry)) {
 				content.emplace_back();
-				content.back().emplace_back(TruncateText(entry.first, content_width), TreeRenderType::KEY);
+				// keep the trailing colon so a narrow detail reads the same as an inline "Key: value" detail
+				content.back().emplace_back(TruncateText(entry.first + ":", content_width), TreeRenderType::KEY);
 				for (auto &value_line : WrapValues(entry.second, content_width, MaxDetailLines())) {
 					content.emplace_back();
 					content.back().emplace_back(std::move(value_line), TreeRenderType::VALUE);

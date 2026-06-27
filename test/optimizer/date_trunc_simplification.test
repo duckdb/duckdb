@@ -110,7 +110,7 @@ analyzed_plan	<REGEX>:.*Filters[ \t\n│]*.*d >= '2025.*AND.*d <.*'2025.*$
 query II
 explain analyze select * from test where date_trunc('day', d) is distinct from '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters[ \t\n│─]*\(d >= '2025.*OR.*\(d <[ \t\n│─]*'2025.*$
+analyzed_plan	<REGEX>:.*Filters[: \t\n│─]*\(d >= '2025.*OR.*\(d <[: \t\n│─]*'2025.*$
 
 #
 # check correctness of simple optimizations, column on rhs
