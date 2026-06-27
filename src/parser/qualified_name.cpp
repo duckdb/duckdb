@@ -19,7 +19,7 @@ string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
 	           !(mode == QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA && schema == DEFAULT_SCHEMA)) {
 		result += SQLIdentifier(schema) + ".";
 	}
-	result += SQLIdentifier(name);
+	result += SQLIdentifier(Name());
 	return result;
 }
 

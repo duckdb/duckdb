@@ -1,0 +1,13 @@
+diff --git a/src/storage/sqlite_schema_entry.cpp b/src/storage/sqlite_schema_entry.cpp
+index 7b04417..f266753 100644
+--- a/src/storage/sqlite_schema_entry.cpp
++++ b/src/storage/sqlite_schema_entry.cpp
+@@ -46,7 +46,7 @@ string GetCreateTableSQL(CreateTableInfo &info) {
+ void SQLiteSchemaEntry::TryDropEntry(ClientContext &context, CatalogType catalog_type, const string &name) {
+ 	DropInfo info;
+ 	info.type = catalog_type;
+-	info.NameMutable() = Identifier(name);
++	info.SetName(Identifier(name));
+ 	info.cascade = false;
+ 	info.if_not_found = OnEntryNotFound::RETURN_NULL;
+ 	DropEntry(context, info);

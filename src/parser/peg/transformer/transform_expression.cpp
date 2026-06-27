@@ -58,7 +58,7 @@ PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
 			}
 		} else {
 			auto base_table = make_uniq<BaseTableRef>();
-			base_table->TableMutable() = col_expr.GetColumnName();
+			base_table->SetTable(col_expr.GetColumnName());
 			select_node->from_table = std::move(base_table);
 		}
 		select_node->select_list.push_back(make_uniq<StarExpression>());
@@ -942,11 +942,14 @@ PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transfor
 		} else {
 			func_expr->GetArgumentsMutable().insert(func_expr->GetArgumentsMutable().begin(), std::move(expr));
 		}
-		auto regex_operator_negated = TryRemoveRegexOperatorNegation(func_expr->FunctionNameMutable());
+		auto function_name = func_expr->FunctionName();
+		auto regex_operator_negated = TryRemoveRegexOperatorNegation(function_name);
+		bool negated_like = has_not && !regex_operator_negated && TryNegateLikeFunction(function_name);
+		func_expr->SetQualifiedName(func_expr->GetQualifiedName().WithName(std::move(function_name)));
 		if (has_not) {
 			if (regex_operator_negated) {
 				expr = std::move(func_expr);
-			} else if (!TryNegateLikeFunction(func_expr->FunctionNameMutable())) {
+			} else if (!negated_like) {
 				// If it wasn't a special "Like" function, wrap it in a standard NOT operator
 				expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(func_expr));
 			} else {

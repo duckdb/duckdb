@@ -75,8 +75,11 @@ public:
 	void SetQualifiedName(QualifiedName name) {
 		qualified_name = std::move(name);
 	}
-	Identifier &NameMutable() {
-		return qualified_name.NameMutable();
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
+	}
+	void SetName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
 	}
 
 public:

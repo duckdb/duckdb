@@ -1,0 +1,13 @@
+diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+index 1e2867a..a086365 100644
+--- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
++++ b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+@@ -111,7 +111,7 @@ static optional_ptr<RTreeIndex> TryGetIndex(ClientContext &context, const string
+ 	auto qname = QualifiedName::Parse(index_name);
+ 
+ 	// look up the index name in the catalog
+-	Binder::BindSchemaOrCatalog(context, qname.CatalogMutable(), qname.SchemaMutable());
++	Binder::BindSchemaOrCatalog(context, qname);
+ 	auto &index_entry =
+ 	    Catalog::GetEntry(context, CatalogType::INDEX_ENTRY, qname.Catalog(), qname.Schema(), qname.Name())
+ 	        .Cast<IndexCatalogEntry>();

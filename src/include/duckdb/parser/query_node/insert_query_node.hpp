@@ -40,6 +40,10 @@ public:
 	//! The qualified name of the table to insert to (catalog/schema/name)
 	QualifiedName qualified_name;
 
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
+	}
+
 	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;
 
