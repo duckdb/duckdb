@@ -40,6 +40,12 @@ public:
 
 	void ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) override;
 
+	//! Keep the internal "__cardinality__"/"__timing__"/"__estimated_cardinality__" keys raw so they can be surfaced
+	//! as dedicated metrics in the viewer rather than as generic detail rows.
+	bool UsesRawKeyNames() override {
+		return true;
+	}
+
 	string RenderProfilerDisabled() override;
 };
 
