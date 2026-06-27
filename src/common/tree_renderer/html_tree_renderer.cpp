@@ -201,12 +201,13 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
 .tree li.collapsed > ul { display: none; }
 
 /* ---------- Node card ---------- */
+.node-wrap { position: relative; display: inline-block; }
 .node {
     position: relative; min-width: 168px; max-width: 320px;
     background: var(--panel); border: 1px solid var(--border);
     border-radius: 10px; box-shadow: var(--shadow);
     transition: box-shadow .15s, border-color .15s, transform .12s, opacity .15s;
-    overflow: hidden;
+    overflow: hidden; cursor: pointer;
 }
 .node:hover { box-shadow: var(--shadow-hover); border-color: var(--border-strong); }
 .node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow-hover); }
@@ -221,16 +222,11 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
 }
 .node-title { font-weight: 700; font-size: 13px; letter-spacing: -.1px; flex: 1; line-height: 1.25; }
 .node-kind-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--k-color, var(--border-strong)); flex-shrink: 0; }
-.chevron {
-    flex-shrink: 0; width: 18px; height: 18px; border-radius: 5px;
-    display: none; align-items: center; justify-content: center;
-    color: var(--text-muted); background: var(--panel-2); border: 1px solid var(--border);
-    font-size: 10px;
-}
-.node.has-children .chevron { display: inline-flex; }
-.node-head:hover .chevron { color: var(--text); border-color: var(--border-strong); }
-.chevron svg { transition: transform .15s; }
-.tree li.collapsed > .node .chevron svg { transform: rotate(-90deg); }
+/* caret indicating the card can be clicked to reveal details */
+.details-caret { flex-shrink: 0; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; color: var(--text-faint); }
+.details-caret svg { transition: transform .15s; }
+.node.open-details .details-caret svg { transform: rotate(180deg); }
+.node-head:hover .details-caret { color: var(--text); }
 
 /* metrics row */
 .node-metrics { display: flex; gap: 0; padding: 0 12px 9px 14px; flex-wrap: wrap; }
@@ -252,25 +248,40 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
 .detail .dk { font-size: 9.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-faint); font-weight: 700; margin-bottom: 3px; }
 .detail .dv { font-size: 12px; font-family: var(--mono); color: var(--text); word-break: break-word; line-height: 1.45; }
 .detail .dv .row { display: block; }
-.details-toggle {
-    text-align: center; font-size: 11px; color: var(--text-muted); padding: 5px;
-    cursor: pointer; user-select: none; font-weight: 600;
+/* ---------- Collapse handle (sits on the connector line below a parent) ---------- */
+.collapse-handle {
+    position: absolute; left: 50%; bottom: -14px; transform: translateX(-50%);
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--panel); border: 1.5px solid var(--border-strong);
+    color: var(--text-muted); font-size: 15px; font-weight: 700; line-height: 1;
+    cursor: pointer; z-index: 4; user-select: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,.14);
+    transition: background .12s, color .12s, border-color .12s, transform .1s;
 }
-.details-toggle:hover { color: var(--text); }
-
-/* heatmap mode tints the whole card */
-.tree.heat .node.heat-critical { --k-color: #e5484d; background: color-mix(in srgb, #e5484d 9%, var(--panel)); }
-.tree.heat .node.heat-high     { --k-color: #f76808; background: color-mix(in srgb, #f76808 8%, var(--panel)); }
-.tree.heat .node.heat-moderate { --k-color: #ffb224; background: color-mix(in srgb, #ffb224 9%, var(--panel)); }
-
-/* collapsed-subtree badge */
-.hidden-badge {
-    position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%);
+.collapse-handle:hover { border-color: var(--accent); color: var(--text); background: var(--bg-grid); transform: translateX(-50%) scale(1.12); }
+.collapse-count {
+    position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%);
     font-size: 9.5px; font-weight: 700; color: var(--text-muted);
     background: var(--panel); border: 1px solid var(--border-strong);
-    border-radius: 9px; padding: 1px 7px; white-space: nowrap; display: none;
+    border-radius: 9px; padding: 1px 7px; white-space: nowrap; display: none; z-index: 4;
 }
-.tree li.collapsed > .node .hidden-badge { display: block; }
+
+/* heatmap mode: tint the card AND outline heavy hitters so the whole box reads as hot */
+.tree.heat .node.heat-critical {
+    --k-color: #e5484d; background: color-mix(in srgb, #e5484d 10%, var(--panel));
+    border-color: #e5484d; border-width: 2px;
+    box-shadow: 0 0 0 3px color-mix(in srgb, #e5484d 22%, transparent), var(--shadow);
+}
+.tree.heat .node.heat-high {
+    --k-color: #f76808; background: color-mix(in srgb, #f76808 9%, var(--panel));
+    border-color: #f76808; border-width: 2px;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #f76808 16%, transparent), var(--shadow);
+}
+.tree.heat .node.heat-moderate {
+    --k-color: #ffb224; background: color-mix(in srgb, #ffb224 10%, var(--panel));
+    border-color: #ffb224; border-width: 2px;
+}
 
 /* ---------- Legend ---------- */
 #legend {
@@ -404,9 +415,7 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
         head.className = "node-head";
         var dot = document.createElement("span"); dot.className = "node-kind-dot";
         var title = document.createElement("span"); title.className = "node-title"; title.textContent = data.name;
-        var chev = document.createElement("span"); chev.className = "chevron";
-        chev.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m6 9 6 6 6-6"/></svg>';
-        head.appendChild(dot); head.appendChild(title); head.appendChild(chev);
+        head.appendChild(dot); head.appendChild(title);
         node.appendChild(head);
 
         // metrics
@@ -435,6 +444,11 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
         // details
         var details = data.details || [];
         if (details.length) {
+            node.classList.add("has-details");
+            var caret = document.createElement("span"); caret.className = "details-caret";
+            caret.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg>';
+            head.appendChild(caret);
+
             var dwrap = document.createElement("div");
             dwrap.className = "node-details";
             details.forEach(function (d) {
@@ -447,46 +461,50 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
                 dd.appendChild(dk); dd.appendChild(dv); dwrap.appendChild(dd);
             });
             node.appendChild(dwrap);
-
-            var dtoggle = document.createElement("div");
-            dtoggle.className = "details-toggle";
-            dtoggle.textContent = "Show details";
-            dtoggle.addEventListener("click", function (e) {
-                e.stopPropagation();
-                var open = node.classList.toggle("open-details");
-                dtoggle.textContent = open ? "Hide details" : "Show details";
-            });
-            node.appendChild(dtoggle);
         }
 
-        // hidden-subtree badge
-        var badge = document.createElement("span");
-        badge.className = "hidden-badge";
-        node.appendChild(badge);
+        // clicking anywhere on the card selects it and toggles its details
+        node.addEventListener("click", function () {
+            select(node);
+            if (details.length) node.classList.toggle("open-details");
+        });
 
-        li.appendChild(node);
+        var wrap = document.createElement("div");
+        wrap.className = "node-wrap";
+        wrap.appendChild(node);
+        li.appendChild(wrap);
 
-        var rec = { li: li, node: node, data: data, badge: badge, descendants: 0 };
+        var rec = { li: li, node: node, data: data, descendants: 0, handle: null, count: null };
+        li._rec = rec;
         allNodes.push(rec);
 
         // children
         if (hasChildren) {
             var ul = document.createElement("ul");
-            var count = 0;
+            var cnt = 0;
             data.children.forEach(function (c) {
                 var childRec = makeNode(c, depth + 1);
                 ul.appendChild(childRec.li);
-                count += 1 + childRec.descendants;
+                cnt += 1 + childRec.descendants;
             });
             li.appendChild(ul);
-            rec.descendants = count;
-            badge.textContent = "+" + count + " hidden";
+            rec.descendants = cnt;
 
-            chev.addEventListener("click", function (e) { e.stopPropagation(); toggleCollapse(li); });
+            // collapse control sits on the connector line below the card
+            var handle = document.createElement("div");
+            handle.className = "collapse-handle";
+            handle.textContent = "−"; // minus
+            handle.title = "Collapse / expand subtree";
+            var countEl = document.createElement("div");
+            countEl.className = "collapse-count";
+            countEl.textContent = cnt + " hidden";
+            wrap.appendChild(handle);
+            wrap.appendChild(countEl);
+            rec.handle = handle;
+            rec.count = countEl;
+            handle.addEventListener("click", function (e) { e.stopPropagation(); toggleCollapse(rec); });
         }
 
-        // selection (clicking the header selects without collapsing)
-        head.addEventListener("click", function () { select(node); });
         return rec;
     }
 
@@ -499,7 +517,20 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
         return m;
     }
 
-    function toggleCollapse(li) { li.classList.toggle("collapsed"); }
+    function setCollapsed(rec, collapsed) {
+        rec.li.classList.toggle("collapsed", collapsed);
+        if (rec.handle) rec.handle.textContent = collapsed ? "+" : "−";
+        if (rec.count) rec.count.style.display = collapsed ? "block" : "none";
+    }
+    // Toggle while keeping the clicked node fixed on screen, so the camera doesn't jump as the tree reflows.
+    function toggleCollapse(rec) {
+        var before = rec.node.getBoundingClientRect();
+        setCollapsed(rec, !rec.li.classList.contains("collapsed"));
+        var after = rec.node.getBoundingClientRect();
+        tx += before.left - after.left;
+        ty += before.top - after.top;
+        applyTransform();
+    }
 
     var selected = null;
     function select(node) {
@@ -603,12 +634,12 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
 
     // ---------- expand / collapse all ----------
     document.getElementById("expand-all").addEventListener("click", function () {
-        allNodes.forEach(function (r) { r.li.classList.remove("collapsed"); });
+        allNodes.forEach(function (r) { setCollapsed(r, false); });
     });
     document.getElementById("collapse-all").addEventListener("click", function () {
-        // collapse everything below the root's direct children
+        // collapse every node that has children, except the root
         allNodes.forEach(function (r) {
-            if (r.descendants > 0 && r !== rootRec) r.li.classList.add("collapsed");
+            if (r.descendants > 0 && r !== rootRec) setCollapsed(r, true);
         });
     });
 
@@ -636,7 +667,7 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
                 // reveal matches by expanding ancestors
                 var p = r.li.parentElement;
                 while (p && p !== tree) {
-                    if (p.tagName === "LI") p.classList.remove("collapsed");
+                    if (p.tagName === "LI" && p._rec) setCollapsed(p._rec, false);
                     p = p.parentElement;
                 }
             }
