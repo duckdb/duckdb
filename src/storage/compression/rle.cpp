@@ -268,15 +268,18 @@ struct RLEScanState : public SegmentScanState {
 	                    static_cast<idx_t>(sizeof(rle_count_t))) {
 		if (rle_count_offset < RLEConstants::RLE_HEADER_SIZE) {
 			//! This would make the index_pointer point into a region reserved for the header data
-			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
+			throw IOException("Corrupted RLE segment: rle_count_offset is smaller than the header size. The "
+			                  "index_pointer would point into the region reserved for the header data");
 		}
 		if (segment.GetBlockOffset() + rle_count_offset > segment.GetBlockSize()) {
 			//! This would make the index_pointer start outside of the segment
-			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
+			throw IOException("Corrupted RLE segment: rle_count_offset exceeds the block size. The index_pointer would "
+			                  "start outside of the segment");
 		}
 		if (rle_count_offset > AlignValue(RLEConstants::RLE_HEADER_SIZE + max_entry_pos * sizeof(T))) {
 			//! This would make the indexing of the index_pointer[entry_pos] reach outside of the segment
-			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
+			throw IOException("Corrupted RLE segment: rle_count_offset has more values than fit in the segment. "
+			                  "index_pointer[entry_pos] would reach outside of the segment");
 		}
 	}
 
