@@ -1170,7 +1170,8 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	// Table with tagged columns
 	{
 		auto tagged_table_info = make_uniq<CreateTableInfo>();
-		tagged_table_info->SetQualifiedName(QualifiedName(INVALID_CATALOG, Identifier::DefaultSchema(), "tagged_table"));
+		tagged_table_info->SetQualifiedName(
+		    QualifiedName(INVALID_CATALOG, Identifier::DefaultSchema(), "tagged_table"));
 		tagged_table_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		tagged_table_info->temporary = false;
 		tagged_table_info->internal = true;

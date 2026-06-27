@@ -1,5 +1,13 @@
 {
   "description": "Run with debug_verification_projection enabled",
   "on_init": "SET debug_verification_projection=true;",
-  "skip_compiled": "true"
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "Type pushdown optimizer collapses projections and checks for that",
+      "paths": [
+        "test/optimizer/pushdown/csv_type_pushdown.test"
+      ]
+    }
+  ]
 }

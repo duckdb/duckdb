@@ -322,6 +322,8 @@ enum class Monotonicity : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
 
+enum class MultiFileDecodeResult : uint8_t;
+
 enum class MultiFileFileState : uint8_t;
 
 enum class MultiFileScanPhase : uint8_t;
@@ -527,6 +529,8 @@ enum class TransactionInvalidationPolicy : uint8_t;
 enum class TransactionModifierType : uint8_t;
 
 enum class TransactionType : uint8_t;
+
+enum class TransformFrameState : uint8_t;
 
 enum class TriggerEventType : uint8_t;
 
@@ -1005,6 +1009,9 @@ template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
 
 template<>
+const char* EnumUtil::ToChars<MultiFileDecodeResult>(MultiFileDecodeResult value);
+
+template<>
 const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value);
 
 template<>
@@ -1312,6 +1319,9 @@ const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType v
 
 template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
+
+template<>
+const char* EnumUtil::ToChars<TransformFrameState>(TransformFrameState value);
 
 template<>
 const char* EnumUtil::ToChars<TriggerEventType>(TriggerEventType value);
@@ -1810,6 +1820,9 @@ template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
 
 template<>
+MultiFileDecodeResult EnumUtil::FromString<MultiFileDecodeResult>(const char *value);
+
+template<>
 MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value);
 
 template<>
@@ -2117,6 +2130,9 @@ TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);
+
+template<>
+TransformFrameState EnumUtil::FromString<TransformFrameState>(const char *value);
 
 template<>
 TriggerEventType EnumUtil::FromString<TriggerEventType>(const char *value);

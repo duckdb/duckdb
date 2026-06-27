@@ -6,6 +6,9 @@
 
 namespace duckdb {
 
+static constexpr idx_t PARTITION_KEY_TRACKER_CAPACITY =
+    RadixPartitioning::NumberOfPartitions(RadixPartitioning::MAX_RADIX_BITS);
+
 template <bool USE_PARTITION_SEL>
 static idx_t GetPartitionRowIndex(PartitionedTupleDataAppendState &append_state, idx_t idx) {
 	if constexpr (USE_PARTITION_SEL) {
@@ -17,16 +20,16 @@ static idx_t GetPartitionRowIndex(PartitionedTupleDataAppendState &append_state,
 PartitionKeyTracker::PartitionKeyTracker(Allocator &allocator_p, const vector<LogicalType> &key_types_p)
     : key_count(key_types_p.size()) {
 	single_value_sel.Initialize();
-	candidate_input_sel.Initialize();
-	candidate_rep_sel.Initialize();
-	mismatch_sel.Initialize();
-	representatives.Initialize(allocator_p, key_types_p, 4096);
+	candidate_input_sel.Initialize(PARTITION_KEY_TRACKER_CAPACITY);
+	candidate_rep_sel.Initialize(PARTITION_KEY_TRACKER_CAPACITY);
+	mismatch_sel.Initialize(PARTITION_KEY_TRACKER_CAPACITY);
+	representatives.Initialize(allocator_p, key_types_p, PARTITION_KEY_TRACKER_CAPACITY);
 }
 
 void PartitionKeyTracker::Reset(idx_t radix_bits_p) {
 	radix_bits = radix_bits_p;
 	const auto partition_count = RadixPartitioning::NumberOfPartitions(radix_bits);
-	D_ASSERT(partition_count <= STANDARD_VECTOR_SIZE);
+	D_ASSERT(partition_count <= PARTITION_KEY_TRACKER_CAPACITY);
 	states.clear();
 	states.resize(partition_count, PartitionKeyTrackerState::EMPTY);
 	hashes.clear();
@@ -76,7 +79,7 @@ void PartitionKeyTracker::Combine(const PartitionKeyTracker &other) {
 	}
 	D_ASSERT(radix_bits == other.radix_bits);
 	D_ASSERT(states.size() == other.states.size());
-	D_ASSERT(states.size() <= STANDARD_VECTOR_SIZE);
+	D_ASSERT(states.size() <= PARTITION_KEY_TRACKER_CAPACITY);
 
 	idx_t candidate_count = 0;
 	for (idx_t bin_idx = 0; bin_idx < states.size(); bin_idx++) {
@@ -221,7 +224,7 @@ idx_t PartitionKeyTracker::CompactTrackerCandidates(idx_t candidate_count) {
 }
 
 void PartitionKeyTracker::CompareTrackerCandidates(const PartitionKeyTracker &source, idx_t candidate_count) {
-	D_ASSERT(candidate_count <= STANDARD_VECTOR_SIZE);
+	D_ASSERT(candidate_count <= PARTITION_KEY_TRACKER_CAPACITY);
 	for (idx_t col_idx = 0; col_idx < key_count && candidate_count; col_idx++) {
 		Vector target_slice(representatives.data[col_idx], candidate_input_sel, candidate_count);
 		Vector source_slice(source.representatives.data[col_idx], candidate_rep_sel, candidate_count);

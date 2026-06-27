@@ -22,14 +22,14 @@ QualifiedName QualifiedName::Deserialize(Deserializer &deserializer) {
 string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
 	const auto &catalog = Catalog();
 	const auto &schema = Schema();
-	const bool hide_defaults = mode == QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA;
 	string result;
-	if (!catalog.empty() && !(hide_defaults && catalog == TEMP_CATALOG)) {
+	if (!catalog.empty()) {
 		result += SQLIdentifier(catalog) + ".";
 		if (!schema.empty()) {
 			result += SQLIdentifier(schema) + ".";
 		}
-	} else if (!schema.empty() && !(hide_defaults && schema == DEFAULT_SCHEMA)) {
+	} else if (!schema.empty() &&
+	           !(mode == QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA && schema == DEFAULT_SCHEMA)) {
 		result += SQLIdentifier(schema) + ".";
 	}
 	result += SQLIdentifier(name);

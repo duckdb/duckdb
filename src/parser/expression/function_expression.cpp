@@ -12,7 +12,8 @@ namespace duckdb {
 FunctionExpression::FunctionExpression() : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION) {
 }
 
-FunctionExpression::FunctionExpression(QualifiedName function_name, vector<unique_ptr<ParsedExpression>> children_p,
+FunctionExpression::FunctionExpression(const QualifiedName &function_name,
+                                       vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
                                        bool distinct, bool is_operator, bool export_state_p)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION),
@@ -37,7 +38,7 @@ FunctionExpression::FunctionExpression(const Identifier &function_name, vector<u
                          distinct, is_operator, export_state_p) {
 }
 
-FunctionExpression::FunctionExpression(QualifiedName function_name, vector<FunctionArgument> children,
+FunctionExpression::FunctionExpression(const QualifiedName &function_name, vector<FunctionArgument> children,
                                        unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
                                        bool distinct, bool is_operator, bool export_state)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION),

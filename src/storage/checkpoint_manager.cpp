@@ -403,7 +403,8 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 	if (block_manager.Prefetch()) {
 		auto metadata_blocks = metadata_manager.GetBlocks();
 		auto &buffer_manager = BufferManager::GetBufferManager(storage.GetDatabase());
-		buffer_manager.Prefetch(metadata_blocks);
+		// Database load happens before any query is running, so there is no query context to attribute to.
+		buffer_manager.Prefetch(QueryContext(), metadata_blocks);
 	}
 
 	// create the MetadataReader to read from the storage

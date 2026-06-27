@@ -21,7 +21,7 @@ struct CreateViewInfo : public CreateInfo {
 public:
 	CreateViewInfo();
 	CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name);
-	CreateViewInfo(QualifiedName view_name);
+	explicit CreateViewInfo(const QualifiedName &view_name);
 
 public:
 	//! View name

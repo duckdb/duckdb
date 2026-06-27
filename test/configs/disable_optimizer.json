@@ -97,6 +97,15 @@
       ]
     },
     {
+      "reason": "Type pushdown optimizer changes output types",
+      "paths": [
+        "test/optimizer/pushdown/csv_type_pushdown.test",
+        "test/sql/copy/csv/test_insert_into_types.test",
+        "test/sql/copy/csv/test_csv_error_message_type.test",
+        "test/sql/copy/csv/test_timestamptz_12926.test"
+      ]
+    },
+    {
       "reason": "Error mismatch.",
       "paths": [
         "test/sql/types/time/test_time_ns.test"
