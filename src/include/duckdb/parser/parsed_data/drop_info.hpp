@@ -54,6 +54,12 @@ public:
 	void SetName(Identifier name) {
 		qualified_name = qualified_name.WithName(std::move(name));
 	}
+	void SetSchema(Identifier schema) {
+		qualified_name = QualifiedName(qualified_name.Catalog(), std::move(schema), qualified_name.Name());
+	}
+	void SetCatalog(Identifier catalog) {
+		qualified_name = QualifiedName(std::move(catalog), qualified_name.Schema(), qualified_name.Name());
+	}
 
 public:
 	virtual unique_ptr<DropInfo> Copy() const;
