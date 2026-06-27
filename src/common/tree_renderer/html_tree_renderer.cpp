@@ -220,7 +220,9 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
     display: flex; align-items: center; gap: 8px;
     padding: 9px 11px 9px 14px; cursor: pointer; user-select: none;
 }
-.node-title { font-weight: 700; font-size: 13px; letter-spacing: -.1px; flex: 1; line-height: 1.25; }
+.node-headings { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.node-title { font-weight: 700; font-size: 13px; letter-spacing: -.1px; line-height: 1.25; }
+.node-source { font-size: 11px; font-family: var(--mono); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .node-kind-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--k-color, var(--border-strong)); flex-shrink: 0; }
 /* caret indicating the card can be clicked to reveal details */
 .details-caret { flex-shrink: 0; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; color: var(--text-faint); }
@@ -250,18 +252,21 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
 .detail .dv .row { display: block; }
 /* ---------- Collapse handle (sits on the connector line below a parent) ---------- */
 .collapse-handle {
-    position: absolute; left: 50%; bottom: -14px; transform: translateX(-50%);
-    width: 22px; height: 22px; border-radius: 50%;
+    position: absolute; left: 50%; bottom: -28px; transform: translateX(-50%);
+    width: 21px; height: 21px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     background: var(--panel); border: 1.5px solid var(--border-strong);
     color: var(--text-muted); font-size: 15px; font-weight: 700; line-height: 1;
     cursor: pointer; z-index: 4; user-select: none;
     box-shadow: 0 1px 3px rgba(0,0,0,.14);
-    transition: background .12s, color .12s, border-color .12s, transform .1s;
+    opacity: 0; transition: opacity .12s, background .12s, color .12s, border-color .12s, transform .1s;
 }
+/* only reveal the handle when the pointer is near the operator (or it is collapsed, so the user can re-expand) */
+.node-wrap:hover .collapse-handle,
+.tree li.collapsed > .node-wrap .collapse-handle { opacity: 1; }
 .collapse-handle:hover { border-color: var(--accent); color: var(--text); background: var(--bg-grid); transform: translateX(-50%) scale(1.12); }
 .collapse-count {
-    position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%);
+    position: absolute; left: 50%; bottom: -50px; transform: translateX(-50%);
     font-size: 9.5px; font-weight: 700; color: var(--text-muted);
     background: var(--panel); border: 1px solid var(--border-strong);
     border-radius: 9px; padding: 1px 7px; white-space: nowrap; display: none; z-index: 4;
@@ -288,11 +293,50 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
     position: fixed; bottom: 14px; left: 14px; z-index: 15;
     background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
     box-shadow: var(--shadow); padding: 9px 12px; font-size: 11px;
-    display: flex; flex-direction: column; gap: 5px; max-width: 200px;
+    display: flex; flex-direction: column; gap: 5px; min-width: 168px; max-width: 230px;
 }
-#legend .lg-title { font-size: 9.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-faint); font-weight: 700; margin-bottom: 2px; }
+#legend.clickable { cursor: pointer; }
+#legend.clickable:hover { border-color: var(--border-strong); }
+#legend .lg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 2px; }
+#legend .lg-title { font-size: 9.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-faint); font-weight: 700; }
+#legend .lg-hint { font-size: 9.5px; color: var(--text-faint); font-weight: 600; }
 #legend .lg-row { display: flex; align-items: center; gap: 7px; color: var(--text-muted); }
+#legend .lg-row .nm { flex: 1; }
+#legend .lg-row .pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
 #legend .sw { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+
+/* ---------- Time-breakdown pie ---------- */
+#pie-panel {
+    position: fixed; bottom: 14px; left: 14px; z-index: 17;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow-hover); padding: 14px; width: 272px; display: none;
+}
+#pie-panel.show { display: block; }
+.pie-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.pie-head .t { font-size: 12.5px; font-weight: 700; }
+.pie-close { cursor: pointer; color: var(--text-faint); font-size: 17px; line-height: 1; padding: 0 5px; border-radius: 6px; }
+.pie-close:hover { background: var(--bg-grid); color: var(--text); }
+.pie-wrap { display: flex; justify-content: center; margin: 6px 0 12px; }
+.pie-slice { cursor: pointer; transition: opacity .12s; stroke: var(--panel); stroke-width: 2; }
+.pie-slice:hover { opacity: .82; }
+.pie-slice.sel { stroke: var(--text); stroke-width: 3; }
+.pie-rows, .pie-brows { display: flex; flex-direction: column; gap: 3px; }
+.pie-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-muted); cursor: pointer; padding: 3px 5px; border-radius: 6px; }
+.pie-row:hover { background: var(--panel-2); }
+.pie-row.sel { background: var(--panel-2); color: var(--text); }
+.pie-row .sw { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+.pie-row .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pie-row .pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+.pie-break { margin-top: 11px; border-top: 1px solid var(--border); padding-top: 9px; display: none; }
+.pie-break.show { display: block; }
+.pie-break .bt { font-size: 9.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-faint); font-weight: 700; margin-bottom: 6px; }
+.pie-brow { display: flex; gap: 8px; font-size: 11px; color: var(--text-muted); padding: 2px 5px; }
+.pie-brow .nm { flex: 1; font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pie-brow .pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+
+/* nodes highlighted by a selected pie slice */
+.node.kind-dim { opacity: .22; }
+.node.kind-sel { border-color: var(--k-color, var(--accent)); box-shadow: 0 0 0 2px var(--k-color, var(--accent)), var(--shadow-hover); }
 
 /* ---------- Zoom indicator ---------- */
 #zoom-ind {
@@ -336,6 +380,12 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
 </div>
 
 <div id="legend"></div>
+<div id="pie-panel">
+    <div class="pie-head"><span class="t">Time by operator</span><span class="pie-close" id="pie-close">×</span></div>
+    <div class="pie-wrap"><svg id="pie-svg" width="180" height="180" viewBox="0 0 180 180"></svg></div>
+    <div class="pie-rows" id="pie-rows"></div>
+    <div class="pie-break" id="pie-break"><div class="bt" id="pie-break-title"></div><div class="pie-brows" id="pie-brows"></div></div>
+</div>
 <div id="zoom-ind">100%</div>
 
 <script id="plan-data" type="application/json">__PLAN_JSON__</script>
@@ -353,6 +403,22 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
         order:     { color: "#f76808", label: "Order / Top-N" },
         generic:   { color: "#8b94a3", label: "Other" }
     };
+
+    // The scanned table / table-function for a scan node, used as a subtitle and in the time breakdown.
+    function nodeSource(data) {
+        var dl = data.details || [];
+        for (var i = 0; i < dl.length; i++) {
+            if (dl[i].key === "Table" || dl[i].key === "Function") {
+                return (dl[i].values || [])[0] || "";
+            }
+        }
+        return "";
+    }
+    // A human label for an operator: name plus its source table where there is one.
+    function displayLabel(data) {
+        var s = nodeSource(data);
+        return s ? data.name + " · " + s : data.name;
+    }
 
     // ---------- number / time formatting ----------
     function fmtInt(n) {
@@ -410,13 +476,26 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
         accent.className = "accent";
         node.appendChild(accent);
 
-        // head
+        // head: kind dot, operator name (+ source table/function for scans), details caret
         var head = document.createElement("div");
         head.className = "node-head";
         var dot = document.createElement("span"); dot.className = "node-kind-dot";
+        var headings = document.createElement("span"); headings.className = "node-headings";
         var title = document.createElement("span"); title.className = "node-title"; title.textContent = data.name;
-        head.appendChild(dot); head.appendChild(title);
+        headings.appendChild(title);
+        var src = nodeSource(data);
+        if (src) {
+            var srcEl = document.createElement("span"); srcEl.className = "node-source"; srcEl.textContent = src;
+            headings.appendChild(srcEl);
+        }
+        head.appendChild(dot); head.appendChild(headings);
         node.appendChild(head);
+
+        // assemble detail rows; for ANALYZE the estimated cardinality lives here rather than in the headline metrics
+        var details = (data.details || []).slice();
+        if (ANALYZE && data.estimated_cardinality != null) {
+            details.push({ key: "Estimated Cardinality", values: [fmtInt(data.estimated_cardinality)] });
+        }
 
         // metrics
         var metrics = document.createElement("div");
@@ -424,7 +503,7 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
         if (data.cardinality != null) {
             metrics.appendChild(metric("Rows", fmtCompact(data.cardinality), "", fmtInt(data.cardinality)));
         }
-        if (data.estimated_cardinality != null) {
+        if (!ANALYZE && data.estimated_cardinality != null) {
             metrics.appendChild(metric("Est. Rows", fmtCompact(data.estimated_cardinality), "est", fmtInt(data.estimated_cardinality)));
         }
         if (ANALYZE && data.timing != null) {
@@ -442,7 +521,6 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
         }
 
         // details
-        var details = data.details || [];
         if (details.length) {
             node.classList.add("has-details");
             var caret = document.createElement("span"); caret.className = "details-caret";
@@ -558,20 +636,123 @@ html[data-theme="dark"] .btn.active { color: #16191f; }
         }
     })();
 
-    // ---------- legend ----------
+    // ---------- legend + time-breakdown pie ----------
     (function () {
-        var lg = document.getElementById("legend");
-        var html = '<div class="lg-title">Operators</div>';
-        Object.keys(KINDS).forEach(function (k) {
-            html += '<div class="lg-row"><span class="sw" style="background:' + KINDS[k].color + '"></span>' + KINDS[k].label + '</div>';
+        // aggregate time and members per operator kind
+        var kindStats = {};
+        Object.keys(KINDS).forEach(function (k) { kindStats[k] = { time: 0, recs: [] }; });
+        allNodes.forEach(function (r) {
+            var k = KINDS[r.data.kind] ? r.data.kind : "generic";
+            kindStats[k].time += (r.data.timing || 0);
+            kindStats[k].recs.push(r);
         });
-        if (ANALYZE) {
-            html += '<div class="lg-title" style="margin-top:6px">Time share</div>';
-            html += '<div class="lg-row"><span class="sw" style="background:#e5484d"></span>≥ 25% (critical)</div>';
-            html += '<div class="lg-row"><span class="sw" style="background:#f76808"></span>≥ 10% (high)</div>';
-            html += '<div class="lg-row"><span class="sw" style="background:#ffb224"></span>≥ 1% (moderate)</div>';
-        }
+        var presentKinds = Object.keys(KINDS).filter(function (k) { return kindStats[k].recs.length > 0; });
+        var hasTime = ANALYZE && TOTAL_TIME > 0;
+        function pct(t) { return TOTAL_TIME > 0 ? t / TOTAL_TIME * 100 : 0; }
+
+        // --- legend ---
+        var lg = document.getElementById("legend");
+        var html = '<div class="lg-head"><span class="lg-title">Operators</span>' +
+                   (hasTime ? '<span class="lg-hint">click for pie ▸</span>' : '') + '</div>';
+        presentKinds.forEach(function (k) {
+            var pctStr = hasTime ? Math.round(pct(kindStats[k].time)) + "%" : "";
+            html += '<div class="lg-row"><span class="sw" style="background:' + KINDS[k].color + '"></span>' +
+                    '<span class="nm">' + KINDS[k].label + '</span><span class="pct">' + pctStr + '</span></div>';
+        });
         lg.innerHTML = html;
+        if (!hasTime) { return; }
+
+        // --- pie ---
+        var SVGNS = "http://www.w3.org/2000/svg";
+        function svgEl(tag, attrs) { var e = document.createElementNS(SVGNS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; }
+        function polar(cx, cy, r, deg) { var a = (deg - 90) * Math.PI / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; }
+        function arcPath(cx, cy, r, start, end) {
+            var s = polar(cx, cy, r, end), e = polar(cx, cy, r, start);
+            var large = (end - start) <= 180 ? 0 : 1;
+            return "M " + cx + " " + cy + " L " + s[0] + " " + s[1] + " A " + r + " " + r + " 0 " + large + " 0 " + e[0] + " " + e[1] + " Z";
+        }
+
+        var pieSlices = {}, pieRows = {}, currentKind = null;
+        var svg = document.getElementById("pie-svg");
+        var rowsBox = document.getElementById("pie-rows");
+        var pieKinds = presentKinds.filter(function (k) { return kindStats[k].time > 0; })
+                                   .sort(function (a, b) { return kindStats[b].time - kindStats[a].time; });
+        var sum = pieKinds.reduce(function (acc, k) { return acc + kindStats[k].time; }, 0);
+
+        var angle = 0;
+        pieKinds.forEach(function (k) {
+            var frac = sum > 0 ? kindStats[k].time / sum : 0;
+            var sweep = frac * 360;
+            var shape;
+            if (pieKinds.length === 1) {
+                shape = svgEl("circle", { cx: 90, cy: 90, r: 80, fill: KINDS[k].color });
+            } else {
+                shape = svgEl("path", { d: arcPath(90, 90, 80, angle, angle + sweep), fill: KINDS[k].color });
+            }
+            shape.setAttribute("class", "pie-slice");
+            shape.addEventListener("click", function () { selectKind(k); });
+            svg.appendChild(shape);
+            pieSlices[k] = shape;
+            angle += sweep;
+
+            var row = document.createElement("div"); row.className = "pie-row";
+            var sw = document.createElement("span"); sw.className = "sw"; sw.style.setProperty("background", KINDS[k].color);
+            var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = KINDS[k].label;
+            var pc = document.createElement("span"); pc.className = "pct"; pc.textContent = pct(kindStats[k].time).toFixed(1) + "%";
+            row.appendChild(sw); row.appendChild(nm); row.appendChild(pc);
+            row.addEventListener("click", function () { selectKind(k); });
+            rowsBox.appendChild(row);
+            pieRows[k] = row;
+        });
+
+        function selectKind(k) {
+            if (currentKind === k) { clearKind(); return; }
+            currentKind = k;
+            Object.keys(pieSlices).forEach(function (kk) { pieSlices[kk].classList.toggle("sel", kk === k); });
+            Object.keys(pieRows).forEach(function (kk) { pieRows[kk].classList.toggle("sel", kk === k); });
+            allNodes.forEach(function (r) {
+                var rk = KINDS[r.data.kind] ? r.data.kind : "generic";
+                r.node.classList.toggle("kind-sel", rk === k);
+                r.node.classList.toggle("kind-dim", rk !== k);
+            });
+            var brk = document.getElementById("pie-break");
+            document.getElementById("pie-break-title").textContent = KINDS[k].label + " — operators by time";
+            var brows = document.getElementById("pie-brows");
+            brows.innerHTML = "";
+            var members = kindStats[k].recs.filter(function (r) { return (r.data.timing || 0) > 0; })
+                                           .sort(function (a, b) { return (b.data.timing || 0) - (a.data.timing || 0); });
+            if (!members.length) {
+                var none = document.createElement("div"); none.className = "pie-brow";
+                var nnm = document.createElement("span"); nnm.className = "nm"; nnm.textContent = "No measured time"; none.appendChild(nnm);
+                brows.appendChild(none);
+            }
+            members.forEach(function (r) {
+                var row = document.createElement("div"); row.className = "pie-brow";
+                var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = displayLabel(r.data);
+                var pc = document.createElement("span"); pc.className = "pct"; pc.textContent = pct(r.data.timing || 0).toFixed(1) + "%";
+                row.appendChild(nm); row.appendChild(pc);
+                brows.appendChild(row);
+            });
+            brk.classList.add("show");
+        }
+        function clearKind() {
+            currentKind = null;
+            Object.keys(pieSlices).forEach(function (kk) { pieSlices[kk].classList.remove("sel"); });
+            Object.keys(pieRows).forEach(function (kk) { pieRows[kk].classList.remove("sel"); });
+            allNodes.forEach(function (r) { r.node.classList.remove("kind-sel", "kind-dim"); });
+            document.getElementById("pie-break").classList.remove("show");
+        }
+
+        lg.classList.add("clickable");
+        lg.addEventListener("click", function () {
+            lg.style.display = "none";
+            document.getElementById("pie-panel").classList.add("show");
+        });
+        document.getElementById("pie-close").addEventListener("click", function () {
+            document.getElementById("pie-panel").classList.remove("show");
+            lg.style.display = "";
+            clearKind();
+        });
     })();
 
     // ---------- pan & zoom ----------
