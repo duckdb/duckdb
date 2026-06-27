@@ -115,7 +115,7 @@ static unique_ptr<CommonTableExpressionInfo> MakeTransitionTableAliasCTE(const I
 	}
 	alias_select->select_list.push_back(std::move(star));
 	auto alias_ref = make_uniq<BaseTableRef>();
-	alias_ref->TableMutable() = base_cte_name;
+	alias_ref->SetTable(base_cte_name);
 	alias_select->from_table = std::move(alias_ref);
 	alias_cte->query_node = std::move(alias_select);
 	alias_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
@@ -264,7 +264,7 @@ static unique_ptr<SelectNode> BuildTriggerChain(const QueryNode &node, const Tab
 		    make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
 	}
 	auto from_ref = make_uniq<BaseTableRef>();
-	from_ref->TableMutable() = base_cte_name;
+	from_ref->SetTable(base_cte_name);
 	from_ref->alias = GetTableAlias(node, table.name);
 	outer->from_table = std::move(from_ref);
 
@@ -498,7 +498,7 @@ BoundStatement Binder::ExpandRowTriggers(QueryNode &node, vector<unique_ptr<Pars
 	auto outer = make_uniq<SelectNode>();
 	outer->select_list.push_back(make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
 	auto from_ref = make_uniq<BaseTableRef>();
-	from_ref->TableMutable() = base_cte_name;
+	from_ref->SetTable(base_cte_name);
 	outer->from_table = std::move(from_ref);
 	outer->cte_map.map[base_cte_name] = std::move(base_cte);
 

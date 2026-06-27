@@ -62,6 +62,14 @@ public:
 	void SetQualifiedName(QualifiedName name) {
 		qualified_name = std::move(name);
 	}
+	//! Set the name, keeping the catalog/schema qualification
+	void SetName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
+	}
+	//! Set the catalog/schema qualification, keeping the name
+	void SetQualification(Identifier catalog, Identifier schema) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), qualified_name.Name());
+	}
 	//! Renders the qualified name for ToString - the catalog is omitted for temporary entries and the default schema is
 	//! hidden
 	DUCKDB_API string QualifiedNameToString() const;

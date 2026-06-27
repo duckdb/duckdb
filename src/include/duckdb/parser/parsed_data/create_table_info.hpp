@@ -27,7 +27,7 @@ struct CreateTableInfo : public CreateInfo {
 		return qualified_name.Name();
 	}
 	void SetTableName(Identifier name) {
-		qualified_name.NameMutable() = std::move(name);
+		qualified_name = qualified_name.WithName(std::move(name));
 	}
 	//! List of columns of the table
 	ColumnList columns;

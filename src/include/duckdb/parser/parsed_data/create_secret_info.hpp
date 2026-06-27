@@ -37,7 +37,7 @@ public:
 		return qualified_name.Name();
 	}
 	void SetSecretName(Identifier name) {
-		qualified_name.NameMutable() = std::move(name);
+		qualified_name = qualified_name.WithName(std::move(name));
 	}
 	//! (optionally) the scope of the secret
 	unique_ptr<ParsedExpression> scope;

@@ -320,10 +320,11 @@ void TypeExpression::Serialize(Serializer &serializer) const {
 
 unique_ptr<ParsedExpression> TypeExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TypeExpression>(new TypeExpression());
-	deserializer.ReadPropertyWithDefault<Identifier>(200, "catalog", result->qualified_name.CatalogMutable());
-	deserializer.ReadPropertyWithDefault<Identifier>(201, "schema", result->qualified_name.SchemaMutable());
-	deserializer.ReadPropertyWithDefault<Identifier>(202, "type_name", result->qualified_name.NameMutable());
+	auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(200, "catalog");
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(201, "schema");
+	auto type_name = deserializer.ReadPropertyWithDefault<Identifier>(202, "type_name");
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(203, "children", result->children);
+	result->SetQualifiedName(std::move(catalog), std::move(schema), std::move(type_name));
 	return std::move(result);
 }
 

@@ -108,14 +108,14 @@ public:
 	void SetQualifiedName(QualifiedName name) {
 		qualified_name = std::move(name);
 	}
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
+	}
 	const Identifier &FunctionName() const {
 		return qualified_name.Name();
 	}
-	Identifier &FunctionNameMutable() {
-		return qualified_name.NameMutable();
-	}
 	void SetFunctionName(string function_name_p) {
-		qualified_name.NameMutable() = Identifier(std::move(function_name_p));
+		qualified_name = qualified_name.WithName(Identifier(std::move(function_name_p)));
 	}
 	bool IsOperator() const {
 		return is_operator;

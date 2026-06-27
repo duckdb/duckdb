@@ -899,7 +899,7 @@ void WriteAheadLogDeserializer::ReplayDropSchema() {
 	DropInfo info;
 
 	info.type = CatalogType::SCHEMA_ENTRY;
-	info.NameMutable() = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	info.SetName(Identifier(deserializer.ReadProperty<string>(101, "schema")));
 	if (DeserializeOnly()) {
 		return;
 	}
