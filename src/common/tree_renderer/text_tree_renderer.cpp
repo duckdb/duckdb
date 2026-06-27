@@ -46,8 +46,8 @@ struct ExplainBlock {
 	vector<ExplainLine> lines;
 	idx_t width = 0;
 	idx_t spine = 0;
-	//! Whether this block is the build side of a hash join - its parent connector is drawn with a double line.
-	bool build_side = false;
+	//! The number of rows this block's root operator passes up to its parent - drives the connector's line weight.
+	optional_idx output_rows;
 };
 
 static idx_t LineWidth(const ExplainLine &line) {
@@ -164,47 +164,46 @@ static void SetLayoutChar(ExplainLine &line, idx_t col, const char *replacement)
 	}
 }
 
-//! Map a light junction glyph to the heavy-line variant used where a hash join's build edge meets it.
-//! The build edge is drawn heavy (━┃) while the surrounding boxes/bus stay light, so each junction
-//! mixes weights: e.g. ╮ -> ┓ (sharp heavy corner), ├ -> ┝ (light bus, heavy branch to the right).
-static const char *HeavyLineVariant(const char *glyph) {
+//! Map a light routing glyph to the variant with a heavy DOWNWARD stroke, used where a heavier edge drops off
+//! the (light) horizontal bus into a child while still connecting along the bus:
+//! e.g. ┬ -> ┰ (heavy drop), ╮ -> ┒ (heavy drop, arm from the left), ├ -> ┟ (heavy drop, arm to the right).
+static const char *ThickDownVariant(const char *glyph) {
 	string g(glyph);
-	if (g == "╮") {
-		return "┓";
-	}
-	if (g == "╭") {
-		return "┏";
-	}
-	if (g == "├") {
-		return "┝";
-	}
-	if (g == "┤") {
-		return "┥";
-	}
 	if (g == "┬") {
 		return "┰";
 	}
-	if (g == "┴") {
-		return "┸";
+	if (g == "╮") {
+		return "┒";
+	}
+	if (g == "╭") {
+		return "┎";
+	}
+	if (g == "├") {
+		return "┟";
+	}
+	if (g == "┤") {
+		return "┧";
+	}
+	if (g == "┼") {
+		return "╁";
 	}
 	return glyph;
 }
 
-//! Whether the routing column `col` is the spine of a build-side child (whose connector is drawn heavy).
-static bool IsBuildSpine(const vector<ExplainBlock> &children, const vector<idx_t> &spines, idx_t col) {
-	for (idx_t i = 0; i < children.size() && i < spines.size(); i++) {
-		if (spines[i] == col) {
-			return children[i].build_side;
+//! The cap glyph where a tier-`tier` connector meets a *free* box border. `top`: the parent side (stem points down),
+//! otherwise the child side (stem points up). `right`: the second column of a 2-column wide pipe.
+//! (the wide pipe attaching to a join's bus is drawn separately, since the bus needs arm-bearing glyphs)
+static const char *TierCap(idx_t tier, bool top, bool right) {
+	switch (tier) {
+	case 0:
+		return top ? "┬" : "┴";
+	case 1:
+		return top ? "┰" : "┸";
+	default: // wide pipe: a 2-column mouth with the arms folding back into the border
+		if (top) {
+			return right ? "┎" : "┒";
 		}
-	}
-	return false;
-}
-
-//! Draw the upward connector (┴) onto a child's top border, where its parent connects down into it.
-//! For a hash join's build side the connector is drawn heavy (┸) so it joins the heavy build edge.
-static void DrawRoofConnector(ExplainBlock &child, idx_t col) {
-	if (!child.lines.empty() && RenderCharEquals(child.lines.front(), col, "─")) {
-		SetLayoutChar(child.lines.front(), col, child.build_side ? "┸" : "┴");
+		return right ? "┖" : "┚";
 	}
 }
 
@@ -231,6 +230,25 @@ static void ComputeSubtreeStats(ExplainTreeNode &node) {
 		node.subtree_time += child->subtree_time;
 		node.subtree_count += child->subtree_count;
 	}
+}
+
+//! The rows used to scale a connector's thickness: only the actual count (EXPLAIN ANALYZE) thickens a line.
+//! Estimates are deliberately ignored so plain EXPLAIN plans stay light (the weight reflects real data flow).
+static optional_idx NodeRows(const ExplainTreeNode &node) {
+	return node.rows;
+}
+
+//! The largest row count emitted by any operator in the subtree (the plan's peak row flow).
+static idx_t MaxNodeRows(const ExplainTreeNode &node) {
+	idx_t result = 0;
+	auto rows = NodeRows(node);
+	if (rows.IsValid()) {
+		result = rows.GetIndex();
+	}
+	for (auto &child : node.children) {
+		result = MaxValue<idx_t>(result, MaxNodeRows(*child));
+	}
+	return result;
 }
 
 //! The operator name as shown in a box title - underscores become spaces and the result is title-cased
@@ -612,6 +630,10 @@ public:
 	static constexpr idx_t MIN_FLATTEN_NODES = 2;
 	static constexpr idx_t MIN_GROUP_NODES = 2;
 	static constexpr double SIGNIFICANT_TIME_FRACTION = 0.05;
+	//! Connector weight is purely relative: an edge's tier is its share of the plan's peak row flow.
+	//! (so 100k rows is a thick pipe in a small plan, but a thin one next to a 100M-row hot path)
+	static constexpr double TIER1_FRACTION = 0.33; // heavy line
+	static constexpr double TIER2_FRACTION = 0.66; // wide (2-column) pipe
 
 	ExplainBoxRenderer(idx_t max_width, char thousand_separator, double total_time, ExplainAlignment alignment,
 	                   bool flatten, bool merge, bool upper_case, bool expand_all)
@@ -639,12 +661,52 @@ public:
 	}
 
 	vector<ExplainLine> Render(const ExplainTreeNode &root) {
+		max_edge_rows = MaxNodeRows(root);
 		tree_content_width = MaxValue<idx_t>(TreeContentWidth(root), 6);
 		auto block = RenderNode(root, ChainWidth(root));
 		return std::move(block.lines);
 	}
 
 private:
+	//! Connector thickness tier (0 = thin light line ... 3 = wide pipe) for an edge passing `rows` rows,
+	//! taken purely as a fraction of the plan's peak row flow so it scales with the whole plan.
+	idx_t EdgeTier(optional_idx rows) const {
+		if (!rows.IsValid() || max_edge_rows == 0) {
+			return 0;
+		}
+		double fraction = static_cast<double>(rows.GetIndex()) / static_cast<double>(max_edge_rows);
+		if (fraction >= TIER2_FRACTION) {
+			return 2;
+		}
+		if (fraction >= TIER1_FRACTION) {
+			return 1;
+		}
+		return 0;
+	}
+	//! The number of columns a tier's connector occupies (the heaviest edges widen to a 2-column pipe).
+	//! Weight is expressed purely through width/glyph - connectors are never made longer.
+	static idx_t TierWidth(idx_t tier) {
+		return tier >= 2 ? 2 : 1;
+	}
+	idx_t EdgeTierAtSpine(const vector<ExplainBlock> &children, const vector<idx_t> &spines, idx_t col) const {
+		for (idx_t i = 0; i < children.size() && i < spines.size(); i++) {
+			if (spines[i] == col) {
+				return EdgeTier(children[i].output_rows);
+			}
+		}
+		return 0;
+	}
+
+	//! Stamp a connector cap (and its second column, for a wide pipe) onto a box border line at `col`.
+	static void DrawCap(ExplainLine &border, idx_t col, idx_t tier, bool top) {
+		if (RenderCharEquals(border, col, "─")) {
+			SetLayoutChar(border, col, TierCap(tier, top, false));
+		}
+		if (TierWidth(tier) == 2 && RenderCharEquals(border, col + 1, "─")) {
+			SetLayoutChar(border, col + 1, TierCap(tier, top, true));
+		}
+	}
+
 	static idx_t LongestValue(const vector<string> &values) {
 		idx_t longest = 0;
 		for (auto &value : values) {
@@ -994,8 +1056,10 @@ private:
 		idx_t target = MaxValue<idx_t>(box.spine, child.spine);
 		idx_t box_offset = target - box.spine;
 		idx_t child_offset = target - child.spine;
-		SetLayoutChar(box.lines.back(), box.spine, "┬");
-		DrawRoofConnector(child, child.spine);
+		idx_t tier = EdgeTier(child.output_rows);
+		// both borders are free here (no horizontal bus), so the cap glyphs can fully reflect the tier
+		DrawCap(box.lines.back(), box.spine, tier, true);
+		DrawCap(child.lines.front(), child.spine, tier, false);
 
 		ExplainBlock result;
 		for (auto &line : box.lines) {
@@ -1025,7 +1089,6 @@ private:
 		vector<idx_t> profile;
 		idx_t cumulative = 0;
 		for (idx_t i = 0; i < children.size(); i++) {
-			DrawRoofConnector(children[i], children[i].spine);
 			auto &lines = children[i].lines;
 			idx_t offset = cumulative;
 			if (compact) {
@@ -1073,42 +1136,71 @@ private:
 		idx_t row_width = 0;
 		LayoutRow(children, row_lines, spines, row_width);
 
-		SetLayoutChar(box.lines.back(), box.spine, "┬");
+		// the parent connects to the bus over its first child (left-aligned); widen that junction to ┰┰ when the
+		// first child is a wide pipe so both of its walls rise into the parent
+		idx_t front = spines.front();
+		bool wide_first = TierWidth(EdgeTier(children.front().output_rows)) == 2 && box.spine == front;
+		if (wide_first) {
+			SetLayoutChar(box.lines.back(), box.spine, "┰");
+			if (RenderCharEquals(box.lines.back(), box.spine + 1, "─")) {
+				SetLayoutChar(box.lines.back(), box.spine + 1, "┰");
+			}
+		} else {
+			SetLayoutChar(box.lines.back(), box.spine, "┬");
+		}
+
+		// each child's top cap (┴ / ┸ / ┚┖) on the merged children-top border
+		idx_t bus_end = spines.back();
+		for (idx_t i = 0; i < children.size(); i++) {
+			idx_t tier = EdgeTier(children[i].output_rows);
+			DrawCap(row_lines.front(), spines[i], tier, false);
+			bus_end = MaxValue<idx_t>(bus_end, spines[i] + TierWidth(tier) - 1);
+		}
+
+		// build the bus: light children branch (├/┬/╮), heavy ones drop a heavy stem (┟/┰/┒), and the widest drop a
+		// 2-column pipe whose walls carry the arms so the bus and parent still connect (┃┠ under the parent, else ┒┎)
+		vector<string> bus(bus_end - front + 1, "─");
+		for (idx_t i = 0; i < children.size(); i++) {
+			idx_t s = spines[i];
+			idx_t tier = EdgeTier(children[i].output_rows);
+			bool first = i == 0;
+			bool last = i + 1 == children.size();
+			if (TierWidth(tier) == 2) {
+				if (first && wide_first) {
+					bus[s - front] = "┃";     // left wall rises to the parent (┰ above)
+					bus[s + 1 - front] = "┠"; // right wall rises to the parent and carries the bus onward
+				} else if (last) {
+					// the bus arrives from the left and ends here: cap the pipe with a light lid (┰─┒) so the right
+					// wall does not dangle past the end of the bus
+					bus[s - front] = "┰";
+					bus[s + 1 - front] = "┒";
+				} else {
+					// a middle child: the bus feeds each wall from its own side
+					bus[s - front] = "┒";
+					bus[s + 1 - front] = "┎";
+				}
+				continue;
+			}
+			const char *base = first ? "├" : (last ? "╮" : "┬");
+			bus[s - front] = tier >= 1 ? ThickDownVariant(base) : base;
+		}
+		string routing;
+		for (auto &cell : bus) {
+			routing += cell;
+		}
+		ExplainLine routing_line;
+		routing_line.emplace_back(std::move(routing), TreeRenderType::LAYOUT);
+		OffsetLine(routing_line, front);
+
 		ExplainBlock result;
 		for (auto &line : box.lines) {
 			result.lines.push_back(std::move(line));
 		}
-		// the build side is the right (last) child - its feed runs from the branch point to the build corner
-		bool has_build = !children.empty() && children.back().build_side;
-		string routing;
-		for (idx_t col = spines.front(); col <= spines.back(); col++) {
-			bool is_child_spine = std::find(spines.begin(), spines.end(), col) != spines.end();
-			const char *c = "─";
-			if (col == spines.front()) {
-				c = "├";
-			} else if (col == spines.back()) {
-				c = "╮";
-			} else if (is_child_spine) {
-				c = "┬";
-			}
-			if (IsBuildSpine(children, spines, col)) {
-				c = HeavyLineVariant(c);
-			} else if (has_build && col == spines.front()) {
-				// branch point where the heavy build feed leaves the (light) bus
-				c = "┝";
-			} else if (has_build && col > spines.front() && col < spines.back() && string(c) == "─") {
-				c = "━";
-			}
-			routing += c;
-		}
-		ExplainLine routing_line;
-		routing_line.emplace_back(std::move(routing), TreeRenderType::LAYOUT);
-		OffsetLine(routing_line, spines.front());
 		result.lines.push_back(std::move(routing_line));
 		for (auto &line : row_lines) {
 			result.lines.push_back(std::move(line));
 		}
-		result.width = MaxValue<idx_t>(box.width, row_width);
+		result.width = MaxValue<idx_t>(MaxValue<idx_t>(box.width, row_width), bus_end + 1);
 		result.spine = box.spine;
 		return result;
 	}
@@ -1142,7 +1234,7 @@ private:
 		ExplainBlock result;
 		if (direct) {
 			for (idx_t i = 0; i < spines.size(); i++) {
-				SetLayoutChar(box.lines.back(), spines[i] - box_offset, children[i].build_side ? "┰" : "┬");
+				DrawCap(box.lines.back(), spines[i] - box_offset, EdgeTier(children[i].output_rows), true);
 			}
 		} else {
 			SetLayoutChar(box.lines.back(), box.spine, "┬");
@@ -1152,8 +1244,6 @@ private:
 			result.lines.push_back(std::move(line));
 		}
 		if (!direct) {
-			// the build side is the right (last) child - its feed runs from the parent branch to the build corner
-			bool has_build = !children.empty() && children.back().build_side;
 			string routing;
 			for (idx_t col = spines.front(); col <= spines.back(); col++) {
 				const char *c = "─";
@@ -1167,13 +1257,9 @@ private:
 				} else if (col == parent_spine) {
 					c = "┴";
 				}
-				if (IsBuildSpine(children, spines, col)) {
-					c = HeavyLineVariant(c);
-				} else if (has_build && col == parent_spine && string(c) == "┴") {
-					// branch point where the heavy build feed leaves the (light) bus
-					c = "┶";
-				} else if (has_build && col > parent_spine && col < spines.back() && string(c) == "─") {
-					c = "━";
+				// thicken the drop into a child that passes a large share of the plan's rows
+				if (EdgeTierAtSpine(children, spines, col) >= 1) {
+					c = ThickDownVariant(c);
 				}
 				routing += c;
 			}
@@ -1192,6 +1278,13 @@ private:
 	}
 
 	ExplainBlock RenderNode(const ExplainTreeNode &node, idx_t chain_width) {
+		auto block = RenderNodeInternal(node, chain_width);
+		// record what this block passes up so its parent can scale the connecting line to the row count
+		block.output_rows = NodeRows(node);
+		return block;
+	}
+
+	ExplainBlock RenderNodeInternal(const ExplainTreeNode &node, idx_t chain_width) {
 		if (IsCollapsible(node)) {
 			hid_content = true;
 			vector<const ExplainTreeNode *> nodes;
@@ -1217,10 +1310,6 @@ private:
 			idx_t child_chain = i == 0 ? chain_width : ChainWidth(*node.children[i]);
 			children.push_back(RenderNode(*node.children[i], child_chain));
 		}
-		// for a hash join the build side is the right (last) child - mark it so its connector is drawn double-lined
-		if (node.name == "HASH_JOIN") {
-			children.back().build_side = true;
-		}
 		return AttachHorizontal(std::move(box), children);
 	}
 
@@ -1238,6 +1327,8 @@ private:
 	double significant_threshold;
 	idx_t tree_content_width = 0;
 	bool hid_content = false;
+	//! The plan's peak operator row count, used to scale connector line weights
+	idx_t max_edge_rows = 0;
 };
 
 //! Several operators are only merged into one node for plans with at least this many operators.
