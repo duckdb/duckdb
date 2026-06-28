@@ -943,6 +943,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		                   "statement parameters, use PREPARE to prepare a statement, followed by EXECUTE");
 		return SuccessState::FAILURE;
 	}
+	pending_web_html.clear(); // drop any HTML profile queued by a previous (e.g. failed) statement
 	auto &con = *conn;
 	auto renderer = GetRenderer();
 	unique_ptr<duckdb::QueryResult> result;
@@ -981,7 +982,10 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
 	}
 	// analyze the query result so we know how long/wide the result will be
-	return RenderQueryResult(*renderer, res);
+	auto render_state = RenderQueryResult(*renderer, res);
+	// EXPLAIN [ANALYZE] (FORMAT WEB) queued an HTML profile - open it now (once, after all plan stages rendered)
+	OpenPendingWebProfile(*this);
+	return render_state;
 }
 
 /*

@@ -88,6 +88,10 @@ bool RenderExpandedQueryTree(ShellState &state);
 //! browser (start/open/xdg-open). Returns false if there is no query tree available or the browser could not launch.
 bool OpenProfileInBrowser(ShellState &state);
 
+//! If an EXPLAIN (FORMAT WEB) statement queued an HTML profile, write it to a temp file and open it in a browser
+//! (called once per statement, so the multiple plan renders collapse into a single browser tab).
+void OpenPendingWebProfile(ShellState &state);
+
 struct HighlightColorInfo {
 	const char *color_name;
 	uint8_t code;

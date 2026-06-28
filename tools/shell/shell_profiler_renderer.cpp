@@ -8,6 +8,7 @@
 #include "duckdb/main/profiler_extension.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/tree_renderer/html_tree_renderer.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -185,6 +186,92 @@ bool RenderExpandedQueryTree(ShellState &state) {
 	return true;
 }
 
+//! Write a self-contained HTML page to a temp file (kept around, not auto-deleted) and launch the default browser on
+//! it. Returns the file path, or an empty string on failure.
+static string WriteProfileAndOpen(ShellState &state, const string &html) {
+	if (html.empty()) {
+		return string();
+	}
+	state.NewTempFile("html");
+	auto path = state.zTempFile;
+	// stop tracking it: the rendered profile should persist for the browser to load (and for the user to revisit)
+	state.zTempFile = string();
+	auto out = fopen(path.c_str(), "wb");
+	if (!out) {
+		state.PrintF(PrintOutput::STDERR, "Could not write profile to %s\n", path.c_str());
+		return string();
+	}
+	fwrite(html.c_str(), 1, html.size(), out);
+	fclose(out);
+
+	const char *opener =
+#if defined(_WIN32)
+	    "start";
+#elif defined(__APPLE__)
+	    "open";
+#else
+	    "xdg-open";
+#endif
+	auto cmd = duckdb::StringUtil::Format("%s \"%s\"", opener, path);
+	if (system(cmd.c_str()) != 0) {
+		state.PrintF(PrintOutput::STDERR, "Failed to launch browser (%s)\n", cmd.c_str());
+		return string();
+	}
+	return path;
+}
+
+//! Renderer for "EXPLAIN [ANALYZE] (FORMAT WEB)": render the plan/profile to HTML, open it in a browser, and emit a
+//! short status line as the actual result (instead of dumping the HTML to the console).
+class WebTreeRenderer : public duckdb::TreeRenderer {
+public:
+	// plain EXPLAIN: render the operator tree to HTML (via a fresh HTML renderer to avoid virtual re-entrancy)
+	void ToStreamInternal(duckdb::RenderTree &root, duckdb::BaseTreeRenderer &ss) override {
+		duckdb::HTMLTreeRenderer html_renderer;
+		duckdb::StringTreeRenderer sink;
+		html_renderer.ToStreamInternal(root, sink);
+		OpenAndReport(sink.str(), ss);
+	}
+
+	// EXPLAIN ANALYZE: render the full query profile to HTML
+	void RenderProfiler(const duckdb::QueryProfiler &profiler, duckdb::BaseTreeRenderer &ss) override {
+		OpenAndReport(profiler.RenderProfile("html"), ss);
+	}
+
+	// keep the internal metric keys raw, matching the HTML renderer this delegates to
+	bool UsesRawKeyNames() override {
+		return true;
+	}
+
+	duckdb::string RenderProfilerDisabled() override {
+		return "Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling.";
+	}
+
+private:
+	// EXPLAIN renders its plan several times (unopt/opt/physical, then the profile for ANALYZE). Rather than open a
+	// browser for each, record the latest HTML; the shell opens the last one once after the statement completes.
+	void OpenAndReport(const duckdb::string &html, duckdb::BaseTreeRenderer &ss) {
+		auto &state = ShellState::Get();
+		if (state.safe_mode) {
+			ss << "(FORMAT WEB) cannot be used in -safe mode";
+			return;
+		}
+		state.pending_web_html = html;
+		ss << "Opening the query profile in a browser…";
+	}
+};
+
+void OpenPendingWebProfile(ShellState &state) {
+	if (state.pending_web_html.empty()) {
+		return;
+	}
+	auto html = std::move(state.pending_web_html);
+	state.pending_web_html = string();
+	auto path = WriteProfileAndOpen(state, html);
+	if (!path.empty()) {
+		state.PrintF(PrintOutput::STDOUT, "Opening query profile in browser: %s\n", path.c_str());
+	}
+}
+
 bool OpenProfileInBrowser(ShellState &state) {
 	if (!state.conn) {
 		return false;
@@ -202,36 +289,11 @@ bool OpenProfileInBrowser(ShellState &state) {
 		state.PrintF(PrintOutput::STDERR, "Failed to render profile: %s\n", e.what());
 		return false;
 	}
-	if (html.empty()) {
-		state.Print(PrintOutput::STDERR, "No query profile available.\n");
+	auto path = WriteProfileAndOpen(state, html);
+	if (path.empty()) {
 		return false;
 	}
-	state.NewTempFile("html");
-	auto path = state.zTempFile;
-	// stop tracking it: the rendered profile should persist for the browser to load (and for the user to revisit)
-	state.zTempFile = string();
-	auto out = fopen(path.c_str(), "wb");
-	if (!out) {
-		state.PrintF(PrintOutput::STDERR, "Could not write profile to %s\n", path.c_str());
-		return false;
-	}
-	fwrite(html.c_str(), 1, html.size(), out);
-	fclose(out);
-
-	const char *opener =
-#if defined(_WIN32)
-	    "start";
-#elif defined(__APPLE__)
-	    "open";
-#else
-	    "xdg-open";
-#endif
-	auto cmd = duckdb::StringUtil::Format("%s \"%s\"", opener, path);
 	state.PrintF(PrintOutput::STDOUT, "Opening query profile in browser: %s\n", path.c_str());
-	if (system(cmd.c_str()) != 0) {
-		state.PrintF(PrintOutput::STDERR, "Failed to launch browser (%s)\n", cmd.c_str());
-		return false;
-	}
 	return true;
 }
 
@@ -255,6 +317,13 @@ void RegisterProfilerHighlighting(duckdb::DBConfig &config) {
 		return std::move(renderer);
 	};
 	duckdb::ProfilerExtension::Register(config, "shell_explain_printer", std::move(explain_extension));
+
+	// EXPLAIN [ANALYZE] (FORMAT WEB): render to HTML, open it in a browser, and report the path
+	auto web_extension = duckdb::make_shared_ptr<duckdb::ProfilerExtension>();
+	web_extension->create_renderer = [](duckdb::ClientContext &context) -> duckdb::unique_ptr<duckdb::TreeRenderer> {
+		return duckdb::make_uniq<WebTreeRenderer>();
+	};
+	duckdb::ProfilerExtension::Register(config, "web", std::move(web_extension));
 }
 
 } // namespace duckdb_shell

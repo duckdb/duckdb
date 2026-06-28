@@ -177,6 +177,7 @@ public:
 	int64_t szMax = 0;                        /* --maxsize argument to .open */
 	string zDestTable;                        /* Name of destination table when RenderMode::Insert */
 	string zTempFile;                         /* Temporary file that might need deleting */
+	string pending_web_html;                  /* HTML profile from EXPLAIN (FORMAT WEB) to open after the statement */
 	string colSeparator;                      /* Column separator character for several modes */
 	string rowSeparator;                      /* Row separator character for RenderMode::Ascii */
 	string colSepPrior;                       /* Saved column separator */

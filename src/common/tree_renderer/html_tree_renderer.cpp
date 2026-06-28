@@ -194,16 +194,17 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
     position: relative; display: flex; flex-direction: column; align-items: center;
     padding: 28px 14px 0;
 }
-/* connector thickness scales with rows: --edge-w (per node, on its <li>) sizes the riser into that node; the bus and
-   drop use --drop-w (set on the parent <ul>, inherited by its child <li>s) so the trunk has one uniform thickness. */
+/* connector thickness scales with the rows flowing through each edge: --edge-w (per node, on its <li>) sizes both the
+   riser into that node and its half of the sibling bus, so a high-cardinality child gets a thick line and a
+   low-cardinality sibling a thin one; --drop-w (on the parent <ul>) sizes the trunk drop. */
 /* riser: vertical line from the sibling bus down into this node's card */
 .tree li::after {
     content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
     width: var(--edge-w, 2px); height: 28px; background: var(--connector);
 }
-/* bus: horizontal line spanning the siblings (uniform thickness = the parent's drop) */
+/* bus: this child's horizontal half, from the parent centre out to its own riser */
 .tree li::before {
-    content: ""; position: absolute; top: 0; height: var(--drop-w, 2px); background: var(--connector);
+    content: ""; position: absolute; top: 0; height: var(--edge-w, 2px); background: var(--connector);
 }
 .tree li:first-child::before { left: 50%; right: 0; }
 .tree li:last-child::before { left: 0; right: 50%; }
