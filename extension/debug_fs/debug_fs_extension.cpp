@@ -3,16 +3,54 @@
 #include "debug_file_system.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/object_cache.hpp"
 
 namespace duckdb {
 
 namespace {
 
-void EnsureDebugFileSystemInstalled(DatabaseInstance &db) {
-	auto &config = DBConfig::GetConfig(db);
-	if (!dynamic_cast<DebugFileSystem *>(config.file_system.get())) {
-		config.file_system = make_uniq<DebugFileSystem>(std::move(config.file_system));
+//! Non-owning handle to the DebugFileSystem, ownership lies in DBConfig.
+class DebugFileSystemCacheEntry : public ObjectCacheEntry {
+public:
+	explicit DebugFileSystemCacheEntry(DebugFileSystem &fs) : debug_fs(fs) {
 	}
+
+	static string ObjectType() {
+		return "debug_fs_instance";
+	}
+	string GetObjectType() override {
+		return ObjectType();
+	}
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx {};
+	}
+
+	DebugFileSystem &Get() {
+		return debug_fs;
+	}
+
+private:
+	DebugFileSystem &debug_fs;
+};
+
+void EnsureDebugFileSystemInstalled(DatabaseInstance &db) {
+	auto &cache = db.GetObjectCache();
+	if (cache.GetWithTypePrefix<DebugFileSystemCacheEntry>("instance")) {
+		return;
+	}
+	auto &config = DBConfig::GetConfig(db);
+	config.file_system = make_uniq<DebugFileSystem>(std::move(config.file_system));
+	auto &debug_fs = static_cast<DebugFileSystem &>(*config.file_system);
+	cache.PutWithTypePrefix<DebugFileSystemCacheEntry>("instance",
+	                                                   make_shared_ptr<DebugFileSystemCacheEntry>(debug_fs));
+}
+
+DebugFileSystem &GetDebugFileSystemOrThrow(DatabaseInstance &db) {
+	auto entry = db.GetObjectCache().GetWithTypePrefix<DebugFileSystemCacheEntry>("instance");
+	if (!entry) {
+		throw InternalException("DebugFileSystem is not installed");
+	}
+	return entry->Get();
 }
 
 void OnSetDelayMeanMs(ClientContext &context, SetScope, Value &parameter) {
@@ -24,10 +62,7 @@ void OnSetDelayMeanMs(ClientContext &context, SetScope, Value &parameter) {
 	if (delay_ms > 0) {
 		EnsureDebugFileSystemInstalled(db);
 	}
-	auto *debug_fs = dynamic_cast<DebugFileSystem *>(DBConfig::GetConfig(db).file_system.get());
-	if (debug_fs) {
-		debug_fs->SetDelayMeanMs(delay_ms);
-	}
+	GetDebugFileSystemOrThrow(db).SetDelayMeanMs(delay_ms);
 }
 
 void OnSetDelayStddevMs(ClientContext &context, SetScope, Value &parameter) {
@@ -39,10 +74,7 @@ void OnSetDelayStddevMs(ClientContext &context, SetScope, Value &parameter) {
 	if (delay_ms > 0) {
 		EnsureDebugFileSystemInstalled(db);
 	}
-	auto *debug_fs = dynamic_cast<DebugFileSystem *>(DBConfig::GetConfig(db).file_system.get());
-	if (debug_fs) {
-		debug_fs->SetDelayStddevMs(delay_ms);
-	}
+	GetDebugFileSystemOrThrow(db).SetDelayStddevMs(delay_ms);
 }
 
 void LoadInternal(ExtensionLoader &loader) {
