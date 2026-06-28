@@ -38,11 +38,13 @@ FileSystem &DebugFileSystem::GetInnerFileSystem() {
 void DebugFileSystem::SetDelayMeanMs(double v) {
 	const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
 	delay_mean_ms = v;
+	ALWAYS_ASSERT(delay_mean_ms >= 0.0);
 }
 
 void DebugFileSystem::SetDelayStddevMs(double v) {
 	const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
 	delay_stddev_ms = v;
+	ALWAYS_ASSERT(delay_stddev_ms >= 0.0);
 }
 
 void DebugFileSystem::ApplyDelay() {
@@ -54,12 +56,16 @@ void DebugFileSystem::ApplyDelay() {
 		mean_ms = delay_mean_ms;
 		stddev_ms = delay_stddev_ms;
 	}
-	if (mean_ms <= 0.0 && stddev_ms <= 0.0) {
+
+	if (mean_ms == 0.0 && stddev_ms == 0.0) {
 		return;
 	}
 
+	// Check against invalid setting: mean latency cannot be 0.
+	ALWAYS_ASSERT(mean_ms > 0.0);
+
 	double delay_ms = 0;
-	if (stddev_ms <= 0.0) {
+	if (stddev_ms == 0.0) {
 		delay_ms = mean_ms;
 	} else {
 		const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
