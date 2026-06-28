@@ -282,18 +282,17 @@ bool OpenProfileInBrowser(ShellState &state) {
 		state.Print(PrintOutput::STDERR, "No query profile available - run EXPLAIN ANALYZE first.\n");
 		return false;
 	}
-	string html;
 	try {
-		html = profiler.RenderProfile("html");
+		// render the current profile through the "web" format, which queues the HTML (just like EXPLAIN (FORMAT WEB))
+		profiler.RenderProfile("web");
 	} catch (const std::exception &e) {
 		state.PrintF(PrintOutput::STDERR, "Failed to render profile: %s\n", e.what());
 		return false;
 	}
-	auto path = WriteProfileAndOpen(state, html);
-	if (path.empty()) {
+	if (state.pending_web_html.empty()) {
 		return false;
 	}
-	state.PrintF(PrintOutput::STDOUT, "Opening query profile in browser: %s\n", path.c_str());
+	OpenPendingWebProfile(state);
 	return true;
 }
 
