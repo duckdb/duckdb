@@ -42,11 +42,11 @@ static unique_ptr<ColumnRefExpression> ColumnRef(const string &alias, const stri
 
 static unique_ptr<ParsedExpression> ServeJoinCondition(const string &feature_alias, const string &feature_entity,
                                                        const string &spine_entity, const string &spine_ts) {
-	auto entity_condition = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, ColumnRef("spine", spine_entity),
-	                                                       ColumnRef(feature_alias, feature_entity));
-	auto timestamp_condition = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-	                                                          ColumnRef("spine", spine_ts),
-	                                                          ColumnRef(feature_alias, "feature_timestamp"));
+	auto entity_condition = make_uniq<ComparisonExpression>(
+	    ExpressionType::COMPARE_EQUAL, ColumnRef("spine", spine_entity), ColumnRef(feature_alias, feature_entity));
+	auto timestamp_condition =
+	    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, ColumnRef("spine", spine_ts),
+	                                    ColumnRef(feature_alias, "feature_timestamp"));
 	return make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(entity_condition),
 	                                        std::move(timestamp_condition));
 }
