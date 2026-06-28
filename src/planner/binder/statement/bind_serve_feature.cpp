@@ -8,8 +8,8 @@
 namespace duckdb {
 
 BoundStatement Binder::Bind(ServeFeatureStatement &stmt) {
-	auto serve_sql = BuildServeFeatureSQL(context, stmt.feature_names, stmt.spine_table, stmt.entity_column,
-	                                     stmt.as_of_column);
+	auto serve_sql =
+	    BuildServeFeatureSQL(context, stmt.feature_names, stmt.spine_table, stmt.entity_column, stmt.as_of_column);
 
 	Parser parser(context.GetParserOptions());
 	parser.ParseQuery(serve_sql);
