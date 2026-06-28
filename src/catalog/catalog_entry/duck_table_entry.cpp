@@ -73,6 +73,15 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 				                            "(database \"%s\" is using storage version %s)",
 				                            required, db.GetName(), current);
 			}
+			// an unnamed STRUCT is serialized identically to a TUPLE, so it must pass the same gate
+			if (storage_version < StorageVersion::V2_0_0 && StructType::IsUnnamed(type)) {
+				auto required = GetStorageVersionName(StorageVersion::V2_0_0, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				throw InvalidInputException("TUPLE columns are not supported in storage versions prior to %s "
+				                            "(database \"%s\" is using storage version %s)",
+				                            required, db.GetName(), current);
+			}
 		} break;
 		case LogicalTypeId::TUPLE: {
 			// TUPLEs are stored as unnamed STRUCTs on disk, which older engines reject - gate them to v2.0.0+
