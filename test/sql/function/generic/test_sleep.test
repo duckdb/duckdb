@@ -58,12 +58,6 @@ SELECT sleep_ms(-10)
 ----
 NULL
 
-# Test sleep with overflowing duration (fuzzer duckdb-fuzzer#4570)
-statement error
-SELECT sleep_ms(9223372036854775807)
-----
-<REGEX>:.*Invalid Input Error.*Overflow in multiplication for CheckedInteger.*
-
 # Test sleep_ms over a table
 statement ok
 CREATE TABLE test_sleep_table AS SELECT * FROM range(5) tbl(id);

@@ -22,8 +22,9 @@ public:
 
 public:
 	CollateCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateCollationInfo &info)
-	    : StandardEntry(CatalogType::COLLATION_ENTRY, schema, catalog, info.name), function(info.function),
-	      combinable(info.combinable), not_required_for_equality(info.not_required_for_equality) {
+	    : StandardEntry(CatalogType::COLLATION_ENTRY, schema, catalog, info.GetCollationName()),
+	      function(info.function), combinable(info.combinable),
+	      not_required_for_equality(info.not_required_for_equality) {
 	}
 
 	//! The collation function to push in case collation is required

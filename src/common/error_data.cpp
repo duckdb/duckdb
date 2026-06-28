@@ -42,7 +42,7 @@ ErrorData::ErrorData(const string &message)
 	}
 
 	// JSON-formatted message.
-	auto info = StringUtil::ParseJSONMap(message)->Flatten();
+	auto info = StringUtil::ParseJSONMap(message);
 	for (auto &entry : info) {
 		if (entry.first == "exception_type") {
 			type = Exception::StringToExceptionType(entry.second);

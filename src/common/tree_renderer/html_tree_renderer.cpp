@@ -15,45 +15,45 @@
 namespace duckdb {
 
 string HTMLTreeRenderer::ToString(const LogicalOperator &op) {
-	duckdb::stringstream ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string HTMLTreeRenderer::ToString(const PhysicalOperator &op) {
-	duckdb::stringstream ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string HTMLTreeRenderer::ToString(const ProfilingNode &op) {
-	duckdb::stringstream ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string HTMLTreeRenderer::ToString(const Pipeline &op) {
-	duckdb::stringstream ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
-void HTMLTreeRenderer::Render(const LogicalOperator &op, std::ostream &ss) {
+void HTMLTreeRenderer::Render(const LogicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void HTMLTreeRenderer::Render(const PhysicalOperator &op, std::ostream &ss) {
+void HTMLTreeRenderer::Render(const PhysicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void HTMLTreeRenderer::Render(const ProfilingNode &op, std::ostream &ss) {
+void HTMLTreeRenderer::Render(const ProfilingNode &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void HTMLTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
+void HTMLTreeRenderer::Render(const Pipeline &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
@@ -257,7 +257,7 @@ function toggleDisplay(button) {
 	return StringUtil::Format(body_section, CreateTreeRecursive(root, 0, 0));
 }
 
-void HTMLTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
+void HTMLTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) {
 	string result;
 	result += CreateHeadSection(root);
 	result += CreateBodySection(root);

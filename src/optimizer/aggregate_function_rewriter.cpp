@@ -78,8 +78,8 @@ public:
 		auto avg_child = std::move(bindings[0].get().Cast<BoundAggregateExpression>().GetChildrenMutable()[0]);
 
 		// Replace AVG(x) with SUM(x)
-		auto &sum_entry =
-		    catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, Identifier::DefaultSchema(), "sum");
+		auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(
+		    optimizer.context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), "sum"));
 		const auto &sum_fun =
 		    sum_entry.functions.GetFunctionByArguments(optimizer.context, {avg_child->GetReturnType()});
 		vector<unique_ptr<Expression>> args;

@@ -264,8 +264,8 @@ TableCatalogEntry &DuckDBReader::GetTableEntry() {
 	auto &attached = GetAttachedDatabase();
 	if (!db_wrapper->table_entry) {
 		auto &catalog = attached.GetCatalog();
-		db_wrapper->table_entry =
-		    catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name, OnEntryNotFound::THROW_EXCEPTION);
+		db_wrapper->table_entry = catalog.GetEntry<TableCatalogEntry>(
+		    context, QualifiedName(catalog.GetName(), schema_name, table_name), OnEntryNotFound::THROW_EXCEPTION);
 	}
 	return *db_wrapper->table_entry;
 }
@@ -308,7 +308,6 @@ bool DuckDBReader::TryInitializeScan(ClientContext &context, GlobalTableFunction
 
 AsyncResult DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate_p,
                                LocalTableFunctionState &lstate_p, DataChunk &chunk) {
-	chunk.Reset();
 	auto &lstate = lstate_p.Cast<DuckDBReadLocalState>();
 	TableFunctionInput input(bind_data.get(), lstate.local_state, global_state);
 

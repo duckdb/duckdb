@@ -1,0 +1,13 @@
+diff --git a/extension/fts/fts_indexing.cpp b/extension/fts/fts_indexing.cpp
+index b8f9bc3..6701ce7 100644
+--- a/extension/fts/fts_indexing.cpp
++++ b/extension/fts/fts_indexing.cpp
+@@ -13,7 +13,7 @@ namespace duckdb {
+ static QualifiedName GetQualifiedName(ClientContext &context, const string &qname_str) {
+ 	auto qname = QualifiedName::Parse(qname_str);
+ 	if (qname.Schema() == INVALID_SCHEMA) {
+-		qname.SchemaMutable() = Identifier(ClientData::Get(context).catalog_search_path->GetDefaultSchema(qname.Catalog()));
++		qname = QualifiedName(qname.Catalog(), Identifier(ClientData::Get(context).catalog_search_path->GetDefaultSchema(qname.Catalog())), qname.Name());
+ 	}
+ 	return qname;
+ }

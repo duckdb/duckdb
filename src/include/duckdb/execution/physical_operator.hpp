@@ -75,7 +75,8 @@ public:
 		return InsertionOrderPreservingMap<string>();
 	}
 	static void SetEstimatedCardinality(InsertionOrderPreservingMap<string> &result, idx_t estimated_cardinality);
-	virtual string ToString(const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
+	virtual string ToString(optional_ptr<ClientContext> context = nullptr,
+	                        const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
 	void Print() const;
 	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
 
@@ -247,8 +248,7 @@ public:
 	}
 };
 
-//! A cached column that arrived as a global dictionary: the pinned upstream entry is kept and
-//! per-chunk selection indices concatenated, so the dictionary survives the cache instead of flattening
+//! Accumulator that lets a dictionary column survive the cache: pinned entry + concatenated per-chunk sels
 struct CachedDictColumn {
 	buffer_ptr<DictionaryEntry> entry;
 	SelectionVector accumulated_sel;
@@ -285,8 +285,8 @@ public:
 	bool must_return_continuation_chunk = false;
 	OperatorResultType cached_result;
 
-	//! One slot per cached column. Invariant: entry != null iff the column is accumulating a global
-	//! dictionary; entry == null iff plain flat caching (the common case)
+	//! One slot per cached column. Invariant: entry != null iff the column is accumulating a dictionary
+	//! (pinned by entry pointer identity); entry == null iff plain flat caching (the common case)
 	vector<CachedDictColumn> dict_columns;
 	bool dict_cache_active = false;
 };

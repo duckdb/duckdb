@@ -45,6 +45,12 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
     : ColumnReader(reader, schema), context(context), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
 
+	for (auto &child : child_readers) {
+		if (child) {
+			child->SetParent(*this);
+		}
+	}
+
 	if (child_readers[0]->Schema().name == "metadata" && child_readers[1]->Schema().name == "value") {
 		metadata_reader_idx = 0;
 		value_reader_idx = 1;
@@ -83,6 +89,21 @@ static LogicalType GetIntermediateGroupType(optional_ptr<ColumnReader> typed_val
 	return LogicalType::STRUCT(std::move(children));
 }
 
+void VariantColumnReader::PrepareChunk(DataChunk &chunk, idx_t &capacity, const vector<LogicalType> &types,
+                                       idx_t count) {
+	bool needs_init = chunk.ColumnCount() != types.size() || count > capacity;
+	for (idx_t i = 0; !needs_init && i < types.size(); i++) {
+		needs_init = chunk.data[i].GetType() != types[i];
+	}
+	if (needs_init) {
+		chunk.Destroy();
+		chunk.Initialize(context, types, count);
+		capacity = count;
+	} else {
+		chunk.Reset();
+	}
+}
+
 idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	if (pending_skips > 0) {
 		throw InternalException("VariantColumnReader cannot have pending skips");
@@ -97,10 +118,10 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	// So, we just initialize them to all be valid beforehand
 	std::fill_n(define_out, num_values, MaxDefine());
 
-	optional_idx read_count;
-
-	Vector metadata_intermediate(LogicalType::BLOB, num_values);
-	Vector intermediate_group(GetIntermediateGroupType(typed_value_reader), num_values);
+	auto group_type = GetIntermediateGroupType(typed_value_reader);
+	PrepareChunk(intermediate_chunk, intermediate_capacity, {LogicalType::BLOB, group_type}, num_values);
+	auto &metadata_intermediate = intermediate_chunk.data[0];
+	auto &intermediate_group = intermediate_chunk.data[1];
 	auto &group_entries = StructVector::GetEntries(intermediate_group);
 	auto &value_intermediate = group_entries[0];
 
@@ -126,10 +147,10 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 			    "The shredded Variant column did not contain the same amount of values for 'typed_value' and 'value'");
 		}
 	}
-	ParquetVariantConversion::Convert(metadata_intermediate, intermediate_group, result, num_values);
+	// convert the actual columns
+	Convert(metadata_intermediate, intermediate_group, result, num_values);
 
-	read_count = value_values;
-	return read_count.GetIndex();
+	return value_values;
 }
 
 void VariantColumnReader::Skip(idx_t num_values) {

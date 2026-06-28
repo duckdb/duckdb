@@ -6,12 +6,12 @@ CreateCollationInfo::CreateCollationInfo(Identifier name_p, ScalarFunction funct
                                          bool not_required_for_equality_p)
     : CreateInfo(CatalogType::COLLATION_ENTRY), function(std::move(function_p)), combinable(combinable_p),
       not_required_for_equality(not_required_for_equality_p) {
-	this->name = std::move(name_p);
+	this->SetCollationName(std::move(name_p));
 	internal = true;
 }
 
 unique_ptr<CreateInfo> CreateCollationInfo::Copy() const {
-	auto result = make_uniq<CreateCollationInfo>(name, function, combinable, not_required_for_equality);
+	auto result = make_uniq<CreateCollationInfo>(GetCollationName(), function, combinable, not_required_for_equality);
 	CopyProperties(*result);
 	return std::move(result);
 }

@@ -10,7 +10,7 @@ namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto logical_plan_opt = op.children[0]->ToString(op.format);
+	auto logical_plan_opt = op.children[0]->ToString(context, op.format);
 	auto &plan = CreatePlan(*op.children[0]);
 	if (op.explain_type == ExplainType::EXPLAIN_ANALYZE) {
 		auto &explain = Make<PhysicalExplainAnalyze>(op.types, op.format);
@@ -19,7 +19,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	}
 
 	// Format the plan and set the output of the EXPLAIN.
-	op.physical_plan = plan.ToString(op.format);
+	op.physical_plan = plan.ToString(context, op.format);
 	vector<string> keys, values;
 	switch (Settings::Get<ExplainOutputSetting>(context)) {
 	case ExplainOutputType::OPTIMIZED_ONLY:

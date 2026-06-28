@@ -5,6 +5,7 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/tree_renderer/base_tree_renderer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
@@ -17,12 +18,9 @@
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
-#include "yyjson.hpp"
-#include "yyjson_utils.hpp"
+#include "duckdb/common/json_document.hpp"
 
 #include <utility>
-
-using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
@@ -82,13 +80,7 @@ bool QueryProfiler::IsEnabled() const {
 }
 
 unique_ptr<TreeRenderer> QueryProfiler::CreateProfiler(const string &name) const {
-	// formats are resolved through the renderer registry, which matches case-insensitively and throws on
-	// unrecognized formats - "no_output" has no renderer, for which CreateRenderer returns nullptr
-	auto renderer = TreeRenderer::CreateRenderer(name);
-	if (renderer) {
-		renderer->Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
-	}
-	return renderer;
+	return TreeRenderer::CreateRenderer(context, name);
 }
 
 unique_ptr<TreeRenderer> QueryProfiler::GetRenderer(const ProfilerPrintFormat &format) const {
@@ -236,13 +228,14 @@ void QueryProfiler::EndQuery() {
 	guard.unlock();
 
 	if (emit_output) {
-		string tree = ToString();
 		auto save_location = GetSaveLocation();
-
 		if (save_location.empty()) {
-			Printer::Print(tree);
+			// print directly through the renderer's print sink
+			auto renderer = GetRenderer();
+			PrintProfilerOutput(renderer.get());
 			Printer::Print("\n");
 		} else {
+			string tree = ToString();
 			WriteToFile(save_location.c_str(), tree);
 		}
 	}
@@ -315,19 +308,33 @@ string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) 
 	if (!IsEnabled()) {
 		return renderer->RenderProfilerDisabled();
 	}
-	return renderer->RenderProfiler(*this);
+	StringTreeRenderer ss;
+	renderer->RenderProfiler(*this, ss);
+	return ss.str();
 }
 
-string QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer) const {
+void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const {
+	if (!renderer) {
+		// "no_output" format: nothing is rendered, enabled or not
+		return;
+	}
+	// only created now that we are actually printing
+	auto sink = renderer->GetPrintRenderer();
+	if (!IsEnabled()) {
+		*sink << renderer->RenderProfilerDisabled();
+		return;
+	}
+	renderer->RenderProfiler(*this, *sink);
+}
+
+void QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer, BaseTreeRenderer &ss) const {
 	lock_guard<std::mutex> guard(lock);
 	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized
 	if (query_metrics.query_sql.empty() || !root) {
-		return "";
+		return;
 	}
-	stringstream str;
-	renderer.Render(*root, str);
-	return str.str();
+	renderer.Render(*root, ss);
 }
 
 OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
@@ -504,20 +511,6 @@ string QueryProfiler::DrawPadded(const string &str, idx_t width) {
 	}
 }
 
-static string RenderTitleCase(string str) {
-	str = StringUtil::Lower(str);
-	str[0] = NumericCast<char>(toupper(str[0]));
-	for (idx_t i = 0; i < str.size(); i++) {
-		if (str[i] == '_') {
-			str[i] = ' ';
-			if (i + 1 < str.size()) {
-				str[i + 1] = NumericCast<char>(toupper(str[i + 1]));
-			}
-		}
-	}
-	return str;
-}
-
 static string RenderTiming(double timing) {
 	string timing_s;
 	if (timing >= 1) {
@@ -531,112 +524,66 @@ static string RenderTiming(double timing) {
 }
 
 string QueryProfiler::QueryTreeToString() const {
-	duckdb::stringstream str;
-	QueryTreeToStream(str);
-	return str.str();
-}
-
-void RenderPhaseTimings(std::ostream &ss, const pair<string, double> &head, map<string, double> &timings, idx_t width) {
-	ss << "┌────────────────────────────────────────────────┐\n";
-	ss << "│" + QueryProfiler::DrawPadded(RenderTitleCase(head.first) + ": " + RenderTiming(head.second), width - 2) +
-	          "│\n";
-	ss << "│┌──────────────────────────────────────────────┐│\n";
-
-	for (const auto &entry : timings) {
-		ss << "││" +
-		          QueryProfiler::DrawPadded(RenderTitleCase(entry.first) + ": " + RenderTiming(entry.second),
-		                                    width - 4) +
-		          "││\n";
-	}
-	ss << "│└──────────────────────────────────────────────┘│\n";
-	ss << "└────────────────────────────────────────────────┘\n";
-}
-
-void PrintPhaseTimingsToStream(std::ostream &ss, const GatheredMetrics &info, idx_t width) {
-	map<string, double> optimizer_timings;
-	map<string, double> planner_timings;
-	map<string, double> parser_timings;
-	map<string, double> physical_planner_timings;
-
-	pair<string, double> optimizer_head;
-	pair<string, double> planner_head;
-	pair<string, double> parser_head;
-	pair<string, double> physical_planner_head;
-
-	for (const auto &entry : info.GetMetrics()) {
-		const auto &metric = entry.first;
-		// Check specific total_time metrics BEFORE group checks — MetricInGroup would otherwise match these first.
-		if (MetricsUtils::IsMetric<MetricOptimizerTotalTime>(metric)) {
-			optimizer_head = {"Optimizer", entry.second.GetValue<double>()};
-		} else if (MetricsUtils::IsMetric<MetricPhysicalPlannerTotalTime>(metric)) {
-			physical_planner_head = {"Physical Planner", entry.second.GetValue<double>()};
-		} else if (MetricsUtils::IsMetric<MetricPlannerTotalTime>(metric)) {
-			planner_head = {"Planner", entry.second.GetValue<double>()};
-		} else if (MetricsUtils::IsMetric<MetricParserTotalTime>(metric)) {
-			parser_head = {"Parser", entry.second.GetValue<double>()};
-		} else if (MetricsUtils::MetricInGroup(metric, "optimizer")) {
-			// "optimizer.expression_rewriter" -> display as "expression_rewriter"
-			optimizer_timings[metric.substr(10)] = entry.second.GetValue<double>();
-		} else if (MetricsUtils::MetricInGroup(metric, "physical_planner")) {
-			// "physical_planner.column_binding" -> display as "column_binding"
-			physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
-		} else if (MetricsUtils::IsMetric<MetricPlannerBindingTime>(metric)) {
-			planner_timings["binding_time"] = entry.second.GetValue<double>();
-		}
-	}
-
-	if (!optimizer_head.first.empty()) {
-		RenderPhaseTimings(ss, optimizer_head, optimizer_timings, width);
-	}
-	if (!physical_planner_head.first.empty()) {
-		RenderPhaseTimings(ss, physical_planner_head, physical_planner_timings, width);
-	}
-	if (!planner_head.first.empty()) {
-		RenderPhaseTimings(ss, planner_head, planner_timings, width);
-	}
-	if (!parser_head.first.empty()) {
-		RenderPhaseTimings(ss, parser_head, parser_timings, width);
-	}
+	StringTreeRenderer ss;
+	RenderQueryTree(ss);
+	return ss.str();
 }
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
+	StringTreeRenderer renderer;
+	RenderQueryTree(renderer);
+	ss << renderer.str();
+}
+
+void QueryProfiler::RenderQueryTree(BaseTreeRenderer &ss) const {
 	lock_guard<std::mutex> guard(lock);
 
-	bool show_query_name = false;
-	if (root) {
-		auto &info = *metrics;
-		show_query_name = info.MetricIsTracked<MetricQuerySQL>();
-	}
-	ss << "┌─────────────────────────────────────┐\n";
-	ss << "│┌───────────────────────────────────┐│\n";
-	ss << "││    Query Profiling Information    ││\n";
-	ss << "│└───────────────────────────────────┘│\n";
-	ss << "└─────────────────────────────────────┘\n";
-	ss << (show_query_name ? StringUtil::Replace(query_metrics.query_sql, "\n", " ") : "") + "\n";
-
-	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized
 	if (query_metrics.query_sql.empty() && !root) {
 		return;
 	}
 
+	// the registered states write profiling info through an ostream - capture it and emit as layout text
+	duckdb::stringstream state_info;
 	for (auto &state : context.registered_state->States()) {
-		state->WriteProfilingInformation(ss);
+		state->WriteProfilingInformation(state_info);
 	}
+	ss << state_info.str();
 
-	constexpr idx_t TOTAL_BOX_WIDTH = 50;
-	ss << "┌────────────────────────────────────────────────┐\n";
-	ss << "│┌──────────────────────────────────────────────┐│\n";
-	string total_time = "Total Time: " + RenderTiming(query_metrics.GetStringMetricInSeconds("query.total_time"));
-	ss << "││" + DrawPadded(total_time, TOTAL_BOX_WIDTH - 4) + "││\n";
-	ss << "│└──────────────────────────────────────────────┘│\n";
-	ss << "└────────────────────────────────────────────────┘\n";
+	// summary box, styled to match the operator boxes (rounded corners, title in the top border)
+	const string title = "Summary";
+	vector<pair<string, string>> rows;
+	rows.emplace_back("Total Time: ", RenderTiming(query_metrics.GetStringMetricInSeconds("query.total_time")));
+	auto bytes_read = query_metrics.GetBytesRead();
+	if (bytes_read > 0) {
+		rows.emplace_back("Data Read: ", StringUtil::BytesToHumanReadableString(bytes_read, 1000));
+	}
+	auto bytes_written = query_metrics.GetBytesWritten();
+	if (bytes_written > 0) {
+		rows.emplace_back("Data Written: ", StringUtil::BytesToHumanReadableString(bytes_written, 1000));
+	}
+	idx_t content_width = title.size() + 2;
+	for (auto &row : rows) {
+		content_width = MaxValue<idx_t>(content_width, row.first.size() + row.second.size());
+	}
+	idx_t box_width = content_width + 4;
+	// top border: ╭─ Summary ─╮
+	ss << "╭─ ";
+	ss.Render(title, TreeRenderType::HEADER);
+	ss << " " + StringUtil::Repeat("─", box_width - 5 - title.size()) + "╮\n";
+	// content rows with the values right-aligned (pad between the key and the value)
+	for (auto &row : rows) {
+		idx_t row_width = row.first.size() + row.second.size();
+		ss << "│ ";
+		ss.Render(row.first, TreeRenderType::KEY);
+		ss << string(content_width - row_width, ' ');
+		ss.Render(row.second, TreeRenderType::VALUE);
+		ss << " │\n";
+	}
+	// bottom border
+	ss << "╰" + StringUtil::Repeat("─", box_width - 2) + "╯\n";
 	// render the main operator tree
 	if (root) {
-		// print phase timings
-		if (PrintOptimizerOutput()) {
-			PrintPhaseTimingsToStream(ss, *metrics, TOTAL_BOX_WIDTH);
-		}
 		Render(*root, ss);
 	}
 }
@@ -725,55 +672,53 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	return result;
 }
 
-static yyjson_mut_val *ValueToJSON(yyjson_mut_doc *doc, const Value &val) {
+static JSONMutableValue ValueToJSON(JSONWriter &writer, const Value &val) {
 	if (val.IsNull()) {
-		return yyjson_mut_null(doc);
+		return writer.CreateNull();
 	}
 	auto &type = val.type();
 	if (type.id() == LogicalTypeId::MAP) {
 		// MAP values (e.g. extra_info) become JSON objects; multiline string values become arrays
-		auto obj = yyjson_mut_obj(doc);
+		auto obj = writer.CreateObject();
 		for (auto &child : MapValue::GetChildren(val)) {
 			auto kv = StructValue::GetChildren(child);
 			auto k = kv[0].GetValue<string>();
 			auto v = kv[1].GetValue<string>();
-			auto key_ptr = yyjson_mut_get_str(yyjson_mut_strcpy(doc, k.c_str()));
 			auto splits = StringUtil::Split(v, "\n");
 			if (splits.size() > 1) {
-				auto arr = yyjson_mut_arr(doc);
+				auto arr = writer.CreateArray();
 				for (auto &s : splits) {
-					yyjson_mut_arr_add_strcpy(doc, arr, s.c_str());
+					arr.AppendString(s);
 				}
-				yyjson_mut_obj_add_val(doc, obj, key_ptr, arr);
+				obj.Add(k, arr);
 			} else {
-				yyjson_mut_obj_add_strcpy(doc, obj, key_ptr, v.c_str());
+				obj.AddString(k, v);
 			}
 		}
 		return obj;
 	}
 	if (type.IsIntegral()) {
-		return yyjson_mut_uint(doc, val.GetValue<uint64_t>());
+		return writer.CreateUnsignedInteger(val.GetValue<uint64_t>());
 	}
 	if (type.IsNumeric()) {
-		return yyjson_mut_real(doc, val.GetValue<double>());
+		return writer.CreateDouble(val.GetValue<double>());
 	}
-	auto str = val.GetValue<string>();
-	return yyjson_mut_strncpy(doc, str.c_str(), str.size());
+	return writer.CreateString(val.GetValue<string>());
 }
 
-static yyjson_mut_val *QueryProfileResultToJSON(yyjson_mut_doc *doc, const QueryProfileResult &node) {
+static JSONMutableValue QueryProfileResultToJSON(JSONWriter &writer, const QueryProfileResult &node) {
 	switch (node.kind) {
 	case QueryProfileResultKind::VALUE:
-		return ValueToJSON(doc, node.value);
+		return ValueToJSON(writer, node.value);
 	case QueryProfileResultKind::LIST: {
-		auto arr = yyjson_mut_arr(doc);
+		auto arr = writer.CreateArray();
 		for (auto &child : node.children) {
-			yyjson_mut_arr_add_val(arr, QueryProfileResultToJSON(doc, *child));
+			arr.Append(QueryProfileResultToJSON(writer, *child));
 		}
 		return arr;
 	}
 	case QueryProfileResultKind::OBJECT: {
-		auto obj = yyjson_mut_obj(doc);
+		auto obj = writer.CreateObject();
 		// Sort children alphabetically by key for deterministic output
 		vector<reference<const QueryProfileResult>> sorted_children;
 		sorted_children.reserve(node.children.size());
@@ -789,24 +734,13 @@ static yyjson_mut_val *QueryProfileResultToJSON(yyjson_mut_doc *doc, const Query
 		          });
 		for (const QueryProfileResult &child : sorted_children) {
 			D_ASSERT(!child.key.empty());
-			auto key_ptr = yyjson_mut_get_str(yyjson_mut_strcpy(doc, child.key.c_str()));
-			yyjson_mut_obj_add_val(doc, obj, key_ptr, QueryProfileResultToJSON(doc, child));
+			obj.Add(child.key, QueryProfileResultToJSON(writer, child));
 		}
 		return obj;
 	}
 	default:
 		throw InternalException("Unknown QueryProfileResultKind");
 	}
-}
-
-static string StringifyAndFree(ConvertedJSONHolder &json_holder, yyjson_mut_val *object) {
-	json_holder.stringified_json = yyjson_mut_val_write_opts(
-	    object, YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY, nullptr, nullptr, nullptr);
-	if (!json_holder.stringified_json) {
-		throw InternalException("The plan could not be rendered as JSON, yyjson failed");
-	}
-	auto result = string(json_holder.stringified_json);
-	return result;
 }
 
 void QueryProfiler::ToLogInternal() const {
@@ -982,12 +916,10 @@ bool QueryProfiler::HasRoot() const {
 
 string QueryProfiler::ToJSON() const {
 	lock_guard<std::mutex> guard(lock);
-	ConvertedJSONHolder json_holder;
-	json_holder.doc = yyjson_mut_doc_new(nullptr);
+	JSONWriter writer;
 	auto result = ToResultTree();
-	auto root_val = QueryProfileResultToJSON(json_holder.doc, *result);
-	yyjson_mut_doc_set_root(json_holder.doc, root_val);
-	return StringifyAndFree(json_holder, root_val);
+	writer.SetRoot(QueryProfileResultToJSON(writer, *result));
+	return writer.ToString(JSONWriteFlags::ALLOW_INF_AND_NAN | JSONWriteFlags::PRETTY);
 }
 
 void QueryProfiler::WriteToFile(const char *path, string &info) const {
@@ -1039,14 +971,16 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	}
 }
 
-void QueryProfiler::Render(const ProfilingNode &node, std::ostream &ss) const {
+void QueryProfiler::Render(const ProfilingNode &node, BaseTreeRenderer &ss) const {
 	TextTreeRenderer renderer;
 	renderer.Configure(ClientConfig::GetConfig(context).profiling_renderer_settings);
 	renderer.Render(node, ss);
 }
 
 void QueryProfiler::Print() {
-	Printer::Print(QueryTreeToString());
+	// print the framed text query tree directly through the renderer's print sink
+	auto renderer = CreateProfiler("query_tree");
+	PrintProfilerOutput(renderer.get());
 }
 
 static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &result) {

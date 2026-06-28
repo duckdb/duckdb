@@ -33,7 +33,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInstallStatement(
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
 	info->load_type = LoadType::INSTALL;
-	info->filename = identifier_or_string_literal.name.GetIdentifierName();
+	info->filename = identifier_or_string_literal.Name().GetIdentifierName();
 	info->repo_is_alias = false;
 	if (from_source) {
 		info->repository = from_source->name.GetIdentifierName();
@@ -76,7 +76,7 @@ PEGTransformerFactory::TransformUpdateExtensionsStatement(PEGTransformer &transf
 
 string PEGTransformerFactory::TransformVersionNumber(PEGTransformer &transformer,
                                                      const QualifiedName &identifier_or_string_literal) {
-	return identifier_or_string_literal.name.GetIdentifierName();
+	return identifier_or_string_literal.Name().GetIdentifierName();
 }
 
 } // namespace duckdb

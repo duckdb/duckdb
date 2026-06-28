@@ -85,6 +85,96 @@ struct PEGTransformerState {
 	idx_t token_index;
 };
 
+class PEGTransformer;
+class TransformStack;
+struct TransformStackFrame;
+
+using transform_frame_function_t = void (*)(PEGTransformer &transformer, TransformStack &stack,
+                                            TransformStackFrame &frame);
+using transform_frame_finalize_t = unique_ptr<TransformResultValue> (*)(PEGTransformer &transformer,
+                                                                        TransformStack &stack,
+                                                                        TransformStackFrame &frame);
+using transform_frame_index_t = idx_t;
+
+enum class TransformFrameState : uint8_t { INITIALIZE, WAITING };
+
+struct TransformFrameOps {
+	const char *name;
+	transform_frame_function_t initialize;
+	transform_frame_finalize_t finalize;
+};
+
+struct TransformFrameResultTarget {
+	TransformFrameResultTarget(transform_frame_index_t frame_index, idx_t slot);
+
+	const transform_frame_index_t frame_index;
+	const idx_t slot;
+};
+
+struct TransformStackFrame {
+	TransformStackFrame(transform_frame_index_t frame_index, ParseResult &parse_result, const TransformFrameOps &ops,
+	                    optional<TransformFrameResultTarget> result_target);
+
+	void ReserveChildSlots(idx_t count);
+	void SetChildResult(idx_t slot, unique_ptr<TransformResultValue> result);
+
+	template <class T>
+	T TakeResult(idx_t slot) {
+		if (slot >= child_results.size() || !child_results[slot]) {
+			throw InternalException("Missing trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
+		}
+		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(child_results[slot].get());
+		if (!typed_result) {
+			throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
+			                        ops.name);
+		}
+		auto result = std::move(typed_result->value);
+		child_results[slot].reset();
+		return result;
+	}
+
+	const transform_frame_index_t frame_index;
+	ParseResult &parse_result;
+	const TransformFrameOps &ops;
+	const optional<TransformFrameResultTarget> result_target;
+	TransformFrameState state = TransformFrameState::INITIALIZE;
+	vector<unique_ptr<TransformResultValue>> child_results;
+};
+
+class TransformStack {
+public:
+	explicit TransformStack(PEGTransformer &transformer);
+
+	transform_frame_index_t PushFrame(ParseResult &parse_result, const TransformFrameOps &ops,
+	                                  optional<TransformFrameResultTarget> result_target);
+
+	template <class T>
+	T Execute(ParseResult &parse_result, const TransformFrameOps &ops) {
+		auto base_result = ExecuteInternal(parse_result, ops);
+		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(base_result.get());
+		if (!typed_result) {
+			throw InternalException("Unexpected trampoline transformer result type for root rule '%s'", ops.name);
+		}
+		return std::move(typed_result->value);
+	}
+
+	TransformStackFrame &GetFrame(transform_frame_index_t frame_index);
+	const TransformStackFrame &GetFrame(transform_frame_index_t frame_index) const;
+
+	string FormatFrame(transform_frame_index_t frame_index) const;
+	string FormatParentChain(transform_frame_index_t frame_index) const;
+	string FormatStack() const;
+
+private:
+	unique_ptr<TransformResultValue> ExecuteInternal(ParseResult &parse_result, const TransformFrameOps &ops);
+	void DeliverResult(TransformStackFrame &frame, unique_ptr<TransformResultValue> result);
+
+private:
+	PEGTransformer &transformer;
+	vector<unique_ptr<TransformStackFrame>> frames;
+	vector<transform_frame_index_t> frame_stack;
+};
+
 class PEGTransformer {
 public:
 	using AnyTransformFunction = std::function<unique_ptr<TransformResultValue>(PEGTransformer &, ParseResult &)>;
@@ -314,6 +404,40 @@ public:
 	                                                               const string &column_name,
 	                                                               unique_ptr<ParsedExpression> expression);
 
+	//===--------------------------------------------------------------------===//
+	// START GENERATED TRAMPOLINE RULES
+	//===--------------------------------------------------------------------===//
+	static void InitializeUseStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeUseStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeUseTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeUseTargetTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSchemaNameAsUseTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeSchemaNameAsUseTargetTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
+	static void InitializeCatalogNameAsUseTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                       TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeCatalogNameAsUseTargetTrampoline(PEGTransformer &transformer,
+	                                                                                 TransformStack &stack,
+	                                                                                 TransformStackFrame &frame);
+	static void InitializeUseTargetCatalogSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                       TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeUseTargetCatalogSchemaTrampoline(PEGTransformer &transformer,
+	                                                                                 TransformStack &stack,
+	                                                                                 TransformStackFrame &frame);
+	static void InitializeDotIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDotIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	//===--------------------------------------------------------------------===//
+	// END GENERATED TRAMPOLINE RULES
+	//===--------------------------------------------------------------------===//
+
 	// Registration methods
 	void RegisterComment();
 	void RegisterCommon();
@@ -323,6 +447,7 @@ public:
 	void RegisterSelect();
 	void RegisterKeywordsAndIdentifiers();
 	void RegisterGenerated();
+	void RegisterGeneratedTrampoline();
 
 	template <class FUNC>
 	void Register(const string &rule_name, FUNC function) {
@@ -340,6 +465,11 @@ public:
 	PEGTransformerFactory(const PEGTransformerFactory &) = delete;
 
 	static unique_ptr<SQLStatement> TransformStatement(PEGTransformer &, ParseResult &list);
+	static unique_ptr<SQLStatement> TransformStatementTrampoline(PEGTransformer &transformer,
+	                                                             ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformStatementTrampolineInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static const case_insensitive_map_t<const TransformFrameOps *> &GeneratedTrampolineOps();
 
 	// comment.gram
 	static Value TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result);
@@ -810,7 +940,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformRowTypeInternal(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformRowType(PEGTransformer &transformer,
-	                                                     const child_list_t<LogicalType> &col_id_type_list);
+	                                                     const optional<child_list_t<LogicalType>> &col_id_type_list);
 	static unique_ptr<TransformResultValue> TransformSetofTypeInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformSetofType(PEGTransformer &transformer, const LogicalType &type);
@@ -1705,7 +1835,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformDropSchemaInternal(PEGTransformer &transformer,
 	                                                                    ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropSchema(PEGTransformer &transformer, const optional<bool> &if_exists,
-	                                                     const vector<QualifiedName> &qualified_schema_name);
+	                                                     const vector<QualifiedName> &qualified_name);
 	static unique_ptr<TransformResultValue> TransformDropIndexInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropIndex(PEGTransformer &transformer, const optional<bool> &if_exists,
@@ -1769,16 +1899,6 @@ public:
 	static unique_ptr<TransformResultValue> TransformIfExistsInternal(PEGTransformer &transformer,
 	                                                                  ParseResult &parse_result);
 	static bool TransformIfExists(PEGTransformer &transformer);
-	static unique_ptr<TransformResultValue> TransformQualifiedSchemaNameInternal(PEGTransformer &transformer,
-	                                                                             ParseResult &parse_result);
-	static unique_ptr<TransformResultValue> TransformQualifiedSchemaNameStringInternal(PEGTransformer &transformer,
-	                                                                                   ParseResult &parse_result);
-	static QualifiedName TransformQualifiedSchemaNameString(PEGTransformer &transformer, const Identifier &schema_name);
-	static unique_ptr<TransformResultValue> TransformCatalogReservedSchemaInternal(PEGTransformer &transformer,
-	                                                                               ParseResult &parse_result);
-	static QualifiedName TransformCatalogReservedSchema(PEGTransformer &transformer,
-	                                                    const Identifier &catalog_qualification,
-	                                                    const Identifier &reserved_schema_name);
 	static unique_ptr<TransformResultValue> TransformDropSecretStorageInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static Identifier TransformDropSecretStorage(PEGTransformer &transformer, const Identifier &identifier);
@@ -2415,12 +2535,21 @@ public:
 	static unique_ptr<TransformResultValue> TransformSimilarToTokenInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static string TransformSimilarToToken(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformRegexMatchTokenInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static string TransformRegexMatchToken(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformRegexInsensitiveMatchTokenInternal(PEGTransformer &transformer,
+	                                                                                    ParseResult &parse_result);
+	static string TransformRegexInsensitiveMatchToken(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformNotILikeOpInternal(PEGTransformer &transformer,
 	                                                                    ParseResult &parse_result);
 	static string TransformNotILikeOp(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformNotLikeOpInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static string TransformNotLikeOp(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformNotRegexInsensitiveMatchOpInternal(PEGTransformer &transformer,
+	                                                                                    ParseResult &parse_result);
+	static string TransformNotRegexInsensitiveMatchOp(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformNotSimilarToOpInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static string TransformNotSimilarToOp(PEGTransformer &transformer);
@@ -3795,8 +3924,11 @@ public:
 	//===--------------------------------------------------------------------===//
 
 private:
+	const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &GetTransformFunctions(ParserOptions &options);
+
 	PEGParser parser;
 	case_insensitive_map_t<PEGTransformer::AnyTransformFunction> sql_transform_functions;
+	case_insensitive_map_t<PEGTransformer::AnyTransformFunction> trampoline_transform_functions;
 };
 
 } // namespace duckdb

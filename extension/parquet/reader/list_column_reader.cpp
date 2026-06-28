@@ -200,6 +200,9 @@ ListColumnReader::ListColumnReader(const ParquetReader &reader, const ParquetCol
 	child_repeats.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	child_defines_ptr = (uint8_t *)child_defines.ptr;
 	child_repeats_ptr = (uint8_t *)child_repeats.ptr;
+	if (child_column_reader) {
+		child_column_reader->SetParent(*this);
+	}
 }
 
 void ListColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) {

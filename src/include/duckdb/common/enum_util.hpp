@@ -158,6 +158,8 @@ enum class CopyOverwriteMode : uint8_t;
 
 enum class CopyToType : uint8_t;
 
+enum class CryptoHashFunction : uint8_t;
+
 enum class DataFileType : uint8_t;
 
 enum class DateCastResult : uint8_t;
@@ -320,7 +322,11 @@ enum class Monotonicity : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
 
+enum class MultiFileDecodeResult : uint8_t;
+
 enum class MultiFileFileState : uint8_t;
+
+enum class MultiFileScanPhase : uint8_t;
 
 enum class NType : uint8_t;
 
@@ -390,6 +396,8 @@ enum class ProfilingParameterNames : uint8_t;
 
 enum class PushdownExtractSupport : uint8_t;
 
+enum class QualifiedNameToStringMode : uint8_t;
+
 enum class QuantileSerializationType : uint8_t;
 
 enum class QueryNodeType : uint8_t;
@@ -405,6 +413,8 @@ enum class RecoveryMode : uint8_t;
 enum class RecursiveCTEInlineStageType : uint8_t;
 
 enum class RecursiveProbeSidePreference : uint8_t;
+
+enum class RegexMatchOperatorSemantics : uint8_t;
 
 enum class RelationType : uint8_t;
 
@@ -519,6 +529,8 @@ enum class TransactionInvalidationPolicy : uint8_t;
 enum class TransactionModifierType : uint8_t;
 
 enum class TransactionType : uint8_t;
+
+enum class TransformFrameState : uint8_t;
 
 enum class TriggerEventType : uint8_t;
 
@@ -749,6 +761,9 @@ const char* EnumUtil::ToChars<CopyOverwriteMode>(CopyOverwriteMode value);
 
 template<>
 const char* EnumUtil::ToChars<CopyToType>(CopyToType value);
+
+template<>
+const char* EnumUtil::ToChars<CryptoHashFunction>(CryptoHashFunction value);
 
 template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
@@ -994,7 +1009,13 @@ template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
 
 template<>
+const char* EnumUtil::ToChars<MultiFileDecodeResult>(MultiFileDecodeResult value);
+
+template<>
 const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value);
+
+template<>
+const char* EnumUtil::ToChars<MultiFileScanPhase>(MultiFileScanPhase value);
 
 template<>
 const char* EnumUtil::ToChars<NType>(NType value);
@@ -1099,6 +1120,9 @@ template<>
 const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport value);
 
 template<>
+const char* EnumUtil::ToChars<QualifiedNameToStringMode>(QualifiedNameToStringMode value);
+
+template<>
 const char* EnumUtil::ToChars<QuantileSerializationType>(QuantileSerializationType value);
 
 template<>
@@ -1121,6 +1145,9 @@ const char* EnumUtil::ToChars<RecursiveCTEInlineStageType>(RecursiveCTEInlineSta
 
 template<>
 const char* EnumUtil::ToChars<RecursiveProbeSidePreference>(RecursiveProbeSidePreference value);
+
+template<>
+const char* EnumUtil::ToChars<RegexMatchOperatorSemantics>(RegexMatchOperatorSemantics value);
 
 template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
@@ -1292,6 +1319,9 @@ const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType v
 
 template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
+
+template<>
+const char* EnumUtil::ToChars<TransformFrameState>(TransformFrameState value);
 
 template<>
 const char* EnumUtil::ToChars<TriggerEventType>(TriggerEventType value);
@@ -1544,6 +1574,9 @@ template<>
 CopyToType EnumUtil::FromString<CopyToType>(const char *value);
 
 template<>
+CryptoHashFunction EnumUtil::FromString<CryptoHashFunction>(const char *value);
+
+template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);
 
 template<>
@@ -1787,7 +1820,13 @@ template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
 
 template<>
+MultiFileDecodeResult EnumUtil::FromString<MultiFileDecodeResult>(const char *value);
+
+template<>
 MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value);
+
+template<>
+MultiFileScanPhase EnumUtil::FromString<MultiFileScanPhase>(const char *value);
 
 template<>
 NType EnumUtil::FromString<NType>(const char *value);
@@ -1892,6 +1931,9 @@ template<>
 PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value);
 
 template<>
+QualifiedNameToStringMode EnumUtil::FromString<QualifiedNameToStringMode>(const char *value);
+
+template<>
 QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const char *value);
 
 template<>
@@ -1914,6 +1956,9 @@ RecursiveCTEInlineStageType EnumUtil::FromString<RecursiveCTEInlineStageType>(co
 
 template<>
 RecursiveProbeSidePreference EnumUtil::FromString<RecursiveProbeSidePreference>(const char *value);
+
+template<>
+RegexMatchOperatorSemantics EnumUtil::FromString<RegexMatchOperatorSemantics>(const char *value);
 
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);
@@ -2085,6 +2130,9 @@ TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);
+
+template<>
+TransformFrameState EnumUtil::FromString<TransformFrameState>(const char *value);
 
 template<>
 TriggerEventType EnumUtil::FromString<TriggerEventType>(const char *value);

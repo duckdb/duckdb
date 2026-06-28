@@ -188,28 +188,21 @@ struct ParquetPrefetchMetrics {
 	}
 };
 
-//! Where the scan is in its async execution.
-enum class ParquetScanState : uint8_t {
-	SCHEDULE,       //! schedule the next row group's I/O
-	PROCESS,        //! process the current row group into a output chunk
-	RESUME_PAYLOAD, //! resume decoding the payload columns after the filter-column I/O blocked
-	FINISHED        //! the scan is done
-};
-
 struct ParquetReaderScanState {
 public:
 	ColumnReader &GetColumnReader(idx_t i);
 
 public:
-	vector<idx_t> group_idx_list;
-	int64_t current_group;
+	//! The row group index this scan state decodes
+	idx_t group_index;
 	idx_t offset_in_group;
 	idx_t group_offset;
 	shared_ptr<CachingFileHandle> file_handle;
 	vector<unique_ptr<ColumnReader>> column_readers;
 	duckdb_base_std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
 
-	ParquetScanState scan_state;
+	//! Set while resuming payload-column decode after the filter-column I/O blocked (vs a fresh row-group pass)
+	bool resuming_payload = false;
 	SelectionVector sel;
 
 	ResizeableBuffer define_buf;
@@ -334,14 +327,15 @@ public:
 	                       LocalTableFunctionState &lstate) override;
 	void PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
 	                 LocalTableFunctionState &lstate_p) override;
+	AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
+	                       LocalTableFunctionState &lstate) override;
 	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 	double GetProgressInFile(ClientContext &context) override;
 
 public:
-	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read) const;
-	AsyncResult Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
+	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const;
 
 	idx_t NumRows() const;
 	idx_t NumRowGroups() const;
@@ -410,10 +404,14 @@ private:
 	ParquetPrefetchStrategy ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
 	                                           const duckdb_parquet::RowGroup &group, bool filters_look_unselective,
 	                                           bool log_prefetch) const;
-	//! Switch to the next row group and schedule its I/O (prepare column buffers, prefetch the bytes).
-	AsyncResult Schedule(ClientContext &context, ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
+	//! Register the read-heads to fetch, and select prefetch strategy
+	ParquetPrefetchStrategy RegisterRowGroupReads(ClientContext &context, ParquetReaderScanState &state);
+	//! Build the async I/O tasks for the registered read-heads
+	AsyncResult ScheduleRowGroupReads(ParquetReaderScanState &state, ParquetPrefetchStrategy strategy);
 	//! Process up to STANDARD_VECTOR_SIZE rows of the current row group into result.
-	AsyncResult Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
+	AsyncResult Process(ClientContext &context, ParquetReaderScanState &state, DataChunk &result);
+	//! Log and finalize the row group's prefetch metrics
+	void FinishRowGroup(ClientContext &context, ParquetReaderScanState &state, bool log_prefetch);
 	//! Process filters
 	AsyncResult ProcessFilters(ParquetReaderScanState &state, DataChunk &result, idx_t scan_count, uint8_t *define_ptr,
 	                           uint8_t *repeat_ptr, bool log_prefetch);

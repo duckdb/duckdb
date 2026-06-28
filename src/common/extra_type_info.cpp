@@ -313,8 +313,8 @@ shared_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserialize
 			user_type_mods.push_back(make_uniq_base<ParsedExpression, ConstantExpression>(mod));
 		}
 
-		result->expr = make_uniq<TypeExpression>(Identifier(catalog), Identifier(schema), Identifier(name),
-		                                         std::move(user_type_mods));
+		result->expr = make_uniq<TypeExpression>(
+		    QualifiedName(Identifier(catalog), Identifier(schema), Identifier(name)), std::move(user_type_mods));
 	}
 
 	return std::move(result);

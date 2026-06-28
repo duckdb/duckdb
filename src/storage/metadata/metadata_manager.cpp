@@ -263,7 +263,7 @@ idx_t MetadataManager::BlockCount() {
 	return blocks.size();
 }
 
-void MetadataManager::Flush() {
+void MetadataManager::Flush(QueryContext context) {
 	// Write the blocks of the metadata manager to disk.
 	const idx_t total_metadata_size = GetMetadataBlockSize() * METADATA_BLOCK_COUNT;
 
@@ -285,7 +285,7 @@ void MetadataManager::Flush() {
 			// Convert the temporary block to a persistent block.
 			// we cannot use ConvertToPersistent as another thread might still be reading the block
 			// so we use the safe version of ConvertToPersistent
-			auto new_block = block_manager.ConvertToPersistent(QueryContext(), kv.first, std::move(block_handle),
+			auto new_block = block_manager.ConvertToPersistent(context, kv.first, std::move(block_handle),
 			                                                   std::move(handle), ConvertToPersistentMode::THREAD_SAFE);
 
 			guard.lock();
@@ -294,7 +294,7 @@ void MetadataManager::Flush() {
 		} else {
 			// Already a persistent block, so we only need to write it.
 			D_ASSERT(block.block->BlockId() == block.block_id);
-			block_manager.Write(QueryContext(), handle.GetFileBuffer(), block.block_id);
+			block_manager.Write(context, handle.GetFileBuffer(), block.block_id);
 		}
 		// the block is no longer dirty
 		block.dirty = false;
