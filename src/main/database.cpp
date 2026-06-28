@@ -346,8 +346,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// scan is needed. If the scheduler did not exist yet, that notification would be silently dropped
 	// and the background thread would block forever without ever scanning. The scheduler's constructor
 	// only stores a reference and launches no thread, so creating it early is cheap and safe. The
-	// background thread itself is launched later, by Start() (after FinalizeStartup()), so the initial
-	// heap scan still runs against the fully committed catalog.
+	// scheduler is enabled later, by Start() (after FinalizeStartup()), so the initial heap scan still
+	// runs against the fully committed catalog once a schedule exists.
 	feature_refresh_scheduler = make_uniq<FeatureRefreshScheduler>(*this);
 
 	if (!db_manager->HasDefaultDatabase()) {
