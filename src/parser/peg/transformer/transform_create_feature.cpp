@@ -16,6 +16,8 @@ struct FeatureWindowSpec {
 	interval_t window_interval;
 };
 
+static constexpr interval_t DEFAULT_WATERMARK_INTERVAL {0, 0, 0};
+
 static int64_t ParsePositiveIntegerScheduleCount(const string &number) {
 	if (number.empty() || number[0] == '-') {
 		throw ParserException("Refresh schedule shorthand count must be a positive integer");
@@ -119,8 +121,8 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
                                                                               ParseResult &parse_result) {
 	// CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral
 	//                      'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral
-	//                      FeatureGranularityClause? 'WINDOW' NumberLiteral
-	//                      FeatureRefreshClause? FeatureRetainClause?
+	//                      FeatureGranularityClause? FeatureWindowClause? FeatureWatermarkClause?
+	//                      FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause?
 	//                      'AS' Parens(SelectStatementInternal)
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 
@@ -150,30 +152,37 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 		window_size = window_spec.window_size;
 		window_interval = window_spec.window_interval;
 	}
-	// index 11: FeatureRefreshClause? (default: INCREMENTAL)
+	// index 11: FeatureWatermarkClause? (default: zero interval)
+	interval_t watermark_interval = DEFAULT_WATERMARK_INTERVAL;
+	auto &watermark_opt = list_pr.Child<OptionalParseResult>(11);
+	if (watermark_opt.HasResult()) {
+		auto &clause = watermark_opt.GetResult().Cast<ListParseResult>();
+		watermark_interval = ParseFeatureWindowInterval(clause.Child<ListParseResult>(1), granularity).window_interval;
+	}
+	// index 12: FeatureRefreshClause? (default: INCREMENTAL)
 	FeatureRefreshMode refresh_mode = FeatureRefreshMode::INCREMENTAL;
-	auto &refresh_opt = list_pr.Child<OptionalParseResult>(11);
+	auto &refresh_opt = list_pr.Child<OptionalParseResult>(12);
 	if (refresh_opt.HasResult()) {
 		auto &clause = refresh_opt.GetResult().Cast<ListParseResult>();
 		refresh_mode = transformer.Transform<FeatureRefreshMode>(clause.Child<ListParseResult>(1));
 	}
-	// index 12: FeatureScheduleClause? (default: no schedule)
+	// index 13: FeatureScheduleClause? (default: no schedule)
 	bool has_schedule = false;
 	interval_t schedule_interval {0, 0, 0};
-	auto &schedule_opt = list_pr.Child<OptionalParseResult>(12);
+	auto &schedule_opt = list_pr.Child<OptionalParseResult>(13);
 	if (schedule_opt.HasResult()) {
 		schedule_interval = transformer.Transform<interval_t>(schedule_opt.GetResult());
 		has_schedule = true;
 	}
-	// index 13: FeatureRetainClause? (default: 1)
+	// index 14: FeatureRetainClause? (default: 1)
 	int64_t retain_versions = 1;
-	auto &retain_opt = list_pr.Child<OptionalParseResult>(13);
+	auto &retain_opt = list_pr.Child<OptionalParseResult>(14);
 	if (retain_opt.HasResult()) {
 		auto &clause = retain_opt.GetResult().Cast<ListParseResult>();
 		retain_versions = std::stoll(clause.Child<NumberParseResult>(1).number);
 	}
-	// index 14: 'AS' keyword
-	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(15));
+	// index 15: 'AS' keyword
+	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(16));
 	auto query = transformer.Transform<unique_ptr<SelectStatement>>(select_parens);
 
 	auto result = make_uniq<CreateStatement>();
@@ -186,6 +195,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	info->granularity = granularity;
 	info->window_size = window_size;
 	info->window_interval = window_interval;
+	info->watermark_interval = watermark_interval;
 	info->refresh_mode = refresh_mode;
 	info->retain_versions = retain_versions;
 	info->has_schedule = has_schedule;

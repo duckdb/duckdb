@@ -128,6 +128,7 @@ void CreateFeatureInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<interval_t>(213, "schedule_interval", schedule_interval, interval_t());
 	serializer.WritePropertyWithDefault<bool>(214, "schedule_enabled", schedule_enabled, true);
 	serializer.WritePropertyWithDefault<interval_t>(215, "window_interval", window_interval, interval_t());
+	serializer.WritePropertyWithDefault<interval_t>(216, "watermark_interval", watermark_interval, interval_t());
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer) {
@@ -151,6 +152,7 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer
 	if (result->window_interval.months == 0 && result->window_interval.days == 0 && result->window_interval.micros == 0) {
 		result->window_interval = FeatureWindowIntervalFromGranularity(result->window_size, result->granularity);
 	}
+	deserializer.ReadPropertyWithExplicitDefault<interval_t>(216, "watermark_interval", result->watermark_interval, interval_t());
 	return std::move(result);
 }
 

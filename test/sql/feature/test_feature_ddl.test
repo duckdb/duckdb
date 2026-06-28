@@ -66,10 +66,10 @@ SELECT feature_name, source_table, entity_column, granularity, window_size FROM 
 daily_txn	transactions	card_no	DAY	7
 
 # DESCRIBE FEATURE shows metadata
-query IIIIIIIIII
+query IIIIIIIIIIII
 DESCRIBE FEATURE daily_txn;
 ----
-daily_txn	transactions	card_no	event_time	DAY	7	FULL	1	1	CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+daily_txn	transactions	card_no	event_time	DAY	7	FULL	1	1	7 days	00:00:00	CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 # DESCRIBE non-existent feature returns empty
 query I
@@ -105,6 +105,20 @@ SELECT sql FROM duckdb_features() WHERE feature_name = 'explicit_hours';
 ----
 <REGEX>:.*WINDOW INTERVAL '24:00:00'.*
 
+query III
+SELECT window_size, window_interval, watermark_interval FROM duckdb_features() WHERE feature_name = 'daily_txn';
+----
+7	7 days	00:00:00
+
+# WATERMARK accepts explicit interval shorthand independent of WINDOW
+statement ok
+CREATE FEATURE watermark_minutes ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 24 HOURS WATERMARK 30 MINUTES REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+
+query II
+SELECT watermark_interval, sql FROM duckdb_features() WHERE feature_name = 'watermark_minutes';
+----
+00:30:00	CREATE FEATURE watermark_minutes ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW INTERVAL '24:00:00' WATERMARK INTERVAL '00:30:00' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+
 # WINDOW also accepts INTERVAL string syntax
 statement ok
 CREATE FEATURE interval_minutes ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW INTERVAL '90 minutes' REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
@@ -114,16 +128,31 @@ SELECT window_size, window_interval FROM duckdb_features() WHERE feature_name = 
 ----
 0	01:30:00
 
+# WATERMARK also accepts INTERVAL string syntax
+statement ok
+CREATE FEATURE watermark_interval_string ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 WATERMARK INTERVAL '2 hours' REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+
+query II
+SELECT watermark_interval, sql FROM duckdb_features() WHERE feature_name = 'watermark_interval_string';
+----
+02:00:00	CREATE FEATURE watermark_interval_string ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 WATERMARK INTERVAL '02:00:00' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+
 query I
 SELECT COUNT(*) FROM duckdb_features();
 ----
-4
+6
 
 statement ok
 DROP FEATURE explicit_hours;
 
 statement ok
 DROP FEATURE interval_minutes;
+
+statement ok
+DROP FEATURE watermark_minutes;
+
+statement ok
+DROP FEATURE watermark_interval_string;
 
 # ============================================================
 # Default parameter values

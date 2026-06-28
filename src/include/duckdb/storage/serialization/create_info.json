@@ -454,6 +454,12 @@
         "name": "window_interval",
         "type": "interval_t",
         "default": "interval_t()"
+      },
+      {
+        "id": 216,
+        "name": "watermark_interval",
+        "type": "interval_t",
+        "default": "interval_t()"
       }
     ]
   }

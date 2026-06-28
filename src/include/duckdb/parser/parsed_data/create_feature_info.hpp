@@ -35,6 +35,8 @@ struct CreateFeatureInfo : public CreateInfo {
 	int64_t window_size;
 	//! Lookback window interval
 	interval_t window_interval;
+	//! Incremental refresh watermark interval
+	interval_t watermark_interval;
 	//! Refresh mode
 	FeatureRefreshMode refresh_mode;
 	//! Number of versions to retain

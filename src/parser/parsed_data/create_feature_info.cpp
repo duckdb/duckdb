@@ -24,8 +24,9 @@ static bool IntervalEquals(const interval_t &left, const interval_t &right) {
 
 CreateFeatureInfo::CreateFeatureInfo()
     : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), granularity(FeatureGranularity::DAY), window_size(7),
-	  window_interval(interval_t {0, 7, 0}), refresh_mode(FeatureRefreshMode::FULL), retain_versions(1),
-	  current_version(1), has_schedule(false), schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
+	  window_interval(interval_t {0, 7, 0}), watermark_interval(interval_t {0, 0, 0}),
+	  refresh_mode(FeatureRefreshMode::FULL), retain_versions(1), current_version(1), has_schedule(false),
+	  schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
@@ -38,6 +39,7 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	result->granularity = granularity;
 	result->window_size = window_size;
 	result->window_interval = window_interval;
+	result->watermark_interval = watermark_interval;
 	result->refresh_mode = refresh_mode;
 	result->retain_versions = retain_versions;
 	result->current_version = current_version;
@@ -80,6 +82,9 @@ string CreateFeatureInfo::ToString() const {
 		result += " WINDOW " + duckdb::to_string(window_size);
 	} else {
 		result += " WINDOW INTERVAL '" + Interval::ToString(window_interval) + "'";
+	}
+	if (!IntervalEquals(watermark_interval, interval_t {0, 0, 0})) {
+		result += " WATERMARK INTERVAL '" + Interval::ToString(watermark_interval) + "'";
 	}
 	result += " REFRESH ";
 	switch (refresh_mode) {

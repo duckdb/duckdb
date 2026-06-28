@@ -35,6 +35,8 @@ public:
 	int64_t window_size;
 	//! The lookback window interval
 	interval_t window_interval;
+	//! The incremental refresh watermark interval
+	interval_t watermark_interval;
 	//! The refresh mode (FULL/INCREMENTAL)
 	FeatureRefreshMode refresh_mode;
 	//! The number of versions to retain
