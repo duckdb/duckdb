@@ -59,9 +59,6 @@ void OnSetDelayMeanMs(ClientContext &context, SetScope, Value &parameter) {
 		throw InvalidInputException("Invalid option for debug_fs_delay_mean_ms: value must be greater than or equal to 0");
 	}
 	auto &db = DatabaseInstance::GetDatabase(context);
-	if (delay_ms > 0) {
-		EnsureDebugFileSystemInstalled(db);
-	}
 	GetDebugFileSystemOrThrow(db).SetDelayMeanMs(delay_ms);
 }
 
@@ -71,15 +68,14 @@ void OnSetDelayStddevMs(ClientContext &context, SetScope, Value &parameter) {
 		throw InvalidInputException("Invalid option for debug_fs_delay_stddev_ms: value must be greater than or equal to 0");
 	}
 	auto &db = DatabaseInstance::GetDatabase(context);
-	if (delay_ms > 0) {
-		EnsureDebugFileSystemInstalled(db);
-	}
 	GetDebugFileSystemOrThrow(db).SetDelayStddevMs(delay_ms);
 }
 
 void LoadInternal(ExtensionLoader &loader) {
-	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+	auto &db = loader.GetDatabaseInstance();
+	EnsureDebugFileSystemInstalled(db);
 
+	auto &config = DBConfig::GetConfig(db);
 	config.AddExtensionOption("debug_fs_delay_mean_ms", "DEBUG SETTING: mean latency (ms) for filesystem operations",
 	                          LogicalType::DOUBLE, Value(0.0), OnSetDelayMeanMs);
 	config.AddExtensionOption("debug_fs_delay_stddev_ms",

@@ -8,6 +8,18 @@
 
 namespace duckdb {
 
+DebugFileHandle::DebugFileHandle(DebugFileSystem &fs, unique_ptr<FileHandle> inner_p)
+    : FileHandle(fs, inner_p->path, inner_p->flags), inner(std::move(inner_p)) {
+}
+
+void DebugFileHandle::Close() {
+	inner->Close();
+}
+
+bool DebugFileHandle::CanSeek() {
+	return inner->CanSeek();
+}
+
 DebugFileSystem::DebugFileSystem(unique_ptr<FileSystem> inner_fs) : inner_fs(std::move(inner_fs)) {
 }
 
@@ -54,27 +66,32 @@ void DebugFileSystem::ApplyDelay() {
 unique_ptr<FileHandle> DebugFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
                                                          optional_ptr<FileOpener> opener) {
 	ApplyDelay();
-	return inner_fs->OpenFile(file, flags, opener);
+	auto inner_handle = inner_fs->OpenFile(file, flags, opener);
+	return make_uniq<DebugFileHandle>(*this, std::move(inner_handle));
 }
 
 void DebugFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	ApplyDelay();
-	inner_fs->Read(handle, buffer, nr_bytes, location);
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	inner.file_system.Read(inner, buffer, nr_bytes, location);
 }
 
 int64_t DebugFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	ApplyDelay();
-	return inner_fs->Read(handle, buffer, nr_bytes);
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.Read(inner, buffer, nr_bytes);
 }
 
 void DebugFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	ApplyDelay();
-	inner_fs->Write(handle, buffer, nr_bytes, location);
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	inner.file_system.Write(inner, buffer, nr_bytes, location);
 }
 
 int64_t DebugFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	ApplyDelay();
-	return inner_fs->Write(handle, buffer, nr_bytes);
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.Write(inner, buffer, nr_bytes);
 }
 
 string DebugFileSystem::GetName() const {
@@ -86,31 +103,81 @@ bool DebugFileSystem::IsLocalFileSystem() const {
 }
 
 int64_t DebugFileSystem::GetFileSize(FileHandle &handle) {
-	return inner_fs->GetFileSize(handle);
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.GetFileSize(inner);
 }
 
 timestamp_t DebugFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	return inner_fs->GetLastModifiedTime(handle);
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.GetLastModifiedTime(inner);
 }
 
 string DebugFileSystem::GetVersionTag(FileHandle &handle) {
-	return inner_fs->GetVersionTag(handle);
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.GetVersionTag(inner);
 }
 
 FileType DebugFileSystem::GetFileType(FileHandle &handle) {
-	return inner_fs->GetFileType(handle);
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.GetFileType(inner);
 }
 
 FileMetadata DebugFileSystem::Stats(FileHandle &handle) {
-	return inner_fs->Stats(handle);
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.Stats(inner);
 }
 
 void DebugFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
-	inner_fs->Truncate(handle, new_size);
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	inner.file_system.Truncate(inner, new_size);
 }
 
 void DebugFileSystem::FileSync(FileHandle &handle) {
-	inner_fs->FileSync(handle);
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	inner.file_system.FileSync(inner);
+}
+
+void DebugFileSystem::Seek(FileHandle &handle, idx_t location) {
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	inner.file_system.Seek(inner, location);
+}
+
+void DebugFileSystem::Reset(FileHandle &handle) {
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	inner.file_system.Reset(inner);
+}
+
+idx_t DebugFileSystem::SeekPosition(FileHandle &handle) {
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.SeekPosition(inner);
+}
+
+bool DebugFileSystem::SupportsPositionalWrites(FileHandle &handle) {
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.SupportsPositionalWrites(inner);
+}
+
+bool DebugFileSystem::OnDiskFile(FileHandle &handle) {
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.OnDiskFile(inner);
+}
+
+bool DebugFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.Trim(inner, offset_bytes, length_bytes);
+}
+
+bool DebugFileSystem::TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result) {
+	auto &inner = *handle.Cast<DebugFileHandle>().inner;
+	return inner.file_system.TryGetNetworkThroughput(inner, result);
+}
+
+unique_ptr<FileHandle> DebugFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
+                                                           bool write) {
+	auto &debug_handle = handle->Cast<DebugFileHandle>();
+	auto &inner_fs_ref = debug_handle.inner->file_system;
+	auto compressed = inner_fs_ref.OpenCompressedFile(context, std::move(debug_handle.inner), write);
+	return make_uniq<DebugFileHandle>(*this, std::move(compressed));
 }
 
 bool DebugFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {

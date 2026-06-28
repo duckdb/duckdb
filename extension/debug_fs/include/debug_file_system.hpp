@@ -14,6 +14,16 @@
 
 namespace duckdb {
 
+// Forwards declaration.
+class DebugFileSystem;
+
+struct DebugFileHandle : public FileHandle {
+	DebugFileHandle(DebugFileSystem &fs, unique_ptr<FileHandle> inner_p);
+	void Close() override;
+	bool CanSeek() override;
+	unique_ptr<FileHandle> inner;
+};
+
 //! Wraps a FileSystem and injects configurable latency on open/read/write.
 class DebugFileSystem : public FileSystem {
 public:
@@ -39,6 +49,15 @@ public:
 	FileMetadata Stats(FileHandle &handle) override;
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 	void FileSync(FileHandle &handle) override;
+	void Seek(FileHandle &handle, idx_t location) override;
+	void Reset(FileHandle &handle) override;
+	idx_t SeekPosition(FileHandle &handle) override;
+	bool SupportsPositionalWrites(FileHandle &handle) override;
+	bool OnDiskFile(FileHandle &handle) override;
+	bool Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) override;
+	bool TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result) override;
+	unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
+	                                          bool write) override;
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
