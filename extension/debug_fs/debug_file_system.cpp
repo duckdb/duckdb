@@ -47,8 +47,8 @@ void DebugFileSystem::SetDelayStddevMs(double v) {
 
 void DebugFileSystem::ApplyDelay() {
 #ifndef DUCKDB_NO_THREADS
-	double mean_ms;
-	double stddev_ms;
+	double mean_ms = 0;
+	double stddev_ms = 0;
 	{
 		const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
 		mean_ms = delay_mean_ms;
@@ -75,6 +75,9 @@ unique_ptr<FileHandle> DebugFileSystem::OpenFileExtended(const OpenFileInfo &fil
                                                          optional_ptr<FileOpener> opener) {
 	ApplyDelay();
 	auto inner_handle = inner_fs->OpenFile(file, flags, opener);
+	if (!inner_handle) {
+		return nullptr;
+	}
 	return make_uniq<DebugFileHandle>(*this, std::move(inner_handle));
 }
 

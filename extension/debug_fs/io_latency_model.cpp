@@ -16,9 +16,9 @@ IoLatencyModel::IoLatencyModel(double mean_ms_p, double stddev_ms_p)
 }
 
 double IoLatencyModel::SampleLatency(RandomEngine &random) {
-	if (stddev_ms <= 0.0) {
-		return mean_ms;
-	}
+	ALWAYS_ASSERT(stddev_ms >= 0.0);
+	ALWAYS_ASSERT(mean_ms >= 0.0);
+
 	double u1 = 0;
 	do {
 		u1 = random.NextRandom();
