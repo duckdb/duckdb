@@ -14,6 +14,8 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
 #include "duckdb/main/settings.hpp"
@@ -298,6 +300,77 @@ string QueryProfiler::ToString(const ProfilerPrintFormat &format) const {
 string QueryProfiler::ToString(const string &profiler_format_name) const {
 	auto renderer = CreateProfiler(profiler_format_name);
 	return RenderProfilerOutput(renderer.get());
+}
+
+//! Strip a leading EXPLAIN [ANALYZE] [(...)] wrapper so only the underlying query remains.
+static string StripExplainPrefix(const string &sql) {
+	auto is_space = [](char c) {
+		return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+	};
+	idx_t start = 0;
+	while (start < sql.size() && is_space(sql[start])) {
+		start++;
+	}
+	string rest = sql.substr(start);
+	if (!StringUtil::StartsWith(StringUtil::Upper(rest), "EXPLAIN")) {
+		return sql;
+	}
+	idx_t pos = 7; // past "EXPLAIN"
+	while (pos < rest.size() && is_space(rest[pos])) {
+		pos++;
+	}
+	if (StringUtil::StartsWith(StringUtil::Upper(rest.substr(pos)), "ANALYZE")) {
+		pos += 7;
+		while (pos < rest.size() && is_space(rest[pos])) {
+			pos++;
+		}
+	}
+	if (pos < rest.size() && rest[pos] == '(') {
+		idx_t depth = 0;
+		while (pos < rest.size()) {
+			char c = rest[pos++];
+			if (c == '(') {
+				depth++;
+			} else if (c == ')' && --depth == 0) {
+				break;
+			}
+		}
+		while (pos < rest.size() && is_space(rest[pos])) {
+			pos++;
+		}
+	}
+	return rest.substr(pos);
+}
+
+string QueryProfiler::GetFormattedSQL() const {
+	auto sql = StripExplainPrefix(query_metrics.query_sql);
+	if (sql.empty()) {
+		return query_metrics.query_sql;
+	}
+	// pretty-print via duckdb_format_sql, but only if the autocomplete extension is already loaded (never autoload)
+	try {
+		if (!context.db || !context.db->ExtensionIsLoaded("autocomplete")) {
+			return sql;
+		}
+		Connection con(*context.db);
+		auto prepared = con.Prepare("SELECT duckdb_format_sql($1)");
+		if (!prepared || prepared->HasError()) {
+			return sql;
+		}
+		vector<Value> params;
+		params.emplace_back(sql);
+		auto result = prepared->Execute(params, false);
+		if (!result || result->HasError()) {
+			return sql;
+		}
+		auto chunk = result->Fetch();
+		if (!chunk || chunk->size() == 0 || chunk->GetValue(0, 0).IsNull()) {
+			return sql;
+		}
+		return chunk->GetValue(0, 0).ToString();
+	} catch (const std::exception &) {
+		return sql;
+	}
 }
 
 string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const {

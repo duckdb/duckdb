@@ -67,20 +67,20 @@ static const char *HTML_TEMPLATE = R"DUCKDBHTML(
 }
 /* Palette mirrors duckdb.org: grey scale (grey-05..grey-100), brand yellow #fff100, accents from the site's blue/red. */
 html[data-theme="light"] {
-    --bg: #f2f2f2;
-    --bg-grid: #e6e6e6;
+    --bg: #fafafa;                /* duckdb.org body background */
+    --bg-grid: #ececec;
     --panel: #ffffff;
-    --panel-2: #fafafa;
-    --border: #e6e6e6;
-    --border-strong: #cccccc;
+    --panel-2: #f4f4f5;
+    --border: #e8e8e8;
+    --border-strong: #d6d6d6;
     --text: #0d0d0d;
-    --text-muted: #666666;
-    --text-faint: #999999;
-    --accent: #0d0d0d;
-    --accent-on: #ffffff;
-    --connector: #cccccc;
-    --shadow: 0 1px 2px rgba(13,13,13,.05), 0 4px 12px rgba(13,13,13,.06);
-    --shadow-hover: 0 2px 6px rgba(13,13,13,.09), 0 12px 28px rgba(13,13,13,.13);
+    --text-muted: #5f5f5f;
+    --text-faint: #9a9a9a;
+    --accent: #fff100;            /* DuckDB yellow, as the site uses in light mode */
+    --accent-on: #0d0d0d;
+    --connector: #cfcfcf;
+    --shadow: 0 1px 2px rgba(13,13,13,.04), 0 3px 10px rgba(13,13,13,.06);
+    --shadow-hover: 0 2px 6px rgba(13,13,13,.07), 0 12px 26px rgba(13,13,13,.10);
     --duck: #fff100;
     --match: #2eafff;
 }
@@ -194,15 +194,16 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
     position: relative; display: flex; flex-direction: column; align-items: center;
     padding: 28px 14px 0;
 }
-/* connector thickness (--edge-w on each li, --drop-w on each ul) scales with the rows flowing through the edge */
+/* connector thickness scales with rows: --edge-w (per node, on its <li>) sizes the riser into that node; the bus and
+   drop use --drop-w (set on the parent <ul>, inherited by its child <li>s) so the trunk has one uniform thickness. */
 /* riser: vertical line from the sibling bus down into this node's card */
 .tree li::after {
     content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-    width: var(--edge-w, 2px); height: 28px; background: var(--connector); border-radius: 2px;
+    width: var(--edge-w, 2px); height: 28px; background: var(--connector);
 }
-/* bus: horizontal line spanning the siblings */
+/* bus: horizontal line spanning the siblings (uniform thickness = the parent's drop) */
 .tree li::before {
-    content: ""; position: absolute; top: 0; height: var(--edge-w, 2px); background: var(--connector); border-radius: 2px;
+    content: ""; position: absolute; top: 0; height: var(--drop-w, 2px); background: var(--connector);
 }
 .tree li:first-child::before { left: 50%; right: 0; }
 .tree li:last-child::before { left: 0; right: 50%; }
@@ -211,7 +212,7 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
 /* drop: vertical line from a parent card down to its children's bus */
 .tree ul::before {
     content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-    width: var(--drop-w, 2px); height: 28px; background: var(--connector); border-radius: 2px;
+    width: var(--drop-w, 2px); height: 28px; background: var(--connector);
 }
 /* root node: no incoming connector */
 .tree > li { padding-top: 0; }
@@ -345,7 +346,8 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
     position: fixed; bottom: 14px; left: 14px; z-index: 15;
     background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
     box-shadow: var(--shadow); padding: 9px 12px; font-size: 11px;
-    display: flex; flex-direction: column; gap: 5px; min-width: 168px; max-width: 230px;
+    display: flex; flex-direction: column; gap: 5px;
+    width: max-content; min-width: 184px; max-width: min(620px, calc(100vw - 28px));
 }
 #legend.clickable { cursor: pointer; }
 #legend.clickable:hover { border-color: var(--border-strong); }
@@ -363,18 +365,30 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
 #legend .lg-back { cursor: pointer; color: var(--text-faint); font-size: 15px; line-height: 1; margin-left: auto; padding: 0 3px; border-radius: 5px; }
 #legend .lg-back:hover { background: var(--bg-grid); color: var(--text); }
 #legend .lg-title .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
-#legend .lg-oplist { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; max-height: 260px; overflow-y: auto; }
+#legend .lg-oplist { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+#legend .lg-more { font-size: 10.5px; color: var(--text-faint); font-weight: 600; padding: 3px 5px; }
+.lg-op .nm { max-width: 92ch; }
 .lg-op { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-muted); padding: 3px 5px; margin: 0 -4px; border-radius: 6px; }
 .lg-op.clickable { cursor: pointer; }
 .lg-op.clickable:hover { background: var(--panel-2); color: var(--text); }
 .lg-op .nm { flex: 1; font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lg-op .pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
 
-/* ---------- Phase timings panel ---------- */
+/* ---------- Phase timings (floating top-right button + panel) ---------- */
+#timings-fab {
+    position: fixed; top: 64px; right: 14px; z-index: 16;
+    display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px;
+    background: var(--panel); color: var(--text); border: 1px solid var(--border-strong); border-radius: 8px;
+    box-shadow: var(--shadow); cursor: pointer; font-size: 12px; font-weight: 600; font-family: var(--font);
+    transition: background .12s, border-color .12s;
+}
+#timings-fab:hover { background: var(--panel-2); border-color: var(--text-faint); }
+#timings-fab.active { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+#timings-fab svg { display: block; }
 #timings-panel {
-    position: fixed; bottom: 14px; left: 14px; z-index: 17; display: none;
+    position: fixed; top: 102px; right: 14px; z-index: 17; display: none;
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-    box-shadow: var(--shadow-hover); padding: 10px 12px 12px; width: 280px;
+    box-shadow: var(--shadow-hover); padding: 10px 12px 12px; width: 290px; max-height: 60vh; overflow-y: auto;
 }
 #timings-panel.show { display: block; }
 .tm-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
@@ -388,15 +402,7 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
 .tm-nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tm-pc { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
 
-/* ---------- SQL preview ---------- */
-#sql-chip {
-    display: flex; align-items: center; gap: 7px; max-width: 320px; height: 30px; padding: 0 10px;
-    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
-    overflow: hidden; transition: border-color .12s;
-}
-#sql-chip:hover { border-color: var(--border-strong); }
-#sql-chip .sql-ico { font-size: 9.5px; font-weight: 800; letter-spacing: .5px; color: var(--accent-on); background: var(--accent); padding: 2px 5px; border-radius: 4px; flex-shrink: 0; }
-#sql-preview { font-family: var(--mono); font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* ---------- SQL panel ---------- */
 #sql-panel {
     position: fixed; top: 60px; left: 16px; z-index: 18; display: none;
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
@@ -427,6 +433,7 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
 }
 .side-badge.build { background: #7d66ff; color: #fff; border-color: #7d66ff; }
 .side-badge.probe { background: var(--panel); color: var(--text-muted); border-color: var(--border-strong); }
+.side-badge.cte { background: #a855f7; color: #fff; border-color: #a855f7; }
 
 /* ---------- Zoom indicator ---------- */
 #zoom-ind {
@@ -445,10 +452,9 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
 <body>
 <div id="toolbar">
     <div id="brand"><span class="logo"><svg viewBox="0 0 100 100" width="15" height="15" aria-label="DuckDB"><path fill="#0d0d0d" d="M50,1C22.9,1,1,22.9,1,50c0,27.1,21.9,49,49,49s49-21.9,49-49C99,22.9,77.1,1,50,1z M38.3,70.3C27.1,70.3,18,61.2,18,50 s9.1-20.3,20.3-20.3S58.6,38.8,58.6,50S49.5,70.3,38.3,70.3z M74.7,57.2h-9.6V42.7h9.6c4,0,7.3,3.2,7.3,7.2S78.7,57.2,74.7,57.2z"/></svg></span><span>DuckDB</span><span class="sub" id="brand-sub">Query Plan</span></div>
-    <div id="sql-chip" title="Show query"><span class="sql-ico">SQL</span><span id="sql-preview"></span></div>
+    <button class="btn" id="sql-chip" title="Show query SQL">SQL</button>
     <div id="stats"></div>
     <div class="spacer"></div>
-    <button class="btn" id="timings-toggle" title="Show parser / planner / optimizer timings">Timings</button>
     <div class="search-wrap">
         <span class="icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
         <input id="search" type="text" placeholder="Search nodes…" autocomplete="off" spellcheck="false">
@@ -469,6 +475,7 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
 </div>
 
 <div id="legend"></div>
+<button id="timings-fab" title="Phase timings (parser / planner / optimizer / …)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M12 2h0M9 2h6"/></svg><span>Timings</span></button>
 <div id="timings-panel"></div>
 <div id="sql-panel"><div class="sql-head"><span class="t">Query</span><span class="sql-close" id="sql-close">×</span></div><pre id="sql-body"></pre></div>
 <div id="zoom-ind">100%</div>
@@ -497,6 +504,7 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
         join:       { color: "#7d66ff", label: "Join" },         // DuckDB purple
         aggregate:  { color: "#2eafff", label: "Aggregate" },    // DuckDB blue
         window:     { color: "#e93d82", label: "Window" },       // pink
+        filter:     { color: "#06b6d4", label: "Filter" },       // cyan
         order:      { color: "#ff8733", label: "Order / Top-N" }, // DuckDB orange
         union:      { color: "#12a594", label: "Union" },        // teal
         cte:        { color: "#bf7d3a", label: "CTE" },          // bronze
@@ -876,13 +884,18 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
             addSideBadge(rec.childHeads[1], "Main", "probe");
         }
     }
-    // Highlight the other operators of the same CTE (same index) in a distinct colour.
+    // Highlight the other operators of the same CTE (same index) in a distinct colour, and badge their role.
     function updateCTELink(rec) {
         allNodes.forEach(function (r) { r.node.classList.remove("cte-linked"); });
         if (!rec) return;
         var idx = cteIndexOf(rec.data);
         if (!idx) return;
-        allNodes.forEach(function (r) { if (r.node !== rec.node && cteIndexOf(r.data) === idx) r.node.classList.add("cte-linked"); });
+        allNodes.forEach(function (r) {
+            if (r.node !== rec.node && cteIndexOf(r.data) === idx) {
+                r.node.classList.add("cte-linked");
+                addSideBadge(r.node, r.data.name === "CTE" ? "CTE" : "Scan", "cte");
+            }
+        });
     }
 
     var selected = null;
@@ -916,7 +929,6 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
             s.innerHTML = '<span class="k">' + k + '</span><span class="v">' + v + '</span>';
             stats.appendChild(s);
         }
-        addStat("Operators", allNodes.length);
         if (ANALYZE) {
             var qm = PLAN.query || {};
             // real (wall-clock) time from the query metrics; CPU time is the cumulative operator timing
@@ -982,7 +994,8 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
             lg.appendChild(head);
             var list = document.createElement("div"); list.className = "lg-oplist"; lg.appendChild(list);
             var members = kindStats[k].recs.slice().sort(function (a, b) { return (b.data.timing || 0) - (a.data.timing || 0); });
-            members.forEach(function (r) {
+            var LIMIT = 10;
+            members.slice(0, LIMIT).forEach(function (r) {
                 var row = document.createElement("div"); row.className = "lg-op clickable";
                 var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = displayLabel(r.data);
                 var pc2 = document.createElement("span"); pc2.className = "pct"; pc2.textContent = (r.data.timing != null) ? fmtTime(r.data.timing) : "";
@@ -991,6 +1004,11 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
                 row.addEventListener("click", function () { revealRec(r); select(r.node); panToNode(r.node); });
                 list.appendChild(row);
             });
+            if (members.length > LIMIT) {
+                var more = document.createElement("div"); more.className = "lg-more";
+                more.textContent = "+ " + (members.length - LIMIT) + " more (sorted by time)";
+                list.appendChild(more);
+            }
         }
 
         showCategories();
@@ -1221,13 +1239,10 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
     }
     function buildSQL() {
         var sql = (PLAN.query && PLAN.query.sql) ? PLAN.query.sql : "";
-        // drop a leading EXPLAIN [ANALYZE] [(...)] wrapper so the real query is shown
-        sql = sql.replace(/^\s*EXPLAIN\s+ANALYZE\s*(\([^)]*\))?\s*/i, "").replace(/^\s*EXPLAIN\s*(\([^)]*\))?\s*/i, "");
         var chip = document.getElementById("sql-chip");
-        if (!sql) { chip.style.display = "none"; return; }
-        var oneLine = sql.replace(/\s+/g, " ").trim();
-        document.getElementById("sql-preview").textContent = oneLine.length > 52 ? oneLine.slice(0, 52) + "…" : oneLine;
-        document.getElementById("sql-body").innerHTML = highlightSQL(formatSQL(sql));
+        if (!sql.trim()) { chip.style.display = "none"; return; }
+        // duckdb_format_sql already pretty-prints (multi-line); only apply our light formatter to a raw one-liner
+        document.getElementById("sql-body").innerHTML = sql.indexOf("\n") >= 0 ? highlightSQL(sql) : highlightSQL(formatSQL(sql));
         var panel = document.getElementById("sql-panel");
         chip.addEventListener("click", function () { panel.classList.toggle("show"); });
         document.getElementById("sql-close").addEventListener("click", function () { panel.classList.remove("show"); });
@@ -1235,7 +1250,7 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
 
     // ---------- phase timings (cascaded) ----------
     function buildTimings() {
-        var btn = document.getElementById("timings-toggle");
+        var btn = document.getElementById("timings-fab");
         var panel = document.getElementById("timings-panel");
         var timings = (PLAN.query && PLAN.query.timings) ? PLAN.query.timings : [];
         var map = {};
@@ -1334,6 +1349,9 @@ static const char *ClassifyKind(const string &name, bool is_leaf, const Insertio
 	}
 	if (StringUtil::Contains(name, "UNION")) {
 		return "union";
+	}
+	if (StringUtil::Contains(name, "FILTER")) {
+		return "filter";
 	}
 	if (is_leaf) {
 		for (auto &entry : extra) {
@@ -1457,7 +1475,7 @@ void HTMLTreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseTreeRen
 	query_cpu_time = qm.GetStringMetricInSeconds("query.cpu_time");
 	query_bytes_read = qm.GetBytesRead();
 	query_bytes_written = qm.GetBytesWritten();
-	query_sql = qm.query_sql;
+	query_sql = profiler.GetFormattedSQL();
 	query_timings.clear();
 	for (auto &entry : qm.GetMetricTimings()) {
 		query_timings.emplace_back(entry.first, static_cast<double>(entry.second) / 1e9);

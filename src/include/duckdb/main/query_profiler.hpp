@@ -214,6 +214,9 @@ public:
 	const QueryMetrics &GetQueryMetrics() const {
 		return query_metrics;
 	}
+	//! The query text with any EXPLAIN wrapper stripped, pretty-printed via duckdb_format_sql when the autocomplete
+	//! extension is loaded (otherwise returned as-is). Used by renderers that show the query.
+	DUCKDB_API string GetFormattedSQL() const;
 
 private:
 	void FinalizeMetricsInternal();
