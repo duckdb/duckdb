@@ -80,7 +80,7 @@ SELECT COUNT(*) FROM persisted;
 5
 
 query II rowsort
-SELECT customer, total_value FROM persisted WHERE feature_timestamp = '2024-01-02'::TIMESTAMP;
+SELECT customer, total_value FROM persisted WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP);
 ----
 x	10
 y	30

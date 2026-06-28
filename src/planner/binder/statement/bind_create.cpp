@@ -838,18 +838,18 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto window_interval = StringUtil::Format("%d %s", feature_info.window_size, gran);
 
 		string pit_sql = StringUtil::Format(
-		    "SELECT spine.%s, spine.bucket AS feature_timestamp, %s "
-		    "FROM (SELECT DISTINCT %s, DATE_TRUNC('%s', %s) + INTERVAL '1 %s' AS bucket FROM %s) AS spine "
-		    "JOIN %s ON %s.%s = spine.%s "
-		    "AND %s.%s < spine.bucket "
-		    "AND %s.%s >= spine.bucket - INTERVAL '%s' "
-		    "GROUP BY spine.%s, spine.bucket",
-		    entity, agg_exprs,             // outer SELECT
-		    entity, gran, ts, gran, table, // spine subquery
-		    table, table, entity, entity,  // JOIN
-		    table, ts,                     // AND <
-		    table, ts, window_interval,    // AND >=
-		    entity);                       // GROUP BY
+		    "SELECT anchor.%s, anchor.feature_timestamp, %s "
+		    "FROM (SELECT %s, %s AS feature_timestamp FROM %s) AS anchor "
+		    "JOIN %s ON %s.%s = anchor.%s "
+		    "AND %s.%s <= anchor.feature_timestamp "
+		    "AND %s.%s >= anchor.feature_timestamp - INTERVAL '%s' "
+		    "GROUP BY anchor.%s, anchor.feature_timestamp",
+		    entity, agg_exprs,           // outer SELECT
+		    entity, ts, table,           // anchor subquery
+		    table, table, entity, entity, // JOIN
+		    table, ts,                   // AND <=
+		    table, ts, window_interval, // AND >=
+		    entity);                    // GROUP BY
 
 		// Parse and bind the PIT query
 		Parser parser(context.GetParserOptions());

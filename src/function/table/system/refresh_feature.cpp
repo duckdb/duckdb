@@ -83,19 +83,19 @@ static string BuildPITQuery(const FeatureCatalogEntry &feat, const string &spine
 	auto window_interval = StringUtil::Format("%d %s", feat.window_size, gran);
 
 	string pit_sql = StringUtil::Format(
-	    "SELECT spine.%s, spine.bucket AS feature_timestamp, %s "
-	    "FROM (SELECT DISTINCT %s, DATE_TRUNC('%s', %s) + INTERVAL '1 %s' AS bucket FROM %s%s) AS spine "
-	    "JOIN %s ON %s.%s = spine.%s "
-	    "AND %s.%s < spine.bucket "
-	    "AND %s.%s >= spine.bucket - INTERVAL '%s' "
-	    "GROUP BY spine.%s, spine.bucket "
-	    "ORDER BY spine.%s, spine.bucket",
-	    entity, agg_exprs,                           // outer SELECT
-	    entity, gran, ts, gran, table, spine_filter, // spine subquery
-	    table, table, entity, entity,                // JOIN
-	    table, ts,                                   // AND <
-	    table, ts, window_interval,                  // AND >=
-	    entity, entity);                             // GROUP BY, ORDER BY
+	    "SELECT anchor.%s, anchor.feature_timestamp, %s "
+	    "FROM (SELECT %s, %s AS feature_timestamp FROM %s%s) AS anchor "
+	    "JOIN %s ON %s.%s = anchor.%s "
+	    "AND %s.%s <= anchor.feature_timestamp "
+	    "AND %s.%s >= anchor.feature_timestamp - INTERVAL '%s' "
+	    "GROUP BY anchor.%s, anchor.feature_timestamp "
+	    "ORDER BY anchor.%s, anchor.feature_timestamp",
+	    entity, agg_exprs,              // outer SELECT
+	    entity, ts, table, spine_filter, // anchor subquery
+	    table, table, entity, entity,   // JOIN
+	    table, ts,                      // AND <=
+	    table, ts, window_interval,     // AND >=
+	    entity, entity);                // GROUP BY, ORDER BY
 
 	return pit_sql;
 }
@@ -228,10 +228,10 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 				// ceiling bucket is strictly below the watermark (unaffected by recompute).
 				string recompute_from = "'" + watermark + "'::TIMESTAMP - INTERVAL '1 " + gran + "'";
 
-				// Create the new version table with the unaffected rows (feature_timestamp < watermark)
-				// copied forward from the current version table.
+				// Create the new version table with the unaffected rows copied forward from the
+				// current version table. Rows from recompute_from onward are rebuilt below.
 				auto create_sql = "CREATE TABLE " + new_table_id + " AS SELECT * FROM " + cur_table_id +
-				                  " WHERE feature_timestamp < '" + watermark + "'::TIMESTAMP";
+				                  " WHERE feature_timestamp < " + recompute_from;
 				auto create_result = con.Query(create_sql);
 				if (create_result->HasError()) {
 					throw InternalException("Failed to copy unaffected rows for '%s': %s", feature_name,
@@ -241,7 +241,7 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 				// Recompute the last floor bucket onward and insert into the new version table. The spine
 				// is restricted to floors >= recompute_from while the join still looks back the full window
 				// for correct aggregation.
-				string filter = " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") >= " + recompute_from;
+				string filter = " WHERE " + ts_col + " >= " + recompute_from;
 				auto pit_sql = BuildPITQuery(feat, filter);
 				auto insert_sql = "INSERT INTO " + new_table_id + " SELECT * FROM (" + pit_sql + ")";
 				auto ins_result = con.Query(insert_sql);
