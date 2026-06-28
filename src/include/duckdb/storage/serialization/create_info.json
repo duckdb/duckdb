@@ -369,9 +369,7 @@
     "base": "CreateInfo",
     "enum": "FEATURE_ENTRY",
     "includes": ["duckdb/parser/parsed_data/create_feature_info.hpp"],
-    "finalize_deserialization": [
-      "result->FinalizeDeserialization();"
-    ],
+    "finalize_deserialization": ["result->FinalizeDeserialization();"],
     "members": [
       {
         "id": 200,
