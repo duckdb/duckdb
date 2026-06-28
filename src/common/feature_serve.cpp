@@ -4,16 +4,18 @@
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/sql_identifier.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
 
 namespace duckdb {
-
-static string QuoteId(const string &name) {
-	return SQLIdentifier::ToString(name);
-}
 
 static optional_ptr<FeatureCatalogEntry> LookupFeature(ClientContext &context, const string &feature_name) {
 	auto schemas = Catalog::GetAllSchemas(context);
@@ -27,8 +29,53 @@ static optional_ptr<FeatureCatalogEntry> LookupFeature(ClientContext &context, c
 	return nullptr;
 }
 
-string BuildServeFeatureSQL(ClientContext &context, const vector<string> &feature_list, const string &spine_table,
-                            const string &entity_override, const string &as_of_override) {
+static unique_ptr<BaseTableRef> BaseTable(const string &table_name, const string &alias) {
+	auto result = make_uniq<BaseTableRef>();
+	result->table_name = table_name;
+	result->alias = alias;
+	return result;
+}
+
+static unique_ptr<ColumnRefExpression> ColumnRef(const string &alias, const string &column_name) {
+	return make_uniq<ColumnRefExpression>(column_name, alias);
+}
+
+static unique_ptr<ParsedExpression> ServeJoinCondition(const string &feature_alias, const string &feature_entity,
+                                                       const string &spine_entity, const string &spine_ts) {
+	auto entity_condition = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, ColumnRef("spine", spine_entity),
+	                                                       ColumnRef(feature_alias, feature_entity));
+	auto timestamp_condition = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+	                                                          ColumnRef("spine", spine_ts),
+	                                                          ColumnRef(feature_alias, "feature_timestamp"));
+	return make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(entity_condition),
+	                                        std::move(timestamp_condition));
+}
+
+static unique_ptr<StarExpression> FeatureStar(const string &feature_alias, const string &feature_entity) {
+	auto result = make_uniq<StarExpression>(feature_alias);
+	result->exclude_list.insert(QualifiedColumnName(feature_entity));
+	result->exclude_list.insert(QualifiedColumnName("feature_timestamp"));
+	return result;
+}
+
+static void AddServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatalogEntry &feat, const string &feature_alias,
+                         const string &entity_override, const string &as_of_override) {
+	auto versioned_table = feat.name + "__v" + duckdb::to_string(feat.current_version);
+	auto feat_entity = feat.entity_column;
+	auto spine_entity = entity_override.empty() ? feat_entity : entity_override;
+	auto spine_ts = as_of_override.empty() ? feat.timestamp_column : as_of_override;
+
+	auto join = make_uniq<JoinRef>(JoinRefType::ASOF);
+	join->type = JoinType::LEFT;
+	join->left = std::move(from_table);
+	join->right = BaseTable(versioned_table, feature_alias);
+	join->condition = ServeJoinCondition(feature_alias, feat_entity, spine_entity, spine_ts);
+	from_table = std::move(join);
+}
+
+unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, const vector<string> &feature_list,
+                                                    const string &spine_table, const string &entity_override,
+                                                    const string &as_of_override) {
 	auto schemas = Catalog::GetAllSchemas(context);
 	bool spine_found = false;
 	for (auto &schema : schemas) {
@@ -66,28 +113,22 @@ string BuildServeFeatureSQL(ClientContext &context, const vector<string> &featur
 			throw CatalogException("Feature \"%s\" does not exist", feature_list[0]);
 		}
 		auto &feat = *feature_entry;
-		auto versioned_table = feat.name + "__v" + duckdb::to_string(feat.current_version);
-		auto feat_table = QuoteId(versioned_table);
-		auto feat_entity = QuoteId(feat.entity_column);
-		auto spine_entity = entity_override.empty() ? feat_entity : QuoteId(entity_override);
-		auto spine_ts = as_of_override.empty() ? QuoteId(feat.timestamp_column) : QuoteId(as_of_override);
-		auto spine = QuoteId(spine_table);
 
-		return StringUtil::Format("SELECT spine.*, f.feature_timestamp, "
-		                          "f.* EXCLUDE (%s, feature_timestamp) "
-		                          "FROM %s AS spine "
-		                          "ASOF LEFT JOIN %s AS f "
-		                          "ON spine.%s = f.%s AND spine.%s >= f.feature_timestamp",
-		                          feat_entity,               // EXCLUDE
-		                          spine,                     // FROM
-		                          feat_table,                // feature version table
-		                          spine_entity, feat_entity, // entity join (spine col = feature col)
-		                          spine_ts                   // temporal condition
-		);
+		auto select = make_uniq<SelectNode>();
+		select->select_list.push_back(make_uniq<StarExpression>("spine"));
+		select->select_list.push_back(ColumnRef("f", "feature_timestamp"));
+		select->select_list.push_back(FeatureStar("f", feat.entity_column));
+		select->from_table = BaseTable(spine_table, "spine");
+		AddServeJoin(select->from_table, feat, "f", entity_override, as_of_override);
+
+		auto result = make_uniq<SelectStatement>();
+		result->node = std::move(select);
+		return result;
 	}
 
-	string sql = "SELECT spine.*";
-	string joins;
+	auto select = make_uniq<SelectNode>();
+	select->select_list.push_back(make_uniq<StarExpression>("spine"));
+	select->from_table = BaseTable(spine_table, "spine");
 
 	for (idx_t i = 0; i < feature_list.size(); i++) {
 		auto feature_entry = LookupFeature(context, feature_list[i]);
@@ -95,23 +136,18 @@ string BuildServeFeatureSQL(ClientContext &context, const vector<string> &featur
 			throw CatalogException("Feature \"%s\" does not exist", feature_list[i]);
 		}
 		auto &feat = *feature_entry;
-		auto versioned_table = feat.name + "__v" + duckdb::to_string(feat.current_version);
-		auto feat_table = QuoteId(versioned_table);
-		auto feat_entity = QuoteId(feat.entity_column);
-		auto spine_entity = entity_override.empty() ? feat_entity : QuoteId(entity_override);
-		auto spine_ts = as_of_override.empty() ? QuoteId(feat.timestamp_column) : QuoteId(as_of_override);
 		auto alias = "f" + duckdb::to_string(i);
 
-		sql += StringUtil::Format(", %s.feature_timestamp AS %s_timestamp, %s.* EXCLUDE (%s, feature_timestamp)", alias,
-		                          feat.name, alias, feat_entity);
-
-		joins += StringUtil::Format(" ASOF LEFT JOIN %s AS %s "
-		                            "ON spine.%s = %s.%s AND spine.%s >= %s.feature_timestamp",
-		                            feat_table, alias, spine_entity, alias, feat_entity, spine_ts, alias);
+		auto timestamp = ColumnRef(alias, "feature_timestamp");
+		timestamp->SetAlias(feat.name + "_timestamp");
+		select->select_list.push_back(std::move(timestamp));
+		select->select_list.push_back(FeatureStar(alias, feat.entity_column));
+		AddServeJoin(select->from_table, feat, alias, entity_override, as_of_override);
 	}
 
-	sql += " FROM " + QuoteId(spine_table) + " AS spine" + joins;
-	return sql;
+	auto result = make_uniq<SelectStatement>();
+	result->node = std::move(select);
+	return result;
 }
 
 } // namespace duckdb

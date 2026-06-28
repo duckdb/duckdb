@@ -12,8 +12,10 @@
 namespace duckdb {
 
 class ClientContext;
+class SelectStatement;
 
-string BuildServeFeatureSQL(ClientContext &context, const vector<string> &feature_list, const string &spine_table,
-                            const string &entity_override, const string &as_of_override);
+unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, const vector<string> &feature_list,
+                                                    const string &spine_table, const string &entity_override,
+                                                    const string &as_of_override);
 
 } // namespace duckdb
