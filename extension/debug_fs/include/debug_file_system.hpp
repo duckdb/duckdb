@@ -58,8 +58,7 @@ public:
 	bool OnDiskFile(FileHandle &handle) override;
 	bool Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) override;
 	bool TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result) override;
-	unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
-	                                          bool write) override;
+	unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write) override;
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override;
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override;
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override;

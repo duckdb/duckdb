@@ -56,7 +56,8 @@ DebugFileSystem &GetDebugFileSystemOrThrow(DatabaseInstance &db) {
 void OnSetDelayMeanMs(ClientContext &context, SetScope, Value &parameter) {
 	auto delay_ms = parameter.GetValue<double>();
 	if (delay_ms < 0) {
-		throw InvalidInputException("Invalid option for debug_fs_delay_mean_ms: value must be greater than or equal to 0");
+		throw InvalidInputException(
+		    "Invalid option for debug_fs_delay_mean_ms: value must be greater than or equal to 0");
 	}
 	auto &db = DatabaseInstance::GetDatabase(context);
 	GetDebugFileSystemOrThrow(db).SetDelayMeanMs(delay_ms);
@@ -65,7 +66,8 @@ void OnSetDelayMeanMs(ClientContext &context, SetScope, Value &parameter) {
 void OnSetDelayStddevMs(ClientContext &context, SetScope, Value &parameter) {
 	auto delay_ms = parameter.GetValue<double>();
 	if (delay_ms < 0) {
-		throw InvalidInputException("Invalid option for debug_fs_delay_stddev_ms: value must be greater than or equal to 0");
+		throw InvalidInputException(
+		    "Invalid option for debug_fs_delay_stddev_ms: value must be greater than or equal to 0");
 	}
 	auto &db = DatabaseInstance::GetDatabase(context);
 	GetDebugFileSystemOrThrow(db).SetDelayStddevMs(delay_ms);
