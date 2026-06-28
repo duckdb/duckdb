@@ -220,8 +220,8 @@ static string WriteProfileAndOpen(ShellState &state, const string &html) {
 	return path;
 }
 
-//! Renderer for "EXPLAIN [ANALYZE] (FORMAT WEB)": render the plan/profile to HTML, open it in a browser, and emit a
-//! short status line as the actual result (instead of dumping the HTML to the console).
+//! Renderer for "EXPLAIN [ANALYZE] (FORMAT WEB)" and the ".web" command: render the plan/profile to HTML and open it
+//! in a browser when rendering finishes (see Finish). Emits nothing as the result, so the EXPLAIN output stays empty.
 class WebTreeRenderer : public duckdb::TreeRenderer {
 public:
 	// plain EXPLAIN: render the operator tree to HTML (via a fresh HTML renderer to avoid virtual re-entrancy)
@@ -229,12 +229,28 @@ public:
 		duckdb::HTMLTreeRenderer html_renderer;
 		duckdb::StringTreeRenderer sink;
 		html_renderer.ToStreamInternal(root, sink);
-		OpenAndReport(sink.str(), ss);
+		html = sink.str();
 	}
 
 	// EXPLAIN ANALYZE: render the full query profile to HTML
 	void RenderProfiler(const duckdb::QueryProfiler &profiler, duckdb::BaseTreeRenderer &ss) override {
-		OpenAndReport(profiler.RenderProfile("html"), ss);
+		html = profiler.RenderProfile("html");
+	}
+
+	// rendering finished - write the HTML to a temp file and open it in a browser
+	void Finish() override {
+		if (html.empty()) {
+			return;
+		}
+		auto &state = ShellState::Get();
+		if (state.safe_mode) {
+			state.Print(PrintOutput::STDERR, "(FORMAT WEB) cannot be used in -safe mode\n");
+			return;
+		}
+		auto path = WriteProfileAndOpen(state, html);
+		if (!path.empty()) {
+			state.PrintF(PrintOutput::STDOUT, "Opening query profile in browser: %s\n", path.c_str());
+		}
 	}
 
 	// keep the internal metric keys raw, matching the HTML renderer this delegates to
@@ -247,31 +263,8 @@ public:
 	}
 
 private:
-	// EXPLAIN renders its plan several times (unopt/opt/physical, then the profile for ANALYZE). Rather than open a
-	// browser for each, record the latest HTML; the shell opens the last one once after the statement completes.
-	void OpenAndReport(const duckdb::string &html, duckdb::BaseTreeRenderer &ss) {
-		auto &state = ShellState::Get();
-		if (state.safe_mode) {
-			ss << "(FORMAT WEB) cannot be used in -safe mode";
-			return;
-		}
-		// queue the profile; the shell opens it once the statement completes and prints the path then. Emit nothing
-		// here so the EXPLAIN result itself stays empty (no redundant "opening..." line).
-		state.pending_web_html = html;
-	}
+	duckdb::string html;
 };
-
-void OpenPendingWebProfile(ShellState &state) {
-	if (state.pending_web_html.empty()) {
-		return;
-	}
-	auto html = std::move(state.pending_web_html);
-	state.pending_web_html = string();
-	auto path = WriteProfileAndOpen(state, html);
-	if (!path.empty()) {
-		state.PrintF(PrintOutput::STDOUT, "Opening query profile in browser: %s\n", path.c_str());
-	}
-}
 
 bool OpenProfileInBrowser(ShellState &state) {
 	if (!state.conn) {
@@ -284,16 +277,12 @@ bool OpenProfileInBrowser(ShellState &state) {
 		return false;
 	}
 	try {
-		// render the current profile through the "web" format, which queues the HTML (just like EXPLAIN (FORMAT WEB))
+		// render the current profile through the "web" format, which opens it in a browser (WebTreeRenderer::Finish)
 		profiler.RenderProfile("web");
 	} catch (const std::exception &e) {
 		state.PrintF(PrintOutput::STDERR, "Failed to render profile: %s\n", e.what());
 		return false;
 	}
-	if (state.pending_web_html.empty()) {
-		return false;
-	}
-	OpenPendingWebProfile(state);
 	return true;
 }
 

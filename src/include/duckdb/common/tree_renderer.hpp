@@ -36,6 +36,11 @@ public:
 	void ToStream(RenderTree &root, BaseTreeRenderer &ss);
 	virtual void ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) = 0;
 
+	//! Called once after this renderer has produced its output (end of ToStream, and after RenderProfiler). Lets a
+	//! renderer perform a one-shot side effect for the render (e.g. open the rendered result in a browser).
+	virtual void Finish() {
+	}
+
 	//! Returns the sink to render into when printing this format's output directly. Only invoked when we are about
 	//! to print (the default renderer writes straight to the output stream), so it is never created for the
 	//! string-producing paths. Formats can override this to provide a highlighting-aware sink.

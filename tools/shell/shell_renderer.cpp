@@ -907,9 +907,9 @@ public:
 		out.Print(data[1]);
 		// after EXPLAIN ANALYZE (interactive), point users at the full (expanded) tree when the pretty tree folded
 		// low-impact operators, and always at the ".web" command which opens the profile in a browser.
-		// (skip it for EXPLAIN ANALYZE (FORMAT WEB), which already queued the profile to open in a browser)
+		// (skip it for EXPLAIN ANALYZE (FORMAT WEB), whose result value is empty and which already opened the profile)
 		if (out.SupportsHighlight() && state.stdin_is_interactive && state.stdout_is_console &&
-		    state.pending_web_html.empty() && data[0].GetString() == "analyzed_plan") {
+		    !data[1].GetString().empty() && data[0].GetString() == "analyzed_plan") {
 			string hint = state.last_explain_hid_content
 			                  ? "\ntype .last to show the full tree, .web to open it in a browser\n"
 			                  : "\ntype .web to open the query profile in a browser\n";

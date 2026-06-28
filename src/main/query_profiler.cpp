@@ -380,6 +380,7 @@ string QueryProfiler::RenderProfile(const string &format) const {
 	}
 	StringTreeRenderer ss;
 	renderer->RenderProfiler(*this, ss);
+	renderer->Finish();
 	return ss.str();
 }
 
@@ -393,6 +394,7 @@ string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) 
 	}
 	StringTreeRenderer ss;
 	renderer->RenderProfiler(*this, ss);
+	renderer->Finish();
 	return ss.str();
 }
 
@@ -408,6 +410,7 @@ void QueryProfiler::PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) con
 		return;
 	}
 	renderer->RenderProfiler(*this, *sink);
+	renderer->Finish();
 }
 
 void QueryProfiler::RenderProfilingNodeTree(TreeRenderer &renderer, BaseTreeRenderer &ss) const {

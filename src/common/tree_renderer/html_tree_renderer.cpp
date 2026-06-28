@@ -1,6 +1,5 @@
 #include "duckdb/common/tree_renderer/html_tree_renderer.hpp"
 
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/json_document.hpp"
 
@@ -53,7 +52,7 @@ void HTMLTreeRenderer::Render(const Pipeline &op, BaseTreeRenderer &ss) {
 }
 
 //! Single-page interactive viewer (CSS + JS). The query plan is injected as JSON in place of __PLAN_JSON__.
-static const char *HTML_TEMPLATE = R"DUCKDBHTML(
+static const char *const HTML_TEMPLATE = R"DUCKDBHTML(
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -756,7 +755,8 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
         }
         return run;
     }
-
+)DUCKDBHTML"
+                                         R"DUCKDBHTML(
     function setGroupExpanded(li, expanded) { li.classList.toggle("expanded", !!expanded); scheduleEdges(); }
 
     // Render a condensed chain: a placeholder card listing the operator names that expands into the real cards.
