@@ -8,7 +8,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/common/types/interval.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 
 namespace duckdb {
@@ -102,9 +101,7 @@ void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
 		// nothing to permute
 		return;
 	}
-	auto duration =
-	    static_cast<double>(state.monotonic_start.ElapsedMicros()) / static_cast<double>(Interval::MICROS_PER_SEC);
-	AdaptRuntimeStatistics(duration);
+	AdaptRuntimeStatistics(state.monotonic_start.ElapsedSeconds());
 }
 
 void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
