@@ -161,6 +161,12 @@
         "name": "counter",
         "type": "int64_t",
         "required_until": "v2.0.0"
+      },
+      {
+        "id": 105,
+        "name": "last_value",
+        "type": "optional<int64_t>",
+        "version": "v2.0.0"
       }
     ]
   },

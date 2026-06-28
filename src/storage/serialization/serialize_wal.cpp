@@ -334,6 +334,9 @@ void WALSequenceValue::Serialize(Serializer &serializer) const {
 	} else {
 		serializer.WriteProperty<int64_t>(104, "counter", counter);
 	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<optional<int64_t>>(105, "last_value", last_value);
+	}
 }
 
 WALSequenceValue WALSequenceValue::Deserialize(Deserializer &deserializer) {
@@ -342,6 +345,7 @@ WALSequenceValue WALSequenceValue::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
 	deserializer.ReadPropertyWithDefault<uint64_t>(103, "usage_count", result.usage_count);
 	deserializer.ReadPropertyWithDefault<int64_t>(104, "counter", result.counter);
+	deserializer.ReadPropertyWithDefault<optional<int64_t>>(105, "last_value", result.last_value);
 	return result;
 }
 

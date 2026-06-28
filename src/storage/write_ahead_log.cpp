@@ -346,12 +346,9 @@ void WriteAheadLog::WriteDropSequence(const SequenceCatalogEntry &entry) {
 void WriteAheadLog::WriteSequenceValue(SequenceValue val) {
 	auto &sequence = *val.entry;
 	WriteAheadLogSerializer serializer(*this, WALType::SEQUENCE_VALUE);
-	serializer.WriteEntry(WALSequenceValue {sequence.schema.name, sequence.name, val.usage_count, val.counter});
-	// we only support writing last_value from version 2.0.0 onwards
-	// (this field is written manually so that the always-write encoding is preserved exactly)
-	if (StorageManager::TargetAtLeastVersion(StorageVersion::V2_0_0, storage_manager.GetStorageVersion())) {
-		serializer.WriteProperty(105, "last_value", val.entry->GetData().last_value);
-	}
+	// last_value (id 105) is only serialized from storage version v2.0.0 onwards, and is omitted when unset
+	serializer.WriteEntry(WALSequenceValue {sequence.schema.name, sequence.name, val.usage_count, val.counter,
+	                                        val.entry->GetData().last_value});
 	serializer.End();
 }
 

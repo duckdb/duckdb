@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/identifier.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/storage/block.hpp"
@@ -94,13 +95,14 @@ struct WALDropSequence {
 	static WALDropSequence Deserialize(Deserializer &deserializer);
 };
 
-// NOTE: the version-gated last_value field (id 105) is (de)serialized manually by the WAL writer/replay, so that
-// its exact always-write encoding is preserved. This struct only covers fields 101-104.
 struct WALSequenceValue {
 	Identifier schema;
 	Identifier name;
 	uint64_t usage_count;
 	int64_t counter;
+	// the last value produced by the sequence; only serialized from storage version v2.0.0 onwards, and omitted when
+	// unset (so older readers can still replay sequence values that do not carry a last_value)
+	optional<int64_t> last_value;
 
 	void Serialize(Serializer &serializer) const;
 	static WALSequenceValue Deserialize(Deserializer &deserializer);

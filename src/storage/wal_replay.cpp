@@ -1014,8 +1014,6 @@ void WriteAheadLogDeserializer::ReplayDropSequence() {
 
 void WriteAheadLogDeserializer::ReplaySequenceValue() {
 	auto entry = WALSequenceValue::Deserialize(deserializer);
-	// last_value (id 105) is read manually, preserving its tolerant (optional) decoding for older WALs
-	auto last_value = deserializer.ReadPropertyWithDefault<optional<int64_t>>(105, "last_value");
 
 	if (DeserializeOnly()) {
 		return;
@@ -1024,7 +1022,7 @@ void WriteAheadLogDeserializer::ReplaySequenceValue() {
 	// fetch the sequence from the catalog
 	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(
 	    context, QualifiedName(catalog.GetName(), std::move(entry.schema), std::move(entry.name)));
-	seq.ReplayValue(entry.usage_count, entry.counter, last_value);
+	seq.ReplayValue(entry.usage_count, entry.counter, entry.last_value);
 }
 
 //===--------------------------------------------------------------------===//
