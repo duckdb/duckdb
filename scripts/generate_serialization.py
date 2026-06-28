@@ -927,8 +927,9 @@ def generate_class_code(class_entry: SerializableClass):
         type_name = replace_pointer(entry.type)
         is_method_arg = entry.name in class_entry.method_arg_names
         if entry_idx > last_constructor_index:
-            if is_method_arg:
-                # read into a local variable; the value is passed to a method call after deserialization
+            if is_method_arg or entry.deserialize_skip_assign:
+                # read into a local variable; the value is passed to a method call, or applied conditionally by
+                # finalize_deserialization, after deserialization
                 class_deserialize += class_entry.get_deserialize_element(entry)
             else:
                 class_deserialize += get_deserialize_element_template(
@@ -963,8 +964,6 @@ def generate_class_code(class_entry: SerializableClass):
         class_deserialize += UNSET_DESERIALIZE_PARAMETER_FORMAT.format(
             property_type=entry.type, property_name=entry.name
         )
-    if class_entry.finalize_deserialization is not None:
-        class_deserialize += class_entry.finalize_deserialization
     if class_entry.finalize_deserialization is not None:
         for line in class_entry.finalize_deserialization:
             class_deserialize += "\t" + line + "\n"

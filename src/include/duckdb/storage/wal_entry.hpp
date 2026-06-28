@@ -59,7 +59,10 @@ struct WALCreateSchema {
 };
 
 struct WALDropSchema {
+	// legacy top-level schema name (serialized for storage versions older than v2.0.0)
 	Identifier schema;
+	// the schema as a QualifiedName (parent schemas form the path, the schema name is the name); v2.0.0 onwards
+	QualifiedName qualified_name;
 
 	void Serialize(Serializer &serializer) const;
 	static WALDropSchema Deserialize(Deserializer &deserializer);

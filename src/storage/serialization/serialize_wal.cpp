@@ -174,16 +174,18 @@ WALDropMacro WALDropMacro::Deserialize(Deserializer &deserializer) {
 }
 
 void WALDropSchema::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<Identifier>(101, "schema", schema);
-	} else {
-		serializer.WriteProperty<Identifier>(101, "schema", schema);
+	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<QualifiedName>(102, "qualified_name", qualified_name, QualifiedName());
 	}
 }
 
 WALDropSchema WALDropSchema::Deserialize(Deserializer &deserializer) {
 	WALDropSchema result;
 	deserializer.ReadPropertyWithDefault<Identifier>(101, "schema", result.schema);
+	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(102, "qualified_name", result.qualified_name, QualifiedName());
 	return result;
 }
 

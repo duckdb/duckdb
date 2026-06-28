@@ -70,7 +70,14 @@
         "id": 101,
         "name": "schema",
         "type": "Identifier",
-        "required_until": "v2.0.0"
+        "serialize_until": "v2.0.0"
+      },
+      {
+        "id": 102,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "default": "QualifiedName()"
       }
     ]
   },

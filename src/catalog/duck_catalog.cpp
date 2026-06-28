@@ -103,7 +103,13 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
 			DropInfo drop_info;
 			drop_info.type = CatalogType::SCHEMA_ENTRY;
-			drop_info.SetQualifiedName(QualifiedName(info.SchemaName()));
+			// build the path [catalog, parent schemas..., schema] so a nested schema can be navigated on drop
+			vector<Identifier> drop_path;
+			drop_path.push_back(info.SchemaCatalog());
+			for (auto &parent : info.ParentSchemas()) {
+				drop_path.push_back(parent);
+			}
+			drop_info.SetQualifiedName(QualifiedName(std::move(drop_path), info.SchemaName()));
 			DropSchema(transaction, drop_info);
 			result = CreateSchemaInternal(transaction, info);
 			if (!result) {
@@ -122,10 +128,29 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 }
 
 void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
-	D_ASSERT(!info.GetQualifiedName().Name().empty());
-	if (!schemas->DropEntry(transaction, info.GetQualifiedName().Name(), info.cascade)) {
+	auto &path = info.GetQualifiedName().Path();
+	auto &schema_name = info.GetQualifiedName().Name();
+	D_ASSERT(!schema_name.empty());
+	// navigate to the catalog set that holds the schema to drop: the root set for a top-level schema, or the nested
+	// schemas set of the deepest parent. The path is [catalog, parent schemas..., schema] after binding; for internal
+	// callers it can be just [schema].
+	reference<CatalogSet> target_set = *schemas;
+	for (idx_t i = 1; i + 1 < path.size(); i++) {
+		auto parent_entry = target_set.get().GetEntry(transaction, path[i]);
+		if (!parent_entry) {
+			if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+				throw CatalogException("Cannot drop schema \"%s\": parent schema \"%s\" does not exist",
+				                       schema_name.GetIdentifierName(), path[i].GetIdentifierName());
+			}
+			return;
+		}
+		target_set = parent_entry->Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::SCHEMA_ENTRY);
+	}
+	// drop exactly this schema - the dependency manager blocks the drop (RESTRICT) or cascades to the schema's
+	// contents, including any nested schemas (which depend on it), when CASCADE is given
+	if (!target_set.get().DropEntry(transaction, schema_name, info.cascade, info.allow_drop_internal)) {
 		if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, info.GetQualifiedName().Name(), string());
+			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, schema_name, string());
 		}
 	}
 }

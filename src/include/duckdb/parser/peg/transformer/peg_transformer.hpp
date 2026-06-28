@@ -1831,7 +1831,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformDropSchemaInternal(PEGTransformer &transformer,
 	                                                                    ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropSchema(PEGTransformer &transformer, const optional<bool> &if_exists,
-	                                                     const vector<QualifiedName> &qualified_schema_name);
+	                                                     const vector<QualifiedName> &qualified_name);
 	static unique_ptr<TransformResultValue> TransformDropIndexInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropIndex(PEGTransformer &transformer, const optional<bool> &if_exists,
@@ -1895,16 +1895,6 @@ public:
 	static unique_ptr<TransformResultValue> TransformIfExistsInternal(PEGTransformer &transformer,
 	                                                                  ParseResult &parse_result);
 	static bool TransformIfExists(PEGTransformer &transformer);
-	static unique_ptr<TransformResultValue> TransformQualifiedSchemaNameInternal(PEGTransformer &transformer,
-	                                                                             ParseResult &parse_result);
-	static unique_ptr<TransformResultValue> TransformQualifiedSchemaNameStringInternal(PEGTransformer &transformer,
-	                                                                                   ParseResult &parse_result);
-	static QualifiedName TransformQualifiedSchemaNameString(PEGTransformer &transformer, const Identifier &schema_name);
-	static unique_ptr<TransformResultValue> TransformCatalogReservedSchemaInternal(PEGTransformer &transformer,
-	                                                                               ParseResult &parse_result);
-	static QualifiedName TransformCatalogReservedSchema(PEGTransformer &transformer,
-	                                                    const Identifier &catalog_qualification,
-	                                                    const Identifier &reserved_schema_name);
 	static unique_ptr<TransformResultValue> TransformDropSecretStorageInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static Identifier TransformDropSecretStorage(PEGTransformer &transformer, const Identifier &identifier);

@@ -28,18 +28,22 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		break;
 	}
 	case CatalogType::SCHEMA_ENTRY: {
-		auto &catalog = Catalog::GetCatalog(context.client, info->GetQualifiedName().Catalog());
+		// the catalog is the leading component of the resolved path ([catalog, parent schemas..., schema])
+		auto &catalog_name = info->GetQualifiedName().Path().front();
+		auto &catalog = Catalog::GetCatalog(context.client, catalog_name);
 		catalog.DropEntry(context.client, *info);
 
-		// Check if the dropped schema was set as the current schema
+		// Check if the dropped schema was set as the current schema. Compare the resolved catalog names: the dropped
+		// schema's catalog is catalog.GetName(); the current default catalog may be empty (= the default database).
 		auto &client_data = ClientData::Get(context.client);
 		auto &default_entry = client_data.catalog_search_path->GetDefault();
 		auto &current_catalog = default_entry.GetCatalog();
 		auto &current_schema = default_entry.GetSchema();
 		D_ASSERT(info->GetQualifiedName().Name() != DEFAULT_SCHEMA);
 
-		if (info->GetQualifiedName().Catalog() == current_catalog &&
-		    current_schema == info->GetQualifiedName().Name()) {
+		auto resolved_current_catalog =
+		    IsInvalidCatalog(current_catalog) ? DatabaseManager::GetDefaultDatabase(context.client) : current_catalog;
+		if (catalog.GetName() == resolved_current_catalog && current_schema == info->GetQualifiedName().Name()) {
 			// Reset the schema to default
 			SchemaSetting::SetLocal(context.client, DEFAULT_SCHEMA);
 		}
