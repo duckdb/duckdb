@@ -103,4 +103,10 @@ string CreateFeatureInfo::ToString() const {
 	return result;
 }
 
+void CreateFeatureInfo::FinalizeDeserialization() {
+	if (IntervalEquals(window_interval, interval_t {0, 0, 0})) {
+		window_interval = WindowIntervalFromGranularity(window_size, granularity);
+	}
+}
+
 } // namespace duckdb
