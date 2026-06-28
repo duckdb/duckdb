@@ -409,10 +409,6 @@ TemporaryFileCompressionAdaptivity::TemporaryFileCompressionAdaptivity() : last_
 	}
 }
 
-int64_t TemporaryFileCompressionAdaptivity::GetCurrentTimeNanos() {
-	return duration_cast<nanoseconds>(high_resolution_clock::now().time_since_epoch()).count();
-}
-
 TemporaryCompressionLevel TemporaryFileCompressionAdaptivity::IndexToLevel(const idx_t index) {
 	return static_cast<TemporaryCompressionLevel>(NumericCast<int>(index) * 2 - 5);
 }
@@ -477,8 +473,8 @@ TemporaryCompressionLevel TemporaryFileCompressionAdaptivity::GetCompressionLeve
 	return result;
 }
 
-void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel level, const int64_t time_before_ns) {
-	const auto duration = GetCurrentTimeNanos() - time_before_ns;
+void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel level, const TimePoint &time_before) {
+	const auto duration = time_before.ElapsedNanos();
 	auto &last_write_ns = level == TemporaryCompressionLevel::UNCOMPRESSED
 	                          ? last_uncompressed_write_ns
 	                          : last_compressed_writes_ns[LevelToIndex(level)];
@@ -509,7 +505,7 @@ idx_t TemporaryFileManager::WriteTemporaryBuffer(QueryContext context, block_id_
 	const auto adaptivity_idx = TaskScheduler::GetEstimatedCPUId() % COMPRESSION_ADAPTIVITIES;
 	auto &compression_adaptivity = compression_adaptivities[adaptivity_idx];
 
-	const auto time_before_ns = TemporaryFileCompressionAdaptivity::GetCurrentTimeNanos();
+	const auto time_before = TimePoint::Tick();
 	AllocatedData compressed_buffer;
 	const auto compression_result = CompressBuffer(compression_adaptivity, buffer, compressed_buffer);
 
@@ -543,7 +539,7 @@ idx_t TemporaryFileManager::WriteTemporaryBuffer(QueryContext context, block_id_
 
 	handle->WriteTemporaryBuffer(context, buffer, index.block_index.GetIndex(), compressed_buffer);
 
-	compression_adaptivity.Update(compression_result.level, time_before_ns);
+	compression_adaptivity.Update(compression_result.level, time_before);
 	return static_cast<idx_t>(compression_result.size);
 }
 
