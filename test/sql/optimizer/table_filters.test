@@ -3,6 +3,9 @@
 # group: [optimizer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 PRAGMA threads=1
 
 statement ok
@@ -335,7 +338,7 @@ JOIN bf_build_cast_up b
   ON p.k = b.k
  AND p.g >= b.g
 ----
-analyzed_plan	<REGEX>:(?s).*IN.*(PRF|BF).*\(k\).*
+analyzed_plan	<REGEX>:(?s).*HASH_JOIN.*CAST\(k AS BIGINT\) = k.*g >= g.*
 
 query I
 SELECT count(*)
@@ -367,7 +370,7 @@ JOIN bf_build_cast_down b
   ON p.k = b.k
  AND p.g >= b.g
 ----
-analyzed_plan	<REGEX>:(?s).*IN.*(PRF|BF).*\(CAST\(k.*AS BIGINT\)\).*
+analyzed_plan	<REGEX>:(?s).*HASH_JOIN.*k = CAST\(k AS BIGINT\).*g >= g.*
 
 query I
 SELECT count(*)

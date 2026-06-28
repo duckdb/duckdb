@@ -2,6 +2,9 @@
 # description: Test CSV With Pushing Down Type Casts
 # group: [pushdown]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 # Column is used uncasted
 query II
 EXPLAIN SELECT column00 FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|');

@@ -1,6 +1,5 @@
 #include "duckdb/common/tree_renderer/graphviz_tree_renderer.hpp"
 
-#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
@@ -17,50 +16,50 @@
 namespace duckdb {
 
 string GRAPHVIZTreeRenderer::ToString(const LogicalOperator &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string GRAPHVIZTreeRenderer::ToString(const PhysicalOperator &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string GRAPHVIZTreeRenderer::ToString(const ProfilingNode &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string GRAPHVIZTreeRenderer::ToString(const Pipeline &op) {
-	StringResultRenderer ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
-void GRAPHVIZTreeRenderer::Render(const LogicalOperator &op, BaseResultRenderer &ss) {
+void GRAPHVIZTreeRenderer::Render(const LogicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void GRAPHVIZTreeRenderer::Render(const PhysicalOperator &op, BaseResultRenderer &ss) {
+void GRAPHVIZTreeRenderer::Render(const PhysicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void GRAPHVIZTreeRenderer::Render(const ProfilingNode &op, BaseResultRenderer &ss) {
+void GRAPHVIZTreeRenderer::Render(const ProfilingNode &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void GRAPHVIZTreeRenderer::Render(const Pipeline &op, BaseResultRenderer &ss) {
+void GRAPHVIZTreeRenderer::Render(const Pipeline &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void GRAPHVIZTreeRenderer::ToStreamInternal(RenderTree &root, BaseResultRenderer &ss) {
+void GRAPHVIZTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) {
 	const string digraph_format = R"(
 digraph G {
     node [shape=box, style=rounded, fontname="Courier New", fontsize=10];
