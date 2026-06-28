@@ -2,6 +2,9 @@
 # description: Join filter pushdown through integral/variant up/downcasts
 # group: [pushdown]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 load {TEST_DIR}/join_filter_pushdown_cast.db readwrite v1.5.0
 
 statement ok
@@ -58,7 +61,7 @@ PRAGMA explain_output = OPTIMIZED_ONLY
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_direct_variant JOIN build_direct_variant ON probe_direct_variant.a = build_direct_variant.b;
 ----
-analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<REGEX>:.*Dynamic Filters.*
 
 query I
 SELECT COUNT(*) FROM probe_direct_variant JOIN build_direct_variant ON probe_direct_variant.a = build_direct_variant.b;
@@ -79,7 +82,7 @@ logical_opt	<REGEX>:.*CAST\(CAST\(a AS SMALLINT\) AS BIGINT\).*CAST\(b AS BIGINT
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_variant_smallint JOIN build_variant_bigint ON probe_variant_smallint.a = build_variant_bigint.b;
 ----
-analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<REGEX>:.*Dynamic Filters.*
 
 query I
 SELECT COUNT(*) FROM probe_variant_smallint JOIN build_variant_bigint ON probe_variant_smallint.a = build_variant_bigint.b;
@@ -99,7 +102,7 @@ SELECT COUNT(*) FROM probe_direct_variant_null JOIN build_direct_variant_null ON
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::INT AS a FROM probe_variant_int) t JOIN build_int_for_variant ON t.a = build_int_for_variant.b;
 ----
-analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<REGEX>:.*Dynamic Filters.*
 
 query I
 SELECT COUNT(*) FROM (SELECT a::INT AS a FROM probe_variant_int) t JOIN build_int_for_variant ON t.a = build_int_for_variant.b;
@@ -109,7 +112,7 @@ SELECT COUNT(*) FROM (SELECT a::INT AS a FROM probe_variant_int) t JOIN build_in
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_mixed_variant JOIN build_mixed_variant ON probe_mixed_variant.a = build_mixed_variant.b;
 ----
-analyzed_plan	<!REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<!REGEX>:.*Dynamic Filters.*
 
 query I
 SELECT COUNT(*) FROM probe_mixed_variant JOIN build_mixed_variant ON probe_mixed_variant.a = build_mixed_variant.b;

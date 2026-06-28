@@ -3,6 +3,9 @@
 # group: [optimizer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE services (date DATE, train_number INT);
 
 statement ok

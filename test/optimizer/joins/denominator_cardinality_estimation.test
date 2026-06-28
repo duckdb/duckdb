@@ -3,6 +3,9 @@
 # group: [joins]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 set disabled_optimizers='statistics_propagation';
 
 # Two disconnected join components are merged by a cross product. The final

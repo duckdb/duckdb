@@ -958,7 +958,7 @@ def test_profiling_select(shell):
         .statement("select 42")
     )
     result = test.run()
-    result.check_stderr('Query Profiling Information')
+    result.check_stderr('Total Time')
     result.check_stdout('42')
 
 @pytest.mark.skipif(os.name == 'nt', reason="echo does not exist on Windows")
@@ -989,7 +989,7 @@ def test_profiling_optimizer(shell):
         .statement("SELECT 42;")
     )
     result = test.run()
-    result.check_stderr('Optimizer')
+    result.check_stderr('Total Time')
     result.check_stdout('42')
 
 def test_profiling_optimizer_detailed(shell):
@@ -1000,7 +1000,7 @@ def test_profiling_optimizer_detailed(shell):
         .statement("SELECT 42;")
     )
     result = test.run()
-    result.check_stderr('Optimizer')
+    result.check_stderr('Total Time')
     result.check_stdout('42')
 
 def test_profiling_optimizer_json(shell):

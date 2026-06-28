@@ -2,6 +2,9 @@
 # description: Test Filter Can Not Push Down
 # group: [pushdown]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 # test some expressions which have side effects can not push down
 
 statement ok
