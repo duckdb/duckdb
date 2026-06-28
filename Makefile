@@ -848,6 +848,7 @@ generate-files:
 	$(PYTHON) scripts/generate_util.py
 	$(PYTHON) scripts/generate_storage_info.py
 	$(PYTHON) scripts/generate_enum_util.py
+	$(PYTHON) scripts/generate_html_template.py
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 
