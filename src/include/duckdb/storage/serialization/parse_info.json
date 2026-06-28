@@ -615,6 +615,11 @@
     "includes": [
       "duckdb/parser/parsed_data/drop_info.hpp"
     ],
+    "finalize_deserialization": [
+      "if (!qualified_name.Path().empty()) {",
+      "\tresult->qualified_name = std::move(qualified_name);",
+      "}"
+    ],
     "members": [
       {
         "id": 200,
@@ -658,6 +663,17 @@
         "id": 207,
         "name": "extra_drop_info",
         "type": "unique_ptr<ExtraDropInfo>"
+      },
+      {
+        "id": 208,
+        "name": "qualified_name",
+        "serialize_property": "qualified_name",
+        "deserialize_property": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "serialize_condition": "qualified_name.Path().size() > 3",
+        "deserialize_default": "QualifiedName()",
+        "deserialize_skip_assign": true
       }
     ],
     "methods": {

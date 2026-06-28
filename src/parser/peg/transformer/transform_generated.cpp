@@ -3828,13 +3828,13 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDropSchemaInter
 		auto if_exists_value = transformer.Transform<bool>(if_exists_opt.GetResult());
 		if_exists = if_exists_value;
 	}
-	vector<QualifiedName> qualified_schema_name;
-	auto qualified_schema_name_items = ExtractParseResultsFromList(list_pr.GetChild(2));
-	for (auto &qualified_schema_name_item : qualified_schema_name_items) {
-		auto qualified_schema_name_value = transformer.Transform<QualifiedName>(qualified_schema_name_item.get());
-		qualified_schema_name.push_back(qualified_schema_name_value);
+	vector<QualifiedName> qualified_name;
+	auto qualified_name_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	for (auto &qualified_name_item : qualified_name_items) {
+		auto qualified_name_value = transformer.Transform<QualifiedName>(qualified_name_item.get());
+		qualified_name.push_back(qualified_name_value);
 	}
-	auto result = TransformDropSchema(transformer, if_exists, qualified_schema_name);
+	auto result = TransformDropSchema(transformer, if_exists, qualified_name);
 	return make_uniq<TypedTransformResult<unique_ptr<DropStatement>>>(std::move(result));
 }
 
@@ -4037,32 +4037,6 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIfExistsInterna
                                                                                   ParseResult &parse_result) {
 	auto result = TransformIfExists(transformer);
 	return make_uniq<TypedTransformResult<bool>>(result);
-}
-
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::TransformQualifiedSchemaNameInternal(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<QualifiedName>(choice_pr.GetResult());
-	return make_uniq<TypedTransformResult<QualifiedName>>(result);
-}
-
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::TransformQualifiedSchemaNameStringInternal(PEGTransformer &transformer,
-                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto schema_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
-	auto result = TransformQualifiedSchemaNameString(transformer, schema_name);
-	return make_uniq<TypedTransformResult<QualifiedName>>(result);
-}
-
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::TransformCatalogReservedSchemaInternal(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto catalog_qualification = transformer.Transform<Identifier>(list_pr.GetChild(0));
-	auto reserved_schema_name = list_pr.GetChild(1).Cast<IdentifierParseResult>().identifier;
-	auto result = TransformCatalogReservedSchema(transformer, catalog_qualification, reserved_schema_name);
-	return make_uniq<TypedTransformResult<QualifiedName>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDropSecretStorageInternal(PEGTransformer &transformer,
@@ -10400,9 +10374,6 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CascadeDropBehavior", &PEGTransformerFactory::TransformCascadeDropBehaviorInternal},
 	    {"RestrictDropBehavior", &PEGTransformerFactory::TransformRestrictDropBehaviorInternal},
 	    {"IfExists", &PEGTransformerFactory::TransformIfExistsInternal},
-	    {"QualifiedSchemaName", &PEGTransformerFactory::TransformQualifiedSchemaNameInternal},
-	    {"QualifiedSchemaNameString", &PEGTransformerFactory::TransformQualifiedSchemaNameStringInternal},
-	    {"CatalogReservedSchema", &PEGTransformerFactory::TransformCatalogReservedSchemaInternal},
 	    {"DropSecretStorage", &PEGTransformerFactory::TransformDropSecretStorageInternal},
 	    {"ExecuteStatement", &PEGTransformerFactory::TransformExecuteStatementInternal},
 	    {"ExplainStatement", &PEGTransformerFactory::TransformExplainStatementInternal},
