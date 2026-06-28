@@ -52,7 +52,9 @@ void HTMLTreeRenderer::Render(const Pipeline &op, BaseTreeRenderer &ss) {
 }
 
 //! Single-page interactive viewer (CSS + JS). The query plan is injected as JSON in place of __PLAN_JSON__.
-static const char *const HTML_TEMPLATE = R"DUCKDBHTML(
+//! Split into two parts because a single string literal may not exceed the 64KB the C++ standard guarantees
+//! (-Woverlength-strings applies to the concatenated length, so the parts are joined at runtime, not adjacently).
+static const char *const HTML_TEMPLATE_1 = R"DUCKDBHTML(
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -755,8 +757,9 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
         }
         return run;
     }
-)DUCKDBHTML"
-                                         R"DUCKDBHTML(
+)DUCKDBHTML";
+
+static const char *const HTML_TEMPLATE_2 = R"DUCKDBHTML(
     function setGroupExpanded(li, expanded) { li.classList.toggle("expanded", !!expanded); scheduleEdges(); }
 
     // Render a condensed chain: a placeholder card listing the operator names that expands into the real cards.
@@ -1578,7 +1581,7 @@ void HTMLTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) 
 	json = StringUtil::Replace(json, "<", "\\u003c");
 	json = StringUtil::Replace(json, ">", "\\u003e");
 
-	string html = HTML_TEMPLATE;
+	string html = string(HTML_TEMPLATE_1) + HTML_TEMPLATE_2;
 	html = StringUtil::Replace(html, "__PLAN_JSON__", json);
 	ss << html;
 }
