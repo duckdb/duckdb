@@ -29,13 +29,6 @@ static optional_ptr<FeatureCatalogEntry> LookupFeature(ClientContext &context, c
 
 string BuildServeFeatureSQL(ClientContext &context, const vector<string> &feature_list, const string &spine_table,
                             const string &entity_override, const string &as_of_override) {
-	// For each feature, build an ASOF JOIN against the spine
-	// Only uses the current version from the feature metadata
-	// entity_override: if non-empty, use this as the spine's entity column (maps to feature's entity)
-	// as_of_override: if non-empty, use this as the spine's timestamp column
-	// If empty, assume spine has same column name as the feature's entity/timestamp column
-
-	// Validate that spine table exists
 	auto schemas = Catalog::GetAllSchemas(context);
 	bool spine_found = false;
 	for (auto &schema : schemas) {
@@ -50,7 +43,6 @@ string BuildServeFeatureSQL(ClientContext &context, const vector<string> &featur
 		throw CatalogException("Spine table \"%s\" does not exist", spine_table);
 	}
 
-	// For multiple features without an entity override, validate they all share the same entity column
 	if (feature_list.size() > 1 && entity_override.empty()) {
 		string first_entity;
 		for (auto &fname : feature_list) {
@@ -69,7 +61,6 @@ string BuildServeFeatureSQL(ClientContext &context, const vector<string> &featur
 	}
 
 	if (feature_list.size() == 1) {
-		// Single feature: simple ASOF JOIN
 		auto feature_entry = LookupFeature(context, feature_list[0]);
 		if (!feature_entry) {
 			throw CatalogException("Feature \"%s\" does not exist", feature_list[0]);
@@ -78,7 +69,6 @@ string BuildServeFeatureSQL(ClientContext &context, const vector<string> &featur
 		auto versioned_table = feat.name + "__v" + duckdb::to_string(feat.current_version);
 		auto feat_table = QuoteId(versioned_table);
 		auto feat_entity = QuoteId(feat.entity_column);
-		// Spine column names: use override if provided, else same as feature's column name
 		auto spine_entity = entity_override.empty() ? feat_entity : QuoteId(entity_override);
 		auto spine_ts = as_of_override.empty() ? QuoteId(feat.timestamp_column) : QuoteId(as_of_override);
 		auto spine = QuoteId(spine_table);
@@ -96,7 +86,6 @@ string BuildServeFeatureSQL(ClientContext &context, const vector<string> &featur
 		);
 	}
 
-	// Multiple features: chain of ASOF JOINs
 	string sql = "SELECT spine.*";
 	string joins;
 
