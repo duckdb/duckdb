@@ -20,6 +20,10 @@ struct ExportedTableData {
 	//! The qualified name of the exported table (database = catalog, schema, table = name)
 	QualifiedName qualified_name;
 
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
+	}
+
 	//! Path to be exported
 	string file_path;
 	//! Not Null columns, if any

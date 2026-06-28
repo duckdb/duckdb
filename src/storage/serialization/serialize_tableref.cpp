@@ -83,11 +83,12 @@ void BaseTableRef::Serialize(Serializer &serializer) const {
 
 unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<BaseTableRef>(new BaseTableRef());
-	deserializer.ReadPropertyWithDefault<Identifier>(200, "schema_name", result->qualified_name.SchemaMutable());
-	deserializer.ReadPropertyWithDefault<Identifier>(201, "table_name", result->qualified_name.NameMutable());
+	auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "schema_name");
+	auto table_name = deserializer.ReadPropertyWithDefault<Identifier>(201, "table_name");
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(202, "column_name_alias", result->column_name_alias);
-	deserializer.ReadPropertyWithDefault<Identifier>(203, "catalog_name", result->qualified_name.CatalogMutable());
+	auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(203, "catalog_name");
 	deserializer.ReadPropertyWithDefault<unique_ptr<AtClause>>(204, "at_clause", result->at_clause);
+	result->SetQualifiedName(std::move(catalog_name), std::move(schema_name), std::move(table_name));
 	return std::move(result);
 }
 
@@ -191,11 +192,12 @@ void ShowRef::Serialize(Serializer &serializer) const {
 
 unique_ptr<TableRef> ShowRef::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ShowRef>(new ShowRef());
-	deserializer.ReadPropertyWithDefault<Identifier>(200, "table_name", result->qualified_name.NameMutable());
+	auto table_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "table_name");
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(201, "query", result->query);
 	deserializer.ReadProperty<ShowType>(202, "show_type", result->show_type);
-	deserializer.ReadPropertyWithDefault<Identifier>(203, "catalog_name", result->qualified_name.CatalogMutable());
-	deserializer.ReadPropertyWithDefault<Identifier>(204, "schema_name", result->qualified_name.SchemaMutable());
+	auto catalog_name = deserializer.ReadPropertyWithDefault<Identifier>(203, "catalog_name");
+	auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(204, "schema_name");
+	result->SetQualifiedName(std::move(catalog_name), std::move(schema_name), std::move(table_name));
 	return std::move(result);
 }
 

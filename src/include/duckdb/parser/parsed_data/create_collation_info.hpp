@@ -23,7 +23,7 @@ struct CreateCollationInfo : public CreateInfo {
 		return qualified_name.Name();
 	}
 	void SetCollationName(Identifier name) {
-		qualified_name.NameMutable() = std::move(name);
+		qualified_name = qualified_name.WithName(std::move(name));
 	}
 	//! The collation function to push in case collation is required
 	ScalarFunction function;

@@ -3,8 +3,20 @@
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/planner/binding_alias.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
+
+void QualifiedName::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<vector<Identifier>>(100, "path", path);
+}
+
+QualifiedName QualifiedName::Deserialize(Deserializer &deserializer) {
+	QualifiedName result;
+	result.path = deserializer.ReadPropertyWithDefault<vector<Identifier>>(100, "path");
+	return result;
+}
 
 string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
 	const auto &catalog = Catalog();
@@ -19,7 +31,7 @@ string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
 	           !(mode == QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA && schema == DEFAULT_SCHEMA)) {
 		result += SQLIdentifier(schema) + ".";
 	}
-	result += SQLIdentifier(name);
+	result += SQLIdentifier(Name());
 	return result;
 }
 

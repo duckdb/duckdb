@@ -23,7 +23,7 @@ struct CreateCoordinateSystemInfo : public CreateInfo {
 		return qualified_name.Name();
 	}
 	void SetCoordinateSystemName(Identifier name) {
-		qualified_name.NameMutable() = std::move(name);
+		qualified_name = qualified_name.WithName(std::move(name));
 	}
 
 	//! The authority identifier of the coordinate system (e.g. "EPSG")

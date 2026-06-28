@@ -1179,22 +1179,19 @@
         "id": 1,
         "name": "table_name",
         "type": "Identifier",
-        "serialize_property": "qualified_name.Name()",
-        "deserialize_property": "qualified_name.NameMutable()"
+        "serialize_property": "qualified_name.Name()"
       },
       {
         "id": 2,
         "name": "schema_name",
         "type": "Identifier",
-        "serialize_property": "qualified_name.Schema()",
-        "deserialize_property": "qualified_name.SchemaMutable()"
+        "serialize_property": "qualified_name.Schema()"
       },
       {
         "id": 3,
         "name": "database_name",
         "type": "Identifier",
-        "serialize_property": "qualified_name.Catalog()",
-        "deserialize_property": "qualified_name.CatalogMutable()"
+        "serialize_property": "qualified_name.Catalog()"
       },
       {
         "id": 4,
@@ -1207,7 +1204,14 @@
         "type": "vector<Identifier>"
       }
     ],
-    "pointer_type": "none"
+    "pointer_type": "none",
+    "methods": {
+      "SetQualifiedName": [
+        "database_name",
+        "schema_name",
+        "table_name"
+      ]
+    }
   },
   {
     "class": "ColumnIndex",

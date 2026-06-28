@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/storage/block.hpp"
 
 namespace duckdb {
@@ -47,7 +48,10 @@ struct WALDropTable {
 };
 
 struct WALCreateSchema {
+	// legacy top-level schema name (serialized for storage versions older than v2.0.0)
 	Identifier schema;
+	// the schema as a QualifiedName (parent schemas form the path, the schema name is the name); v2.0.0 onwards
+	QualifiedName qualified_name;
 
 	void Serialize(Serializer &serializer) const;
 	static WALCreateSchema Deserialize(Deserializer &deserializer);

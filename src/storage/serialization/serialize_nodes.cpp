@@ -307,11 +307,12 @@ void ExportedTableData::Serialize(Serializer &serializer) const {
 
 ExportedTableData ExportedTableData::Deserialize(Deserializer &deserializer) {
 	ExportedTableData result;
-	deserializer.ReadPropertyWithDefault<Identifier>(1, "table_name", result.qualified_name.NameMutable());
-	deserializer.ReadPropertyWithDefault<Identifier>(2, "schema_name", result.qualified_name.SchemaMutable());
-	deserializer.ReadPropertyWithDefault<Identifier>(3, "database_name", result.qualified_name.CatalogMutable());
+	auto table_name = deserializer.ReadPropertyWithDefault<Identifier>(1, "table_name");
+	auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(2, "schema_name");
+	auto database_name = deserializer.ReadPropertyWithDefault<Identifier>(3, "database_name");
 	deserializer.ReadPropertyWithDefault<string>(4, "file_path", result.file_path);
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(5, "not_null_columns", result.not_null_columns);
+	result.SetQualifiedName(std::move(database_name), std::move(schema_name), std::move(table_name));
 	return result;
 }
 

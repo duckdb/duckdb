@@ -37,7 +37,7 @@ struct CreateSequenceInfo : public CreateInfo {
 		return qualified_name.Name();
 	}
 	void SetSequenceName(Identifier name) {
-		qualified_name.NameMutable() = std::move(name);
+		qualified_name = qualified_name.WithName(std::move(name));
 	}
 	//! Usage count of the sequence
 	uint64_t usage_count;
