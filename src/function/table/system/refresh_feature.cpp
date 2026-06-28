@@ -197,8 +197,12 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 
 			// Watermark = last materialized ceiling bucket in the current version table.
 			auto max_result = con.Query("SELECT MAX(feature_timestamp) FROM " + cur_table_id);
+			if (max_result->HasError()) {
+				throw InternalException("Failed to read current watermark for feature '%s': %s", feature_name,
+				                        max_result->GetError());
+			}
 			string watermark;
-			if (!max_result->HasError() && max_result->RowCount() > 0) {
+			if (max_result->RowCount() > 0) {
 				auto val = max_result->GetValue(0, 0);
 				if (!val.IsNull()) {
 					watermark = val.ToString();
