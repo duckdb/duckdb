@@ -19,8 +19,12 @@ namespace duckdb {
 
 void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CatalogType>(100, "type", type);
-	serializer.WritePropertyWithDefault<Identifier>(101, "catalog", qualified_name.Catalog());
-	serializer.WritePropertyWithDefault<Identifier>(102, "schema", qualified_name.Schema());
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(101, "catalog", qualified_name.Catalog());
+	}
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(102, "schema", qualified_name.Schema());
+	}
 	serializer.WritePropertyWithDefault<bool>(103, "temporary", temporary);
 	serializer.WritePropertyWithDefault<bool>(104, "internal", internal);
 	serializer.WriteProperty<OnCreateConflict>(105, "on_conflict", on_conflict);
@@ -31,6 +35,9 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
 	}
 	serializer.WritePropertyWithDefault<Identifier>(110, "extension_name", extension_name);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (qualified_name.Path().size() > 3)) {
+		serializer.WriteProperty<QualifiedName>(111, "qualified_name", qualified_name);
+	}
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
@@ -45,6 +52,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto tags = deserializer.ReadPropertyWithExplicitDefault<InsertionOrderPreservingMap<string>>(108, "tags", InsertionOrderPreservingMap<string>());
 	auto dependencies = deserializer.ReadPropertyWithExplicitDefault<LogicalDependencyList>(109, "dependencies", LogicalDependencyList());
 	auto extension_name = deserializer.ReadPropertyWithDefault<Identifier>(110, "extension_name");
+	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(111, "qualified_name", QualifiedName());
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {
@@ -88,6 +96,9 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	result->dependencies = dependencies;
 	result->extension_name = std::move(extension_name);
 	result->SetQualification(std::move(catalog), std::move(schema));
+	if (!qualified_name.Path().empty()) {
+		result->qualified_name = std::move(qualified_name);
+	}
 	return result;
 }
 

@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
@@ -167,6 +168,58 @@ void Binder::SearchSchema(CreateInfo &info) {
 	} else {
 		if (info.GetQualifiedName().Catalog() != TEMP_CATALOG) {
 			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", TEMP_CATALOG);
+		}
+	}
+}
+
+QualifiedName Binder::ResolveCatalog(ClientContext &context, const QualifiedName &name) {
+	auto path = name.Path();
+	if (path.empty()) {
+		return name;
+	}
+	// split off the trailing name; the remaining components are the qualification to resolve
+	Identifier trailing = std::move(path.back());
+	path.pop_back();
+	Identifier catalog;
+	if (!path.empty()) {
+		// try to interpret the leading component as a catalog (i.e. an attached database)
+		Identifier candidate;
+		Identifier first = path[0];
+		BindSchemaOrCatalog(context, candidate, first);
+		if (!candidate.empty()) {
+			catalog = std::move(candidate);
+			path.erase(path.begin());
+		}
+	}
+	if (IsInvalidCatalog(catalog)) {
+		// the leading component (if any) is a schema - resolve the catalog that holds it, else the default database
+		auto &search_path = ClientData::Get(context).catalog_search_path;
+		catalog =
+		    path.empty() ? search_path->GetDefault().GetCatalog() : Identifier(search_path->GetDefaultCatalog(path[0]));
+		if (IsInvalidCatalog(catalog)) {
+			catalog = DatabaseManager::GetDefaultDatabase(context);
+		}
+	}
+	path.insert(path.begin(), std::move(catalog));
+	return QualifiedName(std::move(path), std::move(trailing));
+}
+
+void Binder::BindCreateSchema(CreateSchemaInfo &info) {
+	// the qualified name carries the dotted path with the new schema as the last component; resolve its leading
+	// component into a catalog (prepending the default catalog when it is a schema)
+	info.SetQualifiedName(ResolveCatalog(context, info.GetQualifiedName()));
+
+	if (info.IsNested()) {
+		// nested schemas can only be persisted with storage version v2.0.0 or higher
+		auto &resolved_catalog = Catalog::GetCatalog(context, info.SchemaCatalog());
+		auto &attached = resolved_catalog.GetAttached();
+		if (attached.HasStorageManager()) {
+			auto &storage_manager = attached.GetStorageManager();
+			if (!attached.IsTemporary() && !storage_manager.InMemory() &&
+			    storage_manager.GetStorageVersion() < StorageVersion::V2_0_0) {
+				throw BinderException("Nested schemas are only supported for storage versions v2.0.0 and higher.\n"
+				                      "Use an in-memory database, or ATTACH with (STORAGE_VERSION 'v2.0.0')");
+			}
 		}
 	}
 }
@@ -672,9 +725,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	auto &properties = GetStatementProperties();
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY: {
-		auto &base = stmt.info->Cast<CreateInfo>();
-		auto catalog = BindCatalog(base.GetQualifiedName().Catalog());
-		properties.RegisterDBModify(Catalog::GetCatalog(context, catalog), context,
+		auto &info = stmt.info->Cast<CreateSchemaInfo>();
+		BindCreateSchema(info);
+		properties.RegisterDBModify(Catalog::GetCatalog(context, info.SchemaCatalog()), context,
 		                            DatabaseModificationType::CREATE_CATALOG_ENTRY);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;

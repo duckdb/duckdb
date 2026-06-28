@@ -16,6 +16,8 @@
 
 namespace duckdb {
 struct BindingAlias;
+class Serializer;
+class Deserializer;
 
 //! Controls how QualifiedName::ToString renders the schema qualification
 enum class QualifiedNameToStringMode : uint8_t {
@@ -62,6 +64,11 @@ struct QualifiedName {
 	const Identifier &Name() const {
 		return path.empty() ? empty : path.back();
 	}
+	//! The full underlying path. Most callers should use Catalog()/Schema()/Name(); this is for multi-level schema
+	//! support (e.g. nested CREATE SCHEMA), where the qualification can be deeper than [catalog, schema].
+	const vector<Identifier> &Path() const {
+		return path;
+	}
 
 	//! Return a copy of this name with the name replaced, keeping the catalog/schema qualification
 	QualifiedName WithName(Identifier name) const {
@@ -81,6 +88,9 @@ struct QualifiedName {
 	hash_t Hash() const;
 	bool operator==(const QualifiedName &rhs) const;
 	bool operator!=(const QualifiedName &rhs) const;
+
+	void Serialize(Serializer &serializer) const;
+	static QualifiedName Deserialize(Deserializer &deserializer);
 
 private:
 	//! The full path (catalog/schema/name). The name is always the last element; the catalog/schema components that
