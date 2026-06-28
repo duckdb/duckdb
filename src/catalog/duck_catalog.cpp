@@ -127,28 +127,6 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 	return result;
 }
 
-// recursively drop the nested child schemas of `schema_entry` (depth-first). On a non-cascade (RESTRICT) drop of a
-// schema that still has nested schemas, throw - mirroring how the dependency manager blocks dropping a schema that
-// still has tables.
-static void DropNestedSchemas(CatalogTransaction transaction, DuckSchemaEntry &schema_entry, const DropInfo &info) {
-	auto &nested = schema_entry.GetCatalogSet(CatalogType::SCHEMA_ENTRY);
-	vector<reference<DuckSchemaEntry>> children;
-	nested.Scan(transaction, [&](CatalogEntry &entry) { children.push_back(entry.Cast<DuckSchemaEntry>()); });
-	if (children.empty()) {
-		return;
-	}
-	if (!info.cascade) {
-		throw DependencyException(
-		    "Cannot drop schema \"%s\" because there are nested schemas that depend on it.\nUse DROP...CASCADE to "
-		    "drop all dependents.",
-		    schema_entry.name.GetIdentifierName());
-	}
-	for (auto &child : children) {
-		DropNestedSchemas(transaction, child.get(), info);
-		nested.DropEntry(transaction, child.get().name, info.cascade, info.allow_drop_internal);
-	}
-}
-
 void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
 	auto &path = info.GetQualifiedName().Path();
 	auto &schema_name = info.GetQualifiedName().Name();
@@ -168,12 +146,8 @@ void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
 		}
 		target_set = parent_entry->Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::SCHEMA_ENTRY);
 	}
-	// drop the nested child schemas first (handles RESTRICT/CASCADE), then drop the schema itself - dropping the
-	// schema cascades to its (non-schema) contents through the dependency manager
-	auto schema_entry = target_set.get().GetEntry(transaction, schema_name);
-	if (schema_entry) {
-		DropNestedSchemas(transaction, schema_entry->Cast<DuckSchemaEntry>(), info);
-	}
+	// drop exactly this schema - the dependency manager blocks the drop (RESTRICT) or cascades to the schema's
+	// contents, including any nested schemas (which depend on it), when CASCADE is given
 	if (!target_set.get().DropEntry(transaction, schema_name, info.cascade, info.allow_drop_internal)) {
 		if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, schema_name, string());

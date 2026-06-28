@@ -65,7 +65,7 @@ restart
 statement error
 DROP SCHEMA parent.child;
 ----
-<REGEX>:.*Cannot drop schema "child" because there are nested schemas.*
+<REGEX>:.*Cannot drop entry "child" because there are entries that depend on it.*
 
 # cascade dropping the whole top-level subtree, checkpoint, and verify after restart
 statement ok

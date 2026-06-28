@@ -115,6 +115,11 @@ public:
 	static MangledEntryName MangleName(const CatalogEntryInfo &info);
 	static MangledEntryName MangleName(const CatalogEntry &entry);
 	static CatalogEntryInfo GetLookupProperties(const CatalogEntry &entry);
+	//! Returns the catalog set that (would) contain a schema identified by (schema_path, name): the root schema set
+	//! for a top-level schema (schema_path == name), or the deepest parent's nested-schema set for a nested schema
+	//! (schema_path is the dotted parent path). Returns nullptr if a parent schema along the path does not exist.
+	optional_ptr<CatalogSet> GetSchemaContainerSet(CatalogTransaction transaction, const Identifier &schema_path,
+	                                               const Identifier &name);
 
 private:
 	void ReorderEntry(CatalogTransaction transaction, CatalogEntry &entry, catalog_entry_set_t &visited,

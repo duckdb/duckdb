@@ -57,7 +57,7 @@ SELECT count(*) FROM duckdb_schemas() WHERE database_name = 'memory' AND schema_
 statement error
 DROP SCHEMA s1.child;
 ----
-<REGEX>:.*Cannot drop schema "child" because there are nested schemas.*
+<REGEX>:.*Cannot drop entry "child" because there are entries that depend on it.*
 
 # the schema and its children are untouched after the failed RESTRICT drop
 query II
@@ -96,7 +96,7 @@ CREATE SCHEMA s1.child.grandchild;
 statement error
 DROP SCHEMA s1;
 ----
-<REGEX>:.*Cannot drop schema "s1" because there are nested schemas.*
+<REGEX>:.*Cannot drop entry "s1" because there are entries that depend on it.*
 
 statement ok
 DROP SCHEMA s1 CASCADE;
@@ -118,7 +118,7 @@ CREATE SCHEMA db2.a.b;
 statement error
 DROP SCHEMA db2.a;
 ----
-<REGEX>:.*Cannot drop schema "a" because there are nested schemas.*
+<REGEX>:.*Cannot drop entry "a" because there are entries that depend on it.*
 
 statement ok
 DROP SCHEMA db2.a CASCADE;
@@ -160,7 +160,7 @@ CREATE SCHEMA s1.child.grandchild;
 statement error
 CREATE OR REPLACE SCHEMA s1.child;
 ----
-<REGEX>:.*Cannot drop schema "child" because there are nested schemas.*
+<REGEX>:.*Cannot drop entry "child" because there are entries that depend on it.*
 
 # CREATE OR REPLACE on a nested schema without children replaces it in place
 statement ok

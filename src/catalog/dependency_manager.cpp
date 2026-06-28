@@ -15,6 +15,8 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/catalog/dependency_catalog_set.hpp"
+#include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 
 #include "duckdb/common/printer.hpp"
 
@@ -49,7 +51,26 @@ DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), s
 
 Identifier DependencyManager::GetSchema(const CatalogEntry &entry) {
 	if (entry.type == CatalogType::SCHEMA_ENTRY) {
-		return entry.name;
+		// a nested schema is keyed by its parent path (so it can be navigated on lookup); a top-level schema keeps
+		// its own name as the schema (schema == name) for backwards compatibility
+		auto parent = entry.Cast<SchemaCatalogEntry>().GetParentSchema();
+		if (!parent) {
+			return entry.name;
+		}
+		vector<Identifier> parents;
+		while (parent) {
+			parents.push_back(parent->name);
+			parent = parent->GetParentSchema();
+		}
+		std::reverse(parents.begin(), parents.end());
+		string path;
+		for (auto &name : parents) {
+			if (!path.empty()) {
+				path += ".";
+			}
+			path += SQLIdentifier(name);
+		}
+		return Identifier(path);
 	}
 	return entry.ParentSchema().name;
 }
@@ -319,17 +340,46 @@ CatalogEntryInfo DependencyManager::GetLookupProperties(const CatalogEntry &entr
 	}
 }
 
+optional_ptr<CatalogSet> DependencyManager::GetSchemaContainerSet(CatalogTransaction transaction,
+                                                                  const Identifier &schema_path,
+                                                                  const Identifier &name) {
+	auto &root = catalog.GetSchemaCatalogSet();
+	if (schema_path == name) {
+		// top-level schema (the schema field is the schema's own name)
+		return &root;
+	}
+	// nested schema: schema_path is the dotted parent path - navigate it
+	auto parents = QualifiedName::ParseComponents(schema_path.GetIdentifierName());
+	reference<CatalogSet> current = root;
+	for (auto &parent_name : parents) {
+		auto parent = current.get().GetEntry(transaction, parent_name);
+		if (!parent) {
+			return nullptr;
+		}
+		current = parent->Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::SCHEMA_ENTRY);
+	}
+	return &current.get();
+}
+
 optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction,
                                                           const CatalogEntryInfo &info) {
 	auto &type = info.type;
 	auto &schema = info.schema;
 	auto &name = info.name;
 
+	if (type == CatalogType::SCHEMA_ENTRY) {
+		// the schema (possibly nested) lives in the root schema set or a parent's nested-schema set
+		auto container = GetSchemaContainerSet(transaction, schema, name);
+		if (!container) {
+			return nullptr;
+		}
+		return container->GetEntry(transaction, name);
+	}
+
 	// Lookup the schema
 	auto schema_entry = catalog.GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
-	if (type == CatalogType::SCHEMA_ENTRY || !schema_entry) {
-		// This is a schema entry, perform the callback only providing the schema
-		return reinterpret_cast<CatalogEntry *>(schema_entry.get());
+	if (!schema_entry) {
+		return nullptr;
 	}
 	return schema_entry->GetEntry(transaction, type, name);
 }
@@ -461,16 +511,21 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 	auto &schema = info.schema;
 	auto &name = info.name;
 
-	auto &duck_catalog = catalog.Cast<DuckCatalog>();
-	auto &schema_catalog_set = duck_catalog.GetSchemaCatalogSet();
-
 	CatalogSet::EntryLookup lookup_result;
-	lookup_result = schema_catalog_set.GetEntryDetailed(transaction, schema);
-
-	if (type != CatalogType::SCHEMA_ENTRY && lookup_result.result) {
-		auto &schema_entry = lookup_result.result->Cast<SchemaCatalogEntry>();
-		EntryLookupInfo lookup_info(type, QualifiedName(name));
-		lookup_result = schema_entry.LookupEntryDetailed(transaction, lookup_info);
+	if (type == CatalogType::SCHEMA_ENTRY) {
+		// the subject schema (possibly nested) lives in the root schema set or a parent's nested-schema set
+		auto container = GetSchemaContainerSet(transaction, schema, name);
+		if (container) {
+			lookup_result = container->GetEntryDetailed(transaction, name);
+		}
+	} else {
+		auto &schema_catalog_set = catalog.GetSchemaCatalogSet();
+		lookup_result = schema_catalog_set.GetEntryDetailed(transaction, schema);
+		if (lookup_result.result) {
+			auto &schema_entry = lookup_result.result->Cast<SchemaCatalogEntry>();
+			EntryLookupInfo lookup_info(type, QualifiedName(name));
+			lookup_result = schema_entry.LookupEntryDetailed(transaction, lookup_info);
+		}
 	}
 
 	if (lookup_result.reason == CatalogSet::EntryLookup::FailureReason::DELETED) {
@@ -536,8 +591,7 @@ catalog_entry_set_t DependencyManager::CheckDropDependencies(CatalogTransaction 
 	auto info = GetLookupProperties(object);
 	// Look through all the objects that depend on the 'object'
 	ScanDependents(transaction, info, [&](DependencyEntry &dep) {
-		// It makes no sense to have a schema depend on anything
-		D_ASSERT(dep.EntryInfo().type != CatalogType::SCHEMA_ENTRY);
+		// a nested schema depends on its parent schema; other schemas have no dependencies
 		auto entry = LookupEntry(transaction, dep);
 		if (!entry) {
 			return;

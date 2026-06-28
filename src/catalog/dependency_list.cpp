@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 namespace duckdb {
 
@@ -40,13 +41,6 @@ bool LogicalDependencyEquality::operator()(const LogicalDependency &a, const Log
 LogicalDependency::LogicalDependency() : entry(), catalog() {
 }
 
-static string GetSchema(CatalogEntry &entry) {
-	if (entry.type == CatalogType::SCHEMA_ENTRY) {
-		return entry.name.GetIdentifierName();
-	}
-	return entry.ParentSchema().name.GetIdentifierName();
-}
-
 LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 	catalog = Identifier::InvalidCatalog();
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
@@ -54,7 +48,9 @@ LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 
 		this->entry = dependency_entry.EntryInfo();
 	} else {
-		this->entry.schema = Identifier(GetSchema(entry));
+		// use the same schema key as the dependency manager (the parent path for nested schemas) so subjects and
+		// dependents resolve to the same mangled name
+		this->entry.schema = DependencyManager::GetSchema(entry);
 		this->entry.name = entry.name;
 		this->entry.type = entry.type;
 		catalog = entry.ParentCatalog().GetName();
