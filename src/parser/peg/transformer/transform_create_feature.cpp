@@ -4,6 +4,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/statement/call_statement.hpp"
+#include "duckdb/parser/statement/serve_feature_statement.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -202,14 +203,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(P
 	// index 1: ServeFeatureKw ('FEATURE' or 'FEATURES')
 	// index 2: List(IdentifierOrStringLiteral) - feature names
 	auto feature_items = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
-	// Build comma-separated feature names
-	string feature_names;
+	vector<string> feature_names;
 	for (auto &item : feature_items) {
 		auto name = transformer.Transform<QualifiedName>(item).name;
-		if (!feature_names.empty()) {
-			feature_names += ",";
-		}
-		feature_names += name;
+		feature_names.push_back(name);
 	}
 	// index 3: 'FOR' keyword
 	auto spine_table = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(4)).name;
@@ -232,16 +229,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(P
 		as_of_column = transformer.Transform<QualifiedName>(asof_list.Child<ListParseResult>(1)).name;
 	}
 
-	// Rewrite to: CALL serve_feature('feature_names', 'spine_table', 'entity_column', 'as_of_column')
-	// Empty strings signal "use default from feature metadata"
-	auto result = make_uniq<CallStatement>();
-	vector<unique_ptr<ParsedExpression>> args;
-	args.push_back(make_uniq<ConstantExpression>(Value(feature_names)));
-	args.push_back(make_uniq<ConstantExpression>(Value(spine_table)));
-	args.push_back(make_uniq<ConstantExpression>(Value(entity_column)));
-	args.push_back(make_uniq<ConstantExpression>(Value(as_of_column)));
-	auto function_expression = make_uniq<FunctionExpression>("serve_feature", std::move(args));
-	result->function = std::move(function_expression);
+	auto result = make_uniq<ServeFeatureStatement>();
+	result->feature_names = std::move(feature_names);
+	result->spine_table = std::move(spine_table);
+	result->entity_column = std::move(entity_column);
+	result->as_of_column = std::move(as_of_column);
 	return std::move(result);
 }
 

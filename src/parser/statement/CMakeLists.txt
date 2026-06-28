@@ -23,6 +23,7 @@ add_library_unity(
   pragma_statement.cpp
   prepare_statement.cpp
   relation_statement.cpp
+  serve_feature_statement.cpp
   select_statement.cpp
   set_statement.cpp
   transaction_statement.cpp

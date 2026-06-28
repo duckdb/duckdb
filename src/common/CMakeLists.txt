@@ -61,6 +61,7 @@ add_library_unity(
   pipe_file_system.cpp
   local_file_system.cpp
   error_data.cpp
+  feature_serve.cpp
   opener_file_system.cpp
   printer.cpp
   radix_partitioning.cpp
