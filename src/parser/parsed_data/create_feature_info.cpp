@@ -24,9 +24,9 @@ static bool IntervalEquals(const interval_t &left, const interval_t &right) {
 
 CreateFeatureInfo::CreateFeatureInfo()
     : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), granularity(FeatureGranularity::DAY), window_size(7),
-	  window_interval(interval_t {0, 7, 0}), watermark_interval(interval_t {0, 0, 0}),
-	  refresh_mode(FeatureRefreshMode::FULL), retain_versions(1), current_version(1), has_schedule(false),
-	  schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
+      window_interval(interval_t {0, 7, 0}), watermark_interval(interval_t {0, 0, 0}),
+      refresh_mode(FeatureRefreshMode::FULL), retain_versions(1), current_version(1), has_schedule(false),
+      schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {

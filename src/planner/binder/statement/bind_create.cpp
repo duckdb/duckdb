@@ -822,19 +822,18 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto table = SQLIdentifier::ToString(feature_info.source_table);
 		auto window_interval = Interval::ToString(feature_info.window_interval);
 
-		string pit_sql = StringUtil::Format(
-		    "SELECT anchor.%s, anchor.feature_timestamp, %s "
-		    "FROM (SELECT %s, %s AS feature_timestamp FROM %s) AS anchor "
-		    "JOIN %s ON %s.%s = anchor.%s "
-		    "AND %s.%s <= anchor.feature_timestamp "
-		    "AND %s.%s >= anchor.feature_timestamp - INTERVAL '%s' "
-		    "GROUP BY anchor.%s, anchor.feature_timestamp",
-		    entity, agg_exprs,           // outer SELECT
-		    entity, ts, table,           // anchor subquery
-		    table, table, entity, entity, // JOIN
-		    table, ts,                   // AND <=
-		    table, ts, window_interval, // AND >=
-		    entity);                    // GROUP BY
+		string pit_sql = StringUtil::Format("SELECT anchor.%s, anchor.feature_timestamp, %s "
+		                                    "FROM (SELECT %s, %s AS feature_timestamp FROM %s) AS anchor "
+		                                    "JOIN %s ON %s.%s = anchor.%s "
+		                                    "AND %s.%s <= anchor.feature_timestamp "
+		                                    "AND %s.%s >= anchor.feature_timestamp - INTERVAL '%s' "
+		                                    "GROUP BY anchor.%s, anchor.feature_timestamp",
+		                                    entity, agg_exprs,            // outer SELECT
+		                                    entity, ts, table,            // anchor subquery
+		                                    table, table, entity, entity, // JOIN
+		                                    table, ts,                    // AND <=
+		                                    table, ts, window_interval,   // AND >=
+		                                    entity);                      // GROUP BY
 
 		// Parse and bind the PIT query
 		Parser parser(context.GetParserOptions());
