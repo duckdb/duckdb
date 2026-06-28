@@ -109,8 +109,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugForceExternalSetting),
     DUCKDB_SETTING(DebugForceFetchRowSetting),
     DUCKDB_SETTING(DebugForceNoCrossProductSetting),
-    DUCKDB_SETTING_CALLBACK(DebugFsDelayMeanMsSetting),
-    DUCKDB_SETTING_CALLBACK(DebugFsDelayStddevMsSetting),
     DUCKDB_GLOBAL(DebugOrderVerificationSetting),
     DUCKDB_SETTING_CALLBACK(DebugPhysicalTableScanExecutionStrategySetting),
     DUCKDB_SETTING(DebugSkipCheckpointOnCommitSetting),

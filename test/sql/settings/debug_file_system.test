@@ -2,6 +2,8 @@
 # description: Test DebugFileSystem latency injection settings
 # group: [settings]
 
+require debug_fs
+
 statement ok
 SET debug_fs_delay_mean_ms=1.0;
 

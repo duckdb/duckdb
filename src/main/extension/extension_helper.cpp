@@ -52,6 +52,10 @@
 #define DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED false
 #endif
 
+#ifndef DUCKDB_EXTENSION_DEBUG_FS_LINKED
+#define DUCKDB_EXTENSION_DEBUG_FS_LINKED false
+#endif
+
 // Load the generated header file containing our list of extension headers
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
 #include "duckdb/main/extension/generated_extension_loader.hpp"
@@ -103,6 +107,7 @@ static const DefaultExtension internal_extensions[] = {
     {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", DUCKDB_EXTENSION_HTTPFS_LINKED},
     {"json", "Adds support for JSON operations", DUCKDB_EXTENSION_JSON_LINKED},
     {"autocomplete", "Adds support for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
+    {"debug_fs", "Filesystem debug utilities (latency injection)", DUCKDB_EXTENSION_DEBUG_FS_LINKED},
     {"motherduck", "Enables motherduck integration with the system", false},
     {"mysql_scanner", "Adds support for connecting to a MySQL database", false},
     {"odbc_scanner", "Adds support for connecting to remote databases over ODBC", false},

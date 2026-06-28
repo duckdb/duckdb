@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/debug_file_system.hpp
+// debug_file_system.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,14 +14,15 @@
 
 namespace duckdb {
 
-class DatabaseInstance;
-
 //! Wraps a FileSystem and injects configurable latency on open/read/write.
 class DebugFileSystem : public FileSystem {
 public:
-	DebugFileSystem(unique_ptr<FileSystem> inner_fs, DatabaseInstance &db_p);
+	explicit DebugFileSystem(unique_ptr<FileSystem> inner_fs);
 
 	FileSystem &GetInnerFileSystem();
+
+	void SetDelayMeanMs(double v);
+	void SetDelayStddevMs(double v);
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
@@ -84,9 +85,10 @@ private:
 	void ApplyDelay();
 
 	unique_ptr<FileSystem> inner_fs;
-	DatabaseInstance &db;
 	annotated_mutex random_engine_lock;
 	RandomEngine random_engine DUCKDB_GUARDED_BY(random_engine_lock);
+	double delay_mean_ms DUCKDB_GUARDED_BY(random_engine_lock) = 0.0;
+	double delay_stddev_ms DUCKDB_GUARDED_BY(random_engine_lock) = 0.0;
 };
 
 } // namespace duckdb

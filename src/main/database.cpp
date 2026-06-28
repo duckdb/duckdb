@@ -5,7 +5,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
-#include "duckdb/common/debug_file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
@@ -406,7 +405,7 @@ FileSystem &DatabaseInstance::GetLocalFileSystem() {
 }
 
 static FileSystem &ResolveLocalFileSystem(DatabaseInstance &db, unique_ptr<FileSystem> &owned) {
-	auto &vfs = db.config.GetVirtualFileSystem();
+	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
 	auto &default_fs = vfs.GetDefaultFileSystem();
 	if (default_fs.IsLocalFileSystem()) {
 		return default_fs;
@@ -420,8 +419,7 @@ LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
 }
 
 FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
-	auto &vfs = db.config.GetVirtualFileSystem();
-	if (vfs.SubSystemIsDisabled(local_fs.GetName())) {
+	if (db.config.file_system->SubSystemIsDisabled(local_fs.GetName())) {
 		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
 	}
 	return local_fs;
@@ -485,9 +483,9 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
 	if (new_config.file_system) {
-		config.file_system = make_uniq<DebugFileSystem>(std::move(new_config.file_system), *this);
+		config.file_system = std::move(new_config.file_system);
 	} else {
-		config.file_system = make_uniq<DebugFileSystem>(make_uniq<VirtualFileSystem>(FileSystem::CreateLocal()), *this);
+		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
 		config.AddAllowedPath(database_path);

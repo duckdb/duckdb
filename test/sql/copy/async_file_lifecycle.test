@@ -2,6 +2,8 @@
 # description: test async COPY file open/finalize lifecycle paths
 # group: [copy]
 
+require debug_fs
+
 require parquet
 
 statement ok

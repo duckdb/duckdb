@@ -349,26 +349,6 @@
         "default_value": "false"
     },
     {
-        "name": "debug_fs_delay_mean_ms",
-        "description": "DEBUG SETTING: mean latency (ms) for filesystem operations",
-        "type": "DOUBLE",
-        "scope": "global",
-        "default_value": "0.0",
-        "on_callbacks": [
-            "set"
-        ]
-    },
-    {
-        "name": "debug_fs_delay_stddev_ms",
-        "description": "DEBUG SETTING: standard deviation (ms) for filesystem operation latency",
-        "type": "DOUBLE",
-        "scope": "global",
-        "default_value": "0.0",
-        "on_callbacks": [
-            "set"
-        ]
-    },
-    {
         "name": "debug_order_verification",
         "description": "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)",
         "type": "ENUM<DebugOrderVerification>",

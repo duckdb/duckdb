@@ -1,34 +1,47 @@
-#include "duckdb/common/debug_file_system.hpp"
+#include "duckdb/common/memory_mapped_file.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
+#include "debug_file_system.hpp"
 
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/io_latency_model.hpp"
 #include "duckdb/common/thread.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/settings.hpp"
+#include "io_latency_model.hpp"
 
 namespace duckdb {
 
-DebugFileSystem::DebugFileSystem(unique_ptr<FileSystem> inner_fs, DatabaseInstance &db_p)
-    : inner_fs(std::move(inner_fs)), db(db_p) {
+DebugFileSystem::DebugFileSystem(unique_ptr<FileSystem> inner_fs) : inner_fs(std::move(inner_fs)) {
 }
 
 FileSystem &DebugFileSystem::GetInnerFileSystem() {
 	return *inner_fs;
 }
 
+void DebugFileSystem::SetDelayMeanMs(double v) {
+	const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
+	delay_mean_ms = v;
+}
+
+void DebugFileSystem::SetDelayStddevMs(double v) {
+	const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
+	delay_stddev_ms = v;
+}
+
 void DebugFileSystem::ApplyDelay() {
-	auto mean_ms = Settings::Get<DebugFsDelayMeanMsSetting>(db);
-	auto stddev_ms = Settings::Get<DebugFsDelayStddevMsSetting>(db);
+#ifndef DUCKDB_NO_THREADS
+	double mean_ms;
+	double stddev_ms;
+	{
+		const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
+		mean_ms = delay_mean_ms;
+		stddev_ms = delay_stddev_ms;
+	}
 	if (mean_ms <= 0.0 && stddev_ms <= 0.0) {
 		return;
 	}
 
-#ifndef DUCKDB_NO_THREADS
 	double delay_ms = 0;
 	if (stddev_ms <= 0.0) {
 		delay_ms = mean_ms;
 	} else {
-		// Debug filesystem usage is not intended to be used in production, so performance is not a concern.
 		const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
 		delay_ms = IoLatencyModel(mean_ms, stddev_ms).SampleLatency(random_engine);
 	}
@@ -65,8 +78,6 @@ int64_t DebugFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 }
 
 string DebugFileSystem::GetName() const {
-	// Return internal filesystem name directly, since debug filesystem wrapper is involved by default thus easy to
-	// cause confusion.
 	return inner_fs->GetName();
 }
 

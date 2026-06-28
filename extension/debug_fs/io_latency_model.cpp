@@ -1,4 +1,5 @@
-#include "duckdb/common/io_latency_model.hpp"
+#include "io_latency_model.hpp"
+
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include <cmath>

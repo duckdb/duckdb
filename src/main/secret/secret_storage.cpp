@@ -1,7 +1,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -156,8 +155,7 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 		}
 	} catch (PermissionException &ex) {
 		// If LocalFileSystem is specifically disabled (not all external access), skip loading persistent secrets
-		auto &vfs = DBConfig::GetConfig(db).GetVirtualFileSystem();
-		if (!vfs.SubSystemIsDisabled("LocalFileSystem")) {
+		if (!DBConfig::GetConfig(db).file_system->SubSystemIsDisabled("LocalFileSystem")) {
 			throw;
 		}
 	}
