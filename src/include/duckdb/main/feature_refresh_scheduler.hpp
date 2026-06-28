@@ -32,7 +32,7 @@ public:
 	explicit FeatureRefreshScheduler(DatabaseInstance &db);
 	~FeatureRefreshScheduler();
 
-	//! Start the background thread. No-op for READ_ONLY or no-threads builds.
+	//! Allow the background thread to start once a schedule exists. No-op for READ_ONLY or no-threads builds.
 	void Start();
 	//! Signal the thread to stop and join it. Must be called before catalog teardown.
 	void Stop();
@@ -68,6 +68,7 @@ private:
 #ifndef DUCKDB_NO_THREADS
 	using FeatureHeap = std::priority_queue<ScheduledFeature, vector<ScheduledFeature>, FeatureCmp>;
 
+	void StartThread();
 	void Run();
 	//! Check that a heap entry still points at a committed, enabled schedule before refreshing.
 	bool ValidateScheduledFeature(ScheduledFeature &feature);
@@ -88,6 +89,7 @@ private:
 	std::condition_variable cv;
 	std::atomic<bool> stop_requested {false};
 	std::atomic<bool> heap_dirty {false};
+	bool start_allowed = false;
 	bool started = false;
 #endif
 };

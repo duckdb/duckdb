@@ -62,30 +62,32 @@ void FeatureRefreshScheduler::Start() {
 	if (db.config.options.access_mode == AccessMode::READ_ONLY) {
 		return;
 	}
-	if (started) {
-		return;
+	lock_guard<std::mutex> lock(mtx);
+	start_allowed = true;
+	if (heap_dirty.load()) {
+		StartThread();
 	}
-	started = true;
-	stop_requested.store(false);
-	// Like the TaskScheduler, the constructor only launches the background thread; it performs no
-	// catalog work here. Doing a synchronous catalog scan in Start() is unsafe because Start() runs
-	// inside the DuckDB constructor while the DBInstanceCache holds update_database_mutex, and a
-	// concurrent opener of the same database busy-spins waiting on that path. The initial heap scan
-	// therefore happens on the background thread (see Run()).
-	bg_thread = std::thread([this] { Run(); });
 #endif
 }
 
 void FeatureRefreshScheduler::Stop() {
 #ifndef DUCKDB_NO_THREADS
-	if (!started) {
-		return;
+	std::thread thread_to_join;
+	{
+		lock_guard<std::mutex> lock(mtx);
+		start_allowed = false;
+		if (!started) {
+			return;
+		}
+		started = false;
+		stop_requested.store(true);
+		cv.notify_all();
+		if (bg_thread.joinable()) {
+			thread_to_join = std::move(bg_thread);
+		}
 	}
-	started = false;
-	stop_requested.store(true);
-	cv.notify_all();
-	if (bg_thread.joinable()) {
-		bg_thread.join();
+	if (thread_to_join.joinable()) {
+		thread_to_join.join();
 	}
 #endif
 }
@@ -93,6 +95,12 @@ void FeatureRefreshScheduler::Stop() {
 void FeatureRefreshScheduler::Notify() {
 #ifndef DUCKDB_NO_THREADS
 	heap_dirty.store(true);
+	{
+		lock_guard<std::mutex> lock(mtx);
+		if (start_allowed) {
+			StartThread();
+		}
+	}
 	cv.notify_all();
 #endif
 }
@@ -154,6 +162,16 @@ int64_t FeatureRefreshScheduler::IntervalToMicros(const interval_t &interval) {
 }
 
 #ifndef DUCKDB_NO_THREADS
+
+void FeatureRefreshScheduler::StartThread() {
+	if (started || db.config.options.access_mode == AccessMode::READ_ONLY) {
+		return;
+	}
+	started = true;
+	stop_requested.store(false);
+	// Like the TaskScheduler, this only launches the background thread; it performs no catalog work here.
+	bg_thread = std::thread([this] { Run(); });
+}
 
 void FeatureRefreshScheduler::RebuildHeap(FeatureHeap &heap) {
 	while (!heap.empty()) {
