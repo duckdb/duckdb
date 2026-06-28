@@ -53,6 +53,13 @@ public:
 
 	string RenderProfilerDisabled() override;
 
+protected:
+	//! Pretty-print the query SQL before it is highlighted. The base renderer returns it unchanged; the CLI overrides
+	//! this to run duckdb_format_sql, which requires the autocomplete extension and so cannot live in core.
+	virtual string FormatSQL(const string &sql) {
+		return sql;
+	}
+
 private:
 	//! Query-level summary, populated by RenderProfiler (EXPLAIN ANALYZE / profiling) and shown in the header.
 	bool has_query_metrics = false;

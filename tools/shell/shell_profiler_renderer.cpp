@@ -9,6 +9,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer/html_tree_renderer.hpp"
+#include "duckdb/main/connection.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -220,21 +221,61 @@ static string WriteProfileAndOpen(ShellState &state, const string &html) {
 	return path;
 }
 
+//! HTML renderer that pretty-prints the query SQL via duckdb_format_sql. This requires the autocomplete extension (and
+//! a catalog query), so it lives in the CLI rather than in core's HTMLTreeRenderer.
+class ShellHTMLTreeRenderer : public duckdb::HTMLTreeRenderer {
+protected:
+	duckdb::string FormatSQL(const duckdb::string &sql) override {
+		auto &state = ShellState::Get();
+		if (sql.empty() || !state.conn) {
+			return sql;
+		}
+		auto &context = *state.conn->context;
+		// only format if the autocomplete extension is already loaded (never autoload)
+		try {
+			if (!context.db || !context.db->ExtensionIsLoaded("autocomplete")) {
+				return sql;
+			}
+			duckdb::Connection con(*context.db);
+			auto prepared = con.Prepare("SELECT duckdb_format_sql($1)");
+			if (!prepared || prepared->HasError()) {
+				return sql;
+			}
+			duckdb::vector<duckdb::Value> params;
+			params.emplace_back(sql);
+			auto result = prepared->Execute(params, false);
+			if (!result || result->HasError()) {
+				return sql;
+			}
+			auto chunk = result->Fetch();
+			if (!chunk || chunk->size() == 0 || chunk->GetValue(0, 0).IsNull()) {
+				return sql;
+			}
+			return chunk->GetValue(0, 0).ToString();
+		} catch (const std::exception &) {
+			return sql;
+		}
+	}
+};
+
 //! Renderer for "EXPLAIN [ANALYZE] (FORMAT WEB)" and the ".web" command: render the plan/profile to HTML and open it
 //! in a browser when rendering finishes (see Finish). Emits nothing as the result, so the EXPLAIN output stays empty.
 class WebTreeRenderer : public duckdb::TreeRenderer {
 public:
 	// plain EXPLAIN: render the operator tree to HTML (via a fresh HTML renderer to avoid virtual re-entrancy)
 	void ToStreamInternal(duckdb::RenderTree &root, duckdb::BaseTreeRenderer &ss) override {
-		duckdb::HTMLTreeRenderer html_renderer;
+		ShellHTMLTreeRenderer html_renderer;
 		duckdb::StringTreeRenderer sink;
 		html_renderer.ToStreamInternal(root, sink);
 		html = sink.str();
 	}
 
-	// EXPLAIN ANALYZE: render the full query profile to HTML
+	// EXPLAIN ANALYZE: render the full query profile to HTML (via ShellHTMLTreeRenderer so the SQL is pretty-printed)
 	void RenderProfiler(const duckdb::QueryProfiler &profiler, duckdb::BaseTreeRenderer &ss) override {
-		html = profiler.RenderProfile("html");
+		ShellHTMLTreeRenderer html_renderer;
+		duckdb::StringTreeRenderer sink;
+		html_renderer.RenderProfiler(profiler, sink);
+		html = sink.str();
 	}
 
 	// rendering finished - write the HTML to a temp file and open it in a browser

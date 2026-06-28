@@ -3,6 +3,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/common/tree_renderer/html_template.hpp"
+#include "duckdb/parser/parser.hpp"
 
 #include <cstdlib>
 
@@ -200,13 +201,101 @@ void HTMLTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) 
 	ss << html;
 }
 
+// HTML-escape text for safe embedding in the generated page (matches the viewer's escHtml: & < >).
+static void AppendEscapedHTML(string &out, const char *data, idx_t len) {
+	for (idx_t i = 0; i < len; i++) {
+		char c = data[i];
+		switch (c) {
+		case '&':
+			out += "&amp;";
+			break;
+		case '<':
+			out += "&lt;";
+			break;
+		case '>':
+			out += "&gt;";
+			break;
+		default:
+			out += c;
+		}
+	}
+}
+
+// Render the query SQL as highlighted HTML using the DuckDB tokenizer (keyword/constant/comment spans). Highlighting is
+// done here, at generation time, so the viewer does not need its own SQL highlighter.
+static string HighlightSQL(const string &sql) {
+	if (sql.empty()) {
+		return string();
+	}
+	vector<SimplifiedToken> tokens;
+	try {
+		tokens = Parser::Tokenize(sql);
+	} catch (...) {
+		// tokenization can throw on invalid SQL - fall back to escaped plain text
+		string fallback;
+		AppendEscapedHTML(fallback, sql.c_str(), sql.size());
+		return fallback;
+	}
+	string out;
+	idx_t pos = 0;
+	for (idx_t i = 0; i < tokens.size(); i++) {
+		idx_t start = tokens[i].start;
+		if (start > sql.size()) {
+			break;
+		}
+		idx_t end = i + 1 == tokens.size() ? sql.size() : tokens[i + 1].start;
+		if (end > sql.size()) {
+			end = sql.size();
+		}
+		// emit any text before this token (e.g. leading whitespace) unhighlighted
+		if (start > pos) {
+			AppendEscapedHTML(out, sql.c_str() + pos, start - pos);
+		}
+		if (end <= start) {
+			pos = start;
+			continue;
+		}
+		const char *cls = nullptr;
+		switch (tokens[i].type) {
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
+			cls = "sql-kw";
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
+			cls = "sql-num";
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
+			cls = "sql-str";
+			break;
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
+			cls = "sql-comment";
+			break;
+		default:
+			break;
+		}
+		if (cls) {
+			out += "<span class=\"";
+			out += cls;
+			out += "\">";
+			AppendEscapedHTML(out, sql.c_str() + start, end - start);
+			out += "</span>";
+		} else {
+			AppendEscapedHTML(out, sql.c_str() + start, end - start);
+		}
+		pos = end;
+	}
+	if (pos < sql.size()) {
+		AppendEscapedHTML(out, sql.c_str() + pos, sql.size() - pos);
+	}
+	return out;
+}
+
 void HTMLTreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseTreeRenderer &ss) {
 	auto &qm = profiler.GetQueryMetrics();
 	query_real_time = qm.GetStringMetricInSeconds("query.total_time");
 	query_cpu_time = qm.GetStringMetricInSeconds("query.cpu_time");
 	query_bytes_read = qm.GetBytesRead();
 	query_bytes_written = qm.GetBytesWritten();
-	query_sql = profiler.GetFormattedSQL();
+	query_sql = HighlightSQL(FormatSQL(profiler.GetQuerySQL()));
 	query_timings.clear();
 	for (auto &entry : qm.GetMetricTimings()) {
 		query_timings.emplace_back(entry.first, static_cast<double>(entry.second) / 1e9);

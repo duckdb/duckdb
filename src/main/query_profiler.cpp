@@ -14,7 +14,6 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/main/profiler/gathered_metrics.hpp"
@@ -342,35 +341,9 @@ static string StripExplainPrefix(const string &sql) {
 	return rest.substr(pos);
 }
 
-string QueryProfiler::GetFormattedSQL() const {
+string QueryProfiler::GetQuerySQL() const {
 	auto sql = StripExplainPrefix(query_metrics.query_sql);
-	if (sql.empty()) {
-		return query_metrics.query_sql;
-	}
-	// pretty-print via duckdb_format_sql, but only if the autocomplete extension is already loaded (never autoload)
-	try {
-		if (!context.db || !context.db->ExtensionIsLoaded("autocomplete")) {
-			return sql;
-		}
-		Connection con(*context.db);
-		auto prepared = con.Prepare("SELECT duckdb_format_sql($1)");
-		if (!prepared || prepared->HasError()) {
-			return sql;
-		}
-		vector<Value> params;
-		params.emplace_back(sql);
-		auto result = prepared->Execute(params, false);
-		if (!result || result->HasError()) {
-			return sql;
-		}
-		auto chunk = result->Fetch();
-		if (!chunk || chunk->size() == 0 || chunk->GetValue(0, 0).IsNull()) {
-			return sql;
-		}
-		return chunk->GetValue(0, 0).ToString();
-	} catch (const std::exception &) {
-		return sql;
-	}
+	return sql.empty() ? query_metrics.query_sql : sql;
 }
 
 string QueryProfiler::RenderProfile(const string &format) const {

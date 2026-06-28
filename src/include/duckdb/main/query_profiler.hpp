@@ -214,9 +214,9 @@ public:
 	const QueryMetrics &GetQueryMetrics() const {
 		return query_metrics;
 	}
-	//! The query text with any EXPLAIN wrapper stripped, pretty-printed via duckdb_format_sql when the autocomplete
-	//! extension is loaded (otherwise returned as-is). Used by renderers that show the query.
-	DUCKDB_API string GetFormattedSQL() const;
+	//! The query text with any EXPLAIN [ANALYZE] wrapper stripped. Used by renderers that show the query;
+	//! pretty-printing and highlighting are left to the renderer (e.g. HTMLTreeRenderer) so this stays catalog-free.
+	DUCKDB_API string GetQuerySQL() const;
 	//! Render the current profiling tree in the given format (text/json/html/...) to a string. Unlike ToString this
 	//! only requires a tree to exist (HasRoot()), not that profiling is currently enabled - so it can re-render the
 	//! last profile after the query has finished (e.g. the shell's ".web" command).

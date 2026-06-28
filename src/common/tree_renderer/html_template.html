@@ -359,6 +359,7 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
 html[data-theme="light"] .sql-kw { color: #0070d2; }
 .sql-str { color: #00a36c; }
 .sql-num { color: #d2691e; }
+.sql-comment { color: #6a737d; font-style: italic; }
 
 /* nodes highlighted by a selected pie slice */
 .node.kind-dim { opacity: .22; }
@@ -1279,29 +1280,12 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
     });
 
     // ---------- SQL preview ----------
-    function formatSQL(sql) {
-        var s = sql.replace(/\s+/g, " ").trim();
-        return s.replace(/\s+\b(FROM|WHERE|GROUP BY|ORDER BY|HAVING|LIMIT|OFFSET|UNION ALL|UNION|EXCEPT|INTERSECT|LEFT JOIN|RIGHT JOIN|INNER JOIN|FULL JOIN|JOIN|ON)\b/gi, "\n$1");
-    }
-    var SQL_KW = /^(SELECT|FROM|WHERE|GROUP|ORDER|BY|HAVING|LIMIT|OFFSET|JOIN|LEFT|RIGHT|FULL|INNER|OUTER|CROSS|ON|USING|AND|OR|NOT|IN|AS|WITH|RECURSIVE|MATERIALIZED|UNION|ALL|EXCEPT|INTERSECT|DISTINCT|CASE|WHEN|THEN|ELSE|END|ASC|DESC|NULL|IS|LIKE|BETWEEN|EXISTS|EXTRACT|CAST|OVER|PARTITION|TRUE|FALSE)$/i;
-    function highlightSQL(sql) {
-        var re = /('(?:[^']|'')*'|"(?:[^"]|"")*")|(\b\d+(?:\.\d+)?\b)|([A-Za-z_][A-Za-z0-9_]*)|(\s+)|([^\sA-Za-z0-9_'"]+)/g;
-        var out = "", m;
-        while ((m = re.exec(sql))) {
-            if (m[1]) out += '<span class="sql-str">' + escHtml(m[1]) + "</span>";
-            else if (m[2]) out += '<span class="sql-num">' + escHtml(m[2]) + "</span>";
-            else if (m[3]) out += SQL_KW.test(m[3]) ? '<span class="sql-kw">' + escHtml(m[3]) + "</span>" : escHtml(m[3]);
-            else if (m[4]) out += m[4];
-            else out += escHtml(m[5]);
-        }
-        return out;
-    }
     function buildSQL() {
+        // the query is pretty-printed and syntax-highlighted server-side (HTMLTreeRenderer), so PLAN.query.sql is HTML
         var sql = (PLAN.query && PLAN.query.sql) ? PLAN.query.sql : "";
         var chip = document.getElementById("sql-chip");
         if (!sql.trim()) { chip.style.display = "none"; return; }
-        // duckdb_format_sql already pretty-prints (multi-line); only apply our light formatter to a raw one-liner
-        document.getElementById("sql-body").innerHTML = sql.indexOf("\n") >= 0 ? highlightSQL(sql) : highlightSQL(formatSQL(sql));
+        document.getElementById("sql-body").innerHTML = sql;
         var panel = document.getElementById("sql-panel");
         chip.addEventListener("click", function () { panel.classList.toggle("show"); });
         document.getElementById("sql-close").addEventListener("click", function () { panel.classList.remove("show"); });
