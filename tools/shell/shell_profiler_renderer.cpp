@@ -255,8 +255,9 @@ private:
 			ss << "(FORMAT WEB) cannot be used in -safe mode";
 			return;
 		}
+		// queue the profile; the shell opens it once the statement completes and prints the path then. Emit nothing
+		// here so the EXPLAIN result itself stays empty (no redundant "opening..." line).
 		state.pending_web_html = html;
-		ss << "Opening the query profile in a browser…";
 	}
 };
 

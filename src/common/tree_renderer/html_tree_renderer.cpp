@@ -187,42 +187,22 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
 #canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; padding: 48px; }
 #canvas.interacting { will-change: transform; }
 
-/* ---------- Tree (nested ul/li with connectors) ---------- */
+/* ---------- Tree (nested ul/li; edges are drawn as SVG curves behind the cards by drawEdges()) ---------- */
 .tree, .tree ul { position: relative; padding: 0; margin: 0; list-style: none; }
-.tree ul { display: flex; padding-top: 28px; }
+.tree ul { display: flex; padding-top: 34px; }
 .tree li {
     position: relative; display: flex; flex-direction: column; align-items: center;
-    padding: 28px 14px 0;
+    padding: 34px 14px 0;
 }
-/* connector thickness scales with the rows flowing through each edge: --edge-w (per node, on its <li>) sizes both the
-   riser into that node and its half of the sibling bus, so a high-cardinality child gets a thick line and a
-   low-cardinality sibling a thin one; --drop-w (on the parent <ul>) sizes the trunk drop. */
-/* riser: vertical line from the sibling bus down into this node's card */
-.tree li::after {
-    content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-    width: var(--edge-w, 2px); height: 28px; background: var(--connector);
-}
-/* bus: this child's horizontal half, from the parent centre out to its own riser */
-.tree li::before {
-    content: ""; position: absolute; top: 0; height: var(--edge-w, 2px); background: var(--connector);
-}
-.tree li:first-child::before { left: 50%; right: 0; }
-.tree li:last-child::before { left: 0; right: 50%; }
-.tree li:not(:first-child):not(:last-child)::before { left: 0; right: 0; }
-.tree li:only-child::before { display: none; }
-/* drop: vertical line from a parent card down to its children's bus */
-.tree ul::before {
-    content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-    width: var(--drop-w, 2px); height: 28px; background: var(--connector);
-}
-/* root node: no incoming connector */
 .tree > li { padding-top: 0; }
-.tree > li::before, .tree > li::after { display: none; }
-/* collapsed node: hide its drop + children */
+/* collapsed node: hide its children (and so its edges) */
 .tree li.collapsed > ul { display: none; }
+/* SVG layer holding the curved connectors, behind the cards */
+#edges { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; overflow: visible; }
+.edge { fill: none; stroke: var(--connector); stroke-linecap: round; }
 
 /* ---------- Node card ---------- */
-.node-wrap { position: relative; display: inline-block; }
+.node-wrap { position: relative; display: inline-block; z-index: 1; }
 .node {
     position: relative; min-width: 168px; max-width: 320px;
     background: var(--panel); border: 1px solid var(--border);
@@ -472,7 +452,7 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
 </div>
 
 <div id="viewport">
-    <div id="canvas"><ul class="tree" id="tree"></ul></div>
+    <div id="canvas"><svg id="edges"></svg><ul class="tree" id="tree"></ul></div>
 </div>
 
 <div id="legend"></div>
@@ -608,6 +588,8 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
     var GROUPING = false;        // whether low-impact chains are condensed (decided after a trial layout)
     var FLATTEN_FRACTION = 0.01; // operators below this share of total time are eligible to be condensed
     var MIN_GROUP = 2;           // only condense a chain of at least this many operators
+    var building = false;        // true while (re)building the tree, so edge redraws are deferred until it is done
+    var SVGNS = "http://www.w3.org/2000/svg";
 
     // Build the operator card (.node) for a plan node: heading, metrics, timing bar and collapsible details.
     // Returns { node, hl } where hl lists the text spans that search can highlight.
@@ -716,15 +698,13 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
 
         if (hasChildren) {
             var ul = document.createElement("ul");
-            var sub = 0, maxW = 2;
+            var sub = 0;
             data.children.forEach(function (c) {
                 var r = renderSubtree(c);
                 ul.appendChild(r.li);
                 sub += r.size;
-                if (r.edgeW > maxW) maxW = r.edgeW;
                 rec.childHeads.push(r.head);
             });
-            ul.style.setProperty("--drop-w", maxW.toFixed(1) + "px");
             li.appendChild(ul);
             rec.size += sub;
 
@@ -757,7 +737,7 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
         return run;
     }
 
-    function setGroupExpanded(li, expanded) { li.classList.toggle("expanded", !!expanded); }
+    function setGroupExpanded(li, expanded) { li.classList.toggle("expanded", !!expanded); scheduleEdges(); }
 
     // Render a condensed chain: a placeholder card listing the operator names that expands into the real cards.
     function makeGroup(run) {
@@ -810,7 +790,6 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
         var ul = document.createElement("ul");
         var cont = renderSubtree(continuation);
         ul.appendChild(cont.li);
-        ul.style.setProperty("--drop-w", cont.edgeW.toFixed(1) + "px");
         li.appendChild(ul);
 
         groups.push(li);
@@ -828,7 +807,7 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
         }
         if (!res) { var rec = makeNode(data); res = { li: rec.li, size: rec.size, head: rec.node }; }
         res.edgeW = edgeWidth(data);
-        res.li.style.setProperty("--edge-w", res.edgeW.toFixed(1) + "px");
+        res.li._edgeW = res.edgeW; // consumed by drawEdges() for the connector stroke width
         return res;
     }
 
@@ -845,6 +824,7 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
         rec.li.classList.toggle("collapsed", collapsed);
         if (rec.handle) rec.handle.textContent = collapsed ? "+" : "−";
         if (rec.count) rec.count.style.display = collapsed ? "block" : "none";
+        scheduleEdges();
     }
     // Toggle while keeping the clicked node fixed on screen, so the camera doesn't jump as the tree reflows.
     function toggleCollapse(rec) {
@@ -854,6 +834,7 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
         tx += before.left - after.left;
         ty += before.top - after.top;
         applyTransform();
+        scheduleEdges();
     }
 
     // The CTE table-index a node belongs to (CTE materialization or any of its scans), or "".
@@ -913,11 +894,13 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
 
     // (Re)build the operator tree from PLAN.root, resetting the node/group bookkeeping.
     function buildTree() {
+        building = true;
         allNodes.length = 0;
         groups.length = 0;
         tree.innerHTML = "";
         rootRender = renderSubtree(PLAN.root);
         tree.appendChild(rootRender.li);
+        building = false;
     }
 
     // ---------- summary header ----------
@@ -1073,6 +1056,88 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
         tx = (vw - cw * s) / 2;
         ty = Math.max(16, (vh - ch * s) / 2);
         applyTransform();
+    }
+
+    // ---------- curved SVG edges between cards ----------
+    var edgesSvg = document.getElementById("edges");
+    var edgesRAF = null;
+    function hasClass(el, c) { return el && el.classList && el.classList.contains(c); }
+    function firstByClass(el, c) {
+        if (!el || !el.children) return null;
+        for (var i = 0; i < el.children.length; i++) {
+            if (hasClass(el.children[i], c)) return el.children[i];
+            var f = firstByClass(el.children[i], c);
+            if (f) return f;
+        }
+        return null;
+    }
+    function collectNodeCards(el, out) {
+        if (hasClass(el, "node")) { out.push(el); return; } // a card; don't descend further
+        if (!el || !el.children) return;
+        for (var i = 0; i < el.children.length; i++) collectNodeCards(el.children[i], out);
+    }
+    // The card to anchor an edge on for a given <li>: handles condensed groups (collapsed card vs first/last stacked card).
+    function cardOf(li, bottom) {
+        if (!li || !li.children) return null;
+        var wrap = li.children[0];
+        if (!wrap) return null;
+        if (hasClass(wrap, "group-wrap")) {
+            if (hasClass(li, "expanded")) {
+                var stack = firstByClass(wrap, "group-stack"), nodes = [];
+                if (stack) collectNodeCards(stack, nodes);
+                if (nodes.length) return bottom ? nodes[nodes.length - 1] : nodes[0];
+            }
+            return firstByClass(wrap, "group-card");
+        }
+        return firstByClass(wrap, "node");
+    }
+    function directChildUL(li) {
+        for (var i = 0; i < li.children.length; i++) {
+            if (li.children[i].tagName === "UL") return li.children[i];
+        }
+        return null;
+    }
+    function drawEdges() {
+        if (!edgesSvg || !tree.children.length) return;
+        edgesSvg.innerHTML = "";
+        edgesSvg.setAttribute("width", canvas.scrollWidth);
+        edgesSvg.setAttribute("height", canvas.scrollHeight);
+        var crect = canvas.getBoundingClientRect();
+        var s = scale || 1;
+        function anchor(el, bottom) {
+            var r = el.getBoundingClientRect();
+            return [(r.left + r.width / 2 - crect.left) / s, ((bottom ? r.bottom : r.top) - crect.top) / s];
+        }
+        function visit(li) {
+            if (hasClass(li, "collapsed")) return;
+            var ul = directChildUL(li);
+            if (!ul) return;
+            var pcard = cardOf(li, true);
+            for (var i = 0; i < ul.children.length; i++) {
+                var cli = ul.children[i];
+                if (cli.tagName !== "LI") continue;
+                var ccard = cardOf(cli, false);
+                if (pcard && ccard) {
+                    var p = anchor(pcard, true), c = anchor(ccard, false);
+                    var dy = Math.max(16, (c[1] - p[1]) * 0.5);
+                    var d = "M" + p[0].toFixed(1) + " " + p[1].toFixed(1) +
+                            "C" + p[0].toFixed(1) + " " + (p[1] + dy).toFixed(1) +
+                            " " + c[0].toFixed(1) + " " + (c[1] - dy).toFixed(1) +
+                            " " + c[0].toFixed(1) + " " + c[1].toFixed(1);
+                    var path = document.createElementNS(SVGNS, "path");
+                    path.setAttribute("class", "edge");
+                    path.setAttribute("d", d);
+                    path.setAttribute("stroke-width", (cli._edgeW || 2).toFixed(1));
+                    edgesSvg.appendChild(path);
+                }
+                visit(cli);
+            }
+        }
+        visit(tree.children[0]);
+    }
+    function scheduleEdges() {
+        if (building || edgesRAF) return;
+        edgesRAF = requestAnimationFrame(function () { edgesRAF = null; drawEdges(); });
     }
 
     // Smoothly bring a node to the centre of the viewport, keeping the current zoom.
@@ -1314,7 +1379,7 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
     buildSQL();
     buildTimings();
     if (ANALYZE) setHeat(true);
-    requestAnimationFrame(fit);
+    requestAnimationFrame(function () { fit(); drawEdges(); });
     window.addEventListener("resize", function () { /* keep current transform */ });
 })();
 </script>
