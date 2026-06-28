@@ -172,6 +172,16 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
 .group .btn { border-radius: 0; border-right-width: 0; }
 .group .btn:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
 .group .btn:last-child { border-radius: 0 8px 8px 0; border-right-width: 1px; }
+/* instant tooltip (native title hover is slow/unreliable) */
+.btn[data-tip] { position: relative; overflow: visible; }
+.btn[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute; top: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg);
+    font-size: 11px; font-weight: 500; white-space: nowrap;
+    padding: 4px 8px; border-radius: 6px; box-shadow: var(--shadow);
+    z-index: 30; pointer-events: none;
+}
 
 /* ---------- Canvas / viewport ---------- */
 #viewport {
@@ -209,7 +219,11 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
     border-radius: 10px; box-shadow: var(--shadow);
     transition: box-shadow .15s, border-color .15s, transform .12s, opacity .15s;
     overflow: hidden; cursor: pointer;
+    /* the whole card is a click target, so don't let clicks/double-clicks select its text */
+    user-select: none; -webkit-user-select: none;
 }
+/* keep detail values selectable so expressions/filters can still be copied */
+.node-details .dv { user-select: text; -webkit-user-select: text; cursor: text; }
 .node:hover { box-shadow: var(--shadow-hover); border-color: var(--border-strong); }
 .node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow-hover); }
 .node.dim { opacity: .32; }
@@ -298,6 +312,7 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
     background: var(--panel-2); border: 1.5px dashed var(--border-strong);
     border-radius: 10px; box-shadow: var(--shadow);
     transition: border-color .15s, box-shadow .15s;
+    user-select: none; -webkit-user-select: none;
 }
 .group-card:hover { border-color: var(--accent); box-shadow: var(--shadow-hover); }
 .group-card .gc-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
@@ -334,7 +349,6 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
 #legend.clickable:hover { border-color: var(--border-strong); }
 #legend .lg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 2px; }
 #legend .lg-title { font-size: 9.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-faint); font-weight: 700; }
-#legend .lg-hint { font-size: 9.5px; color: var(--text-faint); font-weight: 600; }
 #legend .lg-row { display: flex; align-items: center; gap: 7px; color: var(--text-muted); }
 #legend .lg-row .nm { flex: 1; }
 #legend .lg-row .pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
@@ -353,6 +367,7 @@ mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: 
 .lg-op.clickable { cursor: pointer; }
 .lg-op.clickable:hover { background: var(--panel-2); color: var(--text); }
 .lg-op .nm { flex: 1; font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-op .rows { font-variant-numeric: tabular-nums; color: var(--text-faint); font-size: 10.5px; white-space: nowrap; flex-shrink: 0; }
 .lg-op .pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
 
 /* ---------- Phase timings (floating top-right button + panel) ---------- */
@@ -446,6 +461,10 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
         <button class="btn icon-btn-only" id="zoom-out" title="Zoom out">−</button>
         <button class="btn" id="zoom-fit" title="Fit to screen">Fit</button>
         <button class="btn icon-btn-only" id="zoom-in" title="Zoom in">+</button>
+    </div>
+    <div class="group">
+        <button class="btn icon-btn-only" id="collapse-all" data-tip="Collapse: hide the extra info in every operator">⊟</button>
+        <button class="btn icon-btn-only" id="expand-all" data-tip="Expand: show the extra info in every operator">⊞</button>
     </div>
     <button class="btn" id="heat-toggle" title="Toggle time heatmap">Heatmap</button>
     <button class="btn icon-btn-only" id="theme-toggle" title="Toggle theme">◐</button>
@@ -675,7 +694,8 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
 
         node.addEventListener("click", function () {
             select(node);
-            if (details.length) node.classList.toggle("open-details");
+            // toggling the details changes the card height, so redraw the connectors to follow it
+            if (details.length) { node.classList.toggle("open-details"); scheduleEdges(); }
         });
         return { node: node, hl: hl };
     }
@@ -952,7 +972,7 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
             clearKindHighlight();
             lg.innerHTML = "";
             var head = document.createElement("div"); head.className = "lg-head";
-            head.innerHTML = '<span class="lg-title">Operators</span>' + (hasTime ? '<span class="lg-hint">click to drill in</span>' : '');
+            head.innerHTML = '<span class="lg-title">Operators</span>';
             lg.appendChild(head);
             presentKinds.forEach(function (k) {
                 var row = document.createElement("div"); row.className = "lg-row" + (hasTime ? " clickable" : "");
@@ -981,9 +1001,15 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
             var LIMIT = 10;
             members.slice(0, LIMIT).forEach(function (r) {
                 var row = document.createElement("div"); row.className = "lg-op clickable";
-                var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = displayLabel(r.data);
+                // the category already conveys the operator type, so show just the source (e.g. table) where there is one
+                var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = nodeSource(r.data) || prettyName(r.data.name);
+                row.appendChild(nm);
+                if (r.data.cardinality != null) {
+                    var rw = document.createElement("span"); rw.className = "rows"; rw.textContent = fmtCompact(r.data.cardinality) + " rows";
+                    row.appendChild(rw);
+                }
                 var pc2 = document.createElement("span"); pc2.className = "pct"; pc2.textContent = (r.data.timing != null) ? fmtTime(r.data.timing) : "";
-                row.appendChild(nm); row.appendChild(pc2);
+                row.appendChild(pc2);
                 row.title = "Pan to this operator";
                 row.addEventListener("click", function () { revealRec(r); select(r.node); panToNode(r.node); });
                 list.appendChild(row);
@@ -1048,6 +1074,9 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
     function fit() {
         // reset transform to measure natural size
         scale = 1; tx = 0; ty = 0; applyTransform();
+        // zero the edge layer first so its size doesn't inflate the measurement: fit to the operators as shown now
+        edgesSvg.setAttribute("width", 0);
+        edgesSvg.setAttribute("height", 0);
         var cw = canvas.scrollWidth, ch = canvas.scrollHeight;
         var vw = viewport.clientWidth, vh = viewport.clientHeight;
         var s = Math.min(vw / cw, vh / ch, 1);
@@ -1056,6 +1085,7 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
         tx = (vw - cw * s) / 2;
         ty = Math.max(16, (vh - ch * s) / 2);
         applyTransform();
+        scheduleEdges();
     }
 
     // ---------- curved SVG edges between cards ----------
@@ -1100,8 +1130,13 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
     function drawEdges() {
         if (!edgesSvg || !tree.children.length) return;
         edgesSvg.innerHTML = "";
-        edgesSvg.setAttribute("width", canvas.scrollWidth);
-        edgesSvg.setAttribute("height", canvas.scrollHeight);
+        // zero the SVG before measuring: its own width/height prop the canvas open, so otherwise the content size can
+        // never shrink back after details/chains are collapsed (and Fit would keep fitting the old expanded size)
+        edgesSvg.setAttribute("width", 0);
+        edgesSvg.setAttribute("height", 0);
+        var fullW = canvas.scrollWidth, fullH = canvas.scrollHeight;
+        edgesSvg.setAttribute("width", fullW);
+        edgesSvg.setAttribute("height", fullH);
         var crect = canvas.getBoundingClientRect();
         var s = scale || 1;
         function anchor(el, bottom) {
@@ -1270,6 +1305,19 @@ html[data-theme="light"] .sql-kw { color: #0070d2; }
         heatBtn.classList.toggle("active", on);
     }
     heatBtn.addEventListener("click", function () { setHeat(!tree.classList.contains("heat")); });
+
+    // ---------- expand / collapse the extra info in every operator ----------
+    // Shows/hides each operator's detail rows and expands/condenses the low-impact chains, without touching the
+    // chain-collapse handles (those keep working independently). The default view is "Collapsed".
+    var expandBtn = document.getElementById("expand-all");
+    var collapseBtn = document.getElementById("collapse-all");
+    function setDetailsAll(open) {
+        groups.forEach(function (g) { setGroupExpanded(g, open); });
+        allNodes.forEach(function (r) { r.node.classList.toggle("open-details", open); });
+        scheduleEdges();
+    }
+    expandBtn.addEventListener("click", function () { setDetailsAll(true); });
+    collapseBtn.addEventListener("click", function () { setDetailsAll(false); });
 
     // ---------- theme: follow the OS setting unless the user toggles it ----------
     var themeMedia = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
