@@ -833,12 +833,17 @@ ForEachStatement <- 'FOR' 'EACH' 'STATEMENT'
 CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureGranularityClause? FeatureWindowClause? FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
 
 FeatureGranularityClause <- 'GRANULARITY' FeatureGranularity
-FeatureWindowClause <- 'WINDOW' NumberLiteral
+FeatureWindowClause <- 'WINDOW' FeatureInterval
 FeatureRefreshClause <- 'REFRESH' FeatureRefreshMode
 FeatureScheduleClause <- FeatureScheduleIntervalClause / FeatureScheduleShorthandClause
 FeatureScheduleIntervalClause <- 'EVERY' 'INTERVAL' StringLiteral
 FeatureScheduleShorthandClause <- 'EVERY' NumberLiteral FeatureScheduleUnit
 FeatureRetainClause <- 'RETAIN' NumberLiteral
+
+FeatureInterval <- FeatureIntervalString / FeatureIntervalShorthand / FeatureIntervalBare
+FeatureIntervalString <- 'INTERVAL' StringLiteral
+FeatureIntervalShorthand <- NumberLiteral FeatureScheduleUnit
+FeatureIntervalBare <- NumberLiteral
 
 FeatureScheduleUnit <- FeatureScheduleUnitDays / FeatureScheduleUnitDay / FeatureScheduleUnitHours / FeatureScheduleUnitHour / FeatureScheduleUnitMinutes / FeatureScheduleUnitMinute
 FeatureScheduleUnitDay <- 'DAY'

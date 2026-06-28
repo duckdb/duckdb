@@ -15,8 +15,22 @@
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_feature_info.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 namespace duckdb {
+
+static interval_t FeatureWindowIntervalFromGranularity(int64_t window_size, FeatureGranularity granularity) {
+	switch (granularity) {
+	case FeatureGranularity::DAY:
+		return interval_t {0, static_cast<int32_t>(window_size), 0};
+	case FeatureGranularity::HOUR:
+		return interval_t {0, 0, window_size * Interval::MICROS_PER_HOUR};
+	case FeatureGranularity::MINUTE:
+		return interval_t {0, 0, window_size * Interval::MICROS_PER_MINUTE};
+	default:
+		return interval_t {0, static_cast<int32_t>(window_size), 0};
+	}
+}
 
 void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CatalogType>(100, "type", type);
@@ -113,6 +127,7 @@ void CreateFeatureInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(212, "has_schedule", has_schedule, false);
 	serializer.WritePropertyWithDefault<interval_t>(213, "schedule_interval", schedule_interval, interval_t());
 	serializer.WritePropertyWithDefault<bool>(214, "schedule_enabled", schedule_enabled, true);
+	serializer.WritePropertyWithDefault<interval_t>(215, "window_interval", window_interval, interval_t());
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer) {
@@ -132,6 +147,10 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadPropertyWithExplicitDefault<bool>(212, "has_schedule", result->has_schedule, false);
 	deserializer.ReadPropertyWithExplicitDefault<interval_t>(213, "schedule_interval", result->schedule_interval, interval_t());
 	deserializer.ReadPropertyWithExplicitDefault<bool>(214, "schedule_enabled", result->schedule_enabled, true);
+	deserializer.ReadPropertyWithExplicitDefault<interval_t>(215, "window_interval", result->window_interval, interval_t());
+	if (result->window_interval.months == 0 && result->window_interval.days == 0 && result->window_interval.micros == 0) {
+		result->window_interval = FeatureWindowIntervalFromGranularity(result->window_size, result->granularity);
+	}
 	return std::move(result);
 }
 

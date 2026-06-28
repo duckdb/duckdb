@@ -179,6 +179,28 @@ b	2024-01-03 08:00:00	300
 b	2024-01-05 08:00:00	500
 
 # ============================================================
+# Explicit interval window: units are independent from GRANULARITY
+# ============================================================
+statement ok
+CREATE TABLE hour_window_src (eid VARCHAR, val INTEGER, ts TIMESTAMP);
+
+statement ok
+INSERT INTO hour_window_src VALUES
+    ('a', 10, '2024-01-01 00:00:00'),
+    ('a', 20, '2024-01-01 12:00:00'),
+    ('a', 30, '2024-01-02 06:00:00');
+
+statement ok
+CREATE FEATURE half_day_feat ON hour_window_src ENTITY eid TIMESTAMP ts GRANULARITY DAY WINDOW 12 HOURS REFRESH FULL RETAIN 1 AS (SELECT eid, SUM(val) AS total FROM hour_window_src GROUP BY eid);
+
+query TIR rowsort
+SELECT eid, feature_timestamp, total FROM half_day_feat;
+----
+a	2024-01-01 00:00:00	10
+a	2024-01-01 12:00:00	30
+a	2024-01-02 06:00:00	30
+
+# ============================================================
 # MIN/MAX features: non-sum aggregates
 # ============================================================
 statement ok
@@ -223,6 +245,9 @@ DROP TABLE transactions CASCADE;
 
 statement ok
 DROP TABLE narrow_window_src CASCADE;
+
+statement ok
+DROP TABLE hour_window_src CASCADE;
 
 query I
 SELECT COUNT(*) FROM duckdb_features();

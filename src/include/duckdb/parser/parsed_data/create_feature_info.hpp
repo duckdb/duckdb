@@ -33,6 +33,8 @@ struct CreateFeatureInfo : public CreateInfo {
 	FeatureGranularity granularity;
 	//! Lookback window size (in units of granularity)
 	int64_t window_size;
+	//! Lookback window interval
+	interval_t window_interval;
 	//! Refresh mode
 	FeatureRefreshMode refresh_mode;
 	//! Number of versions to retain

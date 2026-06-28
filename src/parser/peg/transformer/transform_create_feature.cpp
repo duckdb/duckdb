@@ -11,6 +11,11 @@
 
 namespace duckdb {
 
+struct FeatureWindowSpec {
+	int64_t window_size;
+	interval_t window_interval;
+};
+
 static int64_t ParsePositiveIntegerScheduleCount(const string &number) {
 	if (number.empty() || number[0] == '-') {
 		throw ParserException("Refresh schedule shorthand count must be a positive integer");
@@ -31,14 +36,18 @@ static int64_t ParsePositiveIntegerScheduleCount(const string &number) {
 	return result;
 }
 
+static bool IsPositiveInterval(const interval_t &interval) {
+	return interval.months > 0 || interval.days > 0 || interval.micros > 0;
+}
+
 static interval_t ParseIntervalSchedule(const string &interval_str, const string &context) {
 	interval_t schedule_interval {0, 0, 0};
 	string error_message;
 	if (!Interval::FromCString(interval_str.c_str(), interval_str.size(), schedule_interval, &error_message, false)) {
 		throw ParserException("Invalid interval in %s clause: %s", context, error_message);
 	}
-	if (schedule_interval.months == 0 && schedule_interval.days == 0 && schedule_interval.micros <= 0) {
-		throw ParserException("Refresh schedule interval must be positive");
+	if (!IsPositiveInterval(schedule_interval)) {
+		throw ParserException("%s interval must be positive", context);
 	}
 	return schedule_interval;
 }
@@ -55,6 +64,55 @@ static int64_t ScheduleCountToMicros(int64_t count, int64_t micros_per_unit) {
 		throw ParserException("Refresh schedule shorthand count is out of range");
 	}
 	return count * micros_per_unit;
+}
+
+static interval_t IntervalFromCountAndUnit(int64_t count, const ParseResult &unit) {
+	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitDay") ||
+	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitDays")) {
+		return interval_t {0, ScheduleCountToDays(count), 0};
+	}
+	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitHour") ||
+	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitHours")) {
+		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_HOUR)};
+	}
+	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitMinute") ||
+	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitMinutes")) {
+		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_MINUTE)};
+	}
+	throw InternalException("Unsupported feature interval unit");
+}
+
+static interval_t IntervalFromGranularity(int64_t count, FeatureGranularity granularity) {
+	switch (granularity) {
+	case FeatureGranularity::DAY:
+		return interval_t {0, ScheduleCountToDays(count), 0};
+	case FeatureGranularity::HOUR:
+		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_HOUR)};
+	case FeatureGranularity::MINUTE:
+		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_MINUTE)};
+	default:
+		throw InternalException("Unsupported feature granularity");
+	}
+}
+
+static FeatureWindowSpec ParseFeatureWindowInterval(ParseResult &parse_result, FeatureGranularity granularity) {
+	// FeatureInterval <- FeatureIntervalString / FeatureIntervalShorthand / FeatureIntervalBare
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice = list_pr.Child<ChoiceParseResult>(0).GetResult();
+	auto &clause = choice.Cast<ListParseResult>();
+	if (StringUtil::CIEquals(choice.name, "FeatureIntervalString")) {
+		return FeatureWindowSpec {0, ParseIntervalSchedule(clause.Child<StringLiteralParseResult>(1).result, "WINDOW")};
+	}
+
+	auto count = ParsePositiveIntegerScheduleCount(clause.Child<NumberParseResult>(0).number);
+	if (StringUtil::CIEquals(choice.name, "FeatureIntervalShorthand")) {
+		auto &unit = clause.Child<ListParseResult>(1).Child<ChoiceParseResult>(0).GetResult();
+		return FeatureWindowSpec {count, IntervalFromCountAndUnit(count, unit)};
+	}
+	if (StringUtil::CIEquals(choice.name, "FeatureIntervalBare")) {
+		return FeatureWindowSpec {count, IntervalFromGranularity(count, granularity)};
+	}
+	throw InternalException("Unsupported feature window interval");
 }
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PEGTransformer &transformer,
@@ -82,12 +140,15 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 		auto &clause = granularity_opt.GetResult().Cast<ListParseResult>();
 		granularity = transformer.Transform<FeatureGranularity>(clause.Child<ListParseResult>(1));
 	}
-	// index 10: FeatureWindowClause? (default: 1)
+	// index 10: FeatureWindowClause? (default: 1 unit of GRANULARITY)
 	int64_t window_size = 1;
+	auto window_interval = IntervalFromGranularity(window_size, granularity);
 	auto &window_opt = list_pr.Child<OptionalParseResult>(10);
 	if (window_opt.HasResult()) {
 		auto &clause = window_opt.GetResult().Cast<ListParseResult>();
-		window_size = std::stoll(clause.Child<NumberParseResult>(1).number);
+		auto window_spec = ParseFeatureWindowInterval(clause.Child<ListParseResult>(1), granularity);
+		window_size = window_spec.window_size;
+		window_interval = window_spec.window_interval;
 	}
 	// index 11: FeatureRefreshClause? (default: INCREMENTAL)
 	FeatureRefreshMode refresh_mode = FeatureRefreshMode::INCREMENTAL;
@@ -124,6 +185,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	info->timestamp_column = timestamp_column;
 	info->granularity = granularity;
 	info->window_size = window_size;
+	info->window_interval = window_interval;
 	info->refresh_mode = refresh_mode;
 	info->retain_versions = retain_versions;
 	info->has_schedule = has_schedule;
@@ -150,19 +212,7 @@ interval_t PEGTransformerFactory::TransformFeatureScheduleClause(PEGTransformer 
 
 	auto count = ParsePositiveIntegerScheduleCount(clause.Child<NumberParseResult>(1).number);
 	auto &unit = clause.Child<ListParseResult>(2).Child<ChoiceParseResult>(0).GetResult();
-	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitDay") ||
-	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitDays")) {
-		return interval_t {0, ScheduleCountToDays(count), 0};
-	}
-	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitHour") ||
-	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitHours")) {
-		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_HOUR)};
-	}
-	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitMinute") ||
-	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitMinutes")) {
-		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_MINUTE)};
-	}
-	throw InternalException("Unsupported feature schedule unit");
+	return IntervalFromCountAndUnit(count, unit);
 }
 
 FeatureGranularity PEGTransformerFactory::TransformFeatureGranularity(PEGTransformer &transformer,

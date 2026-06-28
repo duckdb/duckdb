@@ -448,6 +448,12 @@
         "name": "schedule_enabled",
         "type": "bool",
         "default": "true"
+      },
+      {
+        "id": 215,
+        "name": "window_interval",
+        "type": "interval_t",
+        "default": "interval_t()"
       }
     ]
   }

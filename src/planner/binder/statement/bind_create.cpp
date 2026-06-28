@@ -16,6 +16,7 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -798,22 +799,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		feature_info.dependencies.AddDependency(table_entry);
 
 		// Build PIT query string from the feature definition
-		string gran;
-		switch (feature_info.granularity) {
-		case FeatureGranularity::DAY:
-			gran = "day";
-			break;
-		case FeatureGranularity::HOUR:
-			gran = "hour";
-			break;
-		case FeatureGranularity::MINUTE:
-			gran = "minute";
-			break;
-		default:
-			gran = "day";
-			break;
-		}
-
 		auto &select_node = feature_info.query->node->Cast<SelectNode>();
 		string agg_exprs;
 		for (auto &expr : select_node.select_list) {
@@ -835,7 +820,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto entity = SQLIdentifier::ToString(feature_info.entity_column);
 		auto ts = SQLIdentifier::ToString(feature_info.timestamp_column);
 		auto table = SQLIdentifier::ToString(feature_info.source_table);
-		auto window_interval = StringUtil::Format("%d %s", feature_info.window_size, gran);
+		auto window_interval = Interval::ToString(feature_info.window_interval);
 
 		string pit_sql = StringUtil::Format(
 		    "SELECT anchor.%s, anchor.feature_timestamp, %s "

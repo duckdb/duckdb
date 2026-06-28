@@ -76,11 +76,10 @@ static string BuildPITQuery(const FeatureCatalogEntry &feat, const string &spine
 		}
 	}
 
-	auto gran = GranularityToSQL(feat.granularity);
 	auto entity = QuoteIdent(feat.entity_column);
 	auto ts = QuoteIdent(feat.timestamp_column);
 	auto table = QuoteIdent(feat.source_table);
-	auto window_interval = StringUtil::Format("%d %s", feat.window_size, gran);
+	auto window_interval = Interval::ToString(feat.window_interval);
 
 	string pit_sql = StringUtil::Format(
 	    "SELECT anchor.%s, anchor.feature_timestamp, %s "

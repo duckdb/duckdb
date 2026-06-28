@@ -91,10 +91,39 @@ CREATE FEATURE IF NOT EXISTS daily_txn ON transactions ENTITY card_no TIMESTAMP 
 statement ok
 CREATE FEATURE hourly_stats ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY HOUR WINDOW 24 REFRESH INCREMENTAL RETAIN 5 AS (SELECT card_no, AVG(amount) FROM transactions GROUP BY card_no);
 
+# WINDOW accepts explicit interval shorthand independent of GRANULARITY
+statement ok
+CREATE FEATURE explicit_hours ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 24 HOURS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+
+query II
+SELECT window_size, window_interval FROM duckdb_features() WHERE feature_name = 'explicit_hours';
+----
+24	24:00:00
+
+query I
+SELECT sql FROM duckdb_features() WHERE feature_name = 'explicit_hours';
+----
+<REGEX>:.*WINDOW INTERVAL '24:00:00'.*
+
+# WINDOW also accepts INTERVAL string syntax
+statement ok
+CREATE FEATURE interval_minutes ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW INTERVAL '90 minutes' REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+
+query II
+SELECT window_size, window_interval FROM duckdb_features() WHERE feature_name = 'interval_minutes';
+----
+0	01:30:00
+
 query I
 SELECT COUNT(*) FROM duckdb_features();
 ----
-2
+4
+
+statement ok
+DROP FEATURE explicit_hours;
+
+statement ok
+DROP FEATURE interval_minutes;
 
 # ============================================================
 # Default parameter values

@@ -68,6 +68,9 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 	names.emplace_back("next_refresh_at");
 	return_types.emplace_back(LogicalType::TIMESTAMP);
 
+	names.emplace_back("window_interval");
+	return_types.emplace_back(LogicalType::INTERVAL);
+
 	return nullptr;
 }
 
@@ -157,6 +160,8 @@ static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &d
 		} else {
 			output.data[15].Append(Value(LogicalType::TIMESTAMP));
 		}
+		// window_interval
+		output.data[16].Append(Value::INTERVAL(feat.window_interval));
 
 		count++;
 	}

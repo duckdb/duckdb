@@ -5,10 +5,27 @@
 
 namespace duckdb {
 
+static interval_t WindowIntervalFromGranularity(int64_t window_size, FeatureGranularity granularity) {
+	switch (granularity) {
+	case FeatureGranularity::DAY:
+		return interval_t {0, static_cast<int32_t>(window_size), 0};
+	case FeatureGranularity::HOUR:
+		return interval_t {0, 0, window_size * Interval::MICROS_PER_HOUR};
+	case FeatureGranularity::MINUTE:
+		return interval_t {0, 0, window_size * Interval::MICROS_PER_MINUTE};
+	default:
+		return interval_t {0, static_cast<int32_t>(window_size), 0};
+	}
+}
+
+static bool IntervalEquals(const interval_t &left, const interval_t &right) {
+	return left.months == right.months && left.days == right.days && left.micros == right.micros;
+}
+
 CreateFeatureInfo::CreateFeatureInfo()
     : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), granularity(FeatureGranularity::DAY), window_size(7),
-      refresh_mode(FeatureRefreshMode::FULL), retain_versions(1), current_version(1), has_schedule(false),
-      schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
+	  window_interval(interval_t {0, 7, 0}), refresh_mode(FeatureRefreshMode::FULL), retain_versions(1),
+	  current_version(1), has_schedule(false), schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
@@ -20,6 +37,7 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	result->timestamp_column = timestamp_column;
 	result->granularity = granularity;
 	result->window_size = window_size;
+	result->window_interval = window_interval;
 	result->refresh_mode = refresh_mode;
 	result->retain_versions = retain_versions;
 	result->current_version = current_version;
@@ -58,7 +76,11 @@ string CreateFeatureInfo::ToString() const {
 		result += "MINUTE";
 		break;
 	}
-	result += " WINDOW " + duckdb::to_string(window_size);
+	if (IntervalEquals(window_interval, WindowIntervalFromGranularity(window_size, granularity))) {
+		result += " WINDOW " + duckdb::to_string(window_size);
+	} else {
+		result += " WINDOW INTERVAL '" + Interval::ToString(window_interval) + "'";
+	}
 	result += " REFRESH ";
 	switch (refresh_mode) {
 	case FeatureRefreshMode::FULL:
