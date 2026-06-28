@@ -62,6 +62,7 @@ class AtClause;
 class BoundAtClause;
 
 struct CreateInfo;
+struct CreateSchemaInfo;
 struct CreateTriggerInfo;
 struct QualifiedName;
 struct BoundCreateTableInfo;
@@ -263,6 +264,12 @@ public:
 	                     vector<Identifier> &result_names);
 
 	void SearchSchema(CreateInfo &info);
+	//! Resolve the leading component of a (possibly qualified) name into a catalog: if it names an attached database
+	//! it becomes the catalog, otherwise the default catalog is prepended. The result has the catalog as the first
+	//! schema-path element.
+	QualifiedName ResolveCatalog(ClientContext &context, const QualifiedName &name);
+	//! Resolve the (possibly nested) name of a CREATE SCHEMA statement into a canonical [catalog, parents..., schema]
+	void BindCreateSchema(CreateSchemaInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateTriggerInfo(CreateTriggerInfo &info);

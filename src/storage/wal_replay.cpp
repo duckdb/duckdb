@@ -886,8 +886,23 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 // Replay Schema
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSchema() {
+	auto schema = deserializer.ReadPropertyWithExplicitDefault<Identifier>(101, "schema", Identifier());
+	auto qualified_name =
+	    deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(102, "qualified_name", QualifiedName());
 	CreateSchemaInfo info;
-	info.SetQualifiedName(QualifiedName({Identifier(deserializer.ReadProperty<string>(101, "schema"))}, Identifier()));
+	// build the CreateSchemaInfo path [catalog, parent schemas..., new schema, <empty name>]
+	vector<Identifier> path;
+	path.push_back(catalog.GetName());
+	if (!qualified_name.Path().empty()) {
+		// v2.0.0+: the qualified name's path is [parent schemas..., new schema]
+		for (auto &component : qualified_name.Path()) {
+			path.push_back(component);
+		}
+	} else {
+		// legacy: only the (top-level) schema name was serialized
+		path.push_back(std::move(schema));
+	}
+	info.SetQualifiedName(QualifiedName(std::move(path), Identifier()));
 	if (DeserializeOnly()) {
 		return;
 	}

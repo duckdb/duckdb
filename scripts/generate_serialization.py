@@ -348,8 +348,12 @@ supported_member_entries = [
     "deserialize_property",
     "base",
     "default",
+    "deserialize_default",
+    "deserialize_skip_assign",
+    "serialize_until",
     "status",
     "version",
+    "serialize_condition",
     "required_until",
     # equality/hash generation annotations (used by generate_util.py)
     "equals_skip",
@@ -418,9 +422,24 @@ class MemberVariable:
             self.serialize_property = entry["serialize_property"]
         if "deserialize_property" in entry:
             self.deserialize_property = entry["deserialize_property"]
+        self.deserialize_default = None
+        # When set, the property is still read into a local during deserialization, but the generated code does not
+        # auto-assign it to the result. Use together with finalize_deserialization to apply the value conditionally.
+        self.deserialize_skip_assign = entry.get("deserialize_skip_assign", False)
+        # When set, the property is only serialized for storage versions older than this version (newer versions use
+        # a replacement property). Deserialization is unaffected - the property is still read (with a default).
+        self.serialize_until = entry.get("serialize_until", None)
+        # An extra C++ boolean expression that, when true, forces the property to be serialized even when the
+        # version gate (above) would skip it. Used e.g. to always serialize a value that an older format cannot
+        # otherwise represent (nested schema paths).
+        self.serialize_condition = entry.get("serialize_condition", None)
         if "default" in entry:
             self.has_default = True
             self.default = entry["default"]
+        if "deserialize_default" in entry:
+            # A default used by the deserialize side only (e.g. tolerate a newer property being absent in an older
+            # file). The serialize side is unaffected: without 'default' it keeps writing the property unconditionally.
+            self.deserialize_default = entry["deserialize_default"]
         if "status" in entry:
             self.status = parse_status(entry["status"])
         if self.default is None:
@@ -598,8 +617,8 @@ class SerializableClass:
             property_key,
             property_id,
             property_type,
-            entry.has_default,
-            entry.default,
+            entry.has_default or entry.deserialize_default is not None,
+            (entry.deserialize_default if entry.deserialize_default is not None else entry.default),
             entry.status,
             pointer_type,
         )
@@ -630,6 +649,14 @@ class SerializableClass:
             assignment=assignment,
         )
 
+        if entry.serialize_until is not None:
+            # Only serialize for storage versions older than serialize_until (newer versions use a replacement
+            # property). Deserialization is unaffected.
+            serialize_until_enum = version_string_to_storage_version_enum(entry.serialize_until)
+            return (
+                f"\tif (!serializer.ShouldSerialize({serialize_until_enum})) {{\n" f"\t{serialization_code}" f"\t}}\n"
+            )
+
         if entry.required_until is not None:
             # Write as a required property for versions older than required_until (so older releases can read it),
             # and as the optional property above (skipped when default) from required_until onwards.
@@ -657,7 +684,10 @@ class SerializableClass:
                 code.append(f"\tif (!serializer.ShouldSerialize({storage_version_enum})) {{")
             else:
                 # conditional serialization
-                code.append(f"\tif (serializer.ShouldSerialize({storage_version_enum})) {{")
+                condition = f"serializer.ShouldSerialize({storage_version_enum})"
+                if entry.serialize_condition is not None:
+                    condition = f"{condition} || ({entry.serialize_condition})"
+                code.append(f"\tif ({condition}) {{")
             code.append("\t" + serialization_code)
 
             result = "\n".join(code) + "\t}\n"
@@ -749,6 +779,9 @@ def generate_base_class_code(base_class: SerializableClass):
             continue
         if entry.name in base_class.method_arg_names:
             # value is consumed by a method call below instead of being assigned to a member
+            continue
+        if entry.deserialize_skip_assign:
+            # read into a local only; finalize_deserialization applies it conditionally
             continue
         local = deserialize_local_name(entry)
         move = False
