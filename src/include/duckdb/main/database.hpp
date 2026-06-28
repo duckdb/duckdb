@@ -36,6 +36,7 @@ struct DatabaseCacheEntry;
 class LogManager;
 class ExternalFileCache;
 class ResultSetManager;
+class FeatureRefreshScheduler;
 struct ParserCache;
 
 class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
@@ -82,6 +83,21 @@ public:
 	shared_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
 	                                                    AttachOptions &options);
 
+	//! Start the feature auto-refresh scheduler. Must be called after FinalizeStartup() so the
+	//! catalog is fully loaded before the initial heap scan runs.
+	void StartFeatureRefreshScheduler();
+	//! Stop and join the feature auto-refresh scheduler thread. Must be called by an owner thread that
+	//! still holds a strong reference to the DatabaseInstance, so the background thread (which transiently
+	//! co-owns the instance via the Connections it creates) can never be the last owner and end up
+	//! joining itself during ~DatabaseInstance.
+	void StopFeatureRefreshScheduler();
+	//! Wake the feature auto-refresh scheduler so it re-scans the catalog for scheduled features.
+	//! Called when a scheduled FeatureCatalogEntry is created (at startup via WAL replay or at runtime via
+	//! CREATE FEATURE). Safe to call before the scheduler thread is started and is a no-op if the scheduler
+	//! does not exist (e.g. READ_ONLY or no-threads builds).
+	void NotifyFeatureRefreshScheduler();
+	FeatureRefreshScheduler *GetFeatureRefreshScheduler();
+
 private:
 	void Initialize(const char *path, DBConfig *config);
 	void LoadExtensionSettings();
@@ -103,6 +119,7 @@ private:
 	unique_ptr<ExternalFileCache> external_file_cache;
 	unique_ptr<ResultSetManager> result_set_manager;
 	unique_ptr<ParserCache> parser_cache;
+	unique_ptr<FeatureRefreshScheduler> feature_refresh_scheduler;
 
 	duckdb_ext_api_v1 (*create_api_v1)();
 };

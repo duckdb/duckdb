@@ -1,0 +1,52 @@
+# name: test/sql/feature/test_feature_schedule_persistence.test
+# description: Test that a feature's refresh schedule survives a database restart
+# group: [feature]
+
+load {TEST_DIR}/feature_schedule_persistence.db
+
+statement ok
+CREATE TABLE events (customer VARCHAR, value INTEGER, event_time TIMESTAMP);
+
+statement ok
+INSERT INTO events VALUES
+    ('x', 10, '2024-01-01 08:00:00'),
+    ('y', 30, '2024-01-01 12:00:00');
+
+statement ok
+CREATE FEATURE sched ON events
+    ENTITY customer
+    TIMESTAMP event_time
+    GRANULARITY HOUR
+    WINDOW 24
+    REFRESH INCREMENTAL
+    EVERY INTERVAL '90 minutes'
+    RETAIN 3
+    AS (SELECT customer, SUM(value) AS total_value);
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'sched';
+----
+01:30:00	true
+
+# ============================================================
+# Restart 1 — replay the WAL (no checkpoint yet)
+# ============================================================
+restart
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'sched';
+----
+01:30:00	true
+
+# ============================================================
+# Force a checkpoint, then restart again
+# ============================================================
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'sched';
+----
+01:30:00	true

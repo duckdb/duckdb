@@ -2,6 +2,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/feature_refresh_scheduler.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -119,6 +120,9 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		}
 		// Now drop the feature entry itself (cascades to the view via ownership)
 		catalog.DropEntry(context.client, *info);
+		if (auto scheduler = catalog.GetDatabase().GetFeatureRefreshScheduler()) {
+			scheduler->NotifyOnCommit(context.client);
+		}
 		break;
 	}
 	default: {

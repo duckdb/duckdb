@@ -22,6 +22,7 @@
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/feature_refresh_scheduler.hpp"
 #include "duckdb/main/result_set_manager.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -84,6 +85,11 @@ ParserCache &DatabaseInstance::GetParserCache() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
+	// Stop the feature refresh scheduler before any catalog teardown so the background thread
+	// cannot access catalog entries that are being destroyed.
+	if (feature_refresh_scheduler) {
+		feature_refresh_scheduler->Stop();
+	}
 	// destroy all attached databases
 	if (db_manager) {
 		db_manager->ResetDatabases();
@@ -334,6 +340,16 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	LoadExtensionSettings();
 
+	// Create the feature scheduler BEFORE loading the main database. Loading the database
+	// (CreateMainDatabase below) reconstructs FeatureCatalogEntry objects from the checkpoint and the
+	// WAL, and each scheduled entry's constructor calls NotifyFeatureRefreshScheduler() to flag that a
+	// scan is needed. If the scheduler did not exist yet, that notification would be silently dropped
+	// and the background thread would block forever without ever scanning. The scheduler's constructor
+	// only stores a reference and launches no thread, so creating it early is cheap and safe. The
+	// scheduler is enabled later, by Start() (after FinalizeStartup()), so the initial heap scan still
+	// runs against the fully committed catalog once a schedule exists.
+	feature_refresh_scheduler = make_uniq<FeatureRefreshScheduler>(*this);
+
 	if (!db_manager->HasDefaultDatabase()) {
 		CreateMainDatabase();
 	}
@@ -343,21 +359,57 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	scheduler->RelaunchThreads();
 }
 
+void DatabaseInstance::StartFeatureRefreshScheduler() {
+	if (feature_refresh_scheduler) {
+		feature_refresh_scheduler->Start();
+	}
+}
+
+void DatabaseInstance::StopFeatureRefreshScheduler() {
+	if (feature_refresh_scheduler) {
+		feature_refresh_scheduler->Stop();
+	}
+}
+
+void DatabaseInstance::NotifyFeatureRefreshScheduler() {
+	if (feature_refresh_scheduler) {
+		feature_refresh_scheduler->Notify();
+	}
+}
+
+FeatureRefreshScheduler *DatabaseInstance::GetFeatureRefreshScheduler() {
+	return feature_refresh_scheduler.get();
+}
+
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared_ptr<DatabaseInstance>()) {
 	instance->Initialize(path, new_config);
 	if (instance->config.options.load_extensions) {
 		ExtensionHelper::LoadAllExtensions(*this);
 	}
+	// FinalizeStartup replays WAL / checkpoint so catalog entries are visible. The feature
+	// refresh scheduler must start AFTER this so its initial heap scan sees all committed entries.
 	instance->db_manager->FinalizeStartup();
+	instance->StartFeatureRefreshScheduler();
 }
 
 DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), config) {
 }
 
 DuckDB::DuckDB(DatabaseInstance &instance_p) : instance(instance_p.shared_from_this()) {
+	// The instance may have been created externally without going through the DuckDB(path) path.
+	// Start() is idempotent so this is safe to call again if the scheduler is already running.
+	instance->StartFeatureRefreshScheduler();
 }
 
 DuckDB::~DuckDB() {
+	// Stop the feature refresh scheduler here, while this owner still holds a strong reference to the
+	// DatabaseInstance. The scheduler's background thread transiently co-owns the instance through the
+	// Connections it creates, so it must be joined by an owner thread that is guaranteed not to be the
+	// background thread itself. Otherwise the background thread could become the last owner, trigger
+	// ~DatabaseInstance on itself, and deadlock by joining its own thread.
+	if (instance) {
+		instance->StopFeatureRefreshScheduler();
+	}
 }
 
 SecretManager &DatabaseInstance::GetSecretManager() {

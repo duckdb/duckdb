@@ -2,6 +2,8 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/feature_refresh_scheduler.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
@@ -18,6 +20,11 @@ SourceResultType PhysicalAlter::GetDataInternal(ExecutionContext &context, DataC
 	} else {
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 		catalog.Alter(context.client, *info);
+		if (info->GetCatalogType() == CatalogType::FEATURE_ENTRY) {
+			if (auto scheduler = catalog.GetDatabase().GetFeatureRefreshScheduler()) {
+				scheduler->NotifyOnCommit(context.client);
+			}
+		}
 	}
 	return SourceResultType::FINISHED;
 }

@@ -430,6 +430,24 @@
         "name": "current_version",
         "type": "int64_t",
         "default": "1"
+      },
+      {
+        "id": 212,
+        "name": "has_schedule",
+        "type": "bool",
+        "default": "false"
+      },
+      {
+        "id": 213,
+        "name": "schedule_interval",
+        "type": "interval_t",
+        "default": "interval_t()"
+      },
+      {
+        "id": 214,
+        "name": "schedule_enabled",
+        "type": "bool",
+        "default": "true"
       }
     ]
   }

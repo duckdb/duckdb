@@ -1,0 +1,89 @@
+# name: test/sql/feature/test_feature_scheduler.test_slow
+# description: Test that FeatureRefreshScheduler automatically refreshes scheduled features in the background
+# group: [feature]
+
+# Use a persistent database so the scheduler can scan the catalog after a restart.
+load {TEST_DIR}/feature_scheduler.db
+
+statement ok
+CREATE TABLE hits (UserID VARCHAR, EventTime TIMESTAMP);
+
+statement ok
+INSERT INTO hits VALUES
+    ('alice', '2024-01-01 08:00:00'),
+    ('alice', '2024-01-01 14:00:00'),
+    ('bob',   '2024-01-01 12:00:00');
+
+# ============================================================
+# Feature WITH a 1-second schedule
+# ============================================================
+statement ok
+CREATE FEATURE auto_sched ON hits
+    ENTITY UserID
+    TIMESTAMP EventTime
+    GRANULARITY HOUR
+    WINDOW 24
+    REFRESH INCREMENTAL
+    EVERY INTERVAL '1 second'
+    RETAIN 20
+    AS (SELECT UserID, COUNT(*) AS event_count FROM hits GROUP BY UserID);
+
+# ============================================================
+# Feature WITHOUT a schedule (should never be auto-refreshed)
+# ============================================================
+statement ok
+CREATE FEATURE no_sched ON hits
+    ENTITY UserID
+    TIMESTAMP EventTime
+    GRANULARITY HOUR
+    WINDOW 24
+    REFRESH INCREMENTAL
+    RETAIN 20
+    AS (SELECT UserID, COUNT(*) AS event_count FROM hits GROUP BY UserID);
+
+# Both start at version 1
+query I
+SELECT current_version FROM duckdb_features() WHERE feature_name = 'auto_sched';
+----
+1
+
+query I
+SELECT current_version FROM duckdb_features() WHERE feature_name = 'no_sched';
+----
+1
+
+# ============================================================
+# Restart so the scheduler scans the catalog and picks up
+# both features from the committed WAL.
+# ============================================================
+restart
+
+# ============================================================
+# Give the background thread time to fire the 1-second
+# schedule at least twice (3 s >> 1 s interval + startup time).
+# ============================================================
+sleep 3 seconds
+
+# The scheduled feature must have been refreshed automatically.
+query I
+SELECT current_version > 1 FROM duckdb_features() WHERE feature_name = 'auto_sched';
+----
+true
+
+# The unscheduled feature must remain untouched at version 1.
+query I
+SELECT current_version FROM duckdb_features() WHERE feature_name = 'no_sched';
+----
+1
+
+# ============================================================
+# The scheduler continues running: wait another 2 seconds and
+# verify the version advanced again beyond the first check.
+# ============================================================
+sleep 2 seconds
+
+# After 5 s total with a 1-second interval the version must be well above 2.
+query I
+SELECT current_version > 2 FROM duckdb_features() WHERE feature_name = 'auto_sched';
+----
+true

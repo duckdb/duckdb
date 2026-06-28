@@ -4,8 +4,57 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/statement/call_statement.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
+
+static int64_t ParsePositiveIntegerScheduleCount(const string &number) {
+	if (number.empty() || number[0] == '-') {
+		throw ParserException("Refresh schedule shorthand count must be a positive integer");
+	}
+	idx_t start = number[0] == '+' ? 1 : 0;
+	if (start >= number.size() || number.find_first_not_of("0123456789", start) != string::npos) {
+		throw ParserException("Refresh schedule shorthand count must be a positive integer");
+	}
+	int64_t result;
+	try {
+		result = std::stoll(number);
+	} catch (std::exception &) {
+		throw ParserException("Refresh schedule shorthand count is out of range");
+	}
+	if (result <= 0) {
+		throw ParserException("Refresh schedule interval must be positive");
+	}
+	return result;
+}
+
+static interval_t ParseIntervalSchedule(const string &interval_str, const string &context) {
+	interval_t schedule_interval {0, 0, 0};
+	string error_message;
+	if (!Interval::FromCString(interval_str.c_str(), interval_str.size(), schedule_interval, &error_message, false)) {
+		throw ParserException("Invalid interval in %s clause: %s", context, error_message);
+	}
+	if (schedule_interval.months == 0 && schedule_interval.days == 0 && schedule_interval.micros <= 0) {
+		throw ParserException("Refresh schedule interval must be positive");
+	}
+	return schedule_interval;
+}
+
+static int32_t ScheduleCountToDays(int64_t count) {
+	if (count > NumericLimits<int32_t>::Maximum()) {
+		throw ParserException("Refresh schedule shorthand count is out of range");
+	}
+	return static_cast<int32_t>(count);
+}
+
+static int64_t ScheduleCountToMicros(int64_t count, int64_t micros_per_unit) {
+	if (count > NumericLimits<int64_t>::Maximum() / micros_per_unit) {
+		throw ParserException("Refresh schedule shorthand count is out of range");
+	}
+	return count * micros_per_unit;
+}
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PEGTransformer &transformer,
                                                                               ParseResult &parse_result) {
@@ -46,15 +95,23 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 		auto &clause = refresh_opt.GetResult().Cast<ListParseResult>();
 		refresh_mode = transformer.Transform<FeatureRefreshMode>(clause.Child<ListParseResult>(1));
 	}
-	// index 12: FeatureRetainClause? (default: 1)
+	// index 12: FeatureScheduleClause? (default: no schedule)
+	bool has_schedule = false;
+	interval_t schedule_interval {0, 0, 0};
+	auto &schedule_opt = list_pr.Child<OptionalParseResult>(12);
+	if (schedule_opt.HasResult()) {
+		schedule_interval = transformer.Transform<interval_t>(schedule_opt.GetResult());
+		has_schedule = true;
+	}
+	// index 13: FeatureRetainClause? (default: 1)
 	int64_t retain_versions = 1;
-	auto &retain_opt = list_pr.Child<OptionalParseResult>(12);
+	auto &retain_opt = list_pr.Child<OptionalParseResult>(13);
 	if (retain_opt.HasResult()) {
 		auto &clause = retain_opt.GetResult().Cast<ListParseResult>();
 		retain_versions = std::stoll(clause.Child<NumberParseResult>(1).number);
 	}
-	// index 13: 'AS' keyword
-	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(14));
+	// index 14: 'AS' keyword
+	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(15));
 	auto query = transformer.Transform<unique_ptr<SelectStatement>>(select_parens);
 
 	auto result = make_uniq<CreateStatement>();
@@ -68,9 +125,43 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	info->window_size = window_size;
 	info->refresh_mode = refresh_mode;
 	info->retain_versions = retain_versions;
+	info->has_schedule = has_schedule;
+	info->schedule_interval = schedule_interval;
+	info->schedule_enabled = has_schedule;
 	info->query = std::move(query);
 	result->info = std::move(info);
 	return result;
+}
+
+interval_t PEGTransformerFactory::TransformFeatureScheduleClause(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	// FeatureScheduleClause <- FeatureScheduleIntervalClause / FeatureScheduleShorthandClause
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice = list_pr.Child<ChoiceParseResult>(0).GetResult();
+	auto &clause = choice.Cast<ListParseResult>();
+	if (StringUtil::CIEquals(choice.name, "FeatureScheduleIntervalClause")) {
+		return ParseIntervalSchedule(clause.Child<StringLiteralParseResult>(2).result, "EVERY");
+	}
+
+	if (!StringUtil::CIEquals(choice.name, "FeatureScheduleShorthandClause")) {
+		throw InternalException("Unsupported feature schedule clause");
+	}
+
+	auto count = ParsePositiveIntegerScheduleCount(clause.Child<NumberParseResult>(1).number);
+	auto &unit = clause.Child<ListParseResult>(2).Child<ChoiceParseResult>(0).GetResult();
+	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitDay") ||
+	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitDays")) {
+		return interval_t {0, ScheduleCountToDays(count), 0};
+	}
+	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitHour") ||
+	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitHours")) {
+		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_HOUR)};
+	}
+	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitMinute") ||
+	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitMinutes")) {
+		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_MINUTE)};
+	}
+	throw InternalException("Unsupported feature schedule unit");
 }
 
 FeatureGranularity PEGTransformerFactory::TransformFeatureGranularity(PEGTransformer &transformer,

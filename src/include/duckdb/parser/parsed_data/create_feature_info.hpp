@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 namespace duckdb {
 
@@ -38,6 +39,12 @@ struct CreateFeatureInfo : public CreateInfo {
 	int64_t retain_versions;
 	//! Current version number (incremented on each REFRESH); persisted so it survives restarts
 	int64_t current_version;
+	//! Whether an automatic refresh schedule is attached to this feature
+	bool has_schedule;
+	//! The interval between automatic refreshes (valid when has_schedule is true)
+	interval_t schedule_interval;
+	//! Whether the schedule is currently active; can be toggled without dropping the interval
+	bool schedule_enabled;
 	//! The SELECT query that defines the feature
 	unique_ptr<SelectStatement> query;
 	//! Column names of the materialized result (set during binding)

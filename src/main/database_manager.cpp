@@ -7,6 +7,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/feature_refresh_scheduler.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -234,6 +235,9 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 	if (detached_db) {
 		meta_transaction.DetachDatabase(*detached_db);
 		detached_db->OnDetach(context);
+		if (auto scheduler = db.GetFeatureRefreshScheduler()) {
+			scheduler->RemoveCatalog(detached_db->GetName());
+		}
 		detached_db.reset();
 	}
 	auto &db_ref = meta_transaction.UseDatabase(attached_db);
@@ -259,6 +263,9 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	}
 
 	attached_db->OnDetach(context);
+	if (auto scheduler = db.GetFeatureRefreshScheduler()) {
+		scheduler->RemoveCatalog(attached_db->GetName());
+	}
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
 	AttachedDatabase::InvokeCloseIfLastReference(attached_db, context);

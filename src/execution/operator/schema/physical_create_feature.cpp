@@ -4,6 +4,8 @@
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/feature_refresh_scheduler.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
@@ -71,6 +73,11 @@ unique_ptr<GlobalSinkState> PhysicalCreateFeature::GetGlobalSinkState(ClientCont
 
 	if (!set.CreateEntry(transaction, info->feature_name, std::move(entry), dependencies)) {
 		throw CatalogException::EntryAlreadyExists(CatalogType::FEATURE_ENTRY, info->feature_name);
+	}
+	if (info->has_schedule && info->schedule_enabled) {
+		if (auto scheduler = catalog.GetDatabase().GetFeatureRefreshScheduler()) {
+			scheduler->NotifyOnCommit(context);
+		}
 	}
 
 	// Make the feature own the view so dropping feature cascades to the view

@@ -1,0 +1,56 @@
+# name: test/sql/feature/test_feature_scheduler_attach_detach.test
+# description: Test that scheduled features in attached databases do not dirty ATTACH/DETACH transactions
+# group: [feature]
+
+require noforcestorage
+
+statement ok
+ATTACH '{TEST_DIR}/feature_scheduler_attach_detach.db' AS sched_attach;
+
+statement ok
+USE sched_attach.main;
+
+statement ok
+CREATE TABLE events (customer VARCHAR, value INTEGER, event_time TIMESTAMP);
+
+statement ok
+INSERT INTO events VALUES
+    ('x', 10, '2024-01-01 08:00:00'),
+    ('y', 30, '2024-01-01 12:00:00');
+
+statement ok
+CREATE FEATURE sched_attach_feature ON events
+    ENTITY customer
+    TIMESTAMP event_time
+    GRANULARITY HOUR
+    WINDOW 24
+    REFRESH INCREMENTAL
+    EVERY INTERVAL '1 hour'
+    RETAIN 3
+    AS (SELECT customer, SUM(value) AS total_value);
+
+query II
+SELECT database_name, schedule_enabled FROM duckdb_features() WHERE feature_name = 'sched_attach_feature';
+----
+sched_attach	true
+
+statement ok
+USE memory.main;
+
+statement ok
+DETACH sched_attach;
+
+# Regression check: attaching a database that contains a scheduled feature must not
+# create outstanding transaction work on the attached database. Otherwise this DETACH
+# fails with "commit or rollback first".
+statement ok
+START TRANSACTION;
+
+statement ok
+ATTACH '{TEST_DIR}/feature_scheduler_attach_detach.db' AS sched_attach;
+
+statement ok
+DETACH sched_attach;
+
+statement ok
+COMMIT;

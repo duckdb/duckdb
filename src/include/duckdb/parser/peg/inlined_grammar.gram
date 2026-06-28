@@ -830,12 +830,23 @@ ForEachClause <- ForEachRow / ForEachStatement
 ForEachRow <- 'FOR' 'EACH' 'ROW'
 ForEachStatement <- 'FOR' 'EACH' 'STATEMENT'
 
-CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureGranularityClause? FeatureWindowClause? FeatureRefreshClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
+CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureGranularityClause? FeatureWindowClause? FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
 
 FeatureGranularityClause <- 'GRANULARITY' FeatureGranularity
 FeatureWindowClause <- 'WINDOW' NumberLiteral
 FeatureRefreshClause <- 'REFRESH' FeatureRefreshMode
+FeatureScheduleClause <- FeatureScheduleIntervalClause / FeatureScheduleShorthandClause
+FeatureScheduleIntervalClause <- 'EVERY' 'INTERVAL' StringLiteral
+FeatureScheduleShorthandClause <- 'EVERY' NumberLiteral FeatureScheduleUnit
 FeatureRetainClause <- 'RETAIN' NumberLiteral
+
+FeatureScheduleUnit <- FeatureScheduleUnitDays / FeatureScheduleUnitDay / FeatureScheduleUnitHours / FeatureScheduleUnitHour / FeatureScheduleUnitMinutes / FeatureScheduleUnitMinute
+FeatureScheduleUnitDay <- 'DAY'
+FeatureScheduleUnitDays <- 'DAYS'
+FeatureScheduleUnitHour <- 'HOUR'
+FeatureScheduleUnitHours <- 'HOURS'
+FeatureScheduleUnitMinute <- 'MINUTE'
+FeatureScheduleUnitMinutes <- 'MINUTES'
 
 FeatureGranularity <- FeatureGranularityDay / FeatureGranularityHour / FeatureGranularityMinute
 FeatureGranularityDay <- 'DAY'
@@ -893,7 +904,7 @@ AbortOrRollback <- 'ABORT' / 'ROLLBACK'
 CommitOrEnd <- 'COMMIT' / 'END'
 AlterStatement <- 'ALTER' AlterOptions
 
-AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt / AlterSchemaStmt
+AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt / AlterSchemaStmt / AlterFeatureStmt
 
 AlterTableStmt <- 'TABLE' IfExists? BaseTableName List(AlterTableOptions)
 AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter
@@ -939,6 +950,12 @@ AlterSequenceOptions <- RenameAlter / SetSequenceOption
 SetSequenceOption <- SequenceOption+
 
 AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifier
+
+AlterFeatureStmt <- 'FEATURE' IfExists? IdentifierOrStringLiteral AlterFeatureOptions
+AlterFeatureOptions <- AlterFeatureSetSchedule / AlterFeatureEnableSchedule / AlterFeatureDisableSchedule
+AlterFeatureSetSchedule <- 'SET' 'SCHEDULE' FeatureScheduleClause
+AlterFeatureEnableSchedule <- 'ENABLE' 'SCHEDULE'
+AlterFeatureDisableSchedule <- 'DISABLE' 'SCHEDULE'
 
 CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType
 CreateType <- EnumSelectType / EnumStringLiteralList / Type
