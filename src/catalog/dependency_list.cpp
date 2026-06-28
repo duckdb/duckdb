@@ -11,12 +11,13 @@ namespace duckdb {
 
 uint64_t LogicalDependencyHashFunction::operator()(const LogicalDependency &a) const {
 	auto &name = a.entry.name;
-	auto &schema = a.entry.schema;
 	auto &type = a.entry.type;
 	auto &catalog = a.catalog;
 
 	hash_t hash = duckdb::Hash(name.c_str());
-	hash = CombineHash(hash, duckdb::Hash(schema.c_str()));
+	for (auto &schema : a.entry.schema_path) {
+		hash = CombineHash(hash, duckdb::Hash(schema.c_str()));
+	}
 	hash = CombineHash(hash, duckdb::Hash(catalog.c_str()));
 	hash = CombineHash(hash, duckdb::Hash<uint8_t>(static_cast<uint8_t>(type)));
 	return hash;
@@ -29,7 +30,7 @@ bool LogicalDependencyEquality::operator()(const LogicalDependency &a, const Log
 	if (a.entry.name != b.entry.name) {
 		return false;
 	}
-	if (a.entry.schema != b.entry.schema) {
+	if (a.entry.schema_path != b.entry.schema_path) {
 		return false;
 	}
 	if (a.catalog != b.catalog) {
@@ -48,9 +49,9 @@ LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 
 		this->entry = dependency_entry.EntryInfo();
 	} else {
-		// use the same schema key as the dependency manager (the parent path for nested schemas) so subjects and
-		// dependents resolve to the same mangled name
-		this->entry.schema = DependencyManager::GetSchema(entry);
+		// use the same schema path as the dependency manager (the containing schema chain) so subjects and dependents
+		// resolve to the same mangled name
+		this->entry.schema_path = DependencyManager::GetSchemaPath(entry);
 		this->entry.name = entry.name;
 		this->entry.type = entry.type;
 		catalog = entry.ParentCatalog().GetName();
@@ -65,7 +66,8 @@ LogicalDependency::LogicalDependency(optional_ptr<Catalog> catalog_p, CatalogEnt
 }
 
 bool LogicalDependency::operator==(const LogicalDependency &other) const {
-	return other.entry.name == entry.name && other.entry.schema == entry.schema && other.entry.type == entry.type;
+	return other.entry.name == entry.name && other.entry.schema_path == entry.schema_path &&
+	       other.entry.type == entry.type;
 }
 
 void LogicalDependencyList::AddDependency(CatalogEntry &entry) {

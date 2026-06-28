@@ -16,7 +16,6 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/catalog/dependency_catalog_set.hpp"
 #include "duckdb/parser/qualified_name.hpp"
-#include "duckdb/common/sql_identifier.hpp"
 
 #include "duckdb/common/printer.hpp"
 
@@ -34,45 +33,54 @@ static void AssertMangledName(const string &mangled_name, idx_t expected_null_by
 
 MangledEntryName::MangledEntryName(const CatalogEntryInfo &info) {
 	auto &type = info.type;
-	auto &schema = info.schema;
+	auto &schema_path = info.schema_path;
 	auto &name = info.name;
 
-	this->name = Identifier(CatalogTypeToString(type) + '\0' + schema + '\0' + name);
-	AssertMangledName(this->name.GetIdentifierName(), 2);
+	// Format: Type\0[Schema\0 for each containing schema]Name - the schema path is null-separated so distinct nestings
+	// produce distinct keys (SQL identifiers cannot contain null bytes)
+	string mangled = CatalogTypeToString(type) + '\0';
+	for (auto &schema : schema_path) {
+		mangled += schema.GetIdentifierName() + '\0';
+	}
+	mangled += name;
+	this->name = Identifier(mangled);
+	AssertMangledName(this->name.GetIdentifierName(), 1 + schema_path.size());
 }
 
 MangledDependencyName::MangledDependencyName(const MangledEntryName &from, const MangledEntryName &to) {
 	this->name = Identifier(from.name + '\0' + to.name);
-	AssertMangledName(this->name.GetIdentifierName(), 5);
+#ifdef DEBUG
+	auto count_nulls = [](const Identifier &id) {
+		idx_t count = 0;
+		for (auto ch : id.GetIdentifierName()) {
+			count += ch == '\0';
+		}
+		return count;
+	};
+	// the two mangled entry names (each Type\0[Schema\0...]Name) joined by a separator null byte
+	AssertMangledName(this->name.GetIdentifierName(), count_nulls(from.name) + count_nulls(to.name) + 1);
+#endif
 }
 
 DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog), subjects(catalog), dependents(catalog) {
 }
 
-Identifier DependencyManager::GetSchema(const CatalogEntry &entry) {
+vector<Identifier> DependencyManager::GetSchemaPath(const CatalogEntry &entry) {
+	// the path of (nested) schemas that contain this entry, outermost first - the parent chain for a schema entry, or
+	// the containing schema's full path for any other entry. This is uniform across entry types: no special-casing.
+	const SchemaCatalogEntry *schema;
 	if (entry.type == CatalogType::SCHEMA_ENTRY) {
-		// a nested schema is keyed by its parent path (so it can be navigated on lookup); a top-level schema keeps
-		// its own name as the schema (schema == name) for backwards compatibility
-		auto parent = entry.Cast<SchemaCatalogEntry>().GetParentSchema();
-		if (!parent) {
-			return entry.name;
-		}
-		vector<Identifier> parents;
-		while (parent) {
-			parents.push_back(parent->name);
-			parent = parent->GetParentSchema();
-		}
-		std::reverse(parents.begin(), parents.end());
-		string path;
-		for (auto &name : parents) {
-			if (!path.empty()) {
-				path += ".";
-			}
-			path += SQLIdentifier(name);
-		}
-		return Identifier(path);
+		schema = entry.Cast<SchemaCatalogEntry>().GetParentSchema().get();
+	} else {
+		schema = &entry.ParentSchema();
 	}
-	return entry.ParentSchema().name;
+	vector<Identifier> path;
+	while (schema) {
+		path.push_back(schema->name);
+		schema = schema->GetParentSchema().get();
+	}
+	std::reverse(path.begin(), path.end());
+	return path;
 }
 
 MangledEntryName DependencyManager::MangleName(const CatalogEntryInfo &info) {
@@ -84,10 +92,7 @@ MangledEntryName DependencyManager::MangleName(const CatalogEntry &entry) {
 		auto &dependency_entry = entry.Cast<DependencyEntry>();
 		return dependency_entry.EntryMangledName();
 	}
-	auto type = entry.type;
-	auto schema = GetSchema(entry);
-	auto name = entry.name;
-	CatalogEntryInfo info {type, Identifier(schema), name};
+	CatalogEntryInfo info {entry.type, GetSchemaPath(entry), entry.name};
 
 	return MangleName(info);
 }
@@ -332,56 +337,44 @@ CatalogEntryInfo DependencyManager::GetLookupProperties(const CatalogEntry &entr
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
 		auto &dependency_entry = entry.Cast<DependencyEntry>();
 		return dependency_entry.EntryInfo();
-	} else {
-		auto schema = DependencyManager::GetSchema(entry);
-		auto &name = entry.name;
-		auto &type = entry.type;
-		return CatalogEntryInfo {type, Identifier(schema), name};
 	}
+	return CatalogEntryInfo {entry.type, GetSchemaPath(entry), entry.name};
 }
 
-optional_ptr<CatalogSet> DependencyManager::GetSchemaContainerSet(CatalogTransaction transaction,
-                                                                  const Identifier &schema_path,
-                                                                  const Identifier &name) {
-	auto &root = catalog.GetSchemaCatalogSet();
-	if (schema_path == name) {
-		// top-level schema (the schema field is the schema's own name)
-		return &root;
-	}
-	// nested schema: schema_path is the dotted parent path - navigate it
-	auto parents = QualifiedName::ParseComponents(schema_path.GetIdentifierName());
-	reference<CatalogSet> current = root;
-	for (auto &parent_name : parents) {
-		auto parent = current.get().GetEntry(transaction, parent_name);
-		if (!parent) {
+optional_ptr<SchemaCatalogEntry> DependencyManager::NavigateSchemaPath(CatalogTransaction transaction,
+                                                                       const vector<Identifier> &schema_path) {
+	optional_ptr<SchemaCatalogEntry> schema;
+	reference<CatalogSet> current = catalog.GetSchemaCatalogSet();
+	for (auto &component : schema_path) {
+		auto entry = current.get().GetEntry(transaction, component);
+		if (!entry) {
 			return nullptr;
 		}
-		current = parent->Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::SCHEMA_ENTRY);
+		schema = entry->Cast<SchemaCatalogEntry>();
+		current = schema->Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::SCHEMA_ENTRY);
 	}
-	return &current.get();
+	return schema;
 }
 
 optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction,
                                                           const CatalogEntryInfo &info) {
 	auto &type = info.type;
-	auto &schema = info.schema;
+	auto &schema_path = info.schema_path;
 	auto &name = info.name;
 
+	// navigate the (possibly nested) schema path to the schema that directly contains the entry
+	auto schema = NavigateSchemaPath(transaction, schema_path);
 	if (type == CatalogType::SCHEMA_ENTRY) {
-		// the schema (possibly nested) lives in the root schema set or a parent's nested-schema set
-		auto container = GetSchemaContainerSet(transaction, schema, name);
-		if (!container) {
-			return nullptr;
-		}
-		return container->GetEntry(transaction, name);
+		// the entry is itself a schema: it lives in the deepest schema's nested-schema set, or the catalog root when
+		// the path is empty (a top-level schema)
+		auto &container = schema ? schema->Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::SCHEMA_ENTRY)
+		                         : catalog.GetSchemaCatalogSet();
+		return container.GetEntry(transaction, name);
 	}
-
-	// Lookup the schema
-	auto schema_entry = catalog.GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
-	if (!schema_entry) {
+	if (!schema) {
 		return nullptr;
 	}
-	return schema_entry->GetEntry(transaction, type, name);
+	return schema->GetEntry(transaction, type, name);
 }
 
 optional_ptr<CatalogEntry> DependencyManager::LookupEntry(CatalogTransaction transaction, CatalogEntry &dependency) {
@@ -508,24 +501,19 @@ void DependencyManager::VerifyExistence(CatalogTransaction transaction, Dependen
 	}
 
 	auto &type = info.type;
-	auto &schema = info.schema;
+	auto &schema_path = info.schema_path;
 	auto &name = info.name;
 
+	// navigate the (possibly nested) schema path to the schema that directly contains the subject
+	auto schema = NavigateSchemaPath(transaction, schema_path);
 	CatalogSet::EntryLookup lookup_result;
 	if (type == CatalogType::SCHEMA_ENTRY) {
-		// the subject schema (possibly nested) lives in the root schema set or a parent's nested-schema set
-		auto container = GetSchemaContainerSet(transaction, schema, name);
-		if (container) {
-			lookup_result = container->GetEntryDetailed(transaction, name);
-		}
-	} else {
-		auto &schema_catalog_set = catalog.GetSchemaCatalogSet();
-		lookup_result = schema_catalog_set.GetEntryDetailed(transaction, schema);
-		if (lookup_result.result) {
-			auto &schema_entry = lookup_result.result->Cast<SchemaCatalogEntry>();
-			EntryLookupInfo lookup_info(type, QualifiedName(name));
-			lookup_result = schema_entry.LookupEntryDetailed(transaction, lookup_info);
-		}
+		auto &container = schema ? schema->Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::SCHEMA_ENTRY)
+		                         : catalog.GetSchemaCatalogSet();
+		lookup_result = container.GetEntryDetailed(transaction, name);
+	} else if (schema) {
+		EntryLookupInfo lookup_info(type, QualifiedName(name));
+		lookup_result = schema->LookupEntryDetailed(transaction, lookup_info);
 	}
 
 	if (lookup_result.reason == CatalogSet::EntryLookup::FailureReason::DELETED) {
@@ -881,7 +869,8 @@ void DependencyManager::PrintSubjects(CatalogTransaction transaction, const Cata
 		auto &dep = dependency.Cast<DependencyEntry>();
 		auto &entry_info = dep.EntryInfo();
 		auto type = entry_info.type;
-		auto schema = entry_info.schema;
+		auto schema = StringUtil::Join(entry_info.schema_path, entry_info.schema_path.size(), ".",
+		                               [](const Identifier &id) { return id.GetIdentifierName(); });
 		auto name = entry_info.name;
 		Printer::Print(StringUtil::Format("Schema: %s | Name: %s | Type: %s | Dependent type: %s | Subject type: %s",
 		                                  schema, name, CatalogTypeToString(type), dep.Dependent().flags.ToString(),
@@ -897,7 +886,8 @@ void DependencyManager::PrintDependents(CatalogTransaction transaction, const Ca
 		auto &dep = dependent.Cast<DependencyEntry>();
 		auto &entry_info = dep.EntryInfo();
 		auto type = entry_info.type;
-		auto schema = entry_info.schema;
+		auto schema = StringUtil::Join(entry_info.schema_path, entry_info.schema_path.size(), ".",
+		                               [](const Identifier &id) { return id.GetIdentifierName(); });
 		auto name = entry_info.name;
 		Printer::Print(StringUtil::Format("Schema: %s | Name: %s | Type: %s | Dependent type: %s | Subject type: %s",
 		                                  schema, name, CatalogTypeToString(type), dep.Dependent().flags.ToString(),

@@ -111,15 +111,15 @@ private:
 	void CleanupDependencies(CatalogTransaction transaction, CatalogEntry &entry);
 
 public:
-	static Identifier GetSchema(const CatalogEntry &entry);
+	//! The path of (nested) schemas that contain this entry, outermost first (empty for a top-level schema)
+	static vector<Identifier> GetSchemaPath(const CatalogEntry &entry);
 	static MangledEntryName MangleName(const CatalogEntryInfo &info);
 	static MangledEntryName MangleName(const CatalogEntry &entry);
 	static CatalogEntryInfo GetLookupProperties(const CatalogEntry &entry);
-	//! Returns the catalog set that (would) contain a schema identified by (schema_path, name): the root schema set
-	//! for a top-level schema (schema_path == name), or the deepest parent's nested-schema set for a nested schema
-	//! (schema_path is the dotted parent path). Returns nullptr if a parent schema along the path does not exist.
-	optional_ptr<CatalogSet> GetSchemaContainerSet(CatalogTransaction transaction, const Identifier &schema_path,
-	                                               const Identifier &name);
+	//! Navigate the given schema path (outermost first) and return the deepest schema in it. Returns nullptr for an
+	//! empty path (the entry lives in the catalog root) or if a schema along the path does not exist.
+	optional_ptr<SchemaCatalogEntry> NavigateSchemaPath(CatalogTransaction transaction,
+	                                                    const vector<Identifier> &schema_path);
 
 private:
 	void ReorderEntry(CatalogTransaction transaction, CatalogEntry &entry, catalog_entry_set_t &visited,
