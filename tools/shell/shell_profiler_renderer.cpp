@@ -258,6 +258,11 @@ public:
 		return true;
 	}
 
+	// one HTML page is opened per statement, so EXPLAIN renders only the final plan (not every stage)
+	bool RendersSinglePlan() override {
+		return true;
+	}
+
 	duckdb::string RenderProfilerDisabled() override {
 		return "Query profiling is disabled. Use 'PRAGMA enable_profiling;' to enable profiling.";
 	}

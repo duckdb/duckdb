@@ -41,6 +41,12 @@ public:
 	virtual void Finish() {
 	}
 
+	//! Whether this format produces a single standalone artifact (e.g. one HTML page opened in a browser). For such
+	//! formats EXPLAIN renders only the final plan instead of every stage, so a single artifact is produced.
+	virtual bool RendersSinglePlan() {
+		return false;
+	}
+
 	//! Returns the sink to render into when printing this format's output directly. Only invoked when we are about
 	//! to print (the default renderer writes straight to the output stream), so it is never created for the
 	//! string-producing paths. Formats can override this to provide a highlighting-aware sink.
