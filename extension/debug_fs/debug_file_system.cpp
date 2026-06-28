@@ -20,6 +20,14 @@ bool DebugFileHandle::CanSeek() {
 	return inner->CanSeek();
 }
 
+idx_t DebugFileHandle::GetProgress() {
+	return inner->GetProgress();
+}
+
+FileCompressionType DebugFileHandle::GetFileCompressionType() {
+	return inner->GetFileCompressionType();
+}
+
 DebugFileSystem::DebugFileSystem(unique_ptr<FileSystem> inner_fs) : inner_fs(std::move(inner_fs)) {
 }
 

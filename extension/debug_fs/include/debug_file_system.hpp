@@ -21,6 +21,8 @@ struct DebugFileHandle : public FileHandle {
 	DebugFileHandle(DebugFileSystem &fs, unique_ptr<FileHandle> inner_p);
 	void Close() override;
 	bool CanSeek() override;
+	idx_t GetProgress() override;
+	FileCompressionType GetFileCompressionType() override;
 	unique_ptr<FileHandle> inner;
 };
 
