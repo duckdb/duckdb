@@ -7,6 +7,10 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/profiler_extension.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/common/string_util.hpp"
+
+#include <cstdio>
+#include <cstdlib>
 
 namespace duckdb_shell {
 
@@ -178,6 +182,56 @@ bool RenderExpandedQueryTree(ShellState &state) {
 		pager = state.SetupPager();
 	}
 	state.Print(PrintOutput::STDOUT, rendered);
+	return true;
+}
+
+bool OpenProfileInBrowser(ShellState &state) {
+	if (!state.conn) {
+		return false;
+	}
+	auto &context = *state.conn->context;
+	auto &profiler = duckdb::QueryProfiler::Get(context);
+	if (!profiler.HasRoot()) {
+		state.Print(PrintOutput::STDERR, "No query profile available - run EXPLAIN ANALYZE first.\n");
+		return false;
+	}
+	string html;
+	try {
+		html = profiler.RenderProfile("html");
+	} catch (const std::exception &e) {
+		state.PrintF(PrintOutput::STDERR, "Failed to render profile: %s\n", e.what());
+		return false;
+	}
+	if (html.empty()) {
+		state.Print(PrintOutput::STDERR, "No query profile available.\n");
+		return false;
+	}
+	state.NewTempFile("html");
+	auto path = state.zTempFile;
+	// stop tracking it: the rendered profile should persist for the browser to load (and for the user to revisit)
+	state.zTempFile = string();
+	auto out = fopen(path.c_str(), "wb");
+	if (!out) {
+		state.PrintF(PrintOutput::STDERR, "Could not write profile to %s\n", path.c_str());
+		return false;
+	}
+	fwrite(html.c_str(), 1, html.size(), out);
+	fclose(out);
+
+	const char *opener =
+#if defined(_WIN32)
+	    "start";
+#elif defined(__APPLE__)
+	    "open";
+#else
+	    "xdg-open";
+#endif
+	auto cmd = duckdb::StringUtil::Format("%s \"%s\"", opener, path);
+	state.PrintF(PrintOutput::STDOUT, "Opening query profile in browser: %s\n", path.c_str());
+	if (system(cmd.c_str()) != 0) {
+		state.PrintF(PrintOutput::STDERR, "Failed to launch browser (%s)\n", cmd.c_str());
+		return false;
+	}
 	return true;
 }
 

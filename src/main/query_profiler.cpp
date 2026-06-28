@@ -373,6 +373,16 @@ string QueryProfiler::GetFormattedSQL() const {
 	}
 }
 
+string QueryProfiler::RenderProfile(const string &format) const {
+	auto renderer = CreateProfiler(format);
+	if (!renderer) {
+		return string();
+	}
+	StringTreeRenderer ss;
+	renderer->RenderProfiler(*this, ss);
+	return ss.str();
+}
+
 string QueryProfiler::RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const {
 	if (!renderer) {
 		// "no_output" format: nothing is rendered, enabled or not
