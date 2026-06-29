@@ -4,7 +4,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
-from io import StringIO
+from io import BytesIO, StringIO, TextIOWrapper
 from unittest import mock
 from pathlib import Path
 
@@ -33,6 +33,25 @@ def strip_ansi_lines(lines: list[str]) -> list[str]:
 
 
 class RunTestsScriptTest(unittest.TestCase):
+    def test_line_buffering_escapes_unicode_for_non_utf8_streams(self):
+        stdout_buffer = BytesIO()
+        stderr_buffer = BytesIO()
+        stdout = TextIOWrapper(stdout_buffer, encoding="cp1252")
+        stderr = TextIOWrapper(stderr_buffer, encoding="cp1252")
+
+        with (
+            mock.patch("scripts.ci.run_tests.sys.stdout", stdout),
+            mock.patch("scripts.ci.run_tests.sys.stderr", stderr),
+        ):
+            run_tests.enable_line_buffering()
+            print("❌ ran tests", file=run_tests.sys.stdout)
+            print("❌ failed", file=run_tests.sys.stderr)
+            run_tests.sys.stdout.flush()
+            run_tests.sys.stderr.flush()
+
+        self.assertEqual(stdout_buffer.getvalue(), b"\\u274c ran tests\n")
+        self.assertEqual(stderr_buffer.getvalue(), b"\\u274c failed\n")
+
     def test_highlight_stack_trace_lines_colors_frame_index_and_function_name(self):
         lines = run_tests.highlight_stack_trace_lines(
             [

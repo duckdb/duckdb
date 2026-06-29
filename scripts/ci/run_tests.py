@@ -40,9 +40,9 @@ FAILURE_MARKER = "==============================================================
 
 def enable_line_buffering():
     if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(line_buffering=True, write_through=True)
+        sys.stdout.reconfigure(line_buffering=True, write_through=True, errors="backslashreplace")
     if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(line_buffering=True, write_through=True)
+        sys.stderr.reconfigure(line_buffering=True, write_through=True, errors="backslashreplace")
 
 
 def signal_stop_requested(signum, frame):
