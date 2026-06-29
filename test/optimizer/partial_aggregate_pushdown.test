@@ -581,8 +581,9 @@ RESET disabled_optimizers
 statement ok
 CREATE TABLE pj_dim AS SELECT k AS keyid, (k % 40) AS g FROM range(2000) _(k)
 
+# Keep this smaller than pj_b so the projection-fusion assertion is not join-order dependent.
 statement ok
-CREATE TABLE pj_a AS SELECT (k % 2000)::BIGINT AS keyid FROM range(50000) _(k)
+CREATE TABLE pj_a AS SELECT (k % 2000)::BIGINT AS keyid FROM range(20000) _(k)
 
 statement ok
 CREATE TABLE pj_b AS SELECT (k % 2000)::BIGINT AS keyid, (((k * 13) % 100) + 0.5)::DOUBLE AS c FROM range(50000) _(k)
