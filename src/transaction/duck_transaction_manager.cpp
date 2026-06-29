@@ -315,6 +315,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	unique_lock<mutex> held_wal_lock;
 	unique_ptr<StorageCommitState> commit_state;
 	bool skip_wal_write_due_to_checkpoint = false;
+	bool wal_written = false;
 	if (checkpoint_decision.can_checkpoint) {
 		// we can perform an automatic checkpoint
 		// we have two options:
@@ -345,6 +346,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// Commit the changes to the WAL.
 		if (!skip_wal_write_due_to_checkpoint) {
 			error = transaction.WriteToWAL(context, db, commit_state);
+			wal_written = true;
 		}
 
 		// after we finish writing to the WAL we grab the transaction lock again
@@ -361,6 +363,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			// unlock the transaction lock while we are writing to the WAL
 			t_lock.unlock();
 			error = transaction.WriteToWAL(context, db, commit_state);
+			wal_written = true;
 			t_lock.lock();
 			skip_wal_write_due_to_checkpoint = false;
 		}
@@ -455,7 +458,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		try {
 			storage_manager.CreateCheckpoint(context, options);
 		} catch (std::exception &ex) {
-			if (should_write_to_wal && !skip_wal_write_due_to_checkpoint) {
+			if (wal_written) {
 				context.transaction.SetAutocheckpointError(BuildAutocheckpointError(db, ex));
 			} else {
 				error.Merge(ErrorData(ex));
