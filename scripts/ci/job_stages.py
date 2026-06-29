@@ -15,6 +15,7 @@ COMMON_JOBS = [
     "extensions",
     "wasm-eh",
     "linux-release",
+    "codecov",
     "linux-release-tests",
     "linux-release-cli",
     "linux-musl-release-cli",
@@ -61,6 +62,7 @@ SKIP_TESTS_JOBS = {
     "swift",
     "linux-configs",
     "linux-release-tests",
+    "codecov",
 }
 
 PREPARE_JOBS = [
