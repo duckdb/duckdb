@@ -100,8 +100,8 @@ string_t VariantUtils::DecodeStringData(const UnifiedVariantVectorData &variant,
 	auto consumed = static_cast<idx_t>(ptr - data);
 	if (consumed > blob.GetSize() || length > blob.GetSize() - consumed) {
 		throw InvalidInputException(
-		    "Corrupt VARIANT: string value of length %u at byte offset %u exceeds the variant data of size %llu", length,
-		    byte_offset, static_cast<uint64_t>(blob.GetSize()));
+		    "Corrupt VARIANT: string value of length %u at byte offset %u exceeds the variant data of size %llu",
+		    length, byte_offset, static_cast<uint64_t>(blob.GetSize()));
 	}
 	return string_t(reinterpret_cast<const char *>(ptr), length);
 }
