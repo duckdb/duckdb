@@ -35,10 +35,6 @@ DebugFileSystem::DebugFileSystem(unique_ptr<FileSystem> inner_fs, DatabaseInstan
     : inner_fs(std::move(inner_fs)), db(db) {
 }
 
-FileSystem &DebugFileSystem::GetInnerFileSystem() {
-	return *inner_fs;
-}
-
 void DebugFileSystem::SetDelayMeanMs(double v) {
 	const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
 	delay_mean_ms = v;
@@ -92,7 +88,7 @@ void DebugFileSystem::ApplyDelay() {
 
 	// Check against invalid setting: mean latency cannot be 0.
 	ALWAYS_ASSERT(mean_ms > 0.0);
-
+	// Lazy initialize the random engine on first IO operation, so user-set random seed could be applied.
 	EnsureRandomEngineInitialized();
 
 	double delay_ms = 0;

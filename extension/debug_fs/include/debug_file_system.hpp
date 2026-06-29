@@ -34,8 +34,6 @@ class DebugFileSystem : public FileSystem {
 public:
 	DebugFileSystem(unique_ptr<FileSystem> inner_fs, DatabaseInstance &db);
 
-	FileSystem &GetInnerFileSystem();
-
 	void SetDelayMeanMs(double v);
 	void SetDelayStddevMs(double v);
 	void SetRandomSeed(optional_idx seed);

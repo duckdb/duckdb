@@ -85,15 +85,14 @@ void LoadInternal(ExtensionLoader &loader) {
 	EnsureDebugFileSystemInstalled(db);
 
 	auto &config = DBConfig::GetConfig(db);
-	config.AddExtensionOption("debug_fs_delay_mean_ms", "DEBUG SETTING: mean latency (ms) for filesystem operations",
+	config.AddExtensionOption("debug_fs_delay_mean_ms", "Mean latency (ms) for filesystem operations.",
 	                          LogicalType::DOUBLE, Value(0.0), OnSetDelayMeanMs);
-	config.AddExtensionOption("debug_fs_delay_stddev_ms",
-	                          "DEBUG SETTING: standard deviation (ms) for filesystem operation latency",
+	config.AddExtensionOption("debug_fs_delay_stddev_ms", "Standard deviation (ms) for filesystem operation latency.",
 	                          LogicalType::DOUBLE, Value(0.0), OnSetDelayStddevMs);
 	// Random seed is tunable for reproducibility.
 	config.AddExtensionOption("debug_fs_random_seed",
-	                          "DEBUG SETTING: random seed for filesystem latency sampling; defaults to the current "
-	                          "timestamp on the first delayed I/O operation",
+	                          "Random seed for filesystem latency sampling, it should be set before the first I/O "
+	                          "operation; defaults to the current timestamp.",
 	                          LogicalType::UBIGINT, Value(), OnSetRandomSeed);
 }
 
