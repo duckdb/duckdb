@@ -24,9 +24,8 @@ namespace duckdb {
 
 static ErrorData BuildAutocheckpointError(AttachedDatabase &db, const std::exception &ex) {
 	ErrorData original(ex);
-	string recovery = db.IsInitialDatabase()
-	                      ? "Reopen the database instance to recover (committed data is restored from the WAL)."
-	                      : "Detach and reattach the database to recover (committed data is restored from the WAL).";
+	string recovery = db.IsInitialDatabase() ? "Reopen the database instance to recover."
+	                                         : "Detach and reattach the database to recover.";
 	string msg = StringUtil::Format("Transaction COMMIT succeeded and is durable, but the autocheckpoint failed. %s %s",
 	                                recovery, original.RawMessage());
 	return ErrorData(original.Type(), msg);
