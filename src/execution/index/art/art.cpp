@@ -1058,9 +1058,7 @@ ARTSerializationFormat ART::GetSerializationFormat(const StorageVersion storage_
 	return ARTSerializationFormat::CURRENT;
 }
 
-void ART::Checkpoint(TableIndexWriter &writer) {
-	lock_guard<mutex> guard(lock);
-
+BoundCheckpointedIndex ART::CreateCheckpoint(IndexLock &l, TableIndexWriter &writer) {
 	const auto target_format = GetSerializationFormat(writer.GetStorageVersion());
 	// This may mutate the live ART into a deprecated representation, but we accept this to prevent double copying.
 	auto storage_info = PrepareSerialize(target_format);
@@ -1080,8 +1078,8 @@ void ART::Checkpoint(TableIndexWriter &writer) {
 		}
 	}
 
-	auto new_art = CreateShadow(new_allocators);
-	writer.AddBoundIndex(std::move(storage_info), std::move(new_art));
+	auto shadow = CreateShadow(new_allocators);
+	return {(std::move(storage_info)), std::move(shadow)};
 }
 
 IndexStorageInfo ART::SerializeToWAL(const StorageVersion target_version) {

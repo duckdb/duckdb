@@ -63,9 +63,6 @@ public:
 		return std::move(art);
 	}
 
-	//! Create an index which is logically equivalent but backed by potentially (partially) different buffers.
-	unique_ptr<BoundIndex> CreateShadow(shared_ptr<AllocatorArray> new_allocators);
-
 	static IndexType GetARTIndexType();
 
 	//! Root of the tree.
@@ -138,10 +135,6 @@ public:
 	//! Vacuums the ART storage.
 	void Vacuum(IndexLock &state) override;
 
-	//! Checkpoint the ART, this creates a shadow index which is swapped with the live index, only after its blocks have
-	//! been flushed.
-	void Checkpoint(TableIndexWriter &writer) override;
-
 	//! Serializes ART memory to the WAL and returns the ART storage information.
 	IndexStorageInfo SerializeToWAL(StorageVersion target_version) override;
 
@@ -172,9 +165,16 @@ public:
 		return prefix_count;
 	}
 
+protected:
+	//! Produce a shadow ART and its associated metadata, used for checkpointing a bound index.
+	BoundCheckpointedIndex CreateCheckpoint(IndexLock &l, TableIndexWriter &writer) override;
+
 private:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
+
+	//! Create an index which is logically equivalent but backed by potentially different buffers.
+	unique_ptr<BoundIndex> CreateShadow(shared_ptr<AllocatorArray> new_allocators);
 
 	//! Returns how many allocators are used based on the target serialization format.
 	static uint8_t GetAllocatorCount(ARTSerializationFormat format);

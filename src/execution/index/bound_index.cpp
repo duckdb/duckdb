@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 
 namespace duckdb {
@@ -167,6 +168,18 @@ bool BoundIndex::SupportsDeltaIndexes() const {
 
 unique_ptr<BoundIndex> BoundIndex::CreateDeltaIndex(DeltaIndexType delta_index_type) const {
 	throw InternalException("BoundIndex::CreateDeltaIndex is not supported for this index type");
+}
+
+void BoundIndex::Checkpoint(TableIndexWriter &writer) {
+	IndexLock state;
+	InitializeLock(state);
+
+	auto [storage_info, shadow_index] = CreateCheckpoint(state, writer);
+	if (!shadow_index) {
+		throw InternalException("Checkpoint did not produce a shadow index");
+	}
+
+	writer.AddBoundIndex(std::move(storage_info), std::move(shadow_index));
 }
 
 IndexStorageInfo BoundIndex::SerializeToWAL(const StorageVersion storage_version) {
