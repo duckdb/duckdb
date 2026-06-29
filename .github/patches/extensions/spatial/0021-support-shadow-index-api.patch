@@ -1,0 +1,174 @@
+diff --git a/src/spatial/index/rtree/rtree.hpp b/src/spatial/index/rtree/rtree.hpp
+index e35f303..cb688e5 100644
+--- a/src/spatial/index/rtree/rtree.hpp
++++ b/src/spatial/index/rtree/rtree.hpp
+@@ -31,8 +31,13 @@ public:
+ 	RTree(BlockManager &block_manager, const RTreeConfig &config_p) : config(config_p) {
+ 
+ 		// Create the allocators
+-		node_allocator = make_uniq<FixedSizeAllocator>(config.GetNodeByteSize(), block_manager);
+-		leaf_allocator = make_uniq<FixedSizeAllocator>(config.GetLeafByteSize(), block_manager);
++		node_allocator = make_unsafe_uniq<FixedSizeAllocator>(config.GetNodeByteSize(), block_manager);
++		leaf_allocator = make_unsafe_uniq<FixedSizeAllocator>(config.GetLeafByteSize(), block_manager);
++	}
++
++	RTree(const RTreeConfig &config_p, unsafe_unique_ptr<FixedSizeAllocator> leaf_allocator,
++	      unsafe_unique_ptr<FixedSizeAllocator> node_allocator)
++	    : node_allocator(std::move(node_allocator)), leaf_allocator(std::move(leaf_allocator)), config(config_p) {
+ 	}
+ 
+ 	void Insert(const RTreeEntry &entry) {
+@@ -107,8 +112,8 @@ private:
+ 	void ReInsertNode(RTreeEntry &root, RTreeEntry &target);
+ 
+ private:
+-	unique_ptr<FixedSizeAllocator> node_allocator;
+-	unique_ptr<FixedSizeAllocator> leaf_allocator;
++	unsafe_unique_ptr<FixedSizeAllocator> node_allocator;
++	unsafe_unique_ptr<FixedSizeAllocator> leaf_allocator;
+ 
+ 	RTreeEntry root;
+ 
+diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
+index 347e815..6351cbe 100644
+--- a/src/spatial/index/rtree/rtree_index.cpp
++++ b/src/spatial/index/rtree/rtree_index.cpp
+@@ -9,6 +9,7 @@
+ #include "duckdb/common/serializer/binary_serializer.hpp"
+ #include "duckdb/execution/index/fixed_size_allocator.hpp"
+ #include "duckdb/storage/table/scan_state.hpp"
++#include "duckdb/storage/checkpoint/table_index_writer.hpp"
+ #include "duckdb/main/database.hpp"
+ #include "spatial/spatial_types.hpp"
+ #include "spatial/geometry/geometry_serialization.hpp"
+@@ -112,7 +113,8 @@ RTreeIndex::RTreeIndex(const Identifier &name, IndexConstraintType index_constra
+ 	// Construct the key expression executor
+ 	auto &source_type = unbound_expressions[0]->GetReturnType();
+ 	auto &catalog = Catalog::GetSystemCatalog(context);
+-	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "ST_Extent_Approx");
++	auto &entry =
++	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "ST_Extent_Approx");
+ 	const auto &func = entry.functions.GetFunctionByArguments(context, {source_type});
+ 	auto child_expr = make_uniq<BoundReferenceExpression>(source_type, 0);
+ 
+@@ -125,6 +127,31 @@ RTreeIndex::RTreeIndex(const Identifier &name, IndexConstraintType index_constra
+ 	key_chunk.Initialize(context, {GeoTypes::BOX_2DF()});
+ }
+ 
++RTreeIndex::RTreeIndex(const RTreeIndex &src, const RTreeEntry &root,
++                       unsafe_unique_ptr<FixedSizeAllocator> leaf_allocator,
++                       unsafe_unique_ptr<FixedSizeAllocator> node_allocator)
++    : BoundIndex(Identifier(src.name), TYPE_NAME, src.index_constraint_type, src.column_ids, src.table_io_manager,
++                 src.unbound_expressions, src.db) {
++	const auto [max_node_capacity, min_node_capacity] = src.tree->GetConfig();
++
++	tree = make_uniq<RTree>(RTreeConfig {max_node_capacity, min_node_capacity}, std::move(leaf_allocator),
++	                        std::move(node_allocator));
++	tree->SetRoot(root);
++
++	auto &context = src.key_executor->GetContext();
++	key_expr = src.key_expr->Copy();
++	key_executor = make_uniq<ExpressionExecutor>(context);
++	key_executor->AddExpression(*key_expr);
++	key_chunk.Initialize(context, {GeoTypes::BOX_2DF()});
++}
++
++unique_ptr<BoundIndex> RTreeIndex::CreateShadow(const RTreeEntry &root,
++                                                unsafe_unique_ptr<FixedSizeAllocator> leaf_allocator,
++                                                unsafe_unique_ptr<FixedSizeAllocator> node_allocator) {
++	auto index = make_uniq<RTreeIndex>(*this, root, std::move(leaf_allocator), std::move(node_allocator));
++	return std::move(index);
++}
++
+ unique_ptr<IndexScanState> RTreeIndex::InitializeScan(const RTreeBounds &query) const {
+ 	auto state = make_uniq<RTreeIndexScanState>();
+ 	state->query_bounds = query;
+@@ -233,32 +260,32 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &row_vec) {
+ 	ConvertToEntries(box_vec, row_vec, count, [&](const RTreeEntry &entry) { tree->Delete(entry); });
+ }
+ 
+-IndexStorageInfo RTreeIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
++BoundCheckpointedIndex RTreeIndex::CreateCheckpoint(IndexLock &l, TableIndexWriter &writer) {
++	const auto root = tree->GetRoot();
+ 
+ 	IndexStorageInfo info;
+ 	info.name = name;
+-	info.root = tree->GetRoot().pointer.Get();
++	info.root = root.pointer.Get();
+ 
+ 	auto &leaf_allocator = tree->GetLeafAllocator();
+ 	auto &node_allocator = tree->GetNodeAllocator();
+ 
+-	leaf_allocator.RemoveEmptyBuffers();
+-	node_allocator.RemoveEmptyBuffers();
++	auto &partial_block_manager = writer.GetPartialBlockManager();
++	auto new_leaf_allocator = leaf_allocator.Persist(partial_block_manager);
++	auto new_node_allocator = node_allocator.Persist(partial_block_manager);
+ 
+-	// Use the partial block manager to serialize allocator data.
+-	auto &block_manager = table_io_manager.GetIndexBlockManager();
+-	PartialBlockManager partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT);
+-	leaf_allocator.SerializeBuffers(partial_block_manager);
+-	node_allocator.SerializeBuffers(partial_block_manager);
+-	partial_block_manager.FlushPartialBlocks();
++	new_leaf_allocator->RemoveEmptyBuffers();
++	new_node_allocator->RemoveEmptyBuffers();
+ 
+-	info.allocator_infos.push_back(leaf_allocator.GetInfo());
+-	info.allocator_infos.push_back(node_allocator.GetInfo());
++	info.allocator_infos.push_back(new_leaf_allocator->GetInfo());
++	info.allocator_infos.push_back(new_node_allocator->GetInfo());
+ 
+-	return info;
++	auto shadow = CreateShadow(root, std::move(new_leaf_allocator), std::move(new_node_allocator));
++	return {std::move(info), std::move(shadow)};
+ }
+ 
+-IndexStorageInfo RTreeIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
++IndexStorageInfo RTreeIndex::SerializeToWAL(StorageVersion target_version) {
++	lock_guard<mutex> guard(lock);
+ 
+ 	IndexStorageInfo info;
+ 	info.name = name;
+diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
+index 7bc3e67..4b22ddb 100644
+--- a/src/spatial/index/rtree/rtree_index.hpp
++++ b/src/spatial/index/rtree/rtree_index.hpp
+@@ -23,6 +23,9 @@ public:
+ 	           AttachedDatabase &db, const case_insensitive_map_t<Value> &options, ClientContext &context,
+ 	           const IndexStorageInfo &info = IndexStorageInfo(), idx_t estimated_cardinality = 0);
+ 
++	RTreeIndex(const RTreeIndex &src, const RTreeEntry &root, unsafe_unique_ptr<FixedSizeAllocator> leaf_allocator,
++	           unsafe_unique_ptr<FixedSizeAllocator> node_allocator);
++
+ 	unique_ptr<RTree> tree;
+ 
+ 	// To compute bounding boxes when inserting
+@@ -53,10 +56,8 @@ public:
+ 	//! Insert a chunk of entries into the index
+ 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+ 
+-	//! Serializes RTree memory to disk and returns the index storage information.
+-	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
+ 	//! Serializes RTree memory to the WAL and returns the index storage information.
+-	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
++	IndexStorageInfo SerializeToWAL(StorageVersion target_version) override;
+ 
+ 	idx_t GetInMemorySize(IndexLock &state) override;
+ 
+@@ -83,6 +84,15 @@ public:
+ 	                                     DataChunk &input) override {
+ 		return "Constraint violation in RTree index";
+ 	}
++
++protected:
++	//! Produce a shadow RTree and its associated metadata, used for checkpointing a bound index.
++	BoundCheckpointedIndex CreateCheckpoint(IndexLock &l, TableIndexWriter &writer) override;
++
++private:
++	//! Create an index which is logically equivalent but backed by potentially different buffers.
++	unique_ptr<BoundIndex> CreateShadow(const RTreeEntry &root, unsafe_unique_ptr<FixedSizeAllocator> leaf_allocator,
++	                                    unsafe_unique_ptr<FixedSizeAllocator> node_allocator);
+ };
+ 
+ } // namespace duckdb
