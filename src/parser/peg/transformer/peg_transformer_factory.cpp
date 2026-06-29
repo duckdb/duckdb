@@ -371,12 +371,7 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			return false;
 		}
 
-		LogicalType cast_type;
-		try {
-			cast_type = UnboundType::TryDefaultBind(cast.TargetType());
-		} catch (...) {
-			return false;
-		}
+		auto cast_type = UnboundType::TryDefaultBind(cast.TargetType());
 		if (cast_type == LogicalType::INVALID || cast_type == LogicalTypeId::UNBOUND) {
 			return false;
 		}
