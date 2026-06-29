@@ -1,0 +1,104 @@
+# name: test/parquet/variant/variant_bytes_to_variant.test
+# group: [variant]
+
+require parquet
+
+require json
+
+# 'variant_bytes_to_variant' decodes a binary Variant value (the canonical encoding:
+# the metadata blob immediately followed by the value blob) back into a DuckDB VARIANT.
+# It is the inverse of 'variant_to_parquet_variant', which produces a struct of
+# {metadata BLOB, value BLOB}. So concatenating those two blobs and feeding the result
+# to 'variant_bytes_to_variant' should round-trip back to the original VARIANT.
+
+# ---------- scalar values ----------
+
+query I
+with t as (
+	select variant_to_parquet_variant('1'::JSON::VARIANT)::STRUCT(metadata BLOB, value BLOB) as pv
+)
+select variant_bytes_to_variant(pv.metadata || pv.value) from t;
+----
+1
+
+query I
+with t as (
+	select variant_to_parquet_variant('"hello world"'::JSON::VARIANT)::STRUCT(metadata BLOB, value BLOB) as pv
+)
+select variant_bytes_to_variant(pv.metadata || pv.value) from t;
+----
+hello world
+
+query I
+with t as (
+	select variant_to_parquet_variant('true'::JSON::VARIANT)::STRUCT(metadata BLOB, value BLOB) as pv
+)
+select variant_bytes_to_variant(pv.metadata || pv.value) from t;
+----
+true
+
+query I
+with t as (
+	select variant_to_parquet_variant('3.14'::JSON::VARIANT)::STRUCT(metadata BLOB, value BLOB) as pv
+)
+select variant_bytes_to_variant(pv.metadata || pv.value) from t;
+----
+3.14
+
+# ---------- nested values ----------
+
+query I
+with t as (
+	select variant_to_parquet_variant('[1,2,3]'::JSON::VARIANT)::STRUCT(metadata BLOB, value BLOB) as pv
+)
+select variant_bytes_to_variant(pv.metadata || pv.value) from t;
+----
+[1, 2, 3]
+
+query I
+with t as (
+	select variant_to_parquet_variant('{"a": 1, "b": [1,2,3]}'::JSON::VARIANT)::STRUCT(metadata BLOB, value BLOB) as pv
+)
+select variant_bytes_to_variant(pv.metadata || pv.value) from t;
+----
+{'a': 1, 'b': [1, 2, 3]}
+
+query I
+with t as (
+	select variant_to_parquet_variant('{"hello": [1,2,true, false, null], "test": [1, {"test": false}, ["blob", "this is a long string", 123]]}'::JSON::VARIANT)::STRUCT(metadata BLOB, value BLOB) as pv
+)
+select variant_bytes_to_variant(pv.metadata || pv.value) from t;
+----
+{'hello': [1, 2, true, false, NULL], 'test': [1, {'test': false}, [blob, this is a long string, 123]]}
+
+# ---------- round-trip many rows at once (vectorized) ----------
+
+query I
+with t as (
+	select variant_to_parquet_variant(('{"id": ' || range::VARCHAR || '}')::JSON::VARIANT)::STRUCT(metadata BLOB, value BLOB) as pv
+	from range(5)
+)
+select variant_bytes_to_variant(pv.metadata || pv.value) from t;
+----
+{'id': 0}
+{'id': 1}
+{'id': 2}
+{'id': 3}
+{'id': 4}
+
+# ---------- round-trip through VARIANT -> JSON ----------
+
+query I
+with t as (
+	select variant_to_parquet_variant('{"a": 1, "b": [1,2,3]}'::JSON::VARIANT)::STRUCT(metadata BLOB, value BLOB) as pv
+)
+select variant_bytes_to_variant(pv.metadata || pv.value)::JSON from t;
+----
+{"a":1,"b":[1,2,3]}
+
+# ---------- NULL handling ----------
+
+query I
+select variant_bytes_to_variant(NULL::BLOB);
+----
+NULL

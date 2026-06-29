@@ -11,12 +11,12 @@ UniqueConstraint::UniqueConstraint() : Constraint(ConstraintType::UNIQUE), index
 UniqueConstraint::UniqueConstraint(const LogicalIndex index, const bool is_primary_key)
     : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key) {
 }
-UniqueConstraint::UniqueConstraint(const LogicalIndex index, string column_name_p, const bool is_primary_key)
+UniqueConstraint::UniqueConstraint(const LogicalIndex index, Identifier column_name_p, const bool is_primary_key)
     : UniqueConstraint(index, is_primary_key) {
-	columns.push_back(std::move(column_name_p));
+	columns.emplace_back(std::move(column_name_p));
 }
 
-UniqueConstraint::UniqueConstraint(vector<string> columns, const bool is_primary_key)
+UniqueConstraint::UniqueConstraint(vector<Identifier> columns, const bool is_primary_key)
     : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX), columns(std::move(columns)),
       is_primary_key(is_primary_key) {
 }
@@ -37,7 +37,7 @@ unique_ptr<Constraint> UniqueConstraint::Copy() const {
 		return make_uniq<UniqueConstraint>(columns, is_primary_key);
 	}
 
-	auto result = make_uniq<UniqueConstraint>(index, columns.empty() ? string() : columns[0], is_primary_key);
+	auto result = make_uniq<UniqueConstraint>(index, columns.empty() ? Identifier() : columns[0], is_primary_key);
 	return std::move(result);
 }
 
@@ -61,12 +61,12 @@ void UniqueConstraint::SetIndex(const LogicalIndex new_index) {
 	index = new_index;
 }
 
-const vector<string> &UniqueConstraint::GetColumnNames() const {
+const vector<Identifier> &UniqueConstraint::GetColumnNames() const {
 	D_ASSERT(!columns.empty());
 	return columns;
 }
 
-vector<string> &UniqueConstraint::GetColumnNamesMutable() {
+vector<Identifier> &UniqueConstraint::GetColumnNamesMutable() {
 	D_ASSERT(!columns.empty());
 	return columns;
 }
@@ -86,7 +86,7 @@ vector<LogicalIndex> UniqueConstraint::GetLogicalIndexes(const ColumnList &colum
 	return indexes;
 }
 
-string UniqueConstraint::GetName(const string &table_name) const {
+Identifier UniqueConstraint::GetName(const Identifier &table_name) const {
 	auto type = IsPrimaryKey() ? IndexConstraintType::PRIMARY : IndexConstraintType::UNIQUE;
 	auto type_name = EnumUtil::ToString(type);
 
@@ -94,7 +94,7 @@ string UniqueConstraint::GetName(const string &table_name) const {
 	for (const auto &column_name : GetColumnNames()) {
 		name += "_" + column_name;
 	}
-	return type_name + "_" + table_name + name;
+	return Identifier(type_name + "_" + table_name + name);
 }
 
 } // namespace duckdb

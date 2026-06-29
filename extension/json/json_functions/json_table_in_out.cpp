@@ -1,5 +1,6 @@
 #include "json_common.hpp"
 #include "json_functions.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
 
 namespace duckdb {
@@ -100,6 +101,40 @@ static unique_ptr<GlobalTableFunctionState> JSONTableInOutInitGlobal(ClientConte
 	return std::move(result);
 }
 
+//! Whether an object key can appear unquoted in a JSON path (as in "$.key"). Mirrors SQLite's json_each/json_tree:
+//! only keys consisting of an ASCII letter followed by ASCII alphanumerics/underscores go unquoted
+static bool JSONPathKeyNeedsQuoting(const char *data, const idx_t len) {
+	if (len == 0 || !StringUtil::CharacterIsAlpha(data[0])) {
+		return true;
+	}
+	for (idx_t i = 1; i < len; i++) {
+		if (!StringUtil::CharacterIsAlphaNumeric(data[i]) && data[i] != '_') {
+			return true;
+		}
+	}
+	return false;
+}
+
+//! Appends ".key" to the path, quoting the key (as in "$.\"a.b\"") when needed so that the resulting path
+//! round-trips through JSON path extraction (issue #23148)
+static void AppendObjectPathElement(yyjson_val *vkey, string &path) {
+	const auto data = unsafe_yyjson_get_str(vkey);
+	const auto len = unsafe_yyjson_get_len(vkey);
+	path += '.';
+	if (!JSONPathKeyNeedsQuoting(data, len)) {
+		path.append(data, len);
+		return;
+	}
+	path += '"';
+	for (idx_t i = 0; i < len; i++) {
+		if (data[i] == '"' || data[i] == '\\') {
+			path += '\\';
+		}
+		path += data[i];
+	}
+	path += '"';
+}
+
 struct JSONTableInOutRecursionNode {
 	JSONTableInOutRecursionNode(string path_p, yyjson_val *parent_val_p)
 	    : path(std::move(path_p)), parent_val(parent_val_p), child_index(0) {
@@ -127,7 +162,7 @@ struct JSONTableInOutLocalState : LocalTableFunctionState {
 	void AddRecursionNode(yyjson_val *val, optional_ptr<yyjson_val> vkey, const optional_idx arr_index) {
 		string str;
 		if (vkey) {
-			str = "." + string(unsafe_yyjson_get_str(vkey.get()), unsafe_yyjson_get_len(vkey.get()));
+			AppendObjectPathElement(vkey.get(), str);
 		} else if (arr_index.IsValid()) {
 			str = "[" + to_string(arr_index.GetIndex()) + "]";
 		}
@@ -213,8 +248,9 @@ struct JSONTableInOutResult {
 		const auto path_str = lstate.GetPath();
 		if (fullkey.enabled) {
 			if (vkey) { // Object field
-				const auto vkey_str = string(unsafe_yyjson_get_str(vkey.get()), unsafe_yyjson_get_len(vkey.get()));
-				fullkey.data[count] = StringVector::AddString(fullkey.vector, path_str + "." + vkey_str);
+				auto fullkey_str = path_str;
+				AppendObjectPathElement(vkey.get(), fullkey_str);
+				fullkey.data[count] = StringVector::AddString(fullkey.vector, fullkey_str);
 			} else if (arr_el) { // Array element
 				const auto arr_path = "[" + to_string(recursion_nodes.back().child_index) + "]";
 				fullkey.data[count] = StringVector::AddString(fullkey.vector, path_str + arr_path);

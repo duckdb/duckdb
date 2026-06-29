@@ -21,11 +21,14 @@ PEGTransformerFactory::TransformSetAssignment(PEGTransformer &transformer,
 }
 
 // SetSetting <- SettingScope? SettingName
-SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transformer, const SetScope &setting_scope,
-                                                       const string &setting_name) {
+SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transformer,
+                                                       const optional<SetScope> &setting_scope,
+                                                       const Identifier &setting_name) {
 	SettingInfo result;
 	result.name = setting_name;
-	result.scope = setting_scope;
+	if (setting_scope) {
+		result.scope = *setting_scope;
+	}
 	return result;
 }
 
@@ -54,7 +57,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneStringLiteral(P
 
 // ZoneIdentifier <- Identifier
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformZoneIdentifier(PEGTransformer &transformer,
-                                                                            const string &identifier) {
+                                                                            const Identifier &identifier) {
 	return make_uniq<ConstantExpression>(Value(identifier));
 }
 
@@ -69,7 +72,7 @@ unique_ptr<SetStatement> PEGTransformerFactory::TransformSetTimeZone(PEGTransfor
 
 // SetVariable <- VariableScope Identifier
 SettingInfo PEGTransformerFactory::TransformSetVariable(PEGTransformer &transformer, const SetScope &variable_scope,
-                                                        const string &identifier) {
+                                                        const Identifier &identifier) {
 	SettingInfo result;
 	result.name = identifier;
 	result.scope = variable_scope;
@@ -129,7 +132,7 @@ SetScope PEGTransformerFactory::TransformGlobalScope(PEGTransformer &transformer
 // ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformZoneIntervalWithInterval(PEGTransformer &transformer, const string &string_literal,
-                                                         const DatePartSpecifier &interval) {
+                                                         const optional<DatePartSpecifier> &interval) {
 	auto expr = make_uniq<ConstantExpression>(Value(string_literal));
 	return make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
 }

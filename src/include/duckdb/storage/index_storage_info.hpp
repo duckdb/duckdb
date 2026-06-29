@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/block.hpp"
@@ -41,7 +42,7 @@ struct IndexBufferInfo {
 //! Index (de)serialization information.
 struct IndexStorageInfo {
 	IndexStorageInfo() {};
-	explicit IndexStorageInfo(const string &name) : name(name) {};
+	explicit IndexStorageInfo(const Identifier &name) : name(name) {};
 
 	//! Disable copy constructor and copy assignment, this type's lifetime is explicitly managed.
 	IndexStorageInfo(const IndexStorageInfo &) = delete;
@@ -51,7 +52,7 @@ struct IndexStorageInfo {
 	IndexStorageInfo &operator=(IndexStorageInfo &&) = default;
 
 	//! The name.
-	string name;
+	Identifier name;
 	//! The storage root.
 	idx_t root;
 	//! Any index specialization can provide additional key-Value settings via this map.

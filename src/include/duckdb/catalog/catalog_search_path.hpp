@@ -19,12 +19,22 @@ namespace duckdb {
 class ClientContext;
 
 struct CatalogSearchEntry {
-	CatalogSearchEntry(string catalog, string schema);
-
-	string catalog;
-	string schema;
+	CatalogSearchEntry(Identifier catalog, Identifier schema);
 
 public:
+	const Identifier &GetCatalog() const {
+		return catalog;
+	}
+	void SetCatalog(Identifier new_catalog) {
+		catalog = std::move(new_catalog);
+	}
+	const Identifier &GetSchema() const {
+		return schema;
+	}
+	void SetSchema(Identifier new_schema) {
+		schema = std::move(new_schema);
+	}
+
 	string ToString() const;
 	static string ListToString(const vector<CatalogSearchEntry> &input);
 	static CatalogSearchEntry Parse(const string &input);
@@ -32,7 +42,11 @@ public:
 
 private:
 	static CatalogSearchEntry ParseInternal(const string &input, idx_t &pos);
-	static string WriteOptionallyQuoted(const string &input);
+	static string WriteOptionallyQuoted(const Identifier &input);
+
+private:
+	Identifier catalog;
+	Identifier schema;
 };
 
 enum class CatalogSetPathType { SET_SCHEMA, SET_SCHEMAS, SET_DIRECTLY };
@@ -55,15 +69,15 @@ public:
 	}
 	DUCKDB_API const CatalogSearchEntry &GetDefault() const;
 	//! FIXME: this method is deprecated
-	DUCKDB_API string GetDefaultSchema(const string &catalog) const;
-	DUCKDB_API string GetDefaultSchema(ClientContext &context, const string &catalog) const;
-	DUCKDB_API string GetDefaultCatalog(const string &schema) const;
+	DUCKDB_API Identifier GetDefaultSchema(const Identifier &catalog) const;
+	DUCKDB_API Identifier GetDefaultSchema(ClientContext &context, const Identifier &catalog) const;
+	DUCKDB_API Identifier GetDefaultCatalog(const Identifier &schema) const;
 
-	DUCKDB_API vector<string> GetSchemasForCatalog(const string &catalog) const;
-	DUCKDB_API vector<string> GetCatalogsForSchema(const string &schema) const;
+	DUCKDB_API vector<Identifier> GetSchemasForCatalog(const Identifier &catalog) const;
+	DUCKDB_API vector<Identifier> GetCatalogsForSchema(const Identifier &schema) const;
 
-	DUCKDB_API bool SchemaInSearchPath(ClientContext &context, const string &catalog_name,
-	                                   const string &schema_name) const;
+	DUCKDB_API bool SchemaInSearchPath(ClientContext &context, const Identifier &catalog_name,
+	                                   const Identifier &schema_name) const;
 
 private:
 	//! Set paths without checking if they exist

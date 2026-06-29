@@ -21,7 +21,7 @@
 
 namespace duckdb {
 
-void DuckCleanupInfo::Cleanup() noexcept {
+void DuckCleanupInfo::Cleanup() {
 	for (auto &transaction : transactions) {
 		if (transaction->awaiting_cleanup) {
 			transaction->Cleanup(lowest_start_time);
@@ -194,6 +194,9 @@ DuckTransactionManager::GetCheckpointType(DuckTransaction &transaction, const Un
 }
 
 void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
+	if (ValidChecker::IsInvalidated(db)) {
+		throw IOException("%s", ValidChecker::InvalidatedMessage(db));
+	}
 	auto &storage_manager = db.GetStorageManager();
 	auto current = Transaction::TryGet(context, db);
 	if (current) {

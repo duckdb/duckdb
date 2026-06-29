@@ -63,6 +63,7 @@ public:
 
 public:
 	idx_t GetTotalRows() const;
+	idx_t GetNextRowId() const;
 	idx_t GetRowGroupCount() const;
 	Allocator &GetAllocator() const;
 
@@ -106,8 +107,9 @@ public:
 	//! Initialize an append with a variable number of rows. FinalizeAppend should not be called after appending is
 	//! done.
 	void InitializeAppend(TransactionData transaction, TableAppendState &state);
-	//! Appends to the row group collection. Returns true if a new row group has been created to append to
-	bool Append(DataChunk &chunk, TableAppendState &state);
+	//! Appends to the row group collection. Returns the finished row group index if a new row group has been appended
+	//! to
+	optional_idx Append(DataChunk &chunk, TableAppendState &state);
 	//! FinalizeAppend flushes an append with a variable number of rows.
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
@@ -153,6 +155,7 @@ public:
 	//! Append the next row group's column segment info to result. Returns false when no row groups remain.
 	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
 	                           vector<ColumnSegmentInfo> &result) const;
+	bool SupportsPerColumnWrites() const;
 	bool SupportsPerColumnWrites();
 	const vector<LogicalType> &GetTypes() const;
 
@@ -209,6 +212,9 @@ private:
 	const idx_t row_group_size;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
+	//! Next rowid offset relative to the row group tree base rowid.
+	//! For main table storage the base is 0, so this is also the absolute next rowid.
+	atomic<idx_t> next_row_id;
 	//! The data table info
 	shared_ptr<DataTableInfo> info;
 	//! The column types of the row group collection

@@ -55,7 +55,7 @@ public:
 	vector<idx_t> partition_columns;
 	vector<BoundOrderByNode> order_columns;
 
-	vector<string> names;
+	vector<Identifier> names;
 	vector<LogicalType> expected_types;
 
 public:
@@ -65,8 +65,8 @@ public:
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 	static vector<LogicalType> GetTypesWithoutPartitions(const vector<LogicalType> &col_types,
 	                                                     const vector<idx_t> &part_cols, bool write_part_cols);
-	static vector<string> GetNamesWithoutPartitions(const vector<string> &col_names, const vector<column_t> &part_cols,
-	                                                bool write_part_cols);
+	static vector<Identifier> GetNamesWithoutPartitions(const vector<Identifier> &col_names,
+	                                                    const vector<column_t> &part_cols, bool write_part_cols);
 
 protected:
 	void ResolveTypes() override {

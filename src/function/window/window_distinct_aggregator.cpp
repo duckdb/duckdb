@@ -18,15 +18,15 @@ enum class WindowDistinctSortStage : uint8_t { INIT, COMBINE, FINALIZE, SORTED, 
 // WindowDistinctAggregator
 //===--------------------------------------------------------------------===//
 bool WindowDistinctAggregator::CanAggregate(const BoundWindowExpression &wexpr) {
-	if (!wexpr.aggregate) {
+	if (!wexpr.AggregateFunction()) {
 		return false;
 	}
 
-	if (!wexpr.aggregate->CanAggregate()) {
+	if (!wexpr.AggregateFunction()->CanAggregate()) {
 		return false;
 	}
 
-	return wexpr.distinct && wexpr.exclude_clause == WindowExcludeMode::NO_OTHER && wexpr.arg_orders.empty();
+	return wexpr.Distinct() && wexpr.WindowExclude() == WindowExcludeMode::NO_OTHER && wexpr.ArgOrders().empty();
 }
 
 WindowDistinctAggregator::WindowDistinctAggregator(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared,
@@ -269,7 +269,6 @@ void WindowDistinctAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 	for (column_t c = 0; c < child_idx.size(); ++c) {
 		sort_chunk.data[c].Reference(coll_chunk.data[child_idx[c]]);
 	}
-	sort_chunk.SetCardinality(sink_chunk);
 
 	//	Apply FILTER clause, if any
 	if (filter_sel) {
@@ -537,7 +536,7 @@ void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t run_idx, WindowDisti
 	auto &leaves = ldastate.leaves;
 	auto &sel = ldastate.sel;
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), ldastate.allocator);
+	AggregateInputData aggr_input_data(aggr, ldastate.allocator);
 
 	//! The states to update
 	auto &update_v = ldastate.update_v;
@@ -637,7 +636,7 @@ void WindowDistinctAggregatorLocalState::FlushStates() {
 	}
 
 	const auto &aggr = gdstate.aggr;
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	AggregateInputData aggr_input_data(aggr, allocator);
 	statel.Verify();
 	aggr.function.GetStateCombineCallback()(statel, statep, aggr_input_data, flush_count);
 

@@ -1,0 +1,26 @@
+diff --git a/src/core/expression/iceberg_hash.cpp b/src/core/expression/iceberg_hash.cpp
+index ddf0054c..6acef320 100644
+--- a/src/core/expression/iceberg_hash.cpp
++++ b/src/core/expression/iceberg_hash.cpp
+@@ -206,7 +206,7 @@ int32_t IcebergHash::HashDecimalHugeInt(hugeint_t unscaled) {
+ 
+ //! Hash time value (Iceberg spec: int64 microseconds from midnight)
+ int32_t IcebergHash::HashTime(dtime_t t) {
+-	return HashInt64(t.micros);
++	return HashInt64(t.value);
+ }
+ 
+ //! Hash timestamp_ns value (Iceberg spec: int64 nanoseconds from epoch)
+diff --git a/src/core/expression/iceberg_value.cpp b/src/core/expression/iceberg_value.cpp
+index 0aded7c4..575e28fc 100644
+--- a/src/core/expression/iceberg_value.cpp
++++ b/src/core/expression/iceberg_value.cpp
+@@ -211,7 +211,7 @@ DeserializeResult IcebergValue::DeserializeValue(const string_t &blob, const Log
+ 		}
+ 		//! bound stores microseconds since midnight
+ 		dtime_t val;
+-		std::memcpy(&val.micros, blob.GetData(), sizeof(int64_t));
++		std::memcpy(&val.value, blob.GetData(), sizeof(int64_t));
+ 		return Value::TIME(val);
+ 	}
+ 	case LogicalTypeId::TIMESTAMP_NS:

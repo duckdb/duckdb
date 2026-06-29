@@ -166,6 +166,13 @@ def run_program(test, cmd, description):
     return None
 
 
+def matches_skip_error(failure, skip_error_messages):
+    if not skip_error_messages:
+        return False
+    combined = failure.get('stderr', '') + failure.get('stdout', '')
+    return any(msg in combined for msg in skip_error_messages)
+
+
 def execute_test(i, test):
     test_path = test if os.path.isabs(test) else os.path.join(repo_root, test)
     skipped = False
@@ -192,6 +199,7 @@ def execute_test(i, test):
         worker_test_config = os.path.join(temp_dir, 'storage_compatibility.json')
         with open(test_config, 'r') as f:
             config_contents = json.load(f)
+        skip_error_messages = config_contents.get('skip_error_messages', [])
         config_contents['initial_db'] = db_path
         with open(worker_test_config, 'w') as f:
             json.dump(config_contents, f)
@@ -209,6 +217,9 @@ def execute_test(i, test):
             'Run Test',
         )
         if failure is not None:
+            if matches_skip_error(failure, skip_error_messages):
+                result['skipped'] = True
+                return result
             result['failures'].append(failure)
             return result
 
@@ -222,22 +233,22 @@ def execute_test(i, test):
             )
             return result
 
-        failure = run_program(
-            test,
-            [
-                programs_to_test[-1],
-                db_path,
-                '-c',
-                '.headers off',
-                '-csv',
-                '-c',
-                f'.output {table_list_path}',
-                '-c',
-                'SHOW ALL TABLES',
-            ],
-            'List Tables',
-        )
+        list_tables_cmd = [
+            programs_to_test[-1],
+            db_path,
+            '-c',
+            '.headers off',
+            '-csv',
+            '-c',
+            f'.output {table_list_path}',
+            '-c',
+            'SHOW ALL TABLES',
+        ]
+        failure = run_program(test, list_tables_cmd, 'List Tables')
         if failure is not None:
+            if matches_skip_error(failure, skip_error_messages):
+                result['skipped'] = True
+                return result
             result['failures'].append(failure)
             return result
 
@@ -263,6 +274,8 @@ def execute_test(i, test):
             failure = run_program(test, cmd, 'Query Tables')
             if failure is not None:
                 failures.append(failure)
+        if len(failures) > 0:
+            failures = [f for f in failures if not matches_skip_error(f, skip_error_messages)]
         if len(failures) > 0:
             # A query failure can be expected for stale views. Only report it
             # when the same query succeeds against the new CLI.

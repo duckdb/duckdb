@@ -87,6 +87,11 @@ SetOperationNode::SetOperationNode(SetOperationType setop_type, unique_ptr<Query
 	if (children.size() < 2) {
 		throw SerializationException("SetOperationNode must have at least two children");
 	}
+	for (auto &child : children) {
+		if (!child) {
+			throw SerializationException("SetOperationNode children cannot be NULL");
+		}
+	}
 }
 
 unique_ptr<QueryNode> SetOperationNode::SerializeChildNode(Serializer &serializer, idx_t index) const {

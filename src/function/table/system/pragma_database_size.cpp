@@ -97,7 +97,6 @@ void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data
 		memory_limit.Append(data.memory_limit);
 		row++;
 	}
-	output.SetCardinality(row);
 }
 
 void PragmaDatabaseSize::RegisterFunction(BuiltinFunctions &set) {

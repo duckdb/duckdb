@@ -6,6 +6,9 @@ require no_alternative_verify
 
 load {TEST_DIR}/full_table_metadata_reuse_v7.test.db readwrite v1.5.0
 
+statement ok
+SET force_column_metadata_reuse=true
+
 # create a table with several columns
 statement ok
 CREATE TABLE tbl AS SELECT

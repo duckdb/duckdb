@@ -18,13 +18,16 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_REF;
 
 public:
-	BoundReferenceExpression(string alias, LogicalType type, idx_t index);
+	BoundReferenceExpression(Identifier alias, LogicalType type, idx_t index);
 	BoundReferenceExpression(LogicalType type, storage_t index);
 
-	//! Index used to access data in the chunks
-	storage_t index;
-
 public:
+	idx_t Index() const {
+		return index;
+	}
+	idx_t &IndexMutable() {
+		return index;
+	}
 	bool IsScalar() const override {
 		return false;
 	}
@@ -41,5 +44,9 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	//! Index used to access data in the chunks
+	storage_t index;
 };
 } // namespace duckdb

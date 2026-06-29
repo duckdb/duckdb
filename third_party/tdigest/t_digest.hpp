@@ -204,6 +204,20 @@ public:
 		return maxProcessed_;
 	}
 
+	Value min() const {
+		return min_;
+	}
+
+	Value max() const {
+		return max_;
+	}
+
+	// override the tracked minimum/maximum - used when reconstructing a serialized digest
+	void setMinMax(Value min, Value max) {
+		min_ = min;
+		max_ = max;
+	}
+
 	inline void add(std::vector<const TDigest *> digests) {
 		add(digests.cbegin(), digests.cend());
 	}

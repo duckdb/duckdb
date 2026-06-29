@@ -7,6 +7,7 @@
 #include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "fast_float/fast_float.h"
 #include "fmt/format.h"
@@ -245,7 +246,7 @@ public:
 
 	bool TryMatch(const char *str) {
 		auto ptr = pos;
-		while (*str && pos < end && tolower(*pos) == tolower(*str)) {
+		while (*str && pos < end && StringUtil::CharacterToLower(*pos) == StringUtil::CharacterToLower(*str)) {
 			pos++;
 			str++;
 		}
@@ -258,7 +259,7 @@ public:
 	}
 
 	bool TryMatch(char c) {
-		if (pos < end && tolower(*pos) == tolower(c)) {
+		if (pos < end && StringUtil::CharacterToLower(*pos) == StringUtil::CharacterToLower(c)) {
 			pos++;
 			SkipWhitespace(); // remove trailing whitespace
 			return true;      // matched
@@ -326,7 +327,7 @@ public:
 	}
 
 	void SkipWhitespace() {
-		while (pos < end && isspace(*pos)) {
+		while (pos < end && StringUtil::CharacterIsSpace(*pos)) {
 			pos++;
 		}
 	}

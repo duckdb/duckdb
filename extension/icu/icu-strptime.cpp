@@ -182,7 +182,7 @@ struct ICUStrptime : public ICUDateFunc {
 		const auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
+		auto &info = func_expr.BindInfo()->Cast<ICUStrptimeBindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -239,7 +239,7 @@ struct ICUStrptime : public ICUDateFunc {
 		const auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
+		auto &info = func_expr.BindInfo()->Cast<ICUStrptimeBindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -335,7 +335,7 @@ struct ICUStrptime : public ICUDateFunc {
 		return bound_function.GetBindCallback()(new_input);
 	}
 
-	static void TailPatch(const string &name, ExtensionLoader &loader, const vector<LogicalType> &types) {
+	static void TailPatch(const Identifier &name, ExtensionLoader &loader, const vector<LogicalType> &types) {
 		// Find the old function
 		auto &scalar_function = loader.GetFunction(name);
 		auto &functions = scalar_function.functions.functions;
@@ -368,7 +368,7 @@ struct ICUStrptime : public ICUDateFunc {
 		bound_function.SetBindCallback(StrpTimeBindFunction);
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
+	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {
 		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 		TailPatch(name, loader, types);
 
@@ -585,7 +585,7 @@ struct ICUStrftime : public ICUDateFunc {
 		const auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 		const auto tz_name = info.tz_setting.c_str();
 
@@ -619,8 +619,8 @@ struct ICUStrftime : public ICUDateFunc {
 		}
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
-		ScalarFunctionSet set(name);
+	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {
+		ScalarFunctionSet set {name};
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 		                               ICUStrftimeFunction<timestamp_tz_t>, Bind));
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ_NS, LogicalType::VARCHAR}, LogicalType::VARCHAR,

@@ -59,6 +59,7 @@ class StatementNode;
 class UpdateQueryNode;
 class DeleteQueryNode;
 class InsertQueryNode;
+class MergeQueryNode;
 
 //===--------------------------------------------------------------------===//
 // Expressions

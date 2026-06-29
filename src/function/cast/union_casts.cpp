@@ -152,7 +152,7 @@ static unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, cons
 			auto &target_member_name = UnionType::GetMemberName(target, target_idx);
 
 			// found a matching member
-			if (StringUtil::CIEquals(source_member_name, target_member_name)) {
+			if (source_member_name == target_member_name) {
 				auto &target_member_type = UnionType::GetMemberType(target, target_idx);
 				tag_map[source_idx] = static_cast<union_tag_t>(target_idx);
 				member_casts.push_back(input.GetCastFunction(source_member_type, target_member_type));
@@ -373,7 +373,7 @@ BoundCastInfo DefaultCasts::UnionCastSwitch(BindCastInput &input, const LogicalT
 		// bind a cast in which we convert all members to VARCHAR first
 		child_list_t<LogicalType> varchar_members;
 		for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(source); member_idx++) {
-			varchar_members.push_back(make_pair(UnionType::GetMemberName(source, member_idx), LogicalType::VARCHAR));
+			varchar_members.emplace_back(make_pair(UnionType::GetMemberName(source, member_idx), LogicalType::VARCHAR));
 		}
 		auto varchar_type = LogicalType::UNION(std::move(varchar_members));
 		return BoundCastInfo(UnionToVarcharCast, BindUnionToUnionCast(input, source, varchar_type),

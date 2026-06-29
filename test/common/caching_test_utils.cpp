@@ -21,6 +21,12 @@ const string &CachingTestFileGuard::GetPath() const {
 	return file_path;
 }
 
+DuckDB MakeCacheLocalFilesDB() {
+	DBConfig config;
+	config.SetOptionByName("cache_local_files", true);
+	return DuckDB(":memory:", &config);
+}
+
 string SimpleTrackingFileSystem::GetName() const {
 	return "TrackingFileSystem";
 }
@@ -35,6 +41,26 @@ bool SimpleTrackingFileSystem::CanSeek() {
 
 string SimpleTrackingFileSystem::GetVersionTag(FileHandle &handle) {
 	return StringUtil::Format("%lld:%lld", GetFileSize(handle), GetLastModifiedTime(handle).value);
+}
+
+string NoValidationMetadataFileSystem::GetName() const {
+	return "NoValidationMetadataFileSystem";
+}
+
+bool NoValidationMetadataFileSystem::CanHandleFile(const string &path) {
+	return StringUtil::StartsWith(path, TestDirectoryPath());
+}
+
+bool NoValidationMetadataFileSystem::CanSeek() {
+	return true;
+}
+
+string NoValidationMetadataFileSystem::GetVersionTag(FileHandle &handle) {
+	return "";
+}
+
+timestamp_t NoValidationMetadataFileSystem::GetLastModifiedTime(FileHandle &handle) {
+	return timestamp_t(0);
 }
 
 } // namespace duckdb

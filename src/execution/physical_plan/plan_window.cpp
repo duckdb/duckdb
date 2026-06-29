@@ -40,8 +40,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 		Columns partition_columns;
 		if (enable_optimizer && PhysicalStreamingWindow::IsStreamingFunction(context, wexpr)) {
 			streaming_windows.push_back(expr_idx);
-		} else if (!wexpr.partitions.empty() &&
-		           HasSingleValuePartitions(context, wexpr.partitions, plan, partition_columns)) {
+		} else if (!wexpr.Partitions().empty() &&
+		           HasSingleValuePartitions(context, wexpr.Partitions(), plan, partition_columns)) {
 			partitioned_windows.push_back(expr_idx);
 		} else {
 			blocking_windows.push_back(expr_idx);
@@ -112,15 +112,17 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 				continue;
 			}
 
-			// CSE Elimination: Search for a previous match
+			// CSE Elimination: Search for a previous match (volatile expressions must not be deduplicated)
 			bool cse = false;
-			for (idx_t i = 0; i < matching.size(); ++i) {
-				const auto match_idx = matching[i];
-				auto &match_expr = op.expressions[match_idx]->Cast<BoundWindowExpression>();
-				if (wexpr.Equals(match_expr)) {
-					projection_map[input_width + expr_idx] = output_pos + i;
-					cse = true;
-					break;
+			if (!wexpr.IsVolatile()) {
+				for (idx_t i = 0; i < matching.size(); ++i) {
+					const auto match_idx = matching[i];
+					auto &match_expr = op.expressions[match_idx]->Cast<BoundWindowExpression>();
+					if (wexpr.Equals(match_expr)) {
+						projection_map[input_width + expr_idx] = output_pos + i;
+						cse = true;
+						break;
+					}
 				}
 			}
 			if (cse) {
@@ -129,14 +131,14 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 
 			// Is there a common sort prefix?
 			const auto prefix = over_expr.GetSharedOrders(wexpr);
-			if (prefix != MinValue<idx_t>(over_expr.orders.size(), wexpr.orders.size())) {
+			if (prefix != MinValue<idx_t>(over_expr.OrderBy().size(), wexpr.OrderBy().size())) {
 				unprocessed.emplace_back(expr_idx);
 				continue;
 			}
 			matching.emplace_back(expr_idx);
 
 			// Switch to the longer prefix
-			if (prefix < wexpr.orders.size()) {
+			if (prefix < wexpr.OrderBy().size()) {
 				over_idx = expr_idx;
 			}
 		}

@@ -1,10 +1,12 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
+#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -24,34 +26,89 @@ public:
 	double denominator;
 };
 
+struct DomainEstimate {
+public:
+	DomainEstimate();
+
+public:
+	idx_t GetDistinctCount() const;
+	bool HasReliableDistinctCount() const;
+	idx_t GetReliableDistinctCount() const;
+	void Update(const DistinctCount &distinct_count);
+
+private:
+	optional_idx reliable_distinct_count;
+	optional_idx min_max_distinct_count;
+	idx_t fallback_distinct_count;
+};
+
+static bool IsReliableDistinctCount(DistinctCountSource source) {
+	return source == DistinctCountSource::HLL || source == DistinctCountSource::EXACT;
+}
+
+static void UpdateMaxDistinctCount(optional_idx &target, idx_t distinct_count) {
+	if (target.IsValid()) {
+		target = MaxValue(target.GetIndex(), distinct_count);
+		return;
+	}
+	target = distinct_count;
+}
+
+DomainEstimate::DomainEstimate() : fallback_distinct_count(NumericLimits<idx_t>::Maximum()) {
+}
+
+idx_t DomainEstimate::GetDistinctCount() const {
+	if (reliable_distinct_count.IsValid()) {
+		return reliable_distinct_count.GetIndex();
+	}
+	if (min_max_distinct_count.IsValid()) {
+		return min_max_distinct_count.GetIndex();
+	}
+	return fallback_distinct_count;
+}
+
+bool DomainEstimate::HasReliableDistinctCount() const {
+	return reliable_distinct_count.IsValid();
+}
+
+idx_t DomainEstimate::GetReliableDistinctCount() const {
+	D_ASSERT(reliable_distinct_count.IsValid());
+	return reliable_distinct_count.GetIndex();
+}
+
+void DomainEstimate::Update(const DistinctCount &distinct_count) {
+	if (IsReliableDistinctCount(distinct_count.source)) {
+		UpdateMaxDistinctCount(reliable_distinct_count, distinct_count.distinct_count);
+	} else if (distinct_count.source == DistinctCountSource::MIN_MAX) {
+		UpdateMaxDistinctCount(min_max_distinct_count, distinct_count.distinct_count);
+	} else {
+		fallback_distinct_count = MinValue(distinct_count.distinct_count, fallback_distinct_count);
+	}
+}
+
 struct RelationsSetToStats {
 public:
 	explicit RelationsSetToStats(const column_binding_set_t &column_binding_set)
-	    : equivalent_relations(column_binding_set), distinct_count_hll(0),
-	      distinct_count_no_hll(NumericLimits<idx_t>::Maximum()), has_distinct_count_hll(false) {
+	    : equivalent_relations(column_binding_set) {
 	}
 
 public:
 	//! Column binding sets that are equivalent in a join plan.
 	column_binding_set_t equivalent_relations;
-	//! The estimated total domains of the equivalent relations determined using HLL.
-	idx_t distinct_count_hll;
-	//! The estimated total domains of each relation without using HLL.
-	idx_t distinct_count_no_hll;
-	bool has_distinct_count_hll;
+	DomainEstimate domain_estimate;
 	vector<reference<JoinPredicate>> predicates;
 	vector<string> column_names;
 };
 
 struct FilterInfoWithTotalDomains {
 	FilterInfoWithTotalDomains(JoinPredicate &predicate, RelationsSetToStats &relation_set_to_stats)
-	    : predicate(predicate), distinct_count_hll(relation_set_to_stats.distinct_count_hll),
-	      distinct_count_no_hll(relation_set_to_stats.distinct_count_no_hll),
-	      has_distinct_count_hll(relation_set_to_stats.has_distinct_count_hll) {
+	    : predicate(predicate), domain_estimate(relation_set_to_stats.domain_estimate) {
 	}
 
 public:
 	double GetDistinctCount() const;
+	bool HasReliableDistinctCount() const;
+	idx_t GetReliableDistinctCount() const;
 	ExpressionType GetComparisonType();
 	bool IsInnerEquality();
 	FilterInfo &GetFilter() const;
@@ -59,9 +116,7 @@ public:
 
 public:
 	reference<JoinPredicate> predicate;
-	idx_t distinct_count_hll;
-	idx_t distinct_count_no_hll;
-	bool has_distinct_count_hll;
+	reference<const DomainEstimate> domain_estimate;
 };
 
 struct Subgraph2Denominator {
@@ -73,6 +128,17 @@ public:
 	optional_ptr<JoinRelationSet> relations;
 	optional_ptr<JoinRelationSet> numerator_relations;
 	double denom;
+};
+
+struct LeftJoinDenomInfo {
+public:
+	LeftJoinDenomInfo(JoinRelationSet &numerator_relations, double denominator)
+	    : numerator_relations(numerator_relations), denominator(denominator) {
+	}
+
+public:
+	JoinRelationSet &numerator_relations;
+	double denominator;
 };
 
 struct CompositeJoinPairStats {
@@ -133,7 +199,15 @@ CardinalityEstimator::~CardinalityEstimator() {
 }
 
 double FilterInfoWithTotalDomains::GetDistinctCount() const {
-	return static_cast<double>(has_distinct_count_hll ? distinct_count_hll : distinct_count_no_hll);
+	return static_cast<double>(domain_estimate.get().GetDistinctCount());
+}
+
+bool FilterInfoWithTotalDomains::HasReliableDistinctCount() const {
+	return domain_estimate.get().HasReliableDistinctCount();
+}
+
+idx_t FilterInfoWithTotalDomains::GetReliableDistinctCount() const {
+	return domain_estimate.get().GetReliableDistinctCount();
 }
 
 ExpressionType FilterInfoWithTotalDomains::GetComparisonType() {
@@ -351,7 +425,9 @@ JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denomin
                                                                 FilterInfoWithTotalDomains &filter) {
 	auto &predicate = filter.GetPredicate();
 	switch (predicate.GetJoinType()) {
-	case JoinType::LEFT:
+	case JoinType::LEFT: {
+		return CalculateLeftJoinDenomInfo(left, right, filter).numerator_relations;
+	}
 	case JoinType::SEMI:
 	case JoinType::ANTI: {
 		if (JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
@@ -385,6 +461,10 @@ static double ApplyComparisonRatio(double base_denom, ExpressionType comparison_
 	}
 }
 
+static double GetEffectiveDenom(double denom) {
+	return denom <= 0 ? 1 : denom;
+}
+
 double CardinalityEstimator::CalculateInnerJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter) {
 	auto effective_d = filter.GetDistinctCount();
 	auto comparison_type = filter.GetComparisonType();
@@ -394,14 +474,33 @@ double CardinalityEstimator::CalculateInnerJoinDenom(double base_denom, FilterIn
 	return ApplyComparisonRatio(base_denom, comparison_type, effective_d);
 }
 
+LeftJoinDenomInfo CardinalityEstimator::CalculateLeftJoinDenomInfo(Subgraph2Denominator &left,
+                                                                   Subgraph2Denominator &right,
+                                                                   FilterInfoWithTotalDomains &filter) {
+	auto &predicate = filter.GetPredicate();
+	D_ASSERT(left.relations && right.relations);
+	D_ASSERT(left.numerator_relations && right.numerator_relations);
+	auto left_is_preserved = JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
+	                         JoinRelationSet::IsSubset(*right.relations, predicate.GetRightSet());
+	auto &preserved_numerator = left_is_preserved ? *left.numerator_relations : *right.numerator_relations;
+	auto preserved_denom = GetEffectiveDenom(left_is_preserved ? left.denom : right.denom);
+
+	auto &inner_numerator = set_manager.Union(*left.numerator_relations, *right.numerator_relations);
+	auto inner_denom = CalculateInnerJoinDenom(GetEffectiveDenom(left.denom) * GetEffectiveDenom(right.denom), filter);
+	if (inner_denom <= 0) {
+		return LeftJoinDenomInfo(preserved_numerator, preserved_denom);
+	}
+	auto inner_cardinality = GetNumerator(inner_numerator) / inner_denom;
+	auto preserved_cardinality = GetNumerator(preserved_numerator) / preserved_denom;
+	if (inner_cardinality > preserved_cardinality) {
+		return LeftJoinDenomInfo(inner_numerator, inner_denom);
+	}
+	return LeftJoinDenomInfo(preserved_numerator, preserved_denom);
+}
+
 double CardinalityEstimator::CalculateLeftJoinDenom(Subgraph2Denominator &left, Subgraph2Denominator &right,
                                                     FilterInfoWithTotalDomains &filter) {
-	auto &predicate = filter.GetPredicate();
-	if (JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
-	    JoinRelationSet::IsSubset(*right.relations, predicate.GetRightSet())) {
-		return left.denom;
-	}
-	return right.denom;
+	return CalculateLeftJoinDenomInfo(left, right, filter).denominator;
 }
 
 double CardinalityEstimator::CalculateSemiAntiJoinDenom(double base_denom, Subgraph2Denominator &left,
@@ -633,8 +732,8 @@ void CardinalityEstimator::ProcessDenominatorEdge(FilterInfoWithTotalDomains &ed
 		                       *complete_subgraph.relations)) {
 			return;
 		}
-		if (edge.has_distinct_count_hll) {
-			state.unused_edge_tdoms.insert(edge.distinct_count_hll);
+		if (edge.HasReliableDistinctCount()) {
+			state.unused_edge_tdoms.insert(edge.GetReliableDistinctCount());
 		}
 		return;
 	}
@@ -670,9 +769,11 @@ void CardinalityEstimator::CreateDenominatorSubgraph(FilterInfoWithTotalDomains 
 	left_subgraph.numerator_relations = &edge_left_set;
 	right_subgraph.relations = &edge_right_set;
 	right_subgraph.numerator_relations = &edge_right_set;
-	left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
+	auto &numerator_relations = UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
+	auto denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
+	left_subgraph.numerator_relations = &numerator_relations;
 	left_subgraph.relations = &set_manager.Union(edge_left_set, edge_right_set);
-	left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
+	left_subgraph.denom = denom;
 	ApplyCompositeJoinPairCaps(left_subgraph.denom, *left_subgraph.relations, state.join_pair_stats,
 	                           state.capped_join_pairs);
 	state.subgraphs.push_back(left_subgraph);
@@ -701,9 +802,11 @@ void CardinalityEstimator::ExtendDenominatorSubgraph(idx_t subgraph_index, Filte
 		return;
 	}
 
-	left_subgraph->numerator_relations = &UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
+	auto &numerator_relations = UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
+	auto denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
+	left_subgraph->numerator_relations = &numerator_relations;
 	left_subgraph->relations = &set_manager.Union(*left_subgraph->relations, *right_subgraph.relations);
-	left_subgraph->denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
+	left_subgraph->denom = denom;
 	ApplyCompositeJoinPairCaps(left_subgraph->denom, *left_subgraph->relations, state.join_pair_stats,
 	                           state.capped_join_pairs);
 }
@@ -714,11 +817,12 @@ void CardinalityEstimator::MergeDenominatorSubgraphs(const vector<idx_t> &subgra
 	D_ASSERT(subgraph_connections.at(0) < subgraph_connections.at(1));
 	auto subgraph_to_merge_into = &state.subgraphs.at(subgraph_connections.at(0));
 	auto subgraph_to_delete = &state.subgraphs.at(subgraph_connections.at(1));
+	auto &numerator_relations = UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
+	auto denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 	subgraph_to_merge_into->relations =
 	    &set_manager.Union(*subgraph_to_merge_into->relations, *subgraph_to_delete->relations);
-	subgraph_to_merge_into->numerator_relations =
-	    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
-	subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
+	subgraph_to_merge_into->numerator_relations = &numerator_relations;
+	subgraph_to_merge_into->denom = denom;
 	ApplyCompositeJoinPairCaps(subgraph_to_merge_into->denom, *subgraph_to_merge_into->relations, state.join_pair_stats,
 	                           state.capped_join_pairs);
 	subgraph_to_delete->relations = nullptr;
@@ -827,16 +931,7 @@ idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set)
 }
 
 bool SortTdoms(const RelationsSetToStats &a, const RelationsSetToStats &b) {
-	if (a.has_distinct_count_hll && b.has_distinct_count_hll) {
-		return a.distinct_count_hll > b.distinct_count_hll;
-	}
-	if (a.has_distinct_count_hll) {
-		return a.distinct_count_hll > b.distinct_count_no_hll;
-	}
-	if (b.has_distinct_count_hll) {
-		return a.distinct_count_no_hll > b.distinct_count_hll;
-	}
-	return a.distinct_count_no_hll > b.distinct_count_no_hll;
+	return a.domain_estimate.GetDistinctCount() > b.domain_estimate.GetDistinctCount();
 }
 
 void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, RelationStats &stats) {
@@ -870,16 +965,7 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 			if (i_set.find(key) == i_set.end()) {
 				continue;
 			}
-			if (distinct_count.from_hll && relation_to_tdom.has_distinct_count_hll) {
-				relation_to_tdom.distinct_count_hll =
-				    MaxValue(relation_to_tdom.distinct_count_hll, distinct_count.distinct_count);
-			} else if (distinct_count.from_hll && !relation_to_tdom.has_distinct_count_hll) {
-				relation_to_tdom.has_distinct_count_hll = true;
-				relation_to_tdom.distinct_count_hll = distinct_count.distinct_count;
-			} else {
-				relation_to_tdom.distinct_count_no_hll =
-				    MinValue(distinct_count.distinct_count, relation_to_tdom.distinct_count_no_hll);
-			}
+			relation_to_tdom.domain_estimate.Update(distinct_count);
 		}
 	}
 }
@@ -893,7 +979,7 @@ void CardinalityEstimator::AddRelationNamesToRelationStats(vector<RelationStats>
 			D_ASSERT(binding.table_index.index < stats.size());
 			string column_name;
 			if (binding.column_index < stats[binding.table_index.index].column_names.size()) {
-				column_name = stats[binding.table_index.index].column_names[binding.column_index];
+				column_name = stats[binding.table_index.index].column_names[binding.column_index].GetIdentifierName();
 			} else {
 				column_name = "[unknown]";
 			}
@@ -909,9 +995,7 @@ void CardinalityEstimator::PrintRelationStats() {
 		for (auto &column_name : total_domain.column_names) {
 			domain += column_name + ", ";
 		}
-		bool have_hll = total_domain.has_distinct_count_hll;
-		domain += "\n TOTAL DOMAIN = " +
-		          to_string(have_hll ? total_domain.distinct_count_hll : total_domain.distinct_count_no_hll);
+		domain += "\n TOTAL DOMAIN = " + to_string(total_domain.domain_estimate.GetDistinctCount());
 		Printer::Print(domain);
 	}
 }

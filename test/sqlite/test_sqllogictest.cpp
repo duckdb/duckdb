@@ -8,6 +8,7 @@
 #include "test_config.hpp"
 
 #include <functional>
+#include <iostream>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -41,11 +42,8 @@ static void register_sqllogic_test_case(void (*test_fun)(), const string &path, 
 	REGISTER_TEST_CASE(test_fun, normalized_path, tags);
 }
 
-template <bool AUTO_SWITCH_TEST_DIR = false>
-static void testRunner() {
-	// this is an ugly hack that uses the test case name to pass the script file
-	// name if someone has a better idea...
-	const auto name = Catch::getResultCapture().getCurrentTestName();
+template <bool AUTO_SWITCH_TEST_DIR>
+static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input) {
 	const auto test_dir_path = TestDirectoryPath(); // can vary between tests, and does IO
 	auto &test_config = TestConfiguration::Get();
 
@@ -73,7 +71,7 @@ static void testRunner() {
 	// We assume the test working dir for extensions to be one dir above the test/sql. Note that this is very hacky.
 	// however for now it suffices: we use it to run tests from out-of-tree extensions that are based on the extension
 	// template which adheres to this convention.
-	if (AUTO_SWITCH_TEST_DIR) {
+	if (!input && AUTO_SWITCH_TEST_DIR) {
 		prev_directory = TestGetCurrentDirectory();
 
 		std::size_t found = name.rfind("/test/sql");
@@ -96,12 +94,16 @@ static void testRunner() {
 
 	ErrorData error;
 	try {
-		runner.ExecuteFile(name);
+		if (input) {
+			runner.ExecuteStream(*input, name);
+		} else {
+			runner.ExecuteFile(name);
+		}
 	} catch (std::exception &ex) {
 		error = ErrorData(ex);
 	}
 
-	if (AUTO_SWITCH_TEST_DIR) {
+	if (!input && AUTO_SWITCH_TEST_DIR) {
 		test_config.ChangeWorkingDirectory(prev_directory);
 	}
 
@@ -130,6 +132,18 @@ static void testRunner() {
 	if (error.HasError()) {
 		FAIL(error.Message());
 	}
+}
+
+template <bool AUTO_SWITCH_TEST_DIR = false>
+static void testRunner() {
+	// this is an ugly hack that uses the test case name to pass the script file
+	// name if someone has a better idea...
+	const auto name = Catch::getResultCapture().getCurrentTestName();
+	RunSQLLogicTest<AUTO_SWITCH_TEST_DIR>(name, nullptr);
+}
+
+static void testRunnerFromStdin() {
+	RunSQLLogicTest<false>("<stdin>", &std::cin);
 }
 
 static string ParseGroupFromPath(string file) {
@@ -228,5 +242,9 @@ void RegisterSqllogictests() {
 			}
 		});
 	}
+}
+
+void RegisterSqllogictestStdin() {
+	register_sqllogic_test_case(testRunnerFromStdin, "<stdin>", "[sqlitelogic][stdin]");
 }
 } // namespace duckdb

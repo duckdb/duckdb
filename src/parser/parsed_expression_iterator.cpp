@@ -9,6 +9,8 @@
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 
 namespace duckdb {
@@ -48,17 +50,6 @@ void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
 				callback(limit_modifier.offset);
 			}
 		} break;
-
-		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-			auto &limit_modifier = modifier->Cast<LimitPercentModifier>();
-			if (limit_modifier.limit) {
-				callback(limit_modifier.limit);
-			}
-			if (limit_modifier.offset) {
-				callback(limit_modifier.offset);
-			}
-		} break;
-
 		case ResultModifierType::ORDER_MODIFIER: {
 			auto &order_modifier = modifier->Cast<OrderModifier>();
 			for (auto &order : order_modifier.orders) {
@@ -231,6 +222,40 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		}
 		if (ins_node.on_conflict_info && ins_node.on_conflict_info->condition) {
 			expr_callback(ins_node.on_conflict_info->condition);
+		}
+		break;
+	}
+	case QueryNodeType::MERGE_QUERY_NODE: {
+		auto &merge_node = node.Cast<MergeQueryNode>();
+		if (merge_node.target) {
+			EnumerateTableRefChildren(*merge_node.target, expr_callback, ref_callback);
+		}
+		if (merge_node.source) {
+			EnumerateTableRefChildren(*merge_node.source, expr_callback, ref_callback);
+		}
+		if (merge_node.join_condition) {
+			expr_callback(merge_node.join_condition);
+		}
+		for (auto &entry : merge_node.actions) {
+			for (auto &action : entry.second) {
+				if (action->condition) {
+					expr_callback(action->condition);
+				}
+				if (action->update_info) {
+					for (auto &expr : action->update_info->expressions) {
+						expr_callback(expr);
+					}
+					if (action->update_info->condition) {
+						expr_callback(action->update_info->condition);
+					}
+				}
+				for (auto &expr : action->expressions) {
+					expr_callback(expr);
+				}
+			}
+		}
+		for (auto &expr : merge_node.returning_list) {
+			expr_callback(expr);
 		}
 		break;
 	}

@@ -179,15 +179,15 @@ end
 end
 
 function my_bind_error_function(info::DuckDB.BindInfo)
-    throw("bind error")
+    return throw("bind error")
 end
 
 function my_init_error_function(info::DuckDB.InitInfo)
-    throw("init error")
+    return throw("init error")
 end
 
 function my_main_error_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
-    throw("runtime error")
+    return throw("runtime error")
 end
 
 @testset "Test table function errors" begin

@@ -131,7 +131,8 @@ function append(appender::Appender, val::AbstractVector{T}) where {T}
 end
 
 function append(appender::Appender, val::Any)
-    throw(NotImplementedException("unsupported type for append: $(typeof(val))"))
+    println(val)
+    return throw(NotImplementedException("unsupported type for append: $(typeof(val))"))
 end
 
 function end_row(appender::Appender)

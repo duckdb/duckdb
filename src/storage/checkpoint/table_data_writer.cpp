@@ -22,11 +22,12 @@ TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, QueryContext contex
     : table(table_p.Cast<DuckTableEntry>()), context(context.GetClientContext()) {
 	D_ASSERT(table_p.IsDuckTable());
 
-	auto storage_version = StorageCompatibility::FromDatabase(table_p.ParentCatalog().GetAttached());
-	if (storage_version.storage_version < StorageCompatibility::FromString("v1.4.4").storage_version) {
+	auto storage_compatibility = StorageCompatibility::FromDatabase(table_p.ParentCatalog().GetAttached());
+	if (storage_compatibility.storage_version < StorageVersion::V1_4_4) {
 		// older storage versions require legacy start row to be written
 		require_legacy_start_row = true;
 	}
+	can_persist_rowid_gaps = storage_compatibility.storage_version >= StorageVersion::V2_0_0;
 }
 
 TableDataWriter::~TableDataWriter() {
@@ -80,11 +81,12 @@ MetadataManager &SingleFileTableDataWriter::GetMetadataManager() {
 }
 
 void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
-                                                    const vector<MetaBlockPointer> &metadata_pointers,
-                                                    idx_t total_rows) {
+                                                    const vector<MetaBlockPointer> &metadata_pointers, idx_t total_rows,
+                                                    idx_t next_row_id) {
 	existing_pointer = pointer;
 	existing_pointers = metadata_pointers;
 	existing_rows = total_rows;
+	existing_next_row_id = next_row_id;
 }
 
 void SingleFileTableDataWriter::FlushPartialBlocks() {
@@ -95,6 +97,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
                                               RowGroupCollection &collection, Serializer &serializer) {
 	MetaBlockPointer pointer;
 	idx_t total_rows;
+	idx_t next_row_id;
 	auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetDatabase());
 	if (!existing_pointer.IsValid()) {
 		auto supports_per_column_writes = collection.SupportsPerColumnWrites();
@@ -114,10 +117,12 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 		// now start writing the row group pointers to disk
 		table_data_writer.Write<uint64_t>(row_group_pointers.size());
 		total_rows = 0;
+		next_row_id = 0;
 		for (auto &row_group_pointer : row_group_pointers) {
-			auto row_group_count = row_group_pointer.row_start + row_group_pointer.tuple_count;
-			if (row_group_count > total_rows) {
-				total_rows = row_group_count;
+			total_rows += row_group_pointer.tuple_count;
+			auto row_group_end = row_group_pointer.row_start + row_group_pointer.tuple_count;
+			if (row_group_end > next_row_id) {
+				next_row_id = row_group_end;
 			}
 
 			// Each RowGroup is its own unit
@@ -132,6 +137,8 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 		// we have existing metadata and the table is unchanged - write a pointer to the existing metadata
 		pointer = existing_pointer;
 		total_rows = existing_rows.GetIndex();
+		next_row_id = existing_next_row_id.GetIndex();
+		D_ASSERT(next_row_id >= total_rows);
 
 		// label the blocks as used again to prevent them from being freed
 		auto &metadata_manager = checkpoint_manager.GetMetadataManager();
@@ -175,6 +182,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 		}
 	}
 
+	D_ASSERT(next_row_id >= total_rows);
 	// Now begin the metadata as a unit
 	// Pointer to the table itself goes to the metadata stream.
 	serializer.WriteProperty(101, "table_pointer", pointer);
@@ -207,6 +215,11 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteList(
 	    104, "index_storage_infos", index_storage_infos.ordered_infos.size(),
 	    [&](Serializer::List &list, idx_t i) { list.WriteElement(index_storage_infos.ordered_infos[i].get()); });
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WriteProperty(105, "next_row_id", next_row_id);
+	}
+	// ¬serializer.ShouldSerialize(StorageVersion::V2_0_0) ==> (next_row_id == total_rows)
+	D_ASSERT(serializer.ShouldSerialize(StorageVersion::V2_0_0) || (next_row_id == total_rows));
 }
 
 } // namespace duckdb

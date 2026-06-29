@@ -428,11 +428,7 @@ def format_directory(directory):
 
 files = []
 if format_all:
-    try:
-        os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
-    except:
-        pass
-
+    files.append('CMakeLists.txt')
     for direct in formatted_directories:
         files += format_directory(direct)
 

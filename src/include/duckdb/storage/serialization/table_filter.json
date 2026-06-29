@@ -94,7 +94,7 @@
       {
         "id": 201,
         "name": "child_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 202,

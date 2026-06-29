@@ -6,8 +6,8 @@ namespace duckdb {
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggregateExpression &aggr,
                                                                      unique_ptr<Expression> &expr_ptr) {
 	vector<BaseStatistics> stats;
-	stats.reserve(aggr.children.size());
-	for (auto &child : aggr.children) {
+	stats.reserve(aggr.GetChildren().size());
+	for (auto &child : aggr.GetChildrenMutable()) {
 		auto stat = PropagateExpression(child);
 		if (!stat) {
 			stats.push_back(BaseStatistics::CreateUnknown(child->GetReturnType()));
@@ -15,11 +15,11 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggreg
 			stats.push_back(stat->Copy());
 		}
 	}
-	if (!aggr.function.GetCallbacks().HasStatisticsCallback()) {
+	if (!aggr.Function().GetCallbacks().HasStatisticsCallback()) {
 		return nullptr;
 	}
-	AggregateStatisticsInput input(aggr.bind_info.get(), stats, node_stats.get());
-	return aggr.function.GetCallbacks().GetStatisticsCallback()(context, aggr, input);
+	AggregateStatisticsInput input(aggr.BindInfo(), stats, node_stats.get());
+	return aggr.Function().GetCallbacks().GetStatisticsCallback()(context, aggr, input);
 }
 
 } // namespace duckdb

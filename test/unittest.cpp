@@ -18,6 +18,7 @@ int main(int argc_in, char *argv[]) {
 	auto &test_config = TestConfiguration::Get();
 	test_config.Initialize();
 	bool keep_home = false;
+	bool use_stdin = false;
 
 	idx_t argc = NumericCast<idx_t>(argc_in);
 	int new_argc = 0;
@@ -39,9 +40,18 @@ int main(int argc_in, char *argv[]) {
 			AddRequire(string(argv[++i]));
 		} else if (argument == "--keep-home") {
 			keep_home = true;
-		} else if (!test_config.ParseArgument(argument, argc, argv, i)) {
-			new_argv[new_argc] = argv[i];
-			new_argc++;
+		} else if (argument == "--stdin") {
+			use_stdin = true;
+		} else {
+			try {
+				if (!test_config.ParseArgument(argument, argc, argv, i)) {
+					new_argv[new_argc] = argv[i];
+					new_argc++;
+				}
+			} catch (std::exception &ex) {
+				fprintf(stderr, "%s\n", ex.what());
+				return 1;
+			}
 		}
 	}
 	test_config.ChangeWorkingDirectory(test_directory);
@@ -72,10 +82,14 @@ int main(int argc_in, char *argv[]) {
 #endif
 	}
 
-	if (test_config.GetSkipCompiledTests()) {
+	if (use_stdin || test_config.GetSkipCompiledTests()) {
 		Catch::getMutableRegistryHub().clearTests();
 	}
-	RegisterSqllogictests();
+	if (use_stdin) {
+		RegisterSqllogictestStdin();
+	} else {
+		RegisterSqllogictests();
+	}
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
 	std::string failures_summary = FailureSummary::GetFailureSummary();

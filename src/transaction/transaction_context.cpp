@@ -12,7 +12,8 @@
 namespace duckdb {
 
 TransactionContext::TransactionContext(ClientContext &context)
-    : context(context), auto_commit(true), current_transaction(nullptr) {
+    : context(context), auto_commit(true), invalidation_policy(TransactionInvalidationPolicy::STANDARD_POLICY),
+      auto_rollback(false), current_transaction(nullptr) {
 }
 
 TransactionContext::~TransactionContext() {

@@ -224,6 +224,10 @@ unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStat
 	if (source.id() == LogicalTypeId::VARIANT) {
 		return StatisticsPropagateVariant(stats, target);
 	}
+	if (target.id() == LogicalTypeId::VARIANT) {
+		// the cast shreds every value into a single bucket - mirror the (possibly nested) source as typed stats
+		return VariantStats::StatisticsPropagateToVariant(source, stats);
+	}
 	if (!CanPropagateCast(source, target)) {
 		return nullptr;
 	}
@@ -232,12 +236,12 @@ unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStat
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastExpression &cast,
                                                                      unique_ptr<Expression> &expr_ptr) {
-	auto child_stats = PropagateExpression(cast.child);
+	auto child_stats = PropagateExpression(cast.ChildMutable());
 	if (!child_stats) {
 		return nullptr;
 	}
-	auto result_stats = TryPropagateCast(*child_stats, cast.child->GetReturnType(), cast.GetReturnType());
-	if (cast.try_cast && result_stats) {
+	auto result_stats = TryPropagateCast(*child_stats, cast.Child().GetReturnType(), cast.GetReturnType());
+	if (cast.IsTryCast() && result_stats) {
 		result_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}
 	return result_stats;

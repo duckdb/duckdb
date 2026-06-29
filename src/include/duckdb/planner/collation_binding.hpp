@@ -16,14 +16,17 @@ struct MapCastInfo;
 struct MapCastNode;
 struct DBConfig;
 
-typedef bool (*try_push_collation_t)(ClientContext &context, unique_ptr<Expression> &source,
-                                     const LogicalType &sql_type, CollationType type);
+//! Returns the (ordered) list of scalar functions that need to be applied to a value of the given type to make it
+//! byte-comparable under its collation. Returns an empty list if no collation needs to be applied.
+typedef vector<string> (*get_collation_functions_t)(ClientContext &context, const LogicalType &sql_type,
+                                                    CollationType type);
 
 struct CollationCallback {
-	explicit CollationCallback(try_push_collation_t try_push_collation_p) : try_push_collation(try_push_collation_p) {
+	explicit CollationCallback(get_collation_functions_t get_collation_functions_p)
+	    : get_collation_functions(get_collation_functions_p) {
 	}
 
-	try_push_collation_t try_push_collation;
+	get_collation_functions_t get_collation_functions;
 };
 
 class CollationBinding {

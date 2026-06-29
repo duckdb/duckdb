@@ -1,9 +1,10 @@
 #include "duckdb/optimizer/late_materialization_helper.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 
 namespace duckdb {
 
 unique_ptr<LogicalGet> LateMaterializationHelper::CreateLHSGet(const LogicalGet &rhs, Binder &binder) {
-	// we need to construct a new scan of the same table
 	auto table_index = binder.GenerateTableIndex();
 	auto new_get = make_uniq<LogicalGet>(table_index, rhs.function, rhs.bind_data->Copy(), rhs.returned_types,
 	                                     rhs.names, rhs.virtual_columns);
@@ -13,6 +14,18 @@ unique_ptr<LogicalGet> LateMaterializationHelper::CreateLHSGet(const LogicalGet 
 	new_get->named_parameters = rhs.named_parameters;
 	new_get->input_table_types = rhs.input_table_types;
 	new_get->input_table_names = rhs.input_table_names;
+	auto &column_ids = rhs.GetColumnIds();
+	for (auto &filter_entry : rhs.table_filters) {
+		auto &expr_filter = filter_entry.Filter().Cast<ExpressionFilter>();
+		if (ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME)) {
+			continue;
+		}
+		auto col_idx = column_ids[filter_entry.GetIndex()].GetPrimaryIndex();
+		auto &col_type = rhs.returned_types[col_idx];
+		auto optional_expr = CreateOptionalFilterExpression(expr_filter.expr->Copy(), col_type);
+		new_get->table_filters.PushFilter(filter_entry.GetIndex(),
+		                                  make_uniq<ExpressionFilter>(std::move(optional_expr)));
+	}
 	return new_get;
 }
 

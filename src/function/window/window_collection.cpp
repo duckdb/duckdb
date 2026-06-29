@@ -129,7 +129,7 @@ WindowCursor::WindowCursor(const WindowCollection &paged, vector<column_t> colum
 		state.current_row_index = 0;
 		state.next_row_index = paged.size();
 		state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
-		chunk.SetCardinality(state.next_row_index);
+		chunk.SetChildCardinality(state.next_row_index);
 		return;
 	} else if (chunk.data.empty()) {
 		auto &inputs = paged.inputs;
@@ -148,7 +148,7 @@ LogicalType WindowCollectionChunkScanner::PrefixStructType(column_t end, column_
 	for (auto c = begin; c < end; ++c) {
 		auto name = std::to_string(c);
 		auto type = chunk.data[c].GetType();
-		std::pair<string, LogicalType> child {name, type};
+		std::pair<Identifier, LogicalType> child {Identifier(name), type};
 		partition_children.emplace_back(child);
 	}
 	//	For single children, don;t build a struct - compare will be slow

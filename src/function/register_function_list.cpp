@@ -43,7 +43,7 @@ struct ExtensionRegister {
 template <class OP, class T>
 static void FillExtraInfo(const StaticFunctionDefinition &function, T &info) {
 	info.internal = true;
-	info.alias_of = function.alias_of;
+	info.alias_of = Identifier(function.alias_of);
 	FillFunctionDescriptions(function, info);
 	OP::FillExtraInfo(info);
 }
@@ -60,7 +60,7 @@ static void RegisterFunctionList(REGISTER_CONTEXT &context, const StaticFunction
 			} else {
 				result = function.get_function_set();
 			}
-			result.name = function.name;
+			result.name = Identifier(function.name);
 			CreateScalarFunctionInfo info(result);
 			FillExtraInfo<OP>(function, info);
 			OP::RegisterFunction(context, info);
@@ -72,7 +72,7 @@ static void RegisterFunctionList(REGISTER_CONTEXT &context, const StaticFunction
 			} else {
 				result = function.get_aggregate_function_set();
 			}
-			result.name = function.name;
+			result.name = Identifier(function.name);
 			CreateAggregateFunctionInfo info(result);
 			FillExtraInfo<OP>(function, info);
 			OP::RegisterFunction(context, info);
@@ -83,7 +83,7 @@ static void RegisterFunctionList(REGISTER_CONTEXT &context, const StaticFunction
 			} else {
 				result = function.get_window_function_set();
 			}
-			result.name = function.name;
+			result.name = Identifier(function.name);
 			CreateWindowFunctionInfo info(result);
 			FillExtraInfo<OP>(function, info);
 			OP::RegisterFunction(context, info);

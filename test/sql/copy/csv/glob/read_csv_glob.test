@@ -245,7 +245,7 @@ SELECT COUNT(*) FROM glob('{DATA_DIR}/csv/glob/*/*.csv');
 
 # empty list
 statement error
-SELECT * FROM read_csv_auto([]) ORDER BY 1
+SELECT * FROM read_csv_auto([]::INT[]) ORDER BY 1
 ----
 No function matches
 

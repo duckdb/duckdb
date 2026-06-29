@@ -97,9 +97,9 @@ public:
 					if (scan_chunk.size() == 0) {
 						break;
 					}
-					auto new_row_group = result_collection.Append(scan_chunk, append_state);
-					if (new_row_group) {
-						writer.WriteNewRowGroup(optimistic_collection);
+					auto flushed_row_group_idx = result_collection.Append(scan_chunk, append_state);
+					if (flushed_row_group_idx.IsValid()) {
+						writer.WriteNewRowGroup(optimistic_collection, flushed_row_group_idx.GetIndex());
 					}
 				}
 				data_table.ResetOptimisticCollection(context, collection_indexes[i]);
@@ -546,10 +546,10 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &i
 
 	auto &optimistic_collection = table.GetStorage().GetOptimisticCollection(context.client, lstate.collection_index);
 	auto &collection = *optimistic_collection.collection;
-	auto new_row_group = collection.Append(insert_chunk, lstate.current_append_state);
-	if (new_row_group) {
+	auto flushed_row_group_idx = collection.Append(insert_chunk, lstate.current_append_state);
+	if (flushed_row_group_idx.IsValid()) {
 		// we have already written to disk - flush the next row group as well
-		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection);
+		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection, flushed_row_group_idx.GetIndex());
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -691,7 +691,6 @@ SourceResultType PhysicalBatchInsert::GetDataInternal(ExecutionContext &context,
                                                       OperatorSourceInput &input) const {
 	auto &insert_gstate = sink_state->Cast<BatchInsertGlobalState>();
 
-	chunk.SetCardinality(1);
 	chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(insert_gstate.insert_count)));
 
 	return SourceResultType::FINISHED;

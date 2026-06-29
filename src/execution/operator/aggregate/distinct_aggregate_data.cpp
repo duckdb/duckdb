@@ -21,7 +21,7 @@ DistinctAggregateCollectionInfo::DistinctAggregateCollectionInfo(const vector<un
 		if (!aggregate.IsDistinct()) {
 			continue;
 		}
-		total_child_count += aggregate.children.size();
+		total_child_count += aggregate.GetChildren().size();
 	}
 }
 
@@ -37,7 +37,7 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 		auto &aggregate = data.info.aggregates[i]->Cast<BoundAggregateExpression>();
 
 		// Initialize the child executor and get the payload types for every aggregate
-		for (auto &child : aggregate.children) {
+		for (auto &child : aggregate.GetChildren()) {
 			child_executor.AddExpression(*child);
 		}
 		if (!aggregate.IsDistinct()) {
@@ -97,7 +97,7 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 			grouping_set.insert(group);
 		}
 		idx_t group_by_size = group_expressions ? group_expressions->size() : 0;
-		for (idx_t set_idx = 0; set_idx < aggregate.children.size(); set_idx++) {
+		for (idx_t set_idx = 0; set_idx < aggregate.GetChildren().size(); set_idx++) {
 			grouping_set.insert(ProjectionIndex(set_idx + group_by_size));
 		}
 		// Create the hashtable for the aggregate
@@ -108,7 +108,7 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 
 		// Fill the chunk_types (only contains the payload of the distinct aggregates)
 		vector<LogicalType> chunk_types;
-		for (auto &child_p : aggregate.children) {
+		for (auto &child_p : aggregate.GetChildren()) {
 			chunk_types.push_back(child_p->GetReturnType());
 		}
 	}
@@ -122,16 +122,16 @@ struct FindMatchingAggregate {
 	bool operator()(const aggr_ref_t other_r) {
 		auto &other = other_r.get();
 		auto &aggr = aggr_r.get();
-		if (other.children.size() != aggr.children.size()) {
+		if (other.GetChildren().size() != aggr.GetChildren().size()) {
 			return false;
 		}
-		if (!Expression::Equals(aggr.filter, other.filter)) {
+		if (!Expression::Equals(aggr.GetFilterMutable(), other.GetFilterMutable())) {
 			return false;
 		}
-		for (idx_t i = 0; i < aggr.children.size(); i++) {
-			auto &other_child = other.children[i]->Cast<BoundReferenceExpression>();
-			auto &aggr_child = aggr.children[i]->Cast<BoundReferenceExpression>();
-			if (other_child.index != aggr_child.index) {
+		for (idx_t i = 0; i < aggr.GetChildren().size(); i++) {
+			auto &other_child = other.GetChildren()[i]->Cast<BoundReferenceExpression>();
+			auto &aggr_child = aggr.GetChildren()[i]->Cast<BoundReferenceExpression>();
+			if (other_child.Index() != aggr_child.Index()) {
 				return false;
 			}
 		}

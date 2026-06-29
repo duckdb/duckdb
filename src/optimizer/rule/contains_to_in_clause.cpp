@@ -19,8 +19,8 @@ ContainsToInClauseRule::ContainsToInClauseRule(ExpressionRewriter &rewriter) : R
 unique_ptr<Expression> ContainsToInClauseRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                      bool &changes_made, bool is_root) {
 	auto &expr = bindings[0].get().Cast<BoundFunctionExpression>();
-	auto &list_arg = expr.children[0];
-	auto &probe_arg = expr.children[1];
+	auto &list_arg = expr.GetChildren()[0];
+	auto &probe_arg = expr.GetChildren()[1];
 
 	if (probe_arg->IsFoldable()) {
 		return nullptr;
@@ -35,11 +35,11 @@ unique_ptr<Expression> ContainsToInClauseRule::Apply(LogicalOperator &op, vector
 	}
 
 	auto in_expr = make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN);
-	in_expr->children.push_back(probe_arg->Copy());
+	in_expr->GetChildrenMutable().push_back(probe_arg->Copy());
 	const auto &child_type = ListType::GetChildType(list_val.type());
 	for (const auto &elem : ListValue::GetChildren(list_val)) {
 		Value v = elem.DefaultCastAs(child_type);
-		in_expr->children.push_back(make_uniq<BoundConstantExpression>(std::move(v)));
+		in_expr->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(std::move(v)));
 	}
 	changes_made = true;
 	return std::move(in_expr);

@@ -14,13 +14,13 @@ LambdaExpression::LambdaExpression(vector<string> named_parameters_p, unique_ptr
     : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), syntax_type(LambdaSyntaxType::LAMBDA_KEYWORD),
       expr(std::move(expr)) {
 	if (named_parameters_p.size() == 1) {
-		lhs = make_uniq<ColumnRefExpression>(named_parameters_p.back());
+		lhs = make_uniq<ColumnRefExpression>(Identifier(named_parameters_p.back()));
 		return;
 	}
 	// Create a dummy row function and insert the children.
 	vector<unique_ptr<ParsedExpression>> children;
 	for (const auto &name : named_parameters_p) {
-		auto child = make_uniq<ColumnRefExpression>(name);
+		auto child = make_uniq<ColumnRefExpression>(Identifier(name));
 		children.push_back(std::move(child));
 	}
 	lhs = make_uniq<FunctionExpression>("row", std::move(children));
@@ -50,12 +50,12 @@ vector<reference<const ParsedExpression>> LambdaExpression::ExtractColumnRefExpr
 			return column_refs;
 		}
 
-		for (auto &child : func_expr.GetChildren()) {
-			if (child->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
+		for (auto &child : func_expr.GetArguments()) {
+			if (child.GetExpression().GetExpressionClass() != ExpressionClass::COLUMN_REF) {
 				error_message = InvalidParametersErrorMessage();
 				return column_refs;
 			}
-			column_refs.emplace_back(*child);
+			column_refs.emplace_back(child.GetExpression());
 		}
 	}
 
@@ -70,8 +70,8 @@ string LambdaExpression::InvalidParametersErrorMessage() {
 	return "Invalid lambda parameters! Parameters must be unqualified comma-separated names like x or (x, y).";
 }
 
-bool LambdaExpression::IsLambdaParameter(const vector<unordered_set<string>> &lambda_params,
-                                         const string &parameter_name) {
+bool LambdaExpression::IsLambdaParameter(const vector<identifier_set_t> &lambda_params,
+                                         const Identifier &parameter_name) {
 	for (const auto &level : lambda_params) {
 		if (level.find(parameter_name) != level.end()) {
 			return true;

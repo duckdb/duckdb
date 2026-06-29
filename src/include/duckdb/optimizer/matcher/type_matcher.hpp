@@ -53,6 +53,20 @@ private:
 	vector<LogicalType> types;
 };
 
+//! The SpecificTypeIdMatcher class matches only a single specified LogicalTypeId
+class SpecificTypeIdMatcher : public TypeMatcher {
+public:
+	explicit SpecificTypeIdMatcher(LogicalTypeId id_p) : id(id_p) {
+	}
+
+	bool Match(const LogicalType &type_p) override {
+		return type_p.id() == this->id;
+	}
+
+private:
+	LogicalTypeId id;
+};
+
 //! The NumericTypeMatcher class matches any numeric type (DECIMAL, INTEGER, etc...)
 class NumericTypeMatcher : public TypeMatcher {
 public:

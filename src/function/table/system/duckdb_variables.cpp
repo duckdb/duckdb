@@ -44,7 +44,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBVariablesInit(ClientContext &context,
 
 	for (auto &entry : config.user_variables) {
 		VariableData data;
-		data.name = entry.first;
+		data.name = entry.first.GetIdentifierName();
 		data.value = entry.second;
 		result->variables.push_back(std::move(data));
 	}
@@ -76,7 +76,6 @@ void DuckDBVariablesFunction(ClientContext &context, TableFunctionInput &data_p,
 		type.Append(Value(variable_entry.value.type().ToString()));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBVariablesFun::RegisterFunction(BuiltinFunctions &set) {

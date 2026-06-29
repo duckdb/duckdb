@@ -21,11 +21,6 @@ struct HistogramBinState {
 	unsafe_vector<T> *bin_boundaries;
 	unsafe_vector<idx_t> *counts;
 
-	void Initialize() {
-		bin_boundaries = nullptr;
-		counts = nullptr;
-	}
-
 	void Destroy() {
 		if (bin_boundaries) {
 			delete bin_boundaries;
@@ -80,11 +75,6 @@ struct HistogramBinState {
 };
 
 struct HistogramBinFunction {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.Initialize();
-	}
-
 	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
 		state.Destroy();
@@ -281,7 +271,7 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 template <class OP, class T>
-void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
+void HistogramBinFinalizeFunction(Vector &state_vector, AggregateFinalizeInputData &, Vector &result, idx_t count,
                                   idx_t offset) {
 	auto states = state_vector.Values<HistogramBinState<T> *>();
 

@@ -1106,7 +1106,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			return;
 		}
 		// convert the columns in the parsed chunk to the types of the table
-		insert_chunk.SetCardinality(parse_chunk);
+		insert_chunk.SetChildCardinality(parse_chunk.size());
 
 		// We keep track of the borked lines, in case we are ignoring errors
 		D_ASSERT(csv_file_scan);

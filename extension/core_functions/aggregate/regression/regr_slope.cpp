@@ -12,34 +12,9 @@
 
 namespace duckdb {
 
-namespace {
-
-LogicalType GetRegrSlopeStateType(const BoundAggregateFunction &) {
-	child_list_t<LogicalType> covar_children;
-	covar_children.emplace_back("count", LogicalType::UBIGINT);
-	covar_children.emplace_back("meanx", LogicalType::DOUBLE);
-	covar_children.emplace_back("meany", LogicalType::DOUBLE);
-	covar_children.emplace_back("co_moment", LogicalType::DOUBLE);
-	auto cov_pop_type = LogicalType::STRUCT(std::move(covar_children));
-
-	child_list_t<LogicalType> stddev_types;
-	stddev_types.emplace_back("count", LogicalType::UBIGINT);
-	stddev_types.emplace_back("mean", LogicalType::DOUBLE);
-	stddev_types.emplace_back("dsquared", LogicalType::DOUBLE);
-	auto stddev_type = LogicalType::STRUCT(std::move(stddev_types));
-
-	child_list_t<LogicalType> state_children;
-	state_children.emplace_back("cov_pop", std::move(cov_pop_type));
-	state_children.emplace_back("var_pop", std::move(stddev_type));
-	return LogicalType::STRUCT(std::move(state_children));
-}
-
-} // namespace
-
 AggregateFunction RegrSlopeFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrSlopeState, double, double, double, RegrSlopeOperation>(
-	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetRegrSlopeStateType);
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

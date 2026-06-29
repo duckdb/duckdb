@@ -34,8 +34,8 @@ public:
 
 public:
 	//! Returns a table reference to the appended data.
-	static unique_ptr<TableRef> GetColumnDataTableRef(ColumnDataCollection &collection, const string &table_name,
-	                                                  const vector<string> &expected_names);
+	static unique_ptr<TableRef> GetColumnDataTableRef(ColumnDataCollection &collection, const Identifier &table_name,
+	                                                  const vector<Identifier> &expected_names);
 	//! Parses the statement to append data.
 	static unique_ptr<SQLStatement> ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
 	                                               const string &table_name);
@@ -107,7 +107,7 @@ public:
 	virtual void AppendDefault(DataChunk &chunk, idx_t col, idx_t row);
 	//! Appends a column to the active column list.
 	//! Immediately flushes all previous data.
-	virtual void AddColumn(const string &name);
+	virtual void AddColumn(const Identifier &name);
 	//! Removes all columns from the active column list.
 	//! Immediately flushes all previous data.
 	virtual void ClearColumns();
@@ -144,24 +144,24 @@ protected:
 
 class Appender : public BaseAppender {
 public:
-	DUCKDB_API Appender(Connection &con, const string &database_name, const string &schema_name,
-	                    const string &table_name, const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
-	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name,
+	DUCKDB_API Appender(Connection &con, const Identifier &database_name, const Identifier &schema_name,
+	                    const Identifier &table_name, const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
+	DUCKDB_API Appender(Connection &con, const Identifier &schema_name, const Identifier &table_name,
 	                    const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
-	DUCKDB_API Appender(Connection &con, const string &table_name,
+	DUCKDB_API Appender(Connection &con, const Identifier &table_name,
 	                    const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
 	DUCKDB_API ~Appender() override;
 
 public:
 	void AppendDefault() override;
 	void AppendDefault(DataChunk &chunk, idx_t col, idx_t row) override;
-	void AddColumn(const string &name) override;
+	void AddColumn(const Identifier &name) override;
 	void ClearColumns() override;
 	//! Get the expected names based on the active columns.
-	vector<string> GetExpectedNames();
+	vector<Identifier> GetExpectedNames();
 	//! Construct a query that appends data from, typically, a column data collection.
-	static string ConstructQuery(TableDescription &description_p, const string &table_name,
-	                             const vector<string> &expected_names);
+	static string ConstructQuery(TableDescription &description_p, const Identifier &table_name,
+	                             const vector<Identifier> &expected_names);
 
 private:
 	//! A shared pointer to the context of this appender.
@@ -183,7 +183,7 @@ protected:
 class QueryAppender : public BaseAppender {
 public:
 	DUCKDB_API QueryAppender(Connection &con, string query, vector<LogicalType> types,
-	                         vector<string> names = vector<string>(), string table_name = string(),
+	                         vector<Identifier> names = vector<Identifier>(), Identifier table_name = Identifier(),
 	                         const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
 	DUCKDB_API ~QueryAppender() override;
 
@@ -193,9 +193,9 @@ private:
 	//! The query to run.
 	string query;
 	//! The column names of the to-be-appended data, or "col1, col2, ...", if empty.
-	vector<string> names;
+	vector<Identifier> names;
 	//! The table name that we can reference in the query, or "appended_data", if empty.
-	string table_name;
+	Identifier table_name;
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;

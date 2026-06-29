@@ -97,17 +97,17 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = expr.Cast<BoundColumnRefExpression>();
 		// bound column ref, check if this one has already been recorded in the expression list
-		auto column_entry = state.column_map.find(bound_column_ref.binding);
+		auto column_entry = state.column_map.find(bound_column_ref.Binding());
 		if (column_entry == state.column_map.end()) {
 			// not there yet: push the expression
 			auto new_col_ref = make_uniq<BoundColumnRefExpression>(
-			    bound_column_ref.GetAlias(), bound_column_ref.GetReturnType(), bound_column_ref.binding);
+			    bound_column_ref.GetAlias(), bound_column_ref.GetReturnType(), bound_column_ref.Binding());
 			auto new_column_index = ColumnBinding::PushExpression(state.expressions, std::move(new_col_ref));
-			state.column_map[bound_column_ref.binding] = new_column_index;
-			bound_column_ref.binding = ColumnBinding(state.projection_index, new_column_index);
+			state.column_map[bound_column_ref.Binding()] = new_column_index;
+			bound_column_ref.BindingMutable() = ColumnBinding(state.projection_index, new_column_index);
 		} else {
 			// else: just update the column binding!
-			bound_column_ref.binding = ColumnBinding(state.projection_index, column_entry->second);
+			bound_column_ref.BindingMutable() = ColumnBinding(state.projection_index, column_entry->second);
 		}
 		return;
 	}

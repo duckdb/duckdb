@@ -11,17 +11,17 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
 	auto result = make_uniq<AlterStatement>();
 	unique_ptr<AlterInfo> info;
 
-	string column_name;
+	Identifier column_name;
 	if (comment_on_type == CatalogType::INVALID) {
 		// Column type returned
 		auto identifier = dotted_identifier;
-		column_name = identifier.back();
+		column_name = Identifier(identifier.back());
 		identifier.pop_back();
 		if (identifier.empty()) {
-			throw ParserException("Invalid column reference: '%s'", column_name);
+			throw ParserException("Invalid column reference: '%s'", column_name.GetIdentifierName());
 		}
 		auto qualified_name = StringToQualifiedName(identifier);
-		info = make_uniq<SetColumnCommentInfo>(qualified_name.catalog, qualified_name.schema, qualified_name.name,
+		info = make_uniq<SetColumnCommentInfo>(qualified_name.Catalog(), qualified_name.Schema(), qualified_name.Name(),
 		                                       column_name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
 	} else if (comment_on_type == CatalogType::DATABASE_ENTRY) {
 		throw NotImplementedException("Adding comments to databases is not implemented");
@@ -29,8 +29,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
 		throw NotImplementedException("Adding comments to schemas is not implemented");
 	} else {
 		auto qualified_name = StringToQualifiedName(dotted_identifier);
-		info = make_uniq<SetCommentInfo>(comment_on_type, qualified_name.catalog, qualified_name.schema,
-		                                 qualified_name.name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
+		info = make_uniq<SetCommentInfo>(comment_on_type, qualified_name.Catalog(), qualified_name.Schema(),
+		                                 qualified_name.Name(), comment_value, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	if (!info) {
 		throw NotImplementedException("Cannot comment on this type");
@@ -83,9 +83,9 @@ CatalogType PEGTransformerFactory::TransformCommentColumn(PEGTransformer &transf
 	return CatalogType::INVALID;
 }
 
-Value PEGTransformerFactory::TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result) {
+Value PEGTransformerFactory::TransformCommentValue(PEGTransformer &transformer, ParseResult &choice_result) {
 	// CommentValue <- NullLiteral / StringLiteral
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &list_pr = choice_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.GetResult().type == ParseResultType::STRING) {
 		return Value(choice_pr.GetResult().Cast<StringLiteralParseResult>().result);

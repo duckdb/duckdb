@@ -74,7 +74,7 @@ struct CSVReaderOptions {
 	// CSVAutoOptions
 	//===--------------------------------------------------------------------===//
 	//! SQL Type list mapping of name to SQL type index in sql_type_list
-	case_insensitive_map_t<idx_t> sql_types_per_column;
+	identifier_map_t<idx_t> sql_types_per_column;
 	//! User-defined SQL type list
 	vector<LogicalType> sql_type_list;
 	//! User-defined name list

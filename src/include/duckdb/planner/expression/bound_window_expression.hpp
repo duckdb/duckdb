@@ -26,6 +26,139 @@ public:
 	BoundWindowExpression(LogicalType return_type, unique_ptr<BoundAggregateFunction> aggregate,
 	                      unique_ptr<BoundWindowFunction> window, unique_ptr<FunctionData> bind_info);
 
+public:
+	const unique_ptr<BoundAggregateFunction> &AggregateFunction() const {
+		return aggregate;
+	}
+	unique_ptr<BoundAggregateFunction> &AggregateFunctionMutable() {
+		return aggregate;
+	}
+	const unique_ptr<BoundWindowFunction> &WindowFunction() const {
+		return window;
+	}
+	unique_ptr<BoundWindowFunction> &WindowFunctionMutable() {
+		return window;
+	}
+	const unique_ptr<FunctionData> &BindInfo() const {
+		return bind_info;
+	}
+	unique_ptr<FunctionData> &BindInfoMutable() {
+		return bind_info;
+	}
+	const vector<unique_ptr<Expression>> &GetChildren() const {
+		return children;
+	}
+	vector<unique_ptr<Expression>> &GetChildrenMutable() {
+		return children;
+	}
+	const vector<unique_ptr<Expression>> &Partitions() const {
+		return partitions;
+	}
+	vector<unique_ptr<Expression>> &PartitionsMutable() {
+		return partitions;
+	}
+	const vector<BoundOrderByNode> &OrderBy() const {
+		return orders;
+	}
+	vector<BoundOrderByNode> &OrderByMutable() {
+		return orders;
+	}
+	const unique_ptr<Expression> &Filter() const {
+		return filter_expr;
+	}
+	unique_ptr<Expression> &FilterMutable() {
+		return filter_expr;
+	}
+	bool IgnoreNulls() const {
+		return ignore_nulls;
+	}
+	bool &IgnoreNullsMutable() {
+		return ignore_nulls;
+	}
+	bool Distinct() const {
+		return distinct;
+	}
+	bool &DistinctMutable() {
+		return distinct;
+	}
+	WindowBoundary WindowStart() const {
+		return start;
+	}
+	WindowBoundary &WindowStartMutable() {
+		return start;
+	}
+	WindowBoundary WindowEnd() const {
+		return end;
+	}
+	WindowBoundary &WindowEndMutable() {
+		return end;
+	}
+	WindowExcludeMode WindowExclude() const {
+		return exclude_clause;
+	}
+	WindowExcludeMode &WindowExcludeMutable() {
+		return exclude_clause;
+	}
+	const unique_ptr<Expression> &StartExpr() const {
+		return start_expr;
+	}
+	unique_ptr<Expression> &StartExprMutable() {
+		return start_expr;
+	}
+	const unique_ptr<Expression> &EndExpr() const {
+		return end_expr;
+	}
+	unique_ptr<Expression> &EndExprMutable() {
+		return end_expr;
+	}
+	const vector<BoundOrderByNode> &ArgOrders() const {
+		return arg_orders;
+	}
+	vector<BoundOrderByNode> &ArgOrdersMutable() {
+		return arg_orders;
+	}
+	const vector<unique_ptr<BaseStatistics>> &PartitionsStats() const {
+		return partitions_stats;
+	}
+	vector<unique_ptr<BaseStatistics>> &PartitionsStatsMutable() {
+		return partitions_stats;
+	}
+	const vector<unique_ptr<BaseStatistics>> &ExprStats() const {
+		return expr_stats;
+	}
+	vector<unique_ptr<BaseStatistics>> &ExprStatsMutable() {
+		return expr_stats;
+	}
+
+	bool IsWindow() const override {
+		return true;
+	}
+	bool IsFoldable() const override {
+		return false;
+	}
+
+	string ToString() const override;
+
+	//! The number of ordering clauses the functions share
+	static idx_t GetSharedOrders(const vector<BoundOrderByNode> &lhs, const vector<BoundOrderByNode> &rhs);
+	idx_t GetSharedOrders(const BoundWindowExpression &other) const;
+
+	bool PartitionsAreEquivalent(const BoundWindowExpression &other) const;
+	bool KeysAreCompatible(const BoundWindowExpression &other) const;
+	bool Equals(const BaseExpression &other) const override;
+
+	unique_ptr<Expression> Copy() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	//! Remove LEAD/LAG offset/default
+	vector<unique_ptr<Expression>> SerializedChildren(Serializer &serializer) const;
+	unique_ptr<Expression> SerializedOffset(Serializer &serializer) const;
+	unique_ptr<Expression> SerializedDefault(Serializer &serializer) const;
+
+private:
 	//! The bound aggregate function
 	unique_ptr<BoundAggregateFunction> aggregate;
 	//! The bound window function
@@ -62,35 +195,6 @@ public:
 
 	//! Statistics belonging to the other expressions (start, end, offset, default)
 	vector<unique_ptr<BaseStatistics>> expr_stats;
-
-public:
-	bool IsWindow() const override {
-		return true;
-	}
-	bool IsFoldable() const override {
-		return false;
-	}
-
-	string ToString() const override;
-
-	//! The number of ordering clauses the functions share
-	static idx_t GetSharedOrders(const vector<BoundOrderByNode> &lhs, const vector<BoundOrderByNode> &rhs);
-	idx_t GetSharedOrders(const BoundWindowExpression &other) const;
-
-	bool PartitionsAreEquivalent(const BoundWindowExpression &other) const;
-	bool KeysAreCompatible(const BoundWindowExpression &other) const;
-	bool Equals(const BaseExpression &other) const override;
-
-	unique_ptr<Expression> Copy() const override;
-
-	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
-
-private:
-	//! Remove LEAD/LAG offset/default
-	vector<unique_ptr<Expression>> SerializedChildren(Serializer &serializer) const;
-	unique_ptr<Expression> SerializedOffset(Serializer &serializer) const;
-	unique_ptr<Expression> SerializedDefault(Serializer &serializer) const;
 };
 
 } // namespace duckdb

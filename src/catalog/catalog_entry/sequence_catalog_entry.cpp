@@ -21,7 +21,7 @@ SequenceData::SequenceData(CreateSequenceInfo &info)
 }
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info)
-    : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.name), data(info) {
+    : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.GetSequenceName()), data(info) {
 	this->temporary = info.temporary;
 	this->comment = info.comment;
 	this->tags = info.tags;
@@ -93,9 +93,7 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	auto seq_data = GetData();
 
 	auto result = make_uniq<CreateSequenceInfo>();
-	result->catalog = catalog.GetName();
-	result->schema = schema.name;
-	result->name = name;
+	result->SetQualifiedName(QualifiedName(catalog.GetName(), schema.name, name));
 	result->usage_count = seq_data.usage_count;
 	result->increment = seq_data.increment;
 	result->min_value = seq_data.min_value;
@@ -114,7 +112,7 @@ string SequenceCatalogEntry::ToSQL() const {
 
 	duckdb::stringstream ss;
 	ss << "CREATE SEQUENCE ";
-	ss << name;
+	ss << name.GetIdentifierName();
 	ss << " INCREMENT BY " << seq_data.increment;
 	ss << " MINVALUE " << seq_data.min_value;
 	ss << " MAXVALUE " << seq_data.max_value;

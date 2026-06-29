@@ -33,6 +33,7 @@ public:
 	SampleMethod method;
 	optional_idx seed = optional_idx::Invalid();
 	bool repeatable;
+	double sample_rate = -1.0;
 
 	unique_ptr<SampleOptions> Copy();
 	void SetSeed(idx_t new_seed);

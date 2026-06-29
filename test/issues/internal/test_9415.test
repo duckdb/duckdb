@@ -1,0 +1,112 @@
+# name: test/issues/internal/test_9415.test
+# description: Internal Issue 9415: row group pruning after committed deletes
+# group: [internal]
+
+load {TEST_DIR}/internal_9415.duckdb
+
+statement ok
+CREATE TABLE t(chunk_id INTEGER, id INTEGER);
+
+statement ok
+INSERT INTO t SELECT 0, i FROM range(1, 3650) r(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO t VALUES (1, 3650);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO t SELECT 2, i FROM range(3651, 3954) r(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO t VALUES (3, 1), (3, 1);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO t VALUES (4, 888), (4, 888);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO t SELECT 5, i FROM range(3651, 3917) r(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO t SELECT 6, i FROM range(3651, 7953) r(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO t SELECT 7, i FROM range(7961, 8273) r(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO t SELECT 8, i FROM range(8273, 8539) r(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO t VALUES (9, 8536), (9, 8539);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+DELETE FROM t WHERE chunk_id = 6 AND id BETWEEN 3651 AND 4175;
+
+statement ok
+DELETE FROM t WHERE chunk_id = 7 AND id BETWEEN 7961 AND 8017;
+
+statement ok
+DELETE FROM t WHERE chunk_id = 8 AND id = 8273;
+
+statement ok
+DELETE FROM t WHERE chunk_id = 9 AND id = 8536;
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM t;
+----
+8521
+
+query I
+SELECT count(*) FROM (SELECT id FROM t ORDER BY id OFFSET 8000 LIMIT 525);
+----
+521
+
+statement ok
+BEGIN;
+
+statement ok
+DELETE FROM t WHERE chunk_id = 6 AND id BETWEEN 4176 AND 4275;
+
+query I
+SELECT count(*) FROM t;
+----
+8421
+
+query I
+SELECT count(*) FROM (SELECT id FROM t ORDER BY id OFFSET 7900 LIMIT 50);
+----
+50
+
+statement ok
+ROLLBACK;

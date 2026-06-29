@@ -59,6 +59,12 @@ private:
    [POINTER]
    [POINTER]
    The pointers are either NULL
+
+   Two-phase lifecycle: the constructor populates only layout-INDEPENDENT state; all layout-DEPENDENT state
+   (layout_ptr, row matchers, tuple_size/pointer_offset/entry_size, data_collection, sink_collection, dead_end,
+   dict_registry) is published by FinishInitWithLayout on the first build chunk, so slot widths can be chosen from
+   the data's actual runtime encoding. Until then the JHT is unusable except for the null-safe Count() /
+   SizeInBytes() accessors; the layout-dependent accessors assert IsLayoutFinalized().
 */
 class JoinHashTable {
 public:
@@ -226,6 +232,17 @@ public:
 	              optional_ptr<Expression> predicate_ptr = nullptr, const vector<idx_t> &output_in_probe = {});
 	~JoinHashTable();
 
+	//! Initialize layout-dependent state from a layout shared across all per-thread JHTs (deferred ctor body)
+	void FinishInitWithLayout(shared_ptr<TupleDataLayout> published_layout, vector<uint8_t> dict_index_width_p = {});
+	//! True iff FinishInitWithLayout has populated layout-dependent state
+	bool IsLayoutFinalized() const {
+		return layout_ptr.get() != nullptr;
+	}
+
+	//! Per-column index-width decision for the dict-surviving optimisation, consulted by the layout publisher on
+	//! the first build chunk. Returns the narrowed index byte width (1/2/4), or 0 to keep native width.
+	uint8_t GetDictSurvivingIndexWidth(idx_t build_col_idx, const Vector &incoming) const;
+
 	//! Add the given data to the HT
 	void Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &input);
 	//! Merge another HT into this one
@@ -275,17 +292,21 @@ public:
 	}
 
 	idx_t Count() const {
-		return data_collection->Count();
+		return data_collection ? data_collection->Count() : 0;
 	}
 	idx_t SizeInBytes() const {
-		return data_collection->SizeInBytes();
+		return data_collection ? data_collection->SizeInBytes() : 0;
 	}
 
 	PartitionedTupleData &GetSinkCollection() {
+		// Only valid after FinishInitWithLayout; assert so a premature access fails loudly, not as a null-deref.
+		D_ASSERT(IsLayoutFinalized());
 		return *sink_collection;
 	}
 
 	TupleDataCollection &GetDataCollection() {
+		// Only valid after FinishInitWithLayout (see GetSinkCollection).
+		D_ASSERT(IsLayoutFinalized());
 		return *data_collection;
 	}
 	//! Perform a full scan of a build column, filling the provided addresses vector and result vector.
@@ -370,6 +391,12 @@ public:
 	bool use_dict_emission = false;
 	//! Pre-materialized columnar data, one entry per RHS output column
 	vector<buffer_ptr<DictionaryEntry>> dict_arrays;
+	//! Per build payload column: pinned upstream dict entry. Non-null means the row store carries a narrow dict
+	//! index for this column instead of the native value.
+	vector<buffer_ptr<DictionaryEntry>> dict_registry;
+	//! Per build payload column: byte width of the narrowed dict-index slot (0 = native, else 1/2/4). Parallel to
+	//! build_types; set by FinishInitWithLayout.
+	vector<uint8_t> dict_index_width;
 	//! Saved NEXT_PTR values, indexed by dict index; only allocated when chains_longer_than_one
 	AllocatedData aux_next_ptrs;
 	//! Typed pointer into aux_next_ptrs; set by BuildDictionaryArrays alongside the allocation
@@ -450,6 +477,7 @@ private:
 	//! Whether or not to use a bloom filter will be determined by the operator
 	BloomFilter bloom_filter;
 	bool should_build_bloom_filter = false;
+	idx_t bloom_filter_init_count = 0;
 
 	unique_ptr<PrefixRangeFilter> prefix_range_filter;
 	bool should_build_prefix_range_filter = false;
@@ -535,6 +563,7 @@ public:
 		this->should_build_bloom_filter = should_build;
 	}
 	void PrepareBuildBloomFilter(idx_t estimated_row_count);
+	void PrepareBloomFilterForFinalize();
 
 	BloomFilter &GetBloomFilter() {
 		return bloom_filter;
@@ -556,6 +585,7 @@ public:
 		return should_build_prefix_range_filter && prefix_range_filter;
 	}
 
+	void BuildPrefixRangeFilter();
 	unique_ptr<PrefixRangeFilter::BuildState> InitializePrefixRangeBuildState();
 	void InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count, PrefixRangeFilter::BuildState &state);
 	void MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &state);
@@ -593,6 +623,13 @@ public:
 	void ProbeAndSpill(ScanStructure &scan_structure, DataChunk &probe_keys, TupleDataChunkState &key_state,
 	                   ProbeState &probe_state, DataChunk &probe_chunk, ProbeSpill &probe_spill,
 	                   ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk);
+
+private:
+	//! True iff the residual predicate (if any) reads build payload column build_col_idx from its row slot
+	bool ColumnReferencedByResidual(idx_t build_col_idx) const;
+	//! Validate the incoming dict chunk and pin a self-owned copy of its dictionary into dict_registry on the first
+	//! chunk; on later chunks assert id continuity. Called per narrowed column from Build.
+	void PinDictSurvivingColumn(idx_t build_col_idx, const Vector &incoming, uint8_t index_width);
 
 private:
 	//! The current number of radix bits used to partition

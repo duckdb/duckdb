@@ -1,0 +1,265 @@
+diff --git a/src/include/storage/postgres_table_entry.hpp b/src/include/storage/postgres_table_entry.hpp
+index f21f8c3..3d55982 100644
+--- a/src/include/storage/postgres_table_entry.hpp
++++ b/src/include/storage/postgres_table_entry.hpp
+@@ -29,7 +29,7 @@ struct PostgresTableInfo {
+ 	}
+ 
+ 	const string &GetTableName() const {
+-		return create_info->table.GetIdentifierName();
++		return create_info->GetTableName().GetIdentifierName();
+ 	}
+ 
+ 	unique_ptr<CreateTableInfo> create_info;
+diff --git a/src/storage/postgres_catalog.cpp b/src/storage/postgres_catalog.cpp
+index 6e9bd15..5353b4b 100644
+--- a/src/storage/postgres_catalog.cpp
++++ b/src/storage/postgres_catalog.cpp
+@@ -175,13 +175,13 @@ void PostgresCatalog::Initialize(bool load_builtin) {
+ 
+ optional_ptr<CatalogEntry> PostgresCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) {
+ 	auto &postgres_transaction = PostgresTransaction::Get(transaction.GetContext(), *this);
+-	auto entry = schemas.GetEntry(transaction.GetContext(), postgres_transaction, info.schema.GetIdentifierName());
++	auto entry = schemas.GetEntry(transaction.GetContext(), postgres_transaction, info.Schema().GetIdentifierName());
+ 	if (entry) {
+ 		switch (info.on_conflict) {
+ 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
+ 			DropInfo try_drop;
+ 			try_drop.type = CatalogType::SCHEMA_ENTRY;
+-			try_drop.NameMutable() = info.schema;
++			try_drop.NameMutable() = info.Schema();
+ 			try_drop.if_not_found = OnEntryNotFound::RETURN_NULL;
+ 			try_drop.cascade = false;
+ 			schemas.DropEntry(postgres_transaction, try_drop);
+@@ -191,7 +191,7 @@ optional_ptr<CatalogEntry> PostgresCatalog::CreateSchema(CatalogTransaction tran
+ 			return entry;
+ 		case OnCreateConflict::ERROR_ON_CONFLICT:
+ 		default:
+-			throw BinderException("Failed to create schema \"%s\": schema already exists", info.schema);
++			throw BinderException("Failed to create schema \"%s\": schema already exists", info.Schema());
+ 		}
+ 	}
+ 	return schemas.CreateSchema(postgres_transaction, info);
+diff --git a/src/storage/postgres_index.cpp b/src/storage/postgres_index.cpp
+index 0ec4a05..2956277 100644
+--- a/src/storage/postgres_index.cpp
++++ b/src/storage/postgres_index.cpp
+@@ -25,19 +25,19 @@ SourceResultType PostgresCreateIndex::GetDataInternal(ExecutionContext &context,
+ 	auto &catalog = table.catalog;
+ 	auto &schema = table.schema;
+ 	auto transaction = catalog.GetCatalogTransaction(context.client);
+-	auto existing = schema.GetEntry(transaction, CatalogType::INDEX_ENTRY, info->index_name);
++	auto existing = schema.GetEntry(transaction, CatalogType::INDEX_ENTRY, info->GetIndexName());
+ 	if (existing) {
+ 		switch (info->on_conflict) {
+ 		case OnCreateConflict::IGNORE_ON_CONFLICT:
+ 			return SourceResultType::FINISHED;
+ 		case OnCreateConflict::ERROR_ON_CONFLICT:
+-			throw BinderException("Index with name \"%s\" already exists in schema \"%s\"", info->index_name,
++			throw BinderException("Index with name \"%s\" already exists in schema \"%s\"", info->GetIndexName(),
+ 			                      table.schema.name);
+ 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
+ 			DropInfo drop_info;
+ 			drop_info.type = CatalogType::INDEX_ENTRY;
+-			drop_info.SchemaMutable() = info->schema;
+-			drop_info.NameMutable() = info->index_name;
++			drop_info.SchemaMutable() = info->Schema();
++			drop_info.NameMutable() = info->GetIndexName();
+ 			schema.DropEntry(context.client, drop_info);
+ 			break;
+ 		}
+diff --git a/src/storage/postgres_index_set.cpp b/src/storage/postgres_index_set.cpp
+index e4f4c6e..aa3dc5a 100644
+--- a/src/storage/postgres_index_set.cpp
++++ b/src/storage/postgres_index_set.cpp
+@@ -39,9 +39,9 @@ void PostgresIndexSet::LoadEntries(ClientContext &context, PostgresTransaction &
+ 		auto table_name = result.GetString(row, 1);
+ 		auto index_name = result.GetString(row, 2);
+ 		CreateIndexInfo info;
+-		info.schema = schema.name;
++		info.SchemaMutable() = schema.name;
+ 		info.table = Identifier(table_name);
+-		info.index_name = Identifier(index_name);
++		info.SetIndexName(Identifier(index_name));
+ 		auto index_entry = make_shared_ptr<PostgresIndexEntry>(catalog, schema, info, table_name);
+ 		CreateEntry(transaction, std::move(index_entry));
+ 	}
+@@ -65,7 +65,7 @@ string PGGetCreateIndexSQL(CreateIndexInfo &info, TableCatalogEntry &tbl) {
+ 		sql += " UNIQUE";
+ 	}
+ 	sql += " INDEX ";
+-	sql += PostgresUtils::QuotePostgresIdentifier(info.index_name.GetIdentifierName());
++	sql += PostgresUtils::QuotePostgresIdentifier(info.GetIndexName().GetIdentifierName());
+ 	sql += " ON ";
+ 	sql += PostgresUtils::QuotePostgresIdentifier(tbl.schema.name.GetIdentifierName()) + ".";
+ 	sql += PostgresUtils::QuotePostgresIdentifier(tbl.name.GetIdentifierName());
+diff --git a/src/storage/postgres_insert.cpp b/src/storage/postgres_insert.cpp
+index 467b995..0798c42 100644
+--- a/src/storage/postgres_insert.cpp
++++ b/src/storage/postgres_insert.cpp
+@@ -168,7 +168,7 @@ string PostgresInsert::GetName() const {
+ 
+ InsertionOrderPreservingMap<string> PostgresInsert::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+-	result["Table Name"] = table ? table->name.GetIdentifierName() : info->Base().table.GetIdentifierName();
++	result["Table Name"] = table ? table->name.GetIdentifierName() : info->Base().GetTableName().GetIdentifierName();
+ 	return result;
+ }
+ 
+diff --git a/src/storage/postgres_schema_entry.cpp b/src/storage/postgres_schema_entry.cpp
+index 1f73fcf..ceb5563 100644
+--- a/src/storage/postgres_schema_entry.cpp
++++ b/src/storage/postgres_schema_entry.cpp
+@@ -52,7 +52,7 @@ optional_ptr<CatalogEntry> PostgresSchemaEntry::CreateTable(CatalogTransaction t
+                                                             BoundCreateTableInfo &info) {
+ 	auto &postgres_transaction = GetPostgresTransaction(transaction);
+ 	auto &base_info = info.Base();
+-	string table_name = base_info.table.GetIdentifierName();
++	string table_name = base_info.GetTableName().GetIdentifierName();
+ 	if (base_info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+ 		// CREATE OR REPLACE - drop any existing entries first (if any)
+ 		TryDropEntry(transaction.GetContext(), CatalogType::TABLE_ENTRY, table_name);
+@@ -75,7 +75,7 @@ string PGGetCreateViewSQL(PostgresSchemaEntry &schema, CreateViewInfo &info) {
+ 	string sql;
+ 	sql = "CREATE VIEW ";
+ 	sql += PostgresUtils::QuotePostgresIdentifier(schema.name.GetIdentifierName()) + ".";
+-	sql += PostgresUtils::QuotePostgresIdentifier(info.view_name.GetIdentifierName());
++	sql += PostgresUtils::QuotePostgresIdentifier(info.GetViewName().GetIdentifierName());
+ 	sql += " ";
+ 	if (!info.aliases.empty()) {
+ 		sql += "(";
+@@ -99,26 +99,26 @@ optional_ptr<CatalogEntry> PostgresSchemaEntry::CreateView(CatalogTransaction tr
+ 	}
+ 	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT ||
+ 	    info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+-		auto current_entry = GetEntry(transaction, CatalogType::VIEW_ENTRY, info.view_name);
++		auto current_entry = GetEntry(transaction, CatalogType::VIEW_ENTRY, info.GetViewName());
+ 		if (current_entry) {
+ 			if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+ 				return current_entry;
+ 			}
+ 			// CREATE OR REPLACE - drop any existing entries first (if any)
+-			TryDropEntry(transaction.GetContext(), CatalogType::VIEW_ENTRY, info.view_name.GetIdentifierName());
++			TryDropEntry(transaction.GetContext(), CatalogType::VIEW_ENTRY, info.GetViewName().GetIdentifierName());
+ 		}
+ 	}
+ 	auto &postgres_transaction = GetPostgresTransaction(transaction);
+ 	postgres_transaction.Query(PGGetCreateViewSQL(*this, info));
+-	return tables.ReloadEntry(postgres_transaction, info.view_name.GetIdentifierName());
++	return tables.ReloadEntry(postgres_transaction, info.GetViewName().GetIdentifierName());
+ }
+ 
+ optional_ptr<CatalogEntry> PostgresSchemaEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
+ 	auto &postgres_transaction = GetPostgresTransaction(transaction);
+-	auto type_name = info.name;
++	auto type_name = info.GetTypeName();
+ 	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+ 		// CREATE OR REPLACE - drop any existing entries first (if any)
+-		TryDropEntry(transaction.GetContext(), CatalogType::TYPE_ENTRY, info.name.GetIdentifierName());
++		TryDropEntry(transaction.GetContext(), CatalogType::TYPE_ENTRY, info.GetTypeName().GetIdentifierName());
+ 	}
+ 	return types.CreateType(postgres_transaction, info);
+ }
+diff --git a/src/storage/postgres_schema_set.cpp b/src/storage/postgres_schema_set.cpp
+index d5613c7..61032ff 100644
+--- a/src/storage/postgres_schema_set.cpp
++++ b/src/storage/postgres_schema_set.cpp
+@@ -75,7 +75,7 @@ void PostgresSchemaSet::LoadEntries(ClientContext &context, PostgresTransaction
+ 		auto oid = result->GetInt64(row, 0);
+ 		auto schema_name = result->GetString(row, 1);
+ 		CreateSchemaInfo info;
+-		info.schema = Identifier(schema_name);
++		info.SchemaMutable() = Identifier(schema_name);
+ 		info.internal = PostgresSchemaEntry::SchemaIsInternal(schema_name);
+ 		auto schema = make_shared_ptr<PostgresSchemaEntry>(catalog, info, std::move(tables[row]), std::move(enums[row]),
+ 		                                                   std::move(composite_types[row]), std::move(indexes[row]));
+@@ -88,10 +88,10 @@ optional_ptr<CatalogEntry> PostgresSchemaSet::CreateSchema(PostgresTransaction &
+ 	if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+ 		create_sql += " IF NOT EXISTS";
+ 	}
+-	create_sql += PostgresUtils::WriteIdentifier(info.schema.GetIdentifierName());
++	create_sql += PostgresUtils::WriteIdentifier(info.Schema().GetIdentifierName());
+ 	transaction.Query(create_sql);
+ 	auto info_copy = info.Copy();
+-	info.internal = PostgresSchemaEntry::SchemaIsInternal(info_copy->schema.GetIdentifierName());
++	info.internal = PostgresSchemaEntry::SchemaIsInternal(info_copy->Schema().GetIdentifierName());
+ 	auto schema_entry = make_shared_ptr<PostgresSchemaEntry>(catalog, info_copy->Cast<CreateSchemaInfo>());
+ 	return CreateEntry(transaction, std::move(schema_entry));
+ }
+diff --git a/src/storage/postgres_table_set.cpp b/src/storage/postgres_table_set.cpp
+index 795209e..3112724 100644
+--- a/src/storage/postgres_table_set.cpp
++++ b/src/storage/postgres_table_set.cpp
+@@ -331,11 +331,11 @@ string GetPostgresCreateTable(CreateTableInfo &info) {
+ 	if (info.on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+ 		ss << "IF NOT EXISTS ";
+ 	}
+-	if (!info.schema.empty()) {
+-		ss << PostgresUtils::WriteIdentifier(info.schema.GetIdentifierName());
++	if (!info.Schema().empty()) {
++		ss << PostgresUtils::WriteIdentifier(info.Schema().GetIdentifierName());
+ 		ss << ".";
+ 	}
+-	ss << PostgresUtils::WriteIdentifier(info.table.GetIdentifierName());
++	ss << PostgresUtils::WriteIdentifier(info.GetTableName().GetIdentifierName());
+ 	ss << PostgresColumnsToSQL(info.columns, info.constraints);
+ 	ss << ";";
+ 	return ss.str();
+diff --git a/src/storage/postgres_type_set.cpp b/src/storage/postgres_type_set.cpp
+index cee52ac..e1a965f 100644
+--- a/src/storage/postgres_type_set.cpp
++++ b/src/storage/postgres_type_set.cpp
+@@ -52,7 +52,7 @@ void PostgresTypeSet::CreateEnum(PostgresTransaction &transaction, PostgresResul
+ 	PostgresType postgres_type;
+ 	CreateTypeInfo info;
+ 	postgres_type.oid = result.GetInt64(start_row, 1);
+-	info.name = Identifier(result.GetString(start_row, 2));
++	info.SetTypeName(Identifier(result.GetString(start_row, 2)));
+ 	// construct the enum
+ 	idx_t enum_count = end_row - start_row;
+ 	Vector duckdb_levels(LogicalType::VARCHAR, enum_count);
+@@ -60,7 +60,7 @@ void PostgresTypeSet::CreateEnum(PostgresTransaction &transaction, PostgresResul
+ 		duckdb_levels.SetValue(enum_idx, result.GetString(start_row + enum_idx, 3));
+ 	}
+ 	info.type = LogicalType::ENUM(duckdb_levels, enum_count);
+-	info.type.SetAlias(info.name.GetIdentifierName());
++	info.type.SetAlias(info.GetTypeName().GetIdentifierName());
+ 	auto type_entry = make_shared_ptr<PostgresTypeEntry>(catalog, schema, info, postgres_type);
+ 	CreateEntry(transaction, std::move(type_entry));
+ }
+@@ -114,7 +114,7 @@ void PostgresTypeSet::CreateCompositeType(PostgresTransaction &transaction, Post
+ 	PostgresType postgres_type;
+ 	CreateTypeInfo info;
+ 	postgres_type.oid = result.GetInt64(start_row, 1);
+-	info.name = Identifier(result.GetString(start_row, 2));
++	info.SetTypeName(Identifier(result.GetString(start_row, 2)));
+ 
+ 	child_list_t<LogicalType> child_types;
+ 	for (idx_t row = start_row; row < end_row; row++) {
+@@ -128,7 +128,7 @@ void PostgresTypeSet::CreateCompositeType(PostgresTransaction &transaction, Post
+ 		postgres_type.children.push_back(std::move(child_type));
+ 	}
+ 	info.type = LogicalType::STRUCT(std::move(child_types));
+-	info.type.SetAlias(info.name.GetIdentifierName());
++	info.type.SetAlias(info.GetTypeName().GetIdentifierName());
+ 	auto type_entry = make_shared_ptr<PostgresTypeEntry>(catalog, schema, info, postgres_type);
+ 	CreateEntry(transaction, std::move(type_entry));
+ }
+@@ -165,7 +165,7 @@ void PostgresTypeSet::LoadEntries(ClientContext &context, PostgresTransaction &t
+ 
+ string GetCreateTypeSQL(CreateTypeInfo &info) {
+ 	string sql = "CREATE TYPE ";
+-	sql += PostgresUtils::WriteIdentifier(info.name.GetIdentifierName());
++	sql += PostgresUtils::WriteIdentifier(info.GetTypeName().GetIdentifierName());
+ 	sql += " AS ";
+ 	switch (info.type.id()) {
+ 	case LogicalTypeId::ENUM: {
+@@ -206,7 +206,7 @@ optional_ptr<CatalogEntry> PostgresTypeSet::CreateType(PostgresTransaction &tran
+ 
+ 	auto create_sql = GetCreateTypeSQL(info);
+ 	conn.Execute(transaction.GetContext(), create_sql);
+-	info.type.SetAlias(info.name.GetIdentifierName());
++	info.type.SetAlias(info.GetTypeName().GetIdentifierName());
+ 	auto pg_type = PostgresUtils::CreateEmptyPostgresType(info.type);
+ 	auto type_entry = make_shared_ptr<PostgresTypeEntry>(catalog, schema, info, pg_type);
+ 	return CreateEntry(transaction, std::move(type_entry));

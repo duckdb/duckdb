@@ -19,6 +19,8 @@
 namespace duckdb {
 
 struct FileHandle;
+class MemoryMappedFile;
+class QueryContext;
 
 //! The standard row group size
 #define DEFAULT_ROW_GROUP_SIZE 122880ULL
@@ -269,6 +271,7 @@ public:
 	static constexpr uint64_t AES_TAG_LEN = 16;
 
 	static void CheckMagicBytes(QueryContext context, FileHandle &handle);
+	static void CheckMagicBytes(MemoryMappedFile &handle);
 
 	string LibraryGitDesc() {
 		return string(char_ptr_cast(library_git_desc), MAX_VERSION_SIZE);

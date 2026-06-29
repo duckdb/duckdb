@@ -11,7 +11,7 @@ CREATE SEQUENCE seq;
 statement error
 CREATE TABLE db1.integers(i INTEGER DEFAULT nextval('seq'))
 ----
-TransactionContext Error: Attempting to write to database "db1" in a transaction that has already modified database
+a single transaction can only write to a single attached database
 
 statement ok
 CREATE SEQUENCE db1.seq
@@ -32,7 +32,7 @@ SELECT nextval('seq')
 statement error
 CREATE TABLE integers(i INTEGER DEFAULT nextval('db1.seq'))
 ----
-<REGEX>:TransactionContext Error:.*in a transaction that has already modified database "db1".*
+a single transaction can only write to a single attached database
 
 statement ok
 detach db1;

@@ -371,7 +371,7 @@ TEST_CASE("Test path utilities", "[string_util]") {
 }
 
 TEST_CASE("Test JSON Parsing", "[string_util]") {
-	auto complex_json = StringUtil::ParseJSONMap(R"JSON_LITERAL(
+	auto json_map = StringUtil::ParseJSONMap(R"JSON_LITERAL(
 	{
     "crs": {
         "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
@@ -481,7 +481,7 @@ TEST_CASE("Test JSON Parsing", "[string_util]") {
     "crs_type": "projjson"
 }	)JSON_LITERAL");
 
-	complex_json = StringUtil::ParseJSONMap(R"JSON_LITERAL(
+	json_map = StringUtil::ParseJSONMap(R"JSON_LITERAL(
 	{
 		"int": 42,
 		"signed_int": -42,

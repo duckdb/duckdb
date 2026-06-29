@@ -1,0 +1,120 @@
+diff --git a/src/include/storage/ducklake_multi_file_reader.hpp b/src/include/storage/ducklake_multi_file_reader.hpp
+index d89dccfd..ff5a074d 100644
+--- a/src/include/storage/ducklake_multi_file_reader.hpp
++++ b/src/include/storage/ducklake_multi_file_reader.hpp
+@@ -63,11 +63,10 @@ public:
+ 	                                   const MultiFileReaderBindData &bind_data,
+ 	                                   const virtual_column_map_t &virtual_columns) override;
+ 
+-	unique_ptr<Expression>
++	MultiFileReaderVirtualColumnBinding
+ 	GetVirtualColumnExpression(ClientContext &context, MultiFileReaderData &reader_data,
+-	                           const vector<MultiFileColumnDefinition> &local_columns, idx_t &column_id,
+-	                           const LogicalType &type, MultiFileLocalIndex local_index,
+-	                           optional_ptr<MultiFileColumnDefinition> &global_column_reference) override;
++	                           const vector<MultiFileColumnDefinition> &local_columns, const idx_t column_id,
++	                           const LogicalType &type, MultiFileLocalIndex local_index) override;
+ 
+ 	unique_ptr<MultiFileReader> Copy() const override;
+ 
+diff --git a/src/storage/ducklake_inlined_data_reader.cpp b/src/storage/ducklake_inlined_data_reader.cpp
+index 88f4f48a..c9f2d100 100644
+--- a/src/storage/ducklake_inlined_data_reader.cpp
++++ b/src/storage/ducklake_inlined_data_reader.cpp
+@@ -177,7 +177,9 @@ bool DuckLakeInlinedDataReader::TryInitializeScan(ClientContext &context, Global
+ 		data->data->InitializeScan(state, scan_column_ids);
+ 	}
+ 	for (auto &entry : expression_map) {
+-		expression_executors[entry.first] = make_uniq<ExpressionExecutor>(context, *entry.second);
++		auto &expression_data = entry.second;
++		auto &expression = *expression_data.expression;
++		expression_executors[entry.first] = make_uniq<ExpressionExecutor>(context, expression);
+ 	}
+ 	return true;
+ }
+diff --git a/src/storage/ducklake_multi_file_reader.cpp b/src/storage/ducklake_multi_file_reader.cpp
+index 4fc11c8c..5cb9a668 100644
+--- a/src/storage/ducklake_multi_file_reader.cpp
++++ b/src/storage/ducklake_multi_file_reader.cpp
+@@ -43,15 +43,12 @@ static bool ColumnsHaveFieldIds(const vector<MultiFileColumnDefinition> &columns
+ }
+ 
+ //! Try to find a column in local_columns that matches the given field_id
+-static bool TryFindColumnByFieldId(const vector<MultiFileColumnDefinition> &local_columns, int32_t field_id,
+-                                   MultiFileColumnDefinition *fallback_column,
+-                                   optional_ptr<MultiFileColumnDefinition> &global_column_reference) {
++static bool TryFindColumnByFieldId(const vector<MultiFileColumnDefinition> &local_columns, int32_t field_id) {
+ 	for (auto &col : local_columns) {
+ 		if (col.identifier.IsNull()) {
+ 			continue;
+ 		}
+ 		if (col.identifier.GetValue<int32_t>() == field_id) {
+-			global_column_reference = fallback_column;
+ 			return true;
+ 		}
+ 	}
+@@ -558,18 +555,16 @@ ReaderInitializeType DuckLakeMultiFileReader::CreateMapping(
+ 	                                      multi_file_list, bind_data, virtual_columns);
+ }
+ 
+-unique_ptr<Expression> DuckLakeMultiFileReader::GetVirtualColumnExpression(
++MultiFileReaderVirtualColumnBinding DuckLakeMultiFileReader::GetVirtualColumnExpression(
+     ClientContext &context, MultiFileReaderData &reader_data, const vector<MultiFileColumnDefinition> &local_columns,
+-    idx_t &column_id, const LogicalType &type, MultiFileLocalIndex local_idx,
+-    optional_ptr<MultiFileColumnDefinition> &global_column_reference) {
++    const idx_t column_id, const LogicalType &type, MultiFileLocalIndex local_idx) {
+ 	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+ 		deletion_scan_rowid_col = local_idx.GetIndex();
+ 		// row id column
+ 		// this is computed as row_id_start + file_row_number OR read from the file
+ 		// first check if the row id is explicitly defined in this file
+-		if (TryFindColumnByFieldId(local_columns, MultiFileReader::ROW_ID_FIELD_ID, row_id_column.get(),
+-		                           global_column_reference)) {
+-			return nullptr;
++		if (TryFindColumnByFieldId(local_columns, MultiFileReader::ROW_ID_FIELD_ID)) {
++			return MultiFileReaderVirtualColumnBinding(*row_id_column.get());
+ 		}
+ 		// get the row id start for this file
+ 		if (!reader_data.file_to_be_opened.extended_info) {
+@@ -586,9 +581,6 @@ unique_ptr<Expression> DuckLakeMultiFileReader::GetVirtualColumnExpression(
+ 		auto row_id_expr = make_uniq<BoundConstantExpression>(entry->second);
+ 		auto file_row_number = make_uniq<BoundReferenceExpression>(type, local_idx.GetIndex());
+ 
+-		// transform this virtual column to file_row_number
+-		column_id = MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;
+-
+ 		// generate the addition
+ 		vector<unique_ptr<Expression>> children;
+ 		children.push_back(std::move(row_id_expr));
+@@ -600,13 +592,14 @@ unique_ptr<Expression> DuckLakeMultiFileReader::GetVirtualColumnExpression(
+ 		if (error.HasError()) {
+ 			error.Throw();
+ 		}
+-		return function_expr;
++		vector<column_t> column_ids;
++		column_ids.push_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
++		return MultiFileReaderVirtualColumnBinding(std::move(function_expr), std::move(column_ids));
+ 	}
+ 	if (column_id == COLUMN_IDENTIFIER_SNAPSHOT_ID) {
+ 		deletion_scan_snapshot_col = local_idx.GetIndex();
+-		if (TryFindColumnByFieldId(local_columns, MultiFileReader::LAST_UPDATED_SEQUENCE_NUMBER_ID,
+-		                           snapshot_id_column.get(), global_column_reference)) {
+-			return nullptr;
++		if (TryFindColumnByFieldId(local_columns, MultiFileReader::LAST_UPDATED_SEQUENCE_NUMBER_ID)) {
++			return MultiFileReaderVirtualColumnBinding(*snapshot_id_column.get());
+ 		}
+ 		// get the row id start for this file
+ 		if (!reader_data.file_to_be_opened.extended_info) {
+@@ -617,10 +610,9 @@ unique_ptr<Expression> DuckLakeMultiFileReader::GetVirtualColumnExpression(
+ 		if (entry == options.end()) {
+ 			throw InternalException("snapshot_id not found for reading snapshot_id column");
+ 		}
+-		return make_uniq<BoundConstantExpression>(entry->second);
++		return MultiFileReaderVirtualColumnBinding(entry->second);
+ 	}
+-	return MultiFileReader::GetVirtualColumnExpression(context, reader_data, local_columns, column_id, type, local_idx,
+-	                                                   global_column_reference);
++	return MultiFileReader::GetVirtualColumnExpression(context, reader_data, local_columns, column_id, type, local_idx);
+ }
+ 
+ void DuckLakeMultiFileReader::GatherDeletionScanSnapshots(BaseFileReader &reader,

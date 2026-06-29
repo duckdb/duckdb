@@ -23,6 +23,7 @@
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
 
@@ -105,7 +106,7 @@ struct LocalTableFunctionState {
 
 struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
-	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+	                       vector<LogicalType> &input_table_types, vector<Identifier> &input_table_names,
 	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder,
 	                       TableFunction &table_function, const TableFunctionRef &ref,
 	                       optional_ptr<unique_ptr<LogicalOperator>> input_plan = nullptr)
@@ -117,7 +118,7 @@ struct TableFunctionBindInput {
 	vector<Value> &inputs;
 	named_parameter_map_t &named_parameters;
 	vector<LogicalType> &input_table_types;
-	vector<string> &input_table_names;
+	vector<Identifier> &input_table_names;
 	optional_ptr<TableFunctionInfo> info;
 	optional_ptr<Binder> binder;
 	TableFunction &table_function;
@@ -193,6 +194,12 @@ struct TableFunctionPartitionInput {
 
 	optional_ptr<const FunctionData> bind_data;
 	const vector<column_t> &partition_ids;
+};
+
+struct TableFunctionProjectionExpressionInput {
+	const LogicalGet &get;
+	const Expression &expr;
+	idx_t proj_index;
 };
 
 struct TableFunctionToStringInput {
@@ -347,8 +354,8 @@ typedef void (*table_function_serialize_t)(Serializer &serializer, const optiona
                                            const TableFunction &function);
 typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &deserializer, TableFunction &function);
 
-typedef void (*table_function_type_pushdown_t)(ClientContext &context, optional_ptr<FunctionData> bind_data,
-                                               const unordered_map<idx_t, LogicalType> &new_column_types);
+typedef bool (*table_function_projection_expression_pushdown_t)(ClientContext &context,
+                                                                const TableFunctionProjectionExpressionInput &input);
 typedef TablePartitionInfo (*table_function_get_partition_info_t)(ClientContext &context,
                                                                   TableFunctionPartitionInput &input);
 
@@ -377,7 +384,7 @@ public:
 	DUCKDB_API TableFunction();
 	// Overloads taking table_function_t
 	DUCKDB_API
-	TableFunction(string name, const vector<LogicalType> &arguments, table_function_t function,
+	TableFunction(Identifier name, const vector<LogicalType> &arguments, table_function_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
 	              table_function_init_local_t init_local = nullptr);
 	DUCKDB_API
@@ -385,7 +392,7 @@ public:
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
 	// Overloads taking std::nullptr
 	DUCKDB_API
-	TableFunction(string name, const vector<LogicalType> &arguments, std::nullptr_t function,
+	TableFunction(Identifier name, const vector<LogicalType> &arguments, std::nullptr_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
 	              table_function_init_local_t init_local = nullptr);
 	DUCKDB_API
@@ -469,8 +476,10 @@ public:
 	table_function_get_partition_data_t get_partition_data;
 	//! (Optional) returns extra bind info
 	table_function_get_bind_info_t get_bind_info;
-	//! (Optional) pushes down type information to scanner, returns true if pushdown was successful
-	table_function_type_pushdown_t type_pushdown;
+	//! (Optional) pushes down projection expressions like len() in "SELECT len(str)" or
+	//! casts like "col as UINTEGER" in "SELECT col::UINTEGER" to scanner.
+	//! Returns true if pushdown was successful
+	table_function_projection_expression_pushdown_t projection_expression_pushdown;
 	//! (Optional) allows injecting a custom MultiFileReader implementation
 	table_function_get_multi_file_reader_t get_multi_file_reader;
 	//! (Optional) If this scanner supports filter pushdown, but not to all data types
@@ -509,6 +518,9 @@ public:
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
 	TableFunctionReturnType return_type;
+	//! The return type used when this function is invoked through a CALL statement
+	//! By default a CALL returns a query result - functions that only have side effects can use NOTHING instead
+	StatementReturnType call_return_type = StatementReturnType::QUERY_RESULT;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 	//! The order preservation type of the table function

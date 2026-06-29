@@ -29,23 +29,26 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 	fields["table"] = "";
 
 	for (idx_t i = 0; i < field_types.size(); i++) {
-		auto field_name = StringUtil::Lower(field_types[i].first);
+		auto field_name = StringUtil::Lower(field_types[i].first.GetIdentifierName());
 
 		if (fields.find(field_name) == fields.end()) {
-			throw BinderException("index_key: unknown field '%s' in path", field_types[i].first);
+			throw BinderException("index_key: unknown field '%s' in path", field_types[i].first.GetIdentifierName());
 		}
 
 		auto &field_value = field_values[i];
 		if (field_value.IsNull()) {
-			throw BinderException("index_key: path field '%s' cannot be NULL", field_types[i].first);
+			throw BinderException("index_key: path field '%s' cannot be NULL",
+			                      field_types[i].first.GetIdentifierName());
 		}
 		if (field_value.type().id() != LogicalTypeId::VARCHAR) {
-			throw BinderException("index_key: path field '%s' must be VARCHAR", field_types[i].first);
+			throw BinderException("index_key: path field '%s' must be VARCHAR",
+			                      field_types[i].first.GetIdentifierName());
 		}
 
 		auto value = StringValue::Get(field_value);
 		if (value.empty()) {
-			throw BinderException("index_key: path field '%s' cannot be empty", field_types[i].first);
+			throw BinderException("index_key: path field '%s' cannot be empty",
+			                      field_types[i].first.GetIdentifierName());
 		}
 		fields[field_name] = value;
 	}
@@ -54,7 +57,8 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 		throw BinderException("index_key: path must contain a 'table' field");
 	}
 
-	return TableDescription(fields["catalog"], fields["schema"], fields["table"]);
+	return TableDescription(
+	    QualifiedName(Identifier(fields["catalog"]), Identifier(fields["schema"]), Identifier(fields["table"])));
 }
 
 static TableDescription EvaluateTableDescription(ClientContext &context, const Expression &expr) {
@@ -95,25 +99,26 @@ static string GetStringArgument(ClientContext &context, const Expression &expr, 
 	return StringValue::Get(value);
 }
 
-static BoundIndex &FindBoundIndex(TableIndexList &index_list, const string &index_name, const TableDescription &path) {
+static BoundIndex &FindBoundIndex(TableIndexList &index_list, const Identifier &index_name,
+                                  const TableDescription &path) {
 	auto found = index_list.Find(index_name);
 	if (found) {
 		return *found;
 	}
 
-	auto qualified_table = ParseInfo::QualifierToString(path.database, path.schema, path.table);
-	vector<string> available;
+	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	vector<Identifier> available;
 	for (auto &idx : index_list.Indexes()) {
 		available.push_back(idx.GetIndexName());
 	}
 
 	if (available.empty()) {
 		throw CatalogException("index_key: index '%s' was not found on table %s. No indexes found on this table.",
-		                       index_name, qualified_table);
+		                       index_name.GetIdentifierName(), qualified_table);
 	}
 	auto available_list = StringUtil::Join(available, ", ");
-	throw CatalogException("index_key: index '%s' was not found on table %s. Available indexes: %s", index_name,
-	                       qualified_table, available_list);
+	throw CatalogException("index_key: index '%s' was not found on table %s. Available indexes: %s",
+	                       index_name.GetIdentifierName(), qualified_table, available_list);
 }
 
 struct IndexKeyBindData : public FunctionData {
@@ -144,7 +149,9 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	auto path = EvaluateTableDescription(context, *arguments[0]);
 	auto index_name = GetStringArgument(context, *arguments[1], "index_name");
 
-	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, path.database, path.schema, path.table)
+	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY,
+	                                      QualifiedName(path.qualified_name.Catalog(), path.qualified_name.Schema(),
+	                                                    path.qualified_name.Name()))
 	                        .Cast<TableCatalogEntry>();
 	auto &duck_table = table_entry.Cast<DuckTableEntry>();
 	auto &data_table = duck_table.GetStorage();
@@ -156,7 +163,7 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	data_table_info.BindIndexes(context);
 
 	auto &index_list = data_table_info.GetIndexes();
-	auto &bound_index = FindBoundIndex(index_list, index_name, path);
+	auto &bound_index = FindBoundIndex(index_list, Identifier(index_name), path);
 
 	auto index_type = bound_index.GetIndexType();
 	if (index_type != ART::TYPE_NAME) {
@@ -190,7 +197,7 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 
 static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &bind_data = func_expr.bind_info->Cast<IndexKeyBindData>();
+	auto &bind_data = func_expr.BindInfo()->Cast<IndexKeyBindData>();
 
 	idx_t count = args.size();
 
@@ -200,7 +207,6 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	for (idx_t i = 0; i < bind_data.key_types.size(); i++) {
 		key_chunk.data[i].Reference(args.data[INDEX_KEY_FIXED_ARGS + i]);
 	}
-	key_chunk.SetCardinality(count);
 
 	auto &art = bind_data.art;
 	unsafe_vector<ARTKey> keys(count);

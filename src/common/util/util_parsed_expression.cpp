@@ -83,9 +83,6 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &cast_expr = Cast<FunctionExpression>();
-		for (auto &child : cast_expr.GetChildren()) {
-			result.Append(*child);
-		}
 		if (cast_expr.Filter()) {
 			result.Append(*cast_expr.Filter());
 		}
@@ -93,6 +90,9 @@ ConstChildrenView ParsedExpression::Children() const {
 			for (auto &order : cast_expr.OrderBy()->orders) {
 				result.Append(*order.expression);
 			}
+		}
+		for (auto &arg : cast_expr.GetArguments()) {
+			result.Append(arg.GetExpression());
 		}
 		break;
 	}
@@ -128,9 +128,6 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::WINDOW: {
 		auto &cast_expr = Cast<WindowExpression>();
-		for (auto &child : cast_expr.GetChildren()) {
-			result.Append(*child);
-		}
 		for (auto &child : cast_expr.Partitions()) {
 			result.Append(*child);
 		}
@@ -148,6 +145,9 @@ ConstChildrenView ParsedExpression::Children() const {
 		}
 		for (auto &order : cast_expr.ArgOrders()) {
 			result.Append(*order.expression);
+		}
+		for (auto &arg : cast_expr.GetArguments()) {
+			result.Append(arg.GetExpression());
 		}
 		break;
 	}
@@ -217,9 +217,6 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &cast_expr = Cast<FunctionExpression>();
-		for (auto &child : cast_expr.GetChildrenMutable()) {
-			result.Append(child);
-		}
 		if (cast_expr.FilterMutable()) {
 			result.Append(cast_expr.FilterMutable());
 		}
@@ -227,6 +224,9 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 			for (auto &order : cast_expr.OrderByMutable()->orders) {
 				result.Append(order.expression);
 			}
+		}
+		for (auto &arg : cast_expr.GetArgumentsMutable()) {
+			result.Append(arg.GetExpressionMutable());
 		}
 		break;
 	}
@@ -262,9 +262,6 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::WINDOW: {
 		auto &cast_expr = Cast<WindowExpression>();
-		for (auto &child : cast_expr.GetChildrenMutable()) {
-			result.Append(child);
-		}
 		for (auto &child : cast_expr.PartitionsMutable()) {
 			result.Append(child);
 		}
@@ -282,6 +279,9 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 		}
 		for (auto &order : cast_expr.ArgOrdersMutable()) {
 			result.Append(order.expression);
+		}
+		for (auto &arg : cast_expr.GetArgumentsMutable()) {
+			result.Append(arg.GetExpressionMutable());
 		}
 		break;
 	}
@@ -447,7 +447,7 @@ bool ColumnRefExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	for (idx_t i = 0; i < column_names.size(); i++) {
-		if (!StringUtil::CIEquals(column_names[i], other_p.column_names[i])) {
+		if (column_names[i] != other_p.column_names[i]) {
 			return false;
 		}
 	}
@@ -457,7 +457,7 @@ bool ColumnRefExpression::Equals(const ParsedExpression &other) const {
 hash_t ColumnRefExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
 	for (auto &s : column_names) {
-		hash = CombineHash(hash, StringUtil::CIHash(s));
+		hash = CombineHash(hash, s.Hash());
 	}
 	return hash;
 }
@@ -477,7 +477,7 @@ bool LambdaRefExpression::Equals(const ParsedExpression &other) const {
 	if (lambda_idx != other_p.lambda_idx) {
 		return false;
 	}
-	if (!StringUtil::CIEquals(column_name, other_p.column_name)) {
+	if (column_name != other_p.column_name) {
 		return false;
 	}
 	return true;
@@ -486,7 +486,7 @@ bool LambdaRefExpression::Equals(const ParsedExpression &other) const {
 hash_t LambdaRefExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
 	hash = CombineHash(hash, duckdb::Hash<uint64_t>(lambda_idx));
-	hash = CombineHash(hash, StringUtil::CIHash(column_name));
+	hash = CombineHash(hash, column_name.Hash());
 	return hash;
 }
 
@@ -581,13 +581,7 @@ bool FunctionExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<FunctionExpression>();
-	if (function_name != other_p.function_name) {
-		return false;
-	}
-	if (schema != other_p.schema) {
-		return false;
-	}
-	if (!ParsedExpression::ListEquals(children, other_p.children)) {
+	if (qualified_name != other_p.qualified_name) {
 		return false;
 	}
 	if (!ParsedExpression::Equals(filter, other_p.filter)) {
@@ -602,35 +596,37 @@ bool FunctionExpression::Equals(const ParsedExpression &other) const {
 	if (export_state != other_p.export_state) {
 		return false;
 	}
-	if (catalog != other_p.catalog) {
+	if (arguments.size() != other_p.arguments.size()) {
 		return false;
+	}
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		if (!arguments[i].Equals(other_p.arguments[i])) {
+			return false;
+		}
 	}
 	return true;
 }
 
 hash_t FunctionExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, duckdb::Hash<const char *>(function_name.c_str()));
-	hash = CombineHash(hash, duckdb::Hash<const char *>(schema.c_str()));
+	hash = CombineHash(hash, qualified_name.Hash());
 	hash = CombineHash(hash, duckdb::Hash<bool>(distinct));
 	hash = CombineHash(hash, duckdb::Hash<bool>(export_state));
-	hash = CombineHash(hash, duckdb::Hash<const char *>(catalog.c_str()));
 	return hash;
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
-	copy->function_name = function_name;
-	copy->schema = schema;
-	for (auto &child : children) {
-		copy->children.push_back(child->Copy());
-	}
+	copy->is_legacy_function_call = is_legacy_function_call;
+	copy->qualified_name = qualified_name;
 	copy->filter = filter ? filter->Copy() : nullptr;
 	copy->order_bys = order_bys ? unique_ptr_cast<ResultModifier, OrderModifier>(order_bys->Copy()) : nullptr;
 	copy->distinct = distinct;
 	copy->is_operator = is_operator;
 	copy->export_state = export_state;
-	copy->catalog = catalog;
+	for (auto &arg : arguments) {
+		copy->arguments.emplace_back(arg.Copy());
+	}
 	copy->CopyBase(*this);
 	return std::move(copy);
 }
@@ -685,7 +681,7 @@ bool ParameterExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<ParameterExpression>();
-	if (!StringUtil::CIEquals(identifier, other_p.identifier)) {
+	if (identifier != other_p.identifier) {
 		return false;
 	}
 	return true;
@@ -693,7 +689,7 @@ bool ParameterExpression::Equals(const ParsedExpression &other) const {
 
 hash_t ParameterExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, StringUtil::CIHash(identifier));
+	hash = CombineHash(hash, identifier.Hash());
 	return hash;
 }
 
@@ -765,7 +761,7 @@ bool StarExpression::Equals(const ParsedExpression &other) const {
 
 hash_t StarExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, duckdb::Hash<const char *>(relation_name.c_str()));
+	hash = CombineHash(hash, relation_name.Hash());
 	hash = CombineHash(hash, duckdb::Hash<bool>(columns));
 	return hash;
 }
@@ -826,16 +822,7 @@ bool WindowExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<WindowExpression>();
-	if (function_name != other_p.function_name) {
-		return false;
-	}
-	if (schema != other_p.schema) {
-		return false;
-	}
-	if (catalog != other_p.catalog) {
-		return false;
-	}
-	if (!ParsedExpression::ListEquals(children, other_p.children)) {
+	if (qualified_name != other_p.qualified_name) {
 		return false;
 	}
 	if (!ParsedExpression::ListEquals(partitions, other_p.partitions)) {
@@ -896,14 +883,20 @@ bool WindowExpression::Equals(const ParsedExpression &other) const {
 	if (has_ignore_nulls != other_p.has_ignore_nulls) {
 		return false;
 	}
+	if (arguments.size() != other_p.arguments.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		if (!arguments[i].Equals(other_p.arguments[i])) {
+			return false;
+		}
+	}
 	return true;
 }
 
 hash_t WindowExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, duckdb::Hash<const char *>(function_name.c_str()));
-	hash = CombineHash(hash, duckdb::Hash<const char *>(schema.c_str()));
-	hash = CombineHash(hash, duckdb::Hash<const char *>(catalog.c_str()));
+	hash = CombineHash(hash, qualified_name.Hash());
 	for (idx_t i = 0; i < orders.size(); i++) {
 		hash = CombineHash(hash, duckdb::Hash<uint32_t>(static_cast<uint32_t>(orders[i].type)));
 		hash = CombineHash(hash, duckdb::Hash<uint32_t>(static_cast<uint32_t>(orders[i].null_order)));
@@ -923,12 +916,8 @@ hash_t WindowExpression::Hash() const {
 
 unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<WindowExpression>(new WindowExpression());
-	copy->function_name = function_name;
-	copy->schema = schema;
-	copy->catalog = catalog;
-	for (auto &child : children) {
-		copy->children.push_back(child->Copy());
-	}
+	copy->is_legacy_function_call = is_legacy_function_call;
+	copy->qualified_name = qualified_name;
 	for (auto &child : partitions) {
 		copy->partitions.push_back(child->Copy());
 	}
@@ -947,6 +936,9 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 		copy->arg_orders.emplace_back(order.type, order.null_order, order.expression->Copy());
 	}
 	copy->has_ignore_nulls = has_ignore_nulls;
+	for (auto &arg : arguments) {
+		copy->arguments.emplace_back(arg.Copy());
+	}
 	copy->CopyBase(*this);
 	return std::move(copy);
 }
@@ -956,13 +948,7 @@ bool TypeExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<TypeExpression>();
-	if (catalog != other_p.catalog) {
-		return false;
-	}
-	if (schema != other_p.schema) {
-		return false;
-	}
-	if (type_name != other_p.type_name) {
+	if (qualified_name != other_p.qualified_name) {
 		return false;
 	}
 	if (!ParsedExpression::ListEquals(children, other_p.children)) {
@@ -973,17 +959,13 @@ bool TypeExpression::Equals(const ParsedExpression &other) const {
 
 hash_t TypeExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
-	hash = CombineHash(hash, duckdb::Hash<const char *>(catalog.c_str()));
-	hash = CombineHash(hash, duckdb::Hash<const char *>(schema.c_str()));
-	hash = CombineHash(hash, duckdb::Hash<const char *>(type_name.c_str()));
+	hash = CombineHash(hash, qualified_name.Hash());
 	return hash;
 }
 
 unique_ptr<ParsedExpression> TypeExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<TypeExpression>(new TypeExpression());
-	copy->catalog = catalog;
-	copy->schema = schema;
-	copy->type_name = type_name;
+	copy->qualified_name = qualified_name;
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}

@@ -49,8 +49,9 @@ public:
 	void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) override;
 	void RevertAppend(row_t new_count) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
-	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,
-	              Vector &result, idx_t result_idx) override;
+	void FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+	               const idx_t *offsets, const SelectionVector &sel, idx_t count, Vector &result,
+	               idx_t result_offset) override;
 	void Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index, Vector &update_vector,
 	            row_t *row_ids, idx_t update_count, idx_t row_group_start) override;
 	void UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, const vector<column_t> &column_path,
@@ -77,6 +78,10 @@ public:
 	void Verify(RowGroup &parent) override;
 
 	static void ShredVariantData(const Vector &input, Vector &output, idx_t count);
+	//! Debug/verification helper: shred a (top-level) VARIANT vector in place, deriving the shredding
+	//! schema from the first value (so inconsistent values become partially shredded). No-op if the
+	//! vector is already shredded or the first value yields no shreddable type.
+	static void DebugShred(Vector &variant, idx_t count);
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
 	void SetChildData(vector<shared_ptr<ColumnData>> child_data);

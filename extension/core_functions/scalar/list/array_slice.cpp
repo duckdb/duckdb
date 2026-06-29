@@ -271,7 +271,7 @@ void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	}
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<ListSliceBindData>();
+	auto &info = func_expr.BindInfo()->Cast<ListSliceBindData>();
 	auto begin_is_empty = info.begin_is_empty;
 	auto end_is_empty = info.end_is_empty;
 	switch (result.GetType().id()) {

@@ -336,7 +336,6 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 		ReconstructGroupVector(group_values, group_minima[i], required_bits[i], shift, entry_count, result.data[i]);
 	}
 	// then construct the payloads
-	result.SetCardinality(entry_count);
 	RowOperationsState row_state(*aggregate_allocator);
 	RowOperations::FinalizeStates(row_state, *layout_ptr, addresses, result, grouping_columns);
 }

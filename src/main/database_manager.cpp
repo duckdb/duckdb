@@ -48,7 +48,7 @@ void DatabaseManager::FinalizeStartup() {
 	}
 }
 
-optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
+optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const Identifier &name) {
 	auto &meta_transaction = MetaTransaction::Get(context);
 	// first check if we have a local reference to this database already
 	auto database = meta_transaction.GetReferencedDatabase(name);
@@ -58,7 +58,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	}
 	lock_guard<mutex> guard(databases_lock);
 	shared_ptr<AttachedDatabase> db;
-	if (StringUtil::Lower(name) == TEMP_CATALOG) {
+	if (name == TEMP_CATALOG) {
 		db = context.client_data->temporary_objects;
 	} else {
 		db = GetDatabaseInternal(guard, name);
@@ -69,13 +69,13 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	return meta_transaction.UseDatabase(db);
 }
 
-shared_ptr<AttachedDatabase> DatabaseManager::GetDatabase(const string &name) {
+shared_ptr<AttachedDatabase> DatabaseManager::GetDatabase(const Identifier &name) {
 	lock_guard<mutex> guard(databases_lock);
 	return GetDatabaseInternal(guard, name);
 }
 
-shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_guard<mutex> &, const string &name) {
-	if (StringUtil::Lower(name) == SYSTEM_CATALOG) {
+shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_guard<mutex> &, const Identifier &name) {
+	if (name == SYSTEM_CATALOG) {
 		return system;
 	}
 	auto entry = databases.find(name);
@@ -132,10 +132,20 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				throw BinderException("Database \"%s\" is already attached in %s mode, cannot re-attach in %s mode",
 				                      info.name, existing_mode_str, attached_mode);
 			}
-			if (!options.default_table.name.empty()) {
-				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+			if (!options.default_table.Name().empty()) {
+				existing_db->GetCatalog().SetDefaultTable(options.default_table.Schema(), options.default_table.Name());
 			}
 			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+				// we require the vacuuming threshold for indexed tables to be the same as the already attached db
+				if (options.vacuum_rebuild_indexes_threshold.IsValid()) {
+					auto previous_setting = existing_db->GetVacuumRebuildIndexThreshold();
+					auto new_setting = options.vacuum_rebuild_indexes_threshold.GetIndex();
+					if (previous_setting != new_setting) {
+						throw BinderException("Cannot re-attach with a different vacuum_rebuild_indexes setting "
+						                      "(previous: %d, new: %d)",
+						                      previous_setting, new_setting);
+					}
+				}
 				// allow custom catalogs to override this behavior
 				if (!existing_db->GetCatalog().HasConflictingAttachOptions(info.path, options)) {
 					return existing_db;
@@ -180,7 +190,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		options.stored_database_path.reset();
 	}
 	if (AttachedDatabase::NameIsReserved(info.name)) {
-		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
+		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name",
+		                      info.name.GetIdentifierName());
 	}
 	if (!extension.empty()) {
 		if (!ExtensionHelper::TryAutoLoadExtension(context, extension)) {
@@ -203,8 +214,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		attached_db->Initialize(context);
 	} else {
 		attached_db->Initialize(context);
-		if (!options.default_table.name.empty()) {
-			attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+		if (!options.default_table.Name().empty()) {
+			attached_db->GetCatalog().SetDefaultTable(options.default_table.Schema(), options.default_table.Name());
 		}
 		attached_db->FinalizeLoad(context);
 	}
@@ -233,14 +244,14 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 	}
 	auto &meta_transaction = MetaTransaction::Get(context);
 	if (detached_db) {
-		if (detached_db->GetCatalog().IsRemoteCatalog()) {
+		if (detached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 			--remote_catalog_count;
 		}
 		meta_transaction.DetachDatabase(*detached_db);
 		detached_db->OnDetach(context);
 		detached_db.reset();
 	}
-	if (attached_db->GetCatalog().IsRemoteCatalog()) {
+	if (attached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 		++remote_catalog_count;
 	}
 	auto &db_ref = meta_transaction.UseDatabase(attached_db);
@@ -250,17 +261,18 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 	return db_ref;
 }
 
-void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
-	if (StringUtil::CIEquals(GetDefaultDatabase(context), name)) {
+void DatabaseManager::DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found) {
+	if (GetDefaultDatabase(context) == name) {
 		throw BinderException("Cannot detach database \"%s\" because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
-		                      name);
+		                      name.GetIdentifierName());
 	}
 
 	auto attached_db = DetachInternal(name);
 	if (!attached_db) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
+			throw BinderException("Failed to detach database with name \"%s\": database not found",
+			                      name.GetIdentifierName());
 		}
 		return;
 	}
@@ -277,7 +289,7 @@ void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
 	switch (db_info.alter_database_type) {
 	case AlterDatabaseType::RENAME_DATABASE: {
 		auto &rename_info = db_info.Cast<RenameDatabaseInfo>();
-		RenameDatabase(context, db_info.catalog, rename_info.new_name, db_info.if_not_found);
+		RenameDatabase(context, db_info.GetQualifiedName().Catalog(), rename_info.new_name, db_info.if_not_found);
 		break;
 	}
 	default:
@@ -285,10 +297,11 @@ void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
 	}
 }
 
-void DatabaseManager::RenameDatabase(ClientContext &context, const string &old_name, const string &new_name,
+void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &old_name, const Identifier &new_name,
                                      OnEntryNotFound if_not_found) {
 	if (AttachedDatabase::NameIsReserved(new_name)) {
-		throw BinderException("Database name \"%s\" cannot be used because it is a reserved name", new_name);
+		throw BinderException("Database name \"%s\" cannot be used because it is a reserved name",
+		                      new_name.GetIdentifierName());
 	}
 
 	shared_ptr<AttachedDatabase> attached_db;
@@ -297,7 +310,8 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const string &old_n
 		auto old_entry = databases.find(old_name);
 		if (old_entry == databases.end()) {
 			if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-				throw BinderException("Failed to rename database \"%s\": database not found", old_name);
+				throw BinderException("Failed to rename database \"%s\": database not found",
+				                      old_name.GetIdentifierName());
 			}
 			return;
 		}
@@ -305,7 +319,7 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const string &old_n
 		auto new_entry = databases.find(new_name);
 		if (new_entry != databases.end()) {
 			throw BinderException("Failed to rename database \"%s\" to \"%s\": database with new name already exists",
-			                      old_name, new_name);
+			                      old_name.GetIdentifierName(), new_name.GetIdentifierName());
 		}
 
 		attached_db = old_entry->second;
@@ -314,12 +328,12 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const string &old_n
 		databases[new_name] = attached_db;
 	}
 
-	if (StringUtil::CIEquals(default_database, old_name)) {
+	if (old_name == default_database) {
 		default_database = new_name;
 	}
 }
 
-shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const string &name) {
+shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &name) {
 	shared_ptr<AttachedDatabase> attached_db;
 	{
 		lock_guard<mutex> guard(databases_lock);
@@ -330,7 +344,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const string &name)
 		attached_db = std::move(entry->second);
 		databases.erase(entry);
 	}
-	if (attached_db && attached_db->GetCatalog().IsRemoteCatalog()) {
+	if (attached_db && attached_db->GetCatalog().Supports(RemoteCapability::IS_REMOTE)) {
 		--remote_catalog_count;
 	}
 	return attached_db;
@@ -395,22 +409,22 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	}
 }
 
-const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
+Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	auto &config = ClientData::Get(context);
 	auto &default_entry = config.catalog_search_path->GetDefault();
-	if (IsInvalidCatalog(default_entry.catalog)) {
+	if (IsInvalidCatalog(default_entry.GetCatalog())) {
 		auto &result = DatabaseManager::Get(context).default_database;
 		if (result.empty()) {
 			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no default database set");
 		}
 		return result;
 	}
-	return default_entry.catalog;
+	return default_entry.GetCatalog();
 }
 
 // LCOV_EXCL_START
 void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &new_value) {
-	auto db_entry = GetDatabase(context, new_value);
+	auto db_entry = GetDatabase(context, Identifier(new_value));
 
 	if (!db_entry) {
 		throw InternalException("Database \"%s\" not found", new_value);
@@ -420,7 +434,7 @@ void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &n
 		throw InternalException("Cannot set the default database to a system database");
 	}
 
-	default_database = new_value;
+	default_database = Identifier(new_value);
 }
 // LCOV_EXCL_STOP
 

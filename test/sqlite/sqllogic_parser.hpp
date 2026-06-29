@@ -12,6 +12,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception_format_value.hpp"
 #include "sqllogic_command.hpp"
+#include <istream>
 
 namespace duckdb {
 
@@ -53,8 +54,6 @@ public:
 class SQLLogicParser {
 public:
 	string file_name;
-	//! The lines of the current text file
-	vector<string> lines;
 	//! The current line number
 	idx_t current_line = 0;
 	//! Whether or not the input should be printed to stdout as it is executed
@@ -74,6 +73,7 @@ public:
 
 	//! Opens the file, returns whether or not reading was successful
 	bool OpenFile(const string &path);
+	bool OpenStream(std::istream &input, const string &source_name);
 
 	void IncludeFile(const string &file_name);
 
@@ -105,6 +105,9 @@ public:
 	}
 
 private:
+	bool HasLine(idx_t line_idx);
+	string &GetLine(idx_t line_idx);
+	void PruneLines();
 	SQLLogicTokenType CommandToToken(const string &token);
 
 	void FailRecursive(const string &msg, vector<ExceptionFormatValue> &values);
@@ -114,6 +117,13 @@ private:
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		FailRecursive(msg, values, params...);
 	}
+
+private:
+	unique_ptr<std::istream> owned_stream;
+	optional_ptr<std::istream> stream;
+	vector<string> lines;
+	idx_t line_start = 0;
+	bool stream_finished = false;
 };
 
 } // namespace duckdb

@@ -18,7 +18,26 @@
  * already hooked _Unwind_Backtrace.  We'll temporarily disable hooking.
  */
 #undef _Unwind_Backtrace
+/*
+ * libunwind's <unwind.h> (pulled in by libunwind-dev on the musl extension
+ * build images) shadows gcc's own <unwind.h> on the include path and only
+ * declares _Unwind_Backtrace under _GNU_SOURCE.  Without it the declaration is
+ * missing, and gcc 14 treats implicit function declarations as errors in
+ * C99-and-later modes.
+ *
+ * Define _GNU_SOURCE just for this include and restore the prior state right
+ * after, so the change stays confined to <unwind.h> and does not alter the
+ * feature-test posture seen by the rest of this translation unit.
+ */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#define JE_DUCKDB_TMP_GNU_SOURCE
+#endif
 #include <unwind.h>
+#ifdef JE_DUCKDB_TMP_GNU_SOURCE
+#undef _GNU_SOURCE
+#undef JE_DUCKDB_TMP_GNU_SOURCE
+#endif
 #define _Unwind_Backtrace JEMALLOC_TEST_HOOK(_Unwind_Backtrace, test_hooks_libc_hook)
 #endif
 

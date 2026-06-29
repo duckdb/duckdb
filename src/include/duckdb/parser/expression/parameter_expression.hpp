@@ -35,10 +35,10 @@ public:
 	ParameterExpression();
 
 public:
-	const string &Identifier() const {
+	const duckdb::Identifier &Identifier() const {
 		return identifier;
 	}
-	string &IdentifierMutable() {
+	duckdb::Identifier &IdentifierMutable() {
 		return identifier;
 	}
 	bool IsScalar() const override {
@@ -59,6 +59,6 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
 private:
-	string identifier;
+	duckdb::Identifier identifier;
 };
 } // namespace duckdb

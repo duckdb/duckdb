@@ -27,7 +27,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
 		auto &target = distinct_targets[i];
 		if (target->GetExpressionType() == ExpressionType::BOUND_REF) {
 			auto &bound_ref = target->Cast<BoundReferenceExpression>();
-			group_by_references[bound_ref.index] = i;
+			group_by_references[bound_ref.Index()] = i;
 		}
 		aggregate_types.push_back(target->GetReturnType());
 		groups.push_back(std::move(target));
@@ -62,7 +62,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
 			auto first_aggregate =
 			    function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(logical_type),
 			                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
-			first_aggregate->order_bys = op.order_by ? op.order_by->Copy() : nullptr;
+			first_aggregate->GetOrderBysMutable() = op.order_by ? op.order_by->Copy() : nullptr;
 
 			if (Settings::Get<EnableOptimizerSetting>(context)) {
 				bool changes_made = false;

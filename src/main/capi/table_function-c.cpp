@@ -196,7 +196,7 @@ void duckdb_table_function_set_name(duckdb_table_function function, const char *
 		return;
 	}
 	auto &tf = GetCTableFunction(function);
-	tf.name = name;
+	tf.name = duckdb::Identifier(name);
 }
 
 void duckdb_table_function_add_parameter(duckdb_table_function function, duckdb_logical_type type) {

@@ -80,7 +80,7 @@ jobs:
       shell: bash
       if: ${{ !inputs.skip_tests }}
       run: |
-        python scripts/ci/run_tests.py test/unittest.exe
+        python test/run.py
 
     - name: Test with VS2019 C++ stdlib
       shell: bash
@@ -88,7 +88,7 @@ jobs:
       run: |
         python scripts/ci/retry.py -- curl -L --output ./test/msvcp140.dll https://blobs.duckdb.org/ci/msvcp140.dll
         ls ./test
-        python scripts/ci/run_tests.py test/unittest.exe
+        python test/run.py
         rm ./test/msvcp140.dll
 
     - name: Tools Test
@@ -179,7 +179,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: python scripts/ci/run_tests.py test/unittest.exe
+      run: python test/run.py
 
     - name: Tools Test
       shell: bash
@@ -334,7 +334,7 @@ jobs:
          run: python scripts/ci/retry.py -- make release
 
        - name: Test
-         run: make unittest_release SKIP_BUILD=1
+         run: python build/release/test/run.py
 
  win-packaged-upload:
    runs-on: ${{ fromJSON(inputs.runners).linux_slim || 'ubuntu-latest' }}

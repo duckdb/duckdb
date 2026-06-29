@@ -810,7 +810,7 @@ int32_t StrpTimeFormat::TryParseCollection(const char *data, idx_t &pos, idx_t s
 		// compare the characters
 		idx_t i;
 		for (i = 0; i < entry_size; i++) {
-			if (std::tolower(entry_data[i]) != std::tolower(data[pos + i])) {
+			if (StringUtil::CharacterToLower(entry_data[i]) != StringUtil::CharacterToLower(data[pos + i])) {
 				break;
 			}
 		}
@@ -1243,8 +1243,8 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 					error_position = pos;
 					return false;
 				}
-				char pa_char = char(std::tolower(data[pos]));
-				char m_char = char(std::tolower(data[pos + 1]));
+				char pa_char = StringUtil::CharacterToLower(data[pos]);
+				char m_char = StringUtil::CharacterToLower(data[pos + 1]);
 				if (m_char != 'm') {
 					error_message = "Expected AM/PM";
 					error_position = pos;

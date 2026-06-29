@@ -1,0 +1,16 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [jsonbench]
+
+include benchmark/jsonbench/jsonbench_load.benchmark.in
+
+name Q${QUERY_NUMBER_PADDED}
+group jsonbench
+
+storage persistent v1.5.0
+
+cache jsonbench.db
+
+run benchmark/jsonbench/queries/q${QUERY_NUMBER_PADDED}.sql
+
+result benchmark/jsonbench/answers/q${QUERY_NUMBER_PADDED}.csv

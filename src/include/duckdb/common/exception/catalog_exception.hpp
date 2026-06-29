@@ -36,11 +36,11 @@ public:
 	}
 
 	static CatalogException MissingEntry(const EntryLookupInfo &lookup_info, const string &suggestion);
-	static CatalogException MissingEntry(CatalogType type, const string &name, const string &suggestion,
+	static CatalogException MissingEntry(CatalogType type, const Identifier &name, const string &suggestion,
 	                                     QueryErrorContext context = QueryErrorContext());
-	static CatalogException MissingEntry(const string &type, const string &name, const vector<string> &suggestions,
+	static CatalogException MissingEntry(const string &type, const Identifier &name, const vector<string> &suggestions,
 	                                     QueryErrorContext context = QueryErrorContext());
-	static CatalogException EntryAlreadyExists(CatalogType type, const string &name,
+	static CatalogException EntryAlreadyExists(CatalogType type, const Identifier &name,
 	                                           QueryErrorContext context = QueryErrorContext());
 };
 

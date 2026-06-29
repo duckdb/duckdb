@@ -37,3 +37,11 @@ query I
 SELECT 1//2
 ----
 0
+
+statement ok
+SET integer_division=true
+
+query I
+SELECT weighted_avg(v, w) FROM (VALUES (1, 1), (2, 2)) t(v, w)
+----
+1.6666666666666667

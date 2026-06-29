@@ -1,11 +1,17 @@
 #include "duckdb/function/copy_function.hpp"
+#include "duckdb/common/bind_helpers.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/operator/logical_copy_to_file.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/common/helper.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
@@ -46,19 +52,102 @@ static string GetSingleJSONCopyString(const string &loption, const vector<Value>
 	return StringValue::Get(value);
 }
 
+static bool GetJSONCopyBoolean(Binder &binder, const string &loption, const vector<Value> &values) {
+	if (values.size() > 1) {
+		throw InvalidInputException("Copy option \"%s\" did not expect a list as argument", loption);
+	}
+	if (values.empty()) {
+		return true;
+	}
+	if (values.back().IsNull()) {
+		ThrowJSONCopyNullException(loption);
+	}
+	return values.back().CastAs(binder.context, LogicalType::BOOLEAN).GetValue<bool>();
+}
+
+static unique_ptr<ParsedExpression> JSONCopyFormatExpression(unique_ptr<ParsedExpression> expr,
+                                                             const Identifier &function_name, const string &format) {
+	vector<unique_ptr<ParsedExpression>> args;
+	args.push_back(std::move(expr));
+	args.push_back(make_uniq<ConstantExpression>(Value(format)));
+	return make_uniq<FunctionExpression>(function_name, std::move(args));
+}
+
+static unique_ptr<ParsedExpression> JSONCopyPartitionColumnExpression(const string &partition_column,
+                                                                      const string &date_format,
+                                                                      const string &timestamp_format) {
+	unique_ptr<ParsedExpression> result = make_uniq<ColumnRefExpression>(Identifier(partition_column));
+	if (!date_format.empty()) {
+		result = JSONCopyFormatExpression(std::move(result), "json_copy_strftime_if_date", date_format);
+	}
+	if (!timestamp_format.empty()) {
+		result = JSONCopyFormatExpression(std::move(result), "json_copy_strftime_if_timestamp", timestamp_format);
+	}
+	result->SetAlias(Identifier(partition_column));
+	return result;
+}
+
+static unique_ptr<Expression> JSONCopyBoundFormatConstant(const string &format) {
+	if (format.empty()) {
+		return make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR));
+	}
+	return make_uniq<BoundConstantExpression>(Value(format));
+}
+
+static void BindJSONCopyToJSONFunction(Binder &binder, BoundStatement &bound, const string &date_format,
+                                       const string &timestamp_format) {
+	if (date_format.empty() && timestamp_format.empty()) {
+		return;
+	}
+	if (!bound.plan || bound.plan->type != LogicalOperatorType::LOGICAL_COPY_TO_FILE) {
+		throw InternalException("Expected JSON COPY rewrite to bind to a LogicalCopyToFile");
+	}
+	auto &copy = bound.plan->Cast<LogicalCopyToFile>();
+	if (copy.children.empty() || copy.children[0]->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		throw InternalException("Expected JSON COPY rewrite to bind a top-level projection");
+	}
+	auto &projection = copy.children[0]->Cast<LogicalProjection>();
+	if (projection.expressions.empty()) {
+		throw InternalException("Expected JSON COPY rewrite projection to contain a JSON payload expression");
+	}
+
+	auto to_json = std::move(projection.expressions[0]);
+	if (to_json->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		throw InternalException("Expected JSON COPY payload expression to be a bound function");
+	}
+	auto &to_json_function = to_json->Cast<BoundFunctionExpression>();
+	if (to_json_function.Function().GetName() != "to_json" || to_json_function.GetChildren().size() != 1) {
+		throw InternalException("Expected JSON COPY payload expression to be to_json with one argument");
+	}
+
+	auto alias = to_json->GetAlias();
+	auto &to_json_children = to_json_function.GetChildrenMutable();
+	auto replacement = JSONFunctions::CreateJSONCopyToJSONExpression(binder.context, std::move(to_json_children[0]),
+	                                                                 JSONCopyBoundFormatConstant(date_format),
+	                                                                 JSONCopyBoundFormatConstant(timestamp_format));
+	replacement->SetAlias(std::move(alias));
+	projection.expressions[0] = std::move(replacement);
+	projection.ResolveOperatorTypes();
+}
+
 static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	static const unordered_set<string> SUPPORTED_BASE_OPTIONS {
-	    "compression", "encoding", "use_tmp_file", "overwrite_or_ignore", "overwrite", "append", "filename_pattern",
-	    "file_extension", "per_thread_output", "file_size_bytes",
-	    // "partition_by", unsupported
-	    "return_files", "preserve_order", "return_stats", "write_partition_columns", "write_empty_file",
-	    "hive_file_pattern"};
+	    "compression",      "encoding",         "use_tmp_file",   "overwrite_or_ignore", "overwrite",
+	    "append",           "filename_pattern", "file_extension", "per_thread_output",   "file_size_bytes",
+	    "partition_by",     "return_files",     "preserve_order", "return_stats",        "write_partition_columns",
+	    "write_empty_file", "hive_file_pattern"};
 
 	auto &copy_info = *stmt.info;
 
 	// Parse the options, creating options for the CSV writer while doing so
 	string date_format;
 	string timestamp_format;
+	// Partition columns are kept as separate columns (instead of being packed into the JSON object), so that the
+	// COPY writer can partition on them. By default they are excluded from the written JSON, matching the behavior
+	// of the other formats. WRITE_PARTITION_COLUMNS keeps them inside the JSON object instead.
+	vector<string> partition_columns;
+	bool write_partition_columns = false;
+	vector<Identifier> original_column_names;
 	// We insert the JSON file extension here so it works properly with PER_THREAD_OUTPUT/FILE_SIZE_BYTES etc.
 	case_insensitive_map_t<vector<Value>> csv_copy_options {{"file_extension", {"json"}}};
 	for (const auto &kv : copy_info.options) {
@@ -82,6 +171,32 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 		} else if (loption == "file_extension") {
 			// Since we set the file extension to "json" above, we need to override it
 			csv_copy_options["file_extension"] = {GetSingleJSONCopyString(loption, kv.second)};
+		} else if (loption == "partition_by") {
+			for (const auto &val : kv.second) {
+				if (val.IsNull()) {
+					ThrowJSONCopyNullException(loption);
+				}
+			}
+			if (original_column_names.empty()) {
+				auto node_copy = copy_info.select_statement->Copy();
+				auto child_binder = Binder::CreateBinder(binder.context, &binder);
+				auto bound = child_binder->Bind(*node_copy);
+				original_column_names = bound.names;
+			}
+			auto converted = ConvertVectorToValue(vector<Value>(kv.second));
+			auto partition_indices = ParseColumnsOrdered(converted, original_column_names, loption);
+			for (auto &partition_index : partition_indices) {
+				partition_columns.emplace_back(original_column_names[partition_index]);
+			}
+			vector<Value> csv_partition_columns;
+			for (const auto &partition_column : partition_columns) {
+				csv_partition_columns.push_back(partition_column);
+			}
+			csv_copy_options["partition_by"] = std::move(csv_partition_columns);
+		} else if (loption == "write_partition_columns") {
+			// Handled below by keeping the partition columns inside the JSON object. We do not forward this to the
+			// CSV writer, as that would write the (separate) partition columns as their own JSON lines.
+			write_partition_columns = GetJSONCopyBoolean(binder, loption, kv.second);
 		} else if (SUPPORTED_BASE_OPTIONS.find(loption) != SUPPORTED_BASE_OPTIONS.end()) {
 			if (!kv.second.empty() && kv.second.back().IsNull()) {
 				ThrowJSONCopyNullException(loption);
@@ -92,6 +207,11 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 			throw BinderException("Unknown option for COPY ... TO ... (FORMAT JSON): \"%s\".", loption);
 		}
 	}
+	if (!write_partition_columns && !partition_columns.empty() &&
+	    partition_columns.size() == original_column_names.size()) {
+		throw NotImplementedException("No column to write as all columns are specified as partition columns. "
+		                              "WRITE_PARTITION_COLUMNS option can be used to write partition columns.");
+	}
 
 	// Run the following query to convert everything into a single JSON column, then invoke the CSV writer
 	// SELECT TO_JSON(STRUCT_PACK(*COLUMNS(*))) FROM <source>
@@ -99,40 +219,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	auto inner_select_stmt = make_uniq<SelectStatement>();
 	inner_select_stmt->node = std::move(copy_info.select_statement);
 
-	unique_ptr<SubqueryRef> source_ref;
-	if (!date_format.empty() || !timestamp_format.empty()) {
-		// if we have date_format or timestamp_format defined, we use the json_copy macros to apply them
-		// e.g. SELECT json_copy_strftime_if_date(COLUMNS(*), date_format) FROM <source>
-		auto strftime_node = make_uniq<SelectNode>();
-		strftime_node->from_table = make_uniq<SubqueryRef>(std::move(inner_select_stmt));
-
-		unique_ptr<ParsedExpression> expr;
-		auto columns_star = make_uniq<StarExpression>();
-		columns_star->IsColumnsMutable() = true;
-		expr = std::move(columns_star);
-		if (!date_format.empty()) {
-			// apply date format
-			vector<unique_ptr<ParsedExpression>> args;
-			args.push_back(std::move(expr));
-			args.push_back(make_uniq<ConstantExpression>(Value(date_format)));
-			auto strftime_date = make_uniq<FunctionExpression>("json_copy_strftime_if_date", std::move(args));
-			expr = std::move(strftime_date);
-		}
-		if (!timestamp_format.empty()) {
-			// apply timestamp format
-			vector<unique_ptr<ParsedExpression>> args;
-			args.push_back(std::move(expr));
-			args.push_back(make_uniq<ConstantExpression>(Value(timestamp_format)));
-			auto strftime_ts = make_uniq<FunctionExpression>("json_copy_strftime_if_timestamp", std::move(args));
-			expr = std::move(strftime_ts);
-		}
-		strftime_node->select_list.push_back(std::move(expr));
-		auto strftime_stmt = make_uniq<SelectStatement>();
-		strftime_stmt->node = std::move(strftime_node);
-		source_ref = make_uniq<SubqueryRef>(std::move(strftime_stmt));
-	} else {
-		source_ref = make_uniq<SubqueryRef>(std::move(inner_select_stmt));
-	}
+	auto source_ref = make_uniq<SubqueryRef>(std::move(inner_select_stmt));
 
 	// Build outer: SELECT TO_JSON(STRUCT_PACK(*COLUMNS(*))) FROM <source_ref>
 	copy_info.select_statement = make_uniq_base<QueryNode, SelectNode>();
@@ -141,6 +228,12 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 
 	auto columns_star = make_uniq<StarExpression>();
 	columns_star->IsColumnsMutable() = true;
+	if (!write_partition_columns) {
+		// Exclude the partition columns from the JSON object - they are kept as separate columns below
+		for (const auto &partition_column : partition_columns) {
+			columns_star->ExcludeListMutable().insert(QualifiedColumnName(Identifier(partition_column)));
+		}
+	}
 	auto unpack = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
 	unpack->GetChildrenMutable().push_back(std::move(columns_star));
 
@@ -152,6 +245,14 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	to_json_args.push_back(std::move(struct_pack));
 	select_node.select_list.push_back(make_uniq<FunctionExpression>("to_json", std::move(to_json_args)));
 
+	// Keep the partition columns as separate columns so the COPY writer can partition on them. The writer routes rows
+	// into the right files based on these columns but does not write them to disk (WRITE_PARTITION_COLUMNS is handled
+	// above by keeping the columns inside the JSON object instead).
+	for (const auto &partition_column : partition_columns) {
+		select_node.select_list.push_back(
+		    JSONCopyPartitionColumnExpression(partition_column, date_format, timestamp_format));
+	}
+
 	// Now we can just use the CSV writer
 	copy_info.format = "csv";
 	copy_info.options = std::move(csv_copy_options);
@@ -160,7 +261,9 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	copy_info.options["delimiter"] = {"\n"};
 	copy_info.options["header"] = {{0}};
 
-	return binder.Bind(stmt);
+	auto result = binder.Bind(stmt);
+	BindJSONCopyToJSONFunction(binder, result, date_format, timestamp_format);
+	return result;
 }
 
 CopyFunction JSONFunctions::GetJSONCopyFunction() {

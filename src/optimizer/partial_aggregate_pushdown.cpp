@@ -54,18 +54,27 @@ static bool GetColumnBinding(const Expression &expr, ColumnBinding &binding) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 		return false;
 	}
-	binding = expr.Cast<BoundColumnRefExpression>().binding;
+	binding = expr.Cast<BoundColumnRefExpression>().Binding();
 	return true;
 }
 
 static bool IsSupportedAggregate(const BoundAggregateExpression &expr) {
-	if (expr.IsDistinct() || expr.filter || expr.order_bys) {
+	if (expr.IsDistinct() || expr.GetFilter() || expr.GetOrderBys()) {
 		return false;
 	}
-	if (expr.children.size() != 1) {
+	if (expr.StateExportMode() != AggregateStateExportMode::NONE) {
+		// the aggregate already exports its state - we cannot push it down again (and finalizing the
+		// re-exported state would not round-trip back to the original return type)
 		return false;
 	}
-	if (!expr.function.HasGetStateTypeCallback()) {
+	if (expr.GetChildren().size() != 1) {
+		return false;
+	}
+	if (!expr.Function().HasGetStateTypeCallback()) {
+		return false;
+	}
+	if (expr.Function().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
+		// pushing down a partial aggregate changes the order in which values are combined
 		return false;
 	}
 	return true;
@@ -127,7 +136,7 @@ static bool FindAggregateSide(const LogicalAggregate &aggr, PartialAggregatePush
 			return false;
 		}
 		idx_t side;
-		if (!GetExpressionSide(*aggregate.children[0], info, side)) {
+		if (!GetExpressionSide(*aggregate.GetChildren()[0], info, side)) {
 			return false;
 		}
 		if (!aggregate_side.IsValid()) {
@@ -264,13 +273,13 @@ static void BuildLowerGroupMap(LogicalAggregate &aggr, LogicalComparisonJoin &jo
 	info.join_key_count = info.lower_group_bindings.size();
 	for (auto &group : aggr.groups) {
 		auto &group_ref = group->Cast<BoundColumnRefExpression>();
-		if (info.lower_group_map.find(group_ref.binding) != info.lower_group_map.end()) {
+		if (info.lower_group_map.find(group_ref.Binding()) != info.lower_group_map.end()) {
 			continue;
 		}
 		idx_t side;
 		GetExpressionSide(*group, info, side);
 		if (side == info.aggregate_side) {
-			AddLowerGroup(info, group_ref.binding, group->GetReturnType());
+			AddLowerGroup(info, group_ref.Binding(), group->GetReturnType());
 		}
 	}
 }
@@ -290,7 +299,7 @@ static bool BindPushdownAggregates(ClientContext &context, LogicalAggregate &agg
 		auto aggregate_copy = unique_ptr_cast<Expression, BoundAggregateExpression>(aggr.expressions[i]->Copy());
 		auto lower_aggregate = ExportAggregateFunction::Bind(std::move(aggregate_copy));
 		auto lower_type = lower_aggregate->GetReturnType();
-		if (lower_type.id() != LogicalTypeId::AGGREGATE_STATE) {
+		if (!lower_type.IsAggregateState()) {
 			return false;
 		}
 
@@ -298,7 +307,7 @@ static bool BindPushdownAggregates(ClientContext &context, LogicalAggregate &agg
 		auto lower_binding = ColumnBinding(lower_aggregate_index, ProjectionIndex(i));
 		arguments.push_back(make_uniq<BoundColumnRefExpression>(lower_type, lower_binding));
 		auto upper_aggregate = function_binder.BindAggregateFunction(combine_function, std::move(arguments));
-		if (upper_aggregate->GetReturnType().id() != LogicalTypeId::AGGREGATE_STATE) {
+		if (!upper_aggregate->GetReturnType().IsAggregateState()) {
 			return false;
 		}
 		lower_aggregates.push_back(std::move(lower_aggregate));
@@ -368,7 +377,7 @@ static vector<unique_ptr<Expression>> CreateUpperGroups(LogicalAggregate &aggr, 
 	vector<unique_ptr<Expression>> upper_groups;
 	for (auto &group : aggr.groups) {
 		auto &group_ref = group->Cast<BoundColumnRefExpression>();
-		auto entry = info.lower_group_map.find(group_ref.binding);
+		auto entry = info.lower_group_map.find(group_ref.Binding());
 		if (entry == info.lower_group_map.end()) {
 			upper_groups.push_back(group->Copy());
 			continue;
@@ -441,9 +450,9 @@ void PartialAggregatePushdown::VisitOperator(unique_ptr<LogicalOperator> &op) {
 
 unique_ptr<Expression> PartialAggregatePushdown::VisitReplace(BoundColumnRefExpression &expr,
                                                               unique_ptr<Expression> *expr_ptr) {
-	auto entry = replacement_map.find(expr.binding);
+	auto entry = replacement_map.find(expr.Binding());
 	if (entry != replacement_map.end()) {
-		expr.binding = entry->second;
+		expr.BindingMutable() = entry->second;
 	}
 	return nullptr;
 }

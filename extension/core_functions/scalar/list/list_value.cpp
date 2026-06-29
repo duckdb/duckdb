@@ -180,8 +180,6 @@ bool StructFunction(DataChunk &args, Vector &result) {
 
 		DataChunk chunk;
 		chunk.InitializeEmpty(types);
-		chunk.SetCardinality(args.size());
-
 		for (idx_t col = 0; col < column_count; col++) {
 			auto &struct_vector = args.data[col];
 			if (struct_vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {

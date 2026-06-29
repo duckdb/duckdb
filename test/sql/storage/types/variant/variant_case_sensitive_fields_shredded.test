@@ -1,0 +1,50 @@
+# name: test/sql/storage/types/variant/variant_case_sensitive_fields_shredded.test
+# group: [variant]
+
+load __TEST_DIR__/variant_checkpoint_issue.db readwrite v1.5.3
+
+statement ok
+set variant_minimum_shredding_size = 0;
+
+statement ok
+create or replace table test_structs(
+    id int,
+    s VARIANT
+);
+
+statement ok
+insert into test_structs
+values
+	(1, {
+		'name': {
+			'v': 'row 1',
+			'id': 1
+		},
+		'nested_struct': {
+			'a': 42,
+			'b': true
+		}
+	}),
+	(2, null),
+	(3, {
+		'name': {
+			'v': 'row 3',
+			'id': 3
+		},
+		'nested_struct': {
+			'a': 84,
+			'b': null
+		}
+	}),
+	(4, {
+		'name': null,
+		'nested_struct': {
+			'A': null,
+			'b': false
+		}
+	});
+
+restart
+
+statement ok
+checkpoint;

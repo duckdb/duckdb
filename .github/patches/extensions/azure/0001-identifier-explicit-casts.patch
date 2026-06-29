@@ -1,0 +1,22 @@
+diff --git a/src/azure_secret.cpp b/src/azure_secret.cpp
+index 2e39f21..91d1a30 100644
+--- a/src/azure_secret.cpp
++++ b/src/azure_secret.cpp
+@@ -24,7 +24,7 @@ static void CopySecret(const std::string &key, const CreateSecretInput &input, K
+ 	auto val = input.options.find(key);
+ 
+ 	if (val != input.options.end()) {
+-		result.secret_map[key] = val->second;
++		result.secret_map[Identifier(key)] = val->second;
+ 	}
+ }
+ 
+@@ -182,7 +182,7 @@ void CreateAzureSecretFunctions::Register(ExtensionLoader &loader) {
+ 
+ 	// Register the new type
+ 	SecretType secret_type;
+-	secret_type.name = type;
++	secret_type.name = Identifier(type);
+ 	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+ 	secret_type.default_provider = "config";
+ 	loader.RegisterSecretType(secret_type);

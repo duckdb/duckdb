@@ -215,7 +215,7 @@ public:
 RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const RadixPartitionedHashTable &radix_ht_p)
     : context(context_p), temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
       finalized(false), external(false), active_threads(0),
-      number_of_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
+      number_of_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
       memory_limit(BufferManager::GetBufferManager(context).GetOperatorMemoryLimit()),
       block_alloc_size(BufferManager::GetBufferManager(context).GetBlockAllocSize()), any_combined(false),
       any_abandoned(false), radix_ht(radix_ht_p), config(*this), stored_allocators_size(0), finalize_done(0),
@@ -234,7 +234,7 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
 	auto ht_size = num_partitions * blocks_per_partition * block_alloc_size + config.sink_capacity * sizeof(ht_entry_t);
 
 	// This really is the minimum reservation that we can do
-	auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	minimum_reservation = num_threads * ht_size;
 
 	temporary_memory_state->SetMinimumReservation(minimum_reservation);
@@ -477,9 +477,9 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 		D_ASSERT(group->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 		// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
-		group_chunk.data[chunk_index++].Reference(input_chunk.data[bound_ref_expr.index]);
+		group_chunk.data[chunk_index++].Reference(input_chunk.data[bound_ref_expr.Index()]);
 	}
-	group_chunk.SetCardinality(input_chunk.size());
+	group_chunk.SetChildCardinality(input_chunk.size());
 	// the fake group for empty grouping_set was created with v_size=STANDARD_VECTOR_SIZE - resize to match
 	if (grouping_set.empty()) {
 		FlatVector::SetSize(group_chunk.data[0], count_t(input_chunk.size()));
@@ -559,7 +559,7 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 			if (!lstate.abandoned_data) {
 				lstate.abandoned_data = make_uniq<RadixPartitionedTupleData>(
 				    BufferManager::GetBufferManager(context), gstate.radix_ht.GetLayoutPtr(), MemoryTag::HASH_TABLE,
-				    config.GetRadixBits(), gstate.radix_ht.GetLayout().ColumnCount() - 1);
+				    config.GetRadixBits(), gstate.radix_ht.GetLayout().ColumnCount() - 1, context);
 			}
 			ht.SetRadixBits(gstate.config.GetRadixBits());
 			ht.AcquirePartitionedData()->Repartition(context, *lstate.abandoned_data);
@@ -742,8 +742,8 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 		return 0;
 	}
 
-	const auto max_threads = MinValue<idx_t>(
-	    NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads()), sink.partitions.size());
+	const auto max_threads =
+	    MinValue<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads(), sink.partitions.size());
 	sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(
 	    sink.context, sink.stored_allocators_size + max_threads * sink.max_partition_size);
 
@@ -933,7 +933,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		const auto capacity = GroupedAggregateHashTable::GetCapacityForCount(partition.data->Count());
 
 		// However, we will limit the initial capacity so we don't do a huge over-allocation
-		const auto n_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(gstate.context).NumberOfThreads());
+		const auto n_threads = TaskScheduler::GetScheduler(gstate.context).NumberOfThreads();
 		const auto memory_limit = BufferManager::GetBufferManager(gstate.context).GetMaxMemory();
 		const idx_t thread_limit = LossyNumericCast<idx_t>(0.6 * double(memory_limit) / double(n_threads));
 
@@ -953,8 +953,9 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	partition.progress = 1;
 
 	// Move the combined data back to the partition
-	partition.data = make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(gstate.context),
-	                                                sink.radix_ht.GetLayoutPtr(), MemoryTag::HASH_TABLE);
+	partition.data =
+	    make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(gstate.context), sink.radix_ht.GetLayoutPtr(),
+	                                   MemoryTag::HASH_TABLE, nullptr, gstate.context);
 	partition.data->Combine(*ht->AcquirePartitionedData()->GetPartitions()[0]);
 
 	// Update thread-global state
@@ -1030,7 +1031,6 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 		chunk.data[radix_ht.op.GroupCount() + radix_ht.op.aggregates.size() + i].Reference(radix_ht.grouping_values[i],
 		                                                                                   count_t(scan_chunk.size()));
 	}
-	chunk.SetCardinality(scan_chunk);
 	D_ASSERT(chunk.size() != 0);
 }
 
@@ -1065,7 +1065,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			// Special case hack to sort out aggregating from empty intermediates for aggregations without groups
 			D_ASSERT(chunk.ColumnCount() == null_groups.size() + op.aggregates.size() + op.grouping_functions.size());
 			// For each column in the aggregates, set to initial state
-			chunk.SetCardinality(1);
+			chunk.SetChildCardinality(1);
 			for (auto null_group : null_groups) {
 				ConstantVector::SetNull(chunk.data[null_group], count_t(1));
 			}
@@ -1073,17 +1073,17 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			for (idx_t i = 0; i < op.aggregates.size(); i++) {
 				D_ASSERT(op.aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				auto &aggr = op.aggregates[i]->Cast<BoundAggregateExpression>();
-				auto aggr_state =
-				    make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.GetStateSizeCallback()(aggr.function));
-				aggr.function.GetStateInitCallback()(aggr.function, aggr_state.get());
+				auto aggr_state = make_unsafe_uniq_array_uninitialized<data_t>(
+				    aggr.Function().GetStateSizeCallback()(aggr.Function()));
+				aggr.Function().GetStateInitCallback()(aggr.Function(), aggr_state.get());
 
-				AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
+				AggregateFinalizeInputData aggr_input_data(aggr, allocator);
 				Vector state_vector(Value::POINTER(CastPointerToValue(aggr_state.get())), count_t(1));
 				auto &agg_result = chunk.data[null_groups.size() + i];
-				aggr.function.GetStateFinalizeCallback()(state_vector, aggr_input_data, agg_result, 1, 0);
+				aggr.Function().GetStateFinalizeCallback()(state_vector, aggr_input_data, agg_result, 1, 0);
 				FlatVector::SetSize(agg_result, count_t(1));
-				if (aggr.function.HasStateDestructorCallback()) {
-					aggr.function.GetStateDestructorCallback()(state_vector, aggr_input_data, 1);
+				if (aggr.Function().HasStateDestructorCallback()) {
+					aggr.Function().GetStateDestructorCallback()(state_vector, aggr_input_data, 1);
 				}
 			}
 			// Place the grouping values (all the groups of the grouping_set condensed into a single value)

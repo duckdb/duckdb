@@ -53,7 +53,12 @@ from '{DATA_DIR}/parquet-testing/variant_int32.parquet';
 query II
 from '{DATA_DIR}/parquet-testing/variant_binary.parquet';
 ----
-1	CgsMDQ==
+1	\x0A\x0B\x0C\x0D
+
+query III
+select *, octet_length(var::BLOB) from '{DATA_DIR}/parquet-testing/variant_binary.parquet';
+----
+1	\x0A\x0B\x0C\x0D	4
 
 # Decimal16
 query II

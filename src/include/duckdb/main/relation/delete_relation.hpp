@@ -16,13 +16,13 @@ namespace duckdb {
 class DeleteRelation : public Relation {
 public:
 	DeleteRelation(shared_ptr<ClientContextWrapper> &context, unique_ptr<ParsedExpression> condition,
-	               string catalog_name, string schema_name, string table_name);
+	               Identifier catalog_name, Identifier schema_name, Identifier table_name);
 
 	vector<ColumnDefinition> columns;
 	unique_ptr<ParsedExpression> condition;
-	string catalog_name;
-	string schema_name;
-	string table_name;
+	Identifier catalog_name;
+	Identifier schema_name;
+	Identifier table_name;
 
 public:
 	BoundStatement Bind(Binder &binder) override;

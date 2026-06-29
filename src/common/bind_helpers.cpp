@@ -76,7 +76,7 @@ vector<bool> ParseColumnList(const Value &value, vector<string> &names, const st
 	return ParseColumnList(children, names, loption);
 }
 
-vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<string> &names, const string &loption) {
+vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<Identifier> &names, const string &loption) {
 	vector<idx_t> result;
 
 	if (set.empty()) {
@@ -84,7 +84,7 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<string>
 	}
 
 	// Maps option to bool indicating if its found and the index in the original set
-	case_insensitive_map_t<pair<bool, idx_t>> option_map;
+	identifier_map_t<pair<bool, idx_t>> option_map;
 	for (idx_t i = 0; i < set.size(); i++) {
 		const auto [it, inserted] = option_map.emplace(make_pair(set[i].ToString(), make_pair(false, i)));
 		if (!inserted) {
@@ -109,7 +109,7 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<string>
 	return result;
 }
 
-vector<idx_t> ParseColumnsOrdered(const Value &value, const vector<string> &names, const string &loption) {
+vector<idx_t> ParseColumnsOrdered(const Value &value, const vector<Identifier> &names, const string &loption) {
 	vector<idx_t> result;
 
 	// Only accept a list of arguments
@@ -178,7 +178,8 @@ vector<BoundOrderByNode> ParseOrderByColumns(Binder &binder, const vector<Value>
 		auto name = name_value.ToString();
 		const auto &[idx, expressions] = name_map[name];
 		for (auto &expr : expressions) {
-			expr.get() = make_uniq<BoundReferenceExpression>(name, expr.get()->GetReturnType(), indices[idx]);
+			expr.get() =
+			    make_uniq<BoundReferenceExpression>(Identifier(name), expr.get()->GetReturnType(), indices[idx]);
 		}
 	}
 

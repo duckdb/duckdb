@@ -18,6 +18,7 @@ add_library_unity(
   pointer_cast.cpp
   string_cast.cpp
   struct_cast.cpp
+  tuple_cast.cpp
   time_casts.cpp
   type_cast.cpp
   union_casts.cpp

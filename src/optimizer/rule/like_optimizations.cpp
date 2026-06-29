@@ -17,7 +17,7 @@ LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(
 	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 	func->policy = SetMatcher::Policy::ORDERED;
 	// we match on LIKE ("~~") and NOT LIKE ("!~~")
-	func->function = make_uniq<ManyFunctionMatcher>(unordered_set<string> {"!~~", "~~"});
+	func->function = make_uniq<ManyFunctionMatcher>(identifier_set_t {Identifier("!~~"), Identifier("~~")});
 	root = std::move(func);
 }
 
@@ -105,9 +105,9 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
                                                    bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &constant_expr = bindings[2].get().Cast<BoundConstantExpression>();
-	D_ASSERT(root.children.size() == 2);
+	D_ASSERT(root.GetChildren().size() == 2);
 
-	if (constant_expr.value.IsNull()) {
+	if (constant_expr.GetValue().IsNull()) {
 		return make_uniq<BoundConstantExpression>(Value(root.GetReturnType()));
 	}
 
@@ -120,12 +120,12 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 	D_ASSERT(constant_value.type() == constant_expr.GetReturnType());
 	auto &patt_str = StringValue::Get(constant_value);
 
-	bool is_not_like = root.function.GetName() == "!~~";
+	bool is_not_like = root.Function().GetName() == "!~~";
 	if (PatternIsConstant(patt_str)) {
 		// Pattern is constant
-		return BoundComparisonExpression::Create(is_not_like ? ExpressionType::COMPARE_NOTEQUAL
-		                                                     : ExpressionType::COMPARE_EQUAL,
-		                                         std::move(root.children[0]), std::move(root.children[1]));
+		return BoundComparisonExpression::Create(
+		    is_not_like ? ExpressionType::COMPARE_NOTEQUAL : ExpressionType::COMPARE_EQUAL,
+		    std::move(root.GetChildrenMutable()[0]), std::move(root.GetChildrenMutable()[1]));
 	} else if (PatternIsPrefix(patt_str)) {
 		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
 		return ApplyRule(root, PrefixFun::GetFunction(), patt_str, is_not_like);
@@ -142,19 +142,19 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, const ScalarFunction &function,
                                                        string pattern, bool is_not_like) const {
 	// replace LIKE by an optimized function
-	auto result = function.Bind(GetContext(), std::move(expr.children));
+	auto result = function.Bind(GetContext(), std::move(expr.GetChildrenMutable()));
 
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());
 
-	result->children[1] = make_uniq<BoundConstantExpression>(Value(std::move(pattern)));
+	result->GetChildrenMutable()[1] = make_uniq<BoundConstantExpression>(Value(std::move(pattern)));
 
 	if (!is_not_like) {
 		return std::move(result);
 	}
 
 	auto negation = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
-	negation->children.push_back(std::move(result));
+	negation->GetChildrenMutable().push_back(std::move(result));
 	return std::move(negation);
 }
 

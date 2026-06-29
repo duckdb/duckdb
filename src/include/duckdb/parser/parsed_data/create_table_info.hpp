@@ -13,16 +13,22 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/column_list.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 class SchemaCatalogEntry;
 
 struct CreateTableInfo : public CreateInfo {
 	DUCKDB_API CreateTableInfo();
-	DUCKDB_API CreateTableInfo(string catalog, string schema, string name);
-	DUCKDB_API CreateTableInfo(SchemaCatalogEntry &schema, string name);
+	DUCKDB_API explicit CreateTableInfo(QualifiedName qualified_name);
+	DUCKDB_API CreateTableInfo(SchemaCatalogEntry &schema, Identifier name);
 
 	//! Table name to insert to
-	string table;
+	const Identifier &GetTableName() const {
+		return qualified_name.Name();
+	}
+	void SetTableName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
+	}
 	//! List of columns of the table
 	ColumnList columns;
 	//! List of constraints on the table

@@ -29,7 +29,7 @@ public:
 
 	idx_t total_count = 0;
 	//! indices into the top-level 'columns' vector where the stats for the field/element live
-	case_insensitive_map_t<idx_t> field_stats;
+	unordered_map<string, idx_t> field_stats;
 	idx_t element_stats = DConstants::INVALID_INDEX;
 };
 
@@ -48,11 +48,13 @@ public:
 
 public:
 	void Update(const Vector &input, idx_t count);
-	LogicalType GetShreddedType() const;
+	//! If force_partial is set, every level keeps its 'untyped_value_index' (overlay) column even when the
+	//! sampled values are fully consistent - allowing later inconsistent values to be partially shredded.
+	LogicalType GetShreddedType(bool force_partial = false) const;
 
 private:
 	bool GetShreddedTypeInternal(const VariantColumnStatsData &column, LogicalType &out_type,
-	                             optional_idx parent_count = optional_idx()) const;
+	                             optional_idx parent_count = optional_idx(), bool force_partial = false) const;
 
 private:
 	//! Nested type analysis

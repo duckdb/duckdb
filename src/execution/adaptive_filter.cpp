@@ -14,17 +14,17 @@ namespace duckdb {
 
 AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), execute_interval(20), warmup(true) {
 	auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
-	D_ASSERT(conj_expr.children.size() > 1);
-	for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
+	D_ASSERT(conj_expr.GetChildren().size() > 1);
+	for (idx_t idx = 0; idx < conj_expr.GetChildren().size(); idx++) {
 		permutation.push_back(idx);
-		if (conj_expr.children[idx]->CanThrow()) {
+		if (conj_expr.GetChildren()[idx]->CanThrow()) {
 			disable_permutations = true;
 		}
-		if (idx != conj_expr.children.size() - 1) {
+		if (idx != conj_expr.GetChildren().size() - 1) {
 			swap_likeliness.push_back(100);
 		}
 	}
-	right_random_border = 100 * (conj_expr.children.size() - 1);
+	right_random_border = 100 * (conj_expr.GetChildren().size() - 1);
 }
 
 AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, vector<idx_t> filter_global_pos_p)
@@ -50,7 +50,6 @@ bool AdaptiveFilter::Remap(const TableFilterSet &new_filters, vector<idx_t> new_
 	for (idx_t i = 0; i < filter_global_pos.size(); i++) {
 		auto it = new_position_by_identity.find(filter_global_pos[i]);
 		if (it == new_position_by_identity.end()) {
-			// missing filter cant remap
 			return false;
 		}
 		old_to_new[i] = it->second;
@@ -93,7 +92,7 @@ AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
 		return AdaptiveFilterState();
 	}
 	AdaptiveFilterState state;
-	state.start_time = high_resolution_clock::now();
+	state.monotonic_start = TimePoint::Tick();
 	return state;
 }
 
@@ -102,8 +101,7 @@ void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
 		// nothing to permute
 		return;
 	}
-	auto end_time = high_resolution_clock::now();
-	AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - state.start_time).count());
+	AdaptRuntimeStatistics(state.monotonic_start.ElapsedSeconds());
 }
 
 void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {

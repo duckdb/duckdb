@@ -16,8 +16,8 @@ struct DBGenFunctionData : public TableFunctionData {
 
 	bool finished = false;
 	double sf = 0;
-	string catalog = INVALID_CATALOG;
-	string schema = DEFAULT_SCHEMA;
+	Identifier catalog = INVALID_CATALOG;
+	Identifier schema = DEFAULT_SCHEMA;
 	string suffix;
 	bool overwrite = false;
 	uint32_t children = 1;
@@ -30,7 +30,7 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 
 	// Set the current catalog and schema.
 	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
-	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
+	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().GetSchema();
 	result->catalog = current_catalog;
 	result->schema = current_schema;
 
@@ -41,9 +41,9 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 		if (kv.first == "sf") {
 			result->sf = DoubleValue::Get(kv.second);
 		} else if (kv.first == "catalog") {
-			result->catalog = StringValue::Get(kv.second);
+			result->catalog = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "schema") {
-			result->schema = StringValue::Get(kv.second);
+			result->schema = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "suffix") {
 			result->suffix = StringValue::Get(kv.second);
 		} else if (kv.first == "overwrite") {
@@ -125,7 +125,6 @@ static void TPCHQueryFunction(ClientContext &context, TableFunctionInput &data_p
 		data.offset++;
 		chunk_count++;
 	}
-	output.SetCardinality(chunk_count);
 }
 
 static duckdb::unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
@@ -170,7 +169,6 @@ static void TPCHQueryAnswerFunction(ClientContext &context, TableFunctionInput &
 		data.offset++;
 		chunk_count++;
 	}
-	output.SetCardinality(chunk_count);
 }
 
 static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &parameters) {
@@ -187,6 +185,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
 	dbgen_func.named_parameters["children"] = LogicalType::UINTEGER;
 	dbgen_func.named_parameters["step"] = LogicalType::UINTEGER;
+	dbgen_func.call_return_type = StatementReturnType::NOTHING;
 	loader.RegisterFunction(dbgen_func);
 
 	// create the TPCH pragma that allows us to run the query

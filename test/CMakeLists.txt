@@ -50,6 +50,29 @@ endif()
 
 add_executable(unittest unittest.cpp ${UNITTEST_OBJECT_FILES})
 
+set(RUN_WRAPPER_UNITTEST_NAME "unittest")
+if(WIN32)
+  set(RUN_WRAPPER_UNITTEST_NAME "unittest.exe")
+  configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.py.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/run.py" @ONLY)
+  configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.bat.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/run.bat" @ONLY)
+else()
+  configure_file("${PROJECT_SOURCE_DIR}/scripts/ci/test_runner_wrapper.py.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/run" @ONLY)
+  file(
+    CHMOD
+    "${CMAKE_CURRENT_BINARY_DIR}/run"
+    PERMISSIONS
+    OWNER_READ
+    OWNER_WRITE
+    OWNER_EXECUTE
+    GROUP_READ
+    GROUP_EXECUTE
+    WORLD_READ
+    WORLD_EXECUTE)
+endif()
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(unittest PRIVATE -Wno-error=maybe-uninitialized)
 endif()

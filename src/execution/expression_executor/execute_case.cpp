@@ -21,11 +21,11 @@ struct CaseExpressionState : public ExpressionState {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<CaseExpressionState>(expr, root);
-	for (auto &case_check : expr.case_checks) {
+	for (auto &case_check : expr.CaseChecks()) {
 		result->AddChild(*case_check.when_expr);
 		result->AddChild(*case_check.then_expr);
 	}
-	result->AddChild(*expr.else_expr);
+	result->AddChild(expr.Else());
 
 	result->Finalize();
 	return std::move(result);
@@ -42,8 +42,8 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 	auto current_false_sel = &state.false_sel;
 	auto current_sel = sel;
 	idx_t current_count = count;
-	for (idx_t i = 0; i < expr.case_checks.size(); i++) {
-		auto &case_check = expr.case_checks[i];
+	for (idx_t i = 0; i < expr.CaseChecks().size(); i++) {
+		auto &case_check = expr.CaseChecks()[i];
 		auto &intermediate_result = state.intermediate_chunk.data[i * 2 + 1];
 		auto check_state = state.child_states[i * 2].get();
 		auto then_state = state.child_states[i * 2 + 1].get();
@@ -77,13 +77,13 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 		auto else_state = state.child_states.back().get();
 		if (current_count == count) {
 			// everything was false, we can just evaluate the else expression directly
-			Execute(*expr.else_expr, else_state, sel, count, result);
+			Execute(expr.Else(), else_state, sel, count, result);
 			return;
 		} else {
-			auto &intermediate_result = state.intermediate_chunk.data[expr.case_checks.size() * 2];
+			auto &intermediate_result = state.intermediate_chunk.data[expr.CaseChecks().size() * 2];
 
 			D_ASSERT(current_sel);
-			Execute(*expr.else_expr, else_state, current_sel, current_count, intermediate_result);
+			Execute(expr.Else(), else_state, current_sel, current_count, intermediate_result);
 			FillSwitch(intermediate_result, result, *current_sel, NumericCast<sel_t>(current_count));
 		}
 	}

@@ -24,6 +24,18 @@ class BaseUnionData;
 struct GlobalTableFunctionState;
 struct LocalTableFunctionState;
 
+struct BaseFileReaderExpression {
+public:
+	BaseFileReaderExpression(unique_ptr<Expression> expr, vector<ColumnIndex> indexes)
+	    : expression(std::move(expr)), column_indexes(std::move(indexes)) {
+	}
+
+public:
+	unique_ptr<Expression> expression;
+	//! The column index(es) referenced by the expression
+	vector<ColumnIndex> column_indexes;
+};
+
 //! Parent class of single-file readers - this must be inherited from for readers implementing the MultiFileReader
 //! interface
 class BaseFileReader : public enable_shared_from_this<BaseFileReader> {
@@ -46,7 +58,7 @@ public:
 	unique_ptr<TableFilterSet> filters;
 	//! Expression to execute for a given column (BEFORE executing the filter)
 	//! NOTE: this is only set when we have filters - it can be ignored for readers that don't have filter pushdown
-	unordered_map<column_t, unique_ptr<Expression>> expression_map;
+	unordered_map<column_t, BaseFileReaderExpression> expression_map;
 	//! The final types for various expressions - this is ONLY used if UseCastMap() is explicitly enabled
 	unordered_map<column_t, LogicalType> cast_map;
 
@@ -74,7 +86,7 @@ public:
 public:
 	DUCKDB_API virtual shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx);
 	//! Get statistics for a specific column
-	DUCKDB_API virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name);
+	DUCKDB_API virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name);
 	//! Prepare reader for scanning
 	DUCKDB_API virtual void PrepareReader(ClientContext &context, GlobalTableFunctionState &);
 
@@ -83,7 +95,10 @@ public:
 	                               LocalTableFunctionState &lstate) = 0;
 	//! Prepare a scan - called after TryInitializeScan succeeds - this is done without any lock held
 	virtual void PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
-	//! Scan a chunk from the read state
+	//! Function to schedule IO tasks, if Reader supports that
+	DUCKDB_API virtual AsyncResult ScheduleIO(ClientContext &context, GlobalTableFunctionState &gstate,
+	                                          LocalTableFunctionState &lstate);
+	//! Scan a chunk
 	virtual AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
 	                         LocalTableFunctionState &local_state, DataChunk &chunk) = 0;
 	//! Finish scanning a given file
@@ -144,7 +159,7 @@ public:
 	virtual optional_idx TryGetCardinalityEstimate() const {
 		return optional_idx();
 	}
-	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name);
+	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name);
 
 public:
 	template <class TARGET>

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/parser/expression_map.hpp"
@@ -19,14 +20,14 @@ namespace duckdb {
 //! Bind state during a SelectNode
 struct SelectBindState {
 	// Mapping of (alias -> index) and a mapping of (Expression -> index) for the SELECT list
-	case_insensitive_map_t<idx_t> alias_map;
+	identifier_map_t<idx_t> alias_map;
 	parsed_expression_map_t<idx_t> projection_map;
 	//! The original unparsed expressions. This is exported after binding, because the binding might change the
 	//! expressions (e.g. when a * clause is present)
 	vector<unique_ptr<ParsedExpression>> original_expressions;
 	vector<unique_ptr<ParsedExpression>> unbound_groups;
 	parsed_expression_map_t<ProjectionIndex> group_map;
-	case_insensitive_map_t<ProjectionIndex> group_alias_map;
+	identifier_map_t<ProjectionIndex> group_alias_map;
 	unordered_map<ProjectionIndex, ProjectionIndex> collated_groups;
 	unordered_set<idx_t> used_group_aliases;
 

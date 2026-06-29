@@ -18,6 +18,7 @@
 namespace duckdb {
 
 class String;
+class Identifier;
 
 enum class PhysicalType : uint8_t;
 struct LogicalType;
@@ -70,6 +71,8 @@ template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const double &value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const string &value);
+template <>
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const Identifier &value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const String &value);
 template <>

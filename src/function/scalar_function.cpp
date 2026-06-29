@@ -21,7 +21,12 @@ FunctionLocalState::~FunctionLocalState() {
 ScalarFunctionInfo::~ScalarFunctionInfo() {
 }
 
-ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
+ScalarFunction::ScalarFunction(Identifier name, FunctionSignature sig, scalar_function_t function)
+    : SimpleFunction(std::move(name), std::move(sig)) {
+	callbacks.function = std::move(function);
+}
+
+ScalarFunction::ScalarFunction(Identifier name, vector<LogicalType> arguments, LogicalType return_type,
                                scalar_function_t function, bind_scalar_function_t bind,
                                function_statistics_t statistics, init_local_state_t init_local_state,
                                LogicalType varargs, FunctionStability side_effects, FunctionNullHandling null_handling,
@@ -41,7 +46,7 @@ ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return
                                bind_scalar_function_t bind, function_statistics_t statistics,
                                init_local_state_t init_local_state, LogicalType varargs, FunctionStability side_effects,
                                FunctionNullHandling null_handling, bind_lambda_function_t bind_lambda)
-    : ScalarFunction(string(), std::move(arguments), std::move(return_type), std::move(function), bind, statistics,
+    : ScalarFunction(Identifier(), std::move(arguments), std::move(return_type), std::move(function), bind, statistics,
                      init_local_state, std::move(varargs), side_effects, null_handling, bind_lambda) {
 }
 
@@ -77,8 +82,8 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::Bind(ClientContext &context,
 
 BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function) {
 	name = function.name;
-	schema_name = function.schema_name;
-	catalog_name = function.catalog_name;
+	schema_name = function.GetSchemaName();
+	catalog_name = function.GetCatalogName();
 	extra_info = function.extra_info;
 	return_type = function.GetReturnType();
 	callbacks = function.GetCallbacks();

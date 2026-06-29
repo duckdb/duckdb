@@ -42,7 +42,7 @@ static bool TryComparisonFiltersNullValues(const BoundFunctionExpression &compar
 	} else {
 		return false;
 	}
-	if (constant_expr->value.IsNull()) {
+	if (constant_expr->GetValue().IsNull()) {
 		switch (comparison_type) {
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			filters_valid_values = true;
@@ -76,7 +76,7 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 		auto &conjunction = expression.Cast<BoundConjunctionExpression>();
 		if (conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-			for (auto &child : conjunction.children) {
+			for (auto &child : conjunction.GetChildren()) {
 				bool child_filters_nulls = false;
 				bool child_filters_valid_values = false;
 				if (!TryExpressionFiltersNullValues(*child, child_filters_nulls, child_filters_valid_values)) {
@@ -90,7 +90,7 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 		if (conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
 			filters_nulls = true;
 			filters_valid_values = true;
-			for (auto &child : conjunction.children) {
+			for (auto &child : conjunction.GetChildren()) {
 				bool child_filters_nulls = false;
 				bool child_filters_valid_values = false;
 				if (!TryExpressionFiltersNullValues(*child, child_filters_nulls, child_filters_valid_values)) {
@@ -111,7 +111,7 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR) {
 		auto &op = expression.Cast<BoundOperatorExpression>();
-		if (op.children.size() != 1 || !IsSimpleFilterColumnRef(*op.children[0])) {
+		if (op.GetChildren().size() != 1 || !IsSimpleFilterColumnRef(*op.GetChildren()[0])) {
 			return false;
 		}
 		switch (expression.GetExpressionType()) {
@@ -131,15 +131,15 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 		return false;
 	}
 
-	auto &function_name = func_expr->function.GetName();
+	auto &function_name = func_expr->Function().GetName();
 	if (function_name == OptionalFilterScalarFun::NAME) {
 		return true;
 	}
 	if (function_name == BloomFilterScalarFun::NAME) {
-		if (!func_expr->bind_info) {
+		if (!func_expr->BindInfo()) {
 			return true;
 		}
-		auto &data = func_expr->bind_info->Cast<BloomFilterFunctionData>();
+		auto &data = func_expr->BindInfo()->Cast<BloomFilterFunctionData>();
 		if (!data.filter) {
 			return true;
 		}
@@ -147,31 +147,20 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 		return true;
 	}
 	if (function_name == SelectivityOptionalFilterScalarFun::NAME) {
-		if (!func_expr->bind_info) {
+		if (!func_expr->BindInfo()) {
 			return false;
 		}
-		auto &data = func_expr->bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+		auto &data = func_expr->BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
 		if (!data.child_filter_expr) {
 			return false;
 		}
 		return TryExpressionFiltersNullValues(*data.child_filter_expr, filters_nulls, filters_valid_values);
 	}
-	if (function_name == PerfectHashJoinScalarFun::NAME) {
-		if (!func_expr->bind_info) {
-			return true;
-		}
-		auto &data = func_expr->bind_info->Cast<PerfectHashJoinFunctionData>();
-		if (!data.executor) {
-			return true;
-		}
-		filters_nulls = true;
-		return true;
-	}
 	if (function_name == PrefixRangeScalarFun::NAME) {
-		if (!func_expr->bind_info) {
+		if (!func_expr->BindInfo()) {
 			return true;
 		}
-		auto &data = func_expr->bind_info->Cast<PrefixRangeFunctionData>();
+		auto &data = func_expr->BindInfo()->Cast<PrefixRangeFunctionData>();
 		if (!data.filter || !data.filter->IsInitialized()) {
 			return true;
 		}
@@ -179,10 +168,10 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 		return true;
 	}
 	if (function_name == DynamicFilterScalarFun::NAME) {
-		if (!func_expr->bind_info) {
+		if (!func_expr->BindInfo()) {
 			return true;
 		}
-		auto &data = func_expr->bind_info->Cast<DynamicFilterFunctionData>();
+		auto &data = func_expr->BindInfo()->Cast<DynamicFilterFunctionData>();
 		if (!data.filter_data || !data.filter_data->initialized.load()) {
 			return true;
 		}

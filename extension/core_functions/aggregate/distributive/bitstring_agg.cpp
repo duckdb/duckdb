@@ -67,11 +67,6 @@ struct BitstringAggBindData : public FunctionData {
 struct BitStringAggOperation {
 	static constexpr const idx_t MAX_BIT_RANGE = 1000000000; // for now capped at 1 billion bits
 
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.is_set = false;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
 		auto &bind_agg_data = unary_input.input.bind_data->template Cast<BitstringAggBindData>();
@@ -262,9 +257,8 @@ unique_ptr<FunctionData> BindBitstringAgg(BindAggregateFunctionInput &input) {
 
 template <class TYPE>
 void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalTypeId &type) {
-	auto function =
-	    AggregateFunction::UnaryAggregateDestructor<BitAggState<TYPE>, TYPE, string_t, BitStringAggOperation>(
-	        type, LogicalType::BIT);
+	auto function = AggregateFunction::UnaryAggregate<BitAggState<TYPE>, TYPE, string_t, BitStringAggOperation>(
+	    type, LogicalType::BIT);
 	function.SetBindCallback(BindBitstringAgg); // create new a 'BitstringAggBindData'
 	function.SetSerializeCallback(BitstringAggBindData::Serialize);
 	function.SetDeserializeCallback(BitstringAggBindData::Deserialize);

@@ -7,7 +7,8 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
-
+#include "duckdb/common/enums/dialect_compatibility_mode.hpp"
+#include "duckdb/main/settings.hpp"
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -38,6 +39,11 @@ struct LambdaExecuteInfo {
 		// initialize the data chunks
 		input_chunk.InitializeEmpty(input_types);
 		lambda_chunk.Initialize(Allocator::DefaultAllocator(), result_types);
+		// Spark Compatibility Mode: zero-based index for lambdas
+		if (Settings::Get<DialectCompatibilityModeSetting>(context) == DialectCompatibilityMode::SPARK) {
+			// Spark's lambda index parameter is 0-based; default SQL is 1-based
+			index_offset = 0;
+		}
 	};
 
 	//! The expression executor that executes the lambda expression
@@ -48,6 +54,8 @@ struct LambdaExecuteInfo {
 	DataChunk lambda_chunk;
 	//! True, if this lambda expression expects an index vector in the input chunk
 	bool has_index;
+	//! Added to child_idx to form the value the lambda sees in its index parameter (1 by default).
+	idx_t index_offset = 1;
 };
 
 //! A helper struct with information that is specific to the list_filter function
@@ -177,9 +185,6 @@ LambdaFunctions::GetMutableColumnInfo(vector<LambdaFunctions::ColumnInfo> &data)
 static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &column_info,
                               const vector<LambdaFunctions::ColumnInfo> &column_infos, const Vector &index_vector,
                               LambdaExecuteInfo &info) {
-	info.input_chunk.SetCardinality(elem_cnt);
-	info.lambda_chunk.SetCardinality(elem_cnt);
-
 	// slice the child vector
 	Vector slice(column_info.vector, column_info.sel, elem_cnt);
 
@@ -326,7 +331,8 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 
 			// set the index vector
 			if (info.has_index) {
-				index_vector.SetValue(elem_cnt, Value::BIGINT(NumericCast<int64_t>(child_idx + 1)));
+				index_vector.SetValue(elem_cnt,
+				                      Value::BIGINT(NumericCast<int64_t>(child_idx + execute_info.index_offset)));
 			}
 
 			elem_cnt++;
@@ -378,7 +384,7 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 
 	// get the lambda expression and put it in the bind info
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
+	auto lambda_expr = std::move(bound_lambda_expr.LambdaExprMutable());
 	if (lambda_expr->IsVolatile()) {
 		bound_function.SetVolatile();
 	}

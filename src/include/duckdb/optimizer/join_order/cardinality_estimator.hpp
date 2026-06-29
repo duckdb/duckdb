@@ -20,6 +20,7 @@ struct CompositeJoinPairStats;
 struct DenomInfo;
 struct DenominatorState;
 struct FilterInfoWithTotalDomains;
+struct LeftJoinDenomInfo;
 struct Subgraph2Denominator;
 
 class CardinalityEstimator {
@@ -68,6 +69,8 @@ private:
 	double CalculateUpdatedDenom(Subgraph2Denominator left, Subgraph2Denominator right,
 	                             FilterInfoWithTotalDomains &filter);
 	double CalculateInnerJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter);
+	LeftJoinDenomInfo CalculateLeftJoinDenomInfo(Subgraph2Denominator &left, Subgraph2Denominator &right,
+	                                             FilterInfoWithTotalDomains &filter);
 	double CalculateLeftJoinDenom(Subgraph2Denominator &left, Subgraph2Denominator &right,
 	                              FilterInfoWithTotalDomains &filter);
 	double CalculateSemiAntiJoinDenom(double base_denom, Subgraph2Denominator &left, Subgraph2Denominator &right,

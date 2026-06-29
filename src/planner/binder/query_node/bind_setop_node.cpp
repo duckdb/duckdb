@@ -21,7 +21,7 @@ public:
 	}
 
 	void GatherAliases(BoundStatement &stmt, const vector<idx_t> &reorder_idx);
-	void GatherSetOpAliases(SetOperationType setop_type, const vector<string> &names,
+	void GatherSetOpAliases(SetOperationType setop_type, const vector<Identifier> &names,
 	                        vector<BoundStatement> &bound_children, const vector<idx_t> &reorder_idx);
 
 private:
@@ -70,13 +70,13 @@ void SetOpAliasGatherer::GatherAliases(BoundStatement &stmt, const vector<idx_t>
 	}
 }
 
-void SetOpAliasGatherer::GatherSetOpAliases(SetOperationType setop_type, const vector<string> &stmt_names,
+void SetOpAliasGatherer::GatherSetOpAliases(SetOperationType setop_type, const vector<Identifier> &stmt_names,
                                             vector<BoundStatement> &bound_children, const vector<idx_t> &reorder_idx) {
 	// create new reorder index
 	if (setop_type == SetOperationType::UNION_BY_NAME) {
 		auto &setop_names = stmt_names;
 		// for UNION BY NAME - create a new re-order index
-		case_insensitive_map_t<idx_t> reorder_map;
+		identifier_map_t<idx_t> reorder_map;
 		for (idx_t col_idx = 0; col_idx < setop_names.size(); ++col_idx) {
 			reorder_map[setop_names[col_idx]] = reorder_idx[col_idx];
 		}
@@ -114,15 +114,15 @@ static void GatherAliases(BoundSetOperationNode &root, vector<BoundStatement> &c
 
 void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 	D_ASSERT(result.setop_type == SetOperationType::UNION_BY_NAME);
-	vector<case_insensitive_map_t<ProjectionIndex>> node_name_maps;
-	case_insensitive_set_t global_name_set;
+	vector<identifier_map_t<ProjectionIndex>> node_name_maps;
+	identifier_set_t global_name_set;
 
 	// Build a name_map to use to check if a name exists
 	// We throw a binder exception if two same name in the SELECT list
 	D_ASSERT(result.names.empty());
 	for (auto &child : result.bound_children) {
 		auto &child_names = child.names;
-		case_insensitive_map_t<ProjectionIndex> node_name_map;
+		identifier_map_t<ProjectionIndex> node_name_map;
 		for (idx_t i = 0; i < child_names.size(); ++i) {
 			auto &col_name = child_names[i];
 			if (node_name_map.find(col_name) != node_name_map.end()) {
@@ -133,7 +133,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 			}
 			if (global_name_set.find(col_name) == global_name_set.end()) {
 				// column is not yet present in the result
-				result.names.push_back(col_name);
+				result.names.emplace_back(col_name);
 				global_name_set.insert(col_name);
 			}
 			node_name_map[col_name] = ProjectionIndex(i);
@@ -162,7 +162,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 				if (result_type.id() == LogicalTypeId::INVALID) {
 					result_type = child_col_type;
 				} else {
-					result_type = LogicalType::ForceMaxLogicalType(result_type, child_col_type);
+					result_type = LogicalType::ForceMaxLogicalType(context, result_type, child_col_type);
 				}
 				if (i != col_idx_in_child) {
 					// the column exists - but the children are out-of-order, so we need to re-order anyway
@@ -171,7 +171,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 			}
 		}
 		// compute the final type for each column
-		if (!can_contain_nulls) {
+		if (!CanContainNulls()) {
 			if (ExpressionBinder::ContainsNullType(result_type)) {
 				result_type = ExpressionBinder::ExchangeNullType(result_type);
 			}
@@ -252,7 +252,7 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 	}
 	for (auto &child : statement.children) {
 		auto child_binder = Binder::CreateBinder(context, this);
-		child_binder->can_contain_nulls = true;
+		child_binder->SetCanContainNulls(true);
 		auto child_node = child_binder->BindNode(*child);
 		MoveCorrelatedExpressions(*child_binder);
 		result.bound_children.push_back(std::move(child_node));
@@ -278,9 +278,9 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 			auto result_type = result.bound_children[0].types[i];
 			for (idx_t child_idx = 1; child_idx < result.bound_children.size(); ++child_idx) {
 				auto &child_types = result.bound_children[child_idx].types;
-				result_type = LogicalType::ForceMaxLogicalType(result_type, child_types[i]);
+				result_type = LogicalType::ForceMaxLogicalType(context, result_type, child_types[i]);
 			}
-			if (!can_contain_nulls) {
+			if (!CanContainNulls()) {
 				if (ExpressionBinder::ContainsNullType(result_type)) {
 					result_type = ExpressionBinder::ExchangeNullType(result_type);
 				}

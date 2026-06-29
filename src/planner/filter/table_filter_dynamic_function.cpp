@@ -104,7 +104,7 @@ static idx_t SelectDynamicFilter(Vector &input, ExpressionType comparison_type, 
 static idx_t DynamicFilterSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
                                  optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &func_data = func_expr.bind_info->Cast<DynamicFilterFunctionData>();
+	auto &func_data = func_expr.BindInfo()->Cast<DynamicFilterFunctionData>();
 	auto count = args.size();
 	if (!func_data.filter_data || !func_data.filter_data->initialized.load()) {
 		return SetAllTrueSelection(count, sel, true_sel, false_sel);

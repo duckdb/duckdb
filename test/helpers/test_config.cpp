@@ -70,6 +70,7 @@ static const TestConfigOption test_config_options[] = {
     {"settings", "Configuration settings to apply",
      LogicalType::LIST(LogicalType::STRUCT({{"name", LogicalType::VARCHAR}, {"value", LogicalType::VARCHAR}})),
      nullptr},
+    {"extends", "List of config files to extend from", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
@@ -229,7 +230,11 @@ bool TestConfiguration::TryParseOption(const string &name, const Value &value) {
 	if (test_config.on_set_option) {
 		test_config.on_set_option(parameter);
 	}
-	options.insert(make_pair(test_config.name, parameter));
+	options[test_config.name] = parameter;
+	if (StringUtil::CIEquals(test_config.name, "test_env")) {
+		test_env_from_config_loaded = false;
+		test_env_from_config_keys.clear();
+	}
 	return true;
 }
 
@@ -390,8 +395,29 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 		// read the config file
 		auto buffer = ReadFileToString(config_path);
 		// parse json
-		auto json = StringUtil::ParseJSONMap(buffer);
-		auto json_values = json->Flatten();
+		auto json_values = StringUtil::ParseJSONMap(buffer);
+
+		auto extends_it = json_values.find("extends");
+		if (extends_it != json_values.end()) {
+			auto config_dir = StringUtil::GetFilePath(config_path);
+			auto extends_list = Value(extends_it->second).DefaultCastAs(LogicalType::LIST(LogicalType::VARCHAR));
+			for (auto &child : ListValue::GetChildren(extends_list)) {
+				auto path = child.GetValue<string>();
+				if (!config_dir.empty() && !path.empty() && path[0] != '/') {
+					path = config_dir + "/" + path;
+				}
+				LoadConfig(path);
+			}
+		}
+
+		// load the base config (if any) before processing the rest, so that this config's options
+		// and skip_tests are layered on top of the base instead of depending on map iteration order
+		auto base_it = json_values.find("base_config");
+		if (base_it != json_values.end()) {
+			LoadConfig(base_it->second);
+			json_values.erase(base_it);
+		}
+
 		for (auto &entry : json_values) {
 			ParseOption(entry.first, Value(entry.second));
 		}
@@ -434,6 +460,26 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 		ErrorData error(ex);
 		throw std::runtime_error(
 		    StringUtil::Format("Failed to parse config file \"%s\": %s", config_path, error.Message()));
+	}
+}
+
+void TestConfiguration::LoadTestEnvFromConfig() {
+	if (test_env_from_config_loaded) {
+		return;
+	}
+	test_env_from_config_loaded = true;
+	test_env_from_config_keys.clear();
+	auto entry = options.find("test_env");
+	if (entry == options.end()) {
+		return;
+	}
+	auto list_children = ListValue::GetChildren(entry->second);
+	for (const auto &value : list_children) {
+		auto &struct_children = StructValue::GetChildren(value);
+		auto &env = StringValue::Get(struct_children[0]);
+		auto &env_value = StringValue::Get(struct_children[1]);
+		test_env_from_config_keys.insert(env);
+		test_env[env] = env_value;
 	}
 }
 
@@ -536,24 +582,20 @@ vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
 }
 
 string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
-	if (!test_env_from_config_loaded && options.find("test_env") != options.end()) {
-		test_env_from_config_loaded = true;
-		auto entry = options["test_env"];
-		auto list_children = ListValue::GetChildren(entry);
-		for (const auto &value : list_children) {
-			auto &struct_children = StructValue::GetChildren(value);
-			auto &env = StringValue::Get(struct_children[0]);
-			auto &env_value = StringValue::Get(struct_children[1]);
-			test_env[env] = env_value;
-		}
-	}
+	LoadTestEnvFromConfig();
 	if (test_env.find(key) == test_env.end()) {
 		return default_value;
 	}
 	return test_env[key];
 }
 
+bool TestConfiguration::HasTestEnv(const string &key) {
+	LoadTestEnvFromConfig();
+	return test_env_from_config_keys.find(key) != test_env_from_config_keys.end();
+}
+
 const unordered_map<string, string> &TestConfiguration::GetTestEnvMap() {
+	LoadTestEnvFromConfig();
 	return test_env;
 }
 

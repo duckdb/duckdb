@@ -15,7 +15,7 @@ python3 "$GRAMMAR_FILE"
 echo "Successfully built grammar files"
 
 # Generate Internal transformer wrappers for auto-generatable grammar rules
-GEN_TRANSFORMER_FILE="scripts/parser/gen_transformer_v2.py"
+GEN_TRANSFORMER_FILE="scripts/parser/generate_transformer.py"
 if [[ ! -f "$GEN_TRANSFORMER_FILE" ]]; then
   echo "Error: $GEN_TRANSFORMER_FILE not found"
   exit 1
@@ -25,5 +25,4 @@ python3 "$GEN_TRANSFORMER_FILE" --write
 
 echo "Successfully generated transformer wrappers"
 
-echo "Running format-fix..."
-make format-fix > /dev/null 2>&1
+make format-parser-grammar

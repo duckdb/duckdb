@@ -314,7 +314,7 @@ protected:
 
 class WindowFunction : public BaseWindowFunction, public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
-	WindowFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
+	WindowFunction(const Identifier &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	               ExpressionType window_enum, window_bind_function_t bind = nullptr,
 	               window_bounds_function_t bounds = nullptr, window_sharing_function_t sharing = nullptr,
 	               window_global_function_t global = nullptr, window_local_function_t local = nullptr,
@@ -336,7 +336,7 @@ public:
 	               window_sharing_function_t sharing = nullptr, window_global_function_t global = nullptr,
 	               window_local_function_t local = nullptr, window_sink_function_t sink = nullptr,
 	               window_finalize_function_t finalize = nullptr, window_evaluate_function_t evaluate = nullptr)
-	    : WindowFunction(string(), arguments, return_type, window_enum, bind, bounds, sharing, global, local, sink,
+	    : WindowFunction(Identifier(), arguments, return_type, window_enum, bind, bounds, sharing, global, local, sink,
 	                     finalize, evaluate) {
 	}
 

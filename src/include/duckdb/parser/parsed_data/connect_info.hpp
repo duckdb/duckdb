@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
@@ -23,7 +24,7 @@ public:
 	//! Target — empty for bare `CONNECT;` and for `CONNECT LOCAL;` (in the latter case,
 	//! `target_is_local` is true). Otherwise either an identifier (attached-db name) or the
 	//! contents of a string literal (connection-string form).
-	string name;
+	Identifier name;
 	//! True iff the target was parsed as the LOCAL keyword (`CONNECT LOCAL;`). When true, `name`
 	//! is empty and `name_is_string_literal` is false.
 	bool target_is_local = false;

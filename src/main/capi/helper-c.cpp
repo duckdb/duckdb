@@ -164,6 +164,8 @@ duckdb_type LogicalTypeIdToC(const LogicalTypeId type) {
 	case LogicalTypeId::LIST:
 		return DUCKDB_TYPE_LIST;
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
+		// TUPLE is an unnamed struct - reported as DUCKDB_TYPE_STRUCT over the C-API (child names are empty)
 		return DUCKDB_TYPE_STRUCT;
 	case LogicalTypeId::MAP:
 		return DUCKDB_TYPE_MAP;
@@ -202,6 +204,7 @@ idx_t GetCTypeSize(const duckdb_type type) {
 	case DUCKDB_TYPE_SMALLINT:
 		return sizeof(int16_t);
 	case DUCKDB_TYPE_INTEGER:
+	case DUCKDB_TYPE_SQLNULL:
 		return sizeof(int32_t);
 	case DUCKDB_TYPE_BIGINT:
 		return sizeof(int64_t);

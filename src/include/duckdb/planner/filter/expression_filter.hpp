@@ -19,6 +19,7 @@ class ExpressionExecutor;
 struct DynamicFilterData;
 
 class BoundFunctionExpression;
+class ClientContext;
 
 class ExpressionFilter : public TableFilter {
 public:
@@ -48,6 +49,8 @@ public:
 
 	//! Enhanced CheckStatistics that recognizes standard expression patterns
 	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr, const BaseStatistics &stats);
+	static FilterPropagateResult CheckExpressionStatistics(optional_ptr<ClientContext> context_p,
+	                                                       const Expression &expr, const BaseStatistics &stats);
 	//! Check if an expression tree contains an internal function with the given name
 	static bool ContainsInternalFunction(const Expression &expr, const string &func_name);
 	//! Check if an expression tree is entirely optional filter semantics
@@ -58,11 +61,14 @@ public:
 	static bool IsOptionalFilter(const TableFilter &filter);
 	//! Check if the root of a table filter tree is an optional filter wrapper
 	static bool IsRootOptionalFilter(const TableFilter &filter);
+	//! Check if the root of a table filter tree is a non-selectivity optional filter wrapper
+	static bool IsRootNonSelectivityOptionalFilter(const TableFilter &filter);
 	//! If this is an optional/selectivity-optional wrapper around a root dynamic filter,
 	//! return the shared dynamic filter state.
 	static shared_ptr<DynamicFilterData> GetRootOptionalDynamicFilterData(const TableFilter &filter);
 
 	FilterPropagateResult CheckStatistics(const BaseStatistics &stats) const;
+	FilterPropagateResult CheckStatistics(ClientContext &context, const BaseStatistics &stats) const;
 	string ToString(const string &column_name) const;
 	string DebugToString() const;
 	bool Equals(const ExpressionFilter &other) const;

@@ -55,22 +55,24 @@ public:
 class PositionalTableScanner {
 public:
 	PositionalTableScanner(ExecutionContext &context, PhysicalOperator &table_p, GlobalSourceState &gstate_p)
-	    : table(table_p), global_state(gstate_p), source_offset(0), exhausted(false) {
+	    : table(table_p), global_state(gstate_p), source_count(0), source_offset(0), exhausted(false) {
 		local_state = table.GetLocalSourceState(context, gstate_p);
 		source.Initialize(Allocator::Get(context.client), table.types);
 	}
 
 	idx_t Refill(ExecutionContext &context) {
-		if (source_offset >= source.size()) {
+		if (source_offset >= source_count) {
 			if (!exhausted) {
 				source.Reset();
+				source_count = 0;
 
 				InterruptState interrupt_state;
 				OperatorSourceInput source_input {global_state, *local_state, interrupt_state};
 				auto source_result = SourceResultType::HAVE_MORE_OUTPUT;
-				while (source_result == SourceResultType::HAVE_MORE_OUTPUT && source.size() == 0) {
+				while (source_result == SourceResultType::HAVE_MORE_OUTPUT && source_count == 0) {
 					// TODO: this could as well just be propagated further, but for now iterating it is
 					source_result = table.GetData(context, source, source_input);
+					source_count = source.size();
 					if (source_result == SourceResultType::BLOCKED) {
 						throw NotImplementedException(
 						    "Unexpected interrupt from table Source in PositionalTableScanner refill");
@@ -80,10 +82,11 @@ public:
 			source_offset = 0;
 		}
 
-		const auto available = source.size() - source_offset;
+		const auto available = source_count - source_offset;
 		if (!available) {
 			if (!exhausted) {
 				source.Reset();
+				source_count = 0;
 				for (idx_t i = 0; i < source.ColumnCount(); ++i) {
 					auto &vec = source.data[i];
 					ConstantVector::SetNull(vec, count_t(STANDARD_VECTOR_SIZE));
@@ -96,7 +99,7 @@ public:
 	}
 
 	idx_t CopyData(ExecutionContext &context, DataChunk &output, const idx_t count, const idx_t col_offset) {
-		if (!source_offset && (source.size() >= count || exhausted)) {
+		if (!source_offset && (source_count >= count || exhausted)) {
 			//	Fast track: aligned and has enough data
 			for (idx_t i = 0; i < source.ColumnCount(); ++i) {
 				output.data[col_offset + i].Reference(source.data[i]);
@@ -106,15 +109,15 @@ public:
 			// Copy data
 			for (idx_t target_offset = 0; target_offset < count;) {
 				const auto needed = count - target_offset;
-				const auto available = exhausted ? needed : (source.size() - source_offset);
-				const auto copy_size = MinValue(needed, available);
-				const auto source_count = source_offset + copy_size;
+				const auto available = exhausted ? needed : (source_count - source_offset);
+				const auto copy_count = MinValue(needed, available);
+				const auto source_end = source_offset + copy_count;
 				for (idx_t i = 0; i < source.ColumnCount(); ++i) {
-					VectorOperations::Copy(source.data[i], output.data[col_offset + i], source_count, source_offset,
+					VectorOperations::Copy(source.data[i], output.data[col_offset + i], source_end, source_offset,
 					                       target_offset);
 				}
-				target_offset += copy_size;
-				source_offset += copy_size;
+				target_offset += copy_count;
+				source_offset += copy_count;
 				Refill(context);
 			}
 		}
@@ -130,6 +133,7 @@ public:
 	GlobalSourceState &global_state;
 	unique_ptr<LocalSourceState> local_state;
 	DataChunk source;
+	idx_t source_count;
 	idx_t source_offset;
 	bool exhausted;
 };

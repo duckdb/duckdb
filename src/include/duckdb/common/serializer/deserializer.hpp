@@ -11,12 +11,14 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_data.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+#include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 #include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 
 namespace duckdb {
@@ -365,12 +367,13 @@ private:
 	template <typename T = void>
 	inline typename std::enable_if<is_insertion_preserving_map<T>::value, T>::type Read() {
 		using VALUE_TYPE = typename is_insertion_preserving_map<T>::VALUE_TYPE;
+		using KEY_TYPE = typename is_insertion_preserving_map<T>::KEY_TYPE;
 
 		T map;
 		auto size = OnListBegin();
 		for (idx_t i = 0; i < size; i++) {
 			OnObjectBegin();
-			auto key = ReadProperty<string>(0, "key");
+			auto key = ReadProperty<KEY_TYPE>(0, "key");
 			auto value = ReadProperty<VALUE_TYPE>(1, "value");
 			OnObjectEnd();
 			map[key] = std::move(value);
@@ -507,6 +510,12 @@ private:
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, string>::value, T>::type Read() {
 		return ReadString();
+	}
+
+	// Deserialize an Identifier (stored identically to a plain string)
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, Identifier>::value, T>::type Read() {
+		return Identifier(ReadString());
 	}
 
 	// Deserialize a Enum

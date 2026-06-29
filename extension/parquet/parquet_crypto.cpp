@@ -147,7 +147,7 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 	const auto &keys = ParquetKeys::Get(context);
 	for (idx_t i = 0; i < StructType::GetChildCount(arg.type()); i++) {
 		auto &struct_key = child_types[i].first;
-		if (StringUtil::Lower(struct_key) == "footer_key") {
+		if (struct_key == "footer_key") {
 			const auto footer_key_name = StringValue::Get(children[i].DefaultCastAs(LogicalType::VARCHAR));
 			if (!keys.HasKey(footer_key_name)) {
 				throw BinderException(
@@ -157,9 +157,9 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 			// footer key name provided - read the key from the config
 			const auto &keys = ParquetKeys::Get(context);
 			footer_key = keys.GetKey(footer_key_name);
-		} else if (StringUtil::Lower(struct_key) == "footer_key_value") {
+		} else if (struct_key == "footer_key_value") {
 			footer_key = StringValue::Get(children[i].DefaultCastAs(LogicalType::BLOB));
-		} else if (StringUtil::Lower(struct_key) == "column_keys") {
+		} else if (struct_key == "column_keys") {
 			throw NotImplementedException("Parquet encryption_config column_keys not yet implemented");
 		} else {
 			throw BinderException("Unknown key in encryption_config \"%s\"", struct_key);

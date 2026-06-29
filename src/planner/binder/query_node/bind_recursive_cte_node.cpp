@@ -97,7 +97,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			auto bound_expr = expression_binder.Bind(expr);
 			auto &bound_ref = bound_expr->Cast<BoundColumnRefExpression>();
 
-			auto column_index = bound_ref.binding.column_index;
+			auto column_index = bound_ref.Binding().column_index;
 			if (key_references.find(column_index) != key_references.end()) {
 				continue;
 			}
@@ -124,10 +124,10 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			QueryErrorContext error_context(expr->GetQueryLocation());
 
-			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, func_expr.FunctionName(),
-			                                error_context);
-			auto entry =
-			    GetCatalogEntry(func_expr.Catalog(), DEFAULT_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
+			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY,
+			                                QualifiedName(func_expr.FunctionName()), error_context);
+			auto entry = GetCatalogEntry(func_expr.GetQualifiedName().Catalog(), Identifier::DefaultSchema(),
+			                             function_lookup, OnEntryNotFound::RETURN_NULL);
 
 			if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 				throw BinderException(
@@ -140,9 +140,10 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			vector<LogicalType> aggregation_input_types;
 			vector<unique_ptr<Expression>> bound_children;
+
 			// Bind the children of the aggregate function
-			for (auto &child : func_expr.GetChildrenMutable()) {
-				auto bound_child = expression_binder.Bind(child);
+			for (auto &child : func_expr.GetArgumentsMutable()) {
+				auto bound_child = expression_binder.Bind(child.GetExpressionMutable());
 				aggregation_input_types.push_back(bound_child->GetReturnType());
 				bound_children.push_back(std::move(bound_child));
 			}
@@ -166,7 +167,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 					    expr->GetQueryLocation(),
 					    "In USING KEY, an aggregate must either have a column reference or an alias.");
 				}
-				aggregate_idx = bound_children[0]->Cast<BoundColumnRefExpression>().binding.column_index;
+				aggregate_idx = bound_children[0]->Cast<BoundColumnRefExpression>().Binding().column_index;
 			}
 
 			// Find the best matching aggregate function

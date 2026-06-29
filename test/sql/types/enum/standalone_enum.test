@@ -21,6 +21,11 @@ SELECT 'hello'::ENUM;
 ENUM type requires at least one argument
 
 statement error
+SELECT ENUM 'a';
+----
+ENUM type requires at least one argument
+
+statement error
 SELECT 'hello'::ENUM(42);
 ----
 ENUM type requires a set of VARCHAR arguments

@@ -9,12 +9,12 @@
 
 namespace duckdb {
 
-CatalogEntry::CatalogEntry(CatalogType type, string name_p, idx_t oid)
+CatalogEntry::CatalogEntry(CatalogType type, Identifier name_p, idx_t oid)
     : oid(oid), type(type), set(nullptr), name(std::move(name_p)), deleted(false), temporary(false), internal(false),
       parent(nullptr) {
 }
 
-CatalogEntry::CatalogEntry(CatalogType type, Catalog &catalog, string name_p)
+CatalogEntry::CatalogEntry(CatalogType type, Catalog &catalog, Identifier name_p)
     : CatalogEntry(type, std::move(name_p), catalog.GetDatabase().GetDatabaseManager().NextOid()) {
 }
 
@@ -119,7 +119,7 @@ void CatalogEntry::Rollback(CatalogEntry &prev_entry) {
 void CatalogEntry::OnDrop() {
 }
 
-InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, string name)
+InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, Identifier name)
     : CatalogEntry(type, catalog, std::move(name)), catalog(catalog) {
 }
 

@@ -2,6 +2,9 @@
 # group: [optimizer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE t1 AS SELECT i + 100 as x FROM range(250000) AS t(i);
 
 query I
@@ -60,4 +63,4 @@ SELECT * FROM t1 where rowid = 6 OR rowid = 9 ORDER BY ALL;
 query II
 EXPLAIN SELECT * FROM t1 where rowid = 6 OR rowid = 9 ORDER BY ALL;
 ----
-physical_plan	<REGEX>:.*Filters:.*rowid.*6.*rowid.*9.*
+physical_plan	<REGEX>:(?s).*Filters.*rowid.*6.*rowid.*9.*

@@ -1,0 +1,73 @@
+diff --git a/src/create_secret_functions.cpp b/src/create_secret_functions.cpp
+index aa5c9b2..7b82c9c 100644
+--- a/src/create_secret_functions.cpp
++++ b/src/create_secret_functions.cpp
+@@ -22,7 +22,7 @@ static Value MapToStruct(const Value &map) {
+ 			throw InvalidInputException("Invalid input passed to refresh_info");
+ 		}
+ 
+-		struct_fields.push_back({kv_pair[0].ToString(), kv_pair[1]});
++		struct_fields.emplace_back(kv_pair[0].ToString(), kv_pair[1]);
+ 	}
+ 	return Value::STRUCT(struct_fields);
+ }
+@@ -105,7 +105,7 @@ unique_ptr<BaseSecret> CreateS3SecretFunctions::CreateSecretFunctionInternal(Cli
+ 			child_list_t<Value> struct_fields;
+ 			for (const auto &named_param : input.options) {
+ 				auto lower_name = StringUtil::Lower(named_param.first);
+-				struct_fields.push_back({lower_name, named_param.second});
++				struct_fields.emplace_back(lower_name, named_param.second);
+ 			}
+ 			secret->secret_map["refresh_info"] = Value::STRUCT(struct_fields);
+ 		} else if (lower_name == "refresh_info") {
+@@ -151,8 +151,8 @@ CreateSecretInput CreateS3SecretFunctions::GenerateRefreshSecretInfo(const Secre
+ 
+ 	result.type = kv_secret.GetType();
+ 	result.name = kv_secret.GetName();
+-	result.provider = kv_secret.GetProvider();
+-	result.storage_type = secret_entry.storage_mode;
++	result.provider = Identifier(kv_secret.GetProvider());
++	result.storage_type = Identifier(secret_entry.storage_mode);
+ 	result.scope = kv_secret.GetScope();
+ 
+ 	auto result_child_count = StructType::GetChildCount(refresh_info.type());
+@@ -161,7 +161,7 @@ CreateSecretInput CreateS3SecretFunctions::GenerateRefreshSecretInfo(const Secre
+ 	for (idx_t i = 0; i < result_child_count; i++) {
+ 		auto &key = StructType::GetChildName(refresh_info.type(), i);
+ 		auto &value = refresh_info_children[i];
+-		result.options[key] = value;
++		result.options[Identifier(key.GetIdentifierName()).GetIdentifierName()] = value;
+ 	}
+ 
+ 	return result;
+@@ -244,7 +244,7 @@ void CreateS3SecretFunctions::SetBaseNamedParams(CreateSecretFunction &function,
+ void CreateS3SecretFunctions::RegisterCreateSecretFunction(ExtensionLoader &loader, string type) {
+ 	// Register the new type
+ 	SecretType secret_type;
+-	secret_type.name = type;
++	secret_type.name = Identifier(type);
+ 	secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+ 	secret_type.default_provider = "config";
+ 	secret_type.extension = "httpfs";
+@@ -259,7 +259,7 @@ void CreateS3SecretFunctions::RegisterCreateSecretFunction(ExtensionLoader &load
+ void CreateBearerTokenFunctions::Register(ExtensionLoader &loader) {
+ 	// HuggingFace secret
+ 	SecretType secret_type_hf;
+-	secret_type_hf.name = HUGGINGFACE_TYPE;
++	secret_type_hf.name = Identifier(HUGGINGFACE_TYPE);
+ 	secret_type_hf.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+ 	secret_type_hf.default_provider = "config";
+ 	secret_type_hf.extension = "httpfs";
+diff --git a/src/s3fs.cpp b/src/s3fs.cpp
+index c21b5b0..ca1ea8e 100644
+--- a/src/s3fs.cpp
++++ b/src/s3fs.cpp
+@@ -254,7 +254,7 @@ void S3AuthParams::SetRegion(string new_region) {
+ 
+ unique_ptr<KeyValueSecret> CreateSecret(vector<string> &prefix_paths_p, string &type, string &provider, string &name,
+                                         S3AuthParams &params) {
+-	auto return_value = make_uniq<KeyValueSecret>(prefix_paths_p, type, provider, name);
++	auto return_value = make_uniq<KeyValueSecret>(prefix_paths_p, Identifier(type), Identifier(provider), Identifier(name));
+ 
+ 	//! Set key value map
+ 	return_value->secret_map["region"] = params.region;

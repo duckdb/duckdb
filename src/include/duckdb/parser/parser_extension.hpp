@@ -13,9 +13,22 @@
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/peg/token_type.hpp"
 
 namespace duckdb {
 struct DBConfig;
+
+//! A minimal token view handed to parser extensions: the token text together with its classified
+//! TokenType.
+struct SimpleToken {
+	SimpleToken(string text_p, TokenType type_p) : text(std::move(text_p)), type(type_p) {
+	}
+
+	//! The raw token text as it appears in the query
+	string text;
+	//! The classified type of the token
+	TokenType type;
+};
 
 //! The ParserExtensionInfo holds static information relevant to the parser extension
 //! It is made available in the parse_function, and will be kept alive as long as the database system is kept alive
@@ -74,9 +87,24 @@ struct ParserExtensionParseResult {
 	string error;
 	//! The error location (if unsuccessful)
 	optional_idx error_location;
+	//! How many leading tokens (from the start of the `tokens` view) the extension claimed:
+	//!    > 0 : SUCCESS — the extension accepted that many tokens; the peeler resumes parsing
+	//!          after them.
+	//!   == 0 : the extension ran fine but did not claim any tokens (it's not taking this input) —
+	//!          the peeler lets the next extension try.
+	//!    < 0 : the extension wants to surface an error — the peeler throws (using `error` /
+	//!          `error_location` if set).
+	//! A positive count must not exceed the number of tokens in the view, or the peeler throws.
+	int64_t consumed_tokens = 0;
 };
 
-typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info, const string &query);
+//! Called when the PEG parser fails to parse a statement.
+//!
+//! `tokens` is the tokenized view of the source tail from the PEG failure point onward — one
+//! SimpleToken (text + TokenType) per token, in source order. The extension dispatches on this
+//! token stream and reports, via `ParserExtensionParseResult::consumed_tokens`, how many leading
+//! tokens it claimed (> 0 success, 0 = ran but claimed nothing, < 0 = throw).
+typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info, const vector<SimpleToken> &tokens);
 //===--------------------------------------------------------------------===//
 // Plan
 //===--------------------------------------------------------------------===//
@@ -86,7 +114,7 @@ struct ParserExtensionPlanResult { // NOLINT: work-around bug in clang-tidy
 	//! Parameters to the function
 	vector<Value> parameters;
 	//! The set of databases that will be modified by this statement (empty for a read-only statement)
-	unordered_map<string, StatementProperties::ModificationInfo> modified_databases;
+	identifier_map_t<StatementProperties::ModificationInfo> modified_databases;
 	//! Whether or not the statement requires a valid transaction to be executed
 	bool requires_valid_transaction = true;
 	//! What type of result set the statement returns

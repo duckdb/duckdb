@@ -107,7 +107,7 @@ idx_t LocalTableStorage::EstimatedSize() {
 
 	if (collection.GetTotalRows() >= collection.GetRowGroupSize() && deleted_rows == 0) {
 		// Optimistic insertion does not generate many WAL logs, so we estimate the size of the Data Block Pointers here
-		idx_t row_group_count = row_groups->complete_row_groups + 1;
+		idx_t row_group_count = row_groups->collection->GetRowGroupCount();
 		idx_t column_count = collection.GetTypes().size();
 
 		data_size = row_group_count * (sizeof(PersistentRowGroupData) +
@@ -138,12 +138,12 @@ idx_t LocalTableStorage::EstimatedSize() {
 	return data_size + index_sizes;
 }
 
-void LocalTableStorage::WriteNewRowGroup() {
+void LocalTableStorage::WriteNewRowGroup(idx_t flushed_row_group_idx) {
 	if (deleted_rows != 0) {
 		// we have deletes - we cannot merge row groups
 		return;
 	}
-	optimistic_writer.WriteNewRowGroup(*row_groups);
+	optimistic_writer.WriteNewRowGroup(*row_groups, flushed_row_group_idx);
 }
 
 void LocalTableStorage::FlushBlocks() {
@@ -197,7 +197,6 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 			auto col_id = mapped_column_ids[i].GetPrimaryIndex();
 			table_chunk.data[col_id].Reference(index_chunk.data[i]);
 		}
-		table_chunk.SetCardinality(index_chunk);
 
 		// Pass both the table and the index chunk.
 		// We need the table chunk for the bound indexes,
@@ -480,7 +479,7 @@ void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, 
                           DataTableInfo &data_table_info) {
 	auto storage = state.storage;
 	storage->table_entry = &table_entry;
-	auto offset = NumericCast<idx_t>(MAX_ROW_ID) + storage->GetCollection().GetTotalRows();
+	auto offset = NumericCast<idx_t>(MAX_ROW_ID) + storage->GetCollection().GetNextRowId();
 	idx_t base_id = offset + state.append_state.total_append_count;
 
 	if (!storage->append_indexes.Empty()) {
@@ -503,11 +502,11 @@ void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, 
 	}
 
 	// Append the chunk to the local storage.
-	auto new_row_group = storage->GetCollection().Append(table_chunk, state.append_state);
+	auto flushed_row_group_idx = storage->GetCollection().Append(table_chunk, state.append_state);
 
 	// Check if we should pre-emptively flush blocks to disk.
-	if (new_row_group) {
-		storage->WriteNewRowGroup();
+	if (flushed_row_group_idx.IsValid()) {
+		storage->WriteNewRowGroup(flushed_row_group_idx.GetIndex());
 	}
 }
 
@@ -520,7 +519,7 @@ void LocalStorage::LocalMerge(DataTable &table, DuckTableEntry &table_entry, Opt
 	storage.table_entry = &table_entry;
 	if (!storage.append_indexes.Empty()) {
 		// append data to indexes if required
-		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.GetCollection().GetTotalRows());
+		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.GetCollection().GetNextRowId());
 		auto error = storage.AppendToIndexes(transaction, *collection.collection, storage.append_indexes,
 		                                     table.GetTypes(), base_id);
 		if (error.HasError()) {

@@ -156,8 +156,9 @@ bool ArrowTestHelper::CompareResults(Connection &con, shared_ptr<Relation> arrow
 	if (statements.size() != 1 || statements[0]->type != StatementType::SELECT_STATEMENT) {
 		auto query_result = con.Query(query);
 		auto duck_collection = query_result->TakeCollection();
-		regular_result =
-		    make_shared_ptr<MaterializedRelation>(con.context, std::move(duck_collection), query_result->names, "duck");
+		regular_result = make_shared_ptr<MaterializedRelation>(con.context, std::move(duck_collection),
+		                                                       duckdb::StringsToIdentifiers(query_result->names),
+		                                                       duckdb::Identifier("duck"));
 	} else {
 		regular_result = con.RelationFromQuery(query, "regular_result");
 	}

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -25,7 +26,7 @@ public:
 	}
 
 	//! The alias of the attached database
-	string name;
+	Identifier name;
 	//! The path to the attached database
 	string path;
 	//! The path expression to the attached database

@@ -7,7 +7,7 @@
 namespace duckdb {
 
 static bool MultiplicationConstantBelongsAtEnd(const BoundFunctionExpression &expr) {
-	return expr.function.GetName() == "*";
+	return expr.Function().GetName() == "*";
 }
 
 class RecursiveFunctionExpressionMatcher : public ExpressionMatcher {
@@ -38,7 +38,7 @@ private:
 		vector<reference<Expression>> curr_bindings;
 		if (func_matcher->Match(expr, curr_bindings)) {
 			auto &func_expr = expr.Cast<BoundFunctionExpression>();
-			for (auto &child : func_expr.children) {
+			for (auto &child : func_expr.GetChildren()) {
 				RecursiveMatch(func_matcher, *(child.get()), bindings);
 			}
 		} else {
@@ -128,8 +128,8 @@ unique_ptr<Expression> ConstantOrderNormalizationRule::Apply(LogicalOperator &op
 	for (idx_t i = 1; i < ordered_bindings.size(); ++i) {
 		// Right child.
 		children.push_back(ordered_bindings[i].get().Copy());
-		new_root = binder.BindScalarFunction(DEFAULT_SCHEMA, root.function.GetName(), std::move(children), error,
-		                                     root.is_operator);
+		new_root = binder.BindScalarFunction(Identifier::DefaultSchema(), root.Function().GetName(),
+		                                     std::move(children), error, root.IsOperator());
 		if (!new_root) {
 			error.Throw();
 		}

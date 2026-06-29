@@ -13,22 +13,22 @@
 namespace duckdb {
 
 void ChildFieldIDs::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<FieldID>>(100, "ids", ids.operator*());
+	serializer.WritePropertyWithDefault<identifier_map_t<FieldID>>(100, "ids", ids.operator*());
 }
 
 ChildFieldIDs ChildFieldIDs::Deserialize(Deserializer &deserializer) {
 	ChildFieldIDs result;
-	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<FieldID>>(100, "ids", result.ids.operator*());
+	deserializer.ReadPropertyWithDefault<identifier_map_t<FieldID>>(100, "ids", result.ids.operator*());
 	return result;
 }
 
 void ChildShreddingTypes::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<case_insensitive_map_t<ShreddingType>>(100, "types", types.operator*());
+	serializer.WritePropertyWithDefault<identifier_map_t<ShreddingType>>(100, "types", types.operator*());
 }
 
 ChildShreddingTypes ChildShreddingTypes::Deserialize(Deserializer &deserializer) {
 	ChildShreddingTypes result;
-	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<ShreddingType>>(100, "types", result.types.operator*());
+	deserializer.ReadPropertyWithDefault<identifier_map_t<ShreddingType>>(100, "types", result.types.operator*());
 	return result;
 }
 

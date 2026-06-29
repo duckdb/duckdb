@@ -19,6 +19,11 @@ class VectorBuffer;
 
 struct SelectionData {
 	DUCKDB_API explicit SelectionData(idx_t count);
+	// Out-of-line destructor: prevents GCC IPA-ICF from folding
+	// _Sp_counted_ptr_inplace<SelectionData>::_M_dispose with the
+	// corresponding instantiation for TemplatedValidityData, which produces
+	// a spurious -Warray-bounds with g++ >= 14.
+	DUCKDB_API ~SelectionData();
 
 	AllocatedData owned_data;
 };

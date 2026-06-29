@@ -4,7 +4,7 @@ namespace duckdb {
 
 InsertionOrderPreservingMap<string> LogicalMaterializedCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["CTE Name"] = ctename;
+	result["CTE Name"] = ctename.GetIdentifierName();
 	result["Table Index"] = StringUtil::Format("%llu", table_index.index);
 	SetParamsEstimatedCardinality(result);
 	return result;

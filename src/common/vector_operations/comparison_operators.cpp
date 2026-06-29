@@ -536,57 +536,6 @@ static void ArrayComparator(const Vector &left, const Vector &right, int8_t *res
 	ListOrArrayComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor, result_validity);
 }
 
-static void VariantComparator(const Vector &left, const Vector &right, int8_t *result_data,
-                              const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
-                              optional_ptr<ValidityMask> result_validity = nullptr) {
-	RecursiveUnifiedVectorFormat left_recursive_data, right_recursive_data;
-	Vector::RecursiveToUnifiedFormat(left, left_recursive_data);
-	Vector::RecursiveToUnifiedFormat(right, right_recursive_data);
-
-	UnifiedVariantVectorData left_variant(left_recursive_data);
-	UnifiedVariantVectorData right_variant(right_recursive_data);
-
-	auto &left_data = left_recursive_data.unified;
-	auto &right_data = right_recursive_data.unified;
-	for (idx_t i = 0; i < sel_count; i++) {
-		auto left_idx = left_data.sel->get_index(lhs_sel.get_index(i));
-		auto right_idx = right_data.sel->get_index(rhs_sel.get_index(i));
-
-		bool left_null = !left_data.validity.RowIsValid(left_idx);
-		bool right_null = !right_data.validity.RowIsValid(right_idx);
-
-		if (left_null || right_null) {
-			if (!result_validity) {
-				// DISTINCT
-				result_data[i] = DistinctNullComparator(left_null, right_null);
-			} else {
-				// regular comparison - set NULL if any value is NULL
-				result_validity->SetInvalid(i);
-			}
-			continue;
-		}
-
-		// both non-NULL: convert to Values and compare
-		auto left_val = VariantUtils::ConvertVariantToValue(left_variant, lhs_sel.get_index(i), 0);
-		auto right_val = VariantUtils::ConvertVariantToValue(right_variant, rhs_sel.get_index(i), 0);
-
-		LogicalType max_logical_type;
-		if (!LogicalType::TryGetMaxLogicalTypeUnchecked(left_val.type(), right_val.type(), max_logical_type)) {
-			throw InvalidInputException(
-			    "Can't compare values of type %s (%s) and type %s (%s) - an explicit cast is required",
-			    left_val.type().ToString(), left_val.ToString(), right_val.type().ToString(), right_val.ToString());
-		}
-
-		if (ValueOperations::DistinctGreaterThan(left_val, right_val)) {
-			result_data[i] = Comparator::LEFT_IS_GREATER;
-		} else if (ValueOperations::DistinctGreaterThan(right_val, left_val)) {
-			result_data[i] = Comparator::RIGHT_IS_GREATER;
-		} else {
-			result_data[i] = Comparator::VALUES_ARE_EQUAL;
-		}
-	}
-}
-
 static void DistinctComparatorTypeSwitchInternal(const Vector &left, const Vector &right, int8_t *result_data,
                                                  const SelectionVector &lhs_sel, const SelectionVector &rhs_sel,
                                                  idx_t sel_count) {
@@ -636,11 +585,7 @@ static void DistinctComparatorTypeSwitchInternal(const Vector &left, const Vecto
 		DistinctComparatorExecute::Execute<string_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::STRUCT:
-		if (left.GetType().id() == LogicalTypeId::VARIANT) {
-			VariantComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count);
-		} else {
-			StructComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count);
-		}
+		StructComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::LIST:
 		ListComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count);
@@ -714,9 +659,7 @@ static void ComparatorTypeSwitch(const Vector &left, const Vector &right, Vector
 		auto &validity = FlatVector::ValidityMutable(result);
 		auto &sel = *FlatVector::IncrementalSelectionVector();
 		auto physical_type = left.GetType().InternalType();
-		if (physical_type == PhysicalType::STRUCT && left.GetType().id() == LogicalTypeId::VARIANT) {
-			VariantComparator(left, right, result_data, sel, sel, count, validity);
-		} else if (physical_type == PhysicalType::STRUCT) {
+		if (physical_type == PhysicalType::STRUCT) {
 			StructComparator(left, right, result_data, sel, sel, count, validity);
 		} else if (physical_type == PhysicalType::LIST) {
 			ListComparator(left, right, result_data, sel, sel, count, validity);

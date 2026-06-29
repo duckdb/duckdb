@@ -42,14 +42,13 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info)
-    : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info.view_name), bind_state(ViewBindState::UNBOUND) {
+    : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info.GetViewName()), bind_state(ViewBindState::UNBOUND) {
 	Initialize(info);
 }
 
 unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateViewInfo>();
-	result->schema = schema.name;
-	result->view_name = name;
+	result->SetQualifiedName(QualifiedName({schema.name}, name));
 	result->sql = sql;
 	result->query = query ? unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy()) : nullptr;
 	result->aliases = aliases;
@@ -74,18 +73,21 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 		auto &comment_on_column_info = info.Cast<SetColumnCommentInfo>();
 		auto copied_view = Copy(context);
 
-		string &resolved_column_name = comment_on_column_info.column_name;
+		Identifier resolved_column_name = comment_on_column_info.column_name;
 		auto view_columns = GetColumnInfo();
 		if (view_columns) {
 			// if the view is bound - verify the name we are commenting on exists
 			auto &names = view_columns->names;
-			auto entry = std::find(names.begin(), names.end(), resolved_column_name);
+			auto match_name = [&](const auto &n) {
+				return resolved_column_name == n;
+			};
+			auto entry = std::find_if(names.begin(), names.end(), match_name);
 			if (entry == names.end()) {
 				// the column name might be a view alias - check those as well
-				auto alias_entry = std::find(aliases.begin(), aliases.end(), resolved_column_name);
+				auto alias_entry = std::find_if(aliases.begin(), aliases.end(), match_name);
 				if (alias_entry == aliases.end()) {
-					throw BinderException("View \"%s\" does not have a column with name \"%s\"", name,
-					                      resolved_column_name);
+					throw BinderException("View \"%s\" does not have a column with name \"%s\"",
+					                      name.GetIdentifierName(), resolved_column_name.GetIdentifierName());
 				}
 				auto alias_index = NumericCast<idx_t>(std::distance(aliases.begin(), alias_entry));
 				D_ASSERT(alias_index < names.size());
@@ -175,7 +177,7 @@ void ViewCatalogEntry::BindView(ClientContext &context, BindViewAction action) {
 	bind_thread = thread_id {};
 }
 
-void ViewCatalogEntry::UpdateBinding(const vector<LogicalType> &types_p, const vector<string> &names_p) {
+void ViewCatalogEntry::UpdateBinding(const vector<LogicalType> &types_p, const vector<Identifier> &names_p) {
 	auto columns = view_columns.atomic_load();
 	if (columns && columns->types == types_p && columns->names == names_p) {
 		// already bound with the current info

@@ -107,7 +107,7 @@ duckdb_re2::RE2 &GetPattern(const RegexpBaseBindData &info, ExpressionState &sta
 
 void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<RegexpBaseBindData>();
+	const auto &info = func_expr.BindInfo()->Cast<RegexpBaseBindData>();
 
 	const auto &strings = args.data[0];
 	const auto &patterns = args.data[1];
@@ -242,7 +242,7 @@ static list_entry_t ExtractStructAllSingleTuple(const string_t &string_val, duck
 void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
 #ifdef D_ASSERT_IS_ENABLED
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<RegexpExtractAllStructBindData>();
+	const auto &info = func_expr.BindInfo()->Cast<RegexpExtractAllStructBindData>();
 	// Struct multi-match variant only supports constant pattern (enforced in Bind)
 	D_ASSERT(info.constant_pattern);
 #endif
@@ -304,8 +304,8 @@ unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(BindScalarFunctionInput &i
 	options.set_log_errors(false);
 	vector<string> group_names;
 	child_list_t<LogicalType> struct_children;
-	regexp_util::ParseGroupNameList(context, function.GetName(), *arguments[2], constant_string, options, true,
-	                                group_names, struct_children);
+	regexp_util::ParseGroupNameList(context, function.GetName().GetIdentifierName(), *arguments[2], constant_string,
+	                                options, true, group_names, struct_children);
 	function.SetReturnType(LogicalType::LIST(LogicalType::STRUCT(struct_children)));
 	return make_uniq<RegexpExtractAllStructBindData>(options, std::move(constant_string), constant_pattern,
 	                                                 std::move(group_names));

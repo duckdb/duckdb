@@ -787,7 +787,7 @@ public:
 	}
 
 	template <class STATE_TYPE, class RESULT_TYPE, class OP>
-	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+	static void Finalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result, idx_t count,
 	                     idx_t offset) {
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -795,7 +795,7 @@ public:
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-			AggregateFinalizeData finalize_data(result, aggr_input_data, count);
+			AggregateFinalizeData finalize_data(result, finalize_input_data, count);
 			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(**sdata, *rdata, finalize_data);
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -803,7 +803,7 @@ public:
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-			AggregateFinalizeData finalize_data(result, aggr_input_data, count);
+			AggregateFinalizeData finalize_data(result, finalize_input_data, count);
 			for (idx_t i = 0; i < count; i++) {
 				finalize_data.result_idx = i + offset;
 				OP::template Finalize<RESULT_TYPE, STATE_TYPE>(*sdata[i], rdata[finalize_data.result_idx],
@@ -813,21 +813,21 @@ public:
 	}
 
 	template <class STATE_TYPE, class OP>
-	static void VoidFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
-	                         idx_t offset) {
+	static void VoidFinalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+	                         idx_t count, idx_t offset) {
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			FlatVector::SetSize(result, count);
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
-			AggregateFinalizeData finalize_data(result, aggr_input_data, count);
+			AggregateFinalizeData finalize_data(result, finalize_input_data, count);
 			OP::template Finalize<STATE_TYPE>(**sdata, finalize_data);
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-			AggregateFinalizeData finalize_data(result, aggr_input_data);
+			AggregateFinalizeData finalize_data(result, finalize_input_data);
 			for (idx_t i = 0; i < count; i++) {
 				finalize_data.result_idx = i + offset;
 				OP::template Finalize<STATE_TYPE>(*sdata[i], finalize_data);

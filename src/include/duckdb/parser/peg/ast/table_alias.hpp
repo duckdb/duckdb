@@ -1,9 +1,10 @@
 #pragma once
 #include "duckdb/common/common.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 struct TableAlias {
-	string name;
-	vector<string> column_name_alias;
+	Identifier name;
+	vector<Identifier> column_name_alias;
 };
 } // namespace duckdb

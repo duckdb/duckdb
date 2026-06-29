@@ -86,9 +86,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 				continue;
 			}
 			auto &in_expr = expr.Cast<BoundOperatorExpression>();
-			if (!in_expr.children.empty() &&
-			    in_expr.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-			    in_expr.children.size() - 1 >= InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD) {
+			if (!in_expr.GetChildren().empty() &&
+			    in_expr.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+			    in_expr.GetChildren().size() - 1 >= InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD) {
 				continue;
 			}
 		}

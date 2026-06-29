@@ -29,7 +29,7 @@
       {
         "id": 102,
         "name": "alias",
-        "type": "string",
+        "type": "Identifier",
         "equals_skip": true
       },
       {
@@ -232,24 +232,15 @@
     "members": [
       {
         "id": 200,
-        "name": "function_name",
-        "type": "string",
-        "accessor_mut": "FunctionNameMutable()",
-        "accessor": "FunctionName()"
-      },
-      {
-        "id": 201,
-        "name": "schema",
-        "type": "string",
-        "accessor_mut": "SchemaMutable()",
-        "accessor": "Schema()"
+        "name": "qualified_name",
+        "type": "QualifiedName"
       },
       {
         "id": 202,
         "name": "children",
-        "type": "vector<ParsedExpression*>",
-        "accessor_mut": "GetChildrenMutable()",
-        "accessor": "GetChildren()"
+        "type": "vector<unique_ptr<ParsedExpression>>",
+        "version": "2.0.0",
+        "status": "deleted"
       },
       {
         "id": 203,
@@ -291,13 +282,14 @@
         "accessor": "ExportState()"
       },
       {
-        "id": 208,
-        "name": "catalog",
-        "type": "string",
-        "accessor_mut": "CatalogMutable()",
-        "accessor": "Catalog()"
+        "id": 209,
+        "name": "arguments",
+        "type": "vector<FunctionArgument>",
+        "accessor_mut": "GetArgumentsMutable()",
+        "accessor": "GetArguments()"
       }
-    ]
+    ],
+    "custom_implementation": true
   },
   {
     "class": "LambdaExpression",
@@ -355,7 +347,7 @@
       {
         "id": 200,
         "name": "identifier",
-        "type": "Identifier"
+        "type": "duckdb::Identifier"
       }
     ]
   },
@@ -379,19 +371,20 @@
       {
         "id": 200,
         "name": "relation_name",
-        "type": "string"
+        "type": "Identifier"
       },
       {
         "id": 201,
         "name": "exclude_list",
-        "type": "case_insensitive_set_t",
+        "type": "identifier_set_t",
         "serialize_property": "SerializedExcludeList()",
+        "required_until": "v2.0.0",
         "hash_skip": true
       },
       {
         "id": 202,
         "name": "replace_list",
-        "type": "case_insensitive_map_t<ParsedExpression*>",
+        "type": "identifier_map_t<ParsedExpression*>",
         "accessor_mut": "ReplaceListMutable()",
         "accessor": "ReplaceList()"
       },
@@ -426,8 +419,8 @@
       {
         "id": 207,
         "name": "rename_list",
-        "type": "qualified_column_map_t<string>",
-        "default": "qualified_column_map_t<string>()"
+        "type": "qualified_column_map_t<Identifier>",
+        "default": "qualified_column_map_t<Identifier>()"
       }
     ],
     "constructor_method": "StarExpression::DeserializeStarExpression"
@@ -469,26 +462,15 @@
     "members": [
       {
         "id": 200,
-        "name": "function_name",
-        "type": "string"
-      },
-      {
-        "id": 201,
-        "name": "schema",
-        "type": "string"
-      },
-      {
-        "id": 202,
-        "name": "catalog",
-        "type": "string"
+        "name": "qualified_name",
+        "type": "QualifiedName"
       },
       {
         "id": 203,
         "name": "children",
-        "type": "vector<ParsedExpression*>",
-        "serialize_property": "SerializedChildren(serializer)",
-        "accessor_mut": "GetChildrenMutable()",
-        "accessor": "GetChildren()"
+        "type": "vector<unique_ptr<ParsedExpression>>",
+        "version": "2.0.0",
+        "status": "deleted"
       },
       {
         "id": 204,
@@ -580,14 +562,16 @@
         "name": "has_ignore_nulls",
         "type": "bool",
         "version": "v2.0.0"
+      },
+      {
+        "id": 218,
+        "name": "arguments",
+        "type": "vector<FunctionArgument>",
+        "accessor_mut": "GetArgumentsMutable()",
+        "accessor": "GetArguments()"
       }
     ],
-    "constructor": [
-      "type",
-      "children",
-      "offset_expr",
-      "default_expr"
-    ]
+    "custom_implementation": true
   },
   {
     "class": "TypeExpression",
@@ -595,19 +579,33 @@
     "enum": "TYPE",
     "members": [
       {
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "serialize_skip": true
+      },
+      {
         "id": 200,
         "name": "catalog",
-        "type": "string"
+        "serialize_property": "qualified_name.Catalog()",
+        "type": "Identifier",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 201,
         "name": "schema",
-        "type": "string"
+        "serialize_property": "qualified_name.Schema()",
+        "type": "Identifier",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 202,
         "name": "type_name",
-        "type": "string"
+        "serialize_property": "qualified_name.Name()",
+        "type": "Identifier",
+        "equals_skip": true,
+        "hash_skip": true
       },
       {
         "id": 203,
@@ -615,6 +613,13 @@
         "type": "vector<unique_ptr<ParsedExpression>>",
         "accessor_mut": "GetChildren()"
       }
-    ]
+    ],
+    "methods": {
+      "SetQualifiedName": [
+        "catalog",
+        "schema",
+        "type_name"
+      ]
+    }
   }
 ]

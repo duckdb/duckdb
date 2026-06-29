@@ -28,8 +28,8 @@ void ColumnBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) 
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
 		for (const auto &replace_binding : replacement_bindings) {
-			if (bound_column_ref.binding == replace_binding.old_binding) {
-				bound_column_ref.binding = replace_binding.new_binding;
+			if (bound_column_ref.Binding() == replace_binding.old_binding) {
+				bound_column_ref.BindingMutable() = replace_binding.new_binding;
 				if (replace_binding.replace_type) {
 					bound_column_ref.SetReturnType(replace_binding.new_type);
 				}

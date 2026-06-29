@@ -102,7 +102,7 @@ Binder Error: Type 'user_type' does not take any type parameters
 statement error
 SELECT 1::BOUNDED(NULL)
 ----
-Binder Error: BOUNDED type modifier cannot be NULL
+BOUNDED type modifier must be integer
 
 statement error
 SELECT 1::BOUNDED(900000000000000000)

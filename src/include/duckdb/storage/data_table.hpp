@@ -249,6 +249,7 @@ public:
 
 	idx_t ColumnCount() const;
 	idx_t GetTotalRows() const;
+	idx_t GetNextRowId() const;
 	idx_t GetRowGroupCount() const;
 	idx_t GetRowGroupCountWithLocalStorage(ClientContext &context);
 
@@ -290,8 +291,8 @@ public:
 	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
 	void Destroy();
 
-	string GetTableName() const;
-	void SetTableName(string new_name);
+	Identifier GetTableName() const;
+	void SetTableName(Identifier new_name);
 
 	TableStorageInfo GetStorageInfo();
 

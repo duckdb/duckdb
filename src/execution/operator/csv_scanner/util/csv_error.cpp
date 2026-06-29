@@ -233,14 +233,14 @@ void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const 
 				break;
 			case CSVErrorType::TOO_FEW_COLUMNS:
 				if (col_idx + 1 < bind_data.names.size()) {
-					errors_appender.Append(string_t(bind_data.names[col_idx + 1]));
+					errors_appender.Append(string_t(bind_data.names[col_idx + 1].GetIdentifierName()));
 				} else {
 					errors_appender.Append(Value());
 				}
 				break;
 			default:
 				if (col_idx < bind_data.names.size()) {
-					errors_appender.Append(string_t(bind_data.names[col_idx]));
+					errors_appender.Append(string_t(bind_data.names[col_idx].GetIdentifierName()));
 				} else {
 					errors_appender.Append(Value());
 				}
@@ -298,7 +298,7 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx
 	full_error_message = error.str();
 }
 
-CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {
+CSVError CSVError::ColumnTypesError(identifier_map_t<idx_t> sql_types_per_column, const vector<Identifier> &names) {
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto it = sql_types_per_column.find(names[i]);
 		if (it != sql_types_per_column.end()) {

@@ -26,6 +26,21 @@ static inline T TemporalRound(T value, T scale) {
 	return UnsafeNumericCast<T>((value + negative) / scale - negative);
 }
 
+static bool CanStartTimestampSuffix(char c) {
+	return c == 'Z' || c == '+' || c == '-' || StringUtil::CharacterIsSpace(c);
+}
+
+static idx_t TimestampTimeLength(const char *str, idx_t len) {
+	idx_t suffix_pos = 0;
+	while (suffix_pos < len && StringUtil::CharacterIsSpace(str[suffix_pos])) {
+		suffix_pos++;
+	}
+	while (suffix_pos < len && !CanStartTimestampSuffix(str[suffix_pos])) {
+		suffix_pos++;
+	}
+	return suffix_pos;
+}
+
 // timestamp/datetime uses 64 bits, high 32 bits for date and low 32 bits for time
 // string format is YYYY-MM-DDThh:mm:ssZ
 // T may be a space
@@ -63,14 +78,14 @@ TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len,
 		pos++;
 	}
 	idx_t time_pos = 0;
-	// TryConvertTime may recursively call us, so we opt for a stricter
-	// operation. Note that we can't pass strict== true here because we
-	// want to process any suffix.
-	if (!Time::TryConvertInterval(str + pos, len - pos, time_pos, time, false, nanos)) {
+	// TryConvertTime may recursively call us, so we use TryConvertInterval.
+	// Note that we can't pass strict== true here because we want to process any suffix.
+	auto time_len = TimestampTimeLength(str + pos, len - pos);
+	if (!Time::TryConvertInterval(str + pos, time_len, time_pos, time, false, nanos) || time_pos != time_len) {
 		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
 	}
 	//	We parsed an interval, so make sure it is in range.
-	if (time.micros > Interval::MICROS_PER_DAY) {
+	if (time.value > Interval::MICROS_PER_DAY) {
 		return TimestampCastResult::ERROR_RANGE;
 	}
 	pos += time_pos;
@@ -186,7 +201,7 @@ TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, t
 
 string Timestamp::FormatError(const string &str) {
 	return StringUtil::Format("invalid timestamp field format: \"%s\", "
-	                          "expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH[:MM[:SS]]| ZONE])",
+	                          "expected format is (YYYY-MM-DD HH:MM[:SS[.US]][±HH[:MM[:SS]]| ZONE])",
 	                          str);
 }
 
@@ -377,7 +392,7 @@ bool Timestamp::TryFromDatetime(date_t date, dtime_t time, timestamp_t &result) 
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, Interval::MICROS_PER_DAY, result.value)) {
 		return false;
 	}
-	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, time.micros, result.value)) {
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, time.value, result.value)) {
 		return false;
 	}
 	return result.IsFinite();
@@ -546,7 +561,7 @@ int64_t Timestamp::GetEpochRounded(timestamp_t input, int64_t power_of_ten) {
 }
 
 double Timestamp::GetJulianDay(timestamp_t timestamp) {
-	double result = double(Timestamp::GetTime(timestamp).micros);
+	double result = double(Timestamp::GetTime(timestamp).value);
 	result /= Interval::MICROS_PER_DAY;
 	result += double(Date::ExtractJulianDay(Timestamp::GetDate(timestamp)));
 	return result;

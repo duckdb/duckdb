@@ -140,7 +140,6 @@ void CheckOnConflictCondition(ExecutionContext &context, DataChunk &conflicts, c
 	ExpressionExecutor executor(context.client, *condition);
 	result.Initialize(context.client, {LogicalType::BOOLEAN});
 	executor.Execute(conflicts, result);
-	result.SetCardinality(conflicts.size());
 }
 
 static void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
@@ -152,7 +151,6 @@ static void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_ch
 		// We have not scanned the initial table, so we can just duplicate the initial chunk
 		result.Initialize(client, input_chunk.GetTypes());
 		result.Reference(input_chunk);
-		result.SetCardinality(input_chunk);
 		return;
 	}
 	vector<LogicalType> combined_types;
@@ -184,7 +182,6 @@ static void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_ch
 	// We can have a SET expression without a conflict target ONLY if there is only 1 Index on the table
 	// In which case this also can't cause a discrepancy between existing tuple count and insert tuple count
 	D_ASSERT(input_chunk.size() == scan_chunk.size());
-	result.SetCardinality(input_chunk.size());
 }
 
 static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, DuckTableEntry &table, Vector &row_ids,
@@ -199,7 +196,6 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, DuckT
 		do_update_filter_result.Initialize(context.client, {LogicalType::BOOLEAN});
 		ExpressionExecutor where_executor(context.client, *do_update_condition);
 		where_executor.Execute(chunk, do_update_filter_result);
-		do_update_filter_result.SetCardinality(chunk.size());
 		do_update_filter_result.Flatten();
 
 		SelectionVector sel(chunk.size());
@@ -215,7 +211,6 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, DuckT
 		if (count != chunk.size()) {
 			// Filter any conflicts not meeting the condition.
 			chunk.Slice(sel, count);
-			chunk.SetCardinality(count);
 			row_ids.Slice(sel, count);
 			row_ids.Flatten();
 		}
@@ -224,7 +219,7 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, DuckT
 	if (chunk.size() == 0) {
 		auto initialize = vector<bool>(set_types.size(), false);
 		update_chunk.Initialize(context.client, set_types, initialize, chunk.size());
-		update_chunk.SetCardinality(chunk);
+		update_chunk.SetChildCardinality(chunk.size());
 		return;
 	}
 
@@ -232,7 +227,6 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, DuckT
 	update_chunk.Initialize(context.client, set_types, chunk.size());
 	ExpressionExecutor executor(context.client, set_expressions);
 	executor.Execute(chunk, update_chunk);
-	update_chunk.SetCardinality(chunk);
 }
 
 template <bool GLOBAL>
@@ -256,7 +250,6 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 
 	// Arrange the columns in the standard table order.
 	DataChunk &append_chunk = lstate.append_chunk;
-	append_chunk.SetCardinality(update_chunk);
 	for (idx_t i = 0; i < append_chunk.ColumnCount(); i++) {
 		append_chunk.data[i].Reference(chunk.data[i]);
 	}
@@ -487,7 +480,6 @@ static idx_t HandleInsertConflicts(DuckTableEntry &table, ExecutionContext &cont
 	conflict_chunk.InitializeEmpty(tuples.GetTypes());
 	conflict_chunk.Reference(tuples);
 	conflict_chunk.Slice(conflict_manager.GetInvertedSel(), conflict_count);
-	conflict_chunk.SetCardinality(conflict_count);
 
 	// Contains the conflict chunk and the scanned chunk (wide).
 	DataChunk combined_chunk;
@@ -511,7 +503,6 @@ static idx_t HandleInsertConflicts(DuckTableEntry &table, ExecutionContext &cont
 	auto &inverted_sel = conflict_manager.GetInvertedSel();
 	auto new_size = SelectionVector::Inverted(inverted_sel, sel_vec, conflict_count, tuples.size());
 	tuples.Slice(sel_vec, new_size);
-	tuples.SetCardinality(new_size);
 
 	return affected_tuples;
 }
@@ -600,11 +591,9 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 
 			lstate.update_chunk.Reference(insert_chunk);
 			lstate.update_chunk.Slice(last_occurrences, last_occurrences_count);
-			lstate.update_chunk.SetCardinality(last_occurrences_count);
 		}
 
 		insert_chunk.Slice(sel, sel_count);
-		insert_chunk.SetCardinality(sel_count);
 	}
 
 	// Check whether any conflicts arise, and if they all meet the conflict_target + condition
@@ -667,9 +656,9 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 
 	auto &optimistic_collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
 	auto &collection = *optimistic_collection.collection;
-	auto new_row_group = collection.Append(insert_chunk, lstate.local_append_state);
-	if (new_row_group) {
-		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection);
+	auto flushed_row_group_idx = collection.Append(insert_chunk, lstate.local_append_state);
+	if (flushed_row_group_idx.IsValid()) {
+		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection, flushed_row_group_idx.GetIndex());
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -711,8 +700,6 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		storage.FinalizeLocalAppend(append_state);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
-		lstate.optimistic_writer->WriteUnflushedRowGroups(optimistic_collection);
-		lstate.optimistic_writer->FinalFlush();
 		gstate.table.GetStorage().LocalMerge(context.client, gstate.table, optimistic_collection);
 		auto &optimistic_writer = gstate.table.GetStorage().GetOptimisticWriter(context.client);
 		optimistic_writer.Merge(*lstate.optimistic_writer);
@@ -751,7 +738,6 @@ SourceResultType PhysicalInsert::GetDataInternal(ExecutionContext &context, Data
 	auto &state = input.global_state.Cast<InsertSourceState>();
 	auto &insert_gstate = sink_state->Cast<InsertGlobalState>();
 	if (!return_chunk) {
-		chunk.SetCardinality(1);
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(insert_gstate.insert_count)));
 		return SourceResultType::FINISHED;
 	}

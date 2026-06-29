@@ -152,7 +152,6 @@ static duckdb::unique_ptr<FunctionData> TestLoggingBind(ClientContext &context, 
 static void TestLoggingFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &local_state = data_p.local_state->Cast<TestLoggingData>();
 	DUCKDB_LOG_INTERNAL(local_state.context, "duckdb.", LogLevel::LOG_INFO, "thread_logger");
-	output.SetCardinality(0);
 }
 
 // This test the thread context logger

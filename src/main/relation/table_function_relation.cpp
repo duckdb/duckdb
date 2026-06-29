@@ -14,12 +14,12 @@
 namespace duckdb {
 
 void TableFunctionRelation::AddNamedParameter(const string &name, Value argument) {
-	named_parameters[name] = std::move(argument);
+	named_parameters[Identifier(name)] = std::move(argument);
 }
 
 void TableFunctionRelation::RemoveNamedParameterIfExists(const string &name) {
-	if (named_parameters.find(name) != named_parameters.end()) {
-		named_parameters.erase(name);
+	if (named_parameters.find(Identifier(name)) != named_parameters.end()) {
+		named_parameters.erase(Identifier(name));
 	}
 }
 
@@ -98,7 +98,7 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 	return std::move(table_function);
 }
 
-string TableFunctionRelation::GetAlias() {
+Identifier TableFunctionRelation::GetAlias() {
 	return name;
 }
 

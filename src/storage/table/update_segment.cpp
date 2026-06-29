@@ -19,7 +19,7 @@ static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFun
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type);
 static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(PhysicalType type);
 static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type);
-static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type);
+static UpdateSegment::fetch_rows_function_t GetFetchRowsFunction(PhysicalType type);
 static UpdateSegment::get_effective_updates_t GetEffectiveUpdatesFunction(PhysicalType type);
 
 UpdateSegment::UpdateSegment(ColumnData &column_data)
@@ -32,7 +32,7 @@ UpdateSegment::UpdateSegment(ColumnData &column_data)
 	this->fetch_update_function = GetFetchUpdateFunction(physical_type);
 	this->fetch_committed_function = GetFetchCommittedFunction(physical_type);
 	this->fetch_committed_range = GetFetchCommittedRangeFunction(physical_type);
-	this->fetch_row_function = GetFetchRowFunction(physical_type);
+	this->fetch_rows_function = GetFetchRowsFunction(physical_type);
 	this->merge_update_function = GetMergeUpdateFunction(physical_type);
 	this->rollback_update_function = GetRollbackUpdateFunction(physical_type);
 	this->statistics_update_function = GetStatisticsUpdateFunction(physical_type);
@@ -438,104 +438,131 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 }
 
 //===--------------------------------------------------------------------===//
-// Fetch Row
+// Fetch Rows
 //===--------------------------------------------------------------------===//
-static void FetchRowValidity(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info, idx_t row_idx,
-                             Vector &result, idx_t result_idx) {
+static bool FindUpdatedTuple(UpdateInfo &current, idx_t row_idx, idx_t &update_idx) {
+	auto tuples = current.GetTuples();
+	idx_t left = 0;
+	idx_t right = current.N;
+	while (left < right) {
+		idx_t mid = left + (right - left) / 2;
+		if (tuples[mid] == row_idx) {
+			update_idx = mid;
+			return true;
+		} else if (tuples[mid] < row_idx) {
+			left = mid + 1;
+		} else {
+			right = mid;
+		}
+	}
+	return false;
+}
+
+static void FetchRowsValidity(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info,
+                              const idx_t *offsets, const SelectionVector &sel, idx_t fetch_offset, idx_t count,
+                              idx_t vector_offset, Vector &result, idx_t result_offset) {
 	auto &result_mask = FlatVector::ValidityMutable(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo &current) {
 		auto info_data = current.GetData<bool>();
-		auto tuples = current.GetTuples();
-		if (current.N == 0) {
-			return;
-		}
-		idx_t left = 0;
-		idx_t right = current.N;
-		while (left < right) {
-			idx_t mid = left + (right - left) / 2;
-			if (tuples[mid] == row_idx) {
-				result_mask.Set(result_idx, info_data[mid]);
-				return;
-			} else if (tuples[mid] < row_idx) {
-				left = mid + 1;
-			} else {
-				right = mid;
+		for (idx_t idx = 0; idx < count; idx++) {
+			const idx_t row_idx = offsets[sel.get_index(fetch_offset + idx)] - vector_offset;
+			idx_t update_idx;
+			if (FindUpdatedTuple(current, row_idx, update_idx)) {
+				result_mask.Set(result_offset + fetch_offset + idx, info_data[update_idx]);
 			}
 		}
 	});
 }
 
 template <class T>
-static void TemplatedFetchRow(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info, idx_t row_idx,
-                              Vector &result, idx_t result_idx) {
+static void TemplatedFetchRows(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info,
+                               const idx_t *offsets, const SelectionVector &sel, idx_t fetch_offset, idx_t count,
+                               idx_t vector_offset, Vector &result, idx_t result_offset) {
 	auto result_data = FlatVector::GetDataMutable<T>(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo &current) {
 		auto info_data = current.GetData<T>();
-		auto tuples = current.GetTuples();
-		// FIXME: we could do a binary search in here
-		for (idx_t i = 0; i < current.N; i++) {
-			if (tuples[i] == row_idx) {
-				result_data[result_idx] = info_data[i];
-				break;
-			} else if (tuples[i] > row_idx) {
-				break;
+		for (idx_t idx = 0; idx < count; idx++) {
+			const idx_t row_idx = offsets[sel.get_index(fetch_offset + idx)] - vector_offset;
+			idx_t update_idx;
+			if (FindUpdatedTuple(current, row_idx, update_idx)) {
+				result_data[result_offset + fetch_offset + idx] = info_data[update_idx];
 			}
 		}
 	});
 }
 
-static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type) {
+static UpdateSegment::fetch_rows_function_t GetFetchRowsFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BIT:
-		return FetchRowValidity;
+		return FetchRowsValidity;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return TemplatedFetchRow<int8_t>;
+		return TemplatedFetchRows<int8_t>;
 	case PhysicalType::INT16:
-		return TemplatedFetchRow<int16_t>;
+		return TemplatedFetchRows<int16_t>;
 	case PhysicalType::INT32:
-		return TemplatedFetchRow<int32_t>;
+		return TemplatedFetchRows<int32_t>;
 	case PhysicalType::INT64:
-		return TemplatedFetchRow<int64_t>;
+		return TemplatedFetchRows<int64_t>;
 	case PhysicalType::UINT8:
-		return TemplatedFetchRow<uint8_t>;
+		return TemplatedFetchRows<uint8_t>;
 	case PhysicalType::UINT16:
-		return TemplatedFetchRow<uint16_t>;
+		return TemplatedFetchRows<uint16_t>;
 	case PhysicalType::UINT32:
-		return TemplatedFetchRow<uint32_t>;
+		return TemplatedFetchRows<uint32_t>;
 	case PhysicalType::UINT64:
-		return TemplatedFetchRow<uint64_t>;
+		return TemplatedFetchRows<uint64_t>;
 	case PhysicalType::INT128:
-		return TemplatedFetchRow<hugeint_t>;
+		return TemplatedFetchRows<hugeint_t>;
 	case PhysicalType::UINT128:
-		return TemplatedFetchRow<uhugeint_t>;
+		return TemplatedFetchRows<uhugeint_t>;
 	case PhysicalType::FLOAT:
-		return TemplatedFetchRow<float>;
+		return TemplatedFetchRows<float>;
 	case PhysicalType::DOUBLE:
-		return TemplatedFetchRow<double>;
+		return TemplatedFetchRows<double>;
 	case PhysicalType::INTERVAL:
-		return TemplatedFetchRow<interval_t>;
+		return TemplatedFetchRows<interval_t>;
 	case PhysicalType::VARCHAR:
-		return TemplatedFetchRow<string_t>;
+		return TemplatedFetchRows<string_t>;
 	default:
-		throw NotImplementedException("Unimplemented type for update segment fetch row");
+		throw NotImplementedException("Unimplemented type for update segment fetch rows");
 	}
 }
 
-void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx) {
-	if (row_id > column_data.count) {
-		throw InternalException("UpdateSegment::FetchRow out of range");
-	}
-	idx_t vector_index = row_id / STANDARD_VECTOR_SIZE;
-	auto lock_handle = lock.GetSharedLock();
-	auto entry = GetUpdateNode(*lock_handle, vector_index);
-	if (!entry.IsSet()) {
+void UpdateSegment::FetchRows(TransactionData transaction, const idx_t *offsets, const SelectionVector &sel,
+                              idx_t fetch_count, Vector &result, idx_t result_offset) {
+	if (fetch_count == 0 || !root) {
 		return;
 	}
-	idx_t row_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
-	auto pin = entry.Pin();
-	fetch_row_function(transaction.start_time, transaction.transaction_id, UpdateInfo::Get(pin), row_in_vector, result,
-	                   result_idx);
+
+	auto lock_handle = lock.GetSharedLock();
+	for (idx_t idx = 0; idx < fetch_count;) {
+		const idx_t offset = offsets[sel.get_index(idx)];
+		if (offset > column_data.count) {
+			throw InternalException("UpdateSegment::FetchRows out of range");
+		}
+		const idx_t vector_index = offset / STANDARD_VECTOR_SIZE;
+		const idx_t vector_offset = vector_index * STANDARD_VECTOR_SIZE;
+		idx_t vector_count = 1;
+		while (idx + vector_count < fetch_count) {
+			const idx_t next_offset = offsets[sel.get_index(idx + vector_count)];
+			if (next_offset > column_data.count) {
+				throw InternalException("UpdateSegment::FetchRows out of range");
+			}
+			if (next_offset / STANDARD_VECTOR_SIZE != vector_index) {
+				break;
+			}
+			vector_count++;
+		}
+
+		auto entry = GetUpdateNode(*lock_handle, vector_index);
+		if (entry.IsSet()) {
+			auto pin = entry.Pin();
+			fetch_rows_function(transaction.start_time, transaction.transaction_id, UpdateInfo::Get(pin), offsets, sel,
+			                    idx, vector_count, vector_offset, result, result_offset);
+		}
+		idx += vector_count;
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -738,6 +765,16 @@ string_t UpdateSelectElement::Operation(UpdateSegment &segment, string_t element
 }
 
 template <class T>
+static T GetUpdateNullPadding() {
+	return T();
+}
+
+template <>
+string_t GetUpdateNullPadding() {
+	return string_t(uint32_t(0));
+}
+
+template <class T>
 static void InitializeUpdateData(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
                                  UnifiedVectorFormat &update, const SelectionVector &sel) {
 	auto update_data = update.GetData<T>(update);
@@ -755,6 +792,7 @@ static void InitializeUpdateData(UpdateInfo &base_info, Vector &base_data, Updat
 	for (idx_t i = 0; i < base_info.N; i++) {
 		auto base_idx = base_tuples[i];
 		if (!base_validity.RowIsValid(base_idx)) {
+			base_tuple_data[i] = GetUpdateNullPadding<T>();
 			continue;
 		}
 		base_tuple_data[i] = UpdateSelectElement::Operation<T>(*base_info.segment, base_array_data[base_idx]);
@@ -855,7 +893,8 @@ struct ExtractValidityEntry {
 template <class T, class V, class OP = ExtractStandardEntry>
 static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, UpdateInfo &update_info,
                                     const SelectionVector &update_vector_sel, const V *update_vector_data, row_t *ids,
-                                    idx_t count, const SelectionVector &sel, idx_t row_group_start) {
+                                    idx_t count, const SelectionVector &sel, idx_t row_group_start,
+                                    const ValidityMask *base_table_validity = nullptr) {
 	auto base_id = row_group_start + base_info.vector_index * STANDARD_VECTOR_SIZE;
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
@@ -916,6 +955,8 @@ static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, U
 		if (base_info_offset < base_info.N && base_tuples[base_info_offset] == update_id) {
 			// it is! we have to move the tuple from base_info->ids[base_info_offset] to update_info
 			result_values[result_offset] = base_info_data[base_info_offset];
+		} else if (base_table_validity && !base_table_validity->RowIsValid(update_id)) {
+			result_values[result_offset] = GetUpdateNullPadding<T>();
 		} else {
 			// it is not! we have to move base_table_data[update_id] to update_info
 			result_values[result_offset] = UpdateSelectElement::Operation<T>(
@@ -973,8 +1014,9 @@ static void MergeUpdateLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo
                             idx_t row_group_start) {
 	auto base_table_data = FlatVector::GetDataMutable<T>(base_data);
 	auto update_vector_data = update.GetData<T>(update);
+	auto &base_validity = FlatVector::Validity(base_data);
 	MergeUpdateLoopInternal<T, T>(base_info, base_table_data, update_info, *update.sel, update_vector_data, ids, count,
-	                              sel, row_group_start);
+	                              sel, row_group_start, &base_validity);
 }
 
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type) {
@@ -1363,11 +1405,9 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		// for strings - we need to push all strings we are going to place here into the string heap of the segment
 		update_p.Flatten();
 		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
-		auto &validity = FlatVector::ValidityMutable(update_p);
 		for (idx_t i = 0; i < count; i++) {
-			if (validity.RowIsValid(i)) {
-				update_data[i] = GetStringHeap().AddBlob(update_data[i]);
-			}
+			auto idx = sel.get_index(i);
+			update_data[idx] = GetStringHeap().AddBlob(update_data[idx]);
 		}
 		update_p.ToUnifiedFormat(update_format);
 	}

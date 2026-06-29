@@ -18,6 +18,7 @@ namespace duckdb {
 class ColumnData;
 class DataTable;
 class DuckTableEntry;
+struct SelectionVector;
 class Vector;
 struct UpdateInfo;
 struct UpdateNode;
@@ -41,7 +42,8 @@ public:
 	void FetchCommittedRange(idx_t start_row, idx_t count, Vector &result);
 	void Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index, Vector &update,
 	            row_t *ids, idx_t count, Vector &base_data, idx_t row_group_start);
-	void FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx);
+	void FetchRows(TransactionData transaction, const idx_t *offsets, const SelectionVector &sel, idx_t count,
+	               Vector &result, idx_t result_offset);
 
 	void RollbackUpdate(UpdateInfo &info);
 	void CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo &info);
@@ -77,8 +79,9 @@ public:
 	typedef void (*fetch_committed_function_t)(UpdateInfo &info, Vector &result);
 	typedef void (*fetch_committed_range_function_t)(UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset,
 	                                                 Vector &result);
-	typedef void (*fetch_row_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info,
-	                                     idx_t row_idx, Vector &result, idx_t result_idx);
+	typedef void (*fetch_rows_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info,
+	                                      const idx_t *offsets, const SelectionVector &sel, idx_t fetch_offset,
+	                                      idx_t count, idx_t vector_offset, Vector &result, idx_t result_offset);
 	typedef void (*rollback_update_function_t)(UpdateInfo &base_info, UpdateInfo &rollback_info);
 	typedef idx_t (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats,
 	                                              UnifiedVectorFormat &update, idx_t count, SelectionVector &sel);
@@ -91,7 +94,7 @@ private:
 	fetch_update_function_t fetch_update_function;
 	fetch_committed_function_t fetch_committed_function;
 	fetch_committed_range_function_t fetch_committed_range;
-	fetch_row_function_t fetch_row_function;
+	fetch_rows_function_t fetch_rows_function;
 	rollback_update_function_t rollback_update_function;
 	statistics_update_function_t statistics_update_function;
 	get_effective_updates_t get_effective_updates;

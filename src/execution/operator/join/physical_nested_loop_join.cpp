@@ -60,7 +60,6 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 		// reference the columns of the left side from the result
 		result.Slice(left, sel, result_count);
 	} else {
-		result.SetCardinality(0);
 	}
 }
 
@@ -75,7 +74,7 @@ void PhysicalJoin::ConstructAntiJoinResult(DataChunk &left, DataChunk &result, b
 void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
                                            bool has_null) {
 	// for the initial set of columns we just reference the left side
-	result.SetCardinality(left);
+	result.SetChildCardinality(left.size());
 	for (idx_t i = 0; i < left.ColumnCount(); i++) {
 		result.data[i].Reference(left.data[i]);
 	}

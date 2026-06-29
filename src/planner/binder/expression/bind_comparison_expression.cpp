@@ -78,7 +78,7 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 		break;
 	}
 	if (is_equality) {
-		res = LogicalType::ForceMaxLogicalType(left_type, right_type);
+		res = LogicalType::ForceMaxLogicalType(context, left_type, right_type);
 	} else {
 		if (!LogicalType::TryGetMaxLogicalType(context, left_type, right_type, res)) {
 			return false;
@@ -147,8 +147,8 @@ LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
 		}
 		if (expr.GetReturnType().IsIntegral()) {
 			auto &constant = expr.Cast<BoundConstantExpression>();
-			if (!constant.value.IsNull()) {
-				return LogicalType::INTEGER_LITERAL(constant.value);
+			if (!constant.GetValue().IsNull()) {
+				return LogicalType::INTEGER_LITERAL(constant.GetValue());
 			}
 		}
 	}
