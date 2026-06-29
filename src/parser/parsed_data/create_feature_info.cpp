@@ -10,10 +10,9 @@ static bool IntervalEquals(const interval_t &left, const interval_t &right) {
 }
 
 CreateFeatureInfo::CreateFeatureInfo()
-    : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), granularity(FeatureGranularity::DAY),
-      window_interval(interval_t {0, 1, 0}), watermark_interval(interval_t {0, 0, 0}),
-      refresh_mode(FeatureRefreshMode::FULL), retain_versions(1), current_version(1), has_schedule(false),
-      schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
+    : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), window_interval(interval_t {0, 1, 0}),
+      watermark_interval(interval_t {0, 0, 0}), refresh_mode(FeatureRefreshMode::FULL), retain_versions(1),
+      current_version(1), has_schedule(false), schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
@@ -23,7 +22,6 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	result->source_table = source_table;
 	result->entity_column = entity_column;
 	result->timestamp_column = timestamp_column;
-	result->granularity = granularity;
 	result->window_interval = window_interval;
 	result->watermark_interval = watermark_interval;
 	result->refresh_mode = refresh_mode;
@@ -52,18 +50,6 @@ string CreateFeatureInfo::ToString() const {
 	result += " ON " + source_table;
 	result += " ENTITY " + entity_column;
 	result += " TIMESTAMP " + timestamp_column;
-	result += " GRANULARITY ";
-	switch (granularity) {
-	case FeatureGranularity::DAY:
-		result += "DAY";
-		break;
-	case FeatureGranularity::HOUR:
-		result += "HOUR";
-		break;
-	case FeatureGranularity::MINUTE:
-		result += "MINUTE";
-		break;
-	}
 	result += " WINDOW INTERVAL '" + Interval::ToString(window_interval) + "'";
 	if (!IntervalEquals(watermark_interval, interval_t {0, 0, 0})) {
 		result += " WATERMARK INTERVAL '" + Interval::ToString(watermark_interval) + "'";

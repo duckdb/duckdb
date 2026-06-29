@@ -79,23 +79,8 @@ static interval_t IntervalFromCountAndUnit(int64_t count, const ParseResult &uni
 	throw InternalException("Unsupported feature interval unit");
 }
 
-static interval_t IntervalFromGranularity(int64_t count, FeatureGranularity granularity) {
-	switch (granularity) {
-	case FeatureGranularity::DAY:
-		return interval_t {0, IntervalCountToDays(count, "WINDOW"), 0};
-	case FeatureGranularity::HOUR:
-		return interval_t {0, 0, IntervalCountToMicros(count, Interval::MICROS_PER_HOUR, "WINDOW")};
-	case FeatureGranularity::MINUTE:
-		return interval_t {0, 0, IntervalCountToMicros(count, Interval::MICROS_PER_MINUTE, "WINDOW")};
-	default:
-		throw InternalException("Unsupported feature granularity");
-	}
-}
-
-static interval_t ParseFeatureInterval(ParseResult &parse_result, const string &context,
-                                       FeatureGranularity granularity = FeatureGranularity::DAY,
-                                       bool allow_bare = false) {
-	// FeatureInterval <- FeatureIntervalString / FeatureIntervalShorthand / FeatureIntervalBare
+static interval_t ParseFeatureInterval(ParseResult &parse_result, const string &context) {
+	// FeatureInterval <- FeatureIntervalString / FeatureIntervalShorthand
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice = list_pr.Child<ChoiceParseResult>(0).GetResult();
 	auto &clause = choice.Cast<ListParseResult>();
@@ -107,12 +92,6 @@ static interval_t ParseFeatureInterval(ParseResult &parse_result, const string &
 	if (StringUtil::CIEquals(choice.name, "FeatureIntervalShorthand")) {
 		auto &unit = clause.Child<ListParseResult>(1).Child<ChoiceParseResult>(0).GetResult();
 		return IntervalFromCountAndUnit(count, unit, context);
-	}
-	if (StringUtil::CIEquals(choice.name, "FeatureIntervalBare")) {
-		if (!allow_bare) {
-			throw ParserException("%s interval requires an explicit unit", context);
-		}
-		return IntervalFromGranularity(count, granularity);
 	}
 	throw InternalException("Unsupported feature interval");
 }
@@ -138,9 +117,8 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
                                                                               ParseResult &parse_result) {
 	// CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral
 	//                      'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral
-	//                      FeatureGranularityClause? FeatureWindowClause? FeatureWatermarkClause?
-	//                      FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause?
-	//                      'AS' Parens(SelectStatementInternal)
+	//                      FeatureWindowClause? FeatureWatermarkClause? FeatureRefreshClause?
+	//                      FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 
 	// index 0: 'FEATURE' keyword
@@ -152,51 +130,44 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	auto entity_column = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(6)).name;
 	// index 7: 'TIMESTAMP' keyword
 	auto timestamp_column = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(8)).name;
-	// index 9: FeatureGranularityClause? (default: DAY)
-	FeatureGranularity granularity = FeatureGranularity::DAY;
-	auto &granularity_opt = list_pr.Child<OptionalParseResult>(9);
-	if (granularity_opt.HasResult()) {
-		auto &clause = granularity_opt.GetResult().Cast<ListParseResult>();
-		granularity = transformer.Transform<FeatureGranularity>(clause.Child<ListParseResult>(1));
-	}
-	// index 10: FeatureWindowClause? (default: 1 unit of GRANULARITY)
-	auto window_interval = IntervalFromGranularity(1, granularity);
-	auto &window_opt = list_pr.Child<OptionalParseResult>(10);
+	// index 9: FeatureWindowClause? (default: 1 day)
+	interval_t window_interval {0, 1, 0};
+	auto &window_opt = list_pr.Child<OptionalParseResult>(9);
 	if (window_opt.HasResult()) {
 		auto &clause = window_opt.GetResult().Cast<ListParseResult>();
-		window_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WINDOW", granularity, true);
+		window_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WINDOW");
 	}
-	// index 11: FeatureWatermarkClause? (default: zero interval)
+	// index 10: FeatureWatermarkClause? (default: zero interval)
 	interval_t watermark_interval = DEFAULT_WATERMARK_INTERVAL;
-	auto &watermark_opt = list_pr.Child<OptionalParseResult>(11);
+	auto &watermark_opt = list_pr.Child<OptionalParseResult>(10);
 	if (watermark_opt.HasResult()) {
 		auto &clause = watermark_opt.GetResult().Cast<ListParseResult>();
 		watermark_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WATERMARK");
 	}
-	// index 12: FeatureRefreshClause? (default: INCREMENTAL)
+	// index 11: FeatureRefreshClause? (default: INCREMENTAL)
 	FeatureRefreshMode refresh_mode = FeatureRefreshMode::INCREMENTAL;
-	auto &refresh_opt = list_pr.Child<OptionalParseResult>(12);
+	auto &refresh_opt = list_pr.Child<OptionalParseResult>(11);
 	if (refresh_opt.HasResult()) {
 		auto &clause = refresh_opt.GetResult().Cast<ListParseResult>();
 		refresh_mode = transformer.Transform<FeatureRefreshMode>(clause.Child<ListParseResult>(1));
 	}
-	// index 13: FeatureScheduleClause? (default: no schedule)
+	// index 12: FeatureScheduleClause? (default: no schedule)
 	bool has_schedule = false;
 	interval_t schedule_interval {0, 0, 0};
-	auto &schedule_opt = list_pr.Child<OptionalParseResult>(13);
+	auto &schedule_opt = list_pr.Child<OptionalParseResult>(12);
 	if (schedule_opt.HasResult()) {
 		schedule_interval = transformer.Transform<interval_t>(schedule_opt.GetResult());
 		has_schedule = true;
 	}
-	// index 14: FeatureRetainClause? (default: 1)
+	// index 13: FeatureRetainClause? (default: 1)
 	int64_t retain_versions = 1;
-	auto &retain_opt = list_pr.Child<OptionalParseResult>(14);
+	auto &retain_opt = list_pr.Child<OptionalParseResult>(13);
 	if (retain_opt.HasResult()) {
 		auto &clause = retain_opt.GetResult().Cast<ListParseResult>();
 		retain_versions = std::stoll(clause.Child<NumberParseResult>(1).number);
 	}
-	// index 15: 'AS' keyword
-	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(16));
+	// index 14: 'AS' keyword
+	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(15));
 	auto query = transformer.Transform<unique_ptr<SelectStatement>>(select_parens);
 
 	auto result = make_uniq<CreateStatement>();
@@ -206,7 +177,6 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	info->source_table = source_table;
 	info->entity_column = entity_column;
 	info->timestamp_column = timestamp_column;
-	info->granularity = granularity;
 	info->window_interval = window_interval;
 	info->watermark_interval = watermark_interval;
 	info->refresh_mode = refresh_mode;
@@ -222,12 +192,6 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 interval_t PEGTransformerFactory::TransformFeatureScheduleClause(PEGTransformer &transformer,
                                                                  ParseResult &parse_result) {
 	return ParseFeatureScheduleInterval(parse_result);
-}
-
-FeatureGranularity PEGTransformerFactory::TransformFeatureGranularity(PEGTransformer &transformer,
-                                                                      ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.TransformEnum<FeatureGranularity>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
 FeatureRefreshMode PEGTransformerFactory::TransformFeatureRefreshMode(PEGTransformer &transformer,

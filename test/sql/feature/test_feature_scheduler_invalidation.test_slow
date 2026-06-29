@@ -20,9 +20,8 @@ START TRANSACTION;
 statement ok
 CREATE FEATURE tx_create_sched ON events
     ENTITY user_id
-    TIMESTAMP event_time
-    GRANULARITY HOUR
-    WINDOW 24
+    TIMESTAMP event_time 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
     EVERY INTERVAL '1 second'
     RETAIN 20
@@ -42,9 +41,8 @@ true
 statement ok
 CREATE FEATURE disable_sched ON events
     ENTITY user_id
-    TIMESTAMP event_time
-    GRANULARITY HOUR
-    WINDOW 24
+    TIMESTAMP event_time 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
     EVERY INTERVAL '1 second'
     RETAIN 20
@@ -80,9 +78,8 @@ true
 statement ok
 CREATE FEATURE rollback_disable_sched ON events
     ENTITY user_id
-    TIMESTAMP event_time
-    GRANULARITY HOUR
-    WINDOW 24
+    TIMESTAMP event_time 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
     EVERY INTERVAL '1 second'
     RETAIN 20
@@ -116,9 +113,8 @@ true
 statement ok
 CREATE FEATURE drop_recreate_sched ON events
     ENTITY user_id
-    TIMESTAMP event_time
-    GRANULARITY HOUR
-    WINDOW 24
+    TIMESTAMP event_time 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
     EVERY INTERVAL '1 second'
     RETAIN 20
@@ -139,9 +135,8 @@ SELECT COUNT(*) FROM duckdb_features() WHERE feature_name = 'drop_recreate_sched
 statement ok
 CREATE FEATURE drop_recreate_sched ON events
     ENTITY user_id
-    TIMESTAMP event_time
-    GRANULARITY HOUR
-    WINDOW 24
+    TIMESTAMP event_time 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
     EVERY INTERVAL '1 second'
     RETAIN 20

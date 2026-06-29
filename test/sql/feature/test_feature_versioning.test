@@ -30,9 +30,8 @@ INSERT INTO events VALUES
 statement ok
 CREATE FEATURE versioned_full ON events
     ENTITY customer
-    TIMESTAMP event_time
-    GRANULARITY DAY
-    WINDOW 7
+    TIMESTAMP event_time 
+    WINDOW 7 DAYS
     REFRESH FULL
     RETAIN 3
     AS (SELECT customer, SUM(value) AS total_value);
@@ -144,9 +143,8 @@ DROP FEATURE versioned_full;
 statement ok
 CREATE FEATURE versioned_retain1 ON events
     ENTITY customer
-    TIMESTAMP event_time
-    GRANULARITY DAY
-    WINDOW 7
+    TIMESTAMP event_time 
+    WINDOW 7 DAYS
     REFRESH FULL
     RETAIN 1
     AS (SELECT customer, SUM(value) AS total_value);
@@ -195,9 +193,8 @@ DROP FEATURE versioned_retain1;
 statement ok
 CREATE FEATURE versioned_incr ON events
     ENTITY customer
-    TIMESTAMP event_time
-    GRANULARITY DAY
-    WINDOW 7
+    TIMESTAMP event_time 
+    WINDOW 7 DAYS
     REFRESH INCREMENTAL
     RETAIN 2
     AS (SELECT customer, SUM(value) AS total_value);
@@ -213,7 +210,7 @@ SELECT COUNT(*) FROM versioned_incr;
 ----
 5
 
-# Add new data beyond watermark
+# Add new data beyond the current max timestamp
 statement ok
 INSERT INTO events VALUES
     ('x', 40, '2024-01-03 09:00:00'),
@@ -221,11 +218,12 @@ INSERT INTO events VALUES
     ('z', 20, '2024-01-03 11:00:00');
 
 # Incremental refresh -> version 2
-# Recompute runs from max(feature_timestamp) - 1 day onward; the stable prefix is copied forward.
+# With the default zero watermark, recompute runs from max(feature_timestamp) onward;
+# the stable prefix is copied forward.
 query I
 REFRESH FEATURE versioned_incr;
 ----
-5
+4
 
 # Both v1 and v2 exist (RETAIN 2)
 query I
@@ -264,7 +262,7 @@ INSERT INTO events VALUES
 query I
 REFRESH FEATURE versioned_incr;
 ----
-6
+3
 
 # Version 1 is gone (GC'd, only retain 2)
 statement error
@@ -313,9 +311,8 @@ INSERT INTO stable_src VALUES
 statement ok
 CREATE FEATURE stable_feat ON stable_src
     ENTITY eid
-    TIMESTAMP ts
-    GRANULARITY DAY
-    WINDOW 7
+    TIMESTAMP ts 
+    WINDOW 7 DAYS
     REFRESH INCREMENTAL
     RETAIN 3
     AS (SELECT eid, SUM(val) AS total);
@@ -375,7 +372,7 @@ a	30
 query I
 REFRESH FEATURE stable_feat;
 ----
-2
+1
 
 query I
 SELECT COUNT(*) FROM stable_feat__v2;

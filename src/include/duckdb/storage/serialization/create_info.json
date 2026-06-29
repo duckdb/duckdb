@@ -393,66 +393,61 @@
       },
       {
         "id": 204,
-        "name": "granularity",
-        "type": "FeatureGranularity"
-      },
-      {
-        "id": 206,
         "name": "refresh_mode",
         "type": "FeatureRefreshMode"
       },
       {
-        "id": 207,
+        "id": 205,
         "name": "retain_versions",
         "type": "int64_t"
       },
       {
-        "id": 208,
+        "id": 206,
         "name": "query",
         "type": "SelectStatement*"
       },
       {
-        "id": 209,
+        "id": 207,
         "name": "result_names",
         "type": "vector<string>"
       },
       {
-        "id": 210,
+        "id": 208,
         "name": "result_types",
         "type": "vector<LogicalType>"
       },
       {
-        "id": 211,
+        "id": 209,
         "name": "current_version",
         "type": "int64_t",
         "default": "1"
       },
       {
-        "id": 212,
+        "id": 210,
         "name": "has_schedule",
         "type": "bool",
         "default": "false"
       },
       {
-        "id": 213,
+        "id": 211,
         "name": "schedule_interval",
         "type": "interval_t",
         "default": "interval_t()"
       },
       {
-        "id": 214,
+        "id": 212,
         "name": "schedule_enabled",
         "type": "bool",
         "default": "true"
       },
       {
-        "id": 215,
+        "id": 213,
         "name": "window_interval",
         "type": "interval_t",
         "default": "interval_t()"
       },
       {
-        "id": 216,
+        "id": 214,
         "name": "watermark_interval",
         "type": "interval_t",
         "default": "interval_t()"

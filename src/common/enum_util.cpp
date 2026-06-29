@@ -2290,25 +2290,6 @@ ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value) {
 	return static_cast<ExtraTypeInfoType>(StringUtil::StringToEnum(GetExtraTypeInfoTypeValues(), 15, "ExtraTypeInfoType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetFeatureGranularityValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(FeatureGranularity::DAY), "DAY" },
-		{ static_cast<uint32_t>(FeatureGranularity::HOUR), "HOUR" },
-		{ static_cast<uint32_t>(FeatureGranularity::MINUTE), "MINUTE" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<FeatureGranularity>(FeatureGranularity value) {
-	return StringUtil::EnumToString(GetFeatureGranularityValues(), 3, "FeatureGranularity", static_cast<uint32_t>(value));
-}
-
-template<>
-FeatureGranularity EnumUtil::FromString<FeatureGranularity>(const char *value) {
-	return static_cast<FeatureGranularity>(StringUtil::StringToEnum(GetFeatureGranularityValues(), 3, "FeatureGranularity", value));
-}
-
 const StringUtil::EnumStringLiteral *GetFeatureRefreshModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(FeatureRefreshMode::FULL), "FULL" },

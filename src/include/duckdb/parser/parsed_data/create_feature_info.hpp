@@ -14,8 +14,6 @@
 
 namespace duckdb {
 
-enum class FeatureGranularity : uint8_t { DAY = 0, HOUR = 1, MINUTE = 2 };
-
 enum class FeatureRefreshMode : uint8_t { FULL = 0, INCREMENTAL = 1 };
 
 struct CreateFeatureInfo : public CreateInfo {
@@ -29,8 +27,6 @@ struct CreateFeatureInfo : public CreateInfo {
 	string entity_column;
 	//! Timestamp column (temporal ordering)
 	string timestamp_column;
-	//! Time granularity for bucketing
-	FeatureGranularity granularity;
 	//! Lookback window interval
 	interval_t window_interval;
 	//! Incremental refresh watermark interval

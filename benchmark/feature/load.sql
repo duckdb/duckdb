@@ -24,9 +24,8 @@ FROM read_parquet(
 -- Exercises the CREATE FEATURE / REFRESH FULL group-by aggregation path.
 CREATE FEATURE user_activity_full ON hits
     ENTITY UserID
-    TIMESTAMP EventTime
-    GRANULARITY HOUR
-    WINDOW 24
+    TIMESTAMP EventTime 
+    WINDOW 24 HOURS
     REFRESH FULL
     RETAIN 1
     AS (SELECT UserID, COUNT(*) AS event_count, AVG(RegionID) AS avg_region);
@@ -36,9 +35,8 @@ CREATE FEATURE user_activity_full ON hits
 -- exercises the REFRESH INCREMENTAL path even without new source rows.
 CREATE FEATURE user_activity_incr ON hits
     ENTITY UserID
-    TIMESTAMP EventTime
-    GRANULARITY HOUR
-    WINDOW 24
+    TIMESTAMP EventTime 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
     RETAIN 5
     AS (SELECT UserID, COUNT(*) AS event_count);

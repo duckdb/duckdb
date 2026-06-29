@@ -21,7 +21,7 @@ CREATE TABLE events (id INTEGER, name VARCHAR);
 
 # Missing TIMESTAMP keyword
 statement error
-CREATE FEATURE bad ON transactions ENTITY card_no GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT 1);
+CREATE FEATURE bad ON transactions ENTITY card_no  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT 1);
 ----
 syntax error
 
@@ -31,25 +31,25 @@ syntax error
 
 # Non-existent source table
 statement error
-CREATE FEATURE bad ON nonexistent ENTITY col1 TIMESTAMP col2 GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT 1);
+CREATE FEATURE bad ON nonexistent ENTITY col1 TIMESTAMP col2  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT 1);
 ----
 Table with name nonexistent does not exist
 
 # Non-existent entity column
 statement error
-CREATE FEATURE bad ON transactions ENTITY bad_col TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT 1);
+CREATE FEATURE bad ON transactions ENTITY bad_col TIMESTAMP event_time  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT 1);
 ----
 Entity column "bad_col" does not exist
 
 # Non-existent timestamp column
 statement error
-CREATE FEATURE bad ON transactions ENTITY card_no TIMESTAMP bad_col GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT 1);
+CREATE FEATURE bad ON transactions ENTITY card_no TIMESTAMP bad_col  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT 1);
 ----
 Timestamp column "bad_col" does not exist
 
 # Timestamp column with wrong type (VARCHAR)
 statement error
-CREATE FEATURE bad ON events ENTITY id TIMESTAMP name GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT 1);
+CREATE FEATURE bad ON events ENTITY id TIMESTAMP name  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT 1);
 ----
 must be a temporal type
 
@@ -57,19 +57,19 @@ must be a temporal type
 # CREATE FEATURE basic
 # ============================================================
 statement ok
-CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 # Feature appears in duckdb_features()
-query IIIII
-SELECT feature_name, source_table, entity_column, granularity, window_interval FROM duckdb_features();
+query IIII
+SELECT feature_name, source_table, entity_column, window_interval FROM duckdb_features();
 ----
-daily_txn	transactions	card_no	DAY	7 days
+daily_txn	transactions	card_no	7 days
 
 # DESCRIBE FEATURE shows metadata
-query IIIIIIIIIII
+query IIIIIIIIII
 DESCRIBE FEATURE daily_txn;
 ----
-daily_txn	transactions	card_no	event_time	DAY	FULL	1	1	7 days	00:00:00	CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW INTERVAL '7 days' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+daily_txn	transactions	card_no	event_time	FULL	1	1	7 days	00:00:00	CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time WINDOW INTERVAL '7 days' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 # DESCRIBE non-existent feature returns empty
 query I
@@ -79,21 +79,21 @@ SELECT COUNT(*) FROM (DESCRIBE FEATURE nonexistent);
 
 # Duplicate fails
 statement error
-CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 ----
 already exists
 
 # IF NOT EXISTS succeeds silently
 statement ok
-CREATE FEATURE IF NOT EXISTS daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE IF NOT EXISTS daily_txn ON transactions ENTITY card_no TIMESTAMP event_time  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
-# Different granularities work
+# HOUR windows work
 statement ok
-CREATE FEATURE hourly_stats ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY HOUR WINDOW 24 REFRESH INCREMENTAL RETAIN 5 AS (SELECT card_no, AVG(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE hourly_stats ON transactions ENTITY card_no TIMESTAMP event_time  WINDOW 24 HOURS REFRESH INCREMENTAL RETAIN 5 AS (SELECT card_no, AVG(amount) FROM transactions GROUP BY card_no);
 
-# WINDOW accepts explicit interval shorthand independent of GRANULARITY
+# WINDOW accepts explicit interval shorthand
 statement ok
-CREATE FEATURE explicit_hours ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 24 HOURS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE explicit_hours ON transactions ENTITY card_no TIMESTAMP event_time  WINDOW 24 HOURS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query I
 SELECT window_interval FROM duckdb_features() WHERE feature_name = 'explicit_hours';
@@ -112,16 +112,16 @@ SELECT window_interval, watermark_interval FROM duckdb_features() WHERE feature_
 
 # WATERMARK accepts explicit interval shorthand independent of WINDOW
 statement ok
-CREATE FEATURE watermark_minutes ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 24 HOURS WATERMARK 30 MINUTES REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE watermark_minutes ON transactions ENTITY card_no TIMESTAMP event_time  WINDOW 24 HOURS WATERMARK 30 MINUTES REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
 SELECT watermark_interval, sql FROM duckdb_features() WHERE feature_name = 'watermark_minutes';
 ----
-00:30:00	CREATE FEATURE watermark_minutes ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW INTERVAL '24:00:00' WATERMARK INTERVAL '00:30:00' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+00:30:00	CREATE FEATURE watermark_minutes ON transactions ENTITY card_no TIMESTAMP event_time WINDOW INTERVAL '24:00:00' WATERMARK INTERVAL '00:30:00' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 # WINDOW also accepts INTERVAL string syntax
 statement ok
-CREATE FEATURE interval_minutes ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW INTERVAL '90 minutes' REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE interval_minutes ON transactions ENTITY card_no TIMESTAMP event_time  WINDOW INTERVAL '90 minutes' REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query I
 SELECT window_interval FROM duckdb_features() WHERE feature_name = 'interval_minutes';
@@ -130,12 +130,12 @@ SELECT window_interval FROM duckdb_features() WHERE feature_name = 'interval_min
 
 # WATERMARK also accepts INTERVAL string syntax
 statement ok
-CREATE FEATURE watermark_interval_string ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 WATERMARK INTERVAL '2 hours' REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE watermark_interval_string ON transactions ENTITY card_no TIMESTAMP event_time  WINDOW 7 DAYS WATERMARK INTERVAL '2 hours' REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
 SELECT watermark_interval, sql FROM duckdb_features() WHERE feature_name = 'watermark_interval_string';
 ----
-02:00:00	CREATE FEATURE watermark_interval_string ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW INTERVAL '7 days' WATERMARK INTERVAL '02:00:00' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+02:00:00	CREATE FEATURE watermark_interval_string ON transactions ENTITY card_no TIMESTAMP event_time WINDOW INTERVAL '7 days' WATERMARK INTERVAL '02:00:00' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 query I
 SELECT COUNT(*) FROM duckdb_features();
@@ -158,21 +158,27 @@ DROP FEATURE watermark_interval_string;
 # Default parameter values
 # ============================================================
 
-# Omit GRANULARITY -> defaults to DAY
+# WINDOW requires an explicit unit
+statement error
+CREATE FEATURE bare_window ON transactions ENTITY card_no TIMESTAMP event_time WINDOW 3 REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+----
+syntax error
+
+# Explicit day shorthand works
 statement ok
-CREATE FEATURE default_gran ON transactions ENTITY card_no TIMESTAMP event_time WINDOW 3 REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE explicit_days ON transactions ENTITY card_no TIMESTAMP event_time WINDOW 3 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
-SELECT feature_name, granularity FROM duckdb_features() WHERE feature_name = 'default_gran';
+SELECT feature_name, window_interval FROM duckdb_features() WHERE feature_name = 'explicit_days';
 ----
-default_gran	DAY
+explicit_days	3 days
 
 statement ok
-DROP FEATURE default_gran;
+DROP FEATURE explicit_days;
 
 # Omit WINDOW -> defaults to 1
 statement ok
-CREATE FEATURE default_window ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE default_window ON transactions ENTITY card_no TIMESTAMP event_time  REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
 SELECT feature_name, window_interval FROM duckdb_features() WHERE feature_name = 'default_window';
@@ -184,7 +190,7 @@ DROP FEATURE default_window;
 
 # Omit REFRESH -> defaults to INCREMENTAL
 statement ok
-CREATE FEATURE default_refresh ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 3 RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE default_refresh ON transactions ENTITY card_no TIMESTAMP event_time  WINDOW 3 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
 SELECT feature_name, refresh_mode FROM duckdb_features() WHERE feature_name = 'default_refresh';
@@ -196,7 +202,7 @@ DROP FEATURE default_refresh;
 
 # Omit RETAIN -> defaults to 1
 statement ok
-CREATE FEATURE default_retain ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 3 REFRESH FULL AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE default_retain ON transactions ENTITY card_no TIMESTAMP event_time  WINDOW 3 DAYS REFRESH FULL AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
 SELECT feature_name, retain_versions FROM duckdb_features() WHERE feature_name = 'default_retain';
@@ -211,9 +217,9 @@ statement ok
 CREATE FEATURE all_defaults ON transactions ENTITY card_no TIMESTAMP event_time AS (SELECT card_no, COUNT(*) AS cnt FROM transactions GROUP BY card_no);
 
 query IIIII
-SELECT feature_name, granularity, window_interval, refresh_mode, retain_versions FROM duckdb_features() WHERE feature_name = 'all_defaults';
+SELECT feature_name, window_interval, watermark_interval, refresh_mode, retain_versions FROM duckdb_features() WHERE feature_name = 'all_defaults';
 ----
-all_defaults	DAY	1 day	INCREMENTAL	1
+all_defaults	1 day	00:00:00	INCREMENTAL	1
 
 statement ok
 DROP FEATURE all_defaults;
@@ -274,10 +280,10 @@ statement ok
 CREATE TABLE t2 (entity_id VARCHAR, score INTEGER, ts TIMESTAMP);
 
 statement ok
-CREATE FEATURE feat_t1 ON t1 ENTITY entity_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT entity_id, SUM(val) FROM t1 GROUP BY entity_id);
+CREATE FEATURE feat_t1 ON t1 ENTITY entity_id TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT entity_id, SUM(val) FROM t1 GROUP BY entity_id);
 
 statement ok
-CREATE FEATURE feat_t2 ON t2 ENTITY entity_id TIMESTAMP ts GRANULARITY HOUR WINDOW 24 REFRESH FULL RETAIN 3 AS (SELECT entity_id, AVG(score) FROM t2 GROUP BY entity_id);
+CREATE FEATURE feat_t2 ON t2 ENTITY entity_id TIMESTAMP ts  WINDOW 24 HOURS REFRESH FULL RETAIN 3 AS (SELECT entity_id, AVG(score) FROM t2 GROUP BY entity_id);
 
 query I
 SELECT COUNT(*) FROM duckdb_features();

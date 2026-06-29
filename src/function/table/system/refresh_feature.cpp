@@ -40,19 +40,6 @@ struct RefreshFeatureState : public GlobalTableFunctionState {
 	idx_t rows_affected = 0;
 };
 
-static string GranularityToSQL(FeatureGranularity gran) {
-	switch (gran) {
-	case FeatureGranularity::DAY:
-		return "day";
-	case FeatureGranularity::HOUR:
-		return "hour";
-	case FeatureGranularity::MINUTE:
-		return "minute";
-	default:
-		return "day";
-	}
-}
-
 static string QuoteIdent(const string &name) {
 	return SQLIdentifier::ToString(name);
 }
@@ -186,28 +173,24 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			}
 
 		} else {
-			// INCREMENTAL refresh: always recompute from the last floor bucket onward,
-			// copying forward all earlier (unaffected) rows. This catches both new data
-			// and late arrivals to the most recent floor bucket without tracking row
-			// counts, and always produces a new version.
-			auto gran = GranularityToSQL(feat.granularity);
+			// INCREMENTAL refresh: copy rows before the stable watermark boundary and recompute the tail.
 			auto ts_col = QuoteIdent(feat.timestamp_column);
 
-			// Watermark = last materialized ceiling bucket in the current version table.
+			// Use the last materialized timestamp as the refresh watermark.
 			auto max_result = con.Query("SELECT MAX(feature_timestamp) FROM " + cur_table_id);
 			if (max_result->HasError()) {
-				throw InternalException("Failed to read current watermark for feature '%s': %s", feature_name,
+				throw InternalException("Failed to read current max timestamp for feature '%s': %s", feature_name,
 				                        max_result->GetError());
 			}
-			string watermark;
+			string max_timestamp;
 			if (max_result->RowCount() > 0) {
 				auto val = max_result->GetValue(0, 0);
 				if (!val.IsNull()) {
-					watermark = val.ToString();
+					max_timestamp = val.ToString();
 				}
 			}
 
-			if (watermark.empty()) {
+			if (max_timestamp.empty()) {
 				// No existing data — do a full materialization into the new version table.
 				auto pit_sql = BuildPITQuery(feat, "");
 				auto create_sql = "CREATE TABLE " + new_table_id + " AS " + pit_sql;
@@ -221,13 +204,10 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 					state.rows_affected = count_result->GetValue(0, 0).GetValue<idx_t>();
 				}
 			} else {
-				// Last floor bucket = watermark - 1 gran (watermark is a ceiling boundary).
-				// Recompute everything from this floor onward; copy forward all rows whose
-				// ceiling bucket is strictly below the watermark (unaffected by recompute).
-				string recompute_from = "'" + watermark + "'::TIMESTAMP - INTERVAL '1 " + gran + "'";
+				string recompute_from = "'" + max_timestamp + "'::TIMESTAMP - INTERVAL '" +
+				                        Interval::ToString(feat.watermark_interval) + "'";
 
-				// Create the new version table with the unaffected rows copied forward from the
-				// current version table. Rows from recompute_from onward are rebuilt below.
+				// Create the new version table with unaffected rows copied forward from the current version table.
 				auto create_sql = "CREATE TABLE " + new_table_id + " AS SELECT * FROM " + cur_table_id +
 				                  " WHERE feature_timestamp < " + recompute_from;
 				auto create_result = con.Query(create_sql);
@@ -236,9 +216,7 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 					                        create_result->GetError());
 				}
 
-				// Recompute the last floor bucket onward and insert into the new version table. The spine
-				// is restricted to floors >= recompute_from while the join still looks back the full window
-				// for correct aggregation.
+				// Recompute the tail while the join still looks back the full window for correct aggregation.
 				string filter = " WHERE " + ts_col + " >= " + recompute_from;
 				auto pit_sql = BuildPITQuery(feat, filter);
 				auto insert_sql = "INSERT INTO " + new_table_id + " SELECT * FROM (" + pit_sql + ")";

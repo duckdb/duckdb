@@ -29,8 +29,6 @@ public:
 	string entity_column;
 	//! The timestamp column
 	string timestamp_column;
-	//! The granularity (DAY/HOUR/MINUTE)
-	FeatureGranularity granularity;
 	//! The lookback window interval
 	interval_t window_interval;
 	//! The incremental refresh watermark interval

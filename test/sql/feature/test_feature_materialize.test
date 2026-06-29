@@ -30,7 +30,7 @@ INSERT INTO transactions VALUES
 # SUM feature: PIT-correct windowed aggregation
 # ============================================================
 statement ok
-CREATE FEATURE total_spend ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, SUM(amount) AS total FROM transactions GROUP BY user_id);
+CREATE FEATURE total_spend ON transactions ENTITY user_id TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, SUM(amount) AS total FROM transactions GROUP BY user_id);
 
 # PIT-correct results — no future data leakage. Each source timestamp anchors one feature timestamp.
 query ITR rowsort
@@ -72,7 +72,7 @@ SELECT feature_timestamp, total FROM total_spend WHERE user_id = 4;
 # AVG feature: different aggregate on same source
 # ============================================================
 statement ok
-CREATE FEATURE avg_spend ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
+CREATE FEATURE avg_spend ON transactions ENTITY user_id TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
 
 query ITR rowsort
 SELECT * FROM avg_spend;
@@ -98,7 +98,7 @@ SELECT COUNT(*) FROM avg_spend;
 # Multiple aggregates in one feature
 # ============================================================
 statement ok
-CREATE FEATURE multi_agg ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, SUM(amount) AS total, COUNT(*) AS cnt, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
+CREATE FEATURE multi_agg ON transactions ENTITY user_id TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, SUM(amount) AS total, COUNT(*) AS cnt, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
 
 # user 1 @ 01-02 14:00: total=300, cnt=2, avg=150 (aggregates Jan 1 + Jan 2 events)
 query ITRIR
@@ -128,7 +128,7 @@ SELECT * FROM multi_agg WHERE user_id = 4 AND feature_timestamp = '2024-01-02 07
 # COUNT feature: verify row counts per event timestamp
 # ============================================================
 statement ok
-CREATE FEATURE event_count ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, COUNT(*) AS cnt FROM transactions GROUP BY user_id);
+CREATE FEATURE event_count ON transactions ENTITY user_id TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, COUNT(*) AS cnt FROM transactions GROUP BY user_id);
 
 query ITI rowsort
 SELECT user_id, feature_timestamp, cnt FROM event_count;
@@ -164,7 +164,7 @@ INSERT INTO narrow_window_src VALUES
 
 # Window of 2 days: each timestamp includes rows in the preceding two-day lookback window.
 statement ok
-CREATE FEATURE narrow_feat ON narrow_window_src ENTITY eid TIMESTAMP ts GRANULARITY DAY WINDOW 2 REFRESH FULL RETAIN 1 AS (SELECT eid, SUM(val) AS total FROM narrow_window_src GROUP BY eid);
+CREATE FEATURE narrow_feat ON narrow_window_src ENTITY eid TIMESTAMP ts  WINDOW 2 DAYS REFRESH FULL RETAIN 1 AS (SELECT eid, SUM(val) AS total FROM narrow_window_src GROUP BY eid);
 
 query TIR rowsort
 SELECT eid, feature_timestamp, total FROM narrow_feat;
@@ -179,7 +179,7 @@ b	2024-01-03 08:00:00	300
 b	2024-01-05 08:00:00	500
 
 # ============================================================
-# Explicit interval window: units are independent from GRANULARITY
+# Explicit interval window with hour units
 # ============================================================
 statement ok
 CREATE TABLE hour_window_src (eid VARCHAR, val INTEGER, ts TIMESTAMP);
@@ -191,7 +191,7 @@ INSERT INTO hour_window_src VALUES
     ('a', 30, '2024-01-02 06:00:00');
 
 statement ok
-CREATE FEATURE half_day_feat ON hour_window_src ENTITY eid TIMESTAMP ts GRANULARITY DAY WINDOW 12 HOURS REFRESH FULL RETAIN 1 AS (SELECT eid, SUM(val) AS total FROM hour_window_src GROUP BY eid);
+CREATE FEATURE half_day_feat ON hour_window_src ENTITY eid TIMESTAMP ts  WINDOW 12 HOURS REFRESH FULL RETAIN 1 AS (SELECT eid, SUM(val) AS total FROM hour_window_src GROUP BY eid);
 
 query TIR rowsort
 SELECT eid, feature_timestamp, total FROM half_day_feat;
@@ -204,7 +204,7 @@ a	2024-01-02 06:00:00	30
 # MIN/MAX features: non-sum aggregates
 # ============================================================
 statement ok
-CREATE FEATURE max_spend ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, MAX(amount) AS peak FROM transactions GROUP BY user_id);
+CREATE FEATURE max_spend ON transactions ENTITY user_id TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, MAX(amount) AS peak FROM transactions GROUP BY user_id);
 
 # user 1: peak at each event timestamp
 query TR rowsort

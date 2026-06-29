@@ -28,9 +28,8 @@ INSERT INTO transactions VALUES
 statement ok
 CREATE FEATURE total_spend ON transactions
     ENTITY user_id
-    TIMESTAMP ts
-    GRANULARITY DAY
-    WINDOW 7
+    TIMESTAMP ts 
+    WINDOW 7 DAYS
     REFRESH FULL
     RETAIN 1
     AS (SELECT user_id, SUM(amount) AS total_amount, COUNT(*) AS tx_count);
@@ -144,9 +143,8 @@ INSERT INTO events VALUES
 statement ok
 CREATE FEATURE event_sum ON events
     ENTITY customer
-    TIMESTAMP event_time
-    GRANULARITY DAY
-    WINDOW 7
+    TIMESTAMP event_time 
+    WINDOW 7 DAYS
     REFRESH INCREMENTAL
     RETAIN 1
     AS (SELECT customer, SUM(value) AS total_value);
@@ -178,11 +176,11 @@ INSERT INTO events VALUES
     ('y', 50, '2024-01-03 10:00:00'),
     ('z', 60, '2024-01-03 14:00:00');
 
-# Recompute runs from max(feature_timestamp) - 1 day onward, copying the stable prefix.
+# Default watermark is zero, so recompute runs from max(feature_timestamp) onward.
 query I
 REFRESH FEATURE event_sum;
 ----
-5
+4
 
 query II rowsort
 SELECT customer, total_value FROM event_sum WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP) ORDER BY customer;
@@ -212,7 +210,7 @@ z	65
 query I
 REFRESH FEATURE event_sum;
 ----
-4
+1
 
 # ---- Scenario 3: Add more data, verify watermark advances ----
 statement ok
@@ -220,11 +218,11 @@ INSERT INTO events VALUES
     ('x', 100, '2024-01-05 12:00:00'),
     ('y',  80, '2024-01-06 09:00:00');
 
-# New data plus the recomputed event-time tail are processed forward.
+# New data plus the current max timestamp are processed forward.
 query I
 REFRESH FEATURE event_sum;
 ----
-6
+3
 
 # Jan 5 timestamp: x sees 10+20+40+100=170
 query II rowsort
@@ -254,11 +252,11 @@ statement ok
 INSERT INTO events VALUES
     ('w', 200, '2024-01-07 10:00:00');
 
-# New entity w arrives on Jan 7; the event-time tail is recomputed too.
+# New entity w arrives on Jan 7; the current max timestamp is recomputed too.
 query I
 REFRESH FEATURE event_sum;
 ----
-3
+2
 
 query II
 SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-07 10:00:00'::TIMESTAMP;
@@ -266,11 +264,10 @@ SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-0
 w	200
 
 # ============================================================
-# INCREMENTAL refresh: late-arriving data for the recompute tail
+# INCREMENTAL refresh: late-arriving data inside the watermark interval
 # ============================================================
-# After initial materialization, a new row arrives near the current max timestamp.
-# Because every refresh recomputes the event-time tail, the late arrival is picked
-# up automatically without any row-count tracking.
+# After initial materialization, a new row arrives before the current max timestamp.
+# The explicit watermark interval makes refresh recompute far enough back to pick it up.
 
 statement ok
 CREATE TABLE late_events (
@@ -287,9 +284,9 @@ INSERT INTO late_events VALUES
 statement ok
 CREATE FEATURE late_test ON late_events
     ENTITY entity
-    TIMESTAMP ts
-    GRANULARITY DAY
-    WINDOW 7
+    TIMESTAMP ts 
+    WINDOW 7 DAYS
+    WATERMARK 1 DAY
     REFRESH INCREMENTAL
     RETAIN 1
     AS (SELECT entity, SUM(val) AS total);
@@ -306,11 +303,11 @@ SELECT total, feature_timestamp FROM late_test WHERE entity = 'a';
 10	2024-01-01 08:00:00
 30	2024-01-02 08:00:00
 
-# Insert a late row in the current recompute tail.
+# Insert a late row before the current max timestamp, but inside the watermark interval.
 statement ok
-INSERT INTO late_events VALUES ('a', 5, '2024-01-02 12:00:00');
+INSERT INTO late_events VALUES ('a', 5, '2024-01-02 06:00:00');
 
-# Refresh recomputes the event-time tail, picking up the late arrival.
+# Refresh recomputes from max(feature_timestamp) - watermark_interval, picking up the late arrival.
 query I
 REFRESH FEATURE late_test;
 ----
@@ -322,17 +319,23 @@ SELECT total FROM late_test WHERE entity = 'a' AND feature_timestamp = '2024-01-
 ----
 10
 
-# Late timestamp has Jan 1 (10) + Jan 2 original (20) + Jan 2 late (5) = 35.
+# Late timestamp has Jan 1 (10) + Jan 2 late (5) = 15.
 query R
-SELECT total FROM late_test WHERE entity = 'a' AND feature_timestamp = '2024-01-02 12:00:00'::TIMESTAMP;
+SELECT total FROM late_test WHERE entity = 'a' AND feature_timestamp = '2024-01-02 06:00:00'::TIMESTAMP;
+----
+15
+
+# The original Jan 2 timestamp sees the late row too.
+query R
+SELECT total FROM late_test WHERE entity = 'a' AND feature_timestamp = '2024-01-02 08:00:00'::TIMESTAMP;
 ----
 35
 
-# Another refresh with no new data still recomputes the event-time tail and bumps the version.
+# Another refresh with no new data still recomputes the watermark tail and bumps the version.
 query I
 REFRESH FEATURE late_test;
 ----
-2
+3
 
 statement ok
 DROP FEATURE late_test;

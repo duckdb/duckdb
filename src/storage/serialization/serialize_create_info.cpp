@@ -102,18 +102,17 @@ void CreateFeatureInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(201, "source_table", source_table);
 	serializer.WritePropertyWithDefault<string>(202, "entity_column", entity_column);
 	serializer.WritePropertyWithDefault<string>(203, "timestamp_column", timestamp_column);
-	serializer.WriteProperty<FeatureGranularity>(204, "granularity", granularity);
-	serializer.WriteProperty<FeatureRefreshMode>(206, "refresh_mode", refresh_mode);
-	serializer.WritePropertyWithDefault<int64_t>(207, "retain_versions", retain_versions);
-	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(208, "query", query);
-	serializer.WritePropertyWithDefault<vector<string>>(209, "result_names", result_names);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(210, "result_types", result_types);
-	serializer.WritePropertyWithDefault<int64_t>(211, "current_version", current_version, 1);
-	serializer.WritePropertyWithDefault<bool>(212, "has_schedule", has_schedule, false);
-	serializer.WritePropertyWithDefault<interval_t>(213, "schedule_interval", schedule_interval, interval_t());
-	serializer.WritePropertyWithDefault<bool>(214, "schedule_enabled", schedule_enabled, true);
-	serializer.WritePropertyWithDefault<interval_t>(215, "window_interval", window_interval, interval_t());
-	serializer.WritePropertyWithDefault<interval_t>(216, "watermark_interval", watermark_interval, interval_t());
+	serializer.WriteProperty<FeatureRefreshMode>(204, "refresh_mode", refresh_mode);
+	serializer.WritePropertyWithDefault<int64_t>(205, "retain_versions", retain_versions);
+	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(206, "query", query);
+	serializer.WritePropertyWithDefault<vector<string>>(207, "result_names", result_names);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(208, "result_types", result_types);
+	serializer.WritePropertyWithDefault<int64_t>(209, "current_version", current_version, 1);
+	serializer.WritePropertyWithDefault<bool>(210, "has_schedule", has_schedule, false);
+	serializer.WritePropertyWithDefault<interval_t>(211, "schedule_interval", schedule_interval, interval_t());
+	serializer.WritePropertyWithDefault<bool>(212, "schedule_enabled", schedule_enabled, true);
+	serializer.WritePropertyWithDefault<interval_t>(213, "window_interval", window_interval, interval_t());
+	serializer.WritePropertyWithDefault<interval_t>(214, "watermark_interval", watermark_interval, interval_t());
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer) {
@@ -122,18 +121,17 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadPropertyWithDefault<string>(201, "source_table", result->source_table);
 	deserializer.ReadPropertyWithDefault<string>(202, "entity_column", result->entity_column);
 	deserializer.ReadPropertyWithDefault<string>(203, "timestamp_column", result->timestamp_column);
-	deserializer.ReadProperty<FeatureGranularity>(204, "granularity", result->granularity);
-	deserializer.ReadProperty<FeatureRefreshMode>(206, "refresh_mode", result->refresh_mode);
-	deserializer.ReadPropertyWithDefault<int64_t>(207, "retain_versions", result->retain_versions);
-	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(208, "query", result->query);
-	deserializer.ReadPropertyWithDefault<vector<string>>(209, "result_names", result->result_names);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(210, "result_types", result->result_types);
-	deserializer.ReadPropertyWithExplicitDefault<int64_t>(211, "current_version", result->current_version, 1);
-	deserializer.ReadPropertyWithExplicitDefault<bool>(212, "has_schedule", result->has_schedule, false);
-	deserializer.ReadPropertyWithExplicitDefault<interval_t>(213, "schedule_interval", result->schedule_interval, interval_t());
-	deserializer.ReadPropertyWithExplicitDefault<bool>(214, "schedule_enabled", result->schedule_enabled, true);
-	deserializer.ReadPropertyWithExplicitDefault<interval_t>(215, "window_interval", result->window_interval, interval_t());
-	deserializer.ReadPropertyWithExplicitDefault<interval_t>(216, "watermark_interval", result->watermark_interval, interval_t());
+	deserializer.ReadProperty<FeatureRefreshMode>(204, "refresh_mode", result->refresh_mode);
+	deserializer.ReadPropertyWithDefault<int64_t>(205, "retain_versions", result->retain_versions);
+	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(206, "query", result->query);
+	deserializer.ReadPropertyWithDefault<vector<string>>(207, "result_names", result->result_names);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(208, "result_types", result->result_types);
+	deserializer.ReadPropertyWithExplicitDefault<int64_t>(209, "current_version", result->current_version, 1);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(210, "has_schedule", result->has_schedule, false);
+	deserializer.ReadPropertyWithExplicitDefault<interval_t>(211, "schedule_interval", result->schedule_interval, interval_t());
+	deserializer.ReadPropertyWithExplicitDefault<bool>(212, "schedule_enabled", result->schedule_enabled, true);
+	deserializer.ReadPropertyWithExplicitDefault<interval_t>(213, "window_interval", result->window_interval, interval_t());
+	deserializer.ReadPropertyWithExplicitDefault<interval_t>(214, "watermark_interval", result->watermark_interval, interval_t());
 	result->FinalizeDeserialization();
 	return std::move(result);
 }

@@ -22,9 +22,8 @@ INSERT INTO transactions VALUES
 statement ok
 CREATE FEATURE total_spend ON transactions
     ENTITY user_id
-    TIMESTAMP ts
-    GRANULARITY DAY
-    WINDOW 7
+    TIMESTAMP ts 
+    WINDOW 7 DAYS
     REFRESH FULL
     RETAIN 1
     AS (SELECT user_id, SUM(amount) AS total_amount, COUNT(*) AS tx_count);
@@ -95,9 +94,8 @@ INSERT INTO events VALUES
 statement ok
 CREATE FEATURE event_sum ON events
     ENTITY customer
-    TIMESTAMP event_time
-    GRANULARITY DAY
-    WINDOW 7
+    TIMESTAMP event_time 
+    WINDOW 7 DAYS
     REFRESH INCREMENTAL
     RETAIN 1
     AS (SELECT customer, SUM(value) AS total_value);
@@ -124,14 +122,11 @@ INSERT INTO events VALUES
     ('x', 40, '2024-01-03 09:00:00'),
     ('y', 50, '2024-01-03 10:00:00');
 
-# Watermark = MAX(feature_timestamp) = 01-02
-# New data: buckets at 01-03 (both > watermark)
-# Affected range: [01-02, 01-03 + 7 days) = [01-02, 01-10)
-# Deletes 01-02, recomputes 01-02 and 01-03
+# Default watermark is zero, so refresh recomputes from MAX(feature_timestamp) onward.
 query I
 REFRESH FEATURE event_sum;
 ----
-5
+3
 
 # 01-01 untouched (below watermark)
 query II
@@ -153,23 +148,22 @@ SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-0
 x	70
 y	80
 
-# ---- Scenario 2: No new data — refresh is a no-op ----
+# ---- Scenario 2: No new data — refresh still recomputes the current max timestamp ----
 query I
 REFRESH FEATURE event_sum;
 ----
-5
+1
 
 # ---- Scenario 3: Add more data, verify watermark advances ----
 statement ok
 INSERT INTO events VALUES
     ('x', 100, '2024-01-05 12:00:00');
 
-# New watermark should be 01-03, new data at 01-05
-# Affected range: [01-03, 01-05 + 7) = [01-03, 01-12)
+# New data plus the current max timestamp are processed forward.
 query I
 REFRESH FEATURE event_sum;
 ----
-6
+2
 
 # 01-05 bucket: x sees 10+20+40+100 = 170 (all within 7-day lookback from 01-05)
 query II

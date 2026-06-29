@@ -38,9 +38,6 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 	names.emplace_back("timestamp_column");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("granularity");
-	return_types.emplace_back(LogicalType::VARCHAR);
-
 	names.emplace_back("refresh_mode");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -86,19 +83,6 @@ static unique_ptr<GlobalTableFunctionState> DuckDBFeaturesInit(ClientContext &co
 	return std::move(result);
 }
 
-static string GranularityToString(FeatureGranularity granularity) {
-	switch (granularity) {
-	case FeatureGranularity::DAY:
-		return "DAY";
-	case FeatureGranularity::HOUR:
-		return "HOUR";
-	case FeatureGranularity::MINUTE:
-		return "MINUTE";
-	default:
-		return "UNKNOWN";
-	}
-}
-
 static string RefreshModeToString(FeatureRefreshMode mode) {
 	switch (mode) {
 	case FeatureRefreshMode::FULL:
@@ -134,34 +118,32 @@ static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &d
 		output.data[4].Append(Value(feat.entity_column));
 		// timestamp_column
 		output.data[5].Append(Value(feat.timestamp_column));
-		// granularity
-		output.data[6].Append(Value(GranularityToString(feat.granularity)));
 		// refresh_mode
-		output.data[7].Append(Value(RefreshModeToString(feat.refresh_mode)));
+		output.data[6].Append(Value(RefreshModeToString(feat.refresh_mode)));
 		// retain_versions
-		output.data[8].Append(Value::BIGINT(feat.retain_versions));
+		output.data[7].Append(Value::BIGINT(feat.retain_versions));
 		// current_version
-		output.data[9].Append(Value::BIGINT(feat.current_version));
+		output.data[8].Append(Value::BIGINT(feat.current_version));
 		// sql
-		output.data[10].Append(Value(feat.ToSQL()));
+		output.data[9].Append(Value(feat.ToSQL()));
 		// last_refresh_timestamp
-		output.data[11].Append(Value::TIMESTAMP(feat.last_refresh_timestamp));
+		output.data[10].Append(Value::TIMESTAMP(feat.last_refresh_timestamp));
 		// schedule_interval (NULL when no schedule is attached)
-		output.data[12].Append(feat.has_schedule ? Value::INTERVAL(feat.schedule_interval)
+		output.data[11].Append(feat.has_schedule ? Value::INTERVAL(feat.schedule_interval)
 		                                         : Value(LogicalType::INTERVAL));
 		// schedule_enabled (false when no schedule is attached)
-		output.data[13].Append(Value::BOOLEAN(feat.has_schedule && feat.schedule_enabled));
+		output.data[12].Append(Value::BOOLEAN(feat.has_schedule && feat.schedule_enabled));
 		// next_refresh_at (NULL when the scheduler is not tracking this feature)
 		if (scheduler &&
 		    scheduler->GetNextRefreshAt(feat.catalog.GetName(), feat.schema.name, feat.name, next_refresh_at)) {
-			output.data[14].Append(Value::TIMESTAMP(next_refresh_at));
+			output.data[13].Append(Value::TIMESTAMP(next_refresh_at));
 		} else {
-			output.data[14].Append(Value(LogicalType::TIMESTAMP));
+			output.data[13].Append(Value(LogicalType::TIMESTAMP));
 		}
 		// window_interval
-		output.data[15].Append(Value::INTERVAL(feat.window_interval));
+		output.data[14].Append(Value::INTERVAL(feat.window_interval));
 		// watermark_interval
-		output.data[16].Append(Value::INTERVAL(feat.watermark_interval));
+		output.data[15].Append(Value::INTERVAL(feat.watermark_interval));
 
 		count++;
 	}

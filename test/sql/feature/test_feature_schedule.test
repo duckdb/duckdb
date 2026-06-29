@@ -24,9 +24,8 @@ INSERT INTO hits VALUES
 statement ok
 CREATE FEATURE no_sched ON hits
     ENTITY UserID
-    TIMESTAMP EventTime
-    GRANULARITY HOUR
-    WINDOW 24
+    TIMESTAMP EventTime 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
     RETAIN 5
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
@@ -42,9 +41,8 @@ NULL	false
 statement ok
 CREATE FEATURE user_activity ON hits
     ENTITY UserID
-    TIMESTAMP EventTime
-    GRANULARITY HOUR
-    WINDOW 24
+    TIMESTAMP EventTime 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
     EVERY INTERVAL '1 hour'
     RETAIN 5
@@ -67,9 +65,8 @@ SELECT sql FROM duckdb_features() WHERE feature_name = 'user_activity';
 statement ok
 CREATE FEATURE half_hourly ON hits
     ENTITY UserID
-    TIMESTAMP EventTime
-    GRANULARITY MINUTE
-    WINDOW 60
+    TIMESTAMP EventTime 
+    WINDOW 60 MINUTES
     EVERY INTERVAL '30 minutes'
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
 
@@ -84,9 +81,8 @@ SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_
 statement ok
 CREATE FEATURE shorthand_hours ON hits
     ENTITY UserID
-    TIMESTAMP EventTime
-    GRANULARITY HOUR
-    WINDOW 24
+    TIMESTAMP EventTime 
+    WINDOW 24 HOURS
     EVERY 2 HOURS
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
 

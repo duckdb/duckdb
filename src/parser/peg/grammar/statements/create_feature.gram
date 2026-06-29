@@ -1,6 +1,5 @@
-CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureGranularityClause? FeatureWindowClause? FeatureWatermarkClause? FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
+CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureWindowClause? FeatureWatermarkClause? FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
 
-FeatureGranularityClause <- 'GRANULARITY' FeatureGranularity
 FeatureWindowClause <- 'WINDOW' FeatureInterval
 FeatureWatermarkClause <- 'WATERMARK' FeatureInterval
 FeatureRefreshClause <- 'REFRESH' FeatureRefreshMode
@@ -9,10 +8,9 @@ FeatureScheduleIntervalClause <- 'EVERY' 'INTERVAL' StringLiteral
 FeatureScheduleShorthandClause <- 'EVERY' NumberLiteral FeatureScheduleUnit
 FeatureRetainClause <- 'RETAIN' NumberLiteral
 
-FeatureInterval <- FeatureIntervalString / FeatureIntervalShorthand / FeatureIntervalBare
+FeatureInterval <- FeatureIntervalString / FeatureIntervalShorthand
 FeatureIntervalString <- 'INTERVAL' StringLiteral
 FeatureIntervalShorthand <- NumberLiteral FeatureScheduleUnit
-FeatureIntervalBare <- NumberLiteral
 
 FeatureScheduleUnit <- FeatureScheduleUnitDays / FeatureScheduleUnitDay / FeatureScheduleUnitHours / FeatureScheduleUnitHour / FeatureScheduleUnitMinutes / FeatureScheduleUnitMinute
 FeatureScheduleUnitDay <- 'DAY'
@@ -21,11 +19,6 @@ FeatureScheduleUnitHour <- 'HOUR'
 FeatureScheduleUnitHours <- 'HOURS'
 FeatureScheduleUnitMinute <- 'MINUTE'
 FeatureScheduleUnitMinutes <- 'MINUTES'
-
-FeatureGranularity <- FeatureGranularityDay / FeatureGranularityHour / FeatureGranularityMinute
-FeatureGranularityDay <- 'DAY'
-FeatureGranularityHour <- 'HOUR'
-FeatureGranularityMinute <- 'MINUTE'
 
 FeatureRefreshMode <- FeatureRefreshFull / FeatureRefreshIncremental
 FeatureRefreshFull <- 'FULL'

@@ -22,7 +22,7 @@ INSERT INTO transactions VALUES
     ('C002', 25.00, '2024-03-03 08:00:00');
 
 statement ok
-CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) AS total_amount, COUNT(amount) AS txn_count FROM transactions GROUP BY card_no);
+CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) AS total_amount, COUNT(amount) AS txn_count FROM transactions GROUP BY card_no);
 
 # ============================================================
 # SERVE FEATURE: basic retrieval (same column names, no explicit ENTITY/ASOF)
@@ -146,7 +146,7 @@ does not exist
 # ============================================================
 
 statement ok
-CREATE FEATURE daily_txn_avg ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT card_no, AVG(amount) AS avg_amount FROM transactions GROUP BY card_no);
+CREATE FEATURE daily_txn_avg ON transactions ENTITY card_no TIMESTAMP event_time  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, AVG(amount) AS avg_amount FROM transactions GROUP BY card_no);
 
 query IIIIIII sort
 SERVE FEATURES daily_txn, daily_txn_avg FOR requests;

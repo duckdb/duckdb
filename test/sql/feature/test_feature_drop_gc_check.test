@@ -25,9 +25,8 @@ INSERT INTO events VALUES
 statement ok
 CREATE FEATURE f ON events
     ENTITY customer
-    TIMESTAMP event_time
-    GRANULARITY DAY
-    WINDOW 7
+    TIMESTAMP event_time 
+    WINDOW 7 DAYS
     REFRESH FULL
     RETAIN 2
     AS (SELECT customer, SUM(value) AS total_value);

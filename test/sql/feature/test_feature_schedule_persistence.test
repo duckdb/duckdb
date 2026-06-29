@@ -15,9 +15,8 @@ INSERT INTO events VALUES
 statement ok
 CREATE FEATURE sched ON events
     ENTITY customer
-    TIMESTAMP event_time
-    GRANULARITY HOUR
-    WINDOW 24
+    TIMESTAMP event_time 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
     EVERY INTERVAL '90 minutes'
     RETAIN 3

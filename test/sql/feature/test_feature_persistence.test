@@ -26,9 +26,8 @@ INSERT INTO events VALUES
 statement ok
 CREATE FEATURE persisted ON events
     ENTITY customer
-    TIMESTAMP event_time
-    GRANULARITY DAY
-    WINDOW 7
+    TIMESTAMP event_time 
+    WINDOW 7 DAYS
     REFRESH FULL
     RETAIN 3
     AS (SELECT customer, SUM(value) AS total_value);
@@ -67,11 +66,11 @@ SELECT feature_name, current_version FROM duckdb_features() WHERE feature_name =
 persisted	3
 
 # Other metadata survives
-query IIIII
-SELECT source_table, entity_column, granularity, window_interval, retain_versions
+query IIII
+SELECT source_table, entity_column, window_interval, retain_versions
 FROM duckdb_features() WHERE feature_name = 'persisted';
 ----
-events	customer	DAY	7 days	3
+events	customer	7 days	3
 
 # The view still resolves to the current version
 query I
