@@ -17,6 +17,10 @@ PEGTransformerFactory::TransformExportStatement(PEGTransformer &transformer, con
 	if (generic_copy_option_list) {
 		for (const auto &option : *generic_copy_option_list) {
 			if (option.name == "format") {
+				if (option.expression || option.children.empty()) {
+					throw ParserException(
+					    "Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
+				}
 				info->format = option.children[0].GetValue<string>();
 				info->is_format_auto_detected = false;
 			} else if (option.expression) {
