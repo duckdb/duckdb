@@ -22,6 +22,14 @@ public:
 	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 
 private:
+	//! Inline any projection chain sitting between the aggregate and a comparison join into the aggregate's
+	//! own expressions (semantics-preserving), so the join becomes the aggregate's direct child and the
+	//! pushdown paths below can match it. Returns true if anything was fused.
+	bool FuseInterveningProjections(LogicalOperator &op);
+	//! Double-eager (Yan & Larson "eager group-by-count"): pre-aggregate BOTH join inputs by the join key and
+	//! reconstruct the aggregates above by scaling each side's partial with the other side's row count.
+	bool TryDoubleEagerPushdown(unique_ptr<LogicalOperator> &op);
+	//! One-sided eager group-by: push a partial aggregate (via state export) below the join on one side only.
 	bool TryPushdownAggregate(unique_ptr<LogicalOperator> &op);
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 

@@ -368,6 +368,9 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	minmax_func.SetName(std::move(name));
 	minmax_func.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	minmax_func.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	// min/max is distributive: min(whole) = min of per-partition mins (eager aggregation can reconstruct it).
+	// Only the plain single-argument form; the collation branch above rewrites to arg_min/arg_max, which is not.
+	minmax_func.SetDistributive(true);
 
 	auto expr = minmax_func.Bind(context, std::move(arguments));
 	arguments = std::move(expr->GetChildrenMutable());

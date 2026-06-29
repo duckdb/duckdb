@@ -346,3 +346,622 @@ SELECT count(*) FROM (
 
 statement ok
 RESET disabled_optimizers
+
+# Double-eager (two-sided) pushdown: a fact x fact join through a shared key, where BOTH inputs have
+# many rows per key. de_a and de_b both have 100 rows per key; the grouping column lives on the unique
+# dimension de_dim. Double-eager pre-aggregates both facts by the key and reconstructs the aggregates by
+# scaling with the other side's row count.
+statement ok
+CREATE TABLE de_dim AS SELECT i AS k, (i % 7) AS g FROM range(50) _(i)
+
+statement ok
+CREATE TABLE de_a AS SELECT (i % 50) AS k FROM range(5000) _(i)
+
+statement ok
+CREATE TABLE de_b AS SELECT (i % 50) AS k, ((i * 13) % 100)::BIGINT AS m FROM range(5000) _(i)
+
+statement ok
+ANALYZE
+
+# Integer measure -> count(*), sum, count, min, max and avg are all exact, so enabled and disabled must
+# produce byte-identical results.
+statement ok
+CREATE TEMP TABLE de_enabled AS
+SELECT g, count(*) AS ev, sum(b.m) AS s, count(b.m) AS c, min(b.m) AS mn, max(b.m) AS mx, avg(b.m) AS a
+FROM de_a a JOIN de_dim d USING (k) JOIN de_b b USING (k)
+GROUP BY g
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+statement ok
+CREATE TEMP TABLE de_disabled AS
+SELECT g, count(*) AS ev, sum(b.m) AS s, count(b.m) AS c, min(b.m) AS mn, max(b.m) AS mx, avg(b.m) AS a
+FROM de_a a JOIN de_dim d USING (k) JOIN de_b b USING (k)
+GROUP BY g
+
+query I
+SELECT count(*) FROM (
+	SELECT * FROM de_enabled
+	EXCEPT ALL
+	SELECT * FROM de_disabled
+)
+----
+0
+
+query I
+SELECT count(*) FROM (
+	SELECT * FROM de_disabled
+	EXCEPT ALL
+	SELECT * FROM de_enabled
+)
+----
+0
+
+statement ok
+RESET disabled_optimizers
+
+# The double-eager rewrite reconstructs the aggregates above the join by scaling one side's partial with
+# the other side's row count, which shows up as a multiplication ("*") in the plan - and notably it does
+# NOT use combine_aggr (that is the one-sided path).
+query II
+EXPLAIN
+SELECT g, count(*) AS ev, sum(b.m) AS s
+FROM de_a a JOIN de_dim d USING (k) JOIN de_b b USING (k)
+GROUP BY g
+----
+physical_plan	<REGEX>:.*"\*"\(.*
+
+# Aggregates from BOTH facts in one query (eager split): each fact is pre-aggregated on its own side and
+# scaled by the other side's row count. de_a needs its own measure for this.
+statement ok
+CREATE TABLE de_a2 AS SELECT (i % 50) AS k, ((i * 7) % 30)::BIGINT AS n FROM range(5000) _(i)
+
+statement ok
+CREATE TEMP TABLE de_split_enabled AS
+SELECT g, count(*) AS ev, sum(a.n) AS sn, sum(b.m) AS sm, min(a.n) AS mn, max(b.m) AS mx
+FROM de_a2 a JOIN de_dim d USING (k) JOIN de_b b USING (k)
+GROUP BY g
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+statement ok
+CREATE TEMP TABLE de_split_disabled AS
+SELECT g, count(*) AS ev, sum(a.n) AS sn, sum(b.m) AS sm, min(a.n) AS mn, max(b.m) AS mx
+FROM de_a2 a JOIN de_dim d USING (k) JOIN de_b b USING (k)
+GROUP BY g
+
+query I
+SELECT count(*) FROM (SELECT * FROM de_split_enabled EXCEPT ALL SELECT * FROM de_split_disabled)
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT * FROM de_split_disabled EXCEPT ALL SELECT * FROM de_split_enabled)
+----
+0
+
+statement ok
+RESET disabled_optimizers
+
+# Floating-point sum/avg: reassociating the partials only perturbs the result within rounding, so compare
+# with a relative tolerance rather than for exact equality. m_f is a non-integer DOUBLE.
+statement ok
+CREATE TABLE de_bf AS SELECT (i % 50) AS k, (((i * 13) % 100) + 0.5)::DOUBLE / 7 AS m_f FROM range(5000) _(i)
+
+statement ok
+CREATE TEMP TABLE de_fp_enabled AS
+SELECT g, sum(b.m_f) AS s, avg(b.m_f) AS a
+FROM de_a a JOIN de_dim d USING (k) JOIN de_bf b USING (k)
+GROUP BY g
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+statement ok
+CREATE TEMP TABLE de_fp_disabled AS
+SELECT g, sum(b.m_f) AS s, avg(b.m_f) AS a
+FROM de_a a JOIN de_dim d USING (k) JOIN de_bf b USING (k)
+GROUP BY g
+
+statement ok
+RESET disabled_optimizers
+
+# no group may differ by more than a tiny relative (+ absolute) tolerance
+query I
+SELECT count(*) FROM de_fp_enabled e JOIN de_fp_disabled f USING (g)
+WHERE abs(e.s - f.s) > 1e-9 * abs(f.s) + 1e-9
+   OR abs(e.a - f.a) > 1e-9 * abs(f.a) + 1e-9
+----
+0
+
+# Multi-column join key, NULL measure values, and a grouping column on the FACT side.
+statement ok
+CREATE TABLE mk_dim AS SELECT i AS k1, (i % 3) AS k2, (i % 5) AS g FROM range(30) _(i)
+
+statement ok
+CREATE TABLE mk_a AS SELECT (i % 30) AS k1, (i % 3) AS k2, (i % 4) AS af FROM range(6000) _(i)
+
+statement ok
+CREATE TABLE mk_b AS SELECT (i % 30) AS k1, (i % 3) AS k2,
+       CASE WHEN i % 13 = 0 THEN NULL ELSE (i % 50)::BIGINT END AS m FROM range(6000) _(i)
+
+statement ok
+CREATE TEMP TABLE mk_enabled AS
+SELECT g, af, count(*) AS ev, sum(b.m) AS s, count(b.m) AS c, min(b.m) AS mn, max(b.m) AS mx
+FROM mk_a a JOIN mk_dim d USING (k1, k2) JOIN mk_b b USING (k1, k2)
+GROUP BY g, af
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+statement ok
+CREATE TEMP TABLE mk_disabled AS
+SELECT g, af, count(*) AS ev, sum(b.m) AS s, count(b.m) AS c, min(b.m) AS mn, max(b.m) AS mx
+FROM mk_a a JOIN mk_dim d USING (k1, k2) JOIN mk_b b USING (k1, k2)
+GROUP BY g, af
+
+query I
+SELECT count(*) FROM (SELECT * FROM mk_enabled EXCEPT ALL SELECT * FROM mk_disabled)
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT * FROM mk_disabled EXCEPT ALL SELECT * FROM mk_enabled)
+----
+0
+
+statement ok
+RESET disabled_optimizers
+
+# count(*) is reconstructed as sum(left_count * right_count). With two hot keys carrying 70k rows each per
+# side, count(*) per group is 70000 * 70000 = 4.9e9 -- above 2^32, so this also guards against the
+# HUGEINT -> BIGINT result cast truncating to 32 bits. Double-eager computes this arithmetically without
+# ever materializing the ~9.8e9-row cross product, so the query is cheap.
+statement ok
+CREATE TABLE big_dim AS SELECT k AS keyid, k AS g FROM range(2) t(k)
+
+statement ok
+CREATE TABLE big_a AS SELECT (i % 2)::BIGINT AS keyid FROM range(140000) t(i)
+
+statement ok
+CREATE TABLE big_b AS SELECT (i % 2)::BIGINT AS keyid FROM range(140000) t(i)
+
+query II
+SELECT g, count(*) AS ev
+FROM big_a a JOIN big_dim d USING (keyid) JOIN big_b b USING (keyid)
+GROUP BY g ORDER BY g
+----
+0	4900000000
+1	4900000000
+
+# Negative cases: LEFT join, DISTINCT, and FILTER must not be mis-transformed (results identical on/off).
+statement ok
+CREATE TEMP TABLE neg_enabled AS
+SELECT 'left' AS q, g, sum(b.m)::DOUBLE AS x
+FROM de_a a JOIN de_dim d USING (k) LEFT JOIN de_b b USING (k) GROUP BY g
+UNION ALL
+SELECT 'distinct' AS q, g, sum(DISTINCT b.m)::DOUBLE AS x
+FROM de_a a JOIN de_dim d USING (k) JOIN de_b b USING (k) GROUP BY g
+UNION ALL
+SELECT 'filter' AS q, g, sum(b.m) FILTER (WHERE b.m > 50)::DOUBLE AS x
+FROM de_a a JOIN de_dim d USING (k) JOIN de_b b USING (k) GROUP BY g
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+statement ok
+CREATE TEMP TABLE neg_disabled AS
+SELECT 'left' AS q, g, sum(b.m)::DOUBLE AS x
+FROM de_a a JOIN de_dim d USING (k) LEFT JOIN de_b b USING (k) GROUP BY g
+UNION ALL
+SELECT 'distinct' AS q, g, sum(DISTINCT b.m)::DOUBLE AS x
+FROM de_a a JOIN de_dim d USING (k) JOIN de_b b USING (k) GROUP BY g
+UNION ALL
+SELECT 'filter' AS q, g, sum(b.m) FILTER (WHERE b.m > 50)::DOUBLE AS x
+FROM de_a a JOIN de_dim d USING (k) JOIN de_b b USING (k) GROUP BY g
+
+query I
+SELECT count(*) FROM (SELECT * FROM neg_enabled EXCEPT ALL SELECT * FROM neg_disabled)
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT * FROM neg_disabled EXCEPT ALL SELECT * FROM neg_enabled)
+----
+0
+
+statement ok
+RESET disabled_optimizers
+
+# Intervening projection: a computed measure from a subquery leaves a projection between the aggregate and
+# the join. It is fused into the aggregate's expressions (semantics-preserving) so the join becomes the
+# direct child and the pushdown can still apply. Without the fusion this query gets no pushdown at all.
+statement ok
+CREATE TABLE pj_dim AS SELECT k AS keyid, (k % 40) AS g FROM range(2000) _(k)
+
+statement ok
+CREATE TABLE pj_a AS SELECT (k % 2000)::BIGINT AS keyid FROM range(50000) _(k)
+
+statement ok
+CREATE TABLE pj_b AS SELECT (k % 2000)::BIGINT AS keyid, (((k * 13) % 100) + 0.5)::DOUBLE AS c FROM range(50000) _(k)
+
+statement ok
+ANALYZE
+
+statement ok
+CREATE TEMP TABLE pj_enabled AS
+SELECT g, count(*) AS ev, sum(b.c2) AS s
+FROM pj_a a JOIN pj_dim d USING (keyid) JOIN (SELECT keyid, c * 2.0 AS c2 FROM pj_b) b USING (keyid)
+GROUP BY g
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+statement ok
+CREATE TEMP TABLE pj_disabled AS
+SELECT g, count(*) AS ev, sum(b.c2) AS s
+FROM pj_a a JOIN pj_dim d USING (keyid) JOIN (SELECT keyid, c * 2.0 AS c2 FROM pj_b) b USING (keyid)
+GROUP BY g
+
+# count exact; sum agrees within floating-point rounding
+query I
+SELECT count(*) FROM pj_enabled e JOIN pj_disabled f USING (g)
+WHERE e.ev <> f.ev OR abs(e.s - f.s) > 1e-9 * abs(f.s) + 1e-9
+----
+0
+
+statement ok
+RESET disabled_optimizers
+
+# the projection is fused and the pushdown fires (one-sided state export, since the inlined measure is an
+# expression rather than a plain column)
+query II
+EXPLAIN
+SELECT g, count(*) AS ev, sum(b.c2) AS s
+FROM pj_a a JOIN pj_dim d USING (keyid) JOIN (SELECT keyid, c * 2.0 AS c2 FROM pj_b) b USING (keyid)
+GROUP BY g
+----
+physical_plan	<REGEX>:.*combine_aggr.*
+
+# ------------------------------------------------------------------------------
+# N-way: a chain of three facts sharing one skewed key. After the topmost join is
+# rewritten, the per-side lower aggregates themselves sit over a join, so the
+# re-traversal pushes them down in turn - collapsing every fact in the chain, not
+# just the two inputs of the outermost join.
+# ------------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE nw_f1 AS SELECT (k % 5)::INTEGER AS keyid, (k % 7)::BIGINT AS m1 FROM range(300) _(k)
+
+statement ok
+CREATE TABLE nw_f2 AS SELECT (k % 5)::INTEGER AS keyid, (k % 11)::BIGINT AS m2 FROM range(300) _(k)
+
+statement ok
+CREATE TABLE nw_f3 AS SELECT (k % 5)::INTEGER AS keyid, (k % 13)::BIGINT AS m3 FROM range(300) _(k)
+
+statement ok
+ANALYZE
+
+statement ok
+CREATE TEMP TABLE nw_enabled AS
+SELECT f1.keyid AS keyid, count(*) AS c, sum(m1) AS s1, sum(m2) AS s2, sum(m3) AS s3,
+       min(m1) AS mn, max(m3) AS mx, count(m2) AS cm
+FROM nw_f1 f1 JOIN nw_f2 f2 USING (keyid) JOIN nw_f3 f3 USING (keyid)
+GROUP BY f1.keyid
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+statement ok
+CREATE TEMP TABLE nw_disabled AS
+SELECT f1.keyid AS keyid, count(*) AS c, sum(m1) AS s1, sum(m2) AS s2, sum(m3) AS s3,
+       min(m1) AS mn, max(m3) AS mx, count(m2) AS cm
+FROM nw_f1 f1 JOIN nw_f2 f2 USING (keyid) JOIN nw_f3 f3 USING (keyid)
+GROUP BY f1.keyid
+
+# integer measures: the rewrite is exact, so both directions of EXCEPT ALL are empty
+query I
+SELECT count(*) FROM (
+	SELECT * FROM nw_enabled
+	EXCEPT ALL
+	SELECT * FROM nw_disabled
+)
+----
+0
+
+query I
+SELECT count(*) FROM (
+	SELECT * FROM nw_disabled
+	EXCEPT ALL
+	SELECT * FROM nw_enabled
+)
+----
+0
+
+statement ok
+RESET disabled_optimizers
+
+# both joins in the chain carry a double-eager rewrite, so the plan multiplies a per-key row count by a
+# partial ("*") at more than one level - confirming the pushdown recursed rather than stopping at the top join
+query II
+EXPLAIN
+SELECT f1.keyid AS keyid, count(*) AS c, sum(m1) AS s1, sum(m3) AS s3
+FROM nw_f1 f1 JOIN nw_f2 f2 USING (keyid) JOIN nw_f3 f3 USING (keyid)
+GROUP BY f1.keyid
+----
+physical_plan	<REGEX>:.*"\*"\(.*
+
+# ------------------------------------------------------------------------------
+# Self-amplifying fact x dimension x fact: access_log JOIN user_profile JOIN location
+# on a shared, skewed key. Each key has many rows in every table, so the all-pairs
+# join self-amplifies (sum over k of A_k * U_k * L_k). This is the case the pushdown
+# targets - and a guard that the selective-dimension gate added to the one-sided
+# heuristic does NOT stop genuine fan-out explosions from firing.
+# ------------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE access_log  AS SELECT (k % 8)::INTEGER AS keyid, (k % 101)::BIGINT AS bytes_sent FROM range(320) _(k)
+
+statement ok
+CREATE TABLE user_profile AS SELECT (k % 8)::INTEGER AS keyid, (k % 7)::BIGINT   AS age        FROM range(320) _(k)
+
+statement ok
+CREATE TABLE location     AS SELECT (k % 8)::INTEGER AS keyid, (k % 13)::BIGINT  AS region     FROM range(320) _(k)
+
+statement ok
+ANALYZE
+
+statement ok
+CREATE TEMP TABLE cust_enabled AS
+SELECT a.keyid AS keyid, count(*) AS hits, sum(bytes_sent) AS total_bytes, sum(age) AS sum_age, sum(region) AS sum_region
+FROM access_log a JOIN user_profile u USING (keyid) JOIN location l USING (keyid)
+GROUP BY a.keyid
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+statement ok
+CREATE TEMP TABLE cust_disabled AS
+SELECT a.keyid AS keyid, count(*) AS hits, sum(bytes_sent) AS total_bytes, sum(age) AS sum_age, sum(region) AS sum_region
+FROM access_log a JOIN user_profile u USING (keyid) JOIN location l USING (keyid)
+GROUP BY a.keyid
+
+# the rewrite is exact on integer measures: both directions of EXCEPT ALL are empty
+query I
+SELECT count(*) FROM (SELECT * FROM cust_enabled EXCEPT ALL SELECT * FROM cust_disabled)
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT * FROM cust_disabled EXCEPT ALL SELECT * FROM cust_enabled)
+----
+0
+
+statement ok
+RESET disabled_optimizers
+
+# the explosion is collapsed: the pushdown still fires on this genuine fan-out (scaling shows up as "*")
+query II
+EXPLAIN
+SELECT a.keyid AS keyid, count(*) AS hits, sum(bytes_sent) AS total_bytes
+FROM access_log a JOIN user_profile u USING (keyid) JOIN location l USING (keyid)
+GROUP BY a.keyid
+----
+physical_plan	<REGEX>:.*"\*"\(.*
+
+# ------------------------------------------------------------------------------
+# Regression: double-eager reconstructs sum as `count_other * partial`, a scalar
+# multiply that can overflow on a single key even when the row-by-row total fits
+# via sign cancellation across keys in the group. With a HUGEINT measure that
+# turned a valid query (result 0) into an overflow error. Double-eager is now
+# gated off for no-headroom exact-typed sums (HUGEINT / INT128 DECIMAL); the
+# one-sided additive-combine path handles them without the spurious overflow.
+# ------------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE ov_a AS SELECT (i % 2)::INTEGER AS k, 0::INTEGER AS g FROM range(4000) _(i)
+
+statement ok
+CREATE TABLE ov_b AS SELECT (i % 2)::INTEGER AS k,
+       (CASE WHEN i % 2 = 0 THEN 1 ELSE -1 END * 85000000000000000000000000000000::HUGEINT) AS m
+       FROM range(4000) _(i)
+
+statement ok
+ANALYZE
+
+# succeeds (no overflow) and the per-group total is exactly zero, matching the unoptimized plan
+query II
+SELECT a.g, sum(b.m) AS s FROM ov_a a JOIN ov_b b USING (k) GROUP BY a.g
+----
+0	0
+
+# the plan must NOT contain the double-eager scaling multiply on this HUGEINT sum
+query II
+EXPLAIN SELECT a.g, sum(b.m) AS s FROM ov_a a JOIN ov_b b USING (k) GROUP BY a.g
+----
+physical_plan	<!REGEX>:.*"\*"\(.*
+
+# ------------------------------------------------------------------------------
+# Type sweep: double-eager must reconstruct sum / min / max / count correctly for
+# every supported measure type, not only the integer measures used above. min/max
+# engage double-eager only when a count(*) (or sum) is also present - otherwise
+# the one-sided path handles them - so each query carries count(*). This also
+# guards the genuine-builtin identity gate (DEIsGenuineBuiltin) against falsely
+# rejecting a legitimate builtin for a non-integer type (date/timestamp/varchar).
+# ------------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE de_typed AS SELECT
+    (i % 50) AS k,
+    ((i * 13) % 100)::TINYINT AS c_i8,
+    ((i * 13) % 1000)::SMALLINT AS c_i16,
+    ((i * 13) % 100000)::INTEGER AS c_i32,
+    ((i * 13) % 100000)::BIGINT AS c_i64,
+    (((i * 13) % 10000) / 100.0)::DECIMAL(10, 2) AS c_d10,
+    (((i * 7) % 100000) / 13.0)::DECIMAL(18, 4) AS c_d18,
+    (((i * 13) % 100) + 0.5)::DOUBLE / 7 AS c_f64,
+    DATE '2020-01-01' + ((i * 7) % 365)::INTEGER AS c_date,
+    TIMESTAMP '2020-01-01' + to_seconds((i * 7) % 100000) AS c_ts,
+    'v' || lpad(((i * 13) % 100)::VARCHAR, 3, '0') AS c_str
+    FROM range(5000) _(i)
+
+statement ok
+ANALYZE
+
+# numeric measures: sum / min / max / count are exact, so enabled == disabled. The shared
+# query label makes sqllogictest compare the two runs to each other (rowsort = multiset).
+query TTTTTTTTTTTTTTTTTTTTT rowsort de_num_ab
+SELECT d.g, count(*) AS ev,
+    sum(f.c_i8) AS s8, min(f.c_i8) AS n8, max(f.c_i8) AS x8,
+    sum(f.c_i16) AS s16, min(f.c_i16) AS n16, max(f.c_i16) AS x16,
+    sum(f.c_i32) AS s32, min(f.c_i32) AS n32, max(f.c_i32) AS x32,
+    sum(f.c_i64) AS s64, min(f.c_i64) AS n64, max(f.c_i64) AS x64,
+    sum(f.c_d10) AS sd10, min(f.c_d10) AS nd10, max(f.c_d10) AS xd10,
+    sum(f.c_d18) AS sd18, min(f.c_d18) AS nd18, max(f.c_d18) AS xd18,
+    count(f.c_i32) AS cc
+FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k)
+GROUP BY d.g
+----
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query TTTTTTTTTTTTTTTTTTTTT rowsort de_num_ab
+SELECT d.g, count(*) AS ev,
+    sum(f.c_i8) AS s8, min(f.c_i8) AS n8, max(f.c_i8) AS x8,
+    sum(f.c_i16) AS s16, min(f.c_i16) AS n16, max(f.c_i16) AS x16,
+    sum(f.c_i32) AS s32, min(f.c_i32) AS n32, max(f.c_i32) AS x32,
+    sum(f.c_i64) AS s64, min(f.c_i64) AS n64, max(f.c_i64) AS x64,
+    sum(f.c_d10) AS sd10, min(f.c_d10) AS nd10, max(f.c_d10) AS xd10,
+    sum(f.c_d18) AS sd18, min(f.c_d18) AS nd18, max(f.c_d18) AS xd18,
+    count(f.c_i32) AS cc
+FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k)
+GROUP BY d.g
+----
+
+statement ok
+RESET disabled_optimizers
+
+# temporal / string min/max (with count(*) so double-eager engages): exact on/off
+query TTTTTTTT rowsort de_dts_ab
+SELECT d.g, count(*) AS ev,
+    min(f.c_date) AS ndt, max(f.c_date) AS xdt,
+    min(f.c_ts) AS nts, max(f.c_ts) AS xts,
+    min(f.c_str) AS nst, max(f.c_str) AS xst
+FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k)
+GROUP BY d.g
+----
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query TTTTTTTT rowsort de_dts_ab
+SELECT d.g, count(*) AS ev,
+    min(f.c_date) AS ndt, max(f.c_date) AS xdt,
+    min(f.c_ts) AS nts, max(f.c_ts) AS xts,
+    min(f.c_str) AS nst, max(f.c_str) AS xst
+FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k)
+GROUP BY d.g
+----
+
+statement ok
+RESET disabled_optimizers
+
+# DECIMAL(18,4) sum engages double-eager (width <= 18 is below the INT128 gate)
+query II
+EXPLAIN SELECT d.g, count(*), sum(f.c_d18) FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k) GROUP BY d.g
+----
+physical_plan	<REGEX>:.*"\*"\(.*
+
+# min/max over DATE and VARCHAR also reconstruct through double-eager (min(min)/max(max))
+query II
+EXPLAIN SELECT d.g, count(*), min(f.c_date), max(f.c_str) FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k) GROUP BY d.g
+----
+physical_plan	<REGEX>:.*"\*"\(.*
+
+# ------------------------------------------------------------------------------
+# SUM gate, the non-HUGEINT branches: sum widens any DECIMAL to DECIMAL(38) and
+# UHUGEINT is INT128-internal - both no headroom for the cnt*partial multiply, so
+# double-eager is gated off and the whole group falls back to the one-sided
+# additive path. ov_a/ov_b above cover the HUGEINT branch and demonstrate why the
+# gate is needed; here we just pin the DECIMAL(38) and UHUGEINT branches: the plan
+# carries no scaling multiply and the result matches the unoptimized plan.
+# ------------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE de_d38 AS SELECT (i % 50) AS k, ((i * 13) % 1000)::DECIMAL(38, 2) AS m FROM range(5000) _(i)
+
+statement ok
+CREATE TABLE de_uh AS SELECT (i % 50) AS k, ((i % 100) + 1)::UHUGEINT AS m FROM range(5000) _(i)
+
+statement ok
+ANALYZE
+
+query II
+EXPLAIN SELECT d.g, count(*), sum(f.m) FROM de_a a JOIN de_dim d USING (k) JOIN de_d38 f USING (k) GROUP BY d.g
+----
+physical_plan	<!REGEX>:.*"\*"\(.*
+
+query II
+EXPLAIN SELECT d.g, count(*), sum(f.m) FROM de_a a JOIN de_dim d USING (k) JOIN de_uh f USING (k) GROUP BY d.g
+----
+physical_plan	<!REGEX>:.*"\*"\(.*
+
+# ... and the gated result still matches the unoptimized plan (one label per measure type)
+query TTT rowsort de_gate_d38_ab
+SELECT d.g, count(*) AS ev, sum(f.m) AS sd FROM de_a a JOIN de_dim d USING (k) JOIN de_d38 f USING (k) GROUP BY d.g
+----
+
+query TTT rowsort de_gate_uh_ab
+SELECT d.g, count(*) AS ev, sum(f.m) AS su FROM de_a a JOIN de_dim d USING (k) JOIN de_uh f USING (k) GROUP BY d.g
+----
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query TTT rowsort de_gate_d38_ab
+SELECT d.g, count(*) AS ev, sum(f.m) AS sd FROM de_a a JOIN de_dim d USING (k) JOIN de_d38 f USING (k) GROUP BY d.g
+----
+
+query TTT rowsort de_gate_uh_ab
+SELECT d.g, count(*) AS ev, sum(f.m) AS su FROM de_a a JOIN de_dim d USING (k) JOIN de_uh f USING (k) GROUP BY d.g
+----
+
+statement ok
+RESET disabled_optimizers
+
+# ------------------------------------------------------------------------------
+# Order-dependent aggregates must not be reassociated below the join. kahan_sum is
+# the deterministic FP opt-out (intentionally not tagged reassociation-precision-
+# only), so IsSupportedAggregate rejects it and its value must be preserved
+# exactly; string_agg (order-dependent, non-decomposable) is likewise left alone.
+# The teeth: removing the order-dependence gate would push these via the one-sided
+# state-export path (a combine_aggr appears), which the negated plan check catches.
+# ------------------------------------------------------------------------------
+
+query II
+EXPLAIN SELECT d.g, kahan_sum(f.c_f64) FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k) GROUP BY d.g
+----
+physical_plan	<!REGEX>:.*combine_aggr.*
+
+query II
+EXPLAIN SELECT d.g, string_agg(f.c_str, ',') FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k) GROUP BY d.g
+----
+physical_plan	<!REGEX>:.*combine_aggr.*
+
+# kahan_sum is not reassociated, so its (deterministic) value is byte-identical on/off
+query TT rowsort de_kahan_ab
+SELECT d.g, kahan_sum(f.c_f64) AS s FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k) GROUP BY d.g
+----
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query TT rowsort de_kahan_ab
+SELECT d.g, kahan_sum(f.c_f64) AS s FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k) GROUP BY d.g
+----
+
+statement ok
+RESET disabled_optimizers

@@ -339,6 +339,8 @@ unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	// ReplaceImplementation above copies properties from the untagged GetSumAggregate, so re-mark distributive
+	function.SetDistributive(true);
 	return nullptr;
 }
 
@@ -405,10 +407,19 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
-	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	auto sum_double = AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	// sum(DOUBLE) stays order dependent (combining in a different order changes the FP rounding), but that
+	// order dependence is precision-only: reassociating it is no less deterministic than parallel grouped
+	// aggregation already is. kahan_sum is the deterministic alternative and is intentionally NOT tagged.
+	sum_double.SetReassociationPrecisionOnly(true);
+	sum.AddFunction(sum_double);
 	sum.AddFunction(AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
 	    LogicalType::BIGNUM, LogicalType::BIGNUM));
+	// sum is distributive: sum(whole) = sum of per-partition sums, so eager aggregation can reconstruct it
+	for (auto &function : sum.functions) {
+		function.SetDistributive(true);
+	}
 	return sum;
 }
 
