@@ -14,6 +14,16 @@ EXPORT DATABASE '' (FORMAT X!);
 Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'
 
 statement error
+EXPORT DATABASE '' (FORMAT x);
+----
+Copy Function with name x does not exist!
+
+statement error
+EXPORT DATABASE '' (FORMAT);
+----
+FORMAT requires a parameter, e.g. FORMAT 'csv' or FORMAT 'parquet'
+
+statement error
 EXPORT DATABASE '' (FORMAT lower('csv'));
 ----
 Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'
