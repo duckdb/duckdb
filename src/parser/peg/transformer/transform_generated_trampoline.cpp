@@ -19,6 +19,48 @@ static const TransformFrameOps CHECKPOINT_STATEMENT_OPS = {
 static const TransformFrameOps CHECKPOINT_FORCE_OPS = {"CheckpointForce",
                                                        &PEGTransformerFactory::InitializeCheckpointForceTrampoline,
                                                        &PEGTransformerFactory::FinalizeCheckpointForceTrampoline};
+static const TransformFrameOps COMMENT_STATEMENT_OPS = {"CommentStatement",
+                                                        &PEGTransformerFactory::InitializeCommentStatementTrampoline,
+                                                        &PEGTransformerFactory::FinalizeCommentStatementTrampoline};
+static const TransformFrameOps COMMENT_ON_TYPE_OPS = {"CommentOnType",
+                                                      &PEGTransformerFactory::InitializeCommentOnTypeTrampoline,
+                                                      &PEGTransformerFactory::FinalizeCommentOnTypeTrampoline};
+static const TransformFrameOps COMMENT_TABLE_OPS = {"CommentTable",
+                                                    &PEGTransformerFactory::InitializeCommentTableTrampoline,
+                                                    &PEGTransformerFactory::FinalizeCommentTableTrampoline};
+static const TransformFrameOps COMMENT_SEQUENCE_OPS = {"CommentSequence",
+                                                       &PEGTransformerFactory::InitializeCommentSequenceTrampoline,
+                                                       &PEGTransformerFactory::FinalizeCommentSequenceTrampoline};
+static const TransformFrameOps COMMENT_FUNCTION_OPS = {"CommentFunction",
+                                                       &PEGTransformerFactory::InitializeCommentFunctionTrampoline,
+                                                       &PEGTransformerFactory::FinalizeCommentFunctionTrampoline};
+static const TransformFrameOps COMMENT_MACRO_TABLE_OPS = {"CommentMacroTable",
+                                                          &PEGTransformerFactory::InitializeCommentMacroTableTrampoline,
+                                                          &PEGTransformerFactory::FinalizeCommentMacroTableTrampoline};
+static const TransformFrameOps COMMENT_MACRO_OPS = {"CommentMacro",
+                                                    &PEGTransformerFactory::InitializeCommentMacroTrampoline,
+                                                    &PEGTransformerFactory::FinalizeCommentMacroTrampoline};
+static const TransformFrameOps COMMENT_VIEW_OPS = {"CommentView",
+                                                   &PEGTransformerFactory::InitializeCommentViewTrampoline,
+                                                   &PEGTransformerFactory::FinalizeCommentViewTrampoline};
+static const TransformFrameOps COMMENT_DATABASE_OPS = {"CommentDatabase",
+                                                       &PEGTransformerFactory::InitializeCommentDatabaseTrampoline,
+                                                       &PEGTransformerFactory::FinalizeCommentDatabaseTrampoline};
+static const TransformFrameOps COMMENT_INDEX_OPS = {"CommentIndex",
+                                                    &PEGTransformerFactory::InitializeCommentIndexTrampoline,
+                                                    &PEGTransformerFactory::FinalizeCommentIndexTrampoline};
+static const TransformFrameOps COMMENT_SCHEMA_OPS = {"CommentSchema",
+                                                     &PEGTransformerFactory::InitializeCommentSchemaTrampoline,
+                                                     &PEGTransformerFactory::FinalizeCommentSchemaTrampoline};
+static const TransformFrameOps COMMENT_TYPE_OPS = {"CommentType",
+                                                   &PEGTransformerFactory::InitializeCommentTypeTrampoline,
+                                                   &PEGTransformerFactory::FinalizeCommentTypeTrampoline};
+static const TransformFrameOps COMMENT_COLUMN_OPS = {"CommentColumn",
+                                                     &PEGTransformerFactory::InitializeCommentColumnTrampoline,
+                                                     &PEGTransformerFactory::FinalizeCommentColumnTrampoline};
+static const TransformFrameOps COMMENT_VALUE_OPS = {"CommentValue",
+                                                    &PEGTransformerFactory::InitializeCommentValueTrampoline,
+                                                    &PEGTransformerFactory::FinalizeCommentValueTrampoline};
 static const TransformFrameOps CONNECT_STATEMENT_OPS = {"ConnectStatement",
                                                         &PEGTransformerFactory::InitializeConnectStatementTrampoline,
                                                         &PEGTransformerFactory::FinalizeConnectStatementTrampoline};
@@ -119,8 +161,16 @@ static const TransformFrameOps SCHEMA_QUALIFICATION_OPS = {
 static const TransformFrameOps RESERVED_SCHEMA_QUALIFICATION_OPS = {
     "ReservedSchemaQualification", &PEGTransformerFactory::InitializeReservedSchemaQualificationTrampoline,
     &PEGTransformerFactory::FinalizeReservedSchemaQualificationTrampoline};
+static const TransformFrameOps DOTTED_IDENTIFIER_OPS = {"DottedIdentifier",
+                                                        &PEGTransformerFactory::InitializeDottedIdentifierTrampoline,
+                                                        &PEGTransformerFactory::FinalizeDottedIdentifierTrampoline};
+static const TransformFrameOps DOT_COL_LABEL_OPS = {"DotColLabel",
+                                                    &PEGTransformerFactory::InitializeDotColLabelTrampoline,
+                                                    &PEGTransformerFactory::FinalizeDotColLabelTrampoline};
 static const TransformFrameOps COL_ID_OPS = {"ColId", &PEGTransformerFactory::InitializeColIdTrampoline,
                                              &PEGTransformerFactory::FinalizeColIdTrampoline};
+static const TransformFrameOps COL_LABEL_OPS = {"ColLabel", &PEGTransformerFactory::InitializeColLabelTrampoline,
+                                                &PEGTransformerFactory::FinalizeColLabelTrampoline};
 static const TransformFrameOps IF_EXISTS_OPS = {"IfExists", &PEGTransformerFactory::InitializeIfExistsTrampoline,
                                                 &PEGTransformerFactory::FinalizeIfExistsTrampoline};
 static const TransformFrameOps BASE_TABLE_NAME_OPS = {"BaseTableName",
@@ -143,6 +193,20 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"AnalyzeVerbose", &ANALYZE_VERBOSE_OPS},
 	    {"CheckpointStatement", &CHECKPOINT_STATEMENT_OPS},
 	    {"CheckpointForce", &CHECKPOINT_FORCE_OPS},
+	    {"CommentStatement", &COMMENT_STATEMENT_OPS},
+	    {"CommentOnType", &COMMENT_ON_TYPE_OPS},
+	    {"CommentTable", &COMMENT_TABLE_OPS},
+	    {"CommentSequence", &COMMENT_SEQUENCE_OPS},
+	    {"CommentFunction", &COMMENT_FUNCTION_OPS},
+	    {"CommentMacroTable", &COMMENT_MACRO_TABLE_OPS},
+	    {"CommentMacro", &COMMENT_MACRO_OPS},
+	    {"CommentView", &COMMENT_VIEW_OPS},
+	    {"CommentDatabase", &COMMENT_DATABASE_OPS},
+	    {"CommentIndex", &COMMENT_INDEX_OPS},
+	    {"CommentSchema", &COMMENT_SCHEMA_OPS},
+	    {"CommentType", &COMMENT_TYPE_OPS},
+	    {"CommentColumn", &COMMENT_COLUMN_OPS},
+	    {"CommentValue", &COMMENT_VALUE_OPS},
 	    {"ConnectStatement", &CONNECT_STATEMENT_OPS},
 	    {"DisconnectStatement", &DISCONNECT_STATEMENT_OPS},
 	    {"SessionTarget", &SESSION_TARGET_OPS},
@@ -179,7 +243,10 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"CatalogQualification", &CATALOG_QUALIFICATION_OPS},
 	    {"SchemaQualification", &SCHEMA_QUALIFICATION_OPS},
 	    {"ReservedSchemaQualification", &RESERVED_SCHEMA_QUALIFICATION_OPS},
+	    {"DottedIdentifier", &DOTTED_IDENTIFIER_OPS},
+	    {"DotColLabel", &DOT_COL_LABEL_OPS},
 	    {"ColId", &COL_ID_OPS},
+	    {"ColLabel", &COL_LABEL_OPS},
 	    {"IfExists", &IF_EXISTS_OPS},
 	    {"BaseTableName", &BASE_TABLE_NAME_OPS},
 	    {"UnqualifiedBaseTableName", &UNQUALIFIED_BASE_TABLE_NAME_OPS},
@@ -294,6 +361,179 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCheckpointForceT
                                                                                           TransformStackFrame &frame) {
 	auto result = PEGTransformerFactory::TransformCheckpointForce(transformer);
 	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeCommentStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(3);
+	stack.PushFrame(list_pr.GetChild(5), COMMENT_VALUE_OPS, TransformFrameResultTarget(frame.frame_index, 2));
+	stack.PushFrame(list_pr.GetChild(3), DOTTED_IDENTIFIER_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+	stack.PushFrame(list_pr.GetChild(2), COMMENT_ON_TYPE_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentStatementTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto comment_on_type = frame.TakeResult<CatalogType>(0);
+	auto dotted_identifier = frame.TakeResult<vector<string>>(1);
+	auto comment_value = frame.TakeResult<Value>(2);
+	auto result = PEGTransformerFactory::TransformCommentStatement(transformer, comment_on_type, dotted_identifier,
+	                                                               comment_value);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeCommentOnTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentOnTypeTrampoline(PEGTransformer &transformer,
+                                                                                        TransformStack &stack,
+                                                                                        TransformStackFrame &frame) {
+	auto result = frame.TakeResult<CatalogType>(0);
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+void PEGTransformerFactory::InitializeCommentTableTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentTableTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformCommentTable(transformer);
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+void PEGTransformerFactory::InitializeCommentSequenceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentSequenceTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformCommentSequence(transformer);
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+void PEGTransformerFactory::InitializeCommentFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentFunctionTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformCommentFunction(transformer);
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+void PEGTransformerFactory::InitializeCommentMacroTableTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCommentMacroTableTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformCommentMacroTable(transformer);
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+void PEGTransformerFactory::InitializeCommentMacroTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentMacroTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformCommentMacro(transformer);
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+void PEGTransformerFactory::InitializeCommentViewTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentViewTrampoline(PEGTransformer &transformer,
+                                                                                      TransformStack &stack,
+                                                                                      TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformCommentView(transformer);
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+void PEGTransformerFactory::InitializeCommentDatabaseTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentDatabaseTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformCommentDatabase(transformer);
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+void PEGTransformerFactory::InitializeCommentIndexTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentIndexTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformCommentIndex(transformer);
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+void PEGTransformerFactory::InitializeCommentSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentSchemaTrampoline(PEGTransformer &transformer,
+                                                                                        TransformStack &stack,
+                                                                                        TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformCommentSchema(transformer);
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+void PEGTransformerFactory::InitializeCommentTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentTypeTrampoline(PEGTransformer &transformer,
+                                                                                      TransformStack &stack,
+                                                                                      TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformCommentType(transformer);
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+void PEGTransformerFactory::InitializeCommentColumnTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentColumnTrampoline(PEGTransformer &transformer,
+                                                                                        TransformStack &stack,
+                                                                                        TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformCommentColumn(transformer);
+	return make_uniq<TypedTransformResult<CatalogType>>(result);
 }
 
 void PEGTransformerFactory::InitializeConnectStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -965,6 +1205,41 @@ PEGTransformerFactory::FinalizeReservedSchemaQualificationTrampoline(PEGTransfor
 	auto reserved_schema_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	auto result = PEGTransformerFactory::TransformReservedSchemaQualification(transformer, reserved_schema_name);
 	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeDottedIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &repeat_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (repeat_opt.HasResult()) {
+		auto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto repeat_children = repeat_pr.GetChildren();
+		frame.ReserveChildSlots(0 + repeat_children.size());
+		for (idx_t i = repeat_children.size(); i > 0; i--) {
+			auto child_idx = i - 1;
+			stack.PushFrame(repeat_children[child_idx].get(), DOT_COL_LABEL_OPS,
+			                TransformFrameResultTarget(frame.frame_index, 0 + child_idx));
+		}
+	} else {
+		frame.ReserveChildSlots(0);
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDottedIdentifierTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
+	optional<vector<string>> dot_col_label {};
+	if (!frame.child_results.empty()) {
+		vector<string> dot_col_label_value;
+		for (idx_t i = 0; i < frame.child_results.size(); i++) {
+			dot_col_label_value.push_back(frame.TakeResult<string>(i));
+		}
+		dot_col_label = std::move(dot_col_label_value);
+	}
+	auto result = PEGTransformerFactory::TransformDottedIdentifier(transformer, identifier, dot_col_label);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
 }
 
 void PEGTransformerFactory::InitializeIfExistsTrampoline(PEGTransformer &transformer, TransformStack &stack,

@@ -426,6 +426,14 @@ public:
 	                                      TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeColIdTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                                TransformStackFrame &frame);
+	static void InitializeColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDotColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDotColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializePrefixExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -480,6 +488,58 @@ public:
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeCheckpointForceTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentOnTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentOnTypeTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentTableTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentTableTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentSequenceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentSequenceTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentMacroTableTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentMacroTableTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentMacroTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentMacroTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentViewTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentViewTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentDatabaseTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentDatabaseTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentIndexTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentIndexTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentTypeTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentColumnTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentColumnTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeConnectStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -640,6 +700,10 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeReservedSchemaQualificationTrampoline(PEGTransformer &transformer,
 	                                                                                      TransformStack &stack,
 	                                                                                      TransformStackFrame &frame);
+	static void InitializeDottedIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDottedIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeIfExistsTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                         TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -1821,6 +1885,7 @@ public:
 	                                                const optional<vector<string>> &dot_col_label);
 	static unique_ptr<TransformResultValue> TransformDotColLabelInternal(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
+	static string TransformDotColLabel(PEGTransformer &transformer, const string &col_label);
 	static unique_ptr<TransformResultValue> TransformColIdInternal(PEGTransformer &transformer,
 	                                                               ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformColIdOrStringInternal(PEGTransformer &transformer,

@@ -32,6 +32,16 @@ rules:
     init: InitializeColIdTrampoline
     finalize: FinalizeColIdTrampoline
 
+  ColLabel:
+    mode: manual
+    init: InitializeColLabelTrampoline
+    finalize: FinalizeColLabelTrampoline
+
+  DotColLabel:
+    mode: manual
+    init: InitializeDotColLabelTrampoline
+    finalize: FinalizeDotColLabelTrampoline
+
   Expression:
     mode: forward
 

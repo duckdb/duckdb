@@ -246,6 +246,23 @@ vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &
 	return parts;
 }
 
+string PEGTransformerFactory::TransformDotColLabel(PEGTransformer &transformer, const string &col_label) {
+	return col_label;
+}
+
+void PEGTransformerFactory::InitializeDotColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDotColLabelTrampoline(PEGTransformer &transformer,
+                                                                                      TransformStack &stack,
+                                                                                      TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto col_label = TransformIdentifierOrKeyword(transformer, list_pr.GetChild(1));
+	return make_uniq<TypedTransformResult<string>>(col_label);
+}
+
 ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
     PEGTransformer &transformer, const vector<string> &dotted_identifier, const optional<LogicalType> &type,
     optional<GeneratedColumnDefinition> generated_column, const bool &has_result,

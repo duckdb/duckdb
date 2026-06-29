@@ -3086,7 +3086,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDotColLabelInte
                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto col_label = transformer.Transform<string>(list_pr.GetChild(1));
-	auto result = col_label;
+	auto result = TransformDotColLabel(transformer, col_label);
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
