@@ -289,12 +289,6 @@ public:
 	//! Whether the aggregate is affect by distinct modifiers
 	AggregateDistinctDependent distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
 
-	//! For order-dependent aggregates: whether reassociating the inputs only perturbs the result within
-	//! floating-point rounding (e.g. sum/avg over DOUBLE), as opposed to changing it semantically. When true,
-	//! transformations that reorder inputs (such as eager aggregation pushdown) may be applied even though the
-	//! aggregate is order dependent - the result is no less deterministic than parallel aggregation already is.
-	bool reassociation_precision_only = false;
-
 	//! Whether the aggregate is distributive: the aggregate over a set equals the same aggregate applied to the
 	//! results of aggregating a partition of that set (sum, count, min, max). This lets the value be reconstructed
 	//! above a join from per-key partials, which the eager-aggregation pushdown relies on. Algebraic aggregates
@@ -338,10 +332,6 @@ public: // Properties
 	//! Whether the aggregate is order dependent
 	auto GetOrderDependent() const -> AggregateOrderDependent { return properties.order_dependent; }
 	auto SetOrderDependent(AggregateOrderDependent value) -> void { properties.order_dependent = value; }
-
-	//! Whether order dependence stems only from floating-point reassociation (see field comment)
-	auto GetReassociationPrecisionOnly() const -> bool { return properties.reassociation_precision_only; }
-	auto SetReassociationPrecisionOnly(bool value) -> void { properties.reassociation_precision_only = value; }
 
 	//! Whether the aggregate is distributive (see field comment)
 	auto GetDistributive() const -> bool { return properties.distributive; }

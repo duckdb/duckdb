@@ -88,10 +88,6 @@ static bool IsSupportedAggregate(const BoundAggregateExpression &expr) {
 	if (!expr.Function().HasGetStateTypeCallback()) {
 		return false;
 	}
-	if (expr.Function().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT &&
-	    !expr.Function().GetReassociationPrecisionOnly()) {
-		return false;
-	}
 	return true;
 }
 
@@ -562,10 +558,6 @@ static bool DEClassify(const BoundAggregateExpression &aggr, DoubleEagerKind &ki
 		return false;
 	}
 	if (!aggr.Function().GetDistributive()) {
-		return false;
-	}
-	if (aggr.Function().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT &&
-	    !aggr.Function().GetReassociationPrecisionOnly()) {
 		return false;
 	}
 	auto &name = aggr.Function().GetName();

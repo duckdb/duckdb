@@ -409,10 +409,6 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	auto sum_double = AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE);
-	// sum(DOUBLE) stays order dependent (combining in a different order changes the FP rounding), but that
-	// order dependence is precision-only: reassociating it is no less deterministic than parallel grouped
-	// aggregation already is. kahan_sum is the deterministic alternative and is intentionally NOT tagged.
-	sum_double.SetReassociationPrecisionOnly(true);
 	sum.AddFunction(sum_double);
 	sum.AddFunction(AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
 	    LogicalType::BIGNUM, LogicalType::BIGNUM));
