@@ -881,6 +881,33 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> st
 	}
 }
 
+StatementSignature ClientContext::BindStatement(unique_ptr<SQLStatement> statement) {
+	auto lock = LockContext();
+	auto named_param_map = statement->named_param_map;
+	StatementSignature signature;
+	RunFunctionInTransactionInternal(
+	    *lock,
+	    [&]() {
+		    Planner planner(*this);
+		    planner.CreatePlan(std::move(statement));
+		    signature.names = planner.names;
+		    signature.types = planner.types;
+		    signature.properties = std::move(planner.properties);
+		    // Parameter types from the bound parameter map (as in PreparedStatementData::TryGetType).
+		    for (auto &entry : named_param_map) {
+			    LogicalType type(LogicalTypeId::UNKNOWN);
+			    auto it = planner.value_map.find(entry.first);
+			    if (it != planner.value_map.end()) {
+				    type = it->second->return_type.id() != LogicalTypeId::INVALID ? it->second->return_type
+				                                                                  : it->second->GetValue().type();
+			    }
+			    signature.parameters.push_back({entry.first, entry.second, std::move(type)});
+		    }
+	    },
+	    false);
+	return signature;
+}
+
 unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 	auto lock = LockContext();
 	// prepare the query
