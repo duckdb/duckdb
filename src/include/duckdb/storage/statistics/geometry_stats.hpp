@@ -284,22 +284,28 @@ struct GeometryStatsData {
 	GeometryTypeSet types;
 	GeometryExtent extent;
 	GeometryStatsFlags flags;
+	//! Whether this is a GEOGRAPHY column: enables antimeridian-aware (circular longitude) extent math.
+	//! NOTE: no in-class initializer - this struct is a union member and must stay trivially constructible.
+	//! It is set from the column type in GeometryStats::Create*/Deserialize (and the Parquet stats state).
+	bool geodetic;
 
 	void SetEmpty() {
 		types = GeometryTypeSet::Empty();
 		extent = GeometryExtent::Empty();
 		flags = GeometryStatsFlags::Empty();
+		geodetic = false;
 	}
 
 	void SetUnknown() {
 		types = GeometryTypeSet::Unknown();
 		extent = GeometryExtent::Unknown();
 		flags = GeometryStatsFlags::Unknown();
+		geodetic = false;
 	}
 
 	void Merge(const GeometryStatsData &other) {
 		types.Merge(other.types);
-		extent.Merge(other.extent);
+		extent.Merge(other.extent, geodetic);
 		flags.Merge(other.flags);
 	}
 
@@ -310,7 +316,7 @@ struct GeometryStatsData {
 
 		// Update extent
 		bool has_any_empty = false;
-		const auto vert_count = Geometry::GetExtent(geom_blob, extent, has_any_empty);
+		const auto vert_count = Geometry::GetExtent(geom_blob, extent, has_any_empty, geodetic);
 
 		// Update flags
 		if (has_any_empty) {

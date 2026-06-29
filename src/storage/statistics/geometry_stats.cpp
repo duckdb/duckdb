@@ -71,16 +71,22 @@ bool GeometryTypeSet::TryAdd(const string &type_name) {
 }
 
 BaseStatistics GeometryStats::CreateUnknown(LogicalType type) {
+	const bool geodetic = type.id() == LogicalTypeId::GEOGRAPHY;
 	BaseStatistics result(std::move(type));
 	result.InitializeUnknown();
-	GetDataUnsafe(result).SetUnknown();
+	auto &data = GetDataUnsafe(result);
+	data.SetUnknown();
+	data.geodetic = geodetic;
 	return result;
 }
 
 BaseStatistics GeometryStats::CreateEmpty(LogicalType type) {
+	const bool geodetic = type.id() == LogicalTypeId::GEOGRAPHY;
 	BaseStatistics result(std::move(type));
 	result.InitializeEmpty();
-	GetDataUnsafe(result).SetEmpty();
+	auto &data = GetDataUnsafe(result);
+	data.SetEmpty();
+	data.geodetic = geodetic;
 	return result;
 }
 
@@ -121,6 +127,8 @@ void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serialize
 
 void GeometryStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
 	auto &data = GetDataUnsafe(base);
+	// The geodetic flag is derived from the column type, not serialized.
+	data.geodetic = base.GetType().id() == LogicalTypeId::GEOGRAPHY;
 
 	// Read old garbage string stats if present, but ignore it since it is not relevant to geometry stats
 	if (deserializer.CanDeserializeProperty(200, "min")) {

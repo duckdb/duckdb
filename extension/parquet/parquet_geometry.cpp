@@ -374,7 +374,8 @@ optional_ptr<const GeoParquetColumnMetadata> GeoParquetFileMetadata::GetColumnMe
 
 unique_ptr<ColumnReader> GeometryColumnReader::Create(const ParquetReader &reader, const ParquetColumnSchema &schema,
                                                       ClientContext &context) {
-	D_ASSERT(schema.type.id() == LogicalTypeId::GEOMETRY);
+	const bool is_geography = schema.type.id() == LogicalTypeId::GEOGRAPHY;
+	D_ASSERT(schema.type.id() == LogicalTypeId::GEOMETRY || is_geography);
 	D_ASSERT(schema.children.size() == 1 && schema.children[0].type.id() == LogicalTypeId::BLOB);
 
 	// Make a string reader for the underlying WKB data
@@ -385,9 +386,10 @@ unique_ptr<ColumnReader> GeometryColumnReader::Create(const ParquetReader &reade
 	auto ref = make_uniq_base<Expression, BoundReferenceExpression>(LogicalTypeId::BLOB, 0);
 	args.push_back(std::move(ref));
 
-	// TODO: Pass the actual target type here so we get the CRS information too
-	auto func = StGeomfromwkbFun::GetFunction();
-	func.SetName("ST_GeomFromWKB");
+	// TODO: Pass the actual target type here so we get the CRS information too.
+	// GEOGRAPHY uses ST_GeogFromWKB, which additionally validates the canonical coordinate ranges.
+	auto func = is_geography ? StGeogfromwkbFun::GetFunction() : StGeomfromwkbFun::GetFunction();
+	func.SetName(is_geography ? "ST_GeogFromWKB" : "ST_GeomFromWKB");
 	auto read_expr = func.Bind(context, std::move(args));
 	auto type_expr = BoundCastExpression::AddDefaultCastToType(std::move(read_expr), schema.type);
 	vector<unique_ptr<ColumnReader>> expression_children;

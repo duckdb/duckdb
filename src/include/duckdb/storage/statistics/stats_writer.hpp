@@ -131,7 +131,9 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 	friend struct StringStats;
 
 	explicit StatsWriter(const LogicalType &type)
-	    : is_varchar(type.id() == LogicalTypeId::VARCHAR), is_geometry(type.id() == LogicalTypeId::GEOMETRY) {
+	    : is_varchar(type.id() == LogicalTypeId::VARCHAR),
+	      is_geometry(type.id() == LogicalTypeId::GEOMETRY || type.id() == LogicalTypeId::GEOGRAPHY),
+	      geodetic(type.id() == LogicalTypeId::GEOGRAPHY) {
 		Clear();
 	}
 
@@ -139,6 +141,8 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 		ClearBase();
 		if (is_geometry) {
 			geometry_stats.SetEmpty();
+			// GEOGRAPHY uses antimeridian-aware (geodetic) extent math.
+			geometry_stats.geodetic = geodetic;
 		} else {
 			is_set = false;
 			min_size = 0;
@@ -257,6 +261,7 @@ private:
 	idx_t total_string_length;
 	bool is_varchar;
 	bool is_geometry;
+	bool geodetic;
 	GeometryStatsData geometry_stats;
 };
 

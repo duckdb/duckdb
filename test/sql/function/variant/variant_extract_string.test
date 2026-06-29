@@ -120,7 +120,7 @@ SELECT variant_extract_string(v, '') FROM t WHERE d = 128;
 query I
 SELECT [*COLUMNS(*)] FROM (
 	SELECT variant_extract_string(
-		COLUMNS(lambda c: NOT regexp_matches(c, 'array|struct|map|union|tuple'))::VARIANT,
+		COLUMNS(lambda c: NOT regexp_matches(c, 'array|struct|map|union|tuple|geography'))::VARIANT,
 		''
 	)
 	FROM test_all_types()

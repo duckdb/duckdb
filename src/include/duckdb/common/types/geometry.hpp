@@ -153,39 +153,62 @@ public:
 		return std::isfinite(m_min) && std::isfinite(m_max);
 	}
 
-	void Extend(const VertexXY &vertex) {
-		ExtendAxis(x_min, x_max, vertex.x);
+	// The `geodetic` flag enables antimeridian-aware longitude (X axis) math used by GEOGRAPHY:
+	// the X axis is treated as a circular [-180,180] degree axis where an arc may wrap (x_min > x_max),
+	// meaning the longitude range is [x_min, 180] u [-180, x_max]. The Y axis is never wrapped.
+	// When `geodetic` is false the behavior is exact min/max, identical to GEOMETRY.
+
+	void Extend(const VertexXY &vertex, bool geodetic = false) {
+		ExtendX(vertex.x, geodetic);
 		ExtendAxis(y_min, y_max, vertex.y);
 	}
 
-	void Extend(const VertexXYZ &vertex) {
-		ExtendAxis(x_min, x_max, vertex.x);
+	void Extend(const VertexXYZ &vertex, bool geodetic = false) {
+		ExtendX(vertex.x, geodetic);
 		ExtendAxis(y_min, y_max, vertex.y);
 		ExtendAxis(z_min, z_max, vertex.z);
 	}
 
-	void Extend(const VertexXYM &vertex) {
-		ExtendAxis(x_min, x_max, vertex.x);
+	void Extend(const VertexXYM &vertex, bool geodetic = false) {
+		ExtendX(vertex.x, geodetic);
 		ExtendAxis(y_min, y_max, vertex.y);
 		ExtendAxis(m_min, m_max, vertex.m);
 	}
 
-	void Extend(const VertexXYZM &vertex) {
-		ExtendAxis(x_min, x_max, vertex.x);
+	void Extend(const VertexXYZM &vertex, bool geodetic = false) {
+		ExtendX(vertex.x, geodetic);
 		ExtendAxis(y_min, y_max, vertex.y);
 		ExtendAxis(z_min, z_max, vertex.z);
 		ExtendAxis(m_min, m_max, vertex.m);
 	}
 
-	void Merge(const GeometryExtent &other) {
-		MergeAxis(x_min, x_max, other.x_min, other.x_max);
+	void Merge(const GeometryExtent &other, bool geodetic = false) {
 		MergeAxis(y_min, y_max, other.y_min, other.y_max);
 		MergeAxis(z_min, z_max, other.z_min, other.z_max);
 		MergeAxis(m_min, m_max, other.m_min, other.m_max);
+
+		// Only the X axis is special-cased for geodetic merging, and only when both arcs are finite.
+		// A non-finite axis is "empty" or "unknown" and the plain min/max correctly propagates both.
+		const bool both_finite =
+		    std::isfinite(x_min) && std::isfinite(x_max) && std::isfinite(other.x_min) && std::isfinite(other.x_max);
+		if (geodetic && both_finite) {
+			LonArcMerge(x_min, x_max, other.x_min, other.x_max, x_min, x_max);
+		} else {
+			MergeAxis(x_min, x_max, other.x_min, other.x_max);
+		}
 	}
 
-	bool IntersectsXY(const GeometryExtent &other) const {
-		return !(x_min > other.x_max || x_max < other.x_min || y_min > other.y_max || y_max < other.y_min);
+	bool IntersectsXY(const GeometryExtent &other, bool geodetic = false) const {
+		if (y_min > other.y_max || y_max < other.y_min) {
+			return false;
+		}
+		const bool both_finite =
+		    std::isfinite(x_min) && std::isfinite(x_max) && std::isfinite(other.x_min) && std::isfinite(other.x_max);
+		if (geodetic && both_finite) {
+			return LonArcIntersects(x_min, x_max, other.x_min, other.x_max);
+		}
+		// Plain (and the non-finite empty/unknown cases): the inequalities handle +/- inf naturally.
+		return !(x_min > other.x_max || x_max < other.x_min);
 	}
 
 	bool IntersectsXYZM(const GeometryExtent &other) const {
@@ -193,8 +216,27 @@ public:
 		         z_min > other.z_max || z_max < other.z_min || m_min > other.m_max || m_max < other.m_min);
 	}
 
-	bool ContainsXY(const GeometryExtent &other) const {
-		return x_min <= other.x_min && x_max >= other.x_max && y_min <= other.y_min && y_max >= other.y_max;
+	bool ContainsXY(const GeometryExtent &other, bool geodetic = false) const {
+		if (!(y_min <= other.y_min && y_max >= other.y_max)) {
+			return false;
+		}
+		const bool both_finite =
+		    std::isfinite(x_min) && std::isfinite(x_max) && std::isfinite(other.x_min) && std::isfinite(other.x_max);
+		if (geodetic && both_finite) {
+			return LonArcContainsArc(x_min, x_max, other.x_min, other.x_max);
+		}
+		return x_min <= other.x_min && x_max >= other.x_max;
+	}
+
+	// Wrap a longitude in degrees into the canonical [-180, 180] range, keeping +180 as +180.
+	static double Norm180(double deg) {
+		double d = std::fmod(deg, 360.0);
+		if (d > 180.0) {
+			d -= 360.0;
+		} else if (d < -180.0) {
+			d += 360.0;
+		}
+		return d;
 	}
 
 private:
@@ -217,6 +259,77 @@ private:
 		}
 		min = MinValue(min, other_min);
 		max = MaxValue(max, other_max);
+	}
+
+	// Eastward angular distance (degrees) from a to b, in [0, 360). Inputs in [-180, 180].
+	static double LonEastDist(double a, double b) {
+		double d = b - a;
+		if (d < 0.0) {
+			d += 360.0;
+		}
+		return d;
+	}
+
+	// Does the eastward arc [lo, hi] contain the longitude p? All inputs finite, in [-180, 180].
+	static bool LonArcContains(double lo, double hi, double p) {
+		return LonEastDist(lo, p) <= LonEastDist(lo, hi);
+	}
+
+	// Do two eastward longitude arcs intersect? Two arcs on a circle overlap iff one contains the
+	// other's start point.
+	static bool LonArcIntersects(double also, double ahi, double blo, double bhi) {
+		return LonArcContains(also, ahi, blo) || LonArcContains(blo, bhi, also);
+	}
+
+	// Does the outer arc fully contain the inner arc?
+	static bool LonArcContainsArc(double olo, double ohi, double ilo, double ihi) {
+		const double ow = LonEastDist(olo, ohi);
+		const double off = LonEastDist(olo, ilo);
+		const double iw = LonEastDist(ilo, ihi);
+		return off <= ow && off + iw <= ow;
+	}
+
+	// Merge two eastward arcs into the smallest covering arc, writing the result to out_lo/out_hi
+	// (which may alias the inputs). The minimal covering arc starts at one of the two input starts.
+	static void LonArcMerge(double also, double ahi, double blo, double bhi, double &out_lo, double &out_hi) {
+		const double aw = LonEastDist(also, ahi);
+		const double bw = LonEastDist(blo, bhi);
+		const double need_a = MaxValue(aw, LonEastDist(also, blo) + bw);
+		const double need_b = MaxValue(bw, LonEastDist(blo, also) + aw);
+		double start, width;
+		if (need_a <= need_b) {
+			start = also;
+			width = need_a;
+		} else {
+			start = blo;
+			width = need_b;
+		}
+		if (width >= 360.0) {
+			// Covers the whole circle - represent as a full, non-wrapped range.
+			out_lo = -180.0;
+			out_hi = 180.0;
+			return;
+		}
+		out_lo = start;
+		out_hi = Norm180(start + width);
+	}
+
+	// Extend the X (longitude) axis to include x. For geodetic this uses circular arc math.
+	void ExtendX(double x, bool geodetic) {
+		if (!geodetic || std::isnan(x)) {
+			ExtendAxis(x_min, x_max, x);
+			return;
+		}
+		if (!std::isfinite(x_min) || !std::isfinite(x_max)) {
+			if (x_min == EMPTY_MIN) {
+				// First vertex into an empty extent.
+				x_min = x;
+				x_max = x;
+			}
+			// Otherwise the X axis is "unknown" (infinite); keep it unknown.
+			return;
+		}
+		LonArcMerge(x_min, x_max, x, x, x_min, x_max);
 	}
 
 public:
@@ -273,6 +386,8 @@ class Geometry {
 public:
 	static constexpr idx_t MAX_RECURSION_DEPTH = 16;
 	static constexpr StorageVersion VERSION_ADDED = StorageVersion::V1_5_0; // Added to core in DuckDB v1.5.0
+	//! GEOGRAPHY shares the WKB representation, but was only added to core in DuckDB v2.0.0
+	static constexpr StorageVersion GEOGRAPHY_VERSION_ADDED = StorageVersion::V2_0_0;
 
 	//! Check for legayc geometry type (pre v1.5)
 	static bool IsSpatialGeometryType(const LogicalType &type);
@@ -301,8 +416,12 @@ public:
 	DUCKDB_API static pair<GeometryType, VertexType> GetType(const string_t &wkb);
 
 	//! Update the bounding box, return number of vertices processed
-	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent);
-	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent, bool &has_any_empty);
+	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent, bool geodetic = false);
+	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent, bool &has_any_empty,
+	                                     bool geodetic = false);
+	//! Whether the geometry's coordinates lie within the canonical GEOGRAPHY ranges
+	//! (X in [-180, 180], Y in [-90, 90]). Empty geometries are always valid.
+	DUCKDB_API static bool IsValidGeography(const string_t &wkb);
 
 	//! Convert to vectorized format
 	DUCKDB_API static void ToVectorizedFormat(const Vector &source, Vector &target, idx_t count, GeometryType geom_type,

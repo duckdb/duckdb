@@ -137,7 +137,7 @@ FROM (
 	SELECT [*COLUMNS(*)] AS results
 	FROM (
 		SELECT variant_contains_self(
-			COLUMNS(lambda c: NOT regexp_matches(c, 'array|struct|map|union|tuple'))
+			COLUMNS(lambda c: NOT regexp_matches(c, 'array|struct|map|union|tuple|geography'))
 		)
 		FROM test_all_types()
 		WHERE bool IS NOT NULL

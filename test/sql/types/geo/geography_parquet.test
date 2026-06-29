@@ -1,0 +1,49 @@
+# name: test/sql/types/geo/geography_parquet.test
+# description: Round-trip the GEOGRAPHY type through Parquet (native GEOGRAPHY logical type)
+# group: [geo]
+
+require parquet
+
+statement ok
+CREATE TABLE g1(id INT, g GEOGRAPHY);
+
+statement ok
+INSERT INTO g1 VALUES
+	(1, 'POINT(1 2)'),
+	(2, 'LINESTRING(0 0, 1 1, 2 2)'),
+	(3, 'POLYGON((0 0, 4 0, 4 4, 0 4, 0 0))'),
+	(4, NULL);
+
+statement ok
+COPY g1 TO '{TEST_DIR}/geography.parquet' (FORMAT 'parquet');
+
+# The column reads back as GEOGRAPHY (native Parquet GEOGRAPHY logical type)
+query I
+SELECT typeof(g) FROM '{TEST_DIR}/geography.parquet' LIMIT 1;
+----
+GEOGRAPHY
+
+# Values round-trip
+query II
+SELECT id, ST_AsText(g) FROM '{TEST_DIR}/geography.parquet' ORDER BY id;
+----
+1	POINT (1 2)
+2	LINESTRING (0 0, 1 1, 2 2)
+3	POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0))
+4	NULL
+
+# Antimeridian-spanning geography produces a wrapped (xmin > xmax) bounding box in the Parquet
+# native geospatial statistics, which round-trips and stays usable for the && predicate.
+statement ok
+CREATE TABLE g2(g GEOGRAPHY);
+
+statement ok
+INSERT INTO g2 VALUES ('LINESTRING(170 0, -170 0)');
+
+statement ok
+COPY g2 TO '{TEST_DIR}/geography_am.parquet' (FORMAT 'parquet');
+
+query I
+SELECT g && 'POINT(179 0)'::GEOGRAPHY FROM '{TEST_DIR}/geography_am.parquet';
+----
+true

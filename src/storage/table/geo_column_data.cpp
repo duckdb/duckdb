@@ -353,7 +353,8 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	// Shredded columns are always re-written from scratch, and the stats are recomputes, do the empty stats of the
 	// inner layout type is a correct default in these cases.
 	unique_ptr<BaseStatistics> shredded_stats;
-	if (base_column->GetType().id() != LogicalTypeId::GEOMETRY) {
+	const auto base_id = base_column->GetType().id();
+	if (base_id != LogicalTypeId::GEOMETRY && base_id != LogicalTypeId::GEOGRAPHY) {
 		shredded_stats = BaseStatistics::CreateEmpty(base_column->GetType()).ToUnique();
 	}
 	auto &old_column_stats = shredded_stats ? *shredded_stats : old_stats;

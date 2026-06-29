@@ -558,19 +558,21 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 		}
 		return string_stats.ToUnique();
 	}
+	case LogicalTypeId::GEOGRAPHY:
 	case LogicalTypeId::GEOMETRY: {
 		if (!column_chunk) {
 			break;
 		}
+		const bool is_geography = type.id() == LogicalTypeId::GEOGRAPHY;
 		auto geo_stats = GeometryStats::CreateUnknown(type);
 		if (column_chunk->meta_data.__isset.geospatial_statistics) {
 			if (column_chunk->meta_data.geospatial_statistics.__isset.bbox) {
 				auto &bbox = column_chunk->meta_data.geospatial_statistics.bbox;
 				auto &stats_bbox = GeometryStats::GetExtent(geo_stats);
 
-				// xmin > xmax is allowed if the geometry crosses the antimeridian,
-				// but we don't handle this right now
-				if (bbox.xmin <= bbox.xmax) {
+				// xmin > xmax means the bounding box wraps across the antimeridian. This is only valid for
+				// GEOGRAPHY (whose extent math is antimeridian-aware); for GEOMETRY we ignore such a box.
+				if (is_geography || bbox.xmin <= bbox.xmax) {
 					stats_bbox.x_min = bbox.xmin;
 					stats_bbox.x_max = bbox.xmax;
 				}

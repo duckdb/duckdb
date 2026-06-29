@@ -13,7 +13,7 @@ create table tbl (
 )
 
 statement ok
-insert into tbl select t::VARIANT var from test_all_types() t
+insert into tbl select t::VARIANT var from (select * exclude (geography) from test_all_types()) t
 
 statement ok
 checkpoint

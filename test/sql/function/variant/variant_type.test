@@ -121,7 +121,7 @@ NULL
 query I
 SELECT [*COLUMNS(*)] FROM (
 	SELECT variant_type(
-		COLUMNS(lambda c: NOT regexp_matches(c, 'array|struct|map|union|tuple'))::VARIANT
+		COLUMNS(lambda c: NOT regexp_matches(c, 'array|struct|map|union|tuple|geography'))::VARIANT
 	)
 	FROM test_all_types()
 	-- strip NULLs from output

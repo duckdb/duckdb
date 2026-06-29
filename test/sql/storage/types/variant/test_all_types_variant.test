@@ -4,7 +4,7 @@
 load {TEST_DIR}/test_all_types_variant.db readwrite v1.5.0
 
 statement ok
-create table tbl as select COLUMNS(*)::VARIANT from test_all_types()
+create table tbl as select COLUMNS(* EXCLUDE (geography))::VARIANT from test_all_types()
 
 statement ok
 checkpoint

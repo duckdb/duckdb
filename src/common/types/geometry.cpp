@@ -1335,7 +1335,8 @@ pair<GeometryType, VertexType> Geometry::GetType(const string_t &wkb) {
 }
 
 template <class VERTEX_TYPE = VertexXY>
-static uint32_t ParseVerticesInternal(BlobReader &reader, GeometryExtent &extent, uint32_t vert_count, bool check_nan) {
+static uint32_t ParseVerticesInternal(BlobReader &reader, GeometryExtent &extent, uint32_t vert_count, bool check_nan,
+                                      bool geodetic) {
 	uint32_t count = 0;
 
 	// Issue a single .Reserve() for all vertices, to minimize bounds checking overhead
@@ -1358,34 +1359,34 @@ static uint32_t ParseVerticesInternal(BlobReader &reader, GeometryExtent &extent
 			continue;
 		}
 
-		extent.Extend(vertex);
+		extent.Extend(vertex, geodetic);
 		count++;
 	}
 	return count;
 }
 
 static uint32_t ParseVertices(BlobReader &reader, GeometryExtent &extent, uint32_t vert_count, VertexType type,
-                              bool check_nan) {
+                              bool check_nan, bool geodetic) {
 	switch (type) {
 	case VertexType::XY:
-		return ParseVerticesInternal<VertexXY>(reader, extent, vert_count, check_nan);
+		return ParseVerticesInternal<VertexXY>(reader, extent, vert_count, check_nan, geodetic);
 	case VertexType::XYZ:
-		return ParseVerticesInternal<VertexXYZ>(reader, extent, vert_count, check_nan);
+		return ParseVerticesInternal<VertexXYZ>(reader, extent, vert_count, check_nan, geodetic);
 	case VertexType::XYM:
-		return ParseVerticesInternal<VertexXYM>(reader, extent, vert_count, check_nan);
+		return ParseVerticesInternal<VertexXYM>(reader, extent, vert_count, check_nan, geodetic);
 	case VertexType::XYZM:
-		return ParseVerticesInternal<VertexXYZM>(reader, extent, vert_count, check_nan);
+		return ParseVerticesInternal<VertexXYZM>(reader, extent, vert_count, check_nan, geodetic);
 	default:
 		throw InvalidInputException("Unsupported vertex type %d in WKB", static_cast<int>(type));
 	}
 }
 
-uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent) {
+uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool geodetic) {
 	bool has_any_empty = false;
-	return GetExtent(wkb, extent, has_any_empty);
+	return GetExtent(wkb, extent, has_any_empty, geodetic);
 }
 
-uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &has_any_empty) {
+uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &has_any_empty, bool geodetic) {
 	BlobReader reader(wkb.GetData(), static_cast<uint32_t>(wkb.GetSize()));
 
 	uint32_t vertex_count = 0;
@@ -1409,7 +1410,7 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &
 
 		switch (geom_type) {
 		case GeometryType::POINT: {
-			const auto parsed_count = ParseVertices(reader, extent, 1, vert_type, true);
+			const auto parsed_count = ParseVertices(reader, extent, 1, vert_type, true, geodetic);
 			if (parsed_count == 0) {
 				has_any_empty = true;
 				continue;
@@ -1422,7 +1423,7 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &
 				has_any_empty = true;
 				continue;
 			}
-			vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false);
+			vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false, geodetic);
 		} break;
 		case GeometryType::POLYGON: {
 			const auto ring_count = reader.Read<uint32_t>();
@@ -1436,7 +1437,7 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &
 					has_any_empty = true;
 					continue;
 				}
-				vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false);
+				vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false, geodetic);
 			}
 		} break;
 		case GeometryType::MULTIPOINT:
@@ -1453,6 +1454,24 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &
 		}
 	}
 	return vertex_count;
+}
+
+bool Geometry::IsValidGeography(const string_t &wkb) {
+	// A geography's coordinates must lie within the canonical ranges X in [-180, 180], Y in [-90, 90].
+	// The naive (non-geodetic) extent holds the true coordinate extremes, so checking its bounds suffices.
+	auto extent = GeometryExtent::Empty();
+	const auto vertex_count = GetExtent(wkb, extent, false);
+	if (vertex_count == 0) {
+		// Empty geometry has no coordinates to validate.
+		return true;
+	}
+	if (extent.HasX() && (extent.x_min < -180.0 || extent.x_max > 180.0)) {
+		return false;
+	}
+	if (extent.HasY() && (extent.y_min < -90.0 || extent.y_max > 90.0)) {
+		return false;
+	}
+	return true;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
