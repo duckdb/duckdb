@@ -1,5 +1,5 @@
 # name: test/sql/storage/attach/attach_autocheckpoint_propagation.test
-# description: A failing autocheckpoint on an attached database surfaces at commit time
+# description: A failing autocheckpoint surfaces at commit time and reports the original checkpoint error
 # group: [attach]
 
 require no_alternative_verify
@@ -25,7 +25,7 @@ PRAGMA debug_checkpoint_abort = 'before_header_non_fatal';
 statement error
 INSERT INTO a.tbl VALUES (1), (2), (3);
 ----
-<REGEX>:IO Error:.*Transaction COMMIT succeeded.*autocheckpoint failed.*
+<REGEX>:IO Error:.*Transaction COMMIT succeeded.*autocheckpoint failed.*Original error: Checkpoint aborted before header write.*
 
 statement error
 SELECT COUNT(*) FROM a.tbl;
