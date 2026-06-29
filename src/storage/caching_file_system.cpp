@@ -1,12 +1,14 @@
 #include "duckdb/storage/caching_file_system.hpp"
 
 #include "duckdb/common/enums/cache_validation_mode.hpp"
+#include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
 #include "duckdb/storage/external_file_cache_util.hpp"
@@ -14,6 +16,14 @@
 namespace duckdb {
 
 namespace {
+
+// Allocate an uncached read buffer to make sure it's de-allocated immediately, and its metadata is not stored in the
+// eviction queue.
+BufferHandle AllocateUncachedReadBuffer(BufferManager &buffer_manager, idx_t size) {
+	auto buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, size);
+	buffer.GetBlockHandle()->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+	return buffer;
+}
 
 // Return whether validation should occur for a specific file
 bool ShouldValidate(const OpenFileInfo &info, optional_ptr<ClientContext> client_context, DatabaseInstance &db,
@@ -134,7 +144,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 	const bool no_validation_metadata =
 	    Validate() && version_tag.empty() && (!Timestamp::IsFinite(last_modified) || last_modified == timestamp_t(0));
 	if (!external_file_cache.IsEnabled() || no_validation_metadata) {
-		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+		result = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		buffer = result.Ptr();
 		GetFileHandle().Read(context, buffer, nr_bytes, location);
 		return result;
@@ -191,7 +201,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 	// If we can't seek, we can't use the cache for these calls,
 	// because we won't be able to seek over any parts we skipped by reading from the cache
 	if (!external_file_cache.IsEnabled() || !CanSeek() || no_validation_metadata) {
-		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+		result = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		buffer = result.Ptr();
 		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buffer, nr_bytes));
 		position += NumericCast<idx_t>(nr_bytes);
