@@ -2743,7 +2743,7 @@ PEGTransformerFactory::TransformReservedSchemaQualificationInternal(PEGTransform
                                                                     ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto reserved_schema_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
-	auto result = reserved_schema_name;
+	auto result = TransformReservedSchemaQualification(transformer, reserved_schema_name);
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 

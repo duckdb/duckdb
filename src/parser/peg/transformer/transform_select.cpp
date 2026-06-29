@@ -426,6 +426,11 @@ Identifier PEGTransformerFactory::TransformSchemaQualification(PEGTransformer &t
 	return schema_name;
 }
 
+Identifier PEGTransformerFactory::TransformReservedSchemaQualification(PEGTransformer &transformer,
+                                                                       const Identifier &reserved_schema_name) {
+	return reserved_schema_name;
+}
+
 Identifier PEGTransformerFactory::TransformCatalogQualification(PEGTransformer &transformer,
                                                                 const Identifier &catalog_name) {
 	return catalog_name;

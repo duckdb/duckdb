@@ -27,6 +27,11 @@ rules:
     init: InitializeCommentValueTrampoline
     finalize: FinalizeCommentValueTrampoline
 
+  ColId:
+    mode: manual
+    init: InitializeColIdTrampoline
+    finalize: FinalizeColIdTrampoline
+
   Expression:
     mode: forward
 
