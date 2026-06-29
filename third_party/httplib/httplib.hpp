@@ -1,6 +1,7 @@
 // taken from: https://github.com/yhirose/cpp-httplib/blob/v0.27.0/httplib.h
 // Note: some modifications are made to file (replace std::regex with RE2)
 // Patched CreateFile2 for lower Windows versions
+// Security fixes from newer upstream releases are backported in DuckDB git history
 
 //
 //  httplib.h
@@ -5070,8 +5071,10 @@ bool prepare_content_receiver(T &x, int &status,
                                             // Guard against zip-bomb: check
                                             // decompressed size against limit.
                                             if (payload_max_length > 0 &&
-                                                (decompressed_size >= payload_max_length ||
-                                                n2 > payload_max_length - decompressed_size)) {
+                                                (decompressed_size >=
+                                                     payload_max_length ||
+                                                 n2 > payload_max_length -
+                                                          decompressed_size)) {
                                               exceed_payload_max_length = true;
                                               return false;
                                             }
@@ -5106,7 +5109,6 @@ bool read_content(Stream &strm, T &x, size_t payload_max_length, int &status,
         // Note: exceed_payload_max_length may also be set by the decompressor
         // wrapper in prepare_content_receiver when the decompressed payload
         // size exceeds the limit.
-        auto exceed_payload_max_length = false;
 
         if (is_chunked_transfer_encoding(x.headers)) {
           auto result = read_content_chunked(strm, x, payload_max_length, out);
@@ -8264,7 +8266,7 @@ inline bool Server::routing(Request &req, Response &res, Stream &strm) {
       dispatched = dispatch_request_for_content_reader(
           req, res, std::move(reader), patch_handlers_for_content_reader_);
     } else if (req.method == "DELETE") {
-        dispatched = dispatch_request_for_content_reader(
+      dispatched = dispatch_request_for_content_reader(
           req, res, std::move(reader), delete_handlers_for_content_reader_);
     }
 
@@ -9276,7 +9278,6 @@ inline void ClientImpl::setup_redirect_client(ClientType &client) {
   client.set_compress(compress_);
   client.set_decompress(decompress_);
 
-
   // NOTE: Authentication credentials (basic auth, bearer token, digest auth)
   // are intentionally NOT copied to the redirect client. Per RFC 9110 Section
   // 15.4, credentials must not be forwarded when redirecting to a different
@@ -9477,7 +9478,6 @@ inline bool ClientImpl::write_request(Stream &strm, Request &req,
       output_error_log(error, &req);
       return false;
     }
-    header_writer_(bstrm, req.headers);
 
     // Flush buffer
     auto &data = bstrm.get_buffer();
