@@ -10,18 +10,18 @@ namespace duckdb {
 
 CreateViewInfo::CreateViewInfo() : CreateInfo(CatalogType::VIEW_ENTRY, Identifier::InvalidSchema()) {
 }
-CreateViewInfo::CreateViewInfo(Identifier catalog_p, Identifier schema_p, Identifier view_name_p)
-    : CreateInfo(CatalogType::VIEW_ENTRY, std::move(schema_p), std::move(catalog_p)) {
-	SetViewName(std::move(view_name_p));
+CreateViewInfo::CreateViewInfo(const QualifiedName &view_name)
+    : CreateInfo(CatalogType::VIEW_ENTRY, view_name.Schema(), view_name.Catalog()) {
+	SetViewName(view_name.Name());
 }
 
 CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name)
-    : CreateViewInfo(schema.catalog.GetName(), schema.name, std::move(view_name)) {
+    : CreateViewInfo(QualifiedName(schema.catalog.GetName(), schema.name, std::move(view_name))) {
 }
 
 string CreateViewInfo::ToString() const {
 	string result = GetCreatePrefix("VIEW");
-	result += QualifierToString(temporary ? Identifier() : Catalog(), Schema(), GetViewName());
+	result += QualifiedNameToString();
 	if (!aliases.empty()) {
 		result += " (";
 		result +=
@@ -38,7 +38,7 @@ string CreateViewInfo::ToString() const {
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
-	auto result = make_uniq<CreateViewInfo>(Catalog(), Schema(), GetViewName());
+	auto result = make_uniq<CreateViewInfo>(GetQualifiedName());
 	CopyProperties(*result);
 	result->aliases = aliases;
 	result->types = types;
@@ -91,8 +91,8 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context
 	}
 
 	auto result = unique_ptr_cast<CreateInfo, CreateViewInfo>(std::move(create_statement.info));
-	result->CatalogMutable() = schema.ParentCatalog().GetName();
-	result->SchemaMutable() = schema.name;
+	result->SetQualifiedName(
+	    QualifiedName(schema.ParentCatalog().GetName(), schema.name, result->GetQualifiedName().Name()));
 
 	auto view_binder = Binder::CreateBinder(context);
 	view_binder->BindCreateViewInfo(*result);

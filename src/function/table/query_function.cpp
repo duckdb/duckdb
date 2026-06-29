@@ -45,7 +45,7 @@ static string UnionTablesQuery(TableFunctionBindInput &input) {
 	if (input.inputs[0].type().id() == LogicalTypeId::VARCHAR) {
 		auto from_path = input.inputs[0].ToString();
 		auto qualified_name = QualifiedName::Parse(from_path);
-		result += "FROM " + qualified_name.ToString();
+		result += "FROM " + qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	} else if (input.inputs[0].type() == LogicalType::LIST(LogicalType::VARCHAR)) {
 		string union_all_clause = " UNION ALL " + by_name + "FROM ";
 		const auto &children = ListValue::GetChildren(input.inputs[0]);
@@ -54,11 +54,11 @@ static string UnionTablesQuery(TableFunctionBindInput &input) {
 			throw InvalidInputException("Input list is empty");
 		}
 		auto qualified_name = QualifiedName::Parse(children[0].ToString());
-		result += "FROM " + qualified_name.ToString();
+		result += "FROM " + qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 		for (size_t i = 1; i < children.size(); ++i) {
 			auto child = children[i].ToString();
 			auto qualified_name = QualifiedName::Parse(child);
-			result += union_all_clause + qualified_name.ToString();
+			result += union_all_clause + qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 		}
 	} else {
 		throw InvalidInputException("Expected a table or a list with tables as input");

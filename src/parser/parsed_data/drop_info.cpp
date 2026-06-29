@@ -4,9 +4,7 @@
 
 namespace duckdb {
 
-DropInfo::DropInfo()
-    : ParseInfo(TYPE), cascade(false),
-      qualified_name(Identifier(INVALID_CATALOG), Identifier(INVALID_SCHEMA), Identifier()) {
+DropInfo::DropInfo() : ParseInfo(TYPE), cascade(false) {
 }
 
 DropInfo::DropInfo(const DropInfo &info)
@@ -24,7 +22,7 @@ string DropInfo::ToString() const {
 	string result = "";
 	if (type == CatalogType::PREPARED_STATEMENT) {
 		result += "DEALLOCATE PREPARE ";
-		result += SQLIdentifier(Name());
+		result += SQLIdentifier(GetQualifiedName().Name());
 	} else {
 		result += "DROP";
 		result += " " + ParseInfo::TypeToString(type);
@@ -32,7 +30,7 @@ string DropInfo::ToString() const {
 			result += " IF EXISTS";
 		}
 		result += " ";
-		result += qualified_name.ToString();
+		result += qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 		if (type == CatalogType::TRIGGER_ENTRY && extra_drop_info) {
 			auto &trigger_info = extra_drop_info->Cast<ExtraDropTriggerInfo>();
 			if (trigger_info.base_table) {

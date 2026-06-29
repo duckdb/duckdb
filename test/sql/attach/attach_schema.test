@@ -5,15 +5,16 @@
 statement ok
 ATTACH DATABASE ':memory:' AS new_database;
 
+# new_database.s1.xxx is now a nested schema (xxx inside parent schema s1) - s1 does not exist yet
 statement error
 CREATE SCHEMA new_database.s1.xxx;
 ----
-too many dots
+<REGEX>:.*"s1" is not a catalog or schema.*
 
 statement error
 CREATE SCHEMA IF NOT EXISTS new_database.s1.xxx;
 ----
-too many dots
+<REGEX>:.*"s1" is not a catalog or schema.*
 
 statement ok
 CREATE SCHEMA new_database.s1;

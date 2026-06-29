@@ -1,0 +1,157 @@
+# name: test/sql/copy/partitioned/partitioned_early_finalize.test
+# description: exercise final-drain partition finalization for partitioned COPY
+# group: [partitioned]
+
+require parquet
+
+statement ok
+PRAGMA threads=4;
+
+statement ok
+SET partitioned_write_max_open_files=1024;
+
+statement ok
+SET partitioned_write_flush_threshold=64;
+
+statement ok
+CREATE TABLE partitioned_early_finalize_source AS
+SELECT
+	(i % 32)::INTEGER AS p,
+	i::INTEGER AS v,
+	repeat('payload-', 4) || i::VARCHAR AS payload
+FROM range(0, 8192) tbl(i);
+
+statement ok
+COPY partitioned_early_finalize_source
+TO '{TEST_DIR}/partitioned_early_finalize'
+(FORMAT PARQUET, PARTITION_BY (p), ROW_GROUP_SIZE 64);
+
+query II
+SELECT count(*), sum(v)
+FROM read_parquet('{TEST_DIR}/partitioned_early_finalize/**/*.parquet', hive_partitioning = true);
+----
+8192	33550336
+
+query I
+WITH files AS (
+	SELECT p, count(DISTINCT filename) AS file_count
+	FROM read_parquet(
+		'{TEST_DIR}/partitioned_early_finalize/**/*.parquet',
+		filename = true,
+		hive_partitioning = true
+	)
+	GROUP BY p
+)
+SELECT max(file_count)
+FROM files;
+----
+1
+
+statement ok
+SET partitioned_write_flush_threshold=128;
+
+statement ok
+CREATE TABLE partitioned_early_finalize_delayed AS
+SELECT
+	CASE WHEN i % 13 = 0 THEN ((i / 13) % 16) + 1 ELSE 0 END::INTEGER AS p,
+	i::INTEGER AS v
+FROM range(0, 12288) tbl(i);
+
+statement ok
+COPY partitioned_early_finalize_delayed
+TO '{TEST_DIR}/partitioned_early_finalize_delayed'
+(FORMAT PARQUET, PARTITION_BY (p), ROW_GROUP_SIZE 64);
+
+query II
+SELECT count(*), count(DISTINCT p)
+FROM read_parquet('{TEST_DIR}/partitioned_early_finalize_delayed/**/*.parquet', hive_partitioning = true);
+----
+12288	17
+
+query I
+WITH files AS (
+	SELECT p, count(DISTINCT filename) AS file_count
+	FROM read_parquet(
+		'{TEST_DIR}/partitioned_early_finalize_delayed/**/*.parquet',
+		filename = true,
+		hive_partitioning = true
+	)
+	GROUP BY p
+)
+SELECT max(file_count)
+FROM files
+WHERE p <> 0;
+----
+1
+
+statement ok
+CREATE TABLE partitioned_early_finalize_serialized AS
+SELECT
+	(i % 8)::INTEGER AS p,
+	((i * 131) % 4096)::INTEGER AS v,
+	i::INTEGER AS payload
+FROM range(0, 4096) tbl(i);
+
+statement ok
+COPY (SELECT p, v, payload FROM partitioned_early_finalize_serialized ORDER BY v DESC, p DESC)
+TO '{TEST_DIR}/partitioned_early_finalize_ordered'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (v), ROW_GROUP_SIZE 64);
+
+query II
+SELECT count(*), count(DISTINCT p)
+FROM read_parquet('{TEST_DIR}/partitioned_early_finalize_ordered/**/*.parquet', hive_partitioning = true);
+----
+4096	8
+
+query I
+WITH per_file AS (
+	SELECT
+		filename,
+		v,
+		lag(v) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_v
+	FROM read_parquet(
+		'{TEST_DIR}/partitioned_early_finalize_ordered/**/*.parquet',
+		filename = true,
+		file_row_number = true,
+		hive_partitioning = true
+	)
+)
+SELECT count(*)
+FROM per_file
+WHERE prev_v IS NOT NULL AND prev_v > v;
+----
+0
+
+statement ok
+CREATE TABLE partitioned_early_finalize_rotation_source AS
+SELECT
+	(i % 4)::INTEGER AS p,
+	((i * 17) % 32768)::INTEGER AS v,
+	hash(i)::DOUBLE AS payload
+FROM range(0, 32768) tbl(i);
+
+statement ok
+COPY partitioned_early_finalize_rotation_source
+TO '{TEST_DIR}/partitioned_early_finalize_rotation'
+(FORMAT PARQUET, PARTITION_BY (p), ROW_GROUP_SIZE 1024, ROW_GROUPS_PER_FILE 1);
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/partitioned_early_finalize_rotation/**/*.parquet', hive_partitioning = true);
+----
+32768
+
+query I
+WITH files AS (
+	SELECT p, count(DISTINCT filename) AS file_count
+	FROM read_parquet(
+		'{TEST_DIR}/partitioned_early_finalize_rotation/**/*.parquet',
+		filename = true,
+		hive_partitioning = true
+	)
+	GROUP BY p
+)
+SELECT min(file_count) > 1
+FROM files;
+----
+true

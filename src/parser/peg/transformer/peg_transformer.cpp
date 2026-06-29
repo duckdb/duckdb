@@ -1,11 +1,165 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 
 namespace duckdb {
+
+TransformFrameResultTarget::TransformFrameResultTarget(transform_frame_index_t frame_index_p, idx_t slot_p)
+    : frame_index(frame_index_p), slot(slot_p) {
+}
+
+TransformStackFrame::TransformStackFrame(transform_frame_index_t frame_index_p, ParseResult &parse_result_p,
+                                         const TransformFrameOps &ops_p,
+                                         optional<TransformFrameResultTarget> result_target_p)
+    : frame_index(frame_index_p), parse_result(parse_result_p), ops(ops_p), result_target(result_target_p) {
+}
+
+void TransformStackFrame::ReserveChildSlots(idx_t count) {
+	child_results.resize(count);
+}
+
+void TransformStackFrame::SetChildResult(idx_t slot, unique_ptr<TransformResultValue> result) {
+	if (slot >= child_results.size()) {
+		throw InternalException("Invalid trampoline transformer result slot %llu for rule '%s'", slot, ops.name);
+	}
+	if (!result) {
+		throw InternalException("Cannot set nullptr trampoline transformer result for slot %llu in rule '%s'", slot,
+		                        ops.name);
+	}
+	if (child_results[slot]) {
+		throw InternalException("Duplicate trampoline transformer result for slot %llu in rule '%s'", slot, ops.name);
+	}
+	child_results[slot] = std::move(result);
+}
+
+TransformStack::TransformStack(PEGTransformer &transformer_p) : transformer(transformer_p) {
+}
+
+transform_frame_index_t TransformStack::PushFrame(ParseResult &parse_result, const TransformFrameOps &ops,
+                                                  optional<TransformFrameResultTarget> result_target) {
+	if (!ops.initialize || !ops.finalize) {
+		throw InternalException("Incomplete trampoline transformer ops for rule '%s'", ops.name);
+	}
+	auto frame_index = frames.size();
+	if (result_target && result_target->frame_index >= frame_index) {
+		throw InternalException("Invalid trampoline transformer parent frame index %llu for frame %llu",
+		                        result_target->frame_index, frame_index);
+	}
+	frames.push_back(make_uniq<TransformStackFrame>(frame_index, parse_result, ops, result_target));
+	frame_stack.push_back(frame_index);
+	return frame_index;
+}
+
+TransformStackFrame &TransformStack::GetFrame(transform_frame_index_t frame_index) {
+	if (frame_index >= frames.size() || !frames[frame_index]) {
+		throw InternalException("Invalid trampoline transformer frame index %llu", frame_index);
+	}
+	return *frames[frame_index];
+}
+
+const TransformStackFrame &TransformStack::GetFrame(transform_frame_index_t frame_index) const {
+	if (frame_index >= frames.size() || !frames[frame_index]) {
+		throw InternalException("Invalid trampoline transformer frame index %llu", frame_index);
+	}
+	return *frames[frame_index];
+}
+
+unique_ptr<TransformResultValue> TransformStack::ExecuteInternal(ParseResult &parse_result,
+                                                                 const TransformFrameOps &ops) {
+	D_ASSERT(frames.empty());
+	D_ASSERT(frame_stack.empty());
+	if (!frames.empty() || !frame_stack.empty()) {
+		throw InternalException("Cannot execute a non-empty trampoline transformer stack");
+	}
+
+	PushFrame(parse_result, ops, optional<TransformFrameResultTarget>());
+	while (!frame_stack.empty()) {
+		auto frame_index = frame_stack.back();
+		auto &frame = GetFrame(frame_index);
+		switch (frame.state) {
+		case TransformFrameState::INITIALIZE:
+			frame.state = TransformFrameState::WAITING;
+			frame.ops.initialize(transformer, *this, frame);
+			break;
+		case TransformFrameState::WAITING: {
+			auto result = frame.ops.finalize(transformer, *this, frame);
+			if (!result) {
+				throw InternalException("Trampoline transformer finalize for rule '%s' returned nullptr",
+				                        frame.ops.name);
+			}
+			frame_stack.pop_back();
+			if (!frame.result_target) {
+				return result;
+			}
+			DeliverResult(frame, std::move(result));
+			break;
+		}
+		default:
+			throw InternalException("Invalid trampoline transformer frame state for rule '%s'", frame.ops.name);
+		}
+	}
+	throw InternalException("Trampoline transformer stack completed without a root result");
+}
+
+void TransformStack::DeliverResult(TransformStackFrame &frame, unique_ptr<TransformResultValue> result) {
+	if (!frame.result_target) {
+		throw InternalException("Cannot deliver trampoline transformer result for root frame '%s'", frame.ops.name);
+	}
+	auto &target = frame.result_target.value();
+	auto &parent = GetFrame(target.frame_index);
+	parent.SetChildResult(target.slot, std::move(result));
+}
+
+string TransformStack::FormatFrame(transform_frame_index_t frame_index) const {
+	auto &frame = GetFrame(frame_index);
+	stringstream result;
+	result << "#" << frame.frame_index << " " << frame.ops.name;
+	if (!frame.parse_result.name.empty() && frame.parse_result.name != frame.ops.name) {
+		result << " parse_result=" << frame.parse_result.name;
+	}
+	result << " state=" << EnumUtil::ToString(frame.state);
+	if (frame.parse_result.offset.IsValid()) {
+		result << " offset=" << frame.parse_result.offset.GetIndex();
+	}
+	if (frame.result_target) {
+		result << " parent=#" << frame.result_target->frame_index << " slot=" << frame.result_target->slot;
+	}
+	return result.str();
+}
+
+string TransformStack::FormatParentChain(transform_frame_index_t frame_index) const {
+	stringstream result;
+	optional_idx current(frame_index);
+	bool first = true;
+	while (current.IsValid()) {
+		if (!first) {
+			result << " <- ";
+		}
+		result << FormatFrame(current.GetIndex());
+		first = false;
+		auto &frame = GetFrame(current.GetIndex());
+		if (!frame.result_target) {
+			break;
+		}
+		current = frame.result_target->frame_index;
+	}
+	return result.str();
+}
+
+string TransformStack::FormatStack() const {
+	stringstream result;
+	for (idx_t i = 0; i < frame_stack.size(); i++) {
+		if (i > 0) {
+			result << "\n";
+		}
+		result << FormatFrame(frame_stack[i]);
+	}
+	return result.str();
+}
 
 void PEGTransformer::ParamTypeCheck(PreparedParamType last_type, PreparedParamType new_type) {
 	// Mixing positional/auto-increment and named parameters is not supported
@@ -67,9 +221,7 @@ unique_ptr<SQLStatement> PEGTransformer::GenerateCreateEnumStmt(unique_ptr<Creat
 	auto info = make_uniq<CreateTypeInfo>();
 	info->temporary = true;
 	info->internal = false;
-	info->CatalogMutable() = Identifier::InvalidCatalog();
-	info->SchemaMutable() = Identifier::InvalidSchema();
-	info->SetTypeName(Identifier(std::move(entry->enum_name)));
+	info->SetQualifiedName(QualifiedName(Identifier(std::move(entry->enum_name))));
 	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 
 	// generate the query that will result in the enum creation

@@ -5,21 +5,23 @@
 namespace duckdb {
 
 SetColumnCommentInfo::SetColumnCommentInfo()
-    : AlterInfo(AlterType::SET_COLUMN_COMMENT, Identifier::InvalidCatalog(), Identifier::InvalidSchema(), "",
+    : AlterInfo(AlterType::SET_COLUMN_COMMENT,
+                QualifiedName(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), ""),
                 OnEntryNotFound::THROW_EXCEPTION),
       catalog_entry_type(CatalogType::INVALID), column_name(""), comment_value(Value()) {
 }
 
 SetColumnCommentInfo::SetColumnCommentInfo(Identifier catalog, Identifier schema, Identifier name,
                                            Identifier column_name, Value comment_value, OnEntryNotFound if_not_found)
-    : AlterInfo(AlterType::SET_COLUMN_COMMENT, std::move(catalog), std::move(schema), std::move(name), if_not_found),
+    : AlterInfo(AlterType::SET_COLUMN_COMMENT, QualifiedName(std::move(catalog), std::move(schema), std::move(name)),
+                if_not_found),
       catalog_entry_type(CatalogType::INVALID), column_name(std::move(column_name)),
       comment_value(std::move(comment_value)) {
 }
 
 unique_ptr<AlterInfo> SetColumnCommentInfo::Copy() const {
-	auto result =
-	    make_uniq<SetColumnCommentInfo>(Catalog(), Schema(), Name(), column_name, comment_value, if_not_found);
+	auto result = make_uniq<SetColumnCommentInfo>(GetQualifiedName().Catalog(), GetQualifiedName().Schema(),
+	                                              GetQualifiedName().Name(), column_name, comment_value, if_not_found);
 	result->type = type;
 	return std::move(result);
 }
@@ -29,7 +31,7 @@ string SetColumnCommentInfo::ToString() const {
 
 	D_ASSERT(catalog_entry_type == CatalogType::INVALID);
 	result += "COMMENT ON COLUMN ";
-	result += QualifierToString(Catalog(), Schema(), Name());
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	result += "." + SQLIdentifier(column_name);
 	result += " IS ";
 	result += comment_value.ToSQLString();
@@ -38,8 +40,11 @@ string SetColumnCommentInfo::ToString() const {
 }
 
 optional_ptr<CatalogEntry> SetColumnCommentInfo::TryResolveCatalogEntry(CatalogEntryRetriever &retriever) {
-	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, Name());
-	auto entry = retriever.GetEntry(Catalog(), Schema(), lookup_info, if_not_found);
+	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, QualifiedName(GetQualifiedName().Name()));
+	auto entry = retriever.GetEntry(
+	    EntryLookupInfo(lookup_info, QualifiedName(GetQualifiedName().Catalog(), GetQualifiedName().Schema(),
+	                                               lookup_info.GetEntryIdentifier())),
+	    if_not_found);
 
 	if (entry) {
 		catalog_entry_type = entry->type;

@@ -44,10 +44,11 @@ public:
 	                                const Identifier &schema_name, const Identifier &name,
 	                                const vector<LogicalType> &arguments,
 	                                const vector<LogicalType> &original_arguments) {
-		EntryLookupInfo lookup_info(catalog_type, name);
+		EntryLookupInfo lookup_info(catalog_type, QualifiedName(name));
 		auto &func_catalog =
-		    Catalog::GetEntry(context, catalog_type, catalog_name.empty() ? Identifier::SystemCatalog() : catalog_name,
-		                      schema_name.empty() ? Identifier::DefaultSchema() : schema_name, name);
+		    Catalog::GetEntry(context, catalog_type,
+		                      QualifiedName(catalog_name.empty() ? Identifier::SystemCatalog() : catalog_name,
+		                                    schema_name.empty() ? Identifier::DefaultSchema() : schema_name, name));
 
 		if (func_catalog.type != catalog_type) {
 			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",
@@ -175,8 +176,8 @@ public:
 		}
 
 		// Now lookup the function in the catalog.
-		EntryLookupInfo lookup_info(catalog_type, name);
-		auto &func_catalog = Catalog::GetEntry(context, catalog_type, catalog_name, schema_name, name);
+		EntryLookupInfo lookup_info(catalog_type, QualifiedName(name));
+		auto &func_catalog = Catalog::GetEntry(context, catalog_type, QualifiedName(catalog_name, schema_name, name));
 
 		if (func_catalog.type != catalog_type) {
 			throw InternalException("DeserializeFunction - cant find catalog entry for function %s",

@@ -28,6 +28,36 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	return result;
 }
 
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatementTrampoline(PEGTransformer &transformer,
+                                                                             ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	auto &ops_map = GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw NotImplementedException("No trampoline transformer for statement rule '%s'", choice_result.name);
+	}
+
+	TransformStack stack(transformer);
+	auto result = stack.Execute<unique_ptr<SQLStatement>>(choice_result, *ops_entry->second);
+	if (!transformer.named_parameter_map.empty()) {
+		result->named_param_map = transformer.named_parameter_map;
+	}
+	result->has_anonymous_parameters = transformer.has_anonymous_parameters;
+	return result;
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformStatementTrampolineInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto result = TransformStatementTrampoline(transformer, parse_result);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::RegisterGeneratedTrampoline() {
+	trampoline_transform_functions["Statement"] = &PEGTransformerFactory::TransformStatementTrampolineInternal;
+}
+
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
                                                              const vector<MatcherToken> &tokens, ParseResult &stmt_pr,
                                                              optional_idx terminator_offset) {
@@ -110,8 +140,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
 	PEGTransformerState transformer_state(tokens);
-	PEGTransformer transformer(transformer_allocator, transformer_state, sql_transform_functions, parser.rules,
-	                           options);
+	auto &transform_functions = GetTransformFunctions(options);
+	PEGTransformer transformer(transformer_allocator, transformer_state, transform_functions, parser.rules, options);
 
 	return ExtractAndTransformStatement(transformer, tokens, stmt_opt.GetResult(), terminator_offset);
 }
@@ -176,6 +206,7 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 
 PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterGenerated();
+	RegisterGeneratedTrampoline();
 	REGISTER_TRANSFORM(TransformStatement);
 	RegisterComment();
 	RegisterCommon();
@@ -184,6 +215,14 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterPivot();
 	RegisterSelect();
 	RegisterKeywordsAndIdentifiers();
+}
+
+const case_insensitive_map_t<PEGTransformer::AnyTransformFunction> &
+PEGTransformerFactory::GetTransformFunctions(ParserOptions &options) {
+	if (options.debug_transformer_trampoline_style) {
+		return trampoline_transform_functions;
+	}
+	return sql_transform_functions;
 }
 
 vector<reference<ParseResult>> PEGTransformerFactory::ExtractParseResultsFromList(ParseResult &parse_result) {
@@ -220,26 +259,18 @@ bool PEGTransformerFactory::ExpressionIsEmptyStar(const ParsedExpression &expr) 
 }
 
 QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input) {
-	QualifiedName result;
 	if (input.empty()) {
 		throw InternalException("QualifiedName cannot be made with an empty input.");
 	}
 	if (input.size() == 1) {
-		result.CatalogMutable() = Identifier::InvalidCatalog();
-		result.SchemaMutable() = Identifier::InvalidSchema();
-		result.NameMutable() = Identifier(input[0]);
+		return QualifiedName(Identifier(input[0]));
 	} else if (input.size() == 2) {
-		result.CatalogMutable() = Identifier::InvalidCatalog();
-		result.SchemaMutable() = Identifier(input[0]);
-		result.NameMutable() = Identifier(input[1]);
+		return QualifiedName({Identifier(input[0])}, Identifier(input[1]));
 	} else if (input.size() == 3) {
-		result.CatalogMutable() = Identifier(input[0]);
-		result.SchemaMutable() = Identifier(input[1]);
-		result.NameMutable() = Identifier(input[2]);
+		return QualifiedName(Identifier(input[0]), Identifier(input[1]), Identifier(input[2]));
 	} else {
 		throw ParserException("Too many qualifications found - expected [catalog.schema.name] or [schema.name]");
 	}
-	return result;
 }
 
 LogicalType PEGTransformerFactory::GetIntervalTargetType(DatePartSpecifier date_part) {

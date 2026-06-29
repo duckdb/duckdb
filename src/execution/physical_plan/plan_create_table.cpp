@@ -37,7 +37,7 @@ PhysicalOperator &DuckCatalog::PlanCreateTableAs(ClientContext &context, Physica
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateTable &op) {
 	const auto &create_info = op.info->base->Cast<CreateTableInfo>();
 	auto &catalog = op.info->schema.catalog;
-	auto existing_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info.Schema(),
+	auto existing_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info.GetQualifiedName().Schema(),
 	                                       create_info.GetTableName(), OnEntryNotFound::RETURN_NULL);
 	bool replace = op.info->Base().on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
 	if ((!existing_entry || replace) && !op.children.empty()) {

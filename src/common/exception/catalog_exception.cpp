@@ -42,7 +42,7 @@ CatalogException CatalogException::MissingEntry(const EntryLookupInfo &lookup_in
 
 CatalogException CatalogException::MissingEntry(CatalogType type, const Identifier &name, const string &suggestion,
                                                 QueryErrorContext context) {
-	EntryLookupInfo lookup_info(type, name, context);
+	EntryLookupInfo lookup_info(type, QualifiedName(name), context);
 	return MissingEntry(lookup_info, suggestion);
 }
 

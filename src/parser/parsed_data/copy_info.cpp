@@ -5,7 +5,7 @@ namespace duckdb {
 
 CopyInfo::CopyInfo()
     : ParseInfo(TYPE), is_from(false), is_format_auto_detected(true),
-      qualified_name(Identifier(INVALID_CATALOG), Identifier(DEFAULT_SCHEMA), Identifier()) {
+      qualified_name({Identifier::DefaultSchema()}, Identifier()) {
 }
 
 unique_ptr<CopyInfo> CopyInfo::Copy() const {
@@ -76,8 +76,8 @@ string CopyInfo::CopyOptionsToString() const {
 string CopyInfo::TablePartToString() const {
 	string result;
 
-	D_ASSERT(!Table().empty());
-	result += qualified_name.ToString();
+	D_ASSERT(!GetQualifiedName().Name().empty());
+	result += qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 
 	// (c1, c2, ..)
 	if (!select_list.empty()) {

@@ -289,7 +289,7 @@ void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
 	switch (db_info.alter_database_type) {
 	case AlterDatabaseType::RENAME_DATABASE: {
 		auto &rename_info = db_info.Cast<RenameDatabaseInfo>();
-		RenameDatabase(context, db_info.Catalog(), rename_info.new_name, db_info.if_not_found);
+		RenameDatabase(context, db_info.GetQualifiedName().Catalog(), rename_info.new_name, db_info.if_not_found);
 		break;
 	}
 	default:
@@ -412,14 +412,14 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 Identifier DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	auto &config = ClientData::Get(context);
 	auto &default_entry = config.catalog_search_path->GetDefault();
-	if (IsInvalidCatalog(default_entry.catalog)) {
+	if (IsInvalidCatalog(default_entry.GetCatalog())) {
 		auto &result = DatabaseManager::Get(context).default_database;
 		if (result.empty()) {
 			throw InternalException("Calling DatabaseManager::GetDefaultDatabase with no default database set");
 		}
 		return result;
 	}
-	return default_entry.catalog;
+	return default_entry.GetCatalog();
 }
 
 // LCOV_EXCL_START

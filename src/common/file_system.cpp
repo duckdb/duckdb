@@ -762,11 +762,14 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 }
 
 int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
-	if (context.GetClientContext() != nullptr) {
-		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(nr_bytes);
+	// A sequential read can return fewer bytes than requested (e.g. at EOF), so track the bytes
+	// actually read rather than the requested amount.
+	auto bytes_read = file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
+	if (track_io && context.GetClientContext() != nullptr) {
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(UnsafeNumericCast<idx_t>(bytes_read));
 	}
 
-	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
+	return bytes_read;
 }
 
 bool FileHandle::Trim(idx_t offset_bytes, idx_t length_bytes) {
@@ -778,7 +781,7 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 }
 
 int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
-	if (context.GetClientContext() != nullptr) {
+	if (track_io && context.GetClientContext() != nullptr) {
 		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(nr_bytes);
 	}
 
@@ -790,7 +793,7 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 }
 
 void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
-	if (context.GetClientContext() != nullptr) {
+	if (track_io && context.GetClientContext() != nullptr) {
 		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(nr_bytes);
 	}
 
@@ -798,7 +801,7 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 }
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
-	if (context.GetClientContext() != nullptr) {
+	if (track_io && context.GetClientContext() != nullptr) {
 		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(nr_bytes);
 	}
 

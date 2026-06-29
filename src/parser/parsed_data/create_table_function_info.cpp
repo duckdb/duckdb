@@ -28,7 +28,7 @@ unique_ptr<CreateInfo> CreateTableFunctionInfo::Copy() const {
 
 unique_ptr<AlterInfo> CreateTableFunctionInfo::GetAlterInfo() const {
 	return make_uniq_base<AlterInfo, AddTableFunctionOverloadInfo>(
-	    AlterEntryData(Catalog(), Schema(), GetFunctionName(), OnEntryNotFound::RETURN_NULL), functions);
+	    AlterEntryData(GetQualifiedName(), OnEntryNotFound::RETURN_NULL), functions);
 }
 
 } // namespace duckdb

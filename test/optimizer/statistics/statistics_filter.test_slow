@@ -2,6 +2,9 @@
 # description: Statistics propagation test with filters
 # group: [statistics]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 foreach type utinyint usmallint uinteger ubigint tinyint smallint integer bigint hugeint uhugeint float double
 
 statement ok

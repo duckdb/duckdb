@@ -78,7 +78,7 @@ SourceResultType PhysicalCreateType::GetDataInternal(ExecutionContext &context, 
 		info->type = LogicalType::ENUM(g_sink_state.result, g_sink_state.size);
 	}
 
-	auto &catalog = Catalog::GetCatalog(context.client, info->Catalog());
+	auto &catalog = Catalog::GetCatalog(context.client, info->GetQualifiedName().Catalog());
 	catalog.CreateType(context.client, *info);
 	return SourceResultType::FINISHED;
 }

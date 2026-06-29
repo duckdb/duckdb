@@ -292,12 +292,6 @@ public:
 	//! Additional Information to specify function from it's name
 	string extra_info;
 
-	// Optional catalog name of the function
-	Identifier catalog_name;
-
-	// Optional schema name of the function
-	Identifier schema_name;
-
 public:
 	auto SetName(Identifier name_p) -> void {
 		name = std::move(name_p);
@@ -335,6 +329,12 @@ public:
 	//! Used in the bind to erase an argument from a function
 	DUCKDB_API static void EraseArgument(BoundSimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
 	                                     idx_t argument_index);
+
+private:
+	//! Optional catalog name of the function
+	Identifier catalog_name;
+	//! Optional schema name of the function
+	Identifier schema_name;
 };
 
 class SimpleFunction : public Function {

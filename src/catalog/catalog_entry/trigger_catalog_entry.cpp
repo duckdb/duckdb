@@ -27,9 +27,7 @@ unique_ptr<CatalogEntry> TriggerCatalogEntry::Copy(ClientContext &context) const
 
 unique_ptr<CreateInfo> TriggerCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateTriggerInfo>();
-	result->CatalogMutable() = catalog.GetName();
-	result->SchemaMutable() = schema.name;
-	result->SetTriggerName(name);
+	result->SetQualifiedName(QualifiedName(catalog.GetName(), schema.name, name));
 	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(base_table->Copy());
 	result->timing = timing;
 	result->event_type = event_type;
@@ -62,7 +60,9 @@ string TriggerCatalogEntry::ToSQL() const {
 		}
 	}
 	ss << " ON ";
-	ss << ParseInfo::QualifierToString(base_table->catalog_name, base_table->schema_name, base_table->table_name);
+	ss << QualifiedName(base_table->GetQualifiedName().Catalog(), base_table->GetQualifiedName().Schema(),
+	                    base_table->Table())
+	          .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	if (!referencing_new_table.empty() || !referencing_old_table.empty()) {
 		ss << " REFERENCING";
 		if (!referencing_new_table.empty()) {

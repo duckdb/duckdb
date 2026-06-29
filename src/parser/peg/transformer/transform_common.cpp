@@ -265,44 +265,30 @@ unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformQualifiedSimpleType(PEGTransformer &transformer,
                                                     const QualifiedName &qualified_type_name,
                                                     optional<vector<unique_ptr<ParsedExpression>>> type_modifiers) {
-	auto result = qualified_type_name;
-	if (result.Schema().empty()) {
-		result.SchemaMutable() = result.Catalog();
-		result.CatalogMutable() = INVALID_CATALOG;
-	}
 	vector<unique_ptr<ParsedExpression>> modifiers;
 	if (type_modifiers) {
 		modifiers = std::move(*type_modifiers);
 	}
-	return make_uniq<TypeExpression>(result.Catalog(), result.Schema(), result.Name(), std::move(modifiers));
+	return make_uniq<TypeExpression>(qualified_type_name, std::move(modifiers));
 }
 
 QualifiedName PEGTransformerFactory::TransformTypeNameAsQualifiedName(PEGTransformer &transformer,
                                                                       const Identifier &type_name) {
-	QualifiedName result;
-	result.CatalogMutable() = INVALID_CATALOG;
-	result.SchemaMutable() = INVALID_SCHEMA;
-	result.NameMutable() = type_name;
+	QualifiedName result(type_name);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedTypeName(PEGTransformer &transformer,
                                                                      const Identifier &schema_qualification,
                                                                      const Identifier &reserved_type_name) {
-	QualifiedName result;
-	result.CatalogMutable() = INVALID_CATALOG;
-	result.SchemaMutable() = schema_qualification;
-	result.NameMutable() = reserved_type_name;
+	QualifiedName result({schema_qualification}, reserved_type_name);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaTypeName(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_type_name) {
-	QualifiedName result;
-	result.CatalogMutable() = catalog_qualification;
-	result.SchemaMutable() = reserved_schema_qualification;
-	result.NameMutable() = reserved_type_name;
+	QualifiedName result(catalog_qualification, reserved_schema_qualification, reserved_type_name);
 	return result;
 }
 

@@ -4,13 +4,14 @@
 namespace duckdb {
 
 AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type)
-    : AlterInfo(AlterType::ALTER_DATABASE, Identifier(), Identifier(), Identifier(), OnEntryNotFound::THROW_EXCEPTION),
+    : AlterInfo(AlterType::ALTER_DATABASE, QualifiedName(), OnEntryNotFound::THROW_EXCEPTION),
       alter_database_type(alter_database_type) {
 }
 
 AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type, Identifier catalog_p,
                                      OnEntryNotFound if_not_found)
-    : AlterInfo(AlterType::ALTER_DATABASE, std::move(catalog_p), Identifier(), Identifier(), if_not_found),
+    : AlterInfo(AlterType::ALTER_DATABASE, QualifiedName(std::move(catalog_p), Identifier(), Identifier()),
+                if_not_found),
       alter_database_type(alter_database_type) {
 }
 
@@ -30,7 +31,7 @@ RenameDatabaseInfo::RenameDatabaseInfo(Identifier catalog_p, Identifier new_name
 }
 
 unique_ptr<AlterInfo> RenameDatabaseInfo::Copy() const {
-	return make_uniq<RenameDatabaseInfo>(Catalog(), new_name, if_not_found);
+	return make_uniq<RenameDatabaseInfo>(GetQualifiedName().Catalog(), new_name, if_not_found);
 }
 
 string RenameDatabaseInfo::ToString() const {
@@ -39,7 +40,7 @@ string RenameDatabaseInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += StringUtil::Format("%s SET ALIAS TO %s", Catalog(), new_name);
+	result += StringUtil::Format("%s SET ALIAS TO %s", GetQualifiedName().Catalog(), new_name);
 	return result;
 }
 

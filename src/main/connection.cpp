@@ -202,7 +202,8 @@ shared_ptr<Relation> Connection::Table(const Identifier &schema_name, const Iden
 	auto table_info = TableInfo(Identifier::InvalidCatalog(), schema_name, table_name);
 	if (!table_info) {
 		throw CatalogException("Table %s does not exist!",
-		                       ParseInfo::QualifierToString(Identifier(), schema_name, table_name));
+		                       QualifiedName(Identifier(), schema_name, table_name)
+		                           .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA));
 	}
 	return make_shared_ptr<TableRelation>(context, std::move(table_info));
 }
@@ -223,7 +224,8 @@ shared_ptr<Relation> Connection::Table(const Identifier &catalog_name, const Ide
 
 	if (!table_info) {
 		throw CatalogException("Table %s does not exist!",
-		                       ParseInfo::QualifierToString(catalog_name, schema_name, table_name));
+		                       QualifiedName(catalog_name, schema_name, table_name)
+		                           .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA));
 	}
 	return make_shared_ptr<TableRelation>(context, std::move(table_info));
 }

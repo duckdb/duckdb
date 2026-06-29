@@ -31,8 +31,7 @@ void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &optio
 				for (const auto &partition : option.children) {
 					func_children.push_back(make_uniq<ColumnRefExpression>(Identifier(partition.GetValue<string>())));
 				}
-				auto row_func =
-				    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(func_children));
+				auto row_func = make_uniq<FunctionExpression>("row", std::move(func_children));
 				info->parsed_options[option.name.GetIdentifierName()] = std::move(row_func);
 			}
 		} else if (option.name == "HEADER" || option.name == "ESCAPE") {
@@ -134,9 +133,7 @@ PEGTransformerFactory::TransformCopyTable(PEGTransformer &transformer, unique_pt
 	auto result = make_uniq<CopyStatement>();
 	auto info = make_uniq<CopyInfo>();
 
-	info->TableMutable() = base_table_name->table_name;
-	info->SchemaMutable() = base_table_name->schema_name;
-	info->CatalogMutable() = base_table_name->catalog_name;
+	info->SetQualifiedName(base_table_name->GetQualifiedName());
 	if (insert_column_list) {
 		info->select_list = StringsToIdentifiers(*insert_column_list);
 	}

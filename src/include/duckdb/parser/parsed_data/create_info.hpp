@@ -59,18 +59,28 @@ public:
 	QualifiedName &GetQualifiedNameMutable() {
 		return qualified_name;
 	}
-	const Identifier &Catalog() const {
-		return qualified_name.Catalog();
+	void SetQualifiedName(QualifiedName name) {
+		qualified_name = std::move(name);
 	}
-	Identifier &CatalogMutable() {
-		return qualified_name.CatalogMutable();
+	//! Set the name, keeping the catalog/schema qualification
+	void SetName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
 	}
-	const Identifier &Schema() const {
-		return qualified_name.Schema();
+	//! Set the catalog/schema qualification, keeping the name
+	void SetQualification(Identifier catalog, Identifier schema) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), qualified_name.Name());
 	}
-	Identifier &SchemaMutable() {
-		return qualified_name.SchemaMutable();
+	//! Set the schema, keeping the catalog and name
+	void SetSchema(Identifier schema) {
+		qualified_name = QualifiedName(qualified_name.Catalog(), std::move(schema), qualified_name.Name());
 	}
+	//! Set the catalog, keeping the schema and name
+	void SetCatalog(Identifier catalog) {
+		qualified_name = QualifiedName(std::move(catalog), qualified_name.Schema(), qualified_name.Name());
+	}
+	//! Renders the qualified name for ToString - the catalog is omitted for temporary entries and the default schema is
+	//! hidden
+	DUCKDB_API string QualifiedNameToString() const;
 
 public:
 	void Serialize(Serializer &serializer) const override;

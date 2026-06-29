@@ -577,7 +577,9 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
                                                    const EntryLookupInfo &lookup_info,
                                                    OnEntryNotFound on_entry_not_found) {
-	return entry_retriever.GetEntry(catalog, schema, lookup_info, on_entry_not_found);
+	return entry_retriever.GetEntry(
+	    EntryLookupInfo(lookup_info, QualifiedName(catalog, schema, lookup_info.GetEntryIdentifier())),
+	    on_entry_not_found);
 }
 
 //! Create a binder whose catalog search path is anchored to the table's catalog+schema
