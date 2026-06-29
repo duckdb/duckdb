@@ -2,15 +2,27 @@
 # description: Test empty structs (STRUCT with no fields)
 # group: [struct]
 
-# an empty struct is constructed with row() / struct_pack()
+# an empty struct is constructed with struct_pack() / {} - row() makes an (empty) unnamed TUPLE instead
 query II
 SELECT row(), struct_pack()
 ----
-{}	{}
+()	{}
+
+# the {} brace literal produces an empty STRUCT (MAP {} is still an empty map)
+query TT
+SELECT {}, typeof({})
+----
+{}	STRUCT
+
+# row() is a TUPLE (it is implicitly castable to the empty STRUCT used throughout the rest of this test)
+query T
+SELECT typeof(row())
+----
+TUPLE
 
 # the empty struct type is spelled (and printed) as a bare STRUCT - no parameter list
 query T
-SELECT typeof(row())
+SELECT typeof(struct_pack())
 ----
 STRUCT
 
@@ -89,7 +101,7 @@ SELECT t1.i, t2.i, t1.s FROM t t1 JOIN t t2 USING (s) WHERE t1.s IS NOT NULL AND
 
 # nesting: empty struct inside a struct, list, and as a list element
 query III
-SELECT {'a': row(), 'b': 1}, [row(), row()], typeof({'a': row()})
+SELECT {'a': struct_pack(), 'b': 1}, [struct_pack(), struct_pack()], typeof({'a': struct_pack()})
 ----
 {'a': {}, 'b': 1}
 [{}, {}]
@@ -97,7 +109,7 @@ STRUCT(a STRUCT)
 
 # casting to varchar
 query T
-SELECT row()::VARCHAR
+SELECT struct_pack()::VARCHAR
 ----
 {}
 

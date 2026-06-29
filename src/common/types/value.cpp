@@ -794,6 +794,15 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return Value::STRUCT(LogicalType::STRUCT(child_types), std::move(struct_values));
 }
 
+Value Value::TUPLE(vector<Value> values) {
+	vector<LogicalType> child_types;
+	child_types.reserve(values.size());
+	for (auto &child : values) {
+		child_types.push_back(child.type());
+	}
+	return Value::STRUCT(LogicalType::TUPLE(std::move(child_types)), std::move(values));
+}
+
 Value Value::VARIANT(vector<Value> val) {
 	D_ASSERT(val.size() == 4);
 	D_ASSERT(val[0].type().id() == LogicalTypeId::LIST);
@@ -1737,8 +1746,10 @@ string Value::ToSQLString() const {
 		ret += ")";
 		return ret;
 	}
+	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::STRUCT: {
-		bool is_unnamed = StructType::IsUnnamed(type_);
+		// a TUPLE is always unnamed (even when empty, where IsUnnamed cannot tell)
+		bool is_unnamed = type_.id() == LogicalTypeId::TUPLE || StructType::IsUnnamed(type_);
 		string ret = is_unnamed ? "(" : "{";
 		auto &child_types = StructType::GetChildTypes(type_);
 		auto &struct_values = StructValue::GetChildren(*this);
@@ -1753,6 +1764,10 @@ string Value::ToSQLString() const {
 			if (i < struct_values.size() - 1) {
 				ret += ", ";
 			}
+		}
+		// a single-element tuple needs a trailing comma to round-trip: (1,) - otherwise (1) is just grouping
+		if (is_unnamed && struct_values.size() == 1) {
+			ret += ",";
 		}
 		ret += is_unnamed ? ")" : "}";
 		return ret;
