@@ -534,7 +534,8 @@ jobs:
       run: |
         python3 scripts/ci/retry.py -- make toolsci
         python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq lcov
+        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq lcov llvm-20
+        echo "/usr/lib/llvm-20/bin" >> "$GITHUB_PATH"
 
     - uses: ./.github/actions/ccache-action
       with:
