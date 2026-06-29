@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/feature_refresh_scheduler.hpp"
@@ -74,24 +75,13 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 static unique_ptr<GlobalTableFunctionState> DuckDBFeaturesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBFeaturesData>();
 
-	// scan all the schemas for features and collect them
+	// Scan all schemas for feature catalog entries.
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema.get().Scan(context, CatalogType::FEATURE_ENTRY,
 		                  [&](CatalogEntry &entry) { result->entries.push_back(entry.Cast<FeatureCatalogEntry>()); });
 	}
 	return std::move(result);
-}
-
-static string JoinFeatureEntityColumns(const vector<string> &columns) {
-	string result;
-	for (auto &column : columns) {
-		if (!result.empty()) {
-			result += ",";
-		}
-		result += column;
-	}
-	return result;
 }
 
 static string RefreshModeToString(FeatureRefreshMode mode) {
@@ -126,7 +116,7 @@ static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &d
 		// source_table
 		output.data[3].Append(Value(feat.source_table));
 		// entity_columns
-		output.data[4].Append(Value(JoinFeatureEntityColumns(feat.entity_columns)));
+		output.data[4].Append(Value(StringUtil::Join(feat.entity_columns, ",")));
 		// timestamp_column
 		output.data[5].Append(Value(feat.timestamp_column));
 		// refresh_mode

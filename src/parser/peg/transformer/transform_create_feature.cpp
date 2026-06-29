@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-static constexpr interval_t DEFAULT_WATERMARK_INTERVAL {0, 0, 0};
+static constexpr interval_t ZERO_INTERVAL {0, 0, 0};
 
 static int64_t ParsePositiveIntegerIntervalCount(const string &number, const string &context) {
 	if (number.empty() || number[0] == '-') {
@@ -37,16 +37,16 @@ static bool IsPositiveInterval(const interval_t &interval) {
 	return interval.months > 0 || interval.days > 0 || interval.micros > 0;
 }
 
-static interval_t ParseIntervalSchedule(const string &interval_str, const string &context) {
-	interval_t schedule_interval {0, 0, 0};
+static interval_t ParseIntervalString(const string &interval_str, const string &context) {
+	interval_t result {0, 0, 0};
 	string error_message;
-	if (!Interval::FromCString(interval_str.c_str(), interval_str.size(), schedule_interval, &error_message, false)) {
+	if (!Interval::FromCString(interval_str.c_str(), interval_str.size(), result, &error_message, false)) {
 		throw ParserException("Invalid interval in %s clause: %s", context, error_message);
 	}
-	if (!IsPositiveInterval(schedule_interval)) {
+	if (!IsPositiveInterval(result)) {
 		throw ParserException("%s interval must be positive", context);
 	}
-	return schedule_interval;
+	return result;
 }
 
 static int32_t IntervalCountToDays(int64_t count, const string &context) {
@@ -89,7 +89,7 @@ static interval_t ParseFeatureInterval(ParseResult &parse_result, const string &
 	auto &choice = list_pr.Child<ChoiceParseResult>(0).GetResult();
 	auto &clause = choice.Cast<ListParseResult>();
 	if (StringUtil::CIEquals(choice.name, "FeatureIntervalString")) {
-		return ParseIntervalSchedule(clause.Child<StringLiteralParseResult>(1).result, context);
+		return ParseIntervalString(clause.Child<StringLiteralParseResult>(1).result, context);
 	}
 	if (StringUtil::CIEquals(choice.name, "FeatureIntervalKeywordShorthand")) {
 		auto count = ParsePositiveIntegerIntervalCount(clause.Child<NumberParseResult>(1).number, context);
@@ -117,6 +117,20 @@ static optional_ptr<ParseResult> FindParseResultByName(ParseResult &parse_result
 	}
 	if (parse_result.type == ParseResultType::CHOICE) {
 		return FindParseResultByName(parse_result.Cast<ChoiceParseResult>().GetResult(), name);
+	}
+	if (parse_result.type == ParseResultType::OPTIONAL) {
+		auto &optional_pr = parse_result.Cast<OptionalParseResult>();
+		return optional_pr.HasResult() ? FindParseResultByName(optional_pr.GetResult(), name) : nullptr;
+	}
+	if (parse_result.type == ParseResultType::REPEAT) {
+		auto &repeat_pr = parse_result.Cast<RepeatParseResult>();
+		for (auto &child : repeat_pr.GetChildren()) {
+			auto result = FindParseResultByName(child.get(), name);
+			if (result) {
+				return result;
+			}
+		}
+		return nullptr;
 	}
 	if (parse_result.type == ParseResultType::LIST) {
 		auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -169,6 +183,20 @@ static optional_ptr<ParseResult> FindFirstIdentifierOrString(ParseResult &parse_
 	if (parse_result.type == ParseResultType::CHOICE) {
 		return FindFirstIdentifierOrString(parse_result.Cast<ChoiceParseResult>().GetResult());
 	}
+	if (parse_result.type == ParseResultType::OPTIONAL) {
+		auto &optional_pr = parse_result.Cast<OptionalParseResult>();
+		return optional_pr.HasResult() ? FindFirstIdentifierOrString(optional_pr.GetResult()) : nullptr;
+	}
+	if (parse_result.type == ParseResultType::REPEAT) {
+		auto &repeat_pr = parse_result.Cast<RepeatParseResult>();
+		for (auto &child : repeat_pr.GetChildren()) {
+			auto result = FindFirstIdentifierOrString(child.get());
+			if (result) {
+				return result;
+			}
+		}
+		return nullptr;
+	}
 	if (parse_result.type == ParseResultType::LIST) {
 		auto &list_pr = parse_result.Cast<ListParseResult>();
 		for (auto &child : list_pr.GetChildren()) {
@@ -216,20 +244,15 @@ static void CollectIdentifierOrStringNames(ParseResult &parse_result, vector<str
 	}
 }
 
-static QualifiedName TransformFirstQualifiedName(PEGTransformer &, ParseResult &parse_result) {
+static string ExtractFirstIdentifierName(ParseResult &parse_result, const string &context) {
 	auto result = FindFirstIdentifierOrString(parse_result);
 	if (!result) {
-		throw InternalException("Expected identifier in SERVE FEATURE entity mapping");
+		throw InternalException("Expected identifier in %s", context);
 	}
-	QualifiedName qualified_name;
-	qualified_name.catalog = INVALID_CATALOG;
-	qualified_name.schema = INVALID_SCHEMA;
 	if (result->type == ParseResultType::IDENTIFIER) {
-		qualified_name.name = result->Cast<IdentifierParseResult>().identifier;
-	} else {
-		qualified_name.name = result->Cast<StringLiteralParseResult>().result;
+		return result->Cast<IdentifierParseResult>().identifier;
 	}
-	return qualified_name;
+	return result->Cast<StringLiteralParseResult>().result;
 }
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PEGTransformer &transformer,
@@ -253,7 +276,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 		window_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WINDOW");
 	}
 	// index 6: FeatureWatermarkClause? (default: zero interval)
-	interval_t watermark_interval = DEFAULT_WATERMARK_INTERVAL;
+	interval_t watermark_interval = ZERO_INTERVAL;
 	auto &watermark_opt = list_pr.Child<OptionalParseResult>(6);
 	if (watermark_opt.HasResult()) {
 		auto &clause = watermark_opt.GetResult().Cast<ListParseResult>();
@@ -343,7 +366,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(P
 	vector<vector<FeatureServeEntityMapping>> entity_mappings;
 	for (auto &item : feature_items) {
 		auto &feature_item = item.get().Cast<ListParseResult>();
-		auto name = TransformFirstQualifiedName(transformer, feature_item.Child<ListParseResult>(0)).name;
+		auto name = ExtractFirstIdentifierName(feature_item.Child<ListParseResult>(0), "SERVE FEATURE item");
 		feature_names.push_back(name);
 
 		vector<FeatureServeEntityMapping> mappings;
@@ -373,14 +396,14 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(P
 				}
 			} else {
 				FeatureServeEntityMapping mapping;
-				mapping.spine_column = TransformFirstQualifiedName(transformer, mapping_clause).name;
+				mapping.spine_column = ExtractFirstIdentifierName(mapping_clause, "SERVE FEATURE entity mapping");
 				mappings.push_back(std::move(mapping));
 			}
 		}
 		entity_mappings.push_back(std::move(mappings));
 	}
 	// index 3: 'FOR' keyword
-	auto spine_table = TransformFirstQualifiedName(transformer, list_pr.Child<ListParseResult>(4)).name;
+	auto spine_table = ExtractFirstIdentifierName(list_pr.Child<ListParseResult>(4), "SERVE FEATURE spine table");
 
 	// index 5: optional ServeFeatureEntity <- 'ENTITY' IdentifierOrStringLiteral
 	string entity_column;
@@ -388,7 +411,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(P
 	if (entity_opt.HasResult()) {
 		auto &entity_list = entity_opt.GetResult().Cast<ListParseResult>();
 		// index 0: 'ENTITY' keyword, index 1: identifier
-		entity_column = TransformFirstQualifiedName(transformer, entity_list).name;
+		entity_column = ExtractFirstIdentifierName(entity_list, "SERVE FEATURE ENTITY clause");
 	}
 
 	// index 6: optional ServeFeatureAsOf <- 'ASOF' IdentifierOrStringLiteral
@@ -397,7 +420,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(P
 	if (asof_opt.HasResult()) {
 		auto &asof_list = asof_opt.GetResult().Cast<ListParseResult>();
 		// index 0: 'ASOF' keyword, index 1: identifier
-		as_of_column = TransformFirstQualifiedName(transformer, asof_list).name;
+		as_of_column = ExtractFirstIdentifierName(asof_list, "SERVE FEATURE ASOF clause");
 	}
 
 	auto result = make_uniq<ServeFeatureStatement>();

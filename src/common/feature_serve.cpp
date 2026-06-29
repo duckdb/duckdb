@@ -54,8 +54,8 @@ static bool ContainsColumn(const vector<string> &columns, const string &column) 
 
 static vector<FeatureServeEntityMapping>
 ResolveEntityMappings(const FeatureCatalogEntry &feat, const vector<FeatureServeEntityMapping> &feature_mappings,
-                      const string &entity_override) {
-	if (feature_mappings.empty() && entity_override.empty()) {
+                      const string &spine_entity_override) {
+	if (feature_mappings.empty() && spine_entity_override.empty()) {
 		vector<FeatureServeEntityMapping> result;
 		result.reserve(feat.entity_columns.size());
 		for (auto &feature_entity : feat.entity_columns) {
@@ -68,7 +68,7 @@ ResolveEntityMappings(const FeatureCatalogEntry &feat, const vector<FeatureServe
 		throw BinderException("SERVE FEATURE entity mapping was provided for global feature \"%s\"", feat.name);
 	}
 
-	if (!entity_override.empty()) {
+	if (!spine_entity_override.empty()) {
 		if (!feature_mappings.empty()) {
 			throw BinderException("SERVE FEATURE cannot combine feature-specific ENTITY mappings with a global ENTITY "
 			                      "override");
@@ -78,7 +78,8 @@ ResolveEntityMappings(const FeatureCatalogEntry &feat, const vector<FeatureServe
 			                      "multiple entity columns",
 			                      feat.name);
 		}
-		return vector<FeatureServeEntityMapping> {FeatureServeEntityMapping {feat.entity_columns[0], entity_override}};
+		return vector<FeatureServeEntityMapping> {
+		    FeatureServeEntityMapping {feat.entity_columns[0], spine_entity_override}};
 	}
 
 	if (feature_mappings.size() == 1 && feature_mappings[0].feature_column.empty()) {
@@ -138,12 +139,12 @@ static unique_ptr<StarExpression> FeatureStar(const string &feature_alias, const
 	return result;
 }
 
-static void AddServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatalogEntry &feat, const string &feature_alias,
-                         const vector<FeatureServeEntityMapping> &feature_mappings, const string &entity_override,
-                         const string &as_of_override) {
+static void AttachServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatalogEntry &feat,
+                            const string &feature_alias, const vector<FeatureServeEntityMapping> &feature_mappings,
+                            const string &spine_entity_override, const string &as_of_override) {
 	auto versioned_table = feat.name + "__v" + duckdb::to_string(feat.current_version);
 	auto spine_ts = as_of_override.empty() ? feat.timestamp_column : as_of_override;
-	auto entity_mappings = ResolveEntityMappings(feat, feature_mappings, entity_override);
+	auto entity_mappings = ResolveEntityMappings(feat, feature_mappings, spine_entity_override);
 
 	auto join = make_uniq<JoinRef>(JoinRefType::ASOF);
 	join->type = JoinType::LEFT;
@@ -186,7 +187,7 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 		select->select_list.push_back(ColumnRef("f", "feature_timestamp"));
 		select->select_list.push_back(FeatureStar("f", feat.entity_columns));
 		select->from_table = BaseTable(spine_table, "spine");
-		AddServeJoin(select->from_table, feat, "f", feature_mappings[0], entity_override, as_of_override);
+		AttachServeJoin(select->from_table, feat, "f", feature_mappings[0], entity_override, as_of_override);
 
 		auto result = make_uniq<SelectStatement>();
 		result->node = std::move(select);
@@ -209,7 +210,7 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 		timestamp->SetAlias(feat.name + "_timestamp");
 		select->select_list.push_back(std::move(timestamp));
 		select->select_list.push_back(FeatureStar(alias, feat.entity_columns));
-		AddServeJoin(select->from_table, feat, alias, feature_mappings[i], entity_override, as_of_override);
+		AttachServeJoin(select->from_table, feat, alias, feature_mappings[i], entity_override, as_of_override);
 	}
 
 	auto result = make_uniq<SelectStatement>();

@@ -67,17 +67,6 @@ static bool FeatureColumnListContains(const vector<string> &columns, const strin
 	return false;
 }
 
-static string FeatureJoin(const vector<string> &items, const string &separator) {
-	string result;
-	for (auto &item : items) {
-		if (!result.empty()) {
-			result += separator;
-		}
-		result += item;
-	}
-	return result;
-}
-
 static string GetFeatureSourceTable(const SelectNode &select_node) {
 	if (!select_node.from_table) {
 		throw BinderException("CREATE FEATURE query must specify a FROM clause");
@@ -163,13 +152,13 @@ static string BuildFeaturePITQuery(const SelectNode &select_node, const vector<s
 
 	auto ts = SQLIdentifier::ToString(timestamp_column);
 	auto window = Interval::ToString(window_interval);
-	auto anchor_select = FeatureJoin(anchor_entity_selects, ", ");
+	auto anchor_select = StringUtil::Join(anchor_entity_selects, ", ");
 	if (!anchor_select.empty()) {
 		anchor_select += ", ";
 	}
 	anchor_select += ts + " AS feature_timestamp";
 
-	auto output_columns = FeatureJoin(anchor_entity_outputs, ", ");
+	auto output_columns = StringUtil::Join(anchor_entity_outputs, ", ");
 	if (!output_columns.empty()) {
 		output_columns += ", ";
 	}
@@ -184,9 +173,9 @@ static string BuildFeaturePITQuery(const SelectNode &select_node, const vector<s
 	                       "JOIN %s ON %s "
 	                       "GROUP BY %s",
 	                       output_columns, anchor_select, table, spine_filter, table,
-	                       FeatureJoin(entity_join_conditions, " AND "), FeatureJoin(group_by_columns, ", "));
+	                       StringUtil::Join(entity_join_conditions, " AND "), StringUtil::Join(group_by_columns, ", "));
 	if (order_result) {
-		pit_sql += " ORDER BY " + FeatureJoin(order_by_columns, ", ");
+		pit_sql += " ORDER BY " + StringUtil::Join(order_by_columns, ", ");
 	}
 	return pit_sql;
 }

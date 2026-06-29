@@ -102,7 +102,7 @@ INSERT INTO requests3 VALUES
     ('C001', '2024-03-02 12:00:00'),
     ('C002', '2024-03-03 10:00:00');
 
-# card_no matches feature's entity column, but timestamp doesn't
+# card_no matches the feature key, but timestamp doesn't
 query IIIII sort
 SERVE FEATURE daily_txn FOR requests3 ASOF ts;
 ----

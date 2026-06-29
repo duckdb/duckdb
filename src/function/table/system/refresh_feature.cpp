@@ -53,17 +53,6 @@ static bool FeatureColumnListContains(const vector<string> &columns, const strin
 	return false;
 }
 
-static string FeatureJoin(const vector<string> &items, const string &separator) {
-	string result;
-	for (auto &item : items) {
-		if (!result.empty()) {
-			result += separator;
-		}
-		result += item;
-	}
-	return result;
-}
-
 static string BuildPITQuery(const FeatureCatalogEntry &feat, const string &spine_filter) {
 	auto &select_node = feat.query->node->Cast<SelectNode>();
 	string agg_exprs;
@@ -89,43 +78,44 @@ static string BuildPITQuery(const FeatureCatalogEntry &feat, const string &spine
 
 	vector<string> anchor_entity_selects;
 	vector<string> anchor_entity_outputs;
-	vector<string> join_conditions;
+	vector<string> entity_join_conditions;
 	vector<string> group_by_columns;
 	vector<string> order_by_columns;
 	for (auto &entity_column : feat.entity_columns) {
 		auto entity = QuoteIdent(entity_column);
 		anchor_entity_selects.push_back(entity);
 		anchor_entity_outputs.push_back("anchor." + entity);
-		join_conditions.push_back(table + "." + entity + " = anchor." + entity);
+		entity_join_conditions.push_back(table + "." + entity + " = anchor." + entity);
 		group_by_columns.push_back("anchor." + entity);
 		order_by_columns.push_back("anchor." + entity);
 	}
 	group_by_columns.push_back("anchor.feature_timestamp");
 	order_by_columns.push_back("anchor.feature_timestamp");
 
-	auto anchor_select = FeatureJoin(anchor_entity_selects, ", ");
+	auto anchor_select = StringUtil::Join(anchor_entity_selects, ", ");
 	if (!anchor_select.empty()) {
 		anchor_select += ", ";
 	}
 	anchor_select += ts + " AS feature_timestamp";
 
-	auto output_columns = FeatureJoin(anchor_entity_outputs, ", ");
+	auto output_columns = StringUtil::Join(anchor_entity_outputs, ", ");
 	if (!output_columns.empty()) {
 		output_columns += ", ";
 	}
 	output_columns += "anchor.feature_timestamp, " + agg_exprs;
 
-	join_conditions.push_back(table + "." + ts + " <= anchor.feature_timestamp");
-	join_conditions.push_back(table + "." + ts + " >= anchor.feature_timestamp - INTERVAL '" + window_interval + "'");
+	entity_join_conditions.push_back(table + "." + ts + " <= anchor.feature_timestamp");
+	entity_join_conditions.push_back(table + "." + ts + " >= anchor.feature_timestamp - INTERVAL '" + window_interval +
+	                                 "'");
 
-	string pit_sql = StringUtil::Format("SELECT %s "
-	                                    "FROM (SELECT %s FROM %s%s) AS anchor "
-	                                    "JOIN %s ON %s "
-	                                    "GROUP BY %s "
-	                                    "ORDER BY %s",
-	                                    output_columns, anchor_select, table, spine_filter, table,
-	                                    FeatureJoin(join_conditions, " AND "), FeatureJoin(group_by_columns, ", "),
-	                                    FeatureJoin(order_by_columns, ", "));
+	string pit_sql = StringUtil::Format(
+	    "SELECT %s "
+	    "FROM (SELECT %s FROM %s%s) AS anchor "
+	    "JOIN %s ON %s "
+	    "GROUP BY %s "
+	    "ORDER BY %s",
+	    output_columns, anchor_select, table, spine_filter, table, StringUtil::Join(entity_join_conditions, " AND "),
+	    StringUtil::Join(group_by_columns, ", "), StringUtil::Join(order_by_columns, ", "));
 
 	return pit_sql;
 }
@@ -218,10 +208,10 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			}
 
 		} else {
-			// INCREMENTAL refresh: copy rows before the stable watermark boundary and recompute the tail.
+			// INCREMENTAL refresh: copy rows before the recompute boundary and rebuild the tail.
 			auto ts_col = QuoteIdent(feat.timestamp_column);
 
-			// Use the last materialized timestamp as the refresh watermark.
+			// The boundary is max(feature_timestamp) minus the configured watermark interval.
 			auto max_result = con.Query("SELECT MAX(feature_timestamp) FROM " + cur_table_id);
 			if (max_result->HasError()) {
 				throw InternalException("Failed to read current max timestamp for feature '%s': %s", feature_name,
@@ -276,9 +266,8 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			}
 		}
 
-		// Garbage-collect the version table that just fell outside the retain window.
-		// Each refresh adds exactly one new version, so at most one table is evicted;
-		// older versions were already dropped by previous refreshes.
+		// Garbage-collect the version table that just fell outside the retain_versions limit.
+		// Each refresh adds one version, so at most one table becomes newly evictable here.
 		int64_t evicted_version = new_version - feat.retain_versions;
 		if (evicted_version >= 1) {
 			auto old_table_name = feature_name + "__v" + duckdb::to_string(evicted_version);
