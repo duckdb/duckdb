@@ -561,8 +561,8 @@ struct DoubleEagerSide {
 
 static unique_ptr<BoundAggregateExpression> DEBindAggregate(ClientContext &context, const string &name,
                                                             vector<unique_ptr<Expression>> children) {
-	auto &entry = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
-	    context, Identifier::DefaultSchema(), Identifier(name));
+	auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+	    context, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier(name)));
 	vector<LogicalType> types;
 	for (auto &child : children) {
 		types.push_back(child->GetReturnType());
