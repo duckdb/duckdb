@@ -344,6 +344,98 @@ statement ok
 DROP TABLE late_events;
 
 # ============================================================
+# INCREMENTAL refresh: different watermark intervals on the same source
+# ============================================================
+# A zero watermark only recomputes the current max timestamp anchor. A wider
+# watermark also creates late-arriving anchors that fall inside the interval.
+
+statement ok
+CREATE TABLE watermark_events (
+    entity VARCHAR,
+    val INTEGER,
+    ts TIMESTAMP
+);
+
+statement ok
+INSERT INTO watermark_events VALUES
+    ('a', 10, '2024-01-01 08:00:00'),
+    ('a', 20, '2024-01-03 08:00:00');
+
+statement ok
+CREATE FEATURE wm_zero ON watermark_events
+    ENTITY entity
+    TIMESTAMP ts
+    WINDOW 7 DAYS
+    REFRESH INCREMENTAL
+    RETAIN 1
+    AS (SELECT entity, SUM(val) AS total);
+
+statement ok
+CREATE FEATURE wm_two_days ON watermark_events
+    ENTITY entity
+    TIMESTAMP ts
+    WINDOW 7 DAYS
+    WATERMARK 2 DAYS
+    REFRESH INCREMENTAL
+    RETAIN 1
+    AS (SELECT entity, SUM(val) AS total);
+
+statement ok
+INSERT INTO watermark_events VALUES ('a', 5, '2024-01-02 08:00:00');
+
+query I
+REFRESH FEATURE wm_zero;
+----
+1
+
+query I
+REFRESH FEATURE wm_two_days;
+----
+3
+
+# The zero-watermark feature recomputes the max timestamp, so the late value is
+# included in the Jan 3 aggregate, but no Jan 2 anchor is materialized.
+query I
+SELECT COUNT(*) FROM wm_zero;
+----
+2
+
+query I
+SELECT COUNT(*) FROM wm_zero WHERE feature_timestamp = '2024-01-02 08:00:00'::TIMESTAMP;
+----
+0
+
+query R
+SELECT total FROM wm_zero WHERE feature_timestamp = '2024-01-03 08:00:00'::TIMESTAMP;
+----
+35
+
+# The two-day watermark recomputes far enough back to materialize the late Jan 2 anchor.
+query I
+SELECT COUNT(*) FROM wm_two_days;
+----
+3
+
+query R
+SELECT total FROM wm_two_days WHERE feature_timestamp = '2024-01-02 08:00:00'::TIMESTAMP;
+----
+15
+
+query R
+SELECT total FROM wm_two_days WHERE feature_timestamp = '2024-01-03 08:00:00'::TIMESTAMP;
+----
+35
+
+statement ok
+DROP FEATURE wm_zero;
+
+statement ok
+DROP FEATURE wm_two_days;
+
+statement ok
+DROP TABLE watermark_events;
+
+# ============================================================
 # Error cases
 # ============================================================
 
