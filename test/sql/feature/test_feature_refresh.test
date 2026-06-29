@@ -26,13 +26,12 @@ INSERT INTO transactions VALUES
     ('carol', 150.00, '2024-01-03 10:00:00');
 
 statement ok
-CREATE FEATURE total_spend ON transactions
-    ENTITY user_id
+CREATE FEATURE total_spend 
     TIMESTAMP ts 
     WINDOW 7 DAYS
     REFRESH FULL
     RETAIN 1
-    AS (SELECT user_id, SUM(amount) AS total_amount, COUNT(*) AS tx_count);
+    AS (SELECT user_id, SUM(amount) AS total_amount, COUNT(*) AS tx_count FROM transactions GROUP BY user_id);
 
 # Initial state: one feature row per source event timestamp
 query I
@@ -141,13 +140,12 @@ INSERT INTO events VALUES
     ('z',  5, '2024-01-01 06:00:00');
 
 statement ok
-CREATE FEATURE event_sum ON events
-    ENTITY customer
+CREATE FEATURE event_sum 
     TIMESTAMP event_time 
     WINDOW 7 DAYS
     REFRESH INCREMENTAL
     RETAIN 1
-    AS (SELECT customer, SUM(value) AS total_value);
+    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
 # Initial: 5 rows
 # x has two event-time rows, y has two, z has one.
@@ -282,14 +280,13 @@ INSERT INTO late_events VALUES
     ('a', 20, '2024-01-02 08:00:00');
 
 statement ok
-CREATE FEATURE late_test ON late_events
-    ENTITY entity
+CREATE FEATURE late_test 
     TIMESTAMP ts 
     WINDOW 7 DAYS
     WATERMARK 1 DAY
     REFRESH INCREMENTAL
     RETAIN 1
-    AS (SELECT entity, SUM(val) AS total);
+    AS (SELECT entity, SUM(val) AS total FROM late_events GROUP BY entity);
 
 # Initial materialization: one row per source timestamp.
 query I
@@ -362,23 +359,21 @@ INSERT INTO watermark_events VALUES
     ('a', 20, '2024-01-03 08:00:00');
 
 statement ok
-CREATE FEATURE wm_zero ON watermark_events
-    ENTITY entity
+CREATE FEATURE wm_zero 
     TIMESTAMP ts
     WINDOW 7 DAYS
     REFRESH INCREMENTAL
     RETAIN 1
-    AS (SELECT entity, SUM(val) AS total);
+    AS (SELECT entity, SUM(val) AS total FROM watermark_events GROUP BY entity);
 
 statement ok
-CREATE FEATURE wm_two_days ON watermark_events
-    ENTITY entity
+CREATE FEATURE wm_two_days 
     TIMESTAMP ts
     WINDOW 7 DAYS
     WATERMARK 2 DAYS
     REFRESH INCREMENTAL
     RETAIN 1
-    AS (SELECT entity, SUM(val) AS total);
+    AS (SELECT entity, SUM(val) AS total FROM watermark_events GROUP BY entity);
 
 statement ok
 INSERT INTO watermark_events VALUES ('a', 5, '2024-01-02 08:00:00');

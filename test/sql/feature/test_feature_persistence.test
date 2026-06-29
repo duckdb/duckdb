@@ -24,13 +24,11 @@ INSERT INTO events VALUES
     ('z',  5, '2024-01-01 06:00:00');
 
 statement ok
-CREATE FEATURE persisted ON events
-    ENTITY customer
-    TIMESTAMP event_time 
+CREATE FEATURE persisted TIMESTAMP event_time 
     WINDOW 7 DAYS
     REFRESH FULL
     RETAIN 3
-    AS (SELECT customer, SUM(value) AS total_value);
+    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
 # Refresh twice so current_version advances to 3
 query I
@@ -67,7 +65,7 @@ persisted	3
 
 # Other metadata survives
 query IIII
-SELECT source_table, entity_column, window_interval, retain_versions
+SELECT source_table, entity_columns, window_interval, retain_versions
 FROM duckdb_features() WHERE feature_name = 'persisted';
 ----
 events	customer	7 days	3

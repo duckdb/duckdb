@@ -32,7 +32,7 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 	names.emplace_back("source_table");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("entity_column");
+	names.emplace_back("entity_columns");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("timestamp_column");
@@ -83,6 +83,17 @@ static unique_ptr<GlobalTableFunctionState> DuckDBFeaturesInit(ClientContext &co
 	return std::move(result);
 }
 
+static string JoinFeatureEntityColumns(const vector<string> &columns) {
+	string result;
+	for (auto &column : columns) {
+		if (!result.empty()) {
+			result += ",";
+		}
+		result += column;
+	}
+	return result;
+}
+
 static string RefreshModeToString(FeatureRefreshMode mode) {
 	switch (mode) {
 	case FeatureRefreshMode::FULL:
@@ -114,8 +125,8 @@ static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &d
 		output.data[2].Append(Value(feat.name));
 		// source_table
 		output.data[3].Append(Value(feat.source_table));
-		// entity_column
-		output.data[4].Append(Value(feat.entity_column));
+		// entity_columns
+		output.data[4].Append(Value(JoinFeatureEntityColumns(feat.entity_columns)));
 		// timestamp_column
 		output.data[5].Append(Value(feat.timestamp_column));
 		// refresh_mode

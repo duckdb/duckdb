@@ -64,28 +64,37 @@ static int64_t IntervalCountToMicros(int64_t count, int64_t micros_per_unit, con
 }
 
 static interval_t IntervalFromCountAndUnit(int64_t count, const ParseResult &unit, const string &context) {
-	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitDay") ||
-	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitDays")) {
+	if (StringUtil::CIEquals(unit.name, "FeatureIntervalUnitDay") ||
+	    StringUtil::CIEquals(unit.name, "FeatureIntervalUnitDays")) {
 		return interval_t {0, IntervalCountToDays(count, context), 0};
 	}
-	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitHour") ||
-	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitHours")) {
+	if (StringUtil::CIEquals(unit.name, "FeatureIntervalUnitHour") ||
+	    StringUtil::CIEquals(unit.name, "FeatureIntervalUnitHours")) {
 		return interval_t {0, 0, IntervalCountToMicros(count, Interval::MICROS_PER_HOUR, context)};
 	}
-	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitMinute") ||
-	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitMinutes")) {
+	if (StringUtil::CIEquals(unit.name, "FeatureIntervalUnitMinute") ||
+	    StringUtil::CIEquals(unit.name, "FeatureIntervalUnitMinutes")) {
 		return interval_t {0, 0, IntervalCountToMicros(count, Interval::MICROS_PER_MINUTE, context)};
+	}
+	if (StringUtil::CIEquals(unit.name, "FeatureIntervalUnitSecond") ||
+	    StringUtil::CIEquals(unit.name, "FeatureIntervalUnitSeconds")) {
+		return interval_t {0, 0, IntervalCountToMicros(count, Interval::MICROS_PER_SEC, context)};
 	}
 	throw InternalException("Unsupported feature interval unit");
 }
 
 static interval_t ParseFeatureInterval(ParseResult &parse_result, const string &context) {
-	// FeatureInterval <- FeatureIntervalString / FeatureIntervalShorthand
+	// FeatureInterval <- FeatureIntervalString / FeatureIntervalKeywordShorthand / FeatureIntervalShorthand
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice = list_pr.Child<ChoiceParseResult>(0).GetResult();
 	auto &clause = choice.Cast<ListParseResult>();
 	if (StringUtil::CIEquals(choice.name, "FeatureIntervalString")) {
 		return ParseIntervalSchedule(clause.Child<StringLiteralParseResult>(1).result, context);
+	}
+	if (StringUtil::CIEquals(choice.name, "FeatureIntervalKeywordShorthand")) {
+		auto count = ParsePositiveIntegerIntervalCount(clause.Child<NumberParseResult>(1).number, context);
+		auto &unit = clause.Child<ListParseResult>(2).Child<ChoiceParseResult>(0).GetResult();
+		return IntervalFromCountAndUnit(count, unit, context);
 	}
 
 	auto count = ParsePositiveIntegerIntervalCount(clause.Child<NumberParseResult>(0).number, context);
@@ -97,85 +106,68 @@ static interval_t ParseFeatureInterval(ParseResult &parse_result, const string &
 }
 
 static interval_t ParseFeatureScheduleInterval(ParseResult &parse_result) {
-	// FeatureScheduleClause <- FeatureScheduleIntervalClause / FeatureScheduleShorthandClause
+	// FeatureScheduleClause <- 'EVERY' FeatureInterval
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	auto &clause = choice.Cast<ListParseResult>();
-	if (StringUtil::CIEquals(choice.name, "FeatureScheduleIntervalClause")) {
-		return ParseIntervalSchedule(clause.Child<StringLiteralParseResult>(2).result, "EVERY");
-	}
-
-	if (StringUtil::CIEquals(choice.name, "FeatureScheduleShorthandClause")) {
-		auto count = ParsePositiveIntegerIntervalCount(clause.Child<NumberParseResult>(1).number, "EVERY");
-		auto &unit = clause.Child<ListParseResult>(2).Child<ChoiceParseResult>(0).GetResult();
-		return IntervalFromCountAndUnit(count, unit, "EVERY");
-	}
-	throw InternalException("Unsupported feature schedule clause");
+	return ParseFeatureInterval(list_pr.Child<ListParseResult>(1), "EVERY");
 }
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PEGTransformer &transformer,
                                                                               ParseResult &parse_result) {
-	// CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral
-	//                      'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral
-	//                      FeatureWindowClause? FeatureWatermarkClause? FeatureRefreshClause?
-	//                      FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
+	// CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral
+	//                      FeatureWindowClause? FeatureWatermarkClause?
+	//                      FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause? 'AS'
+	//                      Parens(SelectStatementInternal)
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 
 	// index 0: 'FEATURE' keyword
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto feature_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2)).name;
-	// index 3: 'ON' keyword
-	auto source_table = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(4)).name;
-	// index 5: 'ENTITY' keyword
-	auto entity_column = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(6)).name;
-	// index 7: 'TIMESTAMP' keyword
-	auto timestamp_column = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(8)).name;
-	// index 9: FeatureWindowClause? (default: 1 day)
+	// index 3: 'TIMESTAMP' keyword
+	auto timestamp_column = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(4)).name;
+	// index 5: FeatureWindowClause? (default: 1 day)
 	interval_t window_interval {0, 1, 0};
-	auto &window_opt = list_pr.Child<OptionalParseResult>(9);
+	auto &window_opt = list_pr.Child<OptionalParseResult>(5);
 	if (window_opt.HasResult()) {
 		auto &clause = window_opt.GetResult().Cast<ListParseResult>();
 		window_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WINDOW");
 	}
-	// index 10: FeatureWatermarkClause? (default: zero interval)
+	// index 6: FeatureWatermarkClause? (default: zero interval)
 	interval_t watermark_interval = DEFAULT_WATERMARK_INTERVAL;
-	auto &watermark_opt = list_pr.Child<OptionalParseResult>(10);
+	auto &watermark_opt = list_pr.Child<OptionalParseResult>(6);
 	if (watermark_opt.HasResult()) {
 		auto &clause = watermark_opt.GetResult().Cast<ListParseResult>();
 		watermark_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WATERMARK");
 	}
-	// index 11: FeatureRefreshClause? (default: INCREMENTAL)
+	// index 7: FeatureRefreshClause? (default: INCREMENTAL)
 	FeatureRefreshMode refresh_mode = FeatureRefreshMode::INCREMENTAL;
-	auto &refresh_opt = list_pr.Child<OptionalParseResult>(11);
+	auto &refresh_opt = list_pr.Child<OptionalParseResult>(7);
 	if (refresh_opt.HasResult()) {
 		auto &clause = refresh_opt.GetResult().Cast<ListParseResult>();
 		refresh_mode = transformer.Transform<FeatureRefreshMode>(clause.Child<ListParseResult>(1));
 	}
-	// index 12: FeatureScheduleClause? (default: no schedule)
+	// index 8: FeatureScheduleClause? (default: no schedule)
 	bool has_schedule = false;
 	interval_t schedule_interval {0, 0, 0};
-	auto &schedule_opt = list_pr.Child<OptionalParseResult>(12);
+	auto &schedule_opt = list_pr.Child<OptionalParseResult>(8);
 	if (schedule_opt.HasResult()) {
 		schedule_interval = transformer.Transform<interval_t>(schedule_opt.GetResult());
 		has_schedule = true;
 	}
-	// index 13: FeatureRetainClause? (default: 1)
+	// index 9: FeatureRetainClause? (default: 1)
 	int64_t retain_versions = 1;
-	auto &retain_opt = list_pr.Child<OptionalParseResult>(13);
+	auto &retain_opt = list_pr.Child<OptionalParseResult>(9);
 	if (retain_opt.HasResult()) {
 		auto &clause = retain_opt.GetResult().Cast<ListParseResult>();
 		retain_versions = std::stoll(clause.Child<NumberParseResult>(1).number);
 	}
-	// index 14: 'AS' keyword
-	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(15));
+	// index 10: 'AS' keyword
+	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(11));
 	auto query = transformer.Transform<unique_ptr<SelectStatement>>(select_parens);
 
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateFeatureInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->feature_name = feature_name;
-	info->source_table = source_table;
-	info->entity_column = entity_column;
 	info->timestamp_column = timestamp_column;
 	info->window_interval = window_interval;
 	info->watermark_interval = watermark_interval;

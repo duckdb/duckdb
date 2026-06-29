@@ -20,7 +20,7 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	CopyProperties(*result);
 	result->feature_name = feature_name;
 	result->source_table = source_table;
-	result->entity_column = entity_column;
+	result->entity_columns = entity_columns;
 	result->timestamp_column = timestamp_column;
 	result->window_interval = window_interval;
 	result->watermark_interval = watermark_interval;
@@ -47,8 +47,6 @@ string CreateFeatureInfo::ToString() const {
 		result += "IF NOT EXISTS ";
 	}
 	result += feature_name;
-	result += " ON " + source_table;
-	result += " ENTITY " + entity_column;
 	result += " TIMESTAMP " + timestamp_column;
 	result += " WINDOW INTERVAL '" + Interval::ToString(window_interval) + "'";
 	if (!IntervalEquals(watermark_interval, interval_t {0, 0, 0})) {

@@ -28,13 +28,12 @@ INSERT INTO events VALUES
 # FULL refresh with RETAIN 3: version increments each refresh
 # ============================================================
 statement ok
-CREATE FEATURE versioned_full ON events
-    ENTITY customer
+CREATE FEATURE versioned_full 
     TIMESTAMP event_time 
     WINDOW 7 DAYS
     REFRESH FULL
     RETAIN 3
-    AS (SELECT customer, SUM(value) AS total_value);
+    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
 # Initial materialization creates version table __v1 with one row per source event timestamp.
 query I
@@ -141,13 +140,12 @@ DROP FEATURE versioned_full;
 # RETAIN 1: only latest version kept (default behavior)
 # ============================================================
 statement ok
-CREATE FEATURE versioned_retain1 ON events
-    ENTITY customer
+CREATE FEATURE versioned_retain1 
     TIMESTAMP event_time 
     WINDOW 7 DAYS
     REFRESH FULL
     RETAIN 1
-    AS (SELECT customer, SUM(value) AS total_value);
+    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
 # Version 1 table exists initially — 5 rows
 query I
@@ -191,13 +189,12 @@ DROP FEATURE versioned_retain1;
 # INCREMENTAL refresh: version increments, old versions GC'd
 # ============================================================
 statement ok
-CREATE FEATURE versioned_incr ON events
-    ENTITY customer
+CREATE FEATURE versioned_incr 
     TIMESTAMP event_time 
     WINDOW 7 DAYS
     REFRESH INCREMENTAL
     RETAIN 2
-    AS (SELECT customer, SUM(value) AS total_value);
+    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
 # Initial: version 1 — 5 rows
 query I
@@ -309,13 +306,12 @@ INSERT INTO stable_src VALUES
     ('c', 30, '2024-01-02 10:00:00');
 
 statement ok
-CREATE FEATURE stable_feat ON stable_src
-    ENTITY eid
+CREATE FEATURE stable_feat 
     TIMESTAMP ts 
     WINDOW 7 DAYS
     REFRESH INCREMENTAL
     RETAIN 3
-    AS (SELECT eid, SUM(val) AS total);
+    AS (SELECT eid, SUM(val) AS total FROM stable_src GROUP BY eid);
 
 # Version 1 after creation — 3 rows, one per source event timestamp
 query I

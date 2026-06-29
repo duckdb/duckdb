@@ -1,5 +1,5 @@
 #include "duckdb/parser/parsed_data/alter_feature_info.hpp"
-#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
@@ -46,7 +46,7 @@ string AlterFeatureInfo::ToString() const {
 	result += SQLIdentifier::ToString(name);
 	switch (alter_feature_type) {
 	case AlterFeatureType::SET_SCHEDULE:
-		result += " SET SCHEDULE EVERY INTERVAL '" + Value::INTERVAL(schedule_interval).ToString() + "'";
+		result += " SET SCHEDULE EVERY INTERVAL '" + Interval::ToString(schedule_interval) + "'";
 		break;
 	case AlterFeatureType::ENABLE_SCHEDULE:
 		result += " ENABLE SCHEDULE";

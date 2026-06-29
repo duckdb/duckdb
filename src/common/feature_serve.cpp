@@ -51,9 +51,21 @@ static unique_ptr<ParsedExpression> ServeJoinCondition(const string &feature_ali
 	                                        std::move(timestamp_condition));
 }
 
-static unique_ptr<StarExpression> FeatureStar(const string &feature_alias, const string &feature_entity) {
+static const string &SingleFeatureEntityColumn(const FeatureCatalogEntry &feat) {
+	if (feat.entity_columns.empty()) {
+		throw BinderException("SERVE FEATURE does not support global feature \"%s\"", feat.name);
+	}
+	if (feat.entity_columns.size() > 1) {
+		throw BinderException("SERVE FEATURE does not support feature \"%s\" with multiple entity columns", feat.name);
+	}
+	return feat.entity_columns[0];
+}
+
+static unique_ptr<StarExpression> FeatureStar(const string &feature_alias, const vector<string> &feature_entities) {
 	auto result = make_uniq<StarExpression>(feature_alias);
-	result->exclude_list.insert(QualifiedColumnName(feature_entity));
+	for (auto &feature_entity : feature_entities) {
+		result->exclude_list.insert(QualifiedColumnName(feature_entity));
+	}
 	result->exclude_list.insert(QualifiedColumnName("feature_timestamp"));
 	return result;
 }
@@ -61,7 +73,7 @@ static unique_ptr<StarExpression> FeatureStar(const string &feature_alias, const
 static void AddServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatalogEntry &feat, const string &feature_alias,
                          const string &entity_override, const string &as_of_override) {
 	auto versioned_table = feat.name + "__v" + duckdb::to_string(feat.current_version);
-	auto feat_entity = feat.entity_column;
+	auto &feat_entity = SingleFeatureEntityColumn(feat);
 	auto spine_entity = entity_override.empty() ? feat_entity : entity_override;
 	auto spine_ts = as_of_override.empty() ? feat.timestamp_column : as_of_override;
 
@@ -97,12 +109,13 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 			if (!entry) {
 				throw CatalogException("Feature \"%s\" does not exist", fname);
 			}
+			auto &feature_entity = SingleFeatureEntityColumn(*entry);
 			if (first_entity.empty()) {
-				first_entity = entry->entity_column;
-			} else if (entry->entity_column != first_entity) {
+				first_entity = feature_entity;
+			} else if (feature_entity != first_entity) {
 				throw BinderException("Features have different entity columns (\"%s\" vs \"%s\"). "
 				                      "Use ENTITY to specify the spine's entity column explicitly.",
-				                      first_entity, entry->entity_column);
+				                      first_entity, feature_entity);
 			}
 		}
 	}
@@ -117,7 +130,7 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 		auto select = make_uniq<SelectNode>();
 		select->select_list.push_back(make_uniq<StarExpression>("spine"));
 		select->select_list.push_back(ColumnRef("f", "feature_timestamp"));
-		select->select_list.push_back(FeatureStar("f", feat.entity_column));
+		select->select_list.push_back(FeatureStar("f", feat.entity_columns));
 		select->from_table = BaseTable(spine_table, "spine");
 		AddServeJoin(select->from_table, feat, "f", entity_override, as_of_override);
 
@@ -141,7 +154,7 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 		auto timestamp = ColumnRef(alias, "feature_timestamp");
 		timestamp->SetAlias(feat.name + "_timestamp");
 		select->select_list.push_back(std::move(timestamp));
-		select->select_list.push_back(FeatureStar(alias, feat.entity_column));
+		select->select_list.push_back(FeatureStar(alias, feat.entity_columns));
 		AddServeJoin(select->from_table, feat, alias, entity_override, as_of_override);
 	}
 

@@ -44,13 +44,33 @@ static string QuoteIdent(const string &name) {
 	return SQLIdentifier::ToString(name);
 }
 
+static bool FeatureColumnListContains(const vector<string> &columns, const string &column_name) {
+	for (auto &column : columns) {
+		if (StringUtil::CIEquals(column, column_name)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static string FeatureJoin(const vector<string> &items, const string &separator) {
+	string result;
+	for (auto &item : items) {
+		if (!result.empty()) {
+			result += separator;
+		}
+		result += item;
+	}
+	return result;
+}
+
 static string BuildPITQuery(const FeatureCatalogEntry &feat, const string &spine_filter) {
 	auto &select_node = feat.query->node->Cast<SelectNode>();
 	string agg_exprs;
 	for (auto &expr : select_node.select_list) {
 		if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 			auto &col_ref = expr->Cast<ColumnRefExpression>();
-			if (col_ref.GetColumnName() == feat.entity_column) {
+			if (FeatureColumnListContains(feat.entity_columns, col_ref.GetColumnName())) {
 				continue;
 			}
 		}
@@ -63,24 +83,49 @@ static string BuildPITQuery(const FeatureCatalogEntry &feat, const string &spine
 		}
 	}
 
-	auto entity = QuoteIdent(feat.entity_column);
 	auto ts = QuoteIdent(feat.timestamp_column);
 	auto table = QuoteIdent(feat.source_table);
 	auto window_interval = Interval::ToString(feat.window_interval);
 
-	string pit_sql = StringUtil::Format("SELECT anchor.%s, anchor.feature_timestamp, %s "
-	                                    "FROM (SELECT %s, %s AS feature_timestamp FROM %s%s) AS anchor "
-	                                    "JOIN %s ON %s.%s = anchor.%s "
-	                                    "AND %s.%s <= anchor.feature_timestamp "
-	                                    "AND %s.%s >= anchor.feature_timestamp - INTERVAL '%s' "
-	                                    "GROUP BY anchor.%s, anchor.feature_timestamp "
-	                                    "ORDER BY anchor.%s, anchor.feature_timestamp",
-	                                    entity, agg_exprs,               // outer SELECT
-	                                    entity, ts, table, spine_filter, // anchor subquery
-	                                    table, table, entity, entity,    // JOIN
-	                                    table, ts,                       // AND <=
-	                                    table, ts, window_interval,      // AND >=
-	                                    entity, entity);                 // GROUP BY, ORDER BY
+	vector<string> anchor_entity_selects;
+	vector<string> anchor_entity_outputs;
+	vector<string> join_conditions;
+	vector<string> group_by_columns;
+	vector<string> order_by_columns;
+	for (auto &entity_column : feat.entity_columns) {
+		auto entity = QuoteIdent(entity_column);
+		anchor_entity_selects.push_back(entity);
+		anchor_entity_outputs.push_back("anchor." + entity);
+		join_conditions.push_back(table + "." + entity + " = anchor." + entity);
+		group_by_columns.push_back("anchor." + entity);
+		order_by_columns.push_back("anchor." + entity);
+	}
+	group_by_columns.push_back("anchor.feature_timestamp");
+	order_by_columns.push_back("anchor.feature_timestamp");
+
+	auto anchor_select = FeatureJoin(anchor_entity_selects, ", ");
+	if (!anchor_select.empty()) {
+		anchor_select += ", ";
+	}
+	anchor_select += ts + " AS feature_timestamp";
+
+	auto output_columns = FeatureJoin(anchor_entity_outputs, ", ");
+	if (!output_columns.empty()) {
+		output_columns += ", ";
+	}
+	output_columns += "anchor.feature_timestamp, " + agg_exprs;
+
+	join_conditions.push_back(table + "." + ts + " <= anchor.feature_timestamp");
+	join_conditions.push_back(table + "." + ts + " >= anchor.feature_timestamp - INTERVAL '" + window_interval + "'");
+
+	string pit_sql = StringUtil::Format("SELECT %s "
+	                                    "FROM (SELECT %s FROM %s%s) AS anchor "
+	                                    "JOIN %s ON %s "
+	                                    "GROUP BY %s "
+	                                    "ORDER BY %s",
+	                                    output_columns, anchor_select, table, spine_filter, table,
+	                                    FeatureJoin(join_conditions, " AND "), FeatureJoin(group_by_columns, ", "),
+	                                    FeatureJoin(order_by_columns, ", "));
 
 	return pit_sql;
 }

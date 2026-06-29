@@ -829,27 +829,28 @@ ForEachClause <- ForEachRow / ForEachStatement
 ForEachRow <- 'FOR' 'EACH' 'ROW'
 ForEachStatement <- 'FOR' 'EACH' 'STATEMENT'
 
-CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureWindowClause? FeatureWatermarkClause? FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
+CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureWindowClause? FeatureWatermarkClause? FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
 
 FeatureWindowClause <- 'WINDOW' FeatureInterval
 FeatureWatermarkClause <- 'WATERMARK' FeatureInterval
 FeatureRefreshClause <- 'REFRESH' FeatureRefreshMode
-FeatureScheduleClause <- FeatureScheduleIntervalClause / FeatureScheduleShorthandClause
-FeatureScheduleIntervalClause <- 'EVERY' 'INTERVAL' StringLiteral
-FeatureScheduleShorthandClause <- 'EVERY' NumberLiteral FeatureScheduleUnit
+FeatureScheduleClause <- 'EVERY' FeatureInterval
 FeatureRetainClause <- 'RETAIN' NumberLiteral
 
-FeatureInterval <- FeatureIntervalString / FeatureIntervalShorthand
+FeatureInterval <- FeatureIntervalString / FeatureIntervalKeywordShorthand / FeatureIntervalShorthand
 FeatureIntervalString <- 'INTERVAL' StringLiteral
-FeatureIntervalShorthand <- NumberLiteral FeatureScheduleUnit
+FeatureIntervalKeywordShorthand <- 'INTERVAL' NumberLiteral FeatureIntervalUnit
+FeatureIntervalShorthand <- NumberLiteral FeatureIntervalUnit
 
-FeatureScheduleUnit <- FeatureScheduleUnitDays / FeatureScheduleUnitDay / FeatureScheduleUnitHours / FeatureScheduleUnitHour / FeatureScheduleUnitMinutes / FeatureScheduleUnitMinute
-FeatureScheduleUnitDay <- 'DAY'
-FeatureScheduleUnitDays <- 'DAYS'
-FeatureScheduleUnitHour <- 'HOUR'
-FeatureScheduleUnitHours <- 'HOURS'
-FeatureScheduleUnitMinute <- 'MINUTE'
-FeatureScheduleUnitMinutes <- 'MINUTES'
+FeatureIntervalUnit <- FeatureIntervalUnitDays / FeatureIntervalUnitDay / FeatureIntervalUnitHours / FeatureIntervalUnitHour / FeatureIntervalUnitMinutes / FeatureIntervalUnitMinute / FeatureIntervalUnitSeconds / FeatureIntervalUnitSecond
+FeatureIntervalUnitDay <- 'DAY'
+FeatureIntervalUnitDays <- 'DAYS'
+FeatureIntervalUnitHour <- 'HOUR'
+FeatureIntervalUnitHours <- 'HOURS'
+FeatureIntervalUnitMinute <- 'MINUTE'
+FeatureIntervalUnitMinutes <- 'MINUTES'
+FeatureIntervalUnitSecond <- 'SECOND'
+FeatureIntervalUnitSeconds <- 'SECONDS'
 
 FeatureRefreshMode <- FeatureRefreshFull / FeatureRefreshIncremental
 FeatureRefreshFull <- 'FULL'

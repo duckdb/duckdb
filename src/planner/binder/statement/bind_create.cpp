@@ -58,6 +58,139 @@
 
 namespace duckdb {
 
+static bool FeatureColumnListContains(const vector<string> &columns, const string &column_name) {
+	for (auto &column : columns) {
+		if (StringUtil::CIEquals(column, column_name)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static string FeatureJoin(const vector<string> &items, const string &separator) {
+	string result;
+	for (auto &item : items) {
+		if (!result.empty()) {
+			result += separator;
+		}
+		result += item;
+	}
+	return result;
+}
+
+static string GetFeatureSourceTable(const SelectNode &select_node) {
+	if (!select_node.from_table) {
+		throw BinderException("CREATE FEATURE query must specify a FROM clause");
+	}
+	if (select_node.from_table->type != TableReferenceType::BASE_TABLE) {
+		throw BinderException("CREATE FEATURE query must read from exactly one base table");
+	}
+	auto &base_table = select_node.from_table->Cast<BaseTableRef>();
+	if (!base_table.alias.empty()) {
+		throw BinderException("CREATE FEATURE source table aliases are not supported");
+	}
+	if (base_table.at_clause) {
+		throw BinderException("CREATE FEATURE source table cannot use an AT clause");
+	}
+	if (!base_table.catalog_name.empty() && base_table.catalog_name != INVALID_CATALOG) {
+		throw BinderException("CREATE FEATURE source table must be unqualified");
+	}
+	if (!base_table.schema_name.empty() && base_table.schema_name != INVALID_SCHEMA) {
+		throw BinderException("CREATE FEATURE source table must be unqualified");
+	}
+	return base_table.table_name;
+}
+
+static vector<string> GetFeatureEntityColumns(const SelectNode &select_node, const TableCatalogEntry &table_entry,
+                                              const string &source_table) {
+	vector<string> result;
+	for (auto &group_expr : select_node.groups.group_expressions) {
+		if (group_expr->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
+			throw BinderException("CREATE FEATURE GROUP BY keys must be column references");
+		}
+		auto &col_ref = group_expr->Cast<ColumnRefExpression>();
+		auto column_name = col_ref.GetColumnName();
+		if (FeatureColumnListContains(result, column_name)) {
+			throw BinderException("Duplicate feature entity column \"%s\"", column_name);
+		}
+		if (!table_entry.ColumnExists(column_name)) {
+			throw BinderException("Entity column \"%s\" does not exist in table \"%s\"", column_name, source_table);
+		}
+		result.push_back(column_name);
+	}
+	return result;
+}
+
+static string BuildFeaturePITQuery(const SelectNode &select_node, const vector<string> &entity_columns,
+                                   const string &timestamp_column, const string &source_table,
+                                   const interval_t &window_interval, const string &spine_filter, bool order_result) {
+	string agg_exprs;
+	for (auto &expr : select_node.select_list) {
+		if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+			auto &col_ref = expr->Cast<ColumnRefExpression>();
+			if (FeatureColumnListContains(entity_columns, col_ref.GetColumnName())) {
+				continue;
+			}
+		}
+		if (!agg_exprs.empty()) {
+			agg_exprs += ", ";
+		}
+		agg_exprs += expr->ToString();
+		if (expr->HasAlias()) {
+			agg_exprs += " AS " + SQLIdentifier::ToString(expr->GetAlias());
+		}
+	}
+	if (agg_exprs.empty()) {
+		throw BinderException("CREATE FEATURE query must project at least one feature expression");
+	}
+
+	vector<string> anchor_entity_selects;
+	vector<string> anchor_entity_outputs;
+	vector<string> entity_join_conditions;
+	vector<string> group_by_columns;
+	vector<string> order_by_columns;
+	auto table = SQLIdentifier::ToString(source_table);
+	for (auto &entity_column : entity_columns) {
+		auto entity = SQLIdentifier::ToString(entity_column);
+		anchor_entity_selects.push_back(entity);
+		anchor_entity_outputs.push_back("anchor." + entity);
+		entity_join_conditions.push_back(table + "." + entity + " = anchor." + entity);
+		group_by_columns.push_back("anchor." + entity);
+		order_by_columns.push_back("anchor." + entity);
+	}
+	group_by_columns.push_back("anchor.feature_timestamp");
+	order_by_columns.push_back("anchor.feature_timestamp");
+
+	auto ts = SQLIdentifier::ToString(timestamp_column);
+	auto window = Interval::ToString(window_interval);
+	auto anchor_select = FeatureJoin(anchor_entity_selects, ", ");
+	if (!anchor_select.empty()) {
+		anchor_select += ", ";
+	}
+	anchor_select += ts + " AS feature_timestamp";
+
+	auto output_columns = FeatureJoin(anchor_entity_outputs, ", ");
+	if (!output_columns.empty()) {
+		output_columns += ", ";
+	}
+	output_columns += "anchor.feature_timestamp, " + agg_exprs;
+
+	entity_join_conditions.push_back(table + "." + ts + " <= anchor.feature_timestamp");
+	entity_join_conditions.push_back(table + "." + ts + " >= anchor.feature_timestamp - INTERVAL '" + window + "'");
+
+	string pit_sql =
+	    StringUtil::Format("SELECT %s "
+	                       "FROM (SELECT %s FROM %s%s) AS anchor "
+	                       "JOIN %s ON %s "
+	                       "GROUP BY %s",
+	                       output_columns, anchor_select, table, spine_filter, table,
+	                       FeatureJoin(entity_join_conditions, " AND "), FeatureJoin(group_by_columns, ", "));
+	if (order_result) {
+		pit_sql += " ORDER BY " + FeatureJoin(order_by_columns, ", ");
+	}
+	return pit_sql;
+}
+
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
 	auto &context = retriever.GetContext();
 	if (schema.empty()) {
@@ -768,16 +901,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::FEATURE_ENTRY: {
 		auto &feature_info = stmt.info->Cast<CreateFeatureInfo>();
 		auto &schema = BindCreateSchema(*stmt.info);
+		auto &select_node = feature_info.query->node->Cast<SelectNode>();
+		feature_info.source_table = GetFeatureSourceTable(select_node);
 
 		// Validate source table exists
 		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, feature_info.catalog, feature_info.schema,
 		                                                         feature_info.source_table);
-
-		// Validate entity column exists
-		if (!table_entry.ColumnExists(feature_info.entity_column)) {
-			throw BinderException("Entity column \"%s\" does not exist in table \"%s\"", feature_info.entity_column,
-			                      feature_info.source_table);
-		}
 
 		// Validate timestamp column exists
 		if (!table_entry.ColumnExists(feature_info.timestamp_column)) {
@@ -798,42 +927,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// Register dependency on the source table so DROP TABLE blocks without CASCADE
 		feature_info.dependencies.AddDependency(table_entry);
 
+		feature_info.entity_columns = GetFeatureEntityColumns(select_node, table_entry, feature_info.source_table);
+
 		// Build PIT query string from the feature definition
-		auto &select_node = feature_info.query->node->Cast<SelectNode>();
-		string agg_exprs;
-		for (auto &expr : select_node.select_list) {
-			if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-				auto &col_ref = expr->Cast<ColumnRefExpression>();
-				if (col_ref.GetColumnName() == feature_info.entity_column) {
-					continue;
-				}
-			}
-			if (!agg_exprs.empty()) {
-				agg_exprs += ", ";
-			}
-			agg_exprs += expr->ToString();
-			if (expr->HasAlias()) {
-				agg_exprs += " AS " + SQLIdentifier::ToString(expr->GetAlias());
-			}
-		}
-
-		auto entity = SQLIdentifier::ToString(feature_info.entity_column);
-		auto ts = SQLIdentifier::ToString(feature_info.timestamp_column);
-		auto table = SQLIdentifier::ToString(feature_info.source_table);
-		auto window_interval = Interval::ToString(feature_info.window_interval);
-
-		string pit_sql = StringUtil::Format("SELECT anchor.%s, anchor.feature_timestamp, %s "
-		                                    "FROM (SELECT %s, %s AS feature_timestamp FROM %s) AS anchor "
-		                                    "JOIN %s ON %s.%s = anchor.%s "
-		                                    "AND %s.%s <= anchor.feature_timestamp "
-		                                    "AND %s.%s >= anchor.feature_timestamp - INTERVAL '%s' "
-		                                    "GROUP BY anchor.%s, anchor.feature_timestamp",
-		                                    entity, agg_exprs,            // outer SELECT
-		                                    entity, ts, table,            // anchor subquery
-		                                    table, table, entity, entity, // JOIN
-		                                    table, ts,                    // AND <=
-		                                    table, ts, window_interval,   // AND >=
-		                                    entity);                      // GROUP BY
+		string pit_sql = BuildFeaturePITQuery(select_node, feature_info.entity_columns, feature_info.timestamp_column,
+		                                      feature_info.source_table, feature_info.window_interval, "", false);
 
 		// Parse and bind the PIT query
 		Parser parser(context.GetParserOptions());

@@ -23,13 +23,11 @@ INSERT INTO events VALUES
 # RETAIN 2: GC should keep only the latest 2 version tables
 # ============================================================
 statement ok
-CREATE FEATURE f ON events
-    ENTITY customer
-    TIMESTAMP event_time 
+CREATE FEATURE f TIMESTAMP event_time 
     WINDOW 7 DAYS
     REFRESH FULL
     RETAIN 2
-    AS (SELECT customer, SUM(value) AS total_value);
+    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
 # After create: only v1 backing table
 query I

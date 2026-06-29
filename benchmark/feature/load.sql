@@ -22,28 +22,25 @@ FROM read_parquet(
 
 -- FULL-refresh feature: hourly windowed aggregation per user over a 24h window.
 -- Exercises the CREATE FEATURE / REFRESH FULL group-by aggregation path.
-CREATE FEATURE user_activity_full ON hits
-    ENTITY UserID
-    TIMESTAMP EventTime 
+CREATE FEATURE user_activity_full TIMESTAMP EventTime 
     WINDOW 24 HOURS
     REFRESH FULL
     RETAIN 1
-    AS (SELECT UserID, COUNT(*) AS event_count, AVG(RegionID) AS avg_region);
+    AS (SELECT UserID, COUNT(*) AS event_count, AVG(RegionID) AS avg_region FROM hits GROUP BY UserID);
 
 -- INCREMENTAL-refresh feature: same shape, watermark-based incremental refresh.
--- A refresh always recomputes the tail from the last floor bucket onward, so it
--- exercises the REFRESH INCREMENTAL path even without new source rows.
-CREATE FEATURE user_activity_incr ON hits
-    ENTITY UserID
-    TIMESTAMP EventTime 
+-- A refresh recomputes the tail from max(feature_timestamp) minus one hour, so
+-- it exercises the REFRESH INCREMENTAL watermark path even without new source rows.
+CREATE FEATURE user_activity_incr TIMESTAMP EventTime 
     WINDOW 24 HOURS
+    WATERMARK 1 HOUR
     REFRESH INCREMENTAL
     RETAIN 5
-    AS (SELECT UserID, COUNT(*) AS event_count);
+    AS (SELECT UserID, COUNT(*) AS event_count FROM hits GROUP BY UserID);
 
 -- Serving spine: a sample of entities with a serving timestamp after all events.
--- Column names match the feature's ENTITY/TIMESTAMP, so SERVE needs no
--- ENTITY/ASOF overrides. Exercises the point-in-time LEFT ASOF JOIN serving path.
+-- SERVE benchmarks consume this table with SERVE FEATURE ... FOR serve_requests.
+-- Column names match the feature key and timestamp, so SERVE needs no overrides.
 CREATE TABLE serve_requests AS
 SELECT DISTINCT
     UserID,

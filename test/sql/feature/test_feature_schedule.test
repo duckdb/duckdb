@@ -22,8 +22,7 @@ INSERT INTO hits VALUES
 # Create a feature without a schedule (default: no schedule)
 # ============================================================
 statement ok
-CREATE FEATURE no_sched ON hits
-    ENTITY UserID
+CREATE FEATURE no_sched 
     TIMESTAMP EventTime 
     WINDOW 24 HOURS
     REFRESH INCREMENTAL
@@ -39,12 +38,11 @@ NULL	false
 # Create a feature WITH a schedule
 # ============================================================
 statement ok
-CREATE FEATURE user_activity ON hits
-    ENTITY UserID
+CREATE FEATURE user_activity 
     TIMESTAMP EventTime 
     WINDOW 24 HOURS
     REFRESH INCREMENTAL
-    EVERY INTERVAL '1 hour'
+    EVERY INTERVAL 1 HOUR
     RETAIN 5
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
 
@@ -63,11 +61,10 @@ SELECT sql FROM duckdb_features() WHERE feature_name = 'user_activity';
 # Schedule accepts compound / minute intervals
 # ============================================================
 statement ok
-CREATE FEATURE half_hourly ON hits
-    ENTITY UserID
+CREATE FEATURE half_hourly 
     TIMESTAMP EventTime 
     WINDOW 60 MINUTES
-    EVERY INTERVAL '30 minutes'
+    EVERY INTERVAL 30 MINUTES
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
 
 query II
@@ -75,12 +72,24 @@ SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_
 ----
 00:30:00	true
 
+# Quoted interval strings are still accepted as an alternate spelling.
+statement ok
+CREATE FEATURE quoted_schedule
+    TIMESTAMP EventTime
+    WINDOW 60 MINUTES
+    EVERY INTERVAL '15 minutes'
+    AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
+
+query II
+SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'quoted_schedule';
+----
+00:15:00	true
+
 # ============================================================
 # Schedule shorthand normalizes to the same interval metadata
 # ============================================================
 statement ok
-CREATE FEATURE shorthand_hours ON hits
-    ENTITY UserID
+CREATE FEATURE shorthand_hours 
     TIMESTAMP EventTime 
     WINDOW 24 HOURS
     EVERY 2 HOURS
@@ -100,17 +109,14 @@ SELECT sql FROM duckdb_features() WHERE feature_name = 'shorthand_hours';
 # Validation: non-positive interval is rejected
 # ============================================================
 statement error
-CREATE FEATURE bad_sched ON hits
-    ENTITY UserID
-    TIMESTAMP EventTime
-    EVERY INTERVAL '0 seconds'
+CREATE FEATURE bad_sched TIMESTAMP EventTime
+    EVERY INTERVAL 0 SECONDS
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
 ----
 <REGEX>:.*interval must be positive.*
 
 statement error
-CREATE FEATURE bad_shorthand_zero ON hits
-    ENTITY UserID
+CREATE FEATURE bad_shorthand_zero 
     TIMESTAMP EventTime
     EVERY 0 HOURS
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
@@ -118,8 +124,7 @@ CREATE FEATURE bad_shorthand_zero ON hits
 <REGEX>:.*interval must be positive.*
 
 statement error
-CREATE FEATURE bad_shorthand_decimal ON hits
-    ENTITY UserID
+CREATE FEATURE bad_shorthand_decimal 
     TIMESTAMP EventTime
     EVERY 1.5 HOURS
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);

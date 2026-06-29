@@ -23,8 +23,8 @@ struct CreateFeatureInfo : public CreateInfo {
 	string feature_name;
 	//! Source table name
 	string source_table;
-	//! Entity column (the GROUP BY key)
-	string entity_column;
+	//! Entity columns (the GROUP BY keys); empty for global features
+	vector<string> entity_columns;
 	//! Timestamp column (temporal ordering)
 	string timestamp_column;
 	//! Lookback window interval

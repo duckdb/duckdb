@@ -25,8 +25,8 @@ public:
 
 	//! The source table name
 	string source_table;
-	//! The entity column
-	string entity_column;
+	//! The entity columns; empty for global features
+	vector<string> entity_columns;
 	//! The timestamp column
 	string timestamp_column;
 	//! The lookback window interval

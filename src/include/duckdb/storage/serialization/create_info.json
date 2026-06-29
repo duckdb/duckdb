@@ -383,8 +383,8 @@
       },
       {
         "id": 202,
-        "name": "entity_column",
-        "type": "string"
+        "name": "entity_columns",
+        "type": "vector<string>"
       },
       {
         "id": 203,
