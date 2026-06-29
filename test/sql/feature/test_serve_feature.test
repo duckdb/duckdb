@@ -102,6 +102,68 @@ C001	2024-03-02 12:00:00	2024-03-02 09:00:00	350.00	3
 C002	2024-03-03 10:00:00	2024-03-03 08:00:00	400.00	3
 
 # ============================================================
+# SERVE FEATURE: global feature with no entity columns
+# ============================================================
+
+statement ok
+CREATE FEATURE global_txn_count TIMESTAMP event_time WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT COUNT(*) AS global_count FROM transactions);
+
+# Global features only use the ASOF timestamp predicate. The spine can still carry
+# arbitrary columns, and they are preserved in the output.
+query IIII sort
+SERVE FEATURE global_txn_count FOR requests;
+----
+C001	2024-03-02 12:00:00	2024-03-02 09:00:00	4
+C002	2024-03-03 10:00:00	2024-03-03 08:00:00	6
+
+# Multiple-feature serving can combine keyed and global features.
+query IIIIIII sort
+SERVE FEATURES daily_txn, global_txn_count FOR requests;
+----
+C001	2024-03-02 12:00:00	2024-03-02 09:00:00	350.00	3	2024-03-02 09:00:00	4
+C002	2024-03-03 10:00:00	2024-03-03 08:00:00	400.00	3	2024-03-03 08:00:00	6
+
+# ============================================================
+# SERVE FEATURE: composite entity columns
+# ============================================================
+
+statement ok
+CREATE TABLE merchant_transactions (card_no VARCHAR, merchant_id VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+
+statement ok
+INSERT INTO merchant_transactions VALUES
+    ('C001', 'M1', 100.00, '2024-03-01 10:00:00'),
+    ('C001', 'M2', 200.00, '2024-03-01 12:00:00'),
+    ('C001', 'M1',  50.00, '2024-03-02 09:00:00'),
+    ('C002', 'M1',  75.00, '2024-03-01 11:00:00');
+
+statement ok
+CREATE FEATURE merchant_txn TIMESTAMP event_time WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, merchant_id, SUM(amount) AS merchant_total FROM merchant_transactions GROUP BY card_no, merchant_id);
+
+statement ok
+CREATE TABLE merchant_requests (card_no VARCHAR, merchant_id VARCHAR, event_time TIMESTAMP);
+
+statement ok
+INSERT INTO merchant_requests VALUES
+    ('C001', 'M1', '2024-03-02 12:00:00'),
+    ('C001', 'M2', '2024-03-02 12:00:00'),
+    ('C002', 'M1', '2024-03-02 12:00:00'),
+    ('C999', 'M1', '2024-03-02 12:00:00');
+
+query IIIII sort
+SERVE FEATURE merchant_txn FOR merchant_requests;
+----
+C001	M1	2024-03-02 12:00:00	2024-03-02 09:00:00	150.00
+C001	M2	2024-03-02 12:00:00	2024-03-01 12:00:00	200.00
+C002	M1	2024-03-02 12:00:00	2024-03-01 11:00:00	75.00
+C999	M1	2024-03-02 12:00:00	NULL	NULL
+
+statement error
+SERVE FEATURE merchant_txn FOR incoming ENTITY customer_id ASOF request_time;
+----
+multiple entity columns
+
+# ============================================================
 # SERVE FEATURE: uses only current version
 # ============================================================
 
@@ -211,6 +273,12 @@ DROP TABLE requests2;
 
 statement ok
 DROP TABLE requests3;
+
+statement ok
+DROP TABLE merchant_requests;
+
+statement ok
+DROP TABLE merchant_transactions CASCADE;
 
 statement ok
 DROP TABLE mixed;
