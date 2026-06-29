@@ -3661,7 +3661,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSummarizeIntern
                                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto summarize_rule = transformer.Transform<ShowType>(list_pr.GetChild(0));
-	auto result = summarize_rule;
+	auto result = TransformSummarize(transformer, summarize_rule);
 	return make_uniq<TypedTransformResult<ShowType>>(result);
 }
 

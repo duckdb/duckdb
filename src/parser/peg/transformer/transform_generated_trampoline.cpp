@@ -79,6 +79,9 @@ static const TransformFrameOps STRING_SESSION_TARGET_OPS = {
 static const TransformFrameOps CATALOG_SESSION_TARGET_OPS = {
     "CatalogSessionTarget", &PEGTransformerFactory::InitializeCatalogSessionTargetTrampoline,
     &PEGTransformerFactory::FinalizeCatalogSessionTargetTrampoline};
+static const TransformFrameOps CREATE_SCHEMA_STMT_OPS = {"CreateSchemaStmt",
+                                                         &PEGTransformerFactory::InitializeCreateSchemaStmtTrampoline,
+                                                         &PEGTransformerFactory::FinalizeCreateSchemaStmtTrampoline};
 static const TransformFrameOps DEALLOCATE_STATEMENT_OPS = {
     "DeallocateStatement", &PEGTransformerFactory::InitializeDeallocateStatementTrampoline,
     &PEGTransformerFactory::FinalizeDeallocateStatementTrampoline};
@@ -321,6 +324,9 @@ static const TransformFrameOps COL_LABEL_OPS = {"ColLabel", &PEGTransformerFacto
 static const TransformFrameOps COL_ID_OR_STRING_OPS = {"ColIdOrString",
                                                        &PEGTransformerFactory::InitializeColIdOrStringTrampoline,
                                                        &PEGTransformerFactory::FinalizeColIdOrStringTrampoline};
+static const TransformFrameOps IF_NOT_EXISTS_OPS = {"IfNotExists",
+                                                    &PEGTransformerFactory::InitializeIfNotExistsTrampoline,
+                                                    &PEGTransformerFactory::FinalizeIfNotExistsTrampoline};
 static const TransformFrameOps QUALIFIED_NAME_OPS = {"QualifiedName",
                                                      &PEGTransformerFactory::InitializeQualifiedNameTrampoline,
                                                      &PEGTransformerFactory::FinalizeQualifiedNameTrampoline};
@@ -422,6 +428,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"LocalSessionTarget", &LOCAL_SESSION_TARGET_OPS},
 	    {"StringSessionTarget", &STRING_SESSION_TARGET_OPS},
 	    {"CatalogSessionTarget", &CATALOG_SESSION_TARGET_OPS},
+	    {"CreateSchemaStmt", &CREATE_SCHEMA_STMT_OPS},
 	    {"DeallocateStatement", &DEALLOCATE_STATEMENT_OPS},
 	    {"DeallocatePrepare", &DEALLOCATE_PREPARE_OPS},
 	    {"DescribeStatement", &DESCRIBE_STATEMENT_OPS},
@@ -510,6 +517,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ColId", &COL_ID_OPS},
 	    {"ColLabel", &COL_LABEL_OPS},
 	    {"ColIdOrString", &COL_ID_OR_STRING_OPS},
+	    {"IfNotExists", &IF_NOT_EXISTS_OPS},
 	    {"QualifiedName", &QUALIFIED_NAME_OPS},
 	    {"SchemaReservedIdentifierOrStringLiteral", &SCHEMA_RESERVED_IDENTIFIER_OR_STRING_LITERAL_OPS},
 	    {"CatalogReservedSchemaIdentifier", &CATALOG_RESERVED_SCHEMA_IDENTIFIER_OPS},
@@ -912,6 +920,30 @@ PEGTransformerFactory::FinalizeCatalogSessionTargetTrampoline(PEGTransformer &tr
 	auto catalog_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	auto result = PEGTransformerFactory::TransformCatalogSessionTarget(transformer, catalog_name);
 	return make_uniq<TypedTransformResult<unique_ptr<ConnectInfo>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeCreateSchemaStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	stack.PushFrame(list_pr.GetChild(2), QUALIFIED_NAME_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+	auto &if_not_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (if_not_exists_opt.HasResult()) {
+		stack.PushFrame(if_not_exists_opt.GetResult(), IF_NOT_EXISTS_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCreateSchemaStmtTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	optional<bool> if_not_exists {};
+	if (frame.child_results[0]) {
+		if_not_exists = frame.TakeResult<bool>(0);
+	}
+	auto qualified_name = frame.TakeResult<QualifiedName>(1);
+	auto result = PEGTransformerFactory::TransformCreateSchemaStmt(transformer, if_not_exists, qualified_name);
+	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeDeallocateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -2610,6 +2642,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColIdOrStringTra
                                                                                         TransformStackFrame &frame) {
 	auto result = frame.TakeResult<Identifier>(0);
 	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeIfNotExistsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeIfNotExistsTrampoline(PEGTransformer &transformer,
+                                                                                      TransformStack &stack,
+                                                                                      TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformIfNotExists(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
 void PEGTransformerFactory::InitializeQualifiedNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
