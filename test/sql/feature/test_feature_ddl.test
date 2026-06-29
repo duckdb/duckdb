@@ -61,15 +61,15 @@ CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRA
 
 # Feature appears in duckdb_features()
 query IIIII
-SELECT feature_name, source_table, entity_column, granularity, window_size FROM duckdb_features();
+SELECT feature_name, source_table, entity_column, granularity, window_interval FROM duckdb_features();
 ----
-daily_txn	transactions	card_no	DAY	7
+daily_txn	transactions	card_no	DAY	7 days
 
 # DESCRIBE FEATURE shows metadata
-query IIIIIIIIIIII
+query IIIIIIIIIII
 DESCRIBE FEATURE daily_txn;
 ----
-daily_txn	transactions	card_no	event_time	DAY	7	FULL	1	1	7 days	00:00:00	CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+daily_txn	transactions	card_no	event_time	DAY	FULL	1	1	7 days	00:00:00	CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW INTERVAL '7 days' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 # DESCRIBE non-existent feature returns empty
 query I
@@ -95,20 +95,20 @@ CREATE FEATURE hourly_stats ON transactions ENTITY card_no TIMESTAMP event_time 
 statement ok
 CREATE FEATURE explicit_hours ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 24 HOURS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
-query II
-SELECT window_size, window_interval FROM duckdb_features() WHERE feature_name = 'explicit_hours';
+query I
+SELECT window_interval FROM duckdb_features() WHERE feature_name = 'explicit_hours';
 ----
-24	24:00:00
+24:00:00
 
 query I
 SELECT sql FROM duckdb_features() WHERE feature_name = 'explicit_hours';
 ----
 <REGEX>:.*WINDOW INTERVAL '24:00:00'.*
 
-query III
-SELECT window_size, window_interval, watermark_interval FROM duckdb_features() WHERE feature_name = 'daily_txn';
+query II
+SELECT window_interval, watermark_interval FROM duckdb_features() WHERE feature_name = 'daily_txn';
 ----
-7	7 days	00:00:00
+7 days	00:00:00
 
 # WATERMARK accepts explicit interval shorthand independent of WINDOW
 statement ok
@@ -123,10 +123,10 @@ SELECT watermark_interval, sql FROM duckdb_features() WHERE feature_name = 'wate
 statement ok
 CREATE FEATURE interval_minutes ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW INTERVAL '90 minutes' REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
-query II
-SELECT window_size, window_interval FROM duckdb_features() WHERE feature_name = 'interval_minutes';
+query I
+SELECT window_interval FROM duckdb_features() WHERE feature_name = 'interval_minutes';
 ----
-0	01:30:00
+01:30:00
 
 # WATERMARK also accepts INTERVAL string syntax
 statement ok
@@ -135,7 +135,7 @@ CREATE FEATURE watermark_interval_string ON transactions ENTITY card_no TIMESTAM
 query II
 SELECT watermark_interval, sql FROM duckdb_features() WHERE feature_name = 'watermark_interval_string';
 ----
-02:00:00	CREATE FEATURE watermark_interval_string ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 WATERMARK INTERVAL '02:00:00' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+02:00:00	CREATE FEATURE watermark_interval_string ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW INTERVAL '7 days' WATERMARK INTERVAL '02:00:00' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 query I
 SELECT COUNT(*) FROM duckdb_features();
@@ -175,9 +175,9 @@ statement ok
 CREATE FEATURE default_window ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
-SELECT feature_name, window_size FROM duckdb_features() WHERE feature_name = 'default_window';
+SELECT feature_name, window_interval FROM duckdb_features() WHERE feature_name = 'default_window';
 ----
-default_window	1
+default_window	1 day
 
 statement ok
 DROP FEATURE default_window;
@@ -211,9 +211,9 @@ statement ok
 CREATE FEATURE all_defaults ON transactions ENTITY card_no TIMESTAMP event_time AS (SELECT card_no, COUNT(*) AS cnt FROM transactions GROUP BY card_no);
 
 query IIIII
-SELECT feature_name, granularity, window_size, refresh_mode, retain_versions FROM duckdb_features() WHERE feature_name = 'all_defaults';
+SELECT feature_name, granularity, window_interval, refresh_mode, retain_versions FROM duckdb_features() WHERE feature_name = 'all_defaults';
 ----
-all_defaults	DAY	1	INCREMENTAL	1
+all_defaults	DAY	1 day	INCREMENTAL	1
 
 statement ok
 DROP FEATURE all_defaults;

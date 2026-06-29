@@ -11,10 +11,10 @@ namespace duckdb {
 FeatureCatalogEntry::FeatureCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateFeatureInfo &info)
     : StandardEntry(CatalogType::FEATURE_ENTRY, schema, catalog, info.feature_name), source_table(info.source_table),
       entity_column(info.entity_column), timestamp_column(info.timestamp_column), granularity(info.granularity),
-      window_size(info.window_size), window_interval(info.window_interval), watermark_interval(info.watermark_interval),
-      refresh_mode(info.refresh_mode), retain_versions(info.retain_versions), current_version(info.current_version),
-      last_refresh_timestamp(Timestamp::GetCurrentTimestamp()), has_schedule(info.has_schedule),
-      schedule_interval(info.schedule_interval), schedule_enabled(info.schedule_enabled) {
+	window_interval(info.window_interval), watermark_interval(info.watermark_interval), refresh_mode(info.refresh_mode),
+	retain_versions(info.retain_versions), current_version(info.current_version),
+	last_refresh_timestamp(Timestamp::GetCurrentTimestamp()), has_schedule(info.has_schedule), schedule_interval(info.schedule_interval),
+	schedule_enabled(info.schedule_enabled) {
 	if (info.query) {
 		query = unique_ptr_cast<SQLStatement, SelectStatement>(info.query->Copy());
 	}
@@ -78,7 +78,6 @@ unique_ptr<CreateInfo> FeatureCatalogEntry::GetInfo() const {
 	info->entity_column = entity_column;
 	info->timestamp_column = timestamp_column;
 	info->granularity = granularity;
-	info->window_size = window_size;
 	info->window_interval = window_interval;
 	info->watermark_interval = watermark_interval;
 	info->refresh_mode = refresh_mode;

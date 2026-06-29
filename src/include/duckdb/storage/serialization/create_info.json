@@ -397,11 +397,6 @@
         "type": "FeatureGranularity"
       },
       {
-        "id": 205,
-        "name": "window_size",
-        "type": "int64_t"
-      },
-      {
         "id": 206,
         "name": "refresh_mode",
         "type": "FeatureRefreshMode"

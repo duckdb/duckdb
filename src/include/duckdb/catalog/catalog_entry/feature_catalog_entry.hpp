@@ -31,8 +31,6 @@ public:
 	string timestamp_column;
 	//! The granularity (DAY/HOUR/MINUTE)
 	FeatureGranularity granularity;
-	//! The window size
-	int64_t window_size;
 	//! The lookback window interval
 	interval_t window_interval;
 	//! The incremental refresh watermark interval

@@ -11,29 +11,24 @@
 
 namespace duckdb {
 
-struct FeatureWindowSpec {
-	int64_t window_size;
-	interval_t window_interval;
-};
-
 static constexpr interval_t DEFAULT_WATERMARK_INTERVAL {0, 0, 0};
 
-static int64_t ParsePositiveIntegerScheduleCount(const string &number) {
+static int64_t ParsePositiveIntegerIntervalCount(const string &number, const string &context) {
 	if (number.empty() || number[0] == '-') {
-		throw ParserException("Refresh schedule shorthand count must be a positive integer");
+		throw ParserException("%s shorthand count must be a positive integer", context);
 	}
 	idx_t start = number[0] == '+' ? 1 : 0;
 	if (start >= number.size() || number.find_first_not_of("0123456789", start) != string::npos) {
-		throw ParserException("Refresh schedule shorthand count must be a positive integer");
+		throw ParserException("%s shorthand count must be a positive integer", context);
 	}
 	int64_t result;
 	try {
 		result = std::stoll(number);
 	} catch (std::exception &) {
-		throw ParserException("Refresh schedule shorthand count is out of range");
+		throw ParserException("%s shorthand count is out of range", context);
 	}
 	if (result <= 0) {
-		throw ParserException("Refresh schedule interval must be positive");
+		throw ParserException("%s interval must be positive", context);
 	}
 	return result;
 }
@@ -54,32 +49,32 @@ static interval_t ParseIntervalSchedule(const string &interval_str, const string
 	return schedule_interval;
 }
 
-static int32_t ScheduleCountToDays(int64_t count) {
+static int32_t IntervalCountToDays(int64_t count, const string &context) {
 	if (count > NumericLimits<int32_t>::Maximum()) {
-		throw ParserException("Refresh schedule shorthand count is out of range");
+		throw ParserException("%s shorthand count is out of range", context);
 	}
 	return static_cast<int32_t>(count);
 }
 
-static int64_t ScheduleCountToMicros(int64_t count, int64_t micros_per_unit) {
+static int64_t IntervalCountToMicros(int64_t count, int64_t micros_per_unit, const string &context) {
 	if (count > NumericLimits<int64_t>::Maximum() / micros_per_unit) {
-		throw ParserException("Refresh schedule shorthand count is out of range");
+		throw ParserException("%s shorthand count is out of range", context);
 	}
 	return count * micros_per_unit;
 }
 
-static interval_t IntervalFromCountAndUnit(int64_t count, const ParseResult &unit) {
+static interval_t IntervalFromCountAndUnit(int64_t count, const ParseResult &unit, const string &context) {
 	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitDay") ||
 	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitDays")) {
-		return interval_t {0, ScheduleCountToDays(count), 0};
+		return interval_t {0, IntervalCountToDays(count, context), 0};
 	}
 	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitHour") ||
 	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitHours")) {
-		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_HOUR)};
+		return interval_t {0, 0, IntervalCountToMicros(count, Interval::MICROS_PER_HOUR, context)};
 	}
 	if (StringUtil::CIEquals(unit.name, "FeatureScheduleUnitMinute") ||
 	    StringUtil::CIEquals(unit.name, "FeatureScheduleUnitMinutes")) {
-		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_MINUTE)};
+		return interval_t {0, 0, IntervalCountToMicros(count, Interval::MICROS_PER_MINUTE, context)};
 	}
 	throw InternalException("Unsupported feature interval unit");
 }
@@ -87,34 +82,57 @@ static interval_t IntervalFromCountAndUnit(int64_t count, const ParseResult &uni
 static interval_t IntervalFromGranularity(int64_t count, FeatureGranularity granularity) {
 	switch (granularity) {
 	case FeatureGranularity::DAY:
-		return interval_t {0, ScheduleCountToDays(count), 0};
+		return interval_t {0, IntervalCountToDays(count, "WINDOW"), 0};
 	case FeatureGranularity::HOUR:
-		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_HOUR)};
+		return interval_t {0, 0, IntervalCountToMicros(count, Interval::MICROS_PER_HOUR, "WINDOW")};
 	case FeatureGranularity::MINUTE:
-		return interval_t {0, 0, ScheduleCountToMicros(count, Interval::MICROS_PER_MINUTE)};
+		return interval_t {0, 0, IntervalCountToMicros(count, Interval::MICROS_PER_MINUTE, "WINDOW")};
 	default:
 		throw InternalException("Unsupported feature granularity");
 	}
 }
 
-static FeatureWindowSpec ParseFeatureWindowInterval(ParseResult &parse_result, FeatureGranularity granularity) {
+static interval_t ParseFeatureInterval(ParseResult &parse_result, const string &context,
+                                       FeatureGranularity granularity = FeatureGranularity::DAY,
+                                       bool allow_bare = false) {
 	// FeatureInterval <- FeatureIntervalString / FeatureIntervalShorthand / FeatureIntervalBare
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice = list_pr.Child<ChoiceParseResult>(0).GetResult();
 	auto &clause = choice.Cast<ListParseResult>();
 	if (StringUtil::CIEquals(choice.name, "FeatureIntervalString")) {
-		return FeatureWindowSpec {0, ParseIntervalSchedule(clause.Child<StringLiteralParseResult>(1).result, "WINDOW")};
+		return ParseIntervalSchedule(clause.Child<StringLiteralParseResult>(1).result, context);
 	}
 
-	auto count = ParsePositiveIntegerScheduleCount(clause.Child<NumberParseResult>(0).number);
+	auto count = ParsePositiveIntegerIntervalCount(clause.Child<NumberParseResult>(0).number, context);
 	if (StringUtil::CIEquals(choice.name, "FeatureIntervalShorthand")) {
 		auto &unit = clause.Child<ListParseResult>(1).Child<ChoiceParseResult>(0).GetResult();
-		return FeatureWindowSpec {count, IntervalFromCountAndUnit(count, unit)};
+		return IntervalFromCountAndUnit(count, unit, context);
 	}
 	if (StringUtil::CIEquals(choice.name, "FeatureIntervalBare")) {
-		return FeatureWindowSpec {count, IntervalFromGranularity(count, granularity)};
+		if (!allow_bare) {
+			throw ParserException("%s interval requires an explicit unit", context);
+		}
+		return IntervalFromGranularity(count, granularity);
 	}
-	throw InternalException("Unsupported feature window interval");
+	throw InternalException("Unsupported feature interval");
+
+}
+
+static interval_t ParseFeatureScheduleInterval(ParseResult &parse_result) {
+	// FeatureScheduleClause <- FeatureScheduleIntervalClause / FeatureScheduleShorthandClause
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice = list_pr.Child<ChoiceParseResult>(0).GetResult();
+	auto &clause = choice.Cast<ListParseResult>();
+	if (StringUtil::CIEquals(choice.name, "FeatureScheduleIntervalClause")) {
+		return ParseIntervalSchedule(clause.Child<StringLiteralParseResult>(2).result, "EVERY");
+	}
+
+	if (StringUtil::CIEquals(choice.name, "FeatureScheduleShorthandClause")) {
+		auto count = ParsePositiveIntegerIntervalCount(clause.Child<NumberParseResult>(1).number, "EVERY");
+		auto &unit = clause.Child<ListParseResult>(2).Child<ChoiceParseResult>(0).GetResult();
+		return IntervalFromCountAndUnit(count, unit, "EVERY");
+	}
+	throw InternalException("Unsupported feature schedule clause");
 }
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PEGTransformer &transformer,
@@ -143,21 +161,18 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 		granularity = transformer.Transform<FeatureGranularity>(clause.Child<ListParseResult>(1));
 	}
 	// index 10: FeatureWindowClause? (default: 1 unit of GRANULARITY)
-	int64_t window_size = 1;
-	auto window_interval = IntervalFromGranularity(window_size, granularity);
+	auto window_interval = IntervalFromGranularity(1, granularity);
 	auto &window_opt = list_pr.Child<OptionalParseResult>(10);
 	if (window_opt.HasResult()) {
 		auto &clause = window_opt.GetResult().Cast<ListParseResult>();
-		auto window_spec = ParseFeatureWindowInterval(clause.Child<ListParseResult>(1), granularity);
-		window_size = window_spec.window_size;
-		window_interval = window_spec.window_interval;
+		window_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WINDOW", granularity, true);
 	}
 	// index 11: FeatureWatermarkClause? (default: zero interval)
 	interval_t watermark_interval = DEFAULT_WATERMARK_INTERVAL;
 	auto &watermark_opt = list_pr.Child<OptionalParseResult>(11);
 	if (watermark_opt.HasResult()) {
 		auto &clause = watermark_opt.GetResult().Cast<ListParseResult>();
-		watermark_interval = ParseFeatureWindowInterval(clause.Child<ListParseResult>(1), granularity).window_interval;
+		watermark_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WATERMARK");
 	}
 	// index 12: FeatureRefreshClause? (default: INCREMENTAL)
 	FeatureRefreshMode refresh_mode = FeatureRefreshMode::INCREMENTAL;
@@ -193,7 +208,6 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	info->entity_column = entity_column;
 	info->timestamp_column = timestamp_column;
 	info->granularity = granularity;
-	info->window_size = window_size;
 	info->window_interval = window_interval;
 	info->watermark_interval = watermark_interval;
 	info->refresh_mode = refresh_mode;
@@ -208,21 +222,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 
 interval_t PEGTransformerFactory::TransformFeatureScheduleClause(PEGTransformer &transformer,
                                                                  ParseResult &parse_result) {
-	// FeatureScheduleClause <- FeatureScheduleIntervalClause / FeatureScheduleShorthandClause
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	auto &clause = choice.Cast<ListParseResult>();
-	if (StringUtil::CIEquals(choice.name, "FeatureScheduleIntervalClause")) {
-		return ParseIntervalSchedule(clause.Child<StringLiteralParseResult>(2).result, "EVERY");
-	}
-
-	if (!StringUtil::CIEquals(choice.name, "FeatureScheduleShorthandClause")) {
-		throw InternalException("Unsupported feature schedule clause");
-	}
-
-	auto count = ParsePositiveIntegerScheduleCount(clause.Child<NumberParseResult>(1).number);
-	auto &unit = clause.Child<ListParseResult>(2).Child<ChoiceParseResult>(0).GetResult();
-	return IntervalFromCountAndUnit(count, unit);
+	return ParseFeatureScheduleInterval(parse_result);
 }
 
 FeatureGranularity PEGTransformerFactory::TransformFeatureGranularity(PEGTransformer &transformer,

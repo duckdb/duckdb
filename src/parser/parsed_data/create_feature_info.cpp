@@ -5,26 +5,13 @@
 
 namespace duckdb {
 
-static interval_t WindowIntervalFromGranularity(int64_t window_size, FeatureGranularity granularity) {
-	switch (granularity) {
-	case FeatureGranularity::DAY:
-		return interval_t {0, static_cast<int32_t>(window_size), 0};
-	case FeatureGranularity::HOUR:
-		return interval_t {0, 0, window_size * Interval::MICROS_PER_HOUR};
-	case FeatureGranularity::MINUTE:
-		return interval_t {0, 0, window_size * Interval::MICROS_PER_MINUTE};
-	default:
-		return interval_t {0, static_cast<int32_t>(window_size), 0};
-	}
-}
-
 static bool IntervalEquals(const interval_t &left, const interval_t &right) {
 	return left.months == right.months && left.days == right.days && left.micros == right.micros;
 }
 
 CreateFeatureInfo::CreateFeatureInfo()
-    : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), granularity(FeatureGranularity::DAY), window_size(7),
-      window_interval(interval_t {0, 7, 0}), watermark_interval(interval_t {0, 0, 0}),
+    : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), granularity(FeatureGranularity::DAY),
+      window_interval(interval_t {0, 1, 0}), watermark_interval(interval_t {0, 0, 0}),
       refresh_mode(FeatureRefreshMode::FULL), retain_versions(1), current_version(1), has_schedule(false),
       schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
 }
@@ -37,7 +24,6 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	result->entity_column = entity_column;
 	result->timestamp_column = timestamp_column;
 	result->granularity = granularity;
-	result->window_size = window_size;
 	result->window_interval = window_interval;
 	result->watermark_interval = watermark_interval;
 	result->refresh_mode = refresh_mode;
@@ -78,11 +64,7 @@ string CreateFeatureInfo::ToString() const {
 		result += "MINUTE";
 		break;
 	}
-	if (IntervalEquals(window_interval, WindowIntervalFromGranularity(window_size, granularity))) {
-		result += " WINDOW " + duckdb::to_string(window_size);
-	} else {
-		result += " WINDOW INTERVAL '" + Interval::ToString(window_interval) + "'";
-	}
+	result += " WINDOW INTERVAL '" + Interval::ToString(window_interval) + "'";
 	if (!IntervalEquals(watermark_interval, interval_t {0, 0, 0})) {
 		result += " WATERMARK INTERVAL '" + Interval::ToString(watermark_interval) + "'";
 	}
@@ -105,7 +87,7 @@ string CreateFeatureInfo::ToString() const {
 
 void CreateFeatureInfo::FinalizeDeserialization() {
 	if (IntervalEquals(window_interval, interval_t {0, 0, 0})) {
-		window_interval = WindowIntervalFromGranularity(window_size, granularity);
+		window_interval = interval_t {0, 1, 0};
 	}
 }
 

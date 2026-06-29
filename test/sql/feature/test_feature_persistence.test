@@ -68,10 +68,10 @@ persisted	3
 
 # Other metadata survives
 query IIIII
-SELECT source_table, entity_column, granularity, window_size, retain_versions
+SELECT source_table, entity_column, granularity, window_interval, retain_versions
 FROM duckdb_features() WHERE feature_name = 'persisted';
 ----
-events	customer	DAY	7	3
+events	customer	DAY	7 days	3
 
 # The view still resolves to the current version
 query I

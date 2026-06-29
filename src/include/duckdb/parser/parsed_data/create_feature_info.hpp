@@ -31,8 +31,6 @@ struct CreateFeatureInfo : public CreateInfo {
 	string timestamp_column;
 	//! Time granularity for bucketing
 	FeatureGranularity granularity;
-	//! Lookback window size (in units of granularity)
-	int64_t window_size;
 	//! Lookback window interval
 	interval_t window_interval;
 	//! Incremental refresh watermark interval
