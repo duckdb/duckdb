@@ -50,7 +50,6 @@ static string BuildPITQuery(const FeatureCatalogEntry &feat, const string &spine
 	parameters.entity_columns = feat.entity_columns;
 	parameters.window_interval = feat.window_interval;
 	parameters.spine_filter = spine_filter;
-	parameters.order_result = true;
 	return BuildFeaturePITQuerySQL(feat.query->node->Cast<SelectNode>(), parameters);
 }
 

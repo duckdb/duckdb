@@ -1,5 +1,6 @@
 #include "duckdb/common/feature_query.hpp"
 
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/common/string_util.hpp"
