@@ -303,6 +303,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapType(PEGTransfor
 	return make_uniq<TypeExpression>(Identifier("MAP"), std::move(map_children));
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTupleType(PEGTransformer &transformer,
+                                                                       const vector<LogicalType> &type) {
+	vector<unique_ptr<ParsedExpression>> tuple_children;
+	for (auto &child : type) {
+		tuple_children.push_back(UnboundType::GetTypeExpression(child)->Copy());
+	}
+	return make_uniq<TypeExpression>(Identifier("TUPLE"), std::move(tuple_children));
+}
+
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformRowType(PEGTransformer &transformer,
                                         const optional<child_list_t<LogicalType>> &col_id_type_list) {

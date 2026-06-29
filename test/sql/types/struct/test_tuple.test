@@ -1,0 +1,186 @@
+# name: test/sql/types/struct/test_tuple.test
+# description: Test the unnamed-struct TUPLE logical type
+# group: [struct]
+
+# row() produces an unnamed TUPLE
+query T
+SELECT typeof(row(1, 'a'));
+----
+TUPLE(INTEGER, VARCHAR)
+
+# Python-style tuple literals: () is empty, (x,) is a 1-tuple, (a, b) is a tuple, (x) is grouping
+query TT
+SELECT (), typeof(());
+----
+()	TUPLE
+
+query TT
+SELECT (1, 'a'), typeof((1, 'a'));
+----
+(1, a)	TUPLE(INTEGER, VARCHAR)
+
+# a single-element tuple keeps its trailing comma when rendered, so it round-trips
+query TT
+SELECT (42,), typeof((42,));
+----
+(42,)	TUPLE(INTEGER)
+
+query T
+SELECT (42,)::VARCHAR::TUPLE(INTEGER);
+----
+(42,)
+
+# a single parenthesized expression without a trailing comma is just grouping (a scalar)
+query TT
+SELECT (42), typeof((42));
+----
+42	INTEGER
+
+# struct_pack() / named struct stays a STRUCT
+query T
+SELECT typeof(struct_pack(a := 1, b := 'a'));
+----
+STRUCT(a INTEGER, b VARCHAR)
+
+# row() is an (empty) TUPLE; struct_pack() / {} make an (empty) STRUCT
+query TT
+SELECT typeof(row()), typeof(struct_pack());
+----
+TUPLE	STRUCT
+
+# empty TUPLE displays as (), empty STRUCT as {}
+query TT
+SELECT row(), struct_pack();
+----
+()	{}
+
+# empty STRUCT and empty TUPLE are trivially, implicitly castable to each other
+query TT
+SELECT row()::STRUCT, struct_pack() = row();
+----
+{}	true
+
+# TUPLE display
+query T
+SELECT row(1, 'a');
+----
+(1, a)
+
+# TUPLE(...) is parseable in a type position
+query T
+SELECT typeof(NULL::TUPLE(INTEGER, VARCHAR));
+----
+TUPLE(INTEGER, VARCHAR)
+
+statement ok
+CREATE TABLE t(c TUPLE(INTEGER, VARCHAR));
+
+query T
+SELECT column_type FROM (DESCRIBE t);
+----
+TUPLE(INTEGER, VARCHAR)
+
+# index-based extraction works on a TUPLE
+query II
+SELECT struct_extract(row(1, 'a'), 1), struct_extract(row(1, 'a'), 2);
+----
+1	a
+
+# name-based extraction does NOT work on a TUPLE
+statement error
+SELECT struct_extract(row(1, 'a'), 'x');
+----
+<REGEX>:.*unnamed struct.*
+
+# struct_keys errors on a TUPLE (it requires a named STRUCT)
+statement error
+SELECT struct_keys(row(1, 'a'));
+----
+<REGEX>:.*expects a STRUCT argument.*
+
+# implicit positional cast TUPLE -> named STRUCT
+query T
+SELECT row(1, 'a')::STRUCT(x INTEGER, y VARCHAR);
+----
+{'x': 1, 'y': a}
+
+# implicit positional cast named STRUCT -> TUPLE
+query T
+SELECT {'x': 1, 'y': 'a'}::TUPLE(INTEGER, VARCHAR);
+----
+(1, a)
+
+# a TUPLE is NOT equal to a named STRUCT with the same children
+query T
+SELECT typeof(row(1, 'a')) = typeof(struct_pack(a := 1, b := 'a'));
+----
+false
+
+# TUPLE inside a LIST
+query T
+SELECT typeof([row(1, 'a'), row(2, 'b')]);
+----
+TUPLE(INTEGER, VARCHAR)[]
+
+# struct_values produces a TUPLE
+query T
+SELECT typeof(struct_values({'a': 1, 'b': 'x'}));
+----
+TUPLE(INTEGER, VARCHAR)
+
+# combining two TUPLEs yields a TUPLE
+query T
+SELECT typeof(t.c) FROM (SELECT row(1, 'a') AS c UNION ALL SELECT row(2, 'b')) t LIMIT 1;
+----
+TUPLE(INTEGER, VARCHAR)
+
+# storing and reading back a TUPLE column
+statement ok
+INSERT INTO t VALUES (row(1, 'a')), (row(2, 'b')), (NULL);
+
+query TT
+SELECT c, typeof(c) FROM t ORDER BY c;
+----
+(1, a)	TUPLE(INTEGER, VARCHAR)
+(2, b)	TUPLE(INTEGER, VARCHAR)
+NULL	TUPLE(INTEGER, VARCHAR)
+
+# C-API / DESCRIBE reports the children of a TUPLE
+query II
+SELECT struct_extract(c, 1), struct_extract(c, 2) FROM t WHERE c IS NOT NULL ORDER BY 1;
+----
+1	a
+2	b
+
+# storage: a recent (v2.0.0+) database stores the TUPLE id directly - empty and non-empty round-trip as TUPLE
+statement ok
+ATTACH '__TEST_DIR__/tuple_v2.db' AS v2 (STORAGE_VERSION 'v2.0.0');
+
+statement ok
+CREATE TABLE v2.tup AS SELECT row() AS e, row(1) AS one, row(2, 'b') AS two;
+
+statement ok
+DETACH v2;
+
+statement ok
+ATTACH '__TEST_DIR__/tuple_v2.db' AS v2 (READ_ONLY);
+
+query TTTTTT
+SELECT e, typeof(e), one, typeof(one), two, typeof(two) FROM v2.tup;
+----
+()	TUPLE	(1,)	TUPLE(INTEGER)	(2, b)	TUPLE(INTEGER, VARCHAR)
+
+statement ok
+DETACH v2;
+
+# storage: TUPLE columns are not storable in older formats (older engines reject the unnamed STRUCT on disk)
+statement ok
+ATTACH '__TEST_DIR__/tuple_v15.db' AS v15 (STORAGE_VERSION 'v1.5.0');
+
+statement error
+CREATE TABLE v15.tup AS SELECT row(2, 'b') AS two;
+----
+TUPLE columns are not supported in storage versions prior to v2.0.0
+
+statement ok
+DETACH v15;

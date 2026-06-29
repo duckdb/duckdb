@@ -422,12 +422,15 @@ PEGTransformerFactory::TransformFilterClauseContents(PEGTransformer &transformer
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformParenthesisExpression(PEGTransformer &transformer,
-                                                      vector<unique_ptr<ParsedExpression>> expression) {
-	// ParenthesisExpression <- Parens(List(Expression))
-	if (expression.size() == 1) {
-		return std::move(expression[0]);
+                                                      optional<vector<unique_ptr<ParsedExpression>>> expression) {
+	// ParenthesisExpression <- Parens(List(Expression)?)
+	// Python-style tuples: (), (x,) and (a, b, ...) all build an (unnamed) row/TUPLE.
+	// A single (x) without a trailing comma is grouping and is handled earlier by ParensExpression.
+	vector<unique_ptr<ParsedExpression>> children;
+	if (expression) {
+		children = std::move(*expression);
 	}
-	return make_uniq<FunctionExpression>("row", std::move(expression));
+	return make_uniq<FunctionExpression>("row", std::move(children));
 }
 
 void PEGTransformerFactory::RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr) {
@@ -530,10 +533,15 @@ PEGTransformerFactory::TransformArrayParensSelect(PEGTransformer &transformer,
 	return std::move(subquery_expr);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructExpression(PEGTransformer &transformer,
-                                                                              vector<FunctionArgument> struct_field) {
-	auto func_name = "struct_pack";
-	return make_uniq<FunctionExpression>(func_name, std::move(struct_field));
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformStructExpression(PEGTransformer &transformer,
+                                                 optional<vector<FunctionArgument>> struct_field) {
+	// {} produces an empty STRUCT, {'a': 1, ...} a named STRUCT - both via struct_pack
+	vector<FunctionArgument> fields;
+	if (struct_field) {
+		fields = std::move(*struct_field);
+	}
+	return make_uniq<FunctionExpression>("struct_pack", std::move(fields));
 }
 
 FunctionArgument PEGTransformerFactory::TransformStructField(PEGTransformer &transformer,

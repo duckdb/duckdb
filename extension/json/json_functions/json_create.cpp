@@ -197,6 +197,14 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 		}
 		return LogicalType::STRUCT(child_types);
 	}
+	// A TUPLE is an unnamed struct: it is serialized as a JSON array (matching how Python serializes tuples)
+	case LogicalTypeId::TUPLE: {
+		vector<LogicalType> child_types;
+		for (const auto &child_type : StructType::GetChildTypes(type)) {
+			child_types.push_back(GetJSONType(const_struct_names, child_type.second));
+		}
+		return LogicalType::TUPLE(std::move(child_types));
+	}
 	case LogicalTypeId::MAP: {
 		return LogicalType::MAP(MapType::KeyType(type), GetJSONType(const_struct_names, MapType::ValueType(type)));
 	}
@@ -552,6 +560,30 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	}
 }
 
+static void CreateValuesTuple(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
+                              idx_t count) {
+	// a TUPLE becomes a JSON array (matching how Python serializes tuples)
+	for (idx_t i = 0; i < count; i++) {
+		vals[i] = yyjson_mut_arr(doc);
+	}
+	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
+	auto &entries = StructVector::GetEntries(value_v);
+	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
+		CreateValues(names, doc, nested_vals, entries[entry_i], count);
+		for (idx_t i = 0; i < count; i++) {
+			yyjson_mut_arr_append(vals[i], nested_vals[i]);
+		}
+	}
+	// Whole tuple can be NULL
+	UnifiedVectorFormat tuple_data;
+	value_v.ToUnifiedFormat(tuple_data);
+	for (idx_t i = 0; i < count; i++) {
+		idx_t idx = tuple_data.sel->get_index(i);
+		if (!tuple_data.validity.RowIsValid(idx)) {
+			vals[i] = yyjson_mut_null(doc);
+		}
+	}
+}
 static void CreateValuesMapKeys(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
                                 const JSONCopyFormatOptions &options);
 
@@ -851,6 +883,9 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		break;
 	case LogicalTypeId::STRUCT:
 		CreateValuesStruct(names, doc, vals, value_v, count, options);
+		break;
+	case LogicalTypeId::TUPLE:
+		CreateValuesTuple(names, doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::MAP:
 		CreateValuesMap(names, doc, vals, value_v, count, options);
@@ -1180,6 +1215,9 @@ void JSONFunctions::RegisterJSONCreateCastFunctions(ExtensionLoader &loader) {
 		switch (type.id()) {
 		case LogicalTypeId::STRUCT:
 			source_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
+			break;
+		case LogicalTypeId::TUPLE:
+			source_type = LogicalType::TUPLE({LogicalType::ANY});
 			break;
 		case LogicalTypeId::LIST:
 			source_type = LogicalType::LIST(LogicalType::ANY);

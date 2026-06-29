@@ -970,6 +970,7 @@ void Vector::DebugTransformToDictionary(Vector &vector) {
 void Vector::DebugShuffleNestedVector(Vector &vector) {
 	const auto count = vector.size();
 	switch (vector.GetType().id()) {
+	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::STRUCT: {
 		auto &entries = StructVector::GetEntries(vector);
 		// recurse into child elements
