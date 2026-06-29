@@ -52,6 +52,11 @@ rules:
     init: InitializeIdentifierOrStringLiteralTrampoline
     finalize: FinalizeIdentifierOrStringLiteralTrampoline
 
+  ReservedIdentifierOrStringLiteral:
+    mode: manual
+    init: InitializeReservedIdentifierOrStringLiteralTrampoline
+    finalize: FinalizeReservedIdentifierOrStringLiteralTrampoline
+
   Expression:
     mode: forward
 
