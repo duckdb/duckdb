@@ -52,6 +52,7 @@ DEFAULT_GRAMMAR_FILES = [
     "deallocate.gram",
     "detach.gram",
     "drop.gram",
+    "load.gram",
     "transaction.gram",
     "use.gram",
     "vacuum.gram",
@@ -65,6 +66,8 @@ DEFAULT_EXTRA_RULES = {
         "DotColLabel",
         "ColId",
         "ColLabel",
+        "ColIdOrString",
+        "IdentifierOrStringLiteral",
         "Temporary",
         "Persistent",
         "TempPersistent",
@@ -81,7 +84,12 @@ DEFAULT_EXTRA_RULES = {
         "SchemaReservedTypeName",
     ],
     "expression.gram": ["FunctionIdentifier", "CatalogReservedSchemaFunctionName", "SchemaReservedFunctionName"],
-    "select.gram": ["BaseTableName", "UnqualifiedBaseTableName", "SchemaReservedTable", "CatalogReservedSchemaTable"],
+    "select.gram": [
+        "BaseTableName",
+        "UnqualifiedBaseTableName",
+        "SchemaReservedTable",
+        "CatalogReservedSchemaTable",
+    ],
 }
 INTERNAL_GRAMMAR_RULES = {"List", "Parens"}
 TRAMPOLINE_START_BLOCK = (

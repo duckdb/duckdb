@@ -27,6 +27,11 @@ rules:
     init: InitializeCommentValueTrampoline
     finalize: FinalizeCommentValueTrampoline
 
+  UpdateExtensionsStatement:
+    mode: manual
+    init: InitializeUpdateExtensionsStatementTrampoline
+    finalize: FinalizeUpdateExtensionsStatementTrampoline
+
   ColId:
     mode: manual
     init: InitializeColIdTrampoline
@@ -41,6 +46,11 @@ rules:
     mode: manual
     init: InitializeDotColLabelTrampoline
     finalize: FinalizeDotColLabelTrampoline
+
+  IdentifierOrStringLiteral:
+    mode: manual
+    init: InitializeIdentifierOrStringLiteralTrampoline
+    finalize: FinalizeIdentifierOrStringLiteralTrampoline
 
   Expression:
     mode: forward
