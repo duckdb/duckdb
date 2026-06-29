@@ -1069,7 +1069,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformRowTypeInternal(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformRowType(PEGTransformer &transformer,
-	                                                     const child_list_t<LogicalType> &col_id_type_list);
+	                                                     const optional<child_list_t<LogicalType>> &col_id_type_list);
 	static unique_ptr<TransformResultValue> TransformSetofTypeInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformSetofType(PEGTransformer &transformer, const LogicalType &type);
@@ -2514,6 +2514,10 @@ public:
 	                                                              unique_ptr<ParsedExpression> expression);
 	static unique_ptr<TransformResultValue> TransformSingleExpressionInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformExpressionInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformExpression(PEGTransformer &transformer,
+	                                                        unique_ptr<ParsedExpression> lambda_arrow_expression);
 	static unique_ptr<TransformResultValue> TransformColumnDefaultExprInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformLambdaArrowExpressionInternal(PEGTransformer &transformer,

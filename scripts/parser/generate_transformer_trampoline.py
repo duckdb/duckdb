@@ -299,6 +299,26 @@ class UseGramPreviewEmitter:
             lines.append(f"{rule_name}: {status}{suffix}")
         return "\n".join(lines)
 
+    def missing_grammar_type_errors(self):
+        result = []
+        for capability in self.rule_capabilities.values():
+            if capability.status != RuleCapabilityStatus.UNSUPPORTED:
+                continue
+            if "grammar_types.yml" not in capability.reason:
+                continue
+            result.append(capability)
+        return result
+
+    def validate_grammar_types(self):
+        missing = self.missing_grammar_type_errors()
+        if not missing:
+            return
+        print("Error: missing trampoline transformer metadata in grammar_types.yml:", file=sys.stderr)
+        for capability in missing:
+            print(f"  {capability.rule_name}: {capability.reason}", file=sys.stderr)
+        print("Add type metadata for these rules or explicitly exclude syntax-only rules.", file=sys.stderr)
+        sys.exit(1)
+
     def emit_source(self):
         lines = []
         lines.append(GENERATED_HEADER)
@@ -819,6 +839,7 @@ def main():
     matcher_overrides = load_matcher_overrides(grammar_types_file)
 
     emitter = UseGramPreviewEmitter(rules, rule_types, excluded_rules, matcher_overrides, rule_config)
+    emitter.validate_grammar_types()
     if args.write:
         if grammar_files != DEFAULT_GRAMMAR_FILES:
             raise NotImplementedError("--write is currently restricted to the default grammar file set")

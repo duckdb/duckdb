@@ -582,6 +582,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTrans
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 }
 
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformExpression(PEGTransformer &transformer,
+                                           unique_ptr<ParsedExpression> lambda_arrow_expression) {
+	return std::move(lambda_arrow_expression);
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLambdaArrowExpression(
     PEGTransformer &transformer, unique_ptr<ParsedExpression> logical_or_expression,
     optional<vector<unique_ptr<ParsedExpression>>> single_arrow_pair) {

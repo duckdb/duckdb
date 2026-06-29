@@ -1705,7 +1705,11 @@ excluded_rules:
   - UnpivotStatement
   - CommentValue
   - Program
+  - TopLevelStatement
   - Statement
+  - "%whitespace"
+  - List
+  - Parens
   - Database
   - AbortOrRollback
   - CommitOrEnd
