@@ -18,8 +18,21 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/checkpoint/checkpoint_options.hpp"
+#include "duckdb/common/stacktrace.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
+
+static ErrorData BuildAutocheckpointError(AttachedDatabase &db, const std::exception &ex) {
+	ErrorData original(ex);
+	string extra = db.IsInitialDatabase()
+	                   ? ". Reopen the database instance to recover (committed data is restored from the WAL)."
+	                   : "";
+	string msg = StringUtil::Format("Transaction COMMIT succeeded and is durable, but the autocheckpoint failed. "
+	                                "%s%s\n\nStack Trace:\n%s",
+	                                original.RawMessage(), extra, StackTrace::GetStackTrace());
+	return ErrorData(original.Type(), msg);
+}
 
 void DuckCleanupInfo::Cleanup() {
 	for (auto &transaction : transactions) {
@@ -448,6 +461,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			// .. UNLESS we have skipped writing to the WAL and there are concurrent transactions active
 			if (skip_wal_write_due_to_checkpoint) {
 				error.Merge(ErrorData(ex));
+			} else {
+				// We have made the commit durable (wrote to the WAL), but the autocheckpoint failed.
+				context.transaction.SetAutocheckpointError(BuildAutocheckpointError(db, ex));
 			}
 		}
 	}
