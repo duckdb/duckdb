@@ -15,7 +15,6 @@ COMMON_JOBS = [
     "extensions",
     "wasm-eh",
     "linux-release",
-    "codecov",
     "linux-release-tests",
     "linux-release-cli",
     "linux-musl-release-cli",
@@ -38,6 +37,7 @@ NIGHTLY_ONLY_JOBS = [
     "main_julia",
     "static-libs-osx",
     "static-libs-windows-mingw",
+    "codecov",
 ]
 
 NIGHTLY_JOBS = COMMON_JOBS + NIGHTLY_ONLY_JOBS
@@ -62,7 +62,6 @@ SKIP_TESTS_JOBS = {
     "swift",
     "linux-configs",
     "linux-release-tests",
-    "codecov",
 }
 
 PREPARE_JOBS = [
