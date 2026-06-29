@@ -71,6 +71,91 @@ GROUP BY d_a, d_b, d_c, d_d
 ----
 physical_plan	<REGEX>:.*combine_aggr.*
 
+# Preserved-side LEFT/RIGHT joins can use the one-sided state-export path.
+statement ok
+CREATE TABLE pap_oj_fact(k INTEGER, m INTEGER)
+
+statement ok
+INSERT INTO pap_oj_fact VALUES (1, 10), (1, 20), (2, 30), (3, 40), (NULL, 50)
+
+statement ok
+CREATE TABLE pap_oj_dim(k INTEGER, g VARCHAR, w INTEGER)
+
+statement ok
+INSERT INTO pap_oj_dim VALUES (1, 'a', 100), (1, 'b', 200), (2, 'a', 300), (4, 'z', 400), (NULL, 'n', 500)
+
+statement ok
+ANALYZE
+
+statement ok
+CREATE TEMP TABLE pap_oj_enabled AS
+SELECT 'left' AS q, d.g, count(*) AS c, sum(f.m) AS s
+FROM pap_oj_fact f LEFT JOIN pap_oj_dim d ON f.k = d.k
+GROUP BY d.g
+UNION ALL
+SELECT 'right' AS q, d.g, count(*) AS c, sum(f.m) AS s
+FROM pap_oj_dim d RIGHT JOIN pap_oj_fact f ON d.k = f.k
+GROUP BY d.g
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+statement ok
+CREATE TEMP TABLE pap_oj_disabled AS
+SELECT 'left' AS q, d.g, count(*) AS c, sum(f.m) AS s
+FROM pap_oj_fact f LEFT JOIN pap_oj_dim d ON f.k = d.k
+GROUP BY d.g
+UNION ALL
+SELECT 'right' AS q, d.g, count(*) AS c, sum(f.m) AS s
+FROM pap_oj_dim d RIGHT JOIN pap_oj_fact f ON d.k = f.k
+GROUP BY d.g
+
+query I
+SELECT count(*) FROM (SELECT * FROM pap_oj_enabled EXCEPT ALL SELECT * FROM pap_oj_disabled)
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT * FROM pap_oj_disabled EXCEPT ALL SELECT * FROM pap_oj_enabled)
+----
+0
+
+statement ok
+RESET disabled_optimizers
+
+query II
+EXPLAIN
+SELECT d.g, count(*) AS c, sum(f.m) AS s
+FROM pap_oj_fact f LEFT JOIN pap_oj_dim d ON f.k = d.k
+GROUP BY d.g
+----
+physical_plan	<REGEX>:.*combine_aggr.*
+
+query II
+EXPLAIN
+SELECT d.g, count(*) AS c, sum(f.m) AS s
+FROM pap_oj_dim d RIGHT JOIN pap_oj_fact f ON d.k = f.k
+GROUP BY d.g
+----
+physical_plan	<REGEX>:.*combine_aggr.*
+
+# Nullable-side aggregate inputs remain unsafe for one-sided outer join pushdown.
+query II
+EXPLAIN
+SELECT f.k, sum(d.w) AS s
+FROM pap_oj_fact f LEFT JOIN pap_oj_dim d ON f.k = d.k
+GROUP BY f.k
+----
+physical_plan	<!REGEX>:.*combine_aggr.*
+
+query II
+EXPLAIN
+SELECT f.k, sum(d.w) AS s
+FROM pap_oj_dim d RIGHT JOIN pap_oj_fact f ON d.k = f.k
+GROUP BY f.k
+----
+physical_plan	<!REGEX>:.*combine_aggr.*
+
 statement ok
 SET disabled_optimizers = 'partial_aggregate_pushdown'
 
