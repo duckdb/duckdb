@@ -23,6 +23,12 @@
       "paths": [
         "test/sql/secrets/secret_autoloading_errors.test"
       ]
+    },
+    {
+      "reason": "COPY TO local paths requires LocalFileSystem during binding/planning",
+      "paths": [
+        "test/sql/json/test_json_copy_serialize_plan.test"
+      ]
     }
   ]
 }
