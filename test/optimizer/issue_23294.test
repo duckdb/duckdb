@@ -1,0 +1,61 @@
+# name: test/optimizer/issue_23294.test
+# description: Issue #23294: Optimizer crash under min/max aggregate query when all row groups are filtered out
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t (
+	uuid_1 UUID NOT NULL,
+	uuid_2 UUID NOT NULL,
+	date_col DATE NOT NULL
+);
+
+# Three row groups where each filter alone can match some groups, but both together match none.
+statement ok
+INSERT INTO t
+SELECT
+	CAST(printf('%08x-0000-4000-8000-000000000000',
+		CASE i // 122880
+			WHEN 0 THEN CASE i % 2 WHEN 0 THEN 268435456  ELSE 805306368  END
+			WHEN 1 THEN CASE i % 2 WHEN 0 THEN 1073741824 ELSE 1610612736 END
+			ELSE        CASE i % 2 WHEN 0 THEN 1879048192 ELSE 2415919104 END
+		END) AS UUID) AS uuid_1,
+	CAST(printf('%08x-0000-4000-8000-000000000000',
+		CASE i // 122880
+			WHEN 0 THEN CASE i % 2 WHEN 0 THEN 536870912  ELSE 4026531840 END
+			ELSE        CASE i % 2 WHEN 0 THEN 83886080    ELSE 4026531840 END
+		END) AS UUID) AS uuid_2,
+	DATE '2022-07-08' + CAST(i % 100 AS INTEGER) AS date_col
+FROM range(368640) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+query D
+SELECT min(date_col)
+FROM t
+WHERE uuid_1 = '20000000-0000-4000-8000-000000000000'
+  AND uuid_2   = '10000000-0000-4000-8000-000000000000';
+----
+NULL
+
+query D
+SELECT min(date_col)
+FROM t
+WHERE uuid_1 = '20000000-0000-4000-8000-000000000000';
+----
+2022-07-08
+
+query D
+SELECT min(date_col)
+FROM t
+WHERE uuid_2 = '10000000-0000-4000-8000-000000000000';
+----
+NULL
+
+query I
+SELECT count(*)
+FROM t
+WHERE uuid_1 = '20000000-0000-4000-8000-000000000000'
+  AND uuid_2   = '10000000-0000-4000-8000-000000000000';
+----
+0
