@@ -127,19 +127,26 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			}
 			column_entry.SetName(column_names.back());
 			if (column_names.size() == 1) {
-				// ADD COLUMN
-				if (!column_entry.HasDefaultValue() ||
-				    column_entry.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT) {
+				if (command->missing_ok) {
+					// SQL query has `IF NOT EXISTS`, so we fall back to the old path to avoid a regression due to the
+					// multistatement rewrite.
+					// This is just a v1.5-variegata quickfix. We can tackle this properly later on for v2.0.
 					result->info =
 					    make_uniq<AddColumnInfo>(std::move(data), std::move(column_entry), command->missing_ok);
-					break;
+				} else {
+					// ADD COLUMN
+					if (!column_entry.HasDefaultValue() ||
+					    column_entry.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT) {
+						result->info =
+						    make_uniq<AddColumnInfo>(std::move(data), std::move(column_entry), command->missing_ok);
+						break;
+					}
+					auto null_column = column_entry.Copy();
+					null_column.SetDefaultValue(make_uniq<ConstantExpression>(ConstantExpression(Value(nullptr))));
+					return unique_ptr<SQLStatement>(std::move(TransformAndMaterializeAlter(
+					    stmt, data, make_uniq<AddColumnInfo>(data, std::move(null_column), command->missing_ok),
+					    column_entry.GetName(), column_entry.DefaultValue().Copy())));
 				}
-				auto null_column = column_entry.Copy();
-				null_column.SetDefaultValue(make_uniq<ConstantExpression>(ConstantExpression(Value(nullptr))));
-				return unique_ptr<SQLStatement>(std::move(TransformAndMaterializeAlter(
-				    stmt, data, make_uniq<AddColumnInfo>(data, std::move(null_column), command->missing_ok),
-				    column_entry.GetName(), column_entry.DefaultValue().Copy())));
-
 			} else {
 				// ADD FIELD
 				column_names.pop_back();
