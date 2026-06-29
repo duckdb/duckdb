@@ -18,7 +18,6 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/checkpoint/checkpoint_options.hpp"
-#include "duckdb/common/stacktrace.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -28,9 +27,8 @@ static ErrorData BuildAutocheckpointError(AttachedDatabase &db, const std::excep
 	string recovery = db.IsInitialDatabase()
 	                      ? "Reopen the database instance to recover (committed data is restored from the WAL)."
 	                      : "Detach and reattach the database to recover (committed data is restored from the WAL).";
-	string msg = StringUtil::Format("Transaction COMMIT succeeded and is durable, but the autocheckpoint failed. "
-	                                "%s %s\n\nStack Trace:\n%s",
-	                                recovery, original.RawMessage(), StackTrace::GetStackTrace());
+	string msg = StringUtil::Format("Transaction COMMIT succeeded and is durable, but the autocheckpoint failed. %s %s",
+	                                recovery, original.RawMessage());
 	return ErrorData(original.Type(), msg);
 }
 
