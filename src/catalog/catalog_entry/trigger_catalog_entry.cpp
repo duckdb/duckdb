@@ -5,6 +5,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 
 namespace duckdb {
 

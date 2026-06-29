@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include <algorithm>
 #include <sstream>
 

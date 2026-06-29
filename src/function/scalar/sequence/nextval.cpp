@@ -14,6 +14,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 
 namespace duckdb {
 

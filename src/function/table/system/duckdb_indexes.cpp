@@ -5,6 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
 
 namespace duckdb {
 
