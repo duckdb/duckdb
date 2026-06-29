@@ -115,7 +115,6 @@ static interval_t ParseFeatureInterval(ParseResult &parse_result, const string &
 		return IntervalFromGranularity(count, granularity);
 	}
 	throw InternalException("Unsupported feature interval");
-
 }
 
 static interval_t ParseFeatureScheduleInterval(ParseResult &parse_result) {
