@@ -581,6 +581,134 @@ public:
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeDetachStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropEntriesTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropEntriesTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropTriggerTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropTriggerTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropTableTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropTableTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropTableFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropTableFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropIndexTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropIndexTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeQualifiedIndexNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                   TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeQualifiedIndexNameTrampoline(PEGTransformer &transformer,
+	                                                                             TransformStack &stack,
+	                                                                             TransformStackFrame &frame);
+	static void InitializeQualifiedIndexNameStringTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeQualifiedIndexNameStringTrampoline(PEGTransformer &transformer,
+	                                                                                   TransformStack &stack,
+	                                                                                   TransformStackFrame &frame);
+	static void InitializeSchemaReservedIndexTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeSchemaReservedIndexTrampoline(PEGTransformer &transformer,
+	                                                                              TransformStack &stack,
+	                                                                              TransformStackFrame &frame);
+	static void InitializeCatalogReservedSchemaIndexTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeCatalogReservedSchemaIndexTrampoline(PEGTransformer &transformer,
+	                                                                                     TransformStack &stack,
+	                                                                                     TransformStackFrame &frame);
+	static void InitializeDropSequenceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropSequenceTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropCollationTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropCollationTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropTypeTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDropSecretTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropSecretTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeTableOrViewTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeTableOrViewTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeMaterializedViewEntryTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeMaterializedViewEntryTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
+	static void InitializeFunctionTypeMacroTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeFunctionTypeMacroTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeFunctionTypeMacroKeywordTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeFunctionTypeMacroKeywordTrampoline(PEGTransformer &transformer,
+	                                                                                   TransformStack &stack,
+	                                                                                   TransformStackFrame &frame);
+	static void InitializeFunctionTypeFunctionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                     TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeFunctionTypeFunctionTrampoline(PEGTransformer &transformer,
+	                                                                               TransformStack &stack,
+	                                                                               TransformStackFrame &frame);
+	static void InitializeDropBehaviorTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropBehaviorTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCascadeDropBehaviorTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeCascadeDropBehaviorTrampoline(PEGTransformer &transformer,
+	                                                                              TransformStack &stack,
+	                                                                              TransformStackFrame &frame);
+	static void InitializeRestrictDropBehaviorTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                     TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeRestrictDropBehaviorTrampoline(PEGTransformer &transformer,
+	                                                                               TransformStack &stack,
+	                                                                               TransformStackFrame &frame);
+	static void InitializeIfExistsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeIfExistsTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeQualifiedSchemaNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeQualifiedSchemaNameTrampoline(PEGTransformer &transformer,
+	                                                                              TransformStack &stack,
+	                                                                              TransformStackFrame &frame);
+	static void InitializeQualifiedSchemaNameStringTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeQualifiedSchemaNameStringTrampoline(PEGTransformer &transformer,
+	                                                                                    TransformStack &stack,
+	                                                                                    TransformStackFrame &frame);
+	static void InitializeCatalogReservedSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeCatalogReservedSchemaTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
+	static void InitializeDropSecretStorageTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDropSecretStorageTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeTransactionStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                     TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeTransactionStatementTrampoline(PEGTransformer &transformer,
@@ -704,10 +832,75 @@ public:
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeDottedIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeIfExistsTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                         TransformStackFrame &frame);
+	static void InitializeTemporaryTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                          TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
-	FinalizeIfExistsTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	FinalizeTemporaryTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializePersistentTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizePersistentTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeTempPersistentTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                               TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeTempPersistentTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeTemporaryPersistentTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeTemporaryPersistentTrampoline(PEGTransformer &transformer,
+	                                                                              TransformStack &stack,
+	                                                                              TransformStackFrame &frame);
+	static void InitializeSecretNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSecretNameTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeTriggerNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeTriggerNameTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeQualifiedSequenceNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeQualifiedSequenceNameTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
+	static void InitializeCollationNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCollationNameTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeQualifiedTypeNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeQualifiedTypeNameTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeTypeNameAsQualifiedNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                        TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeTypeNameAsQualifiedNameTrampoline(PEGTransformer &transformer,
+	                                                                                  TransformStack &stack,
+	                                                                                  TransformStackFrame &frame);
+	static void InitializeCatalogReservedSchemaTypeNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeCatalogReservedSchemaTypeNameTrampoline(PEGTransformer &transformer,
+	                                                                                        TransformStack &stack,
+	                                                                                        TransformStackFrame &frame);
+	static void InitializeSchemaReservedTypeNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                       TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeSchemaReservedTypeNameTrampoline(PEGTransformer &transformer,
+	                                                                                 TransformStack &stack,
+	                                                                                 TransformStackFrame &frame);
+	static void InitializeFunctionIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                   TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeFunctionIdentifierTrampoline(PEGTransformer &transformer,
+	                                                                             TransformStack &stack,
+	                                                                             TransformStackFrame &frame);
+	static void InitializeCatalogReservedSchemaFunctionNameTrampoline(PEGTransformer &transformer,
+	                                                                  TransformStack &stack,
+	                                                                  TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCatalogReservedSchemaFunctionNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static void InitializeSchemaReservedFunctionNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeSchemaReservedFunctionNameTrampoline(PEGTransformer &transformer,
+	                                                                                     TransformStack &stack,
+	                                                                                     TransformStackFrame &frame);
 	static void InitializeBaseTableNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                              TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
