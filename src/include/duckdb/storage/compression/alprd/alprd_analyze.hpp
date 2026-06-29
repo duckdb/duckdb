@@ -10,6 +10,7 @@
 
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
 #include "duckdb/storage/compression/alp/alp_utils.hpp"
 #include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
@@ -38,7 +39,17 @@ public:
 
 template <class T>
 unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
+	auto &storage_manager = col_data.GetStorageManager();
+	auto &block_manager = storage_manager.GetBlockManager();
+
+	if (block_manager.GetBlockSize() + block_manager.GetBlockHeaderSize() < DEFAULT_BLOCK_ALLOC_SIZE) {
+		if (storage_manager.GetStorageVersion() < 7) {
+			// Before v1.5.0, blocks cannot use uncompressed-vector fallback
+			return nullptr;
+		}
+	}
+
+	CompressionInfo info(block_manager);
 	return make_uniq<AlpRDAnalyzeState<T>>(info);
 }
 
@@ -47,10 +58,6 @@ unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType typ
  */
 template <class T>
 bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	if (state.info.GetBlockSize() + state.info.GetBlockHeaderSize() < DEFAULT_BLOCK_ALLOC_SIZE) {
-		return false;
-	}
-
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	auto &analyze_state = state.Cast<AlpRDAnalyzeState<T>>();
 
