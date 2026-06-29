@@ -371,10 +371,20 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			return false;
 		}
 
+		LogicalType cast_type;
+		try {
+			cast_type = UnboundType::TryDefaultBind(cast.TargetType());
+		} catch (...) {
+			return false;
+		}
+		if (cast_type == LogicalType::INVALID || cast_type == LogicalTypeId::UNBOUND) {
+			return false;
+		}
+
 		string error_message;
-		if (!dummy_value.DefaultTryCastAs(cast.TargetType(), value, &error_message)) {
+		if (!dummy_value.DefaultTryCastAs(cast_type, value, &error_message)) {
 			throw ConversionException("Unable to cast %s to %s", dummy_value.ToString(),
-			                          EnumUtil::ToString(cast.TargetType().id()));
+			                          EnumUtil::ToString(cast_type.id()));
 		}
 		return true;
 	}
