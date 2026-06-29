@@ -113,6 +113,8 @@ public:
 	unordered_set<column_t> conflict_target;
 	//! True, if the INSERT OR REPLACE requires delete + insert.
 	bool update_is_del_and_insert;
+	//! See TableDeleteState::skip_unchanged_fk_delete_check.
+	bool skip_unchanged_fk_delete_check = false;
 
 	// Column ids from the original table to fetch
 	vector<StorageIndex> columns_to_fetch;

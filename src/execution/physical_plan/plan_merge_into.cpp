@@ -39,6 +39,7 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		                                          std::move(bound_constraints), cardinality, op.return_chunk);
 		auto &cast_update = result->op->Cast<PhysicalUpdate>();
 		cast_update.update_is_del_and_insert = action.update_is_del_and_insert;
+		cast_update.skip_unchanged_fk_delete_check = action.skip_unchanged_fk_delete_check;
 		break;
 	}
 	case MergeActionType::MERGE_DELETE: {
