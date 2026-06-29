@@ -45,9 +45,14 @@
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
+#include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/statement_preprocessor.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
@@ -906,6 +911,34 @@ StatementSignature ClientContext::BindStatement(unique_ptr<SQLStatement> stateme
 	    },
 	    false);
 	return signature;
+}
+
+ExpressionBindResult ClientContext::BindExpression(const vector<Identifier> &names, const vector<LogicalType> &types,
+                                                   unique_ptr<ParsedExpression> expr) {
+	auto lock = LockContext();
+	ExpressionBindResult result;
+	RunFunctionInTransactionInternal(
+	    *lock,
+	    [&]() {
+		    auto binder = Binder::CreateBinder(*this);
+		    binder->bind_context.AddGenericBinding(binder->GenerateTableIndex(), Identifier("__expr_input"), names,
+		                                           types);
+		    // The SELECT-list binder extracts a top-level aggregate/window into node.aggregates / node.windows.
+		    BoundSelectNode node;
+		    node.projection_index = binder->GenerateTableIndex();
+		    node.group_index = binder->GenerateTableIndex();
+		    node.aggregate_index = binder->GenerateTableIndex();
+		    node.groupings_index = binder->GenerateTableIndex();
+		    node.window_index = binder->GenerateTableIndex();
+		    node.prune_index = binder->GenerateTableIndex();
+		    SelectBinder select_binder(*binder, *this, node);
+		    auto bound = select_binder.Bind(expr);
+		    result.type = bound->GetReturnType();
+		    result.contains_aggregate = !node.aggregates.empty();
+		    result.contains_window = !node.windows.empty();
+	    },
+	    false);
+	return result;
 }
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
