@@ -110,7 +110,7 @@ duckdb_date duckdb_value_date(duckdb_result *result, idx_t col, idx_t row) {
 
 duckdb_time duckdb_value_time(duckdb_result *result, idx_t col, idx_t row) {
 	duckdb_time result_value;
-	result_value.micros = GetInternalCValue<dtime_t>(result, col, row).micros;
+	result_value.micros = GetInternalCValue<dtime_t>(result, col, row).value;
 	return result_value;
 }
 

@@ -21,7 +21,7 @@ date_t FetchDefaultValue::Operation() {
 template <>
 dtime_t FetchDefaultValue::Operation() {
 	dtime_t result;
-	result.micros = 0;
+	result.value = 0;
 	return result;
 }
 

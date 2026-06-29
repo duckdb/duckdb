@@ -10,15 +10,13 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/timebase.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/timestamp_base.hpp"
 #include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 
-struct date_t;     // NOLINT
-struct dtime_t;    // NOLINT
-struct dtime_ns_t; // NOLINT
-struct dtime_tz_t; // NOLINT
+struct date_t; // NOLINT
 
 enum class TimestampCastResult : uint8_t {
 	SUCCESS,
