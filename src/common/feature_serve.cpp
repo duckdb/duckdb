@@ -154,13 +154,9 @@ static void AttachServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatal
 	from_table = std::move(join);
 }
 
-unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, const vector<string> &feature_list,
-                                                    const vector<vector<FeatureServeEntityMapping>> &feature_mappings,
-                                                    const string &spine_table, const string &entity_override,
-                                                    const string &as_of_override) {
-	if (feature_mappings.size() != feature_list.size()) {
-		throw InternalException("SERVE FEATURE mapping count does not match feature count");
-	}
+unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, const vector<ServeFeatureRequest> &features,
+                                                    const string &spine_table, const string &spine_entity_override,
+                                                    const string &spine_asof_column) {
 	auto schemas = Catalog::GetAllSchemas(context);
 	bool spine_found = false;
 	for (auto &schema : schemas) {
@@ -175,10 +171,11 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 		throw CatalogException("Spine table \"%s\" does not exist", spine_table);
 	}
 
-	if (feature_list.size() == 1) {
-		auto feature_entry = LookupFeature(context, feature_list[0]);
+	if (features.size() == 1) {
+		auto &request = features[0];
+		auto feature_entry = LookupFeature(context, request.feature_name);
 		if (!feature_entry) {
-			throw CatalogException("Feature \"%s\" does not exist", feature_list[0]);
+			throw CatalogException("Feature \"%s\" does not exist", request.feature_name);
 		}
 		auto &feat = *feature_entry;
 
@@ -187,7 +184,8 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 		select->select_list.push_back(ColumnRef("f", "feature_timestamp"));
 		select->select_list.push_back(FeatureStar("f", feat.entity_columns));
 		select->from_table = BaseTable(spine_table, "spine");
-		AttachServeJoin(select->from_table, feat, "f", feature_mappings[0], entity_override, as_of_override);
+		AttachServeJoin(select->from_table, feat, "f", request.entity_mappings, spine_entity_override,
+		                spine_asof_column);
 
 		auto result = make_uniq<SelectStatement>();
 		result->node = std::move(select);
@@ -198,10 +196,11 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 	select->select_list.push_back(make_uniq<StarExpression>("spine"));
 	select->from_table = BaseTable(spine_table, "spine");
 
-	for (idx_t i = 0; i < feature_list.size(); i++) {
-		auto feature_entry = LookupFeature(context, feature_list[i]);
+	for (idx_t i = 0; i < features.size(); i++) {
+		auto &request = features[i];
+		auto feature_entry = LookupFeature(context, request.feature_name);
 		if (!feature_entry) {
-			throw CatalogException("Feature \"%s\" does not exist", feature_list[i]);
+			throw CatalogException("Feature \"%s\" does not exist", request.feature_name);
 		}
 		auto &feat = *feature_entry;
 		auto alias = "f" + duckdb::to_string(i);
@@ -210,7 +209,8 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 		timestamp->SetAlias(feat.name + "_timestamp");
 		select->select_list.push_back(std::move(timestamp));
 		select->select_list.push_back(FeatureStar(alias, feat.entity_columns));
-		AttachServeJoin(select->from_table, feat, alias, feature_mappings[i], entity_override, as_of_override);
+		AttachServeJoin(select->from_table, feat, alias, request.entity_mappings, spine_entity_override,
+		                spine_asof_column);
 	}
 
 	auto result = make_uniq<SelectStatement>();

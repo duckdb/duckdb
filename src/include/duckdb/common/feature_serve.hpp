@@ -19,9 +19,13 @@ struct FeatureServeEntityMapping {
 	string spine_column;
 };
 
-unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, const vector<string> &feature_list,
-                                                    const vector<vector<FeatureServeEntityMapping>> &entity_mappings,
-                                                    const string &spine_table, const string &entity_override,
-                                                    const string &as_of_override);
+struct ServeFeatureRequest {
+	string feature_name;
+	vector<FeatureServeEntityMapping> entity_mappings;
+};
+
+unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, const vector<ServeFeatureRequest> &features,
+                                                    const string &spine_table, const string &spine_entity_override,
+                                                    const string &spine_asof_column);
 
 } // namespace duckdb

@@ -19,11 +19,10 @@ public:
 public:
 	ServeFeatureStatement();
 
-	vector<string> feature_names;
-	vector<vector<FeatureServeEntityMapping>> entity_mappings;
+	vector<ServeFeatureRequest> features;
 	string spine_table;
-	string entity_column;
-	string as_of_column;
+	string spine_entity_override;
+	string spine_asof_column;
 
 protected:
 	ServeFeatureStatement(const ServeFeatureStatement &other);

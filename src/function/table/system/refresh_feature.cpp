@@ -7,8 +7,8 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/parser/parsed_data/alter_feature_info.hpp"
+#include "duckdb/common/feature_query.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -16,7 +16,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
@@ -44,80 +43,15 @@ static string QuoteIdent(const string &name) {
 	return SQLIdentifier::ToString(name);
 }
 
-static bool FeatureColumnListContains(const vector<string> &columns, const string &column_name) {
-	for (auto &column : columns) {
-		if (StringUtil::CIEquals(column, column_name)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 static string BuildPITQuery(const FeatureCatalogEntry &feat, const string &spine_filter) {
-	auto &select_node = feat.query->node->Cast<SelectNode>();
-	string agg_exprs;
-	for (auto &expr : select_node.select_list) {
-		if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-			auto &col_ref = expr->Cast<ColumnRefExpression>();
-			if (FeatureColumnListContains(feat.entity_columns, col_ref.GetColumnName())) {
-				continue;
-			}
-		}
-		if (!agg_exprs.empty()) {
-			agg_exprs += ", ";
-		}
-		agg_exprs += expr->ToString();
-		if (expr->HasAlias()) {
-			agg_exprs += " AS " + QuoteIdent(expr->GetAlias());
-		}
-	}
-
-	auto ts = QuoteIdent(feat.timestamp_column);
-	auto table = QuoteIdent(feat.source_table);
-	auto window_interval = Interval::ToString(feat.window_interval);
-
-	vector<string> anchor_entity_selects;
-	vector<string> anchor_entity_outputs;
-	vector<string> entity_join_conditions;
-	vector<string> group_by_columns;
-	vector<string> order_by_columns;
-	for (auto &entity_column : feat.entity_columns) {
-		auto entity = QuoteIdent(entity_column);
-		anchor_entity_selects.push_back(entity);
-		anchor_entity_outputs.push_back("anchor." + entity);
-		entity_join_conditions.push_back(table + "." + entity + " = anchor." + entity);
-		group_by_columns.push_back("anchor." + entity);
-		order_by_columns.push_back("anchor." + entity);
-	}
-	group_by_columns.push_back("anchor.feature_timestamp");
-	order_by_columns.push_back("anchor.feature_timestamp");
-
-	auto anchor_select = StringUtil::Join(anchor_entity_selects, ", ");
-	if (!anchor_select.empty()) {
-		anchor_select += ", ";
-	}
-	anchor_select += ts + " AS feature_timestamp";
-
-	auto output_columns = StringUtil::Join(anchor_entity_outputs, ", ");
-	if (!output_columns.empty()) {
-		output_columns += ", ";
-	}
-	output_columns += "anchor.feature_timestamp, " + agg_exprs;
-
-	entity_join_conditions.push_back(table + "." + ts + " <= anchor.feature_timestamp");
-	entity_join_conditions.push_back(table + "." + ts + " >= anchor.feature_timestamp - INTERVAL '" + window_interval +
-	                                 "'");
-
-	string pit_sql = StringUtil::Format(
-	    "SELECT %s "
-	    "FROM (SELECT %s FROM %s%s) AS anchor "
-	    "JOIN %s ON %s "
-	    "GROUP BY %s "
-	    "ORDER BY %s",
-	    output_columns, anchor_select, table, spine_filter, table, StringUtil::Join(entity_join_conditions, " AND "),
-	    StringUtil::Join(group_by_columns, ", "), StringUtil::Join(order_by_columns, ", "));
-
-	return pit_sql;
+	FeaturePITQueryParameters parameters;
+	parameters.source_table = feat.source_table;
+	parameters.timestamp_column = feat.timestamp_column;
+	parameters.entity_columns = feat.entity_columns;
+	parameters.window_interval = feat.window_interval;
+	parameters.spine_filter = spine_filter;
+	parameters.order_result = true;
+	return BuildFeaturePITQuerySQL(feat.query->node->Cast<SelectNode>(), parameters);
 }
 
 static unique_ptr<FunctionData> RefreshFeatureBind(ClientContext &context, TableFunctionBindInput &input,

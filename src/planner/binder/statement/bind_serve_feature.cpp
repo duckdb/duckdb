@@ -7,8 +7,8 @@
 namespace duckdb {
 
 BoundStatement Binder::Bind(ServeFeatureStatement &stmt) {
-	auto serve_select = BuildServeFeatureSelect(context, stmt.feature_names, stmt.entity_mappings, stmt.spine_table,
-	                                            stmt.entity_column, stmt.as_of_column);
+	auto serve_select = BuildServeFeatureSelect(context, stmt.features, stmt.spine_table, stmt.spine_entity_override,
+	                                            stmt.spine_asof_column);
 	return Bind(*serve_select);
 }
 

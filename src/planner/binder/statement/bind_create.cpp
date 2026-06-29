@@ -15,6 +15,7 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/common/feature_query.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -58,15 +59,6 @@
 
 namespace duckdb {
 
-static bool FeatureColumnListContains(const vector<string> &columns, const string &column_name) {
-	for (auto &column : columns) {
-		if (StringUtil::CIEquals(column, column_name)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 static string GetFeatureSourceTable(const SelectNode &select_node) {
 	if (!select_node.from_table) {
 		throw BinderException("CREATE FEATURE query must specify a FROM clause");
@@ -108,76 +100,6 @@ static vector<string> GetFeatureEntityColumns(const SelectNode &select_node, con
 		result.push_back(column_name);
 	}
 	return result;
-}
-
-static string BuildFeaturePITQuery(const SelectNode &select_node, const vector<string> &entity_columns,
-                                   const string &timestamp_column, const string &source_table,
-                                   const interval_t &window_interval, const string &spine_filter, bool order_result) {
-	string agg_exprs;
-	for (auto &expr : select_node.select_list) {
-		if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-			auto &col_ref = expr->Cast<ColumnRefExpression>();
-			if (FeatureColumnListContains(entity_columns, col_ref.GetColumnName())) {
-				continue;
-			}
-		}
-		if (!agg_exprs.empty()) {
-			agg_exprs += ", ";
-		}
-		agg_exprs += expr->ToString();
-		if (expr->HasAlias()) {
-			agg_exprs += " AS " + SQLIdentifier::ToString(expr->GetAlias());
-		}
-	}
-	if (agg_exprs.empty()) {
-		throw BinderException("CREATE FEATURE query must project at least one feature expression");
-	}
-
-	vector<string> anchor_entity_selects;
-	vector<string> anchor_entity_outputs;
-	vector<string> entity_join_conditions;
-	vector<string> group_by_columns;
-	vector<string> order_by_columns;
-	auto table = SQLIdentifier::ToString(source_table);
-	for (auto &entity_column : entity_columns) {
-		auto entity = SQLIdentifier::ToString(entity_column);
-		anchor_entity_selects.push_back(entity);
-		anchor_entity_outputs.push_back("anchor." + entity);
-		entity_join_conditions.push_back(table + "." + entity + " = anchor." + entity);
-		group_by_columns.push_back("anchor." + entity);
-		order_by_columns.push_back("anchor." + entity);
-	}
-	group_by_columns.push_back("anchor.feature_timestamp");
-	order_by_columns.push_back("anchor.feature_timestamp");
-
-	auto ts = SQLIdentifier::ToString(timestamp_column);
-	auto window = Interval::ToString(window_interval);
-	auto anchor_select = StringUtil::Join(anchor_entity_selects, ", ");
-	if (!anchor_select.empty()) {
-		anchor_select += ", ";
-	}
-	anchor_select += ts + " AS feature_timestamp";
-
-	auto output_columns = StringUtil::Join(anchor_entity_outputs, ", ");
-	if (!output_columns.empty()) {
-		output_columns += ", ";
-	}
-	output_columns += "anchor.feature_timestamp, " + agg_exprs;
-
-	entity_join_conditions.push_back(table + "." + ts + " <= anchor.feature_timestamp");
-	entity_join_conditions.push_back(table + "." + ts + " >= anchor.feature_timestamp - INTERVAL '" + window + "'");
-
-	string pit_sql =
-	    StringUtil::Format("SELECT %s "
-	                       "FROM (SELECT %s FROM %s%s) AS anchor "
-	                       "JOIN %s ON %s "
-	                       "GROUP BY %s",
-	                       output_columns, anchor_select, table, spine_filter, table,
-	                       StringUtil::Join(entity_join_conditions, " AND "), StringUtil::Join(group_by_columns, ", "));
-	if (order_result) {
-		pit_sql += " ORDER BY " + StringUtil::Join(order_by_columns, ", ");
-	}
-	return pit_sql;
 }
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
@@ -918,9 +840,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		feature_info.entity_columns = GetFeatureEntityColumns(select_node, table_entry, feature_info.source_table);
 
-		// Build PIT query string from the feature definition
-		string pit_sql = BuildFeaturePITQuery(select_node, feature_info.entity_columns, feature_info.timestamp_column,
-		                                      feature_info.source_table, feature_info.window_interval, "", false);
+		FeaturePITQueryParameters pit_parameters;
+		pit_parameters.source_table = feature_info.source_table;
+		pit_parameters.timestamp_column = feature_info.timestamp_column;
+		pit_parameters.entity_columns = feature_info.entity_columns;
+		pit_parameters.window_interval = feature_info.window_interval;
+		string pit_sql = BuildFeaturePITQuerySQL(select_node, pit_parameters);
 
 		// Parse and bind the PIT query
 		Parser parser(context.GetParserOptions());

@@ -40,6 +40,7 @@ add_library_unity(
   transform_pragma.cpp
   transform_prepare.cpp
   transform_select.cpp
+  transform_serve_feature.cpp
   transform_set.cpp
   transform_transaction.cpp
   transform_update.cpp
