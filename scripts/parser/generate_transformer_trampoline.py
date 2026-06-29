@@ -49,12 +49,14 @@ DEFAULT_GRAMMAR_FILES = [
     "checkpoint.gram",
     "connect.gram",
     "deallocate.gram",
+    "detach.gram",
     "transaction.gram",
     "use.gram",
     "vacuum.gram",
 ]
 DEFAULT_EXTRA_RULES = {
     "create_table.gram": ["CatalogQualification", "SchemaQualification", "ReservedSchemaQualification", "ColId"],
+    "drop.gram": ["IfExists"],
     "select.gram": ["BaseTableName", "UnqualifiedBaseTableName", "SchemaReservedTable", "CatalogReservedSchemaTable"],
 }
 INTERNAL_GRAMMAR_RULES = {"List", "Parens"}
