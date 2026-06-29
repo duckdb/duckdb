@@ -455,13 +455,10 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		try {
 			storage_manager.CreateCheckpoint(context, options);
 		} catch (std::exception &ex) {
-			// a checkpoint failure here should not result in the commit being turned into a rollback
-			// .. UNLESS we have skipped writing to the WAL and there are concurrent transactions active
-			if (skip_wal_write_due_to_checkpoint) {
-				error.Merge(ErrorData(ex));
-			} else {
-				// We have made the commit durable (wrote to the WAL), but the autocheckpoint failed.
+			if (should_write_to_wal && !skip_wal_write_due_to_checkpoint) {
 				context.transaction.SetAutocheckpointError(BuildAutocheckpointError(db, ex));
+			} else {
+				error.Merge(ErrorData(ex));
 			}
 		}
 	}
