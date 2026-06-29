@@ -83,6 +83,7 @@ DEFAULT_EXTRA_RULES = {
     "create_secret.gram": ["SecretName"],
     "create_trigger.gram": ["TriggerName"],
     "alter.gram": ["QualifiedSequenceName"],
+    "delete.gram": ["TruncateStatement"],
     "common.gram": [
         "CollationName",
         "QualifiedTypeName",

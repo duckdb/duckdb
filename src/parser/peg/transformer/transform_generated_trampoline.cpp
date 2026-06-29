@@ -361,6 +361,9 @@ static const TransformFrameOps TRIGGER_NAME_OPS = {"TriggerName",
 static const TransformFrameOps QUALIFIED_SEQUENCE_NAME_OPS = {
     "QualifiedSequenceName", &PEGTransformerFactory::InitializeQualifiedSequenceNameTrampoline,
     &PEGTransformerFactory::FinalizeQualifiedSequenceNameTrampoline};
+static const TransformFrameOps TRUNCATE_STATEMENT_OPS = {"TruncateStatement",
+                                                         &PEGTransformerFactory::InitializeTruncateStatementTrampoline,
+                                                         &PEGTransformerFactory::FinalizeTruncateStatementTrampoline};
 static const TransformFrameOps COLLATION_NAME_OPS = {"CollationName",
                                                      &PEGTransformerFactory::InitializeCollationNameTrampoline,
                                                      &PEGTransformerFactory::FinalizeCollationNameTrampoline};
@@ -530,6 +533,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"SecretName", &SECRET_NAME_OPS},
 	    {"TriggerName", &TRIGGER_NAME_OPS},
 	    {"QualifiedSequenceName", &QUALIFIED_SEQUENCE_NAME_OPS},
+	    {"TruncateStatement", &TRUNCATE_STATEMENT_OPS},
 	    {"CollationName", &COLLATION_NAME_OPS},
 	    {"QualifiedTypeName", &QUALIFIED_TYPE_NAME_OPS},
 	    {"TypeNameAsQualifiedName", &TYPE_NAME_AS_QUALIFIED_NAME_OPS},
@@ -2837,6 +2841,26 @@ PEGTransformerFactory::FinalizeQualifiedSequenceNameTrampoline(PEGTransformer &t
 	auto result = PEGTransformerFactory::TransformQualifiedSequenceName(transformer, catalog_qualification,
 	                                                                    schema_qualification, sequence_name);
 	return make_uniq<TypedTransformResult<QualifiedName>>(result);
+}
+
+void PEGTransformerFactory::InitializeTruncateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(2), BASE_TABLE_NAME_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTruncateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto base_table_name = frame.TakeResult<unique_ptr<BaseTableRef>>(0);
+	auto result =
+	    PEGTransformerFactory::TransformTruncateStatement(transformer, has_result, std::move(base_table_name));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeCollationNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
