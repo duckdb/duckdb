@@ -560,8 +560,6 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	}
 }
 
-
-
 static void CreateValuesTuple(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                               idx_t count) {
 	// a TUPLE becomes a JSON array (matching how Python serializes tuples)
@@ -587,7 +585,7 @@ static void CreateValuesTuple(const StructNames &names, yyjson_mut_doc *doc, yyj
 	}
 }
 static void CreateValuesMapKeys(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
-								const JSONCopyFormatOptions &options);
+                                const JSONCopyFormatOptions &options);
 
 static void CreateValuesMap(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                             idx_t count, const JSONCopyFormatOptions &options) {
