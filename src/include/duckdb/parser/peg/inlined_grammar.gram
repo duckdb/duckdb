@@ -860,9 +860,15 @@ RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral
 
 FeatureAtVersionStatement <- 'FEATURE' IdentifierOrStringLiteral 'AT' 'VERSION' NumberLiteral
 
-ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(IdentifierOrStringLiteral) 'FOR' IdentifierOrStringLiteral ServeFeatureEntity? ServeFeatureAsOf?
+ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(ServeFeatureItem) 'FOR' IdentifierOrStringLiteral ServeFeatureEntity? ServeFeatureAsOf?
 
 ServeFeatureKw <- 'FEATURES' / 'FEATURE'
+ServeFeatureItem <- IdentifierOrStringLiteral ServeFeatureItemEntity?
+ServeFeatureItemEntity <- 'ENTITY' (ServeFeatureEntityList / IdentifierOrStringLiteral)
+ServeFeatureEntityList <- Parens(List(ServeFeatureEntityMapping))
+ServeFeatureEntityMapping <- ServeFeatureEntityMappingPair / ServeFeatureEntityMappingShorthand
+ServeFeatureEntityMappingPair <- IdentifierOrStringLiteral '=' IdentifierOrStringLiteral
+ServeFeatureEntityMappingShorthand <- IdentifierOrStringLiteral
 ServeFeatureEntity <- 'ENTITY' IdentifierOrStringLiteral
 ServeFeatureAsOf <- 'ASOF' IdentifierOrStringLiteral
 

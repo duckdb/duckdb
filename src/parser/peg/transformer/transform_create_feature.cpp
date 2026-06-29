@@ -111,6 +111,127 @@ static interval_t ParseFeatureScheduleInterval(ParseResult &parse_result) {
 	return ParseFeatureInterval(list_pr.Child<ListParseResult>(1), "EVERY");
 }
 
+static optional_ptr<ParseResult> FindParseResultByName(ParseResult &parse_result, const string &name) {
+	if (StringUtil::CIEquals(parse_result.name, name)) {
+		return parse_result;
+	}
+	if (parse_result.type == ParseResultType::CHOICE) {
+		return FindParseResultByName(parse_result.Cast<ChoiceParseResult>().GetResult(), name);
+	}
+	if (parse_result.type == ParseResultType::LIST) {
+		auto &list_pr = parse_result.Cast<ListParseResult>();
+		for (auto &child : list_pr.GetChildren()) {
+			auto result = FindParseResultByName(child.get(), name);
+			if (result) {
+				return result;
+			}
+		}
+	}
+	return nullptr;
+}
+
+static void CollectParseResultsByName(ParseResult &parse_result, const string &name,
+                                      vector<reference<ParseResult>> &results) {
+	if (StringUtil::CIEquals(parse_result.name, name)) {
+		results.push_back(parse_result);
+		return;
+	}
+	if (parse_result.type == ParseResultType::CHOICE) {
+		CollectParseResultsByName(parse_result.Cast<ChoiceParseResult>().GetResult(), name, results);
+		return;
+	}
+	if (parse_result.type == ParseResultType::OPTIONAL) {
+		auto &optional_pr = parse_result.Cast<OptionalParseResult>();
+		if (optional_pr.HasResult()) {
+			CollectParseResultsByName(optional_pr.GetResult(), name, results);
+		}
+		return;
+	}
+	if (parse_result.type == ParseResultType::REPEAT) {
+		auto &repeat_pr = parse_result.Cast<RepeatParseResult>();
+		for (auto &child : repeat_pr.GetChildren()) {
+			CollectParseResultsByName(child.get(), name, results);
+		}
+		return;
+	}
+	if (parse_result.type == ParseResultType::LIST) {
+		auto &list_pr = parse_result.Cast<ListParseResult>();
+		for (auto &child : list_pr.GetChildren()) {
+			CollectParseResultsByName(child.get(), name, results);
+		}
+	}
+}
+
+static optional_ptr<ParseResult> FindFirstIdentifierOrString(ParseResult &parse_result) {
+	if (parse_result.type == ParseResultType::IDENTIFIER || parse_result.type == ParseResultType::STRING) {
+		return parse_result;
+	}
+	if (parse_result.type == ParseResultType::CHOICE) {
+		return FindFirstIdentifierOrString(parse_result.Cast<ChoiceParseResult>().GetResult());
+	}
+	if (parse_result.type == ParseResultType::LIST) {
+		auto &list_pr = parse_result.Cast<ListParseResult>();
+		for (auto &child : list_pr.GetChildren()) {
+			auto result = FindFirstIdentifierOrString(child.get());
+			if (result) {
+				return result;
+			}
+		}
+	}
+	return nullptr;
+}
+
+static void CollectIdentifierOrStringNames(ParseResult &parse_result, vector<string> &result) {
+	if (parse_result.type == ParseResultType::IDENTIFIER) {
+		result.push_back(parse_result.Cast<IdentifierParseResult>().identifier);
+		return;
+	}
+	if (parse_result.type == ParseResultType::STRING) {
+		result.push_back(parse_result.Cast<StringLiteralParseResult>().result);
+		return;
+	}
+	if (parse_result.type == ParseResultType::CHOICE) {
+		CollectIdentifierOrStringNames(parse_result.Cast<ChoiceParseResult>().GetResult(), result);
+		return;
+	}
+	if (parse_result.type == ParseResultType::OPTIONAL) {
+		auto &optional_pr = parse_result.Cast<OptionalParseResult>();
+		if (optional_pr.HasResult()) {
+			CollectIdentifierOrStringNames(optional_pr.GetResult(), result);
+		}
+		return;
+	}
+	if (parse_result.type == ParseResultType::REPEAT) {
+		auto &repeat_pr = parse_result.Cast<RepeatParseResult>();
+		for (auto &child : repeat_pr.GetChildren()) {
+			CollectIdentifierOrStringNames(child.get(), result);
+		}
+		return;
+	}
+	if (parse_result.type == ParseResultType::LIST) {
+		auto &list_pr = parse_result.Cast<ListParseResult>();
+		for (auto &child : list_pr.GetChildren()) {
+			CollectIdentifierOrStringNames(child.get(), result);
+		}
+	}
+}
+
+static QualifiedName TransformFirstQualifiedName(PEGTransformer &, ParseResult &parse_result) {
+	auto result = FindFirstIdentifierOrString(parse_result);
+	if (!result) {
+		throw InternalException("Expected identifier in SERVE FEATURE entity mapping");
+	}
+	QualifiedName qualified_name;
+	qualified_name.catalog = INVALID_CATALOG;
+	qualified_name.schema = INVALID_SCHEMA;
+	if (result->type == ParseResultType::IDENTIFIER) {
+		qualified_name.name = result->Cast<IdentifierParseResult>().identifier;
+	} else {
+		qualified_name.name = result->Cast<StringLiteralParseResult>().result;
+	}
+	return qualified_name;
+}
+
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PEGTransformer &transformer,
                                                                               ParseResult &parse_result) {
 	// CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral
@@ -211,20 +332,55 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformRefreshFeatureStatement
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(PEGTransformer &transformer,
                                                                                ParseResult &parse_result) {
-	// ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(IdentifierOrStringLiteral) 'FOR' IdentifierOrStringLiteral
+	// ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(ServeFeatureItem) 'FOR' IdentifierOrStringLiteral
 	// ServeFeatureEntity? ServeFeatureAsOf?
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	// index 0: 'SERVE' keyword
 	// index 1: ServeFeatureKw ('FEATURE' or 'FEATURES')
-	// index 2: List(IdentifierOrStringLiteral) - feature names
+	// index 2: List(ServeFeatureItem) - feature names and optional entity mappings
 	auto feature_items = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
 	vector<string> feature_names;
+	vector<vector<FeatureServeEntityMapping>> entity_mappings;
 	for (auto &item : feature_items) {
-		auto name = transformer.Transform<QualifiedName>(item).name;
+		auto &feature_item = item.get().Cast<ListParseResult>();
+		auto name = TransformFirstQualifiedName(transformer, feature_item.Child<ListParseResult>(0)).name;
 		feature_names.push_back(name);
+
+		vector<FeatureServeEntityMapping> mappings;
+		auto &mapping_opt = feature_item.Child<OptionalParseResult>(1);
+		if (mapping_opt.HasResult()) {
+			auto &mapping_clause = mapping_opt.GetResult().Cast<ListParseResult>();
+			auto mapping_list_result = FindParseResultByName(mapping_clause, "ServeFeatureEntityList");
+			if (mapping_list_result) {
+				vector<reference<ParseResult>> mapping_items;
+				CollectParseResultsByName(*mapping_list_result, "ServeFeatureEntityMapping", mapping_items);
+				for (auto &mapping_item_ref : mapping_items) {
+					auto &mapping_item = mapping_item_ref.get();
+					auto mapping_pair = FindParseResultByName(mapping_item, "ServeFeatureEntityMappingPair");
+					auto &mapping_source = mapping_pair ? *mapping_pair : mapping_item;
+					vector<string> identifiers;
+					CollectIdentifierOrStringNames(mapping_source, identifiers);
+					if (identifiers.empty()) {
+						throw InternalException("Expected identifier in SERVE FEATURE entity mapping");
+					}
+					FeatureServeEntityMapping mapping;
+					mapping.feature_column = identifiers[0];
+					mapping.spine_column = mapping.feature_column;
+					if (identifiers.size() > 1) {
+						mapping.spine_column = identifiers[1];
+					}
+					mappings.push_back(std::move(mapping));
+				}
+			} else {
+				FeatureServeEntityMapping mapping;
+				mapping.spine_column = TransformFirstQualifiedName(transformer, mapping_clause).name;
+				mappings.push_back(std::move(mapping));
+			}
+		}
+		entity_mappings.push_back(std::move(mappings));
 	}
 	// index 3: 'FOR' keyword
-	auto spine_table = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(4)).name;
+	auto spine_table = TransformFirstQualifiedName(transformer, list_pr.Child<ListParseResult>(4)).name;
 
 	// index 5: optional ServeFeatureEntity <- 'ENTITY' IdentifierOrStringLiteral
 	string entity_column;
@@ -232,7 +388,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(P
 	if (entity_opt.HasResult()) {
 		auto &entity_list = entity_opt.GetResult().Cast<ListParseResult>();
 		// index 0: 'ENTITY' keyword, index 1: identifier
-		entity_column = transformer.Transform<QualifiedName>(entity_list.Child<ListParseResult>(1)).name;
+		entity_column = TransformFirstQualifiedName(transformer, entity_list).name;
 	}
 
 	// index 6: optional ServeFeatureAsOf <- 'ASOF' IdentifierOrStringLiteral
@@ -241,11 +397,12 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(P
 	if (asof_opt.HasResult()) {
 		auto &asof_list = asof_opt.GetResult().Cast<ListParseResult>();
 		// index 0: 'ASOF' keyword, index 1: identifier
-		as_of_column = transformer.Transform<QualifiedName>(asof_list.Child<ListParseResult>(1)).name;
+		as_of_column = TransformFirstQualifiedName(transformer, asof_list).name;
 	}
 
 	auto result = make_uniq<ServeFeatureStatement>();
 	result->feature_names = std::move(feature_names);
+	result->entity_mappings = std::move(entity_mappings);
 	result->spine_table = std::move(spine_table);
 	result->entity_column = std::move(entity_column);
 	result->as_of_column = std::move(as_of_column);

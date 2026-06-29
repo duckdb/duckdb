@@ -10,7 +10,7 @@ ServeFeatureStatement::ServeFeatureStatement() : SQLStatement(StatementType::SER
 
 ServeFeatureStatement::ServeFeatureStatement(const ServeFeatureStatement &other)
     : SQLStatement(other), feature_names(other.feature_names), spine_table(other.spine_table),
-      entity_column(other.entity_column), as_of_column(other.as_of_column) {
+      entity_mappings(other.entity_mappings), entity_column(other.entity_column), as_of_column(other.as_of_column) {
 }
 
 unique_ptr<SQLStatement> ServeFeatureStatement::Copy() const {
@@ -26,7 +26,30 @@ string ServeFeatureStatement::ToString() const {
 
 	string result = "SERVE ";
 	result += feature_names.size() == 1 ? "FEATURE " : "FEATURES ";
-	result += StringUtil::Join(quoted_features, ", ");
+	vector<string> feature_items;
+	feature_items.reserve(feature_names.size());
+	for (idx_t feature_idx = 0; feature_idx < feature_names.size(); feature_idx++) {
+		string item = quoted_features[feature_idx];
+		if (feature_idx < entity_mappings.size() && !entity_mappings[feature_idx].empty()) {
+			auto &mappings = entity_mappings[feature_idx];
+			if (mappings.size() == 1 && mappings[0].feature_column.empty()) {
+				item += " ENTITY " + SQLIdentifier::ToString(mappings[0].spine_column);
+			} else {
+				vector<string> mapping_strings;
+				mapping_strings.reserve(mappings.size());
+				for (auto &mapping : mappings) {
+					string mapping_string = SQLIdentifier::ToString(mapping.feature_column);
+					if (mapping.spine_column != mapping.feature_column) {
+						mapping_string += " = " + SQLIdentifier::ToString(mapping.spine_column);
+					}
+					mapping_strings.push_back(mapping_string);
+				}
+				item += " ENTITY (" + StringUtil::Join(mapping_strings, ", ") + ")";
+			}
+		}
+		feature_items.push_back(std::move(item));
+	}
+	result += StringUtil::Join(feature_items, ", ");
 	result += " FOR " + SQLIdentifier::ToString(spine_table);
 	if (!entity_column.empty()) {
 		result += " ENTITY " + SQLIdentifier::ToString(entity_column);

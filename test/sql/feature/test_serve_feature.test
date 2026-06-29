@@ -63,6 +63,14 @@ SERVE FEATURE daily_txn FOR incoming ENTITY customer_id ASOF request_time;
 C001	2024-03-02 12:00:00	data1	2024-03-02 09:00:00	350.00	3
 C002	2024-03-03 10:00:00	data2	2024-03-03 08:00:00	400.00	3
 
+# The preferred spelling scopes the entity mapping to the feature. Since daily_txn
+# has one entity key, ENTITY customer_id means card_no = customer_id.
+query IIIIII sort
+SERVE FEATURE daily_txn ENTITY customer_id FOR incoming ASOF request_time;
+----
+C001	2024-03-02 12:00:00	data1	2024-03-02 09:00:00	350.00	3
+C002	2024-03-03 10:00:00	data2	2024-03-03 08:00:00	400.00	3
+
 # ============================================================
 # SERVE FEATURE: only ENTITY override (ASOF defaults to feature's timestamp col name)
 # ============================================================
@@ -157,6 +165,44 @@ C001	M1	2024-03-02 12:00:00	2024-03-02 09:00:00	150.00
 C001	M2	2024-03-02 12:00:00	2024-03-01 12:00:00	200.00
 C002	M1	2024-03-02 12:00:00	2024-03-01 11:00:00	75.00
 C999	M1	2024-03-02 12:00:00	NULL	NULL
+
+statement ok
+CREATE TABLE merchant_incoming (customer_id VARCHAR, shop_id VARCHAR, request_time TIMESTAMP);
+
+statement ok
+INSERT INTO merchant_incoming VALUES
+    ('C001', 'M1', '2024-03-02 12:00:00'),
+    ('C001', 'M2', '2024-03-02 12:00:00'),
+    ('C002', 'M1', '2024-03-02 12:00:00');
+
+query IIIII sort
+SERVE FEATURE merchant_txn ENTITY (card_no = customer_id, merchant_id = shop_id) FOR merchant_incoming ASOF request_time;
+----
+C001	M1	2024-03-02 12:00:00	2024-03-02 09:00:00	150.00
+C001	M2	2024-03-02 12:00:00	2024-03-01 12:00:00	200.00
+C002	M1	2024-03-02 12:00:00	2024-03-01 11:00:00	75.00
+
+statement ok
+CREATE TABLE merchant_partial_incoming (card_no VARCHAR, shop_id VARCHAR, request_time TIMESTAMP);
+
+statement ok
+INSERT INTO merchant_partial_incoming VALUES
+    ('C001', 'M1', '2024-03-02 12:00:00'),
+    ('C001', 'M2', '2024-03-02 12:00:00');
+
+# Unspecified entity keys default to identity by name, so card_no maps to card_no here.
+query IIIII sort
+SERVE FEATURE merchant_txn ENTITY (merchant_id = shop_id) FOR merchant_partial_incoming ASOF request_time;
+----
+C001	M1	2024-03-02 12:00:00	2024-03-02 09:00:00	150.00
+C001	M2	2024-03-02 12:00:00	2024-03-01 12:00:00	200.00
+
+query IIIIIIII sort
+SERVE FEATURES daily_txn ENTITY customer_id, merchant_txn ENTITY (card_no = customer_id, merchant_id = shop_id) FOR merchant_incoming ASOF request_time;
+----
+C001	M1	2024-03-02 12:00:00	2024-03-02 09:00:00	350.00	3	2024-03-02 09:00:00	150.00
+C001	M2	2024-03-02 12:00:00	2024-03-02 09:00:00	350.00	3	2024-03-01 12:00:00	200.00
+C002	M1	2024-03-02 12:00:00	2024-03-01 11:00:00	75.00	1	2024-03-01 11:00:00	75.00
 
 statement error
 SERVE FEATURE merchant_txn FOR incoming ENTITY customer_id ASOF request_time;
@@ -276,6 +322,12 @@ DROP TABLE requests3;
 
 statement ok
 DROP TABLE merchant_requests;
+
+statement ok
+DROP TABLE merchant_incoming;
+
+statement ok
+DROP TABLE merchant_partial_incoming;
 
 statement ok
 DROP TABLE merchant_transactions CASCADE;

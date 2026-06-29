@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "duckdb/common/feature_serve.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
@@ -19,6 +20,7 @@ public:
 	ServeFeatureStatement();
 
 	vector<string> feature_names;
+	vector<vector<FeatureServeEntityMapping>> entity_mappings;
 	string spine_table;
 	string entity_column;
 	string as_of_column;
