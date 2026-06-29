@@ -39,7 +39,7 @@ void EnsureDebugFileSystemInstalled(DatabaseInstance &db) {
 		return;
 	}
 	auto &config = DBConfig::GetConfig(db);
-	config.file_system = make_uniq<DebugFileSystem>(std::move(config.file_system));
+	config.file_system = make_uniq<DebugFileSystem>(std::move(config.file_system), db);
 	auto &debug_fs = static_cast<DebugFileSystem &>(*config.file_system);
 	cache.PutWithTypePrefix<DebugFileSystemCacheEntry>("instance",
 	                                                   make_shared_ptr<DebugFileSystemCacheEntry>(debug_fs));
@@ -59,8 +59,7 @@ void OnSetDelayMeanMs(ClientContext &context, SetScope, Value &parameter) {
 		throw InvalidInputException(
 		    "Invalid option for debug_fs_delay_mean_ms: value must be greater than or equal to 0");
 	}
-	auto &db = DatabaseInstance::GetDatabase(context);
-	GetDebugFileSystemOrThrow(db).SetDelayMeanMs(delay_ms);
+	GetDebugFileSystemOrThrow(DatabaseInstance::GetDatabase(context)).SetDelayMeanMs(delay_ms);
 }
 
 void OnSetDelayStddevMs(ClientContext &context, SetScope, Value &parameter) {
@@ -69,8 +68,16 @@ void OnSetDelayStddevMs(ClientContext &context, SetScope, Value &parameter) {
 		throw InvalidInputException(
 		    "Invalid option for debug_fs_delay_stddev_ms: value must be greater than or equal to 0");
 	}
-	auto &db = DatabaseInstance::GetDatabase(context);
-	GetDebugFileSystemOrThrow(db).SetDelayStddevMs(delay_ms);
+	GetDebugFileSystemOrThrow(DatabaseInstance::GetDatabase(context)).SetDelayStddevMs(delay_ms);
+}
+
+void OnSetRandomSeed(ClientContext &context, SetScope, Value &parameter) {
+	auto &debug_fs = GetDebugFileSystemOrThrow(DatabaseInstance::GetDatabase(context));
+	if (parameter.IsNull()) {
+		debug_fs.SetRandomSeed(optional_idx());
+		return;
+	}
+	debug_fs.SetRandomSeed(parameter.GetValue<uint64_t>());
 }
 
 void LoadInternal(ExtensionLoader &loader) {
@@ -83,6 +90,11 @@ void LoadInternal(ExtensionLoader &loader) {
 	config.AddExtensionOption("debug_fs_delay_stddev_ms",
 	                          "DEBUG SETTING: standard deviation (ms) for filesystem operation latency",
 	                          LogicalType::DOUBLE, Value(0.0), OnSetDelayStddevMs);
+	// Random seed is tunable for reproducibility.
+	config.AddExtensionOption("debug_fs_random_seed",
+	                          "DEBUG SETTING: random seed for filesystem latency sampling; defaults to the current "
+	                          "timestamp on the first delayed I/O operation",
+	                          LogicalType::UBIGINT, Value(), OnSetRandomSeed);
 }
 
 } // namespace

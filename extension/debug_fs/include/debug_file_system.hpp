@@ -14,6 +14,9 @@
 
 namespace duckdb {
 
+// Forward declaration.
+class DatabaseInstance;
+
 // Forwards declaration.
 class DebugFileSystem;
 
@@ -29,12 +32,14 @@ struct DebugFileHandle : public FileHandle {
 //! Wraps a FileSystem and injects configurable latency on open/read/write.
 class DebugFileSystem : public FileSystem {
 public:
-	explicit DebugFileSystem(unique_ptr<FileSystem> inner_fs);
+	DebugFileSystem(unique_ptr<FileSystem> inner_fs, DatabaseInstance &db);
 
 	FileSystem &GetInnerFileSystem();
 
 	void SetDelayMeanMs(double v);
 	void SetDelayStddevMs(double v);
+	void SetRandomSeed(optional_idx seed);
+	bool RandomEngineInitialized();
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
@@ -102,11 +107,15 @@ protected:
 	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) override;
 
 private:
+	// Random engine is initialized lazily on first IO operation, so users could set the random seed for reproduction.
 	void ApplyDelay();
+	void EnsureRandomEngineInitialized();
 
 	unique_ptr<FileSystem> inner_fs;
+	DatabaseInstance &db;
 	annotated_mutex random_engine_lock;
-	RandomEngine random_engine DUCKDB_GUARDED_BY(random_engine_lock);
+	unique_ptr<RandomEngine> random_engine DUCKDB_GUARDED_BY(random_engine_lock);
+	optional_idx random_seed DUCKDB_GUARDED_BY(random_engine_lock);
 	double delay_mean_ms DUCKDB_GUARDED_BY(random_engine_lock) = 0.0;
 	double delay_stddev_ms DUCKDB_GUARDED_BY(random_engine_lock) = 0.0;
 };

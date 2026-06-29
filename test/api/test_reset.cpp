@@ -61,6 +61,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 #ifdef DUCKDB_EXTENSION_DEBUG_FS_LINKED
 	    {"debug_fs_delay_mean_ms", {1.0}},
 	    {"debug_fs_delay_stddev_ms", {0.5}},
+	    {"debug_fs_random_seed", {Value::UBIGINT(42)}},
 #endif
 	    {"debug_order_verification", {"create_sort_key"}},
 	    {"old_implicit_casting", {Value(true)}},

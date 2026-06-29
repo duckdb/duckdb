@@ -5,6 +5,9 @@
 require debug_fs
 
 statement ok
+SET debug_fs_random_seed=42;
+
+statement ok
 SET debug_fs_delay_mean_ms=1.0;
 
 statement ok
@@ -12,6 +15,11 @@ SET debug_fs_delay_stddev_ms=0.3;
 
 statement ok
 COPY (SELECT 42 AS i) TO '{TEMP_DIR}/debug_fs_test.csv' (FORMAT csv);
+
+statement error
+SET debug_fs_random_seed=100;
+----
+<REGEX>:.*Cannot change debug_fs_random_seed after the random engine has been initialized.*
 
 statement ok
 CREATE TABLE debug_fs_readback (i INTEGER);
@@ -29,6 +37,9 @@ RESET debug_fs_delay_mean_ms;
 
 statement ok
 RESET debug_fs_delay_stddev_ms;
+
+statement ok
+RESET debug_fs_random_seed;
 
 statement error
 SET debug_fs_delay_mean_ms=-1.0;

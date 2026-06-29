@@ -4,6 +4,9 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/thread.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/logging/logger.hpp"
+#include "duckdb/main/database.hpp"
 #include "io_latency_model.hpp"
 
 namespace duckdb {
@@ -28,7 +31,8 @@ FileCompressionType DebugFileHandle::GetFileCompressionType() {
 	return inner->GetFileCompressionType();
 }
 
-DebugFileSystem::DebugFileSystem(unique_ptr<FileSystem> inner_fs) : inner_fs(std::move(inner_fs)) {
+DebugFileSystem::DebugFileSystem(unique_ptr<FileSystem> inner_fs, DatabaseInstance &db)
+    : inner_fs(std::move(inner_fs)), db(db) {
 }
 
 FileSystem &DebugFileSystem::GetInnerFileSystem() {
@@ -45,6 +49,31 @@ void DebugFileSystem::SetDelayStddevMs(double v) {
 	const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
 	delay_stddev_ms = v;
 	ALWAYS_ASSERT(delay_stddev_ms >= 0.0);
+}
+
+void DebugFileSystem::SetRandomSeed(optional_idx seed) {
+	const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
+	if (random_engine) {
+		throw InvalidInputException("Cannot change debug_fs_random_seed after the random engine has been initialized");
+	}
+	random_seed = seed;
+}
+
+void DebugFileSystem::EnsureRandomEngineInitialized() {
+	const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
+	if (random_engine) {
+		return;
+	}
+	uint64_t seed = 0;
+	if (random_seed.IsValid()) {
+		seed = random_seed.GetIndex();
+	} else {
+		seed = NumericCast<uint64_t>(Timestamp::GetCurrentTimestamp().value);
+	}
+	random_engine = make_uniq<RandomEngine>();
+	random_engine->SetSeed(seed);
+	// Log the random seed for reproduction.
+	DUCKDB_LOG_INFO(db, "DebugFileSystem initialized with random seed: %llu", seed);
 }
 
 void DebugFileSystem::ApplyDelay() {
@@ -64,12 +93,14 @@ void DebugFileSystem::ApplyDelay() {
 	// Check against invalid setting: mean latency cannot be 0.
 	ALWAYS_ASSERT(mean_ms > 0.0);
 
+	EnsureRandomEngineInitialized();
+
 	double delay_ms = 0;
 	if (stddev_ms == 0.0) {
 		delay_ms = mean_ms;
 	} else {
 		const annotated_lock_guard<annotated_mutex> guard(random_engine_lock);
-		delay_ms = IoLatencyModel(mean_ms, stddev_ms).SampleLatency(random_engine);
+		delay_ms = IoLatencyModel(mean_ms, stddev_ms).SampleLatency(*random_engine);
 	}
 	if (delay_ms > 0.0) {
 		ThreadUtil::SleepMs(LossyNumericCast<idx_t>(delay_ms));
