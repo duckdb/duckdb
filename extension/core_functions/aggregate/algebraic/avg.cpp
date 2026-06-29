@@ -198,14 +198,14 @@ struct IntervalAverageOperation : public BaseSumOperation<AverageSetOperation, I
 struct TimeTZAverageOperation : public BaseSumOperation<AverageSetOperation, AddToHugeint> {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &aggr_unary) {
-		const auto micros = Time::NormalizeTimeTZ(input).micros;
+		const auto micros = Time::NormalizeTimeTZ(input).value;
 		AverageSetOperation::template AddValues<STATE>(state, 1);
 		AddToHugeint::template AddNumber<STATE, int64_t>(state, micros);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &aggr_unary, idx_t count) {
-		const auto micros = Time::NormalizeTimeTZ(input).micros;
+		const auto micros = Time::NormalizeTimeTZ(input).value;
 		AverageSetOperation::template AddValues<STATE>(state, count);
 		AddToHugeint::template AddConstant<STATE, int64_t>(state, micros, count);
 	}

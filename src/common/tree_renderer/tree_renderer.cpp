@@ -7,6 +7,7 @@ void TreeRenderer::ToStream(RenderTree &root, BaseTreeRenderer &ss) {
 		root.SanitizeKeyNames();
 	}
 	ToStreamInternal(root, ss);
+	Finish();
 }
 
 } // namespace duckdb
