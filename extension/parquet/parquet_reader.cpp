@@ -720,7 +720,6 @@ static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &sc
 		typed_value = typed_value_column;
 		path_iter = child;
 	}
-	result_index.SetType(schema.type);
 	result_index.SetPushdownExtract();
 	return result_index;
 }
