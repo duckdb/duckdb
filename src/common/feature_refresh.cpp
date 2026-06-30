@@ -14,12 +14,18 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parsed_data/alter_feature_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/drop_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 
@@ -29,22 +35,18 @@ static string QuoteIdent(const string &name) {
 	return SQLIdentifier::ToString(name);
 }
 
-static string BuildPITQuery(const FeatureCatalogEntry &feat, const string &spine_filter) {
-	FeaturePITQueryParameters parameters;
-	parameters.source_table = feat.source_table;
-	parameters.timestamp_column = feat.timestamp_column;
-	parameters.entity_columns = feat.entity_columns;
-	parameters.window_interval = feat.window_interval;
-	parameters.spine_filter = spine_filter;
-	return BuildFeaturePITQuerySQL(feat.query->node->Cast<SelectNode>(), parameters);
+static unique_ptr<ColumnRefExpression> FeatureTimestampRef() {
+	return make_uniq<ColumnRefExpression>("feature_timestamp");
 }
 
-static unique_ptr<SelectStatement> BuildPITQueryAST(const FeatureCatalogEntry &feat) {
+static unique_ptr<SelectStatement> BuildPITQueryAST(const FeatureCatalogEntry &feat,
+                                                    unique_ptr<ParsedExpression> anchor_filter = nullptr) {
 	FeaturePITQueryParameters parameters;
 	parameters.source_table = feat.source_table;
 	parameters.timestamp_column = feat.timestamp_column;
 	parameters.entity_columns = feat.entity_columns;
 	parameters.window_interval = feat.window_interval;
+	parameters.anchor_filter = std::move(anchor_filter);
 	parameters.order_result = true;
 	return BuildFeaturePITQuery(feat.query->node->Cast<SelectNode>(), parameters);
 }
@@ -74,6 +76,76 @@ static unique_ptr<SelectStatement> BuildCountTableStatement(const string &catalo
 
 	auto result = make_uniq<SelectStatement>();
 	result->node = std::move(node);
+	return result;
+}
+
+static unique_ptr<SelectStatement> BuildMaxFeatureTimestampStatement(const string &catalog, const string &schema,
+                                                                     const string &table) {
+	vector<unique_ptr<ParsedExpression>> args;
+	args.push_back(FeatureTimestampRef());
+
+	auto node = make_uniq<SelectNode>();
+	node->select_list.push_back(make_uniq<FunctionExpression>("max", std::move(args)));
+	node->from_table = BuildVersionTableRef(catalog, schema, table);
+
+	auto result = make_uniq<SelectStatement>();
+	result->node = std::move(node);
+	return result;
+}
+
+static unique_ptr<ParsedExpression> BuildRefreshBoundaryExpression(const Value &max_timestamp,
+                                                                   const interval_t &watermark_interval) {
+	vector<unique_ptr<ParsedExpression>> args;
+	args.push_back(make_uniq<ConstantExpression>(max_timestamp));
+	args.push_back(make_uniq<ConstantExpression>(Value::INTERVAL(watermark_interval)));
+	return make_uniq<FunctionExpression>("-", std::move(args), nullptr, nullptr, false, true);
+}
+
+static unique_ptr<ParsedExpression> BuildCopyUnaffectedFilter(unique_ptr<ParsedExpression> boundary_expression) {
+	return make_uniq<ComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, FeatureTimestampRef(),
+	                                       std::move(boundary_expression));
+}
+
+static unique_ptr<ParsedExpression> BuildTailAnchorFilter(const string &timestamp_column,
+                                                          unique_ptr<ParsedExpression> boundary_expression) {
+	return make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+	                                       make_uniq<ColumnRefExpression>(timestamp_column),
+	                                       std::move(boundary_expression));
+}
+
+static unique_ptr<CreateStatement> BuildCopyUnaffectedRowsStatement(const string &catalog, const string &schema,
+                                                                    const string &new_table,
+                                                                    const string &current_table,
+                                                                    unique_ptr<ParsedExpression> boundary_expression) {
+	auto node = make_uniq<SelectNode>();
+	node->select_list.push_back(make_uniq<StarExpression>());
+	node->from_table = BuildVersionTableRef(catalog, schema, current_table);
+	node->where_clause = BuildCopyUnaffectedFilter(std::move(boundary_expression));
+
+	auto query = make_uniq<SelectStatement>();
+	query->node = std::move(node);
+	return BuildCreateTableAsStatement(catalog, schema, new_table, std::move(query));
+}
+
+static unique_ptr<InsertStatement> BuildInsertIntoTableStatement(const string &catalog, const string &schema,
+                                                                const string &table,
+                                                                unique_ptr<SelectStatement> query) {
+	auto result = make_uniq<InsertStatement>();
+	result->node->catalog = catalog;
+	result->node->schema = schema;
+	result->node->table = table;
+	result->node->select_statement = std::move(query);
+	return result;
+}
+
+static unique_ptr<DropStatement> BuildDropVersionTableStatement(const string &catalog, const string &schema,
+                                                               const string &table) {
+	auto result = make_uniq<DropStatement>();
+	result->info->catalog = catalog;
+	result->info->schema = schema;
+	result->info->name = table;
+	result->info->type = CatalogType::TABLE_ENTRY;
+	result->info->if_not_found = OnEntryNotFound::RETURN_NULL;
 	return result;
 }
 
@@ -119,9 +191,7 @@ FeatureRefreshResult RefreshFeature(ClientContext &context, const string &featur
 
 	int64_t new_version = feat.current_version + 1;
 	auto new_table_name = feature_name + "__v" + duckdb::to_string(new_version);
-	auto new_table_id = QuoteIdent(new_table_name);
 	auto cur_table_name = feature_name + "__v" + duckdb::to_string(feat.current_version);
-	auto cur_table_id = QuoteIdent(cur_table_name);
 
 	// Wrap all operations in a single transaction for atomicity
 	con.BeginTransaction();
@@ -145,53 +215,56 @@ FeatureRefreshResult RefreshFeature(ClientContext &context, const string &featur
 
 		} else {
 			// INCREMENTAL refresh: copy rows before the recompute boundary and rebuild the tail.
-			auto ts_col = QuoteIdent(feat.timestamp_column);
-
 			// The boundary is max(feature_timestamp) minus the configured watermark interval.
-			auto max_result = con.Query("SELECT MAX(feature_timestamp) FROM " + cur_table_id);
+			auto max_statement =
+			    BuildMaxFeatureTimestampStatement(feat_catalog.GetName(), feat_schema.name, cur_table_name);
+			auto max_result = con.Query(std::move(max_statement));
 			if (max_result->HasError()) {
 				throw InternalException("Failed to read current max timestamp for feature '%s': %s", feature_name,
 				                        max_result->GetError());
 			}
-			string max_timestamp;
+			Value max_timestamp;
 			if (max_result->RowCount() > 0) {
 				auto val = max_result->GetValue(0, 0);
 				if (!val.IsNull()) {
-					max_timestamp = val.ToString();
+					max_timestamp = std::move(val);
 				}
 			}
 
-			if (max_timestamp.empty()) {
+			if (max_timestamp.IsNull()) {
 				// No existing data — do a full materialization into the new version table.
-				auto pit_sql = BuildPITQuery(feat, "");
-				auto create_sql = "CREATE TABLE " + new_table_id + " AS " + pit_sql;
-				auto create_result = con.Query(create_sql);
+				auto create_statement = BuildCreateTableAsStatement(feat_catalog.GetName(), feat_schema.name,
+				                                                    new_table_name, BuildPITQueryAST(feat));
+				auto create_result = con.Query(std::move(create_statement));
 				if (create_result->HasError()) {
 					throw InternalException("Failed to refresh feature '%s': %s", feature_name,
 					                        create_result->GetError());
 				}
-				auto count_result = con.Query("SELECT COUNT(*) FROM " + new_table_id);
+
+				auto count_statement = BuildCountTableStatement(feat_catalog.GetName(), feat_schema.name, new_table_name);
+				auto count_result = con.Query(std::move(count_statement));
 				if (!count_result->HasError() && count_result->RowCount() > 0) {
 					result.rows_affected = count_result->GetValue(0, 0).GetValue<idx_t>();
 				}
 			} else {
-				string recompute_from = "'" + max_timestamp + "'::TIMESTAMP - INTERVAL '" +
-				                        Interval::ToString(feat.watermark_interval) + "'";
+				auto recompute_from = BuildRefreshBoundaryExpression(max_timestamp, feat.watermark_interval);
 
 				// Create the new version table with unaffected rows copied forward from the current version table.
-				auto create_sql = "CREATE TABLE " + new_table_id + " AS SELECT * FROM " + cur_table_id +
-				                  " WHERE feature_timestamp < " + recompute_from;
-				auto create_result = con.Query(create_sql);
+				auto create_statement = BuildCopyUnaffectedRowsStatement(feat_catalog.GetName(), feat_schema.name,
+				                                                          new_table_name, cur_table_name,
+				                                                          recompute_from->Copy());
+				auto create_result = con.Query(std::move(create_statement));
 				if (create_result->HasError()) {
 					throw InternalException("Failed to copy unaffected rows for '%s': %s", feature_name,
 					                        create_result->GetError());
 				}
 
 				// Recompute the tail while the join still looks back the full window for correct aggregation.
-				string filter = " WHERE " + ts_col + " >= " + recompute_from;
-				auto pit_sql = BuildPITQuery(feat, filter);
-				auto insert_sql = "INSERT INTO " + new_table_id + " SELECT * FROM (" + pit_sql + ")";
-				auto ins_result = con.Query(insert_sql);
+				auto tail_filter = BuildTailAnchorFilter(feat.timestamp_column, std::move(recompute_from));
+				auto insert_statement = BuildInsertIntoTableStatement(feat_catalog.GetName(), feat_schema.name,
+				                                                      new_table_name,
+				                                                      BuildPITQueryAST(feat, std::move(tail_filter)));
+				auto ins_result = con.Query(std::move(insert_statement));
 				if (ins_result->HasError()) {
 					throw InternalException("Failed to incrementally refresh feature '%s': %s", feature_name,
 					                        ins_result->GetError());
@@ -207,8 +280,9 @@ FeatureRefreshResult RefreshFeature(ClientContext &context, const string &featur
 		int64_t evicted_version = new_version - feat.retain_versions;
 		if (evicted_version >= 1) {
 			auto old_table_name = feature_name + "__v" + duckdb::to_string(evicted_version);
-			auto drop_sql = "DROP TABLE IF EXISTS " + QuoteIdent(old_table_name);
-			auto drop_result = con.Query(drop_sql);
+			auto drop_statement =
+			    BuildDropVersionTableStatement(feat_catalog.GetName(), feat_schema.name, old_table_name);
+			auto drop_result = con.Query(std::move(drop_statement));
 			if (drop_result->HasError()) {
 				throw InternalException("Failed to garbage-collect version table '%s': %s", old_table_name,
 				                        drop_result->GetError());
