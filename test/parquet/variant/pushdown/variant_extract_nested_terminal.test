@@ -27,6 +27,18 @@ COPY (
 	SHREDDING {'v': 'STRUCT(obj STRUCT(a INTEGER), arr INTEGER[])'}
 );
 
+statement ok
+COPY (
+	FROM (VALUES
+		({'obj': {'a': 1::INTEGER, 'b': 'one'}, 'tag': 'both'}::VARIANT),
+		({'obj': {'a': 2::INTEGER}, 'tag': 'only_a'}::VARIANT),
+		({'obj': {'b': 'only_b'}, 'tag': 'only_b'}::VARIANT),
+		({'obj': {}, 'tag': 'empty'}::VARIANT)
+	) t(v)
+) TO '{TEST_DIR}/variant_pushdown_nested_terminal_missing_fields.parquet' (
+	SHREDDING {'v': 'STRUCT(obj STRUCT(a INTEGER, b VARCHAR), tag VARCHAR)'}
+);
+
 query TTTT
 SELECT
 	stats(v).shredding_state::VARCHAR,
@@ -48,6 +60,17 @@ FROM '{TEST_DIR}/variant_pushdown_nested_terminal_fully.parquet'
 LIMIT 1
 ----
 SHREDDED	SHREDDED	SHREDDED	SHREDDED
+
+query TTTT
+SELECT
+	stats(v).shredding_state::VARCHAR,
+	stats(v.obj).shredding_state::VARCHAR,
+	stats(v.obj.a).shredding_state::VARCHAR,
+	stats(v.obj.b).shredding_state::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal_missing_fields.parquet'
+LIMIT 1
+----
+SHREDDED	INCONSISTENT	INCONSISTENT	INCONSISTENT
 
 query IIII
 SELECT
@@ -85,6 +108,23 @@ FROM '{TEST_DIR}/variant_pushdown_nested_terminal.parquet'
 WHERE v.arr::VARCHAR = '[3]'
 ----
 {'a': 2}	[3]
+
+query TT nosort
+SELECT variant_typeof(v.obj), v.obj::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal_missing_fields.parquet'
+ORDER BY v.tag::VARCHAR
+----
+OBJECT(a, b)	{'a': 1, 'b': one}
+OBJECT()	{}
+OBJECT(a)	{'a': 2}
+OBJECT(b)	{'b': only_b}
+
+query T
+SELECT v.obj::VARCHAR
+FROM '{TEST_DIR}/variant_pushdown_nested_terminal_missing_fields.parquet'
+WHERE v.obj::VARCHAR = '{''b'': only_b}'
+----
+{'b': only_b}
 
 query IIII
 SELECT
