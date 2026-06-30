@@ -1,0 +1,127 @@
+# name: test/sql/catalog/attach_catalog_mode.test
+# description: CATALOG_MODE option on ATTACH. NONE makes tables unreachable; HIDDEN hides the database from enumeration but keeps tables queryable.
+# group: [catalog]
+
+# Baseline: regular ATTACH — table is reachable, db is listed.
+
+require vector_size 2048
+
+statement ok
+ATTACH 'data/storage/wal_test_092.db' AS t (READ_ONLY);
+
+query I
+SELECT i FROM t.main.integers ORDER BY i LIMIT 3;
+----
+0
+1
+2
+
+query I
+SELECT count(*) FROM duckdb_databases() WHERE database_name = 't';
+----
+1
+
+statement ok
+DETACH t;
+
+# CATALOG_MODE NONE — table not reachable, db not listed.
+
+statement ok
+ATTACH 'data/storage/wal_test_092.db' AS t (READ_ONLY, CATALOG_MODE NONE);
+
+# Reads against the catalog must fail.
+statement error
+SELECT i FROM t.main.integers;
+----
+<REGEX>:.*
+
+# Not surfaced in enumeration either.
+query I
+SELECT count(*) FROM duckdb_databases() WHERE database_name = 't';
+----
+0
+
+statement ok
+DETACH t;
+
+# Writes are also gated by CATALOG_MODE NONE — use a fresh writable temp db so this section
+# isn't conflated with READ_ONLY blocking the writes for other reasons.
+
+statement ok
+ATTACH '{TEST_DIR}/catalog_mode_writable.db' AS w;
+
+statement ok
+CREATE TABLE w.main.t (i INT);
+
+statement ok
+INSERT INTO w.main.t VALUES (1), (2);
+
+statement ok
+DETACH w;
+
+statement ok
+ATTACH '{TEST_DIR}/catalog_mode_writable.db' AS w (CATALOG_MODE NONE);
+
+statement error
+SELECT * FROM w.main.t;
+----
+<REGEX>:.*
+
+statement error
+CREATE TABLE w.main.new_table (x INT);
+----
+<REGEX>:.*
+
+statement error
+INSERT INTO w.main.t VALUES (3);
+----
+<REGEX>:.*
+
+statement error
+DROP TABLE w.main.t;
+----
+<REGEX>:.*
+
+statement ok
+DETACH w;
+
+# CATALOG_MODE HIDDEN — table reachable, db not listed (parity with the legacy HIDDEN flag).
+
+statement ok
+ATTACH 'data/storage/wal_test_092.db' AS t (READ_ONLY, CATALOG_MODE HIDDEN);
+
+query I
+SELECT i FROM t.main.integers ORDER BY i LIMIT 3;
+----
+0
+1
+2
+
+query I
+SELECT count(*) FROM duckdb_databases() WHERE database_name = 't';
+----
+0
+
+statement ok
+DETACH t;
+
+# CATALOG_MODE ENABLE — explicit version of default. Behaves identically to no option for
+# DuckDB-backed catalogs (which all provide tables).
+
+statement ok
+ATTACH 'data/storage/wal_test_092.db' AS t (READ_ONLY, CATALOG_MODE ENABLE);
+
+query I
+SELECT i FROM t.main.integers ORDER BY i LIMIT 3;
+----
+0
+1
+2
+
+query I
+SELECT count(*) FROM duckdb_databases() WHERE database_name = 't';
+----
+1
+
+statement ok
+DETACH t;

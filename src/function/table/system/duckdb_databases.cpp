@@ -96,7 +96,7 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 		auto &entry = data.entries[data.offset++];
 		auto &attached = *entry;
 		auto &catalog = attached.GetCatalog();
-		if (attached.GetVisibility() == AttachVisibility::HIDDEN) {
+		if (attached.IsHidden()) {
 			continue;
 		}
 
