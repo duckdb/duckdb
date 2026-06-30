@@ -2,6 +2,8 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
@@ -68,7 +70,19 @@ static bool GetColumnBinding(const Expression &expr, ColumnBinding &binding) {
 	return true;
 }
 
-// Carry an operator's estimated cardinality over to a rewritten operator built from it.
+static bool IsAggregateStateFromFunction(const LogicalType &type, const string &function_name) {
+	if (!type.IsAggregateState()) {
+		return false;
+	}
+	auto ext_info = type.GetExtensionInfo();
+	if (!ext_info) {
+		return false;
+	}
+	auto entry = ext_info->properties.find("function_name");
+	return entry != ext_info->properties.end() && entry->second.type().id() == LogicalTypeId::VARCHAR &&
+	       !entry->second.IsNull() && StringValue::Get(entry->second) == function_name;
+}
+
 static void CopyCardinality(LogicalOperator &dst, const LogicalOperator &src) {
 	dst.estimated_cardinality = src.estimated_cardinality;
 	dst.has_estimated_cardinality = src.has_estimated_cardinality;
@@ -78,8 +92,15 @@ static bool IsSupportedAggregate(const BoundAggregateExpression &expr) {
 	if (expr.IsDistinct() || expr.GetFilter() || expr.GetOrderBys()) {
 		return false;
 	}
+	if (expr.Function().GetName() == "decimal_average") {
+		return false;
+	}
+	for (auto &child : expr.GetChildren()) {
+		if (IsAggregateStateFromFunction(child->GetReturnType(), "decimal_average")) {
+			return false;
+		}
+	}
 	if (expr.StateExportMode() != AggregateStateExportMode::NONE) {
-		// Do not push down an already-exported aggregate state again.
 		return false;
 	}
 	if (expr.GetChildren().size() > 1) {
@@ -221,7 +242,7 @@ static bool PassesCardinalityHeuristic(const LogicalComparisonJoin &join, const 
 	auto &aggregate_child = *join.children[info.aggregate_side];
 	auto &dimension_child = *join.children[info.dimension_side];
 	if (!aggregate_child.has_estimated_cardinality || !join.has_estimated_cardinality) {
-		return true; // no estimates: fall back to the structural checks
+		return true;
 	}
 	const auto agg_card = aggregate_child.estimated_cardinality;
 	const auto join_card = join.estimated_cardinality;
@@ -295,7 +316,7 @@ static bool HasDimensionGroup(const LogicalAggregate &aggr, const PartialAggrega
 			dimension_group_count++;
 		}
 	}
-	return dimension_group_count > 0; // at least one group must live on the dimension side
+	return dimension_group_count > 0;
 }
 
 static bool JoinPreservesAggregateSide(const LogicalComparisonJoin &join, const PartialAggregatePushdownInfo &info) {
@@ -449,8 +470,7 @@ static unique_ptr<LogicalAggregate> CreateUpperAggregate(LogicalAggregate &aggr,
                                                          unique_ptr<LogicalComparisonJoin> new_join,
                                                          const PartialAggregatePushdownInfo &info,
                                                          vector<unique_ptr<Expression>> upper_aggregates) {
-	// Fresh upper indices (distinct from the original aggregate's): the final projection below maps the original
-	// indices to itself, so reusing them here would let a re-traversal rewrite the upper aggregate's own outputs.
+	// Keep upper outputs distinct from the original aggregate during re-traversal.
 	auto upper_aggr =
 	    make_uniq<LogicalAggregate>(info.upper_group_index, info.upper_aggregate_index, std::move(upper_aggregates));
 	upper_aggr->groups = CreateUpperGroups(aggr, *new_join, info);
@@ -587,6 +607,14 @@ static bool DEEstimateCollapse(const LogicalComparisonJoin &join, idx_t &effecti
 
 static bool DECanRepeatAggregateState(const BoundAggregateExpression &aggr) {
 	auto &name = aggr.Function().GetName();
+	if (name == "decimal_average") {
+		return false;
+	}
+	for (auto &child : aggr.GetChildren()) {
+		if (IsAggregateStateFromFunction(child->GetReturnType(), "decimal_average")) {
+			return false;
+		}
+	}
 	if ((name != "sum" && name != "avg") || aggr.GetChildren().empty()) {
 		return true;
 	}

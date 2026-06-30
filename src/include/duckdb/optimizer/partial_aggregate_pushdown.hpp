@@ -14,7 +14,7 @@
 namespace duckdb {
 class Optimizer;
 
-//! The PartialAggregatePushdown optimizer pushes SUM aggregates below joins when this can reduce join work
+//! The PartialAggregatePushdown optimizer pushes partial aggregate states below joins when this can reduce join work
 class PartialAggregatePushdown : public LogicalOperatorVisitor {
 public:
 	explicit PartialAggregatePushdown(Optimizer &optimizer);
@@ -22,12 +22,10 @@ public:
 	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 
 private:
-	//! Inline any projection chain sitting between the aggregate and a comparison join into the aggregate's
-	//! own expressions (semantics-preserving), so the join becomes the aggregate's direct child and the
-	//! pushdown paths below can match it. Returns true if anything was fused.
+	//! Inline projection chains between the aggregate and comparison join.
 	bool FuseInterveningProjections(LogicalOperator &op);
 	//! Double-eager (Yan & Larson "eager group-by-count"): pre-aggregate BOTH join inputs by the join key and
-	//! reconstruct the aggregates above by scaling each side's partial with the other side's row count.
+	//! reconstruct aggregates above by repeating each side's state by the other side's row count.
 	bool TryDoubleEagerPushdown(unique_ptr<LogicalOperator> &op);
 	//! One-sided eager group-by: push a partial aggregate (via state export) below the join on one side only.
 	bool TryPushdownAggregate(unique_ptr<LogicalOperator> &op);
