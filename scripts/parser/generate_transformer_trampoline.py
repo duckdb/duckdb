@@ -55,6 +55,7 @@ DEFAULT_GRAMMAR_FILES = [
     "describe.gram",
     "detach.gram",
     "drop.gram",
+    "expression.gram",
     "load.gram",
     "transaction.gram",
     "use.gram",
@@ -77,6 +78,8 @@ DEFAULT_EXTRA_RULES = {
         "QualifiedName",
         "SchemaReservedIdentifierOrStringLiteral",
         "CatalogReservedSchemaIdentifier",
+        "TableQualification",
+        "ReservedTableQualification",
         "IdentifierOrStringLiteral",
         "ReservedIdentifierOrStringLiteral",
         "Temporary",
@@ -102,19 +105,26 @@ DEFAULT_EXTRA_RULES = {
         "GlobalScope",
     ],
     "common.gram": [
+        "ArrayBounds",
         "CollationName",
+        "Interval",
+        "Type",
+        "TypeVariations",
         "QualifiedTypeName",
         "TypeNameAsQualifiedName",
         "CatalogReservedSchemaTypeName",
         "SchemaReservedTypeName",
     ],
-    "expression.gram": ["FunctionIdentifier", "CatalogReservedSchemaFunctionName", "SchemaReservedFunctionName"],
     "select.gram": [
         "SelectStatementInternal",
         "BaseTableName",
         "UnqualifiedBaseTableName",
         "SchemaReservedTable",
         "CatalogReservedSchemaTable",
+        "FunctionArgument",
+        "OrderByClause",
+        "OrderByExpressions",
+        "SubqueryReference",
     ],
 }
 INTERNAL_GRAMMAR_RULES = {"List", "Parens"}
@@ -459,7 +469,7 @@ class UseGramPreviewEmitter:
         if isinstance(ast, ChoiceNode):
             if self.is_manual_finalize_rule(rule_name):
                 raise NotImplementedError("manual_finalize choice rules are not currently supported")
-            return self.emit_choice_rule(rule_name)
+            return self.emit_choice_rule(rule_name, ast)
         if isinstance(ast, SequenceNode):
             return self.emit_sequence_rule(rule_name, ast)
         if isinstance(ast, ReferenceNode):
@@ -476,7 +486,7 @@ class UseGramPreviewEmitter:
         if literal_string_values(ast) is not None:
             return self.emit_syntax_only_initialize(rule_name)
         if isinstance(ast, ChoiceNode):
-            return self.emit_choice_initialize(rule_name)
+            return self.emit_choice_initialize(rule_name, ast)
         if isinstance(ast, SequenceNode):
             return self.emit_sequence_initialize(rule_name, ast)
         if isinstance(ast, ReferenceNode):
@@ -596,8 +606,8 @@ class UseGramPreviewEmitter:
         lines.append("}")
         return lines
 
-    def emit_choice_rule(self, rule_name):
-        lines = self.emit_choice_initialize(rule_name)
+    def emit_choice_rule(self, rule_name, ast):
+        lines = self.emit_choice_initialize(rule_name, ast)
         if self.is_manual_finalize_rule(rule_name):
             return lines
         cpp_type = self.cpp_type(rule_name)
@@ -612,7 +622,7 @@ class UseGramPreviewEmitter:
         lines.append("}")
         return lines
 
-    def emit_choice_initialize(self, rule_name):
+    def emit_choice_initialize(self, rule_name, ast):
         lines = []
         lines.append(
             f"void PEGTransformerFactory::{init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
@@ -722,7 +732,7 @@ class UseGramPreviewEmitter:
                 lines.append("\t}")
                 arg_names.append(arg.var_name)
             elif isinstance(arg, StackChild):
-                var_name = self.identifier_var_name(arg.rule_name)
+                var_name = arg.var_name
                 slot_expr = self.adjusted_slot_expr(plan, arg.slot_idx)
                 lines.append(f"\tauto {var_name} = frame.TakeResult<{self.cpp_type(arg.rule_name)}>({slot_expr});")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
@@ -750,7 +760,7 @@ class UseGramPreviewEmitter:
                 lines.append("\t}")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
             elif isinstance(arg, RepeatStackChild):
-                var_name = self.identifier_var_name(arg.rule_name)
+                var_name = arg.var_name
                 lines.append(f"\toptional<vector<{self.cpp_type(arg.rule_name)}>> {var_name} {{}};")
                 lines.append("\tif (dynamic_child_count > 0) {")
                 lines.append(f"\t\tvector<{self.cpp_type(arg.rule_name)}> {var_name}_value;")
@@ -775,7 +785,7 @@ class UseGramPreviewEmitter:
                 lines.append("\t}")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
             elif isinstance(arg, RequiredRepeatStackChild):
-                var_name = self.identifier_var_name(arg.rule_name)
+                var_name = arg.var_name
                 lines.append(f"\tvector<{self.cpp_type(arg.rule_name)}> {var_name};")
                 loop_end = f"{arg.slot_start} + dynamic_child_count"
                 lines.append(f"\tfor (idx_t i = {arg.slot_start}; i < {loop_end}; i++) {{")
@@ -783,7 +793,7 @@ class UseGramPreviewEmitter:
                 lines.append("\t}")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
             elif isinstance(arg, ListStackChild):
-                var_name = self.identifier_var_name(arg.rule_name)
+                var_name = arg.var_name
                 lines.append(f"\tvector<{self.cpp_type(arg.rule_name)}> {var_name};")
                 loop_end = f"{arg.slot_start} + dynamic_child_count"
                 lines.append(f"\tfor (idx_t i = {arg.slot_start}; i < {loop_end}; i++) {{")
@@ -793,6 +803,8 @@ class UseGramPreviewEmitter:
             else:
                 raise NotImplementedError(f"unsupported finalize argument: {type(arg).__name__}")
         transform_args = ["transformer"] + arg_names
+        if self.rule_types[rule_name].pass_location:
+            transform_args.append("frame.parse_result.offset")
         lines.append(f"\tauto result = PEGTransformerFactory::Transform{rule_name}({', '.join(transform_args)});")
         lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', by_value)};")
         lines.append("}")

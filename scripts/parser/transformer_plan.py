@@ -278,6 +278,7 @@ class StackChild:
     parse_expr: str
     rule_name: str
     slot_idx: int
+    var_name: str
 
 
 @dataclass
@@ -302,6 +303,7 @@ class RepeatStackChild:
     parse_expr: str
     rule_name: str
     slot_start: int
+    var_name: str
 
 
 @dataclass
@@ -317,6 +319,7 @@ class RequiredRepeatStackChild:
     parse_expr: str
     rule_name: str
     slot_start: int
+    var_name: str
 
 
 @dataclass
@@ -324,6 +327,7 @@ class ListStackChild:
     parse_expr: str
     rule_name: str
     slot_start: int
+    var_name: str
 
 
 @dataclass
@@ -476,7 +480,7 @@ def plan_trampoline_sequence_rule_with_terminals(
             else:
                 if has_dynamic_child and not allow_dynamic_stack_followers:
                     raise NotImplementedError("stack child after dynamic stack child is currently unsupported")
-                arg = StackChild(parse_expr, child.name, next_slot)
+                arg = StackChild(parse_expr, child.name, next_slot, to_snake_case(child.name))
                 stack_children.append(arg)
                 next_slot += 1
             finalize_args.append(arg)
@@ -548,7 +552,7 @@ def plan_trampoline_sequence_rule_with_terminals(
             else:
                 if has_dynamic_child and not allow_dynamic_stack_followers:
                     raise NotImplementedError("stack child after dynamic stack child is currently unsupported")
-                arg = StackChild(child_parse_expr, rule_name, next_slot)
+                arg = StackChild(child_parse_expr, rule_name, next_slot, to_snake_case(rule_name))
                 stack_children.append(arg)
                 next_slot += 1
             finalize_args.append(arg)
@@ -565,7 +569,7 @@ def plan_trampoline_sequence_rule_with_terminals(
                     raise NotImplementedError("terminal override repeat is currently unsupported")
                 if repeat_child is not None:
                     raise NotImplementedError("only one repeat child is currently supported")
-                repeat_child = RepeatStackChild(parse_expr, repeat_node.name, next_slot)
+                repeat_child = RepeatStackChild(parse_expr, repeat_node.name, next_slot, to_snake_case(repeat_node.name))
                 next_slot += 1
                 finalize_args.append(repeat_child)
                 continue
@@ -603,7 +607,9 @@ def plan_trampoline_sequence_rule_with_terminals(
                 or required_repeat_child is not None
             ):
                 raise NotImplementedError("only one dynamic stack child is currently supported")
-            required_repeat_child = RequiredRepeatStackChild(parse_expr, child.child.name, next_slot)
+            required_repeat_child = RequiredRepeatStackChild(
+                parse_expr, child.child.name, next_slot, to_snake_case(child.child.name)
+            )
             next_slot += 1
             finalize_args.append(required_repeat_child)
             continue
@@ -622,11 +628,21 @@ def plan_trampoline_sequence_rule_with_terminals(
                 or required_repeat_child is not None
             ):
                 raise NotImplementedError("only one dynamic stack child is currently supported")
-            list_child = ListStackChild(parse_expr, child.inner.name, next_slot)
+            list_child = ListStackChild(parse_expr, child.inner.name, next_slot, to_snake_case(child.inner.name))
             next_slot += 1
             finalize_args.append(list_child)
             continue
         raise NotImplementedError(f"unsupported semantic child shape: {type(child).__name__}")
+    seen_arg_names = {}
+    for arg in finalize_args:
+        if not hasattr(arg, "var_name"):
+            continue
+        var_name = arg.var_name
+        count = seen_arg_names.get(var_name, 0)
+        seen_arg_names[var_name] = count + 1
+        if count > 0:
+            arg.var_name = f"{var_name}_{count}"
+
     return SequenceRulePlan(
         direct_args,
         direct_optional_args,
