@@ -368,7 +368,9 @@ static void StructComparator(const Vector &left, const Vector &right, int8_t *re
 	// child results are written densely, then scattered back to the correct output positions
 	auto child_result = make_unsafe_uniq_array<int8_t>(remaining_count);
 	ValidityMask child_validity(remaining_count);
+	const bool is_union = (left.GetType().id() == LogicalTypeId::UNION);
 	for (idx_t child_idx = 0; child_idx < lchildren.size() && remaining_count > 0; child_idx++) {
+		idx_t new_remaining_count = 0;
 		if (!result_validity) {
 			// DISTINCT
 			DistinctComparatorTypeSwitch(lchildren[child_idx], rchildren[child_idx], child_result.get(),
@@ -380,7 +382,32 @@ static void StructComparator(const Vector &left, const Vector &right, int8_t *re
 			                     remaining_rhs_sel, remaining_count, child_validity);
 		}
 
-		idx_t new_remaining_count = 0;
+		if (is_union && child_idx && result_validity) {
+			//	For SQL-equality comparisons of UNION types,
+			//	we don't know if the NULL means NULL or a different column
+			//	So we have to further restrict the comparison by column index
+			auto &key = lchildren[0];
+			UnifiedVectorFormat key_format;
+			key.ToUnifiedFormat(key_format);
+			const uint8_t *key_data = UnifiedVectorFormat::GetData<uint8_t>(key_format);
+			for (idx_t i = 0; i < remaining_count; i++) {
+				const auto remaining_idx = remaining_result_sel.get_index(i);
+				const idx_t key_idx = key_format.sel->get_index(remaining_idx);
+				//	Skip if not the current column
+				if (key_data[key_idx] + 1 != child_idx) {
+					remaining_lhs_sel.set_index(new_remaining_count, remaining_lhs_sel.get_index(i));
+					remaining_rhs_sel.set_index(new_remaining_count, remaining_rhs_sel.get_index(i));
+					remaining_result_sel.set_index(new_remaining_count, remaining_idx);
+					new_remaining_count++;
+				} else if (!child_validity.RowIsValidUnsafe(i)) {
+					result_validity->SetInvalid(remaining_idx);
+				} else {
+					result_data[remaining_idx] = child_result[i];
+				}
+			}
+			continue;
+		}
+
 		for (idx_t i = 0; i < remaining_count; i++) {
 			const auto remaining_idx = remaining_result_sel.get_index(i);
 			if (result_validity && !child_validity.RowIsValidUnsafe(i)) {
