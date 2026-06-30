@@ -70,8 +70,10 @@ struct ParquetMultiFileInfo : MultiFileReaderInterface {
 	                        FileExpandResult expand_result) override;
 	unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data,
 	                                                           MultiFileGlobalState &global_state) override;
+	// FIXME: I think we can merge them into using ClientContext
 	unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &, GlobalTableFunctionState &) override;
 	unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) override;
+	//FIXME: I'm not yet convinced we need this
 	bool SupportsReadAhead() const override {
 		return true;
 	}
