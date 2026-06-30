@@ -18,6 +18,16 @@
 #include DUCKDB_EXTENSION_HEADER
 #endif
 
+// PROTOTYPE: shadow Catch's SKIP_TEST so every skip also emits a stable, parseable
+// marker (consumed by the pytest collector) before recording the skip with Catch.
+// `file_name` is the runner's member, in scope at all skip sites in this TU.
+#undef SKIP_TEST
+#define SKIP_TEST(reason)                                                                                              \
+	do {                                                                                                               \
+		duckdb::SQLLogicTestLogger::PrintSkip(file_name, (reason));                                                    \
+		Catch::getResultCapture().skipTestDuringRun(reason);                                                           \
+	} while (0)
+
 namespace duckdb {
 
 mutex SQLLogicTestRunner::skip_reason_lock;

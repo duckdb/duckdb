@@ -23,6 +23,7 @@ namespace duckdb {
 static string custom_test_directory;
 static case_insensitive_set_t required_requires;
 static bool delete_test_path = true;
+static bool emit_on_skip = false; // --emit-on-skip opt-in: emit a [SKIP_TEST] marker per skipped test
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
@@ -82,6 +83,14 @@ string TestJoinPath(string path1, string path2) {
 
 void SetTestDirectory(string path) {
 	custom_test_directory = path;
+}
+
+void SetEmitOnSkip(bool emit) {
+	emit_on_skip = emit;
+}
+
+bool EmitOnSkipEnabled() {
+	return emit_on_skip;
 }
 
 void AddRequire(string require) {
