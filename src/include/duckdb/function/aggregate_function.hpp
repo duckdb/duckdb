@@ -289,12 +289,6 @@ public:
 	//! Whether the aggregate is affect by distinct modifiers
 	AggregateDistinctDependent distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
 
-	//! Whether the aggregate is distributive: the aggregate over a set equals the same aggregate applied to the
-	//! results of aggregating a partition of that set (sum, count, min, max). This lets the value be reconstructed
-	//! above a join from per-key partials, which the eager-aggregation pushdown relies on. Algebraic aggregates
-	//! (avg) and holistic ones (median) are not distributive.
-	bool distributive = false;
-
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
@@ -332,10 +326,6 @@ public: // Properties
 	//! Whether the aggregate is order dependent
 	auto GetOrderDependent() const -> AggregateOrderDependent { return properties.order_dependent; }
 	auto SetOrderDependent(AggregateOrderDependent value) -> void { properties.order_dependent = value; }
-
-	//! Whether the aggregate is distributive (see field comment)
-	auto GetDistributive() const -> bool { return properties.distributive; }
-	auto SetDistributive(bool value) -> void { properties.distributive = value; }
 
 	//! Whether the aggregate is affect by distinct modifiers
 	auto GetDistinctDependent() const -> AggregateDistinctDependent { return properties.distinct_dependent; }

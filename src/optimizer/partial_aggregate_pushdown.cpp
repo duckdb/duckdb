@@ -515,13 +515,9 @@ BuildFinalProjection(Optimizer &optimizer, LogicalAggregate &aggr, unique_ptr<Lo
 // Double-Eager Aggregation
 //===--------------------------------------------------------------------===//
 
-enum class DoubleEagerKind { COUNT_STAR, SUM, COUNT, MIN, MAX };
-
 struct DoubleEagerAggregate {
-	DoubleEagerKind kind;
-	idx_t side = 0;              // side that owns the input column (irrelevant for COUNT_STAR)
-	ColumnBinding child_binding; // input column binding (unset for COUNT_STAR)
-	LogicalType child_type;
+	idx_t aggregate_pos = 0;
+	idx_t side = 0;          // side that owns the aggregate input; COUNT_STAR uses side 0
 	LogicalType return_type; // original aggregate return type (final projection casts back to this)
 	idx_t partial_pos = 0;   // position of this aggregate's partial within its side's lower aggregate
 };
@@ -553,36 +549,21 @@ static unique_ptr<BoundAggregateExpression> DEBindAggregate(ClientContext &conte
 	return function_binder.BindAggregateFunction(func, std::move(children));
 }
 
-static bool DEClassify(const BoundAggregateExpression &aggr, DoubleEagerKind &kind) {
-	if (aggr.IsDistinct() || aggr.GetFilter() || aggr.GetOrderBys()) {
-		return false;
+static unique_ptr<BoundAggregateExpression> DEBindCombineAggr(ClientContext &context,
+                                                              vector<unique_ptr<Expression>> children) {
+	auto functions = CombineAggrFun::GetFunctions();
+	vector<LogicalType> types;
+	for (auto &child : children) {
+		types.push_back(child->GetReturnType());
 	}
-	if (!aggr.Function().GetDistributive()) {
-		return false;
+	ErrorData error;
+	FunctionBinder function_binder(context);
+	auto best = function_binder.BindFunction(functions.name, functions, types, error);
+	if (!best.IsValid()) {
+		return nullptr;
 	}
-	auto &name = aggr.Function().GetName();
-	if (aggr.GetChildren().empty()) {
-		if (name == "count_star") {
-			kind = DoubleEagerKind::COUNT_STAR;
-			return true;
-		}
-		return false;
-	}
-	if (aggr.GetChildren().size() != 1) {
-		return false;
-	}
-	if (name == "sum") {
-		kind = DoubleEagerKind::SUM;
-	} else if (name == "count") {
-		kind = DoubleEagerKind::COUNT;
-	} else if (name == "min") {
-		kind = DoubleEagerKind::MIN;
-	} else if (name == "max") {
-		kind = DoubleEagerKind::MAX;
-	} else {
-		return false;
-	}
-	return true;
+	auto &func = functions.GetFunctionByOffset(best.GetIndex());
+	return function_binder.BindAggregateFunction(func, std::move(children));
 }
 
 struct DoubleEagerHeuristics {
@@ -604,34 +585,32 @@ static bool DEEstimateCollapse(const LogicalComparisonJoin &join, idx_t &effecti
 	       c1 >= static_cast<double>(DoubleEagerHeuristics::MIN_COLLAPSE) * ndv;
 }
 
-static bool DECanScaleSum(const LogicalType &type) {
-	return type.id() != LogicalTypeId::HUGEINT && type.id() != LogicalTypeId::UHUGEINT &&
-	       (type.id() != LogicalTypeId::DECIMAL || type.InternalType() != PhysicalType::INT128);
+static bool DECanRepeatAggregateState(const BoundAggregateExpression &aggr) {
+	auto &name = aggr.Function().GetName();
+	if ((name != "sum" && name != "avg") || aggr.GetChildren().empty()) {
+		return true;
+	}
+	auto &type = aggr.GetChildren()[0]->GetReturnType();
+	return type.InternalType() != PhysicalType::INT128;
 }
 
 static bool DEClassifyAggregates(const LogicalAggregate &aggr, const unordered_set<TableIndex> (&side_bindings)[2],
                                  vector<DoubleEagerAggregate> &aggregates) {
-	for (auto &expr : aggr.expressions) {
+	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
+		auto &expr = aggr.expressions[i];
 		if (expr->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
 			return false;
 		}
 		auto &bound = expr->Cast<BoundAggregateExpression>();
-		DoubleEagerKind kind;
-		if (!DEClassify(bound, kind)) {
+		if (!IsSupportedAggregate(bound) || !bound.Function().HasStateCombineCallback() ||
+		    !bound.Function().HasStateFinalizeCallback() || !DECanRepeatAggregateState(bound)) {
 			return false;
 		}
 		DoubleEagerAggregate de;
-		de.kind = kind;
+		de.aggregate_pos = i;
 		de.return_type = bound.GetReturnType();
-		if (kind != DoubleEagerKind::COUNT_STAR) {
-			if (!GetColumnBinding(*bound.GetChildren()[0], de.child_binding)) {
-				return false;
-			}
+		if (!bound.GetChildren().empty()) {
 			if (!GetExpressionSide(*bound.GetChildren()[0], side_bindings, de.side)) {
-				return false;
-			}
-			de.child_type = bound.GetChildren()[0]->GetReturnType();
-			if (kind == DoubleEagerKind::SUM && !DECanScaleSum(de.child_type)) {
 				return false;
 			}
 		}
@@ -693,19 +672,12 @@ static bool DEBuildLowerSides(Optimizer &optimizer, const LogicalAggregate &aggr
 		sides[s].aggregates.push_back(std::move(count_star));
 	}
 
-	// per-side partials for each measured aggregate
+	// Per-side exported states for each measured aggregate.
 	for (auto &de : aggregates) {
-		if (de.kind == DoubleEagerKind::COUNT_STAR) {
-			continue;
-		}
-		string fname = de.kind == DoubleEagerKind::SUM     ? "sum"
-		               : de.kind == DoubleEagerKind::COUNT ? "count"
-		               : de.kind == DoubleEagerKind::MIN   ? "min"
-		                                                   : "max";
-		vector<unique_ptr<Expression>> child;
-		child.push_back(make_uniq<BoundColumnRefExpression>(de.child_type, de.child_binding));
-		auto partial = DEBindAggregate(optimizer.context, fname, std::move(child));
-		if (!partial) {
+		auto aggregate_copy =
+		    unique_ptr_cast<Expression, BoundAggregateExpression>(aggr.expressions[de.aggregate_pos]->Copy());
+		auto partial = ExportAggregateFunction::Bind(std::move(aggregate_copy));
+		if (!partial->GetReturnType().IsAggregateState()) {
 			return false;
 		}
 		de.partial_pos = sides[de.side].aggregates.size();
@@ -766,36 +738,17 @@ static bool DECreateUpperAggregates(Optimizer &optimizer, const vector<DoubleEag
 		return make_uniq<BoundColumnRefExpression>(type, binding);
 	};
 	auto cnt_ref = [&](idx_t s) -> unique_ptr<Expression> {
-		unique_ptr<Expression> ref = make_uniq<BoundColumnRefExpression>(cnt_type[s], cnt_binding[s]);
-		return BoundCastExpression::AddCastToType(optimizer.context, std::move(ref), LogicalType::HUGEINT);
+		return make_uniq<BoundColumnRefExpression>(cnt_type[s], cnt_binding[s]);
 	};
 	for (auto &de : aggregates) {
-		unique_ptr<Expression> upper;
-		switch (de.kind) {
-		case DoubleEagerKind::COUNT_STAR: {
-			auto product = optimizer.BindScalarFunction("*", cnt_ref(0), cnt_ref(1));
-			vector<unique_ptr<Expression>> arg;
-			arg.push_back(std::move(product));
-			upper = DEBindAggregate(optimizer.context, "sum", std::move(arg));
-			break;
-		}
-		case DoubleEagerKind::SUM:
-		case DoubleEagerKind::COUNT: {
-			auto product = optimizer.BindScalarFunction("*", cnt_ref(1 - de.side), partial_ref(de));
-			vector<unique_ptr<Expression>> arg;
-			arg.push_back(std::move(product));
-			upper = DEBindAggregate(optimizer.context, "sum", std::move(arg));
-			break;
-		}
-		case DoubleEagerKind::MIN:
-		case DoubleEagerKind::MAX: {
-			vector<unique_ptr<Expression>> arg;
-			arg.push_back(partial_ref(de));
-			upper = DEBindAggregate(optimizer.context, de.kind == DoubleEagerKind::MIN ? "min" : "max", std::move(arg));
-			break;
-		}
-		}
+		vector<unique_ptr<Expression>> arg;
+		arg.push_back(partial_ref(de));
+		arg.push_back(cnt_ref(1 - de.side));
+		auto upper = DEBindCombineAggr(optimizer.context, std::move(arg));
 		if (!upper) {
+			return false;
+		}
+		if (!upper->GetReturnType().IsAggregateState()) {
 			return false;
 		}
 		upper_aggregates.push_back(std::move(upper));
@@ -886,14 +839,16 @@ bool PartialAggregatePushdown::TryDoubleEagerPushdown(unique_ptr<LogicalOperator
 	auto upper_aggr =
 	    DECreateUpperAggregate(optimizer, aggr, std::move(new_join), side_bindings, sides, std::move(upper_aggregates));
 
-	auto projection = BuildFinalProjection(optimizer, aggr, std::move(upper_aggr), replacement_map,
-	                                       [&](idx_t j, unique_ptr<Expression> ref) -> unique_ptr<Expression> {
-		                                       if (ref->GetReturnType() != aggregates[j].return_type) {
-			                                       return BoundCastExpression::AddCastToType(
-			                                           optimizer.context, std::move(ref), aggregates[j].return_type);
-		                                       }
-		                                       return ref;
-	                                       });
+	auto projection =
+	    BuildFinalProjection(optimizer, aggr, std::move(upper_aggr), replacement_map,
+	                         [&](idx_t j, unique_ptr<Expression> ref) -> unique_ptr<Expression> {
+		                         auto finalized = optimizer.BindScalarFunction("finalize", std::move(ref));
+		                         if (finalized->GetReturnType() != aggregates[j].return_type) {
+			                         return BoundCastExpression::AddCastToType(optimizer.context, std::move(finalized),
+			                                                                   aggregates[j].return_type);
+		                         }
+		                         return finalized;
+	                         });
 	if (!projection) {
 		return false;
 	}

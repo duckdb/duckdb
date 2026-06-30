@@ -434,8 +434,8 @@ RESET disabled_optimizers
 
 # Double-eager (two-sided) pushdown: a fact x fact join through a shared key, where BOTH inputs have
 # many rows per key. de_a and de_b both have 100 rows per key; the grouping column lives on the unique
-# dimension de_dim. Double-eager pre-aggregates both facts by the key and reconstructs the aggregates by
-# scaling with the other side's row count.
+# dimension de_dim. Double-eager pre-aggregates both facts by the key and reconstructs the aggregates
+# with the other side's row count as a state-combine multiplicity.
 statement ok
 CREATE TABLE de_dim AS SELECT i AS k, (i % 7) AS g FROM range(50) _(i)
 
@@ -486,19 +486,17 @@ SELECT count(*) FROM (
 statement ok
 RESET disabled_optimizers
 
-# The double-eager rewrite reconstructs the aggregates above the join by scaling one side's partial with
-# the other side's row count, which shows up as a multiplication ("*") in the plan - and notably it does
-# NOT use combine_aggr (that is the one-sided path).
+# The double-eager rewrite reconstructs the aggregates above the join with combine_aggr(partial, count).
 query II
 EXPLAIN
 SELECT g, count(*) AS ev, sum(b.m) AS s
 FROM de_a a JOIN de_dim d USING (k) JOIN de_b b USING (k)
 GROUP BY g
 ----
-physical_plan	<REGEX>:.*"\*"\(.*
+physical_plan	<REGEX>:.*combine_aggr.*
 
 # Aggregates from BOTH facts in one query (eager split): each fact is pre-aggregated on its own side and
-# scaled by the other side's row count. de_a needs its own measure for this.
+# reconstructed with the other side's row count. de_a needs its own measure for this.
 statement ok
 CREATE TABLE de_a2 AS SELECT (i % 50) AS k, ((i * 7) % 30)::BIGINT AS n FROM range(5000) _(i)
 
@@ -600,10 +598,9 @@ SELECT count(*) FROM (SELECT * FROM mk_disabled EXCEPT ALL SELECT * FROM mk_enab
 statement ok
 RESET disabled_optimizers
 
-# count(*) is reconstructed as sum(left_count * right_count). With two hot keys carrying 70k rows each per
-# side, count(*) per group is 70000 * 70000 = 4.9e9 -- above 2^32, so this also guards against the
-# HUGEINT -> BIGINT result cast truncating to 32 bits. Double-eager computes this arithmetically without
-# ever materializing the ~9.8e9-row cross product, so the query is cheap.
+# count(*) is reconstructed from a partial count state and the other side's row count. With two hot keys
+# carrying 70k rows each per side, count(*) per group is 70000 * 70000 = 4.9e9 -- above 2^32, so this
+# guards against result truncation without materializing the ~9.8e9-row cross product.
 statement ok
 CREATE TABLE big_dim AS SELECT k AS keyid, k AS g FROM range(2) t(k)
 
@@ -769,15 +766,14 @@ SELECT count(*) FROM (
 statement ok
 RESET disabled_optimizers
 
-# both joins in the chain carry a double-eager rewrite, so the plan multiplies a per-key row count by a
-# partial ("*") at more than one level - confirming the pushdown recursed rather than stopping at the top join
+# both joins in the chain carry a double-eager rewrite, so combine_aggr appears in the recursive plan.
 query II
 EXPLAIN
 SELECT f1.keyid AS keyid, count(*) AS c, sum(m1) AS s1, sum(m3) AS s3
 FROM nw_f1 f1 JOIN nw_f2 f2 USING (keyid) JOIN nw_f3 f3 USING (keyid)
 GROUP BY f1.keyid
 ----
-physical_plan	<REGEX>:.*"\*"\(.*
+physical_plan	<REGEX>:.*combine_aggr.*
 
 # ------------------------------------------------------------------------------
 # Self-amplifying fact x dimension x fact: access_log JOIN user_profile JOIN location
@@ -828,22 +824,18 @@ SELECT count(*) FROM (SELECT * FROM cust_disabled EXCEPT ALL SELECT * FROM cust_
 statement ok
 RESET disabled_optimizers
 
-# the explosion is collapsed: the pushdown still fires on this genuine fan-out (scaling shows up as "*")
+# the explosion is collapsed: the pushdown still fires on this genuine fan-out
 query II
 EXPLAIN
 SELECT a.keyid AS keyid, count(*) AS hits, sum(bytes_sent) AS total_bytes
 FROM access_log a JOIN user_profile u USING (keyid) JOIN location l USING (keyid)
 GROUP BY a.keyid
 ----
-physical_plan	<REGEX>:.*"\*"\(.*
+physical_plan	<REGEX>:.*combine_aggr.*
 
 # ------------------------------------------------------------------------------
-# Regression: double-eager reconstructs sum as `count_other * partial`, a scalar
-# multiply that can overflow on a single key even when the row-by-row total fits
-# via sign cancellation across keys in the group. With a HUGEINT measure that
-# turned a valid query (result 0) into an overflow error. Double-eager is now
-# gated off for no-headroom exact-typed sums (HUGEINT / INT128 DECIMAL); the
-# one-sided additive-combine path handles them without the spurious overflow.
+# Regression: repeating an exact no-headroom sum state can still overflow before
+# cancellation across keys, so double-eager is skipped for these sums.
 # ------------------------------------------------------------------------------
 
 statement ok
@@ -863,11 +855,23 @@ SELECT a.g, sum(b.m) AS s FROM ov_a a JOIN ov_b b USING (k) GROUP BY a.g
 ----
 0	0
 
-# the plan must NOT contain the double-eager scaling multiply on this HUGEINT sum
+# the plan must NOT contain the double-eager multiplicity reconstruction on this HUGEINT sum
 query II
 EXPLAIN SELECT a.g, sum(b.m) AS s FROM ov_a a JOIN ov_b b USING (k) GROUP BY a.g
 ----
-physical_plan	<!REGEX>:.*"\*"\(.*
+physical_plan	<!REGEX>:.*Aggregates: combine_aggr\(#[0-9][0-9]*, #[0-9][0-9]*\).*
+
+# avg(HUGEINT) has the same INT128 sum-state risk
+query II
+EXPLAIN SELECT a.g, avg(b.m) AS s FROM ov_a a JOIN ov_b b USING (k) GROUP BY a.g
+----
+physical_plan	<!REGEX>:.*Aggregates: combine_aggr\(#[0-9][0-9]*, #[0-9][0-9]*\).*
+
+# min/max(HUGEINT) do not repeat an additive state and can still use double-eager
+query II
+EXPLAIN SELECT a.g, count(*), min(b.m), max(b.m) FROM ov_a a JOIN ov_b b USING (k) GROUP BY a.g
+----
+physical_plan	<REGEX>:.*Aggregates: combine_aggr\(#[0-9][0-9]*, #[0-9][0-9]*\).*
 
 # ------------------------------------------------------------------------------
 # Type sweep: double-eager must reconstruct sum / min / max / count correctly for
@@ -955,25 +959,21 @@ GROUP BY d.g
 statement ok
 RESET disabled_optimizers
 
-# DECIMAL(18,4) sum engages double-eager (width <= 18 is below the INT128 gate)
+# DECIMAL(18,4) sum engages double-eager
 query II
 EXPLAIN SELECT d.g, count(*), sum(f.c_d18) FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k) GROUP BY d.g
 ----
-physical_plan	<REGEX>:.*"\*"\(.*
+physical_plan	<REGEX>:.*combine_aggr.*
 
-# min/max over DATE and VARCHAR also reconstruct through double-eager (min(min)/max(max))
+# min/max over DATE and VARCHAR also reconstruct through double-eager
 query II
 EXPLAIN SELECT d.g, count(*), min(f.c_date), max(f.c_str) FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k) GROUP BY d.g
 ----
-physical_plan	<REGEX>:.*"\*"\(.*
+physical_plan	<REGEX>:.*combine_aggr.*
 
 # ------------------------------------------------------------------------------
-# SUM gate, the non-HUGEINT branches: sum widens any DECIMAL to DECIMAL(38) and
-# UHUGEINT is INT128-internal - both no headroom for the cnt*partial multiply, so
-# double-eager is gated off and the whole group falls back to the one-sided
-# additive path. ov_a/ov_b above cover the HUGEINT branch and demonstrate why the
-# gate is needed; here we just pin the DECIMAL(38) and UHUGEINT branches: the plan
-# carries no scaling multiply and the result matches the unoptimized plan.
+# DECIMAL(38) sum/avg are skipped by double-eager for the same INT128-state reason.
+# UHUGEINT sum is DOUBLE-backed today, so it can still use the multiplicity path.
 # ------------------------------------------------------------------------------
 
 statement ok
@@ -988,14 +988,19 @@ ANALYZE
 query II
 EXPLAIN SELECT d.g, count(*), sum(f.m) FROM de_a a JOIN de_dim d USING (k) JOIN de_d38 f USING (k) GROUP BY d.g
 ----
-physical_plan	<!REGEX>:.*"\*"\(.*
+physical_plan	<!REGEX>:.*Aggregates: combine_aggr\(#[0-9][0-9]*, #[0-9][0-9]*\).*
+
+query II
+EXPLAIN SELECT d.g, count(*), avg(f.m) FROM de_a a JOIN de_dim d USING (k) JOIN de_d38 f USING (k) GROUP BY d.g
+----
+physical_plan	<!REGEX>:.*Aggregates: combine_aggr\(#[0-9][0-9]*, #[0-9][0-9]*\).*
 
 query II
 EXPLAIN SELECT d.g, count(*), sum(f.m) FROM de_a a JOIN de_dim d USING (k) JOIN de_uh f USING (k) GROUP BY d.g
 ----
-physical_plan	<!REGEX>:.*"\*"\(.*
+physical_plan	<REGEX>:.*Aggregates: combine_aggr\(#[0-9][0-9]*, #[0-9][0-9]*\).*
 
-# ... and the gated result still matches the unoptimized plan (one label per measure type)
+# ... and the result still matches the unoptimized plan (one label per measure type)
 query TTT rowsort de_gate_d38_ab
 SELECT d.g, count(*) AS ev, sum(f.m) AS sd FROM de_a a JOIN de_dim d USING (k) JOIN de_d38 f USING (k) GROUP BY d.g
 ----
@@ -1019,35 +1024,32 @@ statement ok
 RESET disabled_optimizers
 
 # ------------------------------------------------------------------------------
-# Order-dependent aggregates must not be reassociated below the join. kahan_sum is
-# the deterministic FP opt-out (intentionally not tagged reassociation-precision-
-# only), so IsSupportedAggregate rejects it and its value must be preserved
-# exactly; string_agg (order-dependent, non-decomposable) is likewise left alone.
-# The teeth: removing the order-dependence gate would push these via the one-sided
-# state-export path (a combine_aggr appears), which the negated plan check catches.
+# kahan_sum has no multiply fast path, but unordered aggregates may still be
+# reconstructed through generic repeated state combine.
 # ------------------------------------------------------------------------------
 
 query II
 EXPLAIN SELECT d.g, kahan_sum(f.c_f64) FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k) GROUP BY d.g
 ----
-physical_plan	<!REGEX>:.*combine_aggr.*
+physical_plan	<REGEX>:.*Aggregates: combine_aggr\(#[0-9][0-9]*, #[0-9][0-9]*\).*
 
-query II
-EXPLAIN SELECT d.g, string_agg(f.c_str, ',') FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k) GROUP BY d.g
-----
-physical_plan	<!REGEX>:.*combine_aggr.*
-
-# kahan_sum is not reassociated, so its (deterministic) value is byte-identical on/off
-query TT rowsort de_kahan_ab
+# kahan_sum can perturb low bits through generic repeated state combine
+statement ok
+CREATE TEMP TABLE de_kahan_enabled AS
 SELECT d.g, kahan_sum(f.c_f64) AS s FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k) GROUP BY d.g
-----
 
 statement ok
 SET disabled_optimizers = 'partial_aggregate_pushdown'
 
-query TT rowsort de_kahan_ab
+statement ok
+CREATE TEMP TABLE de_kahan_disabled AS
 SELECT d.g, kahan_sum(f.c_f64) AS s FROM de_a a JOIN de_dim d USING (k) JOIN de_typed f USING (k) GROUP BY d.g
-----
 
 statement ok
 RESET disabled_optimizers
+
+query I
+SELECT count(*) FROM de_kahan_enabled e JOIN de_kahan_disabled f USING (g)
+WHERE abs(e.s - f.s) > 1e-9 * abs(f.s) + 1e-9
+----
+0

@@ -1,5 +1,7 @@
 #include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -11,6 +13,17 @@ struct BaseCountFunction {
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		target += source;
+	}
+
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &, idx_t count) {
+		STATE repeated_count;
+		if (!TryMultiplyOperator::Operation(source, static_cast<STATE>(count), repeated_count)) {
+			throw OutOfRangeException("Overflow in repeated aggregate state combine");
+		}
+		if (!TryAddOperator::Operation(target, repeated_count, target)) {
+			throw OutOfRangeException("Overflow in repeated aggregate state combine");
+		}
 	}
 
 	template <class T, class STATE>
@@ -282,7 +295,6 @@ AggregateFunction CountFunctionBase::GetFunction() {
 	                      FunctionNullHandling::SPECIAL_HANDLING, CountFunction::CountClusterUpdate);
 	fun.SetName("count");
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-	fun.SetDistributive(true); // count(whole) = sum of per-partition counts (eager aggregation reconstructs it)
 	fun.SetStructStateExport(GetCountStateType);
 	fun.SetStatisticsCallback(CountPropagateStats);
 	return fun;
@@ -293,7 +305,6 @@ AggregateFunction CountStarFun::GetFunction() {
 	fun.SetName("count_star");
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-	fun.SetDistributive(true); // count(*) over a join = sum of per-key count products (eager aggregation)
 	fun.SetWindowBatchCallback(CountStarFunction::Window<int64_t>);
 	return fun;
 }

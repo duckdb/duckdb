@@ -173,6 +173,11 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 
 struct IntegerSumOperation
     : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.is_set) {
@@ -183,10 +188,21 @@ struct IntegerSumOperation
 	}
 };
 
-using SumToHugeintOperation =
-    ClusteredSumOperation<BaseSumOperation<SumSetOperation, AddToHugeint>, ClusteredAddOp<AddToHugeint>>;
-using NumericSumOperation =
-    ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>>;
+struct SumToHugeintOperation
+    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, AddToHugeint>, ClusteredAddOp<AddToHugeint>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+};
+
+struct NumericSumOperation
+    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+};
 
 struct KahanSumOperation : public BaseSumOperation<KahanSumSetOperation, KahanAdd> {
 	template <class T, class STATE>
@@ -199,8 +215,13 @@ struct KahanSumOperation : public BaseSumOperation<KahanSumSetOperation, KahanAd
 	}
 };
 
-using HugeintSumOperation =
-    ClusteredSumOperation<BaseSumOperation<SumSetOperation, HugeintAdd>, ClusteredAddOp<HugeintAdd>>;
+struct HugeintSumOperation
+    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, HugeintAdd>, ClusteredAddOp<HugeintAdd>> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedSumState::Combine(source, target, input, count);
+	}
+};
 
 unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
 	throw BinderException("sum_no_overflow is for internal use only!");
@@ -339,8 +360,6 @@ unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-	// ReplaceImplementation above copies properties from the untagged GetSumAggregate, so re-mark distributive
-	function.SetDistributive(true);
 	return nullptr;
 }
 
@@ -412,10 +431,6 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(sum_double);
 	sum.AddFunction(AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
 	    LogicalType::BIGNUM, LogicalType::BIGNUM));
-	// sum is distributive: sum(whole) = sum of per-partition sums, so eager aggregation can reconstruct it
-	for (auto &function : sum.functions) {
-		function.SetDistributive(true);
-	}
 	return sum;
 }
 

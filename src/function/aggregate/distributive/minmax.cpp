@@ -137,6 +137,14 @@ struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 			target.value = REDUCE_OP::template Operation<value_type>(target.value, source.value);
 		}
 	}
+
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		if (count == 0) {
+			return;
+		}
+		Combine<STATE, OP>(source, target, input);
+	}
 };
 
 using MinOperation = NumericMinMaxBase<Min>;
@@ -202,6 +210,14 @@ struct StringMinMaxBase : public MinMaxBase {
 			OP::template Execute<string_t, STATE>(target, source.value, input_data);
 		}
 	}
+
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		if (count == 0) {
+			return;
+		}
+		Combine<STATE, OP>(source, target, input);
+	}
 };
 
 template <class COMPARE>
@@ -249,6 +265,14 @@ struct VectorMinMaxBase {
 			return;
 		}
 		OP::template Execute<string_t, STATE, OP>(target, source.value, input_data);
+	}
+
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		if (count == 0) {
+			return;
+		}
+		Combine<STATE, OP>(source, target, input);
 	}
 
 	template <class STATE>
@@ -368,9 +392,6 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	minmax_func.SetName(std::move(name));
 	minmax_func.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	minmax_func.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
-	// min/max is distributive: min(whole) = min of per-partition mins (eager aggregation can reconstruct it).
-	// Only the plain single-argument form; the collation branch above rewrites to arg_min/arg_max, which is not.
-	minmax_func.SetDistributive(true);
 
 	auto expr = minmax_func.Bind(context, std::move(arguments));
 	arguments = std::move(expr->GetChildrenMutable());
