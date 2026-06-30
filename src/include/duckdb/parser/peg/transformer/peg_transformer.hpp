@@ -439,6 +439,10 @@ public:
 	                                         TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeColLabelOrStringTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeColLabelOrStringTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeDotColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                            TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -454,6 +458,10 @@ public:
 	static unique_ptr<TransformResultValue>
 	FinalizeReservedIdentifierOrStringLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                    TransformStackFrame &frame);
+	static void InitializeLiteralExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeLiteralExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializePrefixExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -904,10 +912,6 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeParenthesisExpressionTrampoline(PEGTransformer &transformer,
 	                                                                                TransformStack &stack,
 	                                                                                TransformStackFrame &frame);
-	static void InitializeLiteralExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                  TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeLiteralExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeConstantLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -2158,6 +2162,14 @@ public:
 	                                            TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeTriggerNameTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeIdentifierDotTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeIdentifierDotTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeNestedColumnNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeNestedColumnNameTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeQualifiedSequenceNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                      TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeQualifiedSequenceNameTrampoline(PEGTransformer &transformer,
@@ -2216,6 +2228,15 @@ public:
 	                                              TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeCollationNameTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeExpressionAliasTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeExpressionAliasTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeExpressionStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeExpressionStatementTrampoline(PEGTransformer &transformer,
+	                                                                              TransformStack &stack,
+	                                                                              TransformStackFrame &frame);
 	static void InitializeIntervalTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                         TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -2266,6 +2287,15 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeCatalogReservedSchemaTableTrampoline(PEGTransformer &transformer,
 	                                                                                     TransformStack &stack,
 	                                                                                     TransformStackFrame &frame);
+	static void InitializeColIdExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeColIdExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeExpressionAsCollabelTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                     TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeExpressionAsCollabelTrampoline(PEGTransformer &transformer,
+	                                                                               TransformStack &stack,
+	                                                                               TransformStackFrame &frame);
 	static void InitializeFunctionArgumentTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -2279,6 +2309,11 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeOrderByExpressionsTrampoline(PEGTransformer &transformer,
 	                                                                             TransformStack &stack,
 	                                                                             TransformStackFrame &frame);
+	static void InitializePositionalFunctionArgumentTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizePositionalFunctionArgumentTrampoline(PEGTransformer &transformer,
+	                                                                                     TransformStack &stack,
+	                                                                                     TransformStackFrame &frame);
 	static void InitializeSubqueryReferenceTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                  TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>

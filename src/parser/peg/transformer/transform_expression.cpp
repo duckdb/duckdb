@@ -1607,6 +1607,42 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(P
 	return transformer.Transform<unique_ptr<ParsedExpression>>(choice_result);
 }
 
+void PEGTransformerFactory::InitializeLiteralExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeLiteralExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	unique_ptr<ParsedExpression> result;
+	if (choice_result.name == "StringLiteral") {
+		auto &string_literal = choice_result.Cast<StringLiteralParseResult>();
+		result = string_literal.ToExpression();
+	} else if (choice_result.name == "NumberLiteral") {
+		result = TransformNumberLiteral(transformer, choice_result);
+	} else {
+		auto &constant_list_pr = choice_result.Cast<ListParseResult>();
+		auto &constant_choice_pr = constant_list_pr.Child<ChoiceParseResult>(0);
+		auto &constant_result = constant_choice_pr.GetResult();
+		Value value;
+		if (constant_result.name == "NullLiteral") {
+			value = TransformNullLiteral(transformer);
+		} else if (constant_result.name == "TrueLiteral") {
+			value = TransformTrueLiteral(transformer);
+		} else if (constant_result.name == "FalseLiteral") {
+			value = TransformFalseLiteral(transformer);
+		} else {
+			throw InternalException("Unexpected literal expression trampoline child '%s'", constant_result.name);
+		}
+		result = TransformConstantLiteral(transformer, value);
+	}
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformParensExpression(PEGTransformer &transformer,
                                                                               unique_ptr<ParsedExpression> expression) {
 	return expression;

@@ -65,10 +65,20 @@ rules:
   Expression:
     mode: forward
 
+  LiteralExpression:
+    mode: manual
+    init: InitializeLiteralExpressionTrampoline
+    finalize: FinalizeLiteralExpressionTrampoline
+
   PrefixExpression:
     mode: manual
     init: InitializePrefixExpressionTrampoline
     finalize: FinalizePrefixExpressionTrampoline
+
+  ColLabelOrString:
+    mode: manual
+    init: InitializeColLabelOrStringTrampoline
+    finalize: FinalizeColLabelOrStringTrampoline
 
   OverClause:
     mode: manual
