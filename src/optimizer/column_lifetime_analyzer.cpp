@@ -10,6 +10,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/main/settings.hpp"
@@ -69,7 +70,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// FIXME: groups that are not referenced can be removed from projection
 		// recurse into the children of the aggregate
-		ColumnLifetimeAnalyzer analyzer(optimizer, root);
+		ColumnLifetimeAnalyzer analyzer(optimizer, root, false, dead_gets);
 		analyzer.StandardVisitOperator(op);
 		return;
 	}
@@ -103,6 +104,12 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		GenerateProjectionMap(op.children[1]->GetColumnBindings(), rhs_unused, comp_join.right_projection_map);
 		return;
 	}
+	case LogicalOperatorType::LOGICAL_GET: {
+		RecordDeadColumnGet(op.Cast<LogicalGet>());
+		ColumnLifetimeAnalyzer analyzer(optimizer, root, true, dead_gets);
+		analyzer.StandardVisitOperator(op);
+		return;
+	}
 	case LogicalOperatorType::LOGICAL_INSERT:
 	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE:
@@ -110,7 +117,6 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		//! When RETURNING is used, a PROJECTION is the top level operator for INSERTS, UPDATES, and DELETES
 		//! We still need to project all values from these operators so the projection
 		//! on top of them can select from only the table values being inserted.
-	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
@@ -119,13 +125,13 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		// for set operations/materialized CTEs we don't remove anything, just recursively visit the children
 		// FIXME: for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
 		// encounter a UNION node that is not preceded by a DISTINCT)
-		ColumnLifetimeAnalyzer analyzer(optimizer, root, true);
+		ColumnLifetimeAnalyzer analyzer(optimizer, root, true, dead_gets);
 		analyzer.StandardVisitOperator(op);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		// then recurse into the children of this projection
-		ColumnLifetimeAnalyzer analyzer(optimizer, root);
+		ColumnLifetimeAnalyzer analyzer(optimizer, root, false, dead_gets);
 		analyzer.StandardVisitOperator(op);
 		return;
 	}
@@ -193,6 +199,94 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	StandardVisitOperator(op);
+}
+
+void ColumnLifetimeAnalyzer::RecordDeadColumnGet(LogicalGet &get) {
+	if (get.projection_ids.empty()) {
+		return;
+	}
+	const auto &column_ids = get.GetColumnIds();
+	idx_t kept = 0;
+	vector<bool> keep(column_ids.size(), false);
+	auto mark_kept = [&](idx_t i) {
+		if (!keep[i]) {
+			keep[i] = true;
+			kept++;
+		}
+	};
+	for (auto proj_id : get.projection_ids) {
+		mark_kept(proj_id.GetIndex());
+	}
+	for (auto &entry : get.table_filters) {
+		mark_kept(entry.GetIndex().GetIndex());
+	}
+	if (kept == column_ids.size()) {
+		return;
+	}
+	dead_gets.emplace_back(get);
+}
+
+void ColumnLifetimeAnalyzer::FinalizeDeadColumnPrunes() {
+	if (dead_gets.empty()) {
+		return;
+	}
+	ColumnBindingReplacer replacer;
+	for (auto &get_ref : dead_gets) {
+		auto &get = get_ref.get();
+		auto &column_ids = get.GetMutableColumnIds();
+		vector<bool> keep(column_ids.size(), false);
+		idx_t keep_count = 0;
+		auto mark_kept = [&](idx_t i) {
+			if (!keep[i]) {
+				keep[i] = true;
+				keep_count++;
+			}
+		};
+		for (auto proj_id : get.projection_ids) {
+			mark_kept(proj_id.GetIndex());
+		}
+		for (auto &entry : get.table_filters) {
+			mark_kept(entry.GetIndex().GetIndex());
+		}
+		if (keep_count == column_ids.size()) {
+			// Filter pushed down to this Get since RecordDeadColumnGet ran (e.g. JOIN_FILTER_PUSHDOWN);
+			// no longer dead.
+			continue;
+		}
+		vector<idx_t> old_to_new(column_ids.size(), DConstants::INVALID_INDEX);
+		vector<ColumnIndex> new_column_ids;
+		new_column_ids.reserve(keep_count);
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			if (keep[i]) {
+				old_to_new[i] = new_column_ids.size();
+				new_column_ids.push_back(std::move(column_ids[i]));
+			}
+		}
+		column_ids = std::move(new_column_ids);
+
+		if (get.table_filters.HasFilters()) {
+			TableFilterSet remapped_filters;
+			for (auto &entry : get.table_filters) {
+				auto new_idx = old_to_new[entry.GetIndex().GetIndex()];
+				remapped_filters.PushFilter(ProjectionIndex(new_idx), entry.TakeFilter());
+			}
+			get.table_filters = std::move(remapped_filters);
+		}
+
+		for (auto &proj_id : get.projection_ids) {
+			auto old_value = proj_id.GetIndex();
+			auto new_value = old_to_new[old_value];
+			if (new_value != old_value) {
+				replacer.replacement_bindings.emplace_back(ColumnBinding(get.table_index, ProjectionIndex(old_value)),
+				                                           ColumnBinding(get.table_index, ProjectionIndex(new_value)));
+			}
+			proj_id = ProjectionIndex(new_value);
+		}
+	}
+	if (!replacer.replacement_bindings.empty()) {
+		replacer.VisitOperator(root);
+	}
+	dead_gets.clear();
 }
 
 void ColumnLifetimeAnalyzer::Verify(LogicalOperator &op) {

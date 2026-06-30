@@ -1,0 +1,30 @@
+# name: benchmark/micro/parquet/dead_filter_column_prune.benchmark
+# description: Filter is always-true via table stats; the column it referenced should not be decoded.
+# group: [parquet]
+
+name Dead Filter Column Prune
+group micro
+subgroup parquet
+
+require parquet
+
+storage persistent
+
+load
+COPY (
+  SELECT
+    (i % 20)::INTEGER AS id,
+    CASE WHEN i < 100000 AND (i % 2 = 0)
+         THEN 'a' || lpad(i::VARCHAR, 33, '0')
+         ELSE 'b' || lpad(i::VARCHAR, 33, '0')
+    END AS s
+  FROM range(100000000) t(i)
+) TO '${BENCHMARK_DIR}/dead_filter_column_prune.parquet' (
+  ROW_GROUP_SIZE 100000, COMPRESSION 'snappy', OVERWRITE_OR_IGNORE
+);
+
+run
+SELECT sum(id) FROM '${BENCHMARK_DIR}/dead_filter_column_prune.parquet' WHERE s >= '0'
+
+result I
+950000000
