@@ -25,7 +25,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 	}
 	auto &add_column = alter_table.Cast<AddColumnInfo>();
 	if (!add_column.new_column.HasDefaultValue() ||
-	    add_column.new_column.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT) {
+	    add_column.new_column.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT ||
+	    add_column.if_column_not_exists) {
 		return std::move(result);
 	}
 	auto &column_entry = add_column.new_column;
