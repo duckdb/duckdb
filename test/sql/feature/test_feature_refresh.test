@@ -440,6 +440,34 @@ REFRESH FEATURE nonexistent;
 ----
 Feature "nonexistent" does not exist
 
+# Dropping the source table with CASCADE removes the dependent feature, so a later
+# refresh reports the feature as missing instead of failing deeper in materialization.
+statement ok
+CREATE TABLE refresh_error_src (
+    entity VARCHAR,
+    val INTEGER,
+    ts TIMESTAMP
+);
+
+statement ok
+INSERT INTO refresh_error_src VALUES ('a', 10, '2024-01-01 08:00:00');
+
+statement ok
+CREATE FEATURE refresh_error_feature
+    TIMESTAMP ts
+    WINDOW 7 DAYS
+    REFRESH FULL
+    RETAIN 1
+    AS (SELECT entity, SUM(val) AS total FROM refresh_error_src GROUP BY entity);
+
+statement ok
+DROP TABLE refresh_error_src CASCADE;
+
+statement error
+REFRESH FEATURE refresh_error_feature;
+----
+Feature "refresh_error_feature" does not exist
+
 # ============================================================
 # Cleanup
 # ============================================================

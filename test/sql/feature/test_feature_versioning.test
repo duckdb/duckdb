@@ -77,6 +77,19 @@ SELECT COUNT(*) FROM versioned_full__v2;
 ----
 5
 
+# A FULL refresh with no source changes creates the same version table contents.
+query I
+WITH lhs AS (SELECT * FROM versioned_full__v1 EXCEPT SELECT * FROM versioned_full__v2),
+     rhs AS (SELECT * FROM versioned_full__v2 EXCEPT SELECT * FROM versioned_full__v1)
+SELECT (SELECT COUNT(*) FROM lhs) + (SELECT COUNT(*) FROM rhs);
+----
+0
+
+query I
+SELECT current_version FROM duckdb_features() WHERE feature_name = 'versioned_full';
+----
+2
+
 # View shows current (v2) data
 query II rowsort
 SELECT customer, total_value FROM versioned_full WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP);
