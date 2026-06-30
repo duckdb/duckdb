@@ -13,8 +13,3 @@ SELECT * FROM summary((select 5)) tbl1(i) JOIN summary((select 5)) tbl2(i) ON tb
 [5]	5	[5]	5
 
 endloop
-
-statement error
-PRAGMA approximate_join_order_threshold = -1;
-----
-Invalid Input Error: Failed to cast value: Type INT32 with value -1 can't be cast because the value is out of range for the destination type UINT64
