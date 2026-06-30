@@ -302,6 +302,12 @@ duckdb_statement_type StatementTypeToC(const StatementType type) {
 		return DUCKDB_STATEMENT_TYPE_DETACH;
 	case StatementType::MULTI_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_MULTI;
+	case StatementType::COPY_DATABASE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_COPY_DATABASE;
+	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_UPDATE_EXTENSIONS;
+	case StatementType::MERGE_INTO_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_MERGE_INTO;
 	default:
 		return DUCKDB_STATEMENT_TYPE_INVALID;
 	}
