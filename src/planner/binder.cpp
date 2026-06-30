@@ -143,6 +143,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<ConnectStatement>());
 	case StatementType::DISCONNECT_STATEMENT:
 		return Bind(statement.Cast<DisconnectStatement>());
+	case StatementType::REFRESH_FEATURE_STATEMENT:
+		return Bind(statement.Cast<RefreshFeatureStatement>());
 	case StatementType::SERVE_FEATURE_STATEMENT:
 		return Bind(statement.Cast<ServeFeatureStatement>());
 	default: // LCOV_EXCL_START

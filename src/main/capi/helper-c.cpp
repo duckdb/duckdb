@@ -291,6 +291,8 @@ duckdb_statement_type StatementTypeToC(const StatementType type) {
 		return DUCKDB_STATEMENT_TYPE_VACUUM;
 	case StatementType::CALL_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_CALL;
+	case StatementType::REFRESH_FEATURE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_CALL;
 	case StatementType::SET_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_SET;
 	case StatementType::LOAD_STATEMENT:
