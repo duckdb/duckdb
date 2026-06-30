@@ -100,7 +100,7 @@ void ExpressionColumnReader::Select(ColumnReaderInput &input, Vector &result, co
 		auto &child_reader = child_readers[i];
 		child_reader->Select(input, intermediate_chunk.data[i], sel, approved_tuple_count);
 	}
-	intermediate_chunk.SetCardinality(input.num_values);
+	intermediate_chunk.SetChildCardinality(input.num_values);
 	//! This executes the expression *and* applies the selection vector in the process
 	executor.ExecuteExpression(intermediate_chunk, result, sel, approved_tuple_count);
 	if (input.num_values != approved_tuple_count) {
