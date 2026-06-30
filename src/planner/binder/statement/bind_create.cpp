@@ -26,7 +26,6 @@
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_feature_info.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
@@ -845,14 +844,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		pit_parameters.timestamp_column = feature_info.timestamp_column;
 		pit_parameters.entity_columns = feature_info.entity_columns;
 		pit_parameters.window_interval = feature_info.window_interval;
-		string pit_sql = BuildFeaturePITQuerySQL(select_node, pit_parameters);
-
-		// Parse and bind the PIT query
-		Parser parser(context.GetParserOptions());
-		parser.ParseQuery(pit_sql);
-		auto &pit_select = parser.statements[0]->Cast<SelectStatement>();
+		auto pit_select = BuildFeaturePITQuery(select_node, pit_parameters);
 		auto query_binder = Binder::CreateBinder(context, this);
-		auto query_obj = query_binder->Bind(pit_select);
+		auto query_obj = query_binder->Bind(*pit_select);
 
 		// Store result schema in feature info for table creation
 		feature_info.result_names = query_obj.names;

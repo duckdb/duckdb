@@ -14,8 +14,13 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
@@ -51,6 +56,45 @@ static string BuildPITQuery(const FeatureCatalogEntry &feat, const string &spine
 	parameters.window_interval = feat.window_interval;
 	parameters.spine_filter = spine_filter;
 	return BuildFeaturePITQuerySQL(feat.query->node->Cast<SelectNode>(), parameters);
+}
+
+static unique_ptr<SelectStatement> BuildPITQueryAST(const FeatureCatalogEntry &feat) {
+	FeaturePITQueryParameters parameters;
+	parameters.source_table = feat.source_table;
+	parameters.timestamp_column = feat.timestamp_column;
+	parameters.entity_columns = feat.entity_columns;
+	parameters.window_interval = feat.window_interval;
+	parameters.order_result = true;
+	return BuildFeaturePITQuery(feat.query->node->Cast<SelectNode>(), parameters);
+}
+
+static unique_ptr<CreateStatement> BuildCreateTableAsStatement(const string &catalog, const string &schema,
+                                                               const string &table,
+                                                               unique_ptr<SelectStatement> query) {
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateTableInfo>(catalog, schema, table);
+	info->query = std::move(query);
+	result->info = std::move(info);
+	return result;
+}
+
+static unique_ptr<BaseTableRef> BuildVersionTableRef(const string &catalog, const string &schema, const string &table) {
+	auto result = make_uniq<BaseTableRef>();
+	result->catalog_name = catalog;
+	result->schema_name = schema;
+	result->table_name = table;
+	return result;
+}
+
+static unique_ptr<SelectStatement> BuildCountTableStatement(const string &catalog, const string &schema,
+                                                            const string &table) {
+	auto node = make_uniq<SelectNode>();
+	node->select_list.push_back(make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
+	node->from_table = BuildVersionTableRef(catalog, schema, table);
+
+	auto result = make_uniq<SelectStatement>();
+	result->node = std::move(node);
+	return result;
 }
 
 static unique_ptr<FunctionData> RefreshFeatureBind(ClientContext &context, TableFunctionBindInput &input,
@@ -127,15 +171,16 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 	try {
 		if (feat.refresh_mode == FeatureRefreshMode::FULL) {
 			// FULL refresh: create new version table with all rows
-			auto pit_sql = BuildPITQuery(feat, "");
-			auto create_sql = "CREATE TABLE " + new_table_id + " AS " + pit_sql;
-			auto create_result = con.Query(create_sql);
+			auto create_statement = BuildCreateTableAsStatement(feat_catalog.GetName(), feat_schema.name, new_table_name,
+			                                                    BuildPITQueryAST(feat));
+			auto create_result = con.Query(std::move(create_statement));
 			if (create_result->HasError()) {
 				throw InternalException("Failed to refresh feature '%s': %s", feature_name, create_result->GetError());
 			}
 
 			// Count rows inserted
-			auto count_result = con.Query("SELECT COUNT(*) FROM " + new_table_id);
+			auto count_statement = BuildCountTableStatement(feat_catalog.GetName(), feat_schema.name, new_table_name);
+			auto count_result = con.Query(std::move(count_statement));
 			if (!count_result->HasError() && count_result->RowCount() > 0) {
 				state.rows_affected = count_result->GetValue(0, 0).GetValue<idx_t>();
 			}
