@@ -46,7 +46,7 @@ SELECT DATEDIFF('isoyear', '2022-01-01 00:00:00-08'::TIMESTAMPTZ, '2022-01-03 00
 # TIMESTAMPTZ_NS
 #
 statement ok
-CREATE TABLE datetime_ns AS
+CREATE TEMP TABLE datetime_ns AS
 SELECT '2005-12-31 23:59:59.999999999-08'::TIMESTAMPTZ_NS AS startdate, '2006-01-01 00:00:00.000000000-08'::TIMESTAMPTZ_NS AS enddate;
 
 foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond julian
