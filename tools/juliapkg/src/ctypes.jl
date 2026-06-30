@@ -448,7 +448,9 @@ function duckdb_type_to_julia_type(x)
         child_count = get_struct_child_count(x)
         struct_names::Vector{Symbol} = Vector()
         for i in 1:child_count
-            child_name::Symbol = Symbol(get_struct_child_name(x, i))
+            name = get_struct_child_name(x, i)
+            # TUPLE (unnamed struct) children have empty names - synthesize positional names for the NamedTuple
+            child_name::Symbol = isempty(name) ? Symbol("v", i) : Symbol(name)
             push!(struct_names, child_name)
         end
         struct_names_tuple = Tuple(x for x in struct_names)

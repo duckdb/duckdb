@@ -30,6 +30,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/storage/wal_entry.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
@@ -717,24 +718,25 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 // Replay Table
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateTable() {
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "table");
+	auto entry = WALCreateTable::Deserialize(deserializer);
+	auto info = std::move(entry.table);
 	if (DeserializeOnly()) {
 		return;
 	}
 	// bind the constraints to the table again
 	auto binder = Binder::CreateBinder(context);
-	auto &schema = catalog.GetSchema(context, info->schema);
+	auto &schema = catalog.GetSchema(context, info->GetQualifiedName().Schema());
 	auto bound_info = Binder::BindCreateTableCheckpoint(std::move(info), schema);
 
 	catalog.CreateTable(context, *bound_info);
 }
 
 void WriteAheadLogDeserializer::ReplayDropTable() {
+	auto entry = WALDropTable::Deserialize(deserializer);
 	DropInfo info;
 
 	info.type = CatalogType::TABLE_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -742,8 +744,9 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 	// Remove any replay indexes of this table.
 	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
 	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
-		                                              return replay_info.table_schema == info.schema &&
-		                                                     replay_info.table_name == info.name;
+		                                              return replay_info.table_schema ==
+		                                                         info.GetQualifiedName().Schema() &&
+		                                                     replay_info.table_name == info.GetQualifiedName().Name();
 	                                              }),
 	                               state.replay_index_infos.end());
 
@@ -805,8 +808,11 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
 	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
 
-	auto &table =
-	    catalog.GetEntry<TableCatalogEntry>(context, table_info.schema, table_info.name).Cast<DuckTableEntry>();
+	auto &table = catalog
+	                  .GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(),
+	                                                                      table_info.GetQualifiedName().Schema(),
+	                                                                      table_info.GetQualifiedName().Name()))
+	                  .Cast<DuckTableEntry>();
 	auto &column_list = table.GetColumns();
 
 	// Add the table to the bind context to bind the parsed expressions.
@@ -829,7 +835,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto logical_indexes = unique_info.GetLogicalIndexes(column_list);
 	for (const auto &logical_index : logical_indexes) {
 		auto &col = column_list.GetColumn(logical_index);
-		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.name);
+		unique_ptr<ParsedExpression> parsed =
+		    make_uniq<ColumnRefExpression>(col.GetName(), table_info.GetQualifiedName().Name());
 		unbound_expressions.push_back(idx_binder.Bind(parsed));
 	}
 
@@ -847,8 +854,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto index_instance = index_type->create_instance(input);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table_info.schema,
-	                                      table_info.name);
+	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance),
+	                                      table_info.GetQualifiedName().Schema(), table_info.GetQualifiedName().Name());
 
 	catalog.Alter(context, alter_info);
 }
@@ -857,7 +864,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 // Replay View
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateView() {
-	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "view");
+	auto wal_entry = WALCreateView::Deserialize(deserializer);
+	auto &entry = wal_entry.view;
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -865,10 +873,10 @@ void WriteAheadLogDeserializer::ReplayCreateView() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropView() {
+	auto entry = WALDropView::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::VIEW_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -879,8 +887,21 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 // Replay Schema
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSchema() {
+	auto entry = WALCreateSchema::Deserialize(deserializer);
 	CreateSchemaInfo info;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	// build the CreateSchemaInfo path [catalog, parent schemas..., new schema, <empty name>]
+	vector<Identifier> path;
+	path.push_back(catalog.GetName());
+	if (!entry.qualified_name.Path().empty()) {
+		// v2.0.0+: the qualified name's path is [parent schemas..., new schema]
+		for (auto &component : entry.qualified_name.Path()) {
+			path.push_back(component);
+		}
+	} else {
+		// legacy: only the (top-level) schema name was serialized
+		path.push_back(std::move(entry.schema));
+	}
+	info.SetQualifiedName(QualifiedName(std::move(path), Identifier()));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -889,10 +910,25 @@ void WriteAheadLogDeserializer::ReplayCreateSchema() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropSchema() {
+	auto entry = WALDropSchema::Deserialize(deserializer);
 	DropInfo info;
-
 	info.type = CatalogType::SCHEMA_ENTRY;
-	info.name = Identifier(deserializer.ReadProperty<string>(101, "schema"));
+	// build the DropInfo path [catalog, parent schemas..., schema] with the schema name in the name slot
+	vector<Identifier> path;
+	path.push_back(catalog.GetName());
+	Identifier schema_name;
+	if (!entry.qualified_name.Path().empty()) {
+		// v2.0.0+: the qualified name's path is [parent schemas..., schema]
+		auto &qpath = entry.qualified_name.Path();
+		for (idx_t i = 0; i + 1 < qpath.size(); i++) {
+			path.push_back(qpath[i]);
+		}
+		schema_name = qpath.back();
+	} else {
+		// legacy: only the (top-level) schema name was serialized
+		schema_name = std::move(entry.schema);
+	}
+	info.SetQualifiedName(QualifiedName(std::move(path), std::move(schema_name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -904,17 +940,21 @@ void WriteAheadLogDeserializer::ReplayDropSchema() {
 // Replay Custom Type
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateType() {
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "type");
+	auto wal_entry = WALCreateType::Deserialize(deserializer);
+	auto &info = wal_entry.type;
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	if (DeserializeOnly()) {
+		return;
+	}
 	catalog.CreateType(context, info->Cast<CreateTypeInfo>());
 }
 
 void WriteAheadLogDeserializer::ReplayDropType() {
+	auto entry = WALDropType::Deserialize(deserializer);
 	DropInfo info;
 
 	info.type = CatalogType::TYPE_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -926,42 +966,47 @@ void WriteAheadLogDeserializer::ReplayDropType() {
 // Replay Trigger
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateTrigger() {
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "trigger");
+	auto wal_entry = WALCreateTrigger::Deserialize(deserializer);
+	auto &info = wal_entry.trigger;
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	if (DeserializeOnly()) {
 		return;
 	}
 	auto &trigger_info = info->Cast<CreateTriggerInfo>();
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, trigger_info.catalog, trigger_info.schema,
-	                                                   trigger_info.base_table->table_name);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(trigger_info.GetQualifiedName().Catalog(),
+	                                                                          trigger_info.GetQualifiedName().Schema(),
+	                                                                          trigger_info.base_table->Table()));
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
 	duck_table.CreateTrigger(transaction, trigger_info);
 }
 
 void WriteAheadLogDeserializer::ReplayDropTrigger() {
+	auto entry = WALDropTrigger::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::TRIGGER_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
-	auto table_name = deserializer.ReadPropertyWithDefault<Identifier>(103, "table");
+	auto table_name = std::move(entry.table);
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
 	if (table_name.empty()) {
-		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger \"%s\"", info.name);
+		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger \"%s\"",
+		                        info.GetQualifiedName().Name());
 	}
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.schema, table_name);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(
+	    context, QualifiedName(catalog.GetName(), info.GetQualifiedName().Schema(), table_name));
 	auto &duck_table = table.Cast<DuckTableEntry>();
 	auto transaction = catalog.GetCatalogTransaction(context);
-	duck_table.DropTrigger(transaction, info.name, info.cascade);
+	duck_table.DropTrigger(transaction, info.GetQualifiedName().Name(), info.cascade);
 }
 
 //===--------------------------------------------------------------------===//
 // Replay Sequence
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateSequence() {
-	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "sequence");
+	auto wal_entry = WALCreateSequence::Deserialize(deserializer);
+	auto &entry = wal_entry.sequence;
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -970,10 +1015,10 @@ void WriteAheadLogDeserializer::ReplayCreateSequence() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropSequence() {
+	auto entry = WALDropSequence::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::SEQUENCE_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -982,26 +1027,24 @@ void WriteAheadLogDeserializer::ReplayDropSequence() {
 }
 
 void WriteAheadLogDeserializer::ReplaySequenceValue() {
-	auto schema = deserializer.ReadProperty<string>(101, "schema");
-	auto name = deserializer.ReadProperty<string>(102, "name");
-	auto usage_count = deserializer.ReadProperty<uint64_t>(103, "usage_count");
-	auto counter = deserializer.ReadProperty<int64_t>(104, "counter");
-	auto last_value = deserializer.ReadPropertyWithDefault<optional<int64_t>>(105, "last_value");
+	auto entry = WALSequenceValue::Deserialize(deserializer);
 
 	if (DeserializeOnly()) {
 		return;
 	}
 
 	// fetch the sequence from the catalog
-	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(context, Identifier(schema), Identifier(name));
-	seq.ReplayValue(usage_count, counter, last_value);
+	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(
+	    context, QualifiedName(catalog.GetName(), std::move(entry.schema), std::move(entry.name)));
+	seq.ReplayValue(entry.usage_count, entry.counter, entry.last_value);
 }
 
 //===--------------------------------------------------------------------===//
 // Replay Macro
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateMacro() {
-	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "macro");
+	auto wal_entry = WALCreateMacro::Deserialize(deserializer);
+	auto &entry = wal_entry.macro;
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1010,10 +1053,10 @@ void WriteAheadLogDeserializer::ReplayCreateMacro() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropMacro() {
+	auto entry = WALDropMacro::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::MACRO_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1025,7 +1068,8 @@ void WriteAheadLogDeserializer::ReplayDropMacro() {
 // Replay Table Macro
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayCreateTableMacro() {
-	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "table_macro");
+	auto wal_entry = WALCreateTableMacro::Deserialize(deserializer);
+	auto &entry = wal_entry.table_macro;
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1033,10 +1077,10 @@ void WriteAheadLogDeserializer::ReplayCreateTableMacro() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropTableMacro() {
+	auto entry = WALDropTableMacro::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::TABLE_MACRO_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1062,10 +1106,11 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 		info.index_type = ART::TYPE_NAME;
 	}
 
-	const auto schema_name = create_info->schema;
+	const auto schema_name = create_info->GetQualifiedName().Schema();
 	const auto table_name = info.table;
 
-	auto &entry = catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
+	auto &entry =
+	    catalog.GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(), schema_name, table_name));
 	auto &table = entry.Cast<DuckTableEntry>();
 	auto &storage = table.GetStorage();
 	auto &io_manager = TableIOManager::Get(storage);
@@ -1081,21 +1126,22 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {
+	auto entry = WALDropIndex::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::INDEX_ENTRY;
-	info.schema = Identifier(deserializer.ReadProperty<string>(101, "schema"));
-	info.name = Identifier(deserializer.ReadProperty<string>(102, "name"));
+	info.SetQualifiedName(QualifiedName({std::move(entry.schema)}, std::move(entry.name)));
 	if (DeserializeOnly()) {
 		return;
 	}
 
 	// Remove the replay index, if any.
-	state.replay_index_infos.erase(std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
-	                                              [&info](const ReplayState::ReplayIndexInfo &replay_info) {
-		                                              return replay_info.table_schema == info.schema &&
-		                                                     replay_info.index->GetIndexName() == info.name;
-	                                              }),
-	                               state.replay_index_infos.end());
+	state.replay_index_infos.erase(
+	    std::remove_if(state.replay_index_infos.begin(), state.replay_index_infos.end(),
+	                   [&info](const ReplayState::ReplayIndexInfo &replay_info) {
+		                   return replay_info.table_schema == info.GetQualifiedName().Schema() &&
+		                          replay_info.index->GetIndexName() == info.GetQualifiedName().Name();
+	                   }),
+	    state.replay_index_infos.end());
 
 	catalog.DropEntry(context, info);
 }
@@ -1104,12 +1150,12 @@ void WriteAheadLogDeserializer::ReplayDropIndex() {
 // Replay Data
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayUseTable() {
-	auto schema_name = deserializer.ReadProperty<Identifier>(101, "schema");
-	auto table_name = deserializer.ReadProperty<Identifier>(102, "table");
+	auto entry = WALUseTable::Deserialize(deserializer);
 	if (DeserializeOnly()) {
 		return;
 	}
-	state.current_table = &catalog.GetEntry<DuckTableEntry>(context, schema_name, table_name);
+	state.current_table = &catalog.GetEntry<DuckTableEntry>(
+	    context, QualifiedName(catalog.GetName(), std::move(entry.schema), std::move(entry.table)));
 }
 
 void WriteAheadLogDeserializer::ReplayInsert() {
@@ -1239,7 +1285,8 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 }
 
 void WriteAheadLogDeserializer::ReplayCheckpoint() {
-	state.checkpoint_id = deserializer.ReadProperty<MetaBlockPointer>(101, "meta_block");
+	auto entry = WALCheckpoint::Deserialize(deserializer);
+	state.checkpoint_id = entry.meta_block;
 	state.checkpoint_position = state.current_position;
 }
 

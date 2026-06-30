@@ -4,6 +4,7 @@
 #include "duckdb/function/cast/variant/array_to_variant.hpp"
 #include "duckdb/function/cast/variant/json_to_variant.hpp"
 #include "duckdb/function/cast/variant/struct_to_variant.hpp"
+#include "duckdb/function/cast/variant/tuple_to_variant.hpp"
 #include "duckdb/function/cast/variant/union_to_variant.hpp"
 #include "duckdb/function/cast/variant/variant_to_variant.hpp"
 #include "duckdb/function/cast/variant/primitive_to_variant.hpp"
@@ -39,6 +40,9 @@ bool ConvertToVariant(ToVariantSourceData &source, ToVariantGlobalResultData &re
 			return ConvertStructToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, count, selvec,
 
 			                                                        values_index_selvec, is_root);
+		case LogicalTypeId::TUPLE:
+			return ConvertTupleToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, count, selvec, values_index_selvec,
+			                                                       is_root);
 		case LogicalTypeId::UNION:
 			return ConvertUnionToVariant<WRITE_DATA, IGNORE_NULLS>(source, result, count, selvec,
 

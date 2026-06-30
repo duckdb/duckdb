@@ -51,6 +51,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
@@ -83,6 +84,7 @@
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
 #endif
+#include "terminal.hpp"
 
 #include "duckdb.hpp"
 #include "shell_renderer.hpp"
@@ -979,7 +981,8 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		last_result = duckdb::unique_ptr_cast<duckdb::QueryResult, MaterializedQueryResult>(std::move(result));
 	}
 	// analyze the query result so we know how long/wide the result will be
-	return RenderQueryResult(*renderer, res);
+	auto render_state = RenderQueryResult(*renderer, res);
+	return render_state;
 }
 
 /*
@@ -987,6 +990,33 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 ** any result rows/columns depending on the current mode
 ** set via the supplied callback.
 */
+void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
+	auto &explain = statement.Cast<duckdb::ExplainStatement>();
+	if (explain.format != duckdb::ProfilerPrintFormat::Default()) {
+		// the user explicitly requested an output format (e.g. EXPLAIN (FORMAT json))
+		return;
+	}
+	if (explain.explain_type == duckdb::ExplainType::EXPLAIN_ANALYZE) {
+		auto &profiler_format = duckdb::ClientConfig::GetConfig(*conn->context).profiler_print_format;
+		if (profiler_format != "query_tree" && profiler_format != "no_output") {
+			// a custom profiler output format is configured - respect it
+			return;
+		}
+	}
+	// default to the full plan; only fold low-impact operators in an interactive console session, where the user
+	// can type ".last" to expand the tree again (batch/redirected output has no such affordance)
+	if (stdin_is_interactive && stdout_is_console) {
+		duckdb::ClientConfig::GetConfig(*conn->context).profiling_renderer_settings["expand_all"] =
+		    duckdb::Value::BOOLEAN(false);
+	}
+	if (!stdout_is_console) {
+		// only pretty-print to an interactive console - redirected output keeps the plain plan as a result value
+		return;
+	}
+	// render the plan as a highlighted string (see RegisterProfilerHighlighting)
+	explain.format = duckdb::ProfilerPrintFormat("shell_explain_printer");
+}
+
 SuccessState ShellState::ExecuteSQL(const string &zSql) {
 	auto &con = *conn;
 	try {
@@ -1008,6 +1038,7 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			cMode = mode;
 			if (statement->type == duckdb::StatementType::EXPLAIN_STATEMENT) {
 				cMode = RenderMode::EXPLAIN;
+				SetupPrettyExplain(*statement);
 			}
 			if (mode == RenderMode::DUCKBOX && UseDescribeRenderMode(*statement, describe_table_name)) {
 				cMode = RenderMode::DESCRIBE;
@@ -1393,6 +1424,31 @@ bool ShellState::ShouldUsePager(idx_t line_count) {
 		}
 	}
 	return true;
+}
+
+idx_t ShellState::GetScreenHeight() {
+	auto size = duckdb::Terminal::GetTerminalSize();
+	return size.ws_row > 0 ? idx_t(size.ws_row) : 0;
+}
+
+bool ShellState::ShouldUsePagerForSize(idx_t line_count, idx_t render_width) {
+	if (!ShouldUsePager()) {
+		return false;
+	}
+	if (pager_mode != PagerMode::PAGER_AUTOMATIC) {
+		// PAGER_ON (PAGER_OFF was already rejected by ShouldUsePager())
+		return true;
+	}
+	// in automatic mode we page when the output does not fit on the screen - either too tall or too wide
+	idx_t screen_rows = GetScreenHeight();
+	idx_t row_threshold = screen_rows > 0 ? screen_rows : pager_min_rows;
+	if (line_count >= row_threshold) {
+		return true;
+	}
+	if (render_width > GetMaxRenderWidth()) {
+		return true;
+	}
+	return false;
 }
 
 bool ShellState::ShouldUsePager(ShellRenderer &renderer, RenderingQueryResult &result) {

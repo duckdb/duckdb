@@ -8,11 +8,23 @@ require vector_size 2048
 set seed 0.8675309
 
 query II
-SELECT 
-	list(random()) OVER (ORDER BY id), 
-	max(random()) OVER (ORDER BY id) 
+SELECT
+	list(random()) OVER (ORDER BY id),
+	max(random()) OVER (ORDER BY id)
 FROM range(3) t(id);
 ----
 [0.5232026142836782]	0.985522684201432
 [0.5232026142836782, 0.47754610640283557]	0.985522684201432
 [0.5232026142836782, 0.47754610640283557, 0.6947716273694302]	0.985522684201432
+
+# Identical volatile window expressions must not be CSE'd (issue #23367)
+# any_value(uuid()) called twice should produce two independent UUIDs per partition
+query I
+SELECT count(*) FROM (
+	SELECT
+		any_value(uuid()::varchar) OVER (PARTITION BY g) AS id_a,
+		any_value(uuid()::varchar) OVER (PARTITION BY g) AS id_b
+	FROM (VALUES (1),(1),(2),(2)) t(g)
+) WHERE id_a = id_b;
+----
+0

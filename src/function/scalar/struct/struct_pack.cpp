@@ -70,7 +70,12 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 	}
 
 	// this is more for completeness reasons
-	bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
+	// row() produces an unnamed TUPLE, struct_pack() produces a named STRUCT
+	if (IS_STRUCT_PACK) {
+		bound_function.SetReturnType(LogicalType::STRUCT(std::move(struct_children)));
+	} else {
+		bound_function.SetReturnType(LogicalType::TUPLE(std::move(struct_children)));
+	}
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
@@ -86,7 +91,8 @@ static unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, Functi
 
 template <bool IS_STRUCT_PACK>
 static ScalarFunction GetStructPackFunction() {
-	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {}, LogicalTypeId::STRUCT, StructPackFunction,
+	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {},
+	                   IS_STRUCT_PACK ? LogicalTypeId::STRUCT : LogicalTypeId::TUPLE, StructPackFunction,
 	                   StructPackBind<IS_STRUCT_PACK>, StructPackStats);
 	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);

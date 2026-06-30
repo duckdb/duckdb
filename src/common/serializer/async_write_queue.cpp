@@ -92,7 +92,7 @@ private:
 AsyncWriteQueue::AsyncWriteQueue(ClientContext &client_context_p, AsyncWriteTarget &target_p)
     : client_context(client_context_p), target(target_p) {
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
-	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
+	auto async_threads = scheduler.NumberOfAsyncThreads();
 	max_active_tasks = MaxValue<idx_t>(async_threads, 1);
 	if (async_threads == 0) {
 		return;
@@ -497,7 +497,7 @@ idx_t ManagedAsyncWriteQueue::PendingWrite::Size() const {
 ManagedAsyncWriteQueue::ManagedAsyncWriteQueue(ClientContext &client_context_p, AsyncWriteTarget &target_p)
     : client_context(client_context_p), target(target_p), memory_governor(client_context_p) {
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
-	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
+	auto async_threads = scheduler.NumberOfAsyncThreads();
 	max_active_drain_tasks = MaxValue<idx_t>(async_threads, 1);
 
 	AsyncWriteTarget &async_target = *this;
@@ -925,7 +925,7 @@ ManagedAsyncWriteStreamQueue::ManagedAsyncWriteStreamQueue(ClientContext &client
 	limit_coalesced_write_size = local_file;
 
 	auto &scheduler = TaskScheduler::GetScheduler(client_context);
-	auto async_threads = NumericCast<idx_t>(scheduler.NumberOfAsyncThreads());
+	auto async_threads = scheduler.NumberOfAsyncThreads();
 
 	// Positional writes let multiple async requests drain one logical write queue concurrently.
 	// Otherwise the stream queue keeps one sequential request active so target ordering remains correct.
@@ -1155,6 +1155,7 @@ bool ManagedAsyncWriteStreamQueue::TakePendingWriteRequest(AsyncWriteRequest &re
 		return false;
 	}
 	if (drain_mode == DrainMode::SEQUENTIAL && submitted_requests > 0) {
+		// Non-positional targets write through the file handle's current position, so only one request may be active.
 		return false;
 	}
 	if (policy == SchedulePolicy::THRESHOLD) {

@@ -2,6 +2,9 @@
 # description: Test pushdown of filters on coalesced join keys compared for equality in the join condition
 # group: [pushdown]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 # enable query verification
 statement ok
 CREATE TABLE t1 AS FROM VALUES

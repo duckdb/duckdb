@@ -290,7 +290,7 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 		return string();
 	}
 	auto current_db = duckdb::DatabaseManager::GetDefaultDatabase(context);
-	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().schema;
+	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().GetSchema();
 	if (component.literal == "current_database") {
 		return current_db.GetIdentifierName();
 	}

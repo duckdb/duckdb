@@ -21,11 +21,16 @@ struct CreateViewInfo : public CreateInfo {
 public:
 	CreateViewInfo();
 	CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name);
-	CreateViewInfo(Identifier catalog_p, Identifier schema_p, Identifier view_name);
+	explicit CreateViewInfo(const QualifiedName &view_name);
 
 public:
 	//! View name
-	Identifier view_name;
+	const Identifier &GetViewName() const {
+		return qualified_name.Name();
+	}
+	void SetViewName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
+	}
 	//! Aliases of the view
 	vector<Identifier> aliases;
 	//! Return types

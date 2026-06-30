@@ -32,7 +32,8 @@ static bool TypeContainsDecimal(const LogicalType &type) {
 		return TypeContainsDecimal(ListType::GetChildType(type));
 	case LogicalTypeId::ARRAY:
 		return TypeContainsDecimal(ArrayType::GetChildType(type));
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		for (const auto &child : StructType::GetChildTypes(type)) {
 			if (TypeContainsDecimal(child.second)) {
 				return true;
@@ -254,10 +255,10 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 	auto func = qualifier.QualifyFunction(function);
 	if (!func) {
 		// function was not found - check if we this is a table function (to throw a more helpful error message)
-		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.FunctionName(),
+		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
 		                                      error_context);
-		auto table_func =
-		    GetCatalogEntry(function.Catalog(), function.Schema(), table_function_lookup, OnEntryNotFound::RETURN_NULL);
+		auto table_func = GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
+		                                  table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
 			throw BinderException(function,
 			                      "Function \"%s\" is a table function but it was used as a scalar function. This "
@@ -265,9 +266,10 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 			                      function.FunctionName());
 		}
 		// not a table function - rebind to throw an error
-		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.FunctionName(), error_context);
-		func =
-		    GetCatalogEntry(function.Catalog(), function.Schema(), function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(function.FunctionName()),
+		                                error_context);
+		func = GetCatalogEntry(function.GetQualifiedName().Catalog(), function.GetQualifiedName().Schema(),
+		                       function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	return *func;
 }

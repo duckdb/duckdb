@@ -204,7 +204,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer 
     auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(3));
     auto showref = make_uniq<ShowRef>();
     showref->show_type = ShowType::SHOW_FROM;
-    showref->schema_name = qualified_name.name;
+    showref->SetSchemaName(qualified_name.Name());
     // ... build and return the AST node
 }
 ```

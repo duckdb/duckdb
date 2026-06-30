@@ -327,7 +327,7 @@ public:
 	enum class ScheduleMode : uint8_t { ALLOW, DEFER };
 	//! Whether to schedule only enough request capacity for normal overlap, or force all pending bytes to drain.
 	enum class SchedulePolicy : uint8_t { THRESHOLD, FORCE };
-	//! Whether async requests can write independent target ranges concurrently.
+	//! Whether async requests can write independent target ranges or must use the target's current stream position.
 	enum class DrainMode : uint8_t { SEQUENTIAL, POSITIONAL };
 	//! Whether waiting for scheduled writes should preserve an open registration batch.
 	enum class BatchDrainMode : uint8_t { PRESERVE_BATCH, FORCE_CLOSE_BATCH };
@@ -415,14 +415,14 @@ private:
 	//! Discard queued writes after an async write failure once all submitted writes have stopped.
 	void CancelPendingWritesAfterFailure() noexcept;
 
-	//! Write bytes to the managed target at the assigned logical offset.
+	//! Write bytes to the managed target. SEQUENTIAL mode preserves queue order and ignores the logical offset here.
 	void Write(data_ptr_t buffer, idx_t size, idx_t offset) override;
 
 private:
 	ClientContext &client_context;
 	ManagedAsyncWriteStreamTarget &target;
 
-	//! Positional managed queue that owns TMM reservation, backpressure, and task scheduling.
+	//! Managed queue that owns TMM reservation, backpressure, and task scheduling for physical write requests.
 	unique_ptr<ManagedAsyncWriteQueue> write_queue;
 	//! Whether async requests may drain independent ranges concurrently using positional writes.
 	DrainMode drain_mode = DrainMode::SEQUENTIAL;

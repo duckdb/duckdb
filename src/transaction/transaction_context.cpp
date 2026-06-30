@@ -53,10 +53,15 @@ void TransactionContext::SetInvalidationPolicy(TransactionInvalidationPolicy new
 	invalidation_policy = new_invalidation_policy;
 }
 
+void TransactionContext::SetAutocheckpointError(ErrorData error) {
+	autocheckpoint_error = std::move(error);
+}
+
 void TransactionContext::Commit() {
 	if (!current_transaction) {
 		throw TransactionException("failed to commit: no transaction active");
 	}
+	autocheckpoint_error = ErrorData();
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
 	auto error = transaction->Commit();
@@ -75,6 +80,11 @@ void TransactionContext::Commit() {
 		state->TransactionCommit(*transaction, context);
 	}
 	transaction->Finalize();
+	if (autocheckpoint_error.HasError()) {
+		auto err = std::move(autocheckpoint_error);
+		autocheckpoint_error = ErrorData();
+		err.Throw();
+	}
 }
 
 void TransactionContext::SetAutoCommit(bool value) {

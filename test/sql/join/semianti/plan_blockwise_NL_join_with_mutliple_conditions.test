@@ -3,6 +3,9 @@
 # group: [semianti]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 create table t1 as select * from values (1, 2), (2, 4), (3, 8), (6, 25), (1, 25) t(a, b);
 
 statement ok

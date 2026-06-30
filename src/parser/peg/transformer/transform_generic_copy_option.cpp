@@ -56,7 +56,7 @@ static void SetGenericCopyOptionExpression(GenericCopyOption &copy_option, uniqu
 }
 
 static unique_ptr<ParsedExpression> CreateRowFunction(vector<unique_ptr<ParsedExpression>> &&children) {
-	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(children));
+	return make_uniq<FunctionExpression>("row", std::move(children));
 }
 
 static unique_ptr<ParsedExpression> CreateOrderByRowFunction(const vector<OrderByNode> &orders) {

@@ -9,14 +9,13 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/timebase.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/timestamp_base.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
-struct dtime_t;    // NOLINT: literal casing
-struct date_t;     // NOLINT: literal casing
-struct dtime_tz_t; // NOLINT: literal casing
+struct date_t; // NOLINT: literal casing
 struct TimestampComponents;
 
 class Serializer;

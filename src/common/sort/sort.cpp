@@ -36,7 +36,7 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 		auto col_type = order.expression->GetReturnType();
 		decode_child_list.emplace_back(col_name, col_type);
 		col_type = TypeVisitor::VisitReplace(col_type, [](const LogicalType &type) {
-			if (type.id() != LogicalTypeId::STRUCT) {
+			if (!StructType::IsStruct(type)) {
 				return type;
 			}
 			child_list_t<LogicalType> internal_child_list;
@@ -160,7 +160,7 @@ public:
 class SortGlobalSinkState : public GlobalSinkState {
 public:
 	explicit SortGlobalSinkState(ClientContext &context)
-	    : num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
+	    : num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), sorted_tuples(0),
 	      external(Settings::Get<DebugForceExternalSetting>(context)), any_combined(false), total_count(0),
 	      partition_size(0) {

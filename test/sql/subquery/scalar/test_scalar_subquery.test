@@ -2,6 +2,9 @@
 # description: Test subqueries
 # group: [scalar]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 query I
 SELECT 1+(SELECT 1)
 ----

@@ -31,6 +31,7 @@
 #include "duckdb/common/limits.hpp"
 
 #include <type_traits>
+#include <cstring>
 
 namespace duckdb {
 
@@ -585,6 +586,18 @@ void BuildVariant(SOURCE &source, idx_t count, Vector &result) {
 
 	FlatVector::SetSize(result, count);
 	result.Verify();
+}
+
+//! Build an all-NULL canonical (unshredded) VARIANT vector with no values/children/keys. Used as the
+//! unshredded pool of a SHREDDED vector when a chunk has no leftover data: the pool is never consulted, so
+//! only its structural validity matters. Far cheaper than BuildVariant (no per-row traversal / key finalize).
+inline void BuildEmptyVariant(idx_t count, Vector &result) {
+	if (count == 0) {
+		return;
+	}
+	//! Every row is a (never-consulted) VARIANT NULL; the real row validity lives on the shredded component. The
+	//! pool is never read, so represent it as a single constant NULL (children come along as NULL for free).
+	ConstantVector::SetNull(result, count_t(count));
 }
 
 } // namespace duckdb

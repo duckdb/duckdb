@@ -42,10 +42,6 @@ struct ProfilerPrintFormat {
 		return ProfilerPrintFormat("mermaid");
 	}
 
-	//! Resolve a (case-insensitive) format name against the registry, returning its canonical form. Throws
-	//! InvalidInputException listing the valid format names when the name is not recognized.
-	static ProfilerPrintFormat FromString(const string &name);
-
 	bool operator==(const ProfilerPrintFormat &other) const {
 		return format == other.format;
 	}

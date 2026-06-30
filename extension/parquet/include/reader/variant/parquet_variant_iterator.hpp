@@ -35,6 +35,9 @@ struct ShreddedGroupView {
 	bool has_typed_value = false;
 	ParquetGroupKind kind = ParquetGroupKind::LEAF;
 	LogicalType typed_type;
+	//! The raw 'typed_value' Vector (LEAF primitive / OBJECT struct / ARRAY list) - used to Reference it
+	//! directly into a shredded output (see ParquetVariantConversion::ConvertToShredded)
+	optional_ptr<Vector> typed_value_vec;
 
 	//! LEAF: the typed primitive values (type-erased; read typed via GetData<T> where T is known)
 	UnifiedVectorFormat leaf_format;
@@ -222,6 +225,13 @@ public:
 	//! The (lazily-decoded) Variant metadata of the current row
 	const VariantMetadata &GetMetadata() const;
 
+	//! The recursive view of the Parquet group tree (used by the shredded-conversion path)
+	const ShreddedGroupView &GetRootView() const {
+		return root_view;
+	}
+	//! Emit the binary value in ['data', 'end') of the current row into the builder (BeginRow must precede)
+	void EmitBinary(const_data_ptr_t data, const_data_ptr_t end, VariantBuilder &builder) const;
+
 private:
 	ShreddedGroupView root_view;
 
@@ -231,20 +241,11 @@ private:
 	mutable unique_ptr<VariantMetadata> current_metadata;
 };
 
-//! BuildVariant source wrapping a ParquetVariantIterator (mirrors VariantIteratorSource in core)
-struct ParquetVariantIteratorSource {
-	explicit ParquetVariantIteratorSource(ParquetVariantIterator &iterator) : iterator(iterator) {
-	}
-	bool Emit(idx_t row, VariantBuilder &builder);
-
-	ParquetVariantIterator &iterator;
-};
-
-//! Convert a shredded Parquet VARIANT (metadata + group) into the canonical VARIANT 'result' in a single
-//! pass through the shared VariantBuilder
+//! Convert a Parquet VARIANT (metadata + group) into DuckDB's SHREDDED VARIANT format: the Parquet
+//! typed_value columns are referenced directly where they map exactly, and leftover/binary 'value' data
+//! (including the entire value when there is no 'typed_value' at all) goes into the unshredded component.
 class ParquetVariantConversion {
 public:
-	static void Convert(Vector &metadata, Vector &group, Vector &result, idx_t count);
 	//! Convert binary Variant values (each row being the metadata blob followed by the value blob) into the
 	//! canonical VARIANT 'result' in a single pass
 	static void ConvertBinary(Vector &metadata_and_value, Vector &result, idx_t count);

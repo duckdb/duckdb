@@ -256,11 +256,11 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const Identifier &name,
 		Identifier catalog_name;
 		Identifier schema_name;
 		for (auto &f : functions.functions) {
-			if (catalog_name.empty() && !f.catalog_name.empty()) {
-				catalog_name = f.catalog_name;
+			if (catalog_name.empty() && !f.GetCatalogName().empty()) {
+				catalog_name = f.GetCatalogName();
 			}
-			if (schema_name.empty() && !f.schema_name.empty()) {
-				schema_name = f.schema_name;
+			if (schema_name.empty() && !f.GetSchemaName().empty()) {
+				schema_name = f.GetSchemaName();
 			}
 			candidates.push_back(f.ToString());
 		}
@@ -549,7 +549,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const Identifier &sche
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
                                                           bool is_operator, optional_ptr<Binder> binder) {
 	// bind the function
-	auto &function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(context, schema, name);
+	auto &function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
+	    context, QualifiedName(Catalog::GetSystemCatalog(context).GetName(), schema, name));
 	D_ASSERT(function.type == CatalogType::SCALAR_FUNCTION_ENTRY);
 	return BindScalarFunction(function, std::move(children), error, is_operator, binder);
 }
@@ -853,9 +854,10 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 		// TODO: Support union types with template member types.
 		throw NotImplementedException("Union types cannot infer templated member types yet!");
 	} break;
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		// Structs are only implicitly castable to structs, so we only need to handle this case here.
-		if (target.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(source)) {
+		if (StructType::IsStruct(target) && StructType::IsUnnamed(source)) {
 			const auto &source_children = StructType::GetChildTypes(source);
 			const auto &target_children = StructType::GetChildTypes(target);
 

@@ -5,6 +5,7 @@
 #include "duckdb/planner/planner_extension.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/planner/extension_callback.hpp"
+#include "duckdb/main/profiler_extension.hpp"
 
 namespace duckdb {
 
@@ -21,6 +22,8 @@ struct ExtensionCallbackRegistry {
 	case_insensitive_map_t<shared_ptr<StorageExtension>> storage_extensions;
 	//! Set of callbacks that can be installed by extensions
 	vector<shared_ptr<ExtensionCallback>> extension_callbacks;
+	//! Pluggable profiler / EXPLAIN tree renderers, keyed by format name
+	case_insensitive_map_t<shared_ptr<ProfilerExtension>> profiler_extensions;
 };
 
 ExtensionCallbackManager &ExtensionCallbackManager::Get(ClientContext &context) {
@@ -90,6 +93,13 @@ void ExtensionCallbackManager::Register(shared_ptr<ExtensionCallback> extension)
 	callback_registry.atomic_store(new_registry);
 }
 
+void ExtensionCallbackManager::Register(const string &name, shared_ptr<ProfilerExtension> extension) {
+	lock_guard<mutex> guard(registry_lock);
+	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
+	new_registry->profiler_extensions[name] = std::move(extension);
+	callback_registry.atomic_store(new_registry);
+}
+
 template <class T>
 ExtensionCallbackIteratorHelper<T>::ExtensionCallbackIteratorHelper(
     const vector<T> &vec, shared_ptr<ExtensionCallbackRegistry> callback_registry)
@@ -139,6 +149,15 @@ optional_ptr<StorageExtension> ExtensionCallbackManager::FindStorageExtension(co
 	return entry->second.get();
 }
 
+optional_ptr<ProfilerExtension> ExtensionCallbackManager::FindProfilerExtension(const string &name) const {
+	auto registry = callback_registry.atomic_load();
+	auto entry = registry->profiler_extensions.find(name);
+	if (entry == registry->profiler_extensions.end()) {
+		return nullptr;
+	}
+	return entry->second.get();
+}
+
 bool ExtensionCallbackManager::HasParserExtensions() const {
 	auto registry = callback_registry.atomic_load();
 	return !registry->parser_extensions.empty();
@@ -171,6 +190,14 @@ void ExtensionCallback::Register(DBConfig &config, shared_ptr<ExtensionCallback>
 void StorageExtension::Register(DBConfig &config, const string &extension_name,
                                 shared_ptr<StorageExtension> extension) {
 	config.GetCallbackManager().Register(extension_name, std::move(extension));
+}
+
+void ProfilerExtension::Register(DBConfig &config, const string &format_name, shared_ptr<ProfilerExtension> extension) {
+	config.GetCallbackManager().Register(format_name, std::move(extension));
+}
+
+optional_ptr<ProfilerExtension> ProfilerExtension::Find(const ClientContext &context, const string &format_name) {
+	return ExtensionCallbackManager::Get(context).FindProfilerExtension(format_name);
 }
 
 template class ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>;

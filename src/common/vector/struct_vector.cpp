@@ -287,8 +287,8 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::FlattenSliceInternal(const LogicalT
 }
 
 vector<Vector> &StructVector::GetEntries(Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION ||
-	         vector.GetType().id() == LogicalTypeId::VARIANT);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::TUPLE ||
+	         vector.GetType().id() == LogicalTypeId::UNION || vector.GetType().id() == LogicalTypeId::VARIANT);
 
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		throw InternalException("Struct vectors cannot be dictionary vectors");

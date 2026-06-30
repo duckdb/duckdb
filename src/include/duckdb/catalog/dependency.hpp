@@ -139,7 +139,9 @@ public:
 struct CatalogEntryInfo {
 public:
 	CatalogType type;
-	Identifier schema;
+	//! The path of (nested) schemas that contain this entry, outermost first. Empty for a top-level schema. Note this
+	//! is the path of the *containing* schemas - for a schema entry it is the parent chain (not including itself).
+	vector<Identifier> schema_path;
 	Identifier name;
 
 public:
@@ -147,13 +149,23 @@ public:
 		if (other.type != type) {
 			return false;
 		}
-		if (other.schema != schema) {
+		if (other.schema_path != schema_path) {
 			return false;
 		}
 		if (other.name != name) {
 			return false;
 		}
 		return true;
+	}
+
+	//! The single legacy schema name written for storage versions older than v2.0.0 (which only support top-level
+	//! schemas). For a schema entry this is its own name (matching the historical encoding); for any other entry it is
+	//! the name of the immediate containing schema.
+	Identifier LegacySchema() const {
+		if (type == CatalogType::SCHEMA_ENTRY) {
+			return name;
+		}
+		return schema_path.empty() ? Identifier() : schema_path.back();
 	}
 
 public:

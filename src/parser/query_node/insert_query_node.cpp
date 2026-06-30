@@ -8,7 +8,7 @@
 namespace duckdb {
 
 InsertQueryNode::InsertQueryNode()
-    : QueryNode(QueryNodeType::INSERT_QUERY_NODE), schema(DEFAULT_SCHEMA), catalog(INVALID_CATALOG),
+    : QueryNode(QueryNodeType::INSERT_QUERY_NODE), qualified_name({Identifier::DefaultSchema()}, Identifier()),
       column_order(InsertColumnOrder::INSERT_BY_POSITION) {
 }
 
@@ -23,13 +23,7 @@ string InsertQueryNode::ToString() const {
 		result += " OR REPLACE";
 	}
 	result += " INTO ";
-	if (!catalog.empty()) {
-		result += SQLIdentifier(catalog) + ".";
-	}
-	if (!schema.empty()) {
-		result += SQLIdentifier(schema) + ".";
-	}
-	result += SQLIdentifier(table);
+	result += qualified_name.ToString();
 	// Write the (optional) alias of the insert target
 	if (table_ref && !table_ref->alias.empty()) {
 		result += StringUtil::Format(" AS %s", SQLIdentifier(table_ref->alias));
@@ -127,13 +121,7 @@ bool InsertQueryNode::Equals(const QueryNode *other_p) const {
 		return false;
 	}
 	auto &other = other_p->Cast<InsertQueryNode>();
-	if (table != other.table) {
-		return false;
-	}
-	if (schema != other.schema) {
-		return false;
-	}
-	if (catalog != other.catalog) {
+	if (qualified_name != other.qualified_name) {
 		return false;
 	}
 	if (columns != other.columns) {
@@ -172,9 +160,7 @@ bool InsertQueryNode::Equals(const QueryNode *other_p) const {
 
 unique_ptr<QueryNode> InsertQueryNode::Copy() const {
 	auto result = make_uniq<InsertQueryNode>();
-	result->table = table;
-	result->schema = schema;
-	result->catalog = catalog;
+	result->qualified_name = qualified_name;
 	result->columns = columns;
 	result->default_values = default_values;
 	result->column_order = column_order;
