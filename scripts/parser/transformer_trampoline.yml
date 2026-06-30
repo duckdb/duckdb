@@ -32,6 +32,11 @@ rules:
     init: InitializeUpdateExtensionsStatementTrampoline
     finalize: FinalizeUpdateExtensionsStatementTrampoline
 
+  ExecuteStatement:
+    mode: manual
+    init: InitializeExecuteStatementTrampoline
+    finalize: FinalizeExecuteStatementTrampoline
+
   ColId:
     mode: manual
     init: InitializeColIdTrampoline

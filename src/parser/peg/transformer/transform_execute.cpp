@@ -34,4 +34,22 @@ PEGTransformerFactory::TransformExecuteStatement(PEGTransformer &transformer, co
 	}
 	return std::move(result);
 }
+
+void PEGTransformerFactory::InitializeExecuteStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExecuteStatementTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &table_function_arguments_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (table_function_arguments_opt.HasResult()) {
+		throw NotImplementedException("EXECUTE parameters are not supported by the trampoline transformer yet");
+	}
+	auto identifier = list_pr.GetChild(1).Cast<IdentifierParseResult>().identifier;
+	auto result = TransformExecuteStatement(transformer, identifier, optional<vector<FunctionArgument>>());
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
 } // namespace duckdb

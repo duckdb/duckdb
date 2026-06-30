@@ -61,6 +61,9 @@ DEFAULT_GRAMMAR_FILES = [
 ]
 DEFAULT_EXTRA_RULES = {
     "create_table.gram": [
+        "CreateStatement",
+        "CreateStatementVariation",
+        "OrReplace",
         "CatalogQualification",
         "SchemaQualification",
         "ReservedSchemaQualification",
@@ -84,6 +87,7 @@ DEFAULT_EXTRA_RULES = {
     "create_trigger.gram": ["TriggerName"],
     "alter.gram": ["QualifiedSequenceName"],
     "delete.gram": ["TruncateStatement"],
+    "execute.gram": ["ExecuteStatement"],
     "export.gram": ["ImportStatement"],
     "set.gram": [
         "ResetStatement",
