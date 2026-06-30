@@ -1005,6 +1005,47 @@ public:
 	                                                  TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeTruncateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeImportStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeImportStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeResetStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                               TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeResetStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSetVariableOrSettingTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                     TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeSetVariableOrSettingTrampoline(PEGTransformer &transformer,
+	                                                                               TransformStack &stack,
+	                                                                               TransformStackFrame &frame);
+	static void InitializeSetVariableTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSetVariableTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSetSettingTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSetSettingTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeVariableScopeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeVariableScopeTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSettingScopeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSettingScopeTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeLocalScopeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeLocalScopeTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSessionScopeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSessionScopeTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeGlobalScopeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeGlobalScopeTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeCollationNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                              TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>

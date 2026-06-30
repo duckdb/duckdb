@@ -364,6 +364,34 @@ static const TransformFrameOps QUALIFIED_SEQUENCE_NAME_OPS = {
 static const TransformFrameOps TRUNCATE_STATEMENT_OPS = {"TruncateStatement",
                                                          &PEGTransformerFactory::InitializeTruncateStatementTrampoline,
                                                          &PEGTransformerFactory::FinalizeTruncateStatementTrampoline};
+static const TransformFrameOps IMPORT_STATEMENT_OPS = {"ImportStatement",
+                                                       &PEGTransformerFactory::InitializeImportStatementTrampoline,
+                                                       &PEGTransformerFactory::FinalizeImportStatementTrampoline};
+static const TransformFrameOps RESET_STATEMENT_OPS = {"ResetStatement",
+                                                      &PEGTransformerFactory::InitializeResetStatementTrampoline,
+                                                      &PEGTransformerFactory::FinalizeResetStatementTrampoline};
+static const TransformFrameOps SET_VARIABLE_OR_SETTING_OPS = {
+    "SetVariableOrSetting", &PEGTransformerFactory::InitializeSetVariableOrSettingTrampoline,
+    &PEGTransformerFactory::FinalizeSetVariableOrSettingTrampoline};
+static const TransformFrameOps SET_VARIABLE_OPS = {"SetVariable",
+                                                   &PEGTransformerFactory::InitializeSetVariableTrampoline,
+                                                   &PEGTransformerFactory::FinalizeSetVariableTrampoline};
+static const TransformFrameOps SET_SETTING_OPS = {"SetSetting", &PEGTransformerFactory::InitializeSetSettingTrampoline,
+                                                  &PEGTransformerFactory::FinalizeSetSettingTrampoline};
+static const TransformFrameOps VARIABLE_SCOPE_OPS = {"VariableScope",
+                                                     &PEGTransformerFactory::InitializeVariableScopeTrampoline,
+                                                     &PEGTransformerFactory::FinalizeVariableScopeTrampoline};
+static const TransformFrameOps SETTING_SCOPE_OPS = {"SettingScope",
+                                                    &PEGTransformerFactory::InitializeSettingScopeTrampoline,
+                                                    &PEGTransformerFactory::FinalizeSettingScopeTrampoline};
+static const TransformFrameOps LOCAL_SCOPE_OPS = {"LocalScope", &PEGTransformerFactory::InitializeLocalScopeTrampoline,
+                                                  &PEGTransformerFactory::FinalizeLocalScopeTrampoline};
+static const TransformFrameOps SESSION_SCOPE_OPS = {"SessionScope",
+                                                    &PEGTransformerFactory::InitializeSessionScopeTrampoline,
+                                                    &PEGTransformerFactory::FinalizeSessionScopeTrampoline};
+static const TransformFrameOps GLOBAL_SCOPE_OPS = {"GlobalScope",
+                                                   &PEGTransformerFactory::InitializeGlobalScopeTrampoline,
+                                                   &PEGTransformerFactory::FinalizeGlobalScopeTrampoline};
 static const TransformFrameOps COLLATION_NAME_OPS = {"CollationName",
                                                      &PEGTransformerFactory::InitializeCollationNameTrampoline,
                                                      &PEGTransformerFactory::FinalizeCollationNameTrampoline};
@@ -534,6 +562,16 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"TriggerName", &TRIGGER_NAME_OPS},
 	    {"QualifiedSequenceName", &QUALIFIED_SEQUENCE_NAME_OPS},
 	    {"TruncateStatement", &TRUNCATE_STATEMENT_OPS},
+	    {"ImportStatement", &IMPORT_STATEMENT_OPS},
+	    {"ResetStatement", &RESET_STATEMENT_OPS},
+	    {"SetVariableOrSetting", &SET_VARIABLE_OR_SETTING_OPS},
+	    {"SetVariable", &SET_VARIABLE_OPS},
+	    {"SetSetting", &SET_SETTING_OPS},
+	    {"VariableScope", &VARIABLE_SCOPE_OPS},
+	    {"SettingScope", &SETTING_SCOPE_OPS},
+	    {"LocalScope", &LOCAL_SCOPE_OPS},
+	    {"SessionScope", &SESSION_SCOPE_OPS},
+	    {"GlobalScope", &GLOBAL_SCOPE_OPS},
 	    {"CollationName", &COLLATION_NAME_OPS},
 	    {"QualifiedTypeName", &QUALIFIED_TYPE_NAME_OPS},
 	    {"TypeNameAsQualifiedName", &TYPE_NAME_AS_QUALIFIED_NAME_OPS},
@@ -2861,6 +2899,166 @@ PEGTransformerFactory::FinalizeTruncateStatementTrampoline(PEGTransformer &trans
 	auto result =
 	    PEGTransformerFactory::TransformTruncateStatement(transformer, has_result, std::move(base_table_name));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeImportStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeImportStatementTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto string_literal = PEGTransformerFactory::TransformStringLiteral(transformer, list_pr.GetChild(2));
+	auto result = PEGTransformerFactory::TransformImportStatement(transformer, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeResetStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(1), SET_VARIABLE_OR_SETTING_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeResetStatementTrampoline(PEGTransformer &transformer,
+                                                                                         TransformStack &stack,
+                                                                                         TransformStackFrame &frame) {
+	auto set_variable_or_setting = frame.TakeResult<SettingInfo>(0);
+	auto result = PEGTransformerFactory::TransformResetStatement(transformer, set_variable_or_setting);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeSetVariableOrSettingTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                     TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeSetVariableOrSettingTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	auto result = frame.TakeResult<SettingInfo>(0);
+	return make_uniq<TypedTransformResult<SettingInfo>>(result);
+}
+
+void PEGTransformerFactory::InitializeSetVariableTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), VARIABLE_SCOPE_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSetVariableTrampoline(PEGTransformer &transformer,
+                                                                                      TransformStack &stack,
+                                                                                      TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto variable_scope = frame.TakeResult<SetScope>(0);
+	auto identifier = list_pr.GetChild(1).Cast<IdentifierParseResult>().identifier;
+	auto result = PEGTransformerFactory::TransformSetVariable(transformer, variable_scope, identifier);
+	return make_uniq<TypedTransformResult<SettingInfo>>(result);
+}
+
+void PEGTransformerFactory::InitializeSetSettingTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	auto &setting_scope_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (setting_scope_opt.HasResult()) {
+		stack.PushFrame(setting_scope_opt.GetResult(), SETTING_SCOPE_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSetSettingTrampoline(PEGTransformer &transformer,
+                                                                                     TransformStack &stack,
+                                                                                     TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	optional<SetScope> setting_scope {};
+	if (frame.child_results[0]) {
+		setting_scope = frame.TakeResult<SetScope>(0);
+	}
+	auto setting_name = list_pr.GetChild(1).Cast<IdentifierParseResult>().identifier;
+	auto result = PEGTransformerFactory::TransformSetSetting(transformer, setting_scope, setting_name);
+	return make_uniq<TypedTransformResult<SettingInfo>>(result);
+}
+
+void PEGTransformerFactory::InitializeVariableScopeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeVariableScopeTrampoline(PEGTransformer &transformer,
+                                                                                        TransformStack &stack,
+                                                                                        TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformVariableScope(transformer);
+	return make_uniq<TypedTransformResult<SetScope>>(result);
+}
+
+void PEGTransformerFactory::InitializeSettingScopeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSettingScopeTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	auto result = frame.TakeResult<SetScope>(0);
+	return make_uniq<TypedTransformResult<SetScope>>(result);
+}
+
+void PEGTransformerFactory::InitializeLocalScopeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeLocalScopeTrampoline(PEGTransformer &transformer,
+                                                                                     TransformStack &stack,
+                                                                                     TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformLocalScope(transformer);
+	return make_uniq<TypedTransformResult<SetScope>>(result);
+}
+
+void PEGTransformerFactory::InitializeSessionScopeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSessionScopeTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformSessionScope(transformer);
+	return make_uniq<TypedTransformResult<SetScope>>(result);
+}
+
+void PEGTransformerFactory::InitializeGlobalScopeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeGlobalScopeTrampoline(PEGTransformer &transformer,
+                                                                                      TransformStack &stack,
+                                                                                      TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformGlobalScope(transformer);
+	return make_uniq<TypedTransformResult<SetScope>>(result);
 }
 
 void PEGTransformerFactory::InitializeCollationNameTrampoline(PEGTransformer &transformer, TransformStack &stack,

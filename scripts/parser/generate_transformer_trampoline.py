@@ -84,6 +84,18 @@ DEFAULT_EXTRA_RULES = {
     "create_trigger.gram": ["TriggerName"],
     "alter.gram": ["QualifiedSequenceName"],
     "delete.gram": ["TruncateStatement"],
+    "export.gram": ["ImportStatement"],
+    "set.gram": [
+        "ResetStatement",
+        "SetVariableOrSetting",
+        "SetVariable",
+        "SetSetting",
+        "VariableScope",
+        "SettingScope",
+        "LocalScope",
+        "SessionScope",
+        "GlobalScope",
+    ],
     "common.gram": [
         "CollationName",
         "QualifiedTypeName",
