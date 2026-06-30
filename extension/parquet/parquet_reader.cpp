@@ -793,7 +793,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		}
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
-		if (schema.children.size() != 3) {
+		if (schema.children.size() != 3 || !column_id.IsPushdownExtract()) {
 			//! Not shredded
 			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
 				children[child_index] =
@@ -801,18 +801,10 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 			}
 			return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
 		}
-		//! VARIANT is shredded, has a 'typed_value' column
+		//! VARIANT is shredded -  it has a 'typed_value' column
+		//! And the extract is pushed down into the scan
 		auto &typed_value_schema = schema.children[2];
 		D_ASSERT(typed_value_schema.name == "typed_value");
-		if (!column_id.IsPushdownExtract()) {
-			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
-				children[child_index] =
-				    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
-			}
-			return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
-		}
-
-		//! VARIANT is shredded AND we have a pushed down extract to execute
 		auto variant_stats = ReadColumnStatistics(*GetFileMetadata(), schema, parquet_options);
 
 		if (IsFullyShredded(*variant_stats, column_id)) {

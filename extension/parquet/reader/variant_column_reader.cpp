@@ -97,6 +97,23 @@ unique_ptr<BaseStatistics> VariantColumnReader::Stats(idx_t row_group_idx_p, con
 	return result;
 }
 
+static vector<VariantPathComponent> GetVariantExtractPath(const ColumnIndex &index) {
+	D_ASSERT(index.IsPushdownExtract());
+	vector<VariantPathComponent> result;
+	reference<const ColumnIndex> current(index.GetChildIndex(0));
+	while (true) {
+		if (current.get().HasPrimaryIndex()) {
+			throw InternalException("VARIANT pushdown extract expected a field name path");
+		}
+		result.emplace_back(current.get().GetFieldName());
+		if (!current.get().HasChildren()) {
+			break;
+		}
+		current = current.get().GetChildIndex(0);
+	}
+	return result;
+}
+
 static LogicalType GetIntermediateGroupType(optional_ptr<ColumnReader> typed_value) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("value", LogicalType::BLOB);
@@ -166,6 +183,11 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	}
 	// convert the actual columns
 	Convert(metadata_intermediate, intermediate_group, result, num_values);
+	if (index.IsPushdownExtract()) {
+		Vector extract_result(LogicalType::VARIANT(), num_values);
+		VariantUtils::VariantExtract(result, GetVariantExtractPath(index), extract_result, num_values);
+		result.Reference(extract_result);
+	}
 
 	return value_values;
 }

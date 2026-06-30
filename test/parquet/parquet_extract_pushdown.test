@@ -149,10 +149,10 @@ SELECT v.x FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE va
 ----
 5
 
-statement error
+query I
 SELECT v.x::UTINYINT FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE v.x=5
 ----
-Invalid Input Error: Can't compare values of type VARCHAR (test) and type INTEGER (5) - an explicit cast is required
+5
 
 query I
 SELECT v.x::UTINYINT FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE variant_typeof(v.x) == 'INT64' AND v.x=5

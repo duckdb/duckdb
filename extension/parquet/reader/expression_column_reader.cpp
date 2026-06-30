@@ -96,8 +96,6 @@ static void ReverseSelectionVector(const SelectionVector &input, SelectionVector
 void ExpressionColumnReader::Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
                                     idx_t approved_tuple_count) {
 	intermediate_chunk.Reset();
-	auto &intermediate_vector = intermediate_chunk.data[0];
-
 	for (idx_t i = 0; i < child_readers.size(); i++) {
 		auto &child_reader = child_readers[i];
 		child_reader->Select(input, intermediate_chunk.data[i], sel, approved_tuple_count);
