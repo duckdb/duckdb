@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/enums/operator_result_type.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
@@ -130,9 +131,9 @@ struct TableFunctionInitInput {
 	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, vector<column_t> column_ids_p,
 	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p,
 	                       optional_ptr<SampleOptions> sample_options_p = nullptr,
-	                       optional_ptr<const PhysicalOperator> op_p = nullptr)
+	                       optional_ptr<const PhysicalOperator> op_p = nullptr, optional_idx limit_p = optional_idx())
 	    : bind_data(bind_data_p), column_ids(std::move(column_ids_p)), projection_ids(projection_ids_p),
-	      filters(filters_p), sample_options(sample_options_p), op(op_p) {
+	      filters(filters_p), sample_options(sample_options_p), op(op_p), limit(limit_p) {
 		for (auto &col_id : column_ids) {
 			column_indexes.emplace_back(col_id);
 		}
@@ -141,9 +142,9 @@ struct TableFunctionInitInput {
 	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, vector<ColumnIndex> column_indexes_p,
 	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p,
 	                       optional_ptr<SampleOptions> sample_options_p = nullptr,
-	                       optional_ptr<const PhysicalOperator> op_p = nullptr)
+	                       optional_ptr<const PhysicalOperator> op_p = nullptr, optional_idx limit_p = optional_idx())
 	    : bind_data(bind_data_p), column_indexes(std::move(column_indexes_p)), projection_ids(projection_ids_p),
-	      filters(filters_p), sample_options(sample_options_p), op(op_p) {
+	      filters(filters_p), sample_options(sample_options_p), op(op_p), limit(limit_p) {
 		for (auto &col_id : column_indexes) {
 			column_ids.emplace_back(col_id.GetPrimaryIndex());
 		}
@@ -156,6 +157,8 @@ struct TableFunctionInitInput {
 	optional_ptr<TableFilterSet> filters;
 	optional_ptr<SampleOptions> sample_options;
 	optional_ptr<const PhysicalOperator> op;
+	//! Optional upper bound on rows needed from this scan. This is a hint; LIMIT remains enforced above the scan.
+	optional_idx limit;
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {
