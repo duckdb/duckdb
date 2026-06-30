@@ -48,6 +48,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/bound_parameter_map.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
@@ -923,6 +924,11 @@ ExpressionBindResult ClientContext::BindExpression(const vector<Identifier> &nam
 		    auto binder = Binder::CreateBinder(*this);
 		    binder->bind_context.AddGenericBinding(binder->GenerateTableIndex(), Identifier("__expr_input"), names,
 		                                           types);
+		    // Bind $params as placeholders, inferring their type from context, like Prepare does.
+		    identifier_map_t<BoundParameterData> parameter_data;
+		    BoundParameterMap bound_parameters(parameter_data);
+		    binder->SetParameters(bound_parameters);
+		    binder->SetBindingMode(BindingMode::PREPARE);
 		    // The SELECT-list binder extracts a top-level aggregate/window into node.aggregates / node.windows.
 		    BoundSelectNode node;
 		    node.projection_index = binder->GenerateTableIndex();
@@ -932,8 +938,13 @@ ExpressionBindResult ClientContext::BindExpression(const vector<Identifier> &nam
 		    node.window_index = binder->GenerateTableIndex();
 		    node.prune_index = binder->GenerateTableIndex();
 		    SelectBinder select_binder(*binder, *this, node);
-		    auto bound = select_binder.Bind(expr);
-		    result.type = bound->GetReturnType();
+		    // An unanchored parameter leaves the type indeterminate; mirror Prepare (UNKNOWN, not an error).
+		    try {
+			    auto bound = select_binder.Bind(expr);
+			    result.type = bound->GetReturnType();
+		    } catch (const ParameterNotResolvedException &) {
+			    result.type = LogicalType(LogicalTypeId::UNKNOWN);
+		    }
 		    result.contains_aggregate = !node.aggregates.empty();
 		    result.contains_window = !node.windows.empty();
 	    },

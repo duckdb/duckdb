@@ -61,6 +61,41 @@ TEST_CASE("BindExpression reports type and aggregate/window traits", "[api][bind
 	REQUIRE_THROWS(con.context->BindExpression(names, types, std::move(bad[0])));
 }
 
+TEST_CASE("BindExpression binds parameters like Prepare", "[api][bind_expression]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	vector<Identifier> names = {"a", "b"};
+	vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::VARCHAR};
+
+	// A comparison anchors the parameter to the column type; result is boolean.
+	auto cmp = BindOne(con, "a > $1", names, types);
+	REQUIRE(cmp.type == LogicalType::BOOLEAN);
+	REQUIRE_FALSE(cmp.contains_aggregate);
+	REQUIRE_FALSE(cmp.contains_window);
+
+	// A top-level aggregate alongside a parameter still flags the aggregate trait.
+	auto agg = BindOne(con, "sum(a) > $1", names, types);
+	REQUIRE(agg.type == LogicalType::BOOLEAN);
+	REQUIRE(agg.contains_aggregate);
+	REQUIRE_FALSE(agg.contains_window);
+
+	// A top-level window alongside a parameter flags the window trait.
+	auto win = BindOne(con, "row_number() OVER () > $1", names, types);
+	REQUIRE(win.type == LogicalType::BOOLEAN);
+	REQUIRE(win.contains_window);
+
+	// An unanchored parameter leaves the type UNKNOWN but does not throw.
+	auto unk = BindOne(con, "$1 + a", names, types);
+	REQUIRE(unk.type == LogicalType(LogicalTypeId::UNKNOWN));
+	REQUIRE_FALSE(unk.contains_aggregate);
+
+	// Traits survive even when the parameter leaves the type UNKNOWN.
+	auto unk_agg = BindOne(con, "sum(a) + $1", names, types);
+	REQUIRE(unk_agg.type == LogicalType(LogicalTypeId::UNKNOWN));
+	REQUIRE(unk_agg.contains_aggregate);
+}
+
 TEST_CASE("BindExpression does not disturb a live streaming result", "[api][bind_expression]") {
 	DuckDB db(nullptr);
 	Connection con(db);
