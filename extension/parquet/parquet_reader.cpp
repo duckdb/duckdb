@@ -807,7 +807,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		D_ASSERT(typed_value_schema.name == "typed_value");
 		auto variant_stats = ReadColumnStatistics(*GetFileMetadata(), schema, parquet_options);
 
-		if (IsFullyShredded(*variant_stats, column_id)) {
+		if (variant_stats && IsFullyShredded(*variant_stats, column_id)) {
 			//! This field is present in 'typed_value' across all rowgroups
 			//! So we can directly push a struct extract into 'typed_value' and ignore 'value'+'metadata'
 			auto typed_value_index = CreateVariantTypedValuePushdown(typed_value_schema, column_id);
