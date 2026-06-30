@@ -42,6 +42,11 @@ rules:
     init: InitializeDescribeStatementTrampoline
     finalize: FinalizeDescribeStatementTrampoline
 
+  ExplainOptionName:
+    mode: manual
+    init: InitializeExplainOptionNameTrampoline
+    finalize: FinalizeExplainOptionNameTrampoline
+
   ColId:
     mode: manual
     init: InitializeColIdTrampoline

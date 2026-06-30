@@ -44,6 +44,18 @@ bool PEGTransformerFactory::TransformExplainAnalyze(PEGTransformer &transformer)
 	return true;
 }
 
+void PEGTransformerFactory::InitializeExplainOptionNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeExplainOptionNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto result = Identifier(TransformIdentifierOrKeyword(transformer, frame.parse_result));
+	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformExplainSelectStatement(PEGTransformer &transformer,
                                                        unique_ptr<SelectStatement> select_statement_internal) {

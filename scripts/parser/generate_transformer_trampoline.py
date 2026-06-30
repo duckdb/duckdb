@@ -55,6 +55,7 @@ DEFAULT_GRAMMAR_FILES = [
     "describe.gram",
     "detach.gram",
     "drop.gram",
+    "explain.gram",
     "expression.gram",
     "load.gram",
     "transaction.gram",
