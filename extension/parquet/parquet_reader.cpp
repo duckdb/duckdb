@@ -683,6 +683,7 @@ static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &sc
 
 	reference<const ColumnIndex> path_iter(column_id);
 	ColumnIndex result_index(0);
+	result_index.SetType(schema.type);
 	reference<ColumnIndex> result(result_index);
 	while (path_iter.get().HasChildren()) {
 		auto &child = path_iter.get().GetChildIndexes()[0];
@@ -706,6 +707,7 @@ static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &sc
 		ColumnIndex index(child_column_index.GetIndex());
 		index.SetType(child_column.type);
 		result.get().AddChildIndex(std::move(index));
+		result.get().SetPushdownExtract();
 		result = result.get().GetChildIndexesMutable()[0];
 
 		//! <field_name>.typed_value
@@ -794,7 +796,6 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
 		if (schema.children.size() != 3 || !column_id.IsPushdownExtract()) {
-			//! Not shredded
 			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
 				children[child_index] =
 				    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
@@ -824,7 +825,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		if (scan_type.id() == LogicalTypeId::VARIANT) {
 			return std::move(column_reader);
 		}
-		auto input = make_uniq<BoundReferenceExpression>(LogicalType::VARIANT(), column_id.GetPrimaryIndex());
+		auto input = make_uniq<BoundReferenceExpression>(LogicalType::VARIANT(), 0ULL);
 		auto cast_expression = BoundCastExpression::AddCastToType(context, std::move(input), scan_type);
 		auto expr_schema = make_uniq<ParquetColumnSchema>(ParquetColumnSchema::FromParentSchema(
 		    column_reader->Schema(), cast_expression->GetReturnType(), ParquetColumnSchemaType::EXPRESSION));
