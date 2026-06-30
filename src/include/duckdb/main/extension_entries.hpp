@@ -462,7 +462,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"list_value", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"listagg", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"ln", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"load_aws_credentials", "aws", CatalogType::TABLE_FUNCTION_ENTRY},
     {"log", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"log10", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"log2", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
