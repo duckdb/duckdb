@@ -3234,6 +3234,15 @@ public:
 	static unique_ptr<ResultModifier> TransformOffsetLimitClause(PEGTransformer &transformer,
 	                                                             LimitPercentResult offset_clause,
 	                                                             optional<LimitPercentResult> limit_clause);
+	static unique_ptr<TransformResultValue> TransformOffsetFetchClauseInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<ResultModifier> TransformOffsetFetchClause(PEGTransformer &transformer,
+	                                                             LimitPercentResult offset_clause,
+	                                                             LimitPercentResult fetch_clause);
+	static unique_ptr<TransformResultValue> TransformFetchOnlyClauseInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<ResultModifier> TransformFetchOnlyClause(PEGTransformer &transformer,
+	                                                           LimitPercentResult fetch_clause);
 	static unique_ptr<TransformResultValue> TransformTableStatementInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<SelectStatement> TransformTableStatement(PEGTransformer &transformer,
@@ -3698,6 +3707,11 @@ public:
 	                                                                         ParseResult &parse_result);
 	static LimitPercentResult TransformLimitExpression(PEGTransformer &transformer,
 	                                                   unique_ptr<ParsedExpression> expression, const bool &has_result);
+	static unique_ptr<TransformResultValue> TransformFetchClauseInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformFetchValueInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static LimitPercentResult TransformFetchValue(PEGTransformer &transformer, unique_ptr<ParsedExpression> expression);
 	static unique_ptr<TransformResultValue> TransformAliasedExpressionInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformColIdExpressionInternal(PEGTransformer &transformer,

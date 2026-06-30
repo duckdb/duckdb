@@ -1,0 +1,20 @@
+# name: test/sql/parser/new_parser_failure_0002.test
+# description: SQL-standard FETCH FIRST n ROWS ONLY clause is not recognised by the PEG parser
+# group: [parser]
+
+statement ok
+CREATE TABLE t(a INT);
+
+statement ok
+INSERT INTO t VALUES (1), (2), (3);
+
+query I
+SELECT * FROM t ORDER BY a FETCH FIRST 2 ROWS ONLY
+----
+1
+2
+
+query I
+SELECT * FROM t ORDER BY a FETCH NEXT 1 ROW ONLY
+----
+1
