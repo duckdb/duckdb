@@ -16,7 +16,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
@@ -60,7 +59,7 @@ struct ExportAggregateBindData : public FunctionData {
 };
 
 template <class OP, class... ARGS>
-void TemplateDispatch(PhysicalType type, ARGS &&... args) {
+void TemplateDispatch(PhysicalType type, ARGS &&...args) {
 	switch (type) {
 	case PhysicalType::BOOL:
 		OP::template Operation<bool>(std::forward<ARGS>(args)...);
@@ -729,15 +728,11 @@ void CombineAggrStateDestroy(Vector &state, AggregateInputData &aggr_input_data,
 }
 
 unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 
 	D_ASSERT(arguments.size() == 1 || arguments.size() == 2);
-	if (arguments.size() == 2 && arguments[1]->GetReturnType() != LogicalType::BIGINT) {
-		arguments[1] = BoundCastExpression::AddCastToType(context, std::move(arguments[1]), LogicalType::BIGINT);
-	}
-	auto bind_data = BindAggregateStateInternal(context, function, arguments);
+	auto bind_data = BindAggregateStateInternal(input.GetClientContext(), function, arguments);
 
 	// Copy underlying aggregate's callbacks into this function (same pattern as `ExportAggregateFunction::Bind`)
 	function.SetStateSizeCallback(bind_data->aggr.GetStateSizeCallback());

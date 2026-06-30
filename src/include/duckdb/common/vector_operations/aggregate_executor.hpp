@@ -813,70 +813,73 @@ public:
 	}
 
 	template <class STATE_TYPE, class OP>
+	class AggregateStateGuard {
+	public:
+		explicit AggregateStateGuard(AggregateInputData &aggr_input_data) : aggr_input_data(aggr_input_data) {
+		}
+
+		AggregateStateGuard(const AggregateStateGuard &) = delete;
+		AggregateStateGuard &operator=(const AggregateStateGuard &) = delete;
+
+		~AggregateStateGuard() {
+			Destroy();
+		}
+
+		STATE_TYPE &Get() {
+			return *reinterpret_cast<STATE_TYPE *>(&storage);
+		}
+
+		void Initialize() {
+			D_ASSERT(!initialized);
+			InitializeState<STATE_TYPE, OP>(Get());
+			initialized = true;
+		}
+
+		void Destroy() {
+			if (!initialized) {
+				return;
+			}
+			DestroyState<STATE_TYPE, OP>(Get(), aggr_input_data);
+			initialized = false;
+		}
+
+	private:
+		typename std::aligned_storage<sizeof(STATE_TYPE), alignof(STATE_TYPE)>::type storage;
+		AggregateInputData &aggr_input_data;
+		bool initialized = false;
+	};
+
+	template <class STATE_TYPE, class OP>
 	static void GenericRepeatedCombine(const STATE_TYPE &source, STATE_TYPE &target,
 	                                   AggregateInputData &aggr_input_data, idx_t multiplicity) {
 		AggregateInputData combine_input(aggr_input_data.function, aggr_input_data.bind_data, aggr_input_data.allocator,
 		                                 AggregateCombineType::PRESERVE_INPUT);
 
-		typename std::aligned_storage<sizeof(STATE_TYPE), alignof(STATE_TYPE)>::type result_storage;
-		typename std::aligned_storage<sizeof(STATE_TYPE), alignof(STATE_TYPE)>::type power_a_storage;
-		typename std::aligned_storage<sizeof(STATE_TYPE), alignof(STATE_TYPE)>::type power_b_storage;
-		auto &result = *reinterpret_cast<STATE_TYPE *>(&result_storage);
-		auto &power_a = *reinterpret_cast<STATE_TYPE *>(&power_a_storage);
-		auto &power_b = *reinterpret_cast<STATE_TYPE *>(&power_b_storage);
+		AggregateStateGuard<STATE_TYPE, OP> result(combine_input);
+		AggregateStateGuard<STATE_TYPE, OP> power_a(combine_input);
+		AggregateStateGuard<STATE_TYPE, OP> power_b(combine_input);
 
-		bool result_initialized = false;
-		bool power_initialized = false;
-		bool next_power_initialized = false;
-		InitializeState<STATE_TYPE, OP>(result);
-		result_initialized = true;
-		InitializeState<STATE_TYPE, OP>(power_a);
-		power_initialized = true;
+		result.Initialize();
+		power_a.Initialize();
+		OP::template Combine<STATE_TYPE, OP>(source, power_a.Get(), combine_input);
 
 		auto power = &power_a;
 		auto next_power = &power_b;
-
-		try {
-			OP::template Combine<STATE_TYPE, OP>(source, power_a, combine_input);
-			while (multiplicity > 0) {
-				if (multiplicity & 1) {
-					OP::template Combine<STATE_TYPE, OP>(*power, result, combine_input);
-				}
-				multiplicity >>= 1;
-				if (multiplicity == 0) {
-					break;
-				}
-				InitializeState<STATE_TYPE, OP>(*next_power);
-				next_power_initialized = true;
-				OP::template Combine<STATE_TYPE, OP>(*power, *next_power, combine_input);
-				OP::template Combine<STATE_TYPE, OP>(*power, *next_power, combine_input);
-				DestroyState<STATE_TYPE, OP>(*power, combine_input);
-				power_initialized = false;
-				std::swap(power, next_power);
-				std::swap(power_initialized, next_power_initialized);
+		while (multiplicity > 0) {
+			if (multiplicity & 1) {
+				OP::template Combine<STATE_TYPE, OP>(power->Get(), result.Get(), combine_input);
 			}
-
-			OP::template Combine<STATE_TYPE, OP>(result, target, combine_input);
-		} catch (...) {
-			if (result_initialized) {
-				DestroyState<STATE_TYPE, OP>(result, combine_input);
+			multiplicity >>= 1;
+			if (multiplicity == 0) {
+				break;
 			}
-			if (power_initialized) {
-				DestroyState<STATE_TYPE, OP>(*power, combine_input);
-			}
-			if (next_power_initialized) {
-				DestroyState<STATE_TYPE, OP>(*next_power, combine_input);
-			}
-			throw;
+			next_power->Initialize();
+			OP::template Combine<STATE_TYPE, OP>(power->Get(), next_power->Get(), combine_input);
+			OP::template Combine<STATE_TYPE, OP>(power->Get(), next_power->Get(), combine_input);
+			power->Destroy();
+			std::swap(power, next_power);
 		}
-
-		DestroyState<STATE_TYPE, OP>(result, combine_input);
-		if (power_initialized) {
-			DestroyState<STATE_TYPE, OP>(*power, combine_input);
-		}
-		if (next_power_initialized) {
-			DestroyState<STATE_TYPE, OP>(*next_power, combine_input);
-		}
+		OP::template Combine<STATE_TYPE, OP>(result.Get(), target, combine_input);
 	}
 
 	template <class STATE_TYPE, class OP>
@@ -892,19 +895,21 @@ public:
 	}
 
 	template <class STATE_TYPE, class OP>
-	static void Combine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
-		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
+	static void CombineWithoutMultiplicities(Vector &source, Vector &target, AggregateInputData &aggr_input_data,
+	                                         idx_t count) {
 		auto sdata = source.Values<const STATE_TYPE *>();
 		auto tdata = target.Values<STATE_TYPE *>();
-
-		if (!aggr_input_data.combine_multiplicities) {
-			for (idx_t i = 0; i < count; i++) {
-				OP::template Combine<STATE_TYPE, OP>(*sdata[i].GetValueUnsafe(), *tdata[i].GetValueUnsafe(),
-				                                     aggr_input_data);
-			}
-			return;
+		for (idx_t i = 0; i < count; i++) {
+			OP::template Combine<STATE_TYPE, OP>(*sdata[i].GetValueUnsafe(), *tdata[i].GetValueUnsafe(),
+			                                     aggr_input_data);
 		}
+	}
 
+	template <class STATE_TYPE, class OP>
+	static void CombineWithMultiplicities(Vector &source, Vector &target, AggregateInputData &aggr_input_data,
+	                                      idx_t count) {
+		auto sdata = source.Values<const STATE_TYPE *>();
+		auto tdata = target.Values<STATE_TYPE *>();
 		UnifiedVectorFormat multiplicities;
 		aggr_input_data.combine_multiplicities->ToUnifiedFormat(multiplicities);
 		auto multiplicity_data = UnifiedVectorFormat::GetData<int64_t>(multiplicities);
@@ -928,6 +933,16 @@ public:
 			}
 			RepeatedCombine<STATE_TYPE, OP>(source_state, target_state, aggr_input_data,
 			                                static_cast<idx_t>(multiplicity));
+		}
+	}
+
+	template <class STATE_TYPE, class OP>
+	static void Combine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
+		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
+		if (aggr_input_data.combine_multiplicities) {
+			CombineWithMultiplicities<STATE_TYPE, OP>(source, target, aggr_input_data, count);
+		} else {
+			CombineWithoutMultiplicities<STATE_TYPE, OP>(source, target, aggr_input_data, count);
 		}
 	}
 

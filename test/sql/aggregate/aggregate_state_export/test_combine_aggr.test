@@ -71,10 +71,24 @@ FROM states;
 ----
 27	9	9	3	1	5
 
+# Multiplicity arguments use normal implicit casts
+query III
+WITH states AS (
+    SELECT sum(v) EXPORT_STATE AS s
+    FROM (VALUES (2::BIGINT)) t(v)
+)
+SELECT
+    finalize(combine_aggr(s, 3::INTEGER)),
+    finalize(combine_aggr(s, 3::UINTEGER)),
+    finalize(combine_aggr(s, 3::SMALLINT))
+FROM states;
+----
+6	6	6
+
 # Multiplicities can vary per input state
 query II rowsort
 WITH states AS (
-    SELECT g, sum(v) EXPORT_STATE AS s, count(*) AS n
+    SELECT g, sum(v) EXPORT_STATE AS s, count(*)::INTEGER AS n
     FROM (VALUES (0, 1), (0, 2), (1, 10), (2, 5), (2, 7), (2, 8), (3, 20)) t(g, v)
     GROUP BY g
 )
