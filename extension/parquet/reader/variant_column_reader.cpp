@@ -37,6 +37,25 @@ class ClientContext;
 class ParquetReader;
 class ThriftFileTransport;
 
+static vector<VariantPathComponent> GetVariantExtractPath(const ColumnIndex &index) {
+	vector<VariantPathComponent> result;
+	if (!index.IsPushdownExtract()) {
+		return result;
+	}
+	reference<const ColumnIndex> current(index.GetChildIndex(0));
+	while (true) {
+		if (current.get().HasPrimaryIndex()) {
+			throw InternalException("VARIANT pushdown extract expected a field name path");
+		}
+		result.emplace_back(current.get().GetFieldName());
+		if (!current.get().HasChildren()) {
+			break;
+		}
+		current = current.get().GetChildIndex(0);
+	}
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Variant Column Reader
 //===--------------------------------------------------------------------===//
@@ -44,7 +63,8 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
                                          const ParquetColumnSchema &schema,
                                          vector<unique_ptr<ColumnReader>> child_readers_p,
                                          const struct ColumnIndex &index)
-    : ColumnReader(reader, schema), context(context), index(index), child_readers(std::move(child_readers_p)) {
+    : ColumnReader(reader, schema), context(context), index(index), extract_path(GetVariantExtractPath(index)),
+      child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
 
 	for (auto &child : child_readers) {
@@ -93,23 +113,6 @@ unique_ptr<BaseStatistics> VariantColumnReader::Stats(idx_t row_group_idx_p, con
 	if (result && index.IsPushdownExtract()) {
 		auto storage_index = StorageIndex::FromColumnIndex(index);
 		return result->PushdownExtract(storage_index.GetChildIndexes()[0]);
-	}
-	return result;
-}
-
-static vector<VariantPathComponent> GetVariantExtractPath(const ColumnIndex &index) {
-	D_ASSERT(index.IsPushdownExtract());
-	vector<VariantPathComponent> result;
-	reference<const ColumnIndex> current(index.GetChildIndex(0));
-	while (true) {
-		if (current.get().HasPrimaryIndex()) {
-			throw InternalException("VARIANT pushdown extract expected a field name path");
-		}
-		result.emplace_back(current.get().GetFieldName());
-		if (!current.get().HasChildren()) {
-			break;
-		}
-		current = current.get().GetChildIndex(0);
 	}
 	return result;
 }
@@ -184,8 +187,9 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	// convert the actual columns
 	Convert(metadata_intermediate, intermediate_group, result, num_values);
 	if (index.IsPushdownExtract()) {
+		D_ASSERT(!extract_path.empty());
 		Vector extract_result(LogicalType::VARIANT(), num_values);
-		VariantUtils::VariantExtract(result, GetVariantExtractPath(index), extract_result, num_values);
+		VariantUtils::VariantExtract(result, extract_path, extract_result, num_values);
 		result.Reference(extract_result);
 	}
 

@@ -25,7 +25,10 @@ public:
 	                    vector<unique_ptr<ColumnReader>> child_readers_p, const struct ColumnIndex &index);
 
 	ClientContext &context;
-	struct ColumnIndex index;
+	//! Optional: ColumnIndex used when pushing down extract to the scan
+	const struct ColumnIndex index;
+	//! Optional: Extract path distilled from 'index' (if set)
+	const vector<VariantPathComponent> extract_path;
 	vector<unique_ptr<ColumnReader>> child_readers;
 
 public:
