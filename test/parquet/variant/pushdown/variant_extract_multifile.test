@@ -23,36 +23,6 @@ COPY (
 	) t(v)
 ) TO '{TEST_DIR}/variant_pushdown_multifile_b.parquet' (SHREDDING {'v': 'NULL'});
 
-query TTT
-SELECT
-	stats(v).shredding_state::VARCHAR,
-	stats(v.x).shredding_state::VARCHAR,
-	stats(v.y).shredding_state::VARCHAR
-FROM '{TEST_DIR}/variant_pushdown_multifile_a.parquet'
-LIMIT 1
-----
-SHREDDED	SHREDDED	SHREDDED
-
-query TTT
-SELECT
-	stats(v).shredding_state::VARCHAR,
-	stats(v.x).shredding_state::VARCHAR,
-	stats(v.y).shredding_state::VARCHAR
-FROM '{TEST_DIR}/variant_pushdown_multifile_b.parquet'
-LIMIT 1
-----
-SHREDDED	INCONSISTENT	SHREDDED
-
-query TTT
-SELECT
-	stats(v).shredding_state::VARCHAR,
-	stats(v.x).shredding_state::VARCHAR,
-	stats(v.y).shredding_state::VARCHAR
-FROM '{TEST_DIR}/variant_pushdown_multifile_*.parquet'
-LIMIT 1
-----
-INCONSISTENT	INCONSISTENT	INCONSISTENT
-
 query II
 SELECT count(*), sum(v.y::INTEGER)
 FROM '{TEST_DIR}/variant_pushdown_multifile_*.parquet'

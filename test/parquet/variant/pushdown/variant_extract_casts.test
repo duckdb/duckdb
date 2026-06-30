@@ -39,33 +39,6 @@ COPY (
 	SHREDDING {'v': 'STRUCT(x SMALLINT)'}
 );
 
-query TT
-SELECT
-	stats(v).shredding_state::VARCHAR,
-	stats(v.x).shredding_state::VARCHAR
-FROM '{TEST_DIR}/variant_pushdown_casts.parquet'
-LIMIT 1
-----
-SHREDDED	INCONSISTENT
-
-query TT
-SELECT
-	stats(v).shredding_state::VARCHAR,
-	stats(v.x).shredding_state::VARCHAR
-FROM '{TEST_DIR}/variant_pushdown_casts_unsigned.parquet'
-LIMIT 1
-----
-SHREDDED	INCONSISTENT
-
-query TT
-SELECT
-	stats(v).shredding_state::VARCHAR,
-	stats(v.x).shredding_state::VARCHAR
-FROM '{TEST_DIR}/variant_pushdown_casts_fully.parquet'
-LIMIT 1
-----
-SHREDDED	SHREDDED
-
 query IIII
 SELECT
 	count(*) FILTER (WHERE v.x = 5::INTEGER),

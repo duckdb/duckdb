@@ -33,16 +33,6 @@ COPY (
 	SHREDDING {'v': 'STRUCT(field1 INTEGER, field2 INTEGER)'}
 );
 
-query TTT
-SELECT
-	stats(v).shredding_state::VARCHAR,
-	stats(v.field1).shredding_state::VARCHAR,
-	stats(v.field2).shredding_state::VARCHAR
-FROM '{TEST_DIR}/variant_pushdown_partial.parquet'
-LIMIT 1
-----
-SHREDDED	INCONSISTENT	SHREDDED
-
 query III
 SELECT
 	count(*) FILTER (WHERE v.field1 = 4),

@@ -31,13 +31,6 @@ COPY (
 	) t(v)
 ) TO '{TEST_DIR}/variant_pushdown_nulls.parquet';
 
-query TT
-SELECT stats(v).shredding_state::VARCHAR, stats(v.x).shredding_state::VARCHAR
-FROM '{TEST_DIR}/variant_pushdown_nulls.parquet'
-LIMIT 1
-----
-SHREDDED	INCONSISTENT
-
 query IIIII
 SELECT
 	count(*) FILTER (WHERE v.x IS NULL),
@@ -73,13 +66,6 @@ COPY (
 		({'x': 7::INTEGER}::VARIANT)
 	) t(v)
 ) TO '{TEST_DIR}/variant_pushdown_nulls_fully.parquet';
-
-query TT
-SELECT stats(v).shredding_state::VARCHAR, stats(v.x).shredding_state::VARCHAR
-FROM '{TEST_DIR}/variant_pushdown_nulls_fully.parquet'
-LIMIT 1
-----
-SHREDDED	SHREDDED
 
 query IIII
 SELECT

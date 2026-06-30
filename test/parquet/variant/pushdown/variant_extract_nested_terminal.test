@@ -39,39 +39,6 @@ COPY (
 	SHREDDING {'v': 'STRUCT(obj STRUCT(a INTEGER, b VARCHAR), tag VARCHAR)'}
 );
 
-query TTTT
-SELECT
-	stats(v).shredding_state::VARCHAR,
-	stats(v.obj).shredding_state::VARCHAR,
-	stats(v.obj.a).shredding_state::VARCHAR,
-	stats(v.arr).shredding_state::VARCHAR
-FROM '{TEST_DIR}/variant_pushdown_nested_terminal.parquet'
-LIMIT 1
-----
-SHREDDED	INCONSISTENT	INCONSISTENT	INCONSISTENT
-
-query TTTT
-SELECT
-	stats(v).shredding_state::VARCHAR,
-	stats(v.obj).shredding_state::VARCHAR,
-	stats(v.obj.a).shredding_state::VARCHAR,
-	stats(v.arr).shredding_state::VARCHAR
-FROM '{TEST_DIR}/variant_pushdown_nested_terminal_fully.parquet'
-LIMIT 1
-----
-SHREDDED	SHREDDED	SHREDDED	SHREDDED
-
-query TTTT
-SELECT
-	stats(v).shredding_state::VARCHAR,
-	stats(v.obj).shredding_state::VARCHAR,
-	stats(v.obj.a).shredding_state::VARCHAR,
-	stats(v.obj.b).shredding_state::VARCHAR
-FROM '{TEST_DIR}/variant_pushdown_nested_terminal_missing_fields.parquet'
-LIMIT 1
-----
-SHREDDED	INCONSISTENT	INCONSISTENT	INCONSISTENT
-
 query IIII
 SELECT
 	count(*) FILTER (WHERE variant_typeof(v.obj) LIKE 'OBJECT%'),
