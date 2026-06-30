@@ -18,7 +18,7 @@ struct URLEncodeOperator {
 };
 
 static void URLEncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteString<string_t, string_t, URLEncodeOperator>(args.data[0], result, args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, URLEncodeOperator>(args.data[0], result);
 }
 
 ScalarFunction UrlEncodeFun::GetFunction() {
@@ -39,7 +39,7 @@ struct URLDecodeOperator {
 };
 
 static void URLDecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteString<string_t, string_t, URLDecodeOperator>(args.data[0], result, args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, URLDecodeOperator>(args.data[0], result);
 }
 
 ScalarFunction UrlDecodeFun::GetFunction() {

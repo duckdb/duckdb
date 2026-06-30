@@ -89,8 +89,8 @@ struct StringSplitter {
 
 template <class OP>
 void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result, void *data = nullptr) {
-	auto input_entries = args.data[0].Values<string_t>(args.size());
-	auto delim_entries = args.data[1].Values<string_t>(args.size());
+	auto input_entries = args.data[0].Values<string_t>();
+	auto delim_entries = args.data[1].Values<string_t>();
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -124,7 +124,7 @@ void StringSplitFunction(DataChunk &args, ExpressionState &state, Vector &result
 
 void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<RegexpMatchesBindData>();
+	auto &info = func_expr.BindInfo()->Cast<RegexpMatchesBindData>();
 	if (info.constant_pattern) {
 		// fast path: pre-compiled regex
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();

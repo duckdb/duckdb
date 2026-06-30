@@ -1,0 +1,17 @@
+# name: benchmark/micro/date/date_trunc.benchmark
+# description: date_trunc on a fixed-width unit
+# group: [date]
+
+name Date Trunc
+group date
+
+load
+CREATE TABLE timestamps AS
+SELECT epoch_ms(((range * 2654435761) % 315360000000 + 1000000000000)::BIGINT) AS ts
+FROM range(0, 50000000);
+
+run
+SELECT sum(epoch_ms(date_trunc('minute', ts)))::HUGEINT FROM timestamps
+
+result I
+57883998804880080000

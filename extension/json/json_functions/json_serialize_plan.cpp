@@ -113,10 +113,10 @@ static bool OperatorSupportsSerialization(LogicalOperator &op, string &operator_
 static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &local_state = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = local_state.json_allocator->GetYYAlc();
-	auto &inputs = args.data[0];
+	const auto &inputs = args.data[0];
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<JsonSerializePlanBindData>();
+	const auto &info = func_expr.BindInfo()->Cast<JsonSerializePlanBindData>();
 
 	if (!state.HasContext()) {
 		throw InvalidInputException("json_serialize_plan: No client context available");
@@ -124,7 +124,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 	auto &context = state.GetContext();
 
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(inputs, result, [&](string_t input) {
 		auto doc = JSONCommon::CreateDocument(alc);
 		auto result_obj = yyjson_mut_obj(doc);
 		yyjson_mut_doc_set_root(doc, result_obj);
@@ -147,7 +147,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 				}
 
 				ColumnBindingResolver resolver;
-				resolver.Verify(*plan);
+				resolver.Verify(context, *plan);
 				resolver.VisitOperator(*plan);
 				plan->ResolveOperatorTypes();
 
@@ -201,23 +201,19 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 ScalarFunctionSet JSONFunctions::GetSerializePlanFunction() {
 	ScalarFunctionSet set("json_serialize_plan");
 
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::JSON(), JsonSerializePlanFunction,
-	                               JsonSerializePlanBind, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction func({}, LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr,
+	                    JSONFunctionLocalState::Init);
 
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType::JSON(),
-	                               JsonSerializePlanFunction, JsonSerializePlanBind, nullptr,
-	                               JSONFunctionLocalState::Init));
+	func.GetSignature()
+	    .AddParameter("sql", LogicalType::VARCHAR)
+	    .AddParameter("skip_null", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter("skip_empty", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter("skip_default", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter("format", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter("optimize", LogicalType::BOOLEAN, Value::BOOLEAN(false));
 
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	                               LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr,
-	                               JSONFunctionLocalState::Init));
+	set.AddFunction(std::move(func));
 
-	set.AddFunction(ScalarFunction(
-	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN}, LogicalType::JSON(),
-	    JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction(
-	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	    LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, JSONFunctionLocalState::Init));
 	return set;
 }
 

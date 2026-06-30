@@ -30,12 +30,12 @@ static int64_t MismatchesScalarFunction(Vector &result, const string_t str, stri
 }
 
 static void MismatchesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &str_vec = args.data[0];
-	auto &tgt_vec = args.data[1];
+	const auto &str_vec = args.data[0];
+	const auto &tgt_vec = args.data[1];
 
-	BinaryExecutor::Execute<string_t, string_t, int64_t>(
-	    str_vec, tgt_vec, result, args.size(),
-	    [&](string_t str, string_t tgt) { return MismatchesScalarFunction(result, str, tgt); });
+	BinaryExecutor::Execute<string_t, string_t, int64_t>(str_vec, tgt_vec, result, [&](string_t str, string_t tgt) {
+		return MismatchesScalarFunction(result, str, tgt);
+	});
 }
 
 ScalarFunction HammingFun::GetFunction() {

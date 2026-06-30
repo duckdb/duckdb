@@ -7,7 +7,7 @@ namespace duckdb {
 PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, PreparedStatementData &statement,
                                        vector<LogicalType> types_p, bool allow_stream_result)
     : BaseQueryResult(QueryResultType::PENDING_RESULT, statement.statement_type, statement.properties,
-                      std::move(types_p), statement.names),
+                      std::move(types_p), IdentifiersToStrings(statement.names)),
       context(std::move(context_p)), allow_stream_result(allow_stream_result) {
 }
 
@@ -86,7 +86,8 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 		}
 	}
 	auto result = context->FetchResultInternal(lock, *this);
-	Close();
+	// release our context reference (cannot use Close(): the context lock is already held here)
+	context.reset();
 	return result;
 }
 
@@ -96,6 +97,14 @@ unique_ptr<QueryResult> PendingQueryResult::Execute() {
 }
 
 void PendingQueryResult::Close() {
+	if (context) {
+		auto lock = LockContext();
+		if (context->IsActiveResult(*lock, *this)) {
+			// Abandoned before execution finished: release the active-query state now (matching
+			// InitialCleanup) instead of leaking it until the next query or context teardown.
+			context->CleanupInternal(*lock, this, false);
+		}
+	}
 	context.reset();
 }
 

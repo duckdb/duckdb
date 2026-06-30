@@ -42,16 +42,12 @@ public:
 	vector<unique_ptr<Expression>> select_list;
 	//! The FROM clause
 	BoundStatement from_table;
-	//! The WHERE clause
-	unique_ptr<Expression> where_clause;
 	//! list of groups
 	BoundGroupByNode groups;
 	//! HAVING clause
 	unique_ptr<Expression> having;
 	//! QUALIFY clause
 	unique_ptr<Expression> qualify;
-	//! SAMPLE clause
-	unique_ptr<SampleOptions> sample_options;
 
 	//! The amount of columns in the final result
 	idx_t column_count;

@@ -13,7 +13,7 @@ LateralBinder::LateralBinder(Binder &binder, ClientContext &context) : Expressio
 void LateralBinder::ExtractCorrelatedColumns(Expression &expr) {
 	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
-		if (bound_colref.depth > 0) {
+		if (bound_colref.Depth() > 0) {
 			// add the correlated column info
 			CorrelatedColumnInfo info(bound_colref);
 			if (std::find(correlated_columns.begin(), correlated_columns.end(), info) == correlated_columns.end()) {
@@ -56,13 +56,13 @@ string LateralBinder::UnsupportedAggregateMessage() {
 
 static void ReduceColumnRefDepth(BoundColumnRefExpression &expr, const CorrelatedColumns &correlated_columns) {
 	// don't need to reduce this
-	if (expr.depth == 0) {
+	if (expr.Depth() == 0) {
 		return;
 	}
 	for (auto &correlated : correlated_columns) {
-		if (correlated.binding == expr.binding) {
-			D_ASSERT(expr.depth > 1);
-			expr.depth--;
+		if (correlated.binding == expr.Binding()) {
+			D_ASSERT(expr.Depth() > 1);
+			expr.DepthMutable()--;
 			break;
 		}
 	}
@@ -105,9 +105,9 @@ public:
 	}
 
 	static void ReduceExpressionSubquery(BoundSubqueryExpression &expr, const CorrelatedColumns &correlated_columns) {
-		ReduceColumnDepth(expr.binder->correlated_columns, correlated_columns);
+		ReduceColumnDepth(expr.GetBinder()->correlated_columns, correlated_columns);
 		ExpressionDepthReducerRecursive recursive(correlated_columns);
-		recursive.VisitOperator(*expr.subquery.plan);
+		recursive.VisitOperator(*expr.SubqueryMutable().plan);
 	}
 
 private:

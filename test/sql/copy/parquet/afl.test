@@ -2,7 +2,7 @@
 # description: Read afl-generated parquet files
 # group: [parquet]
 
-mode skip
+mode skip instable
 
 require parquet
 

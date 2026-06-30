@@ -14,7 +14,8 @@
         "test/sql/logging/logging_types.test",
         "test/sql/logging/logging.test",
         "test/sql/logging/logging_context_ids.test",
-        "test/sql/logging/logging_csv.test"
+        "test/sql/logging/logging_csv.test",
+        "test/sql/logging/logging_file_truncate_rewrite.test"
       ]
     },
     {
@@ -29,11 +30,6 @@
         "test/sql/binder/column_ref_as_alias.test",
         "test/sql/cast/cast_error_location.test",
         "test/sql/pragma/test_pragma_sanitized_inputs.test",
-        "test/sql/pragma/profiling/test_profiling_fs.test",
-        "test/sql/pragma/profiling/test_profiling_all.test",
-        "test/sql/pragma/profiling/test_autocheckpoint_latency.test",
-        "test/sql/pragma/profiling/test_checkpoint_profiling.test",
-        "test/sql/pragma/profiling/test_commit_write_wal_latency_and_count.test",
         "test/sql/storage/wal/wal_autocheckpoint_entries.test",
         "test/sql/transactions/statement-preprocessor/multistatement_is_transactional.test",
         "test/sql/transactions/statement-preprocessor/multistatement_is_transactional_chained_PRAGMA.test",

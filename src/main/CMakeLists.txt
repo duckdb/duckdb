@@ -3,6 +3,7 @@ if(NOT CLANG_TIDY)
 endif()
 add_subdirectory(extension)
 add_subdirectory(http)
+add_subdirectory(profiler)
 add_subdirectory(relation)
 add_subdirectory(secret)
 add_subdirectory(settings)
@@ -47,8 +48,6 @@ add_library_unity(
   pending_query_result.cpp
   prepared_statement.cpp
   prepared_statement_data.cpp
-  profiling_info.cpp
-  profiling_utils.cpp
   relation.cpp
   query_profiler.cpp
   query_result.cpp

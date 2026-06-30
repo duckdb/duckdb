@@ -15,4 +15,4 @@ CommentSchema <- 'SCHEMA'
 CommentType <- 'TYPE'
 CommentColumn <- 'COLUMN'
 
-CommentValue <- 'NULL' / StringLiteral
+CommentValue <- NullLiteral / StringLiteral

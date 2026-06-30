@@ -137,6 +137,19 @@ public:
 	idx_t MaxRepeat() const {
 		return column_schema.max_repeat;
 	}
+	inline bool IsSkipped() const {
+		return !chunk;
+	}
+	//! Set the parent reader (the composite reader this reader is a child of). Top-level readers have no parent.
+	void SetParent(ColumnReader &parent_p) {
+		parent = parent_p;
+	}
+	//! Whether this is a top-level reader (i.e. it has no parent reader)
+	bool IsRoot() const {
+		return !parent;
+	}
+	//! Whether every value in the current row group's column chunk is NULL (according to its statistics)
+	bool AllValuesAreNull() const;
 
 	void InitializeCryptoMetadata(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm,
 	                              idx_t row_group_ordinal_p) {
@@ -246,7 +259,7 @@ private:
 	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
 	void FinishRead(idx_t read_count);
 	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr,
-	                      optional_ptr<TableFilterState> filter_state = nullptr);
+	                      optional_ptr<TableFilterState> filter_state = nullptr, idx_t rows_to_skip = 0);
 	idx_t ReadInternal(ColumnReaderInput &input, Vector &result);
 	//! Prepare a read of up to "max_read" rows and read the defines/repeats.
 	//! Returns whether all values are valid (i.e., not NULL)
@@ -353,13 +366,16 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
-	void PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state);
+	void PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state,
+	                 idx_t rows_to_skip = 0);
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
 	const ColumnChunk *chunk = nullptr;
+	//! The composite reader this reader is a child of (struct/list/variant/expression). Null for top-level readers.
+	optional_ptr<ColumnReader> parent;
 
 	TProtocol *protocol;
 	idx_t page_rows_available;

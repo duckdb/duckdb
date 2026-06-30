@@ -100,27 +100,17 @@ static unique_ptr<RenderTreeNode> CreateNode(const PipelineRenderNode &op) {
 }
 
 static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
-	auto &info = op.GetProfilingInfo();
-	InsertionOrderPreservingMap<string> extra_info;
-	if (info.Enabled(info.settings, MetricType::EXTRA_INFO)) {
-		extra_info = op.GetProfilingInfo().GetMetricValue<InsertionOrderPreservingMap<string>>(MetricType::EXTRA_INFO);
-	}
+	auto &info = op.GetOperatorMetrics();
 
-	string node_name = "QUERY";
-	if (op.depth > 0) {
-		node_name = info.GetMetricAsString(MetricType::OPERATOR_TYPE);
+	auto &node_name = info.name;
+	auto result = make_uniq<RenderTreeNode>(node_name, info.GetExtraInfo());
+	if (info.total_row_groups_to_scan > 0) {
+		result->extra_text["Row Groups Scanned"] =
+		    to_string(info.row_groups_scanned) + " / " + to_string(info.total_row_groups_to_scan);
 	}
-
-	auto result = make_uniq<RenderTreeNode>(node_name, extra_info);
-	if (info.Enabled(info.settings, MetricType::OPERATOR_CARDINALITY)) {
-		auto cardinality = info.GetMetricAsString(MetricType::OPERATOR_CARDINALITY);
-		result->extra_text[RenderTreeNode::CARDINALITY] = cardinality;
-	}
-	if (info.Enabled(info.settings, MetricType::OPERATOR_TIMING)) {
-		auto value = info.metrics.at(MetricType::OPERATOR_TIMING).GetValue<double>();
-		string timing = StringUtil::Format("%.2f", value);
-		result->extra_text[RenderTreeNode::TIMING] = timing + "s";
-	}
+	result->extra_text[RenderTreeNode::CARDINALITY] = to_string(info.elements_returned);
+	string timing = StringUtil::Format("%.2f", info.time);
+	result->extra_text[RenderTreeNode::TIMING] = timing + "s";
 	return result;
 }
 

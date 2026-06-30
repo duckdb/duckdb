@@ -12,26 +12,35 @@ namespace duckdb {
 
 void CatalogEntryInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CatalogType>(100, "type", type);
-	serializer.WritePropertyWithDefault<string>(101, "schema", schema);
-	serializer.WritePropertyWithDefault<string>(102, "name", name);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<Identifier>(101, "schema", LegacySchema());
+	}
+	serializer.WritePropertyWithDefault<Identifier>(102, "name", name);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<vector<Identifier>>(103, "schema_path", schema_path, vector<Identifier>());
+	}
 }
 
 CatalogEntryInfo CatalogEntryInfo::Deserialize(Deserializer &deserializer) {
 	CatalogEntryInfo result;
 	deserializer.ReadProperty<CatalogType>(100, "type", result.type);
-	deserializer.ReadPropertyWithDefault<string>(101, "schema", result.schema);
-	deserializer.ReadPropertyWithDefault<string>(102, "name", result.name);
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(101, "schema");
+	deserializer.ReadPropertyWithDefault<Identifier>(102, "name", result.name);
+	deserializer.ReadPropertyWithExplicitDefault<vector<Identifier>>(103, "schema_path", result.schema_path, vector<Identifier>());
+	if (result.schema_path.empty() && result.type != CatalogType::SCHEMA_ENTRY && !schema.empty()) {
+		result.schema_path.push_back(std::move(schema));
+	}
 	return result;
 }
 
 void LogicalDependency::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CatalogEntryInfo>(100, "entry", entry);
-	serializer.WritePropertyWithDefault<string>(101, "catalog", catalog);
+	serializer.WritePropertyWithDefault<Identifier>(101, "catalog", catalog);
 }
 
 LogicalDependency LogicalDependency::Deserialize(Deserializer &deserializer) {
 	auto entry = deserializer.ReadProperty<CatalogEntryInfo>(100, "entry");
-	auto catalog = deserializer.ReadPropertyWithDefault<string>(101, "catalog");
+	auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(101, "catalog");
 	LogicalDependency result(deserializer.TryGet<Catalog>(), entry, std::move(catalog));
 	return result;
 }

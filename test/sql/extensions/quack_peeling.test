@@ -1,0 +1,76 @@
+# name: test/sql/extensions/quack_peeling.test
+# description: Demonstrate per-segment parse_function — the QUACK extension claims its own
+# group: [extensions]
+
+#              statement (three consecutive "quack"s), PEG handles SQL statements
+#              interleaved with it.
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+require notmingw
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+# A QUACK statement: three "quack"s in a row (PEG fails at three idents without separators)
+statement ok
+quack quack quack;
+
+# Case-insensitive
+statement ok
+QUACK quack QuAcK;
+
+# QUACK statement followed by SQL — extension claims the triplet, PEG handles the SELECT
+statement ok
+quack quack quack; SELECT 42;
+
+# SQL followed by a QUACK
+statement ok
+SELECT 1; quack quack quack;
+
+# Maximal munch — the extension greedily claims every consecutive "quack", so six in a row are a
+# single QUACK statement (six QUACK rows), not two triplets.
+query I
+quack quack quack quack quack quack;
+----
+QUACK
+QUACK
+QUACK
+QUACK
+QUACK
+QUACK
+
+# QUACK interleaved between two SELECTs
+statement ok
+SELECT 1; quack quack quack; SELECT 42;
+
+# Case-insensitive maximal run: four quacks terminated by ';' are one QUACK statement (four rows).
+query I
+quack quack QUACK quaCK;
+----
+QUACK
+QUACK
+QUACK
+QUACK
+
+# With a ';' separating it from the SELECT, it's two statements (the QUACK run is properly
+# terminated, then PEG handles SELECT 42).
+statement ok
+quack quack QUACK quaCK; SELECT 42;
+
+# Without a separator, "quack quack QUACK quaCK SELECT 42" is NOT a proper TopLevelStatement — the
+# quack run is followed by a real token (SELECT) rather than ';' or end-of-input, so the extension
+# declines and the original PEG syntax error (pointing at the start of the statement) surfaces.
+statement error
+quack quack QUACK quaCK SELECT 42;
+----
+syntax error at or near "quack"
+
+# A misspelled "quak" is not a "quack" — the extension declines (claims 0 tokens), so the original
+# PEG syntax error surfaces instead of being swallowed.
+statement error
+quak SELECT 32;
+----
+syntax error at or near "SELECT"

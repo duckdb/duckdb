@@ -18,11 +18,11 @@ static vector<unique_ptr<Expression>> CreatePartitionedRowNumExpression(ClientCo
                                                                         const vector<LogicalType> &types) {
 	vector<unique_ptr<Expression>> res;
 	auto expr = RowNumberFun::GetFunction().Bind(client);
-	expr->start = WindowBoundary::UNBOUNDED_PRECEDING;
-	expr->end = WindowBoundary::UNBOUNDED_FOLLOWING;
+	expr->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+	expr->WindowEndMutable() = WindowBoundary::UNBOUNDED_FOLLOWING;
 	for (idx_t i = 0; i < types.size(); i++) {
-		expr->partitions.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
-		ExpressionBinder::PushCollation(client, expr->partitions.back(), types[i]);
+		expr->PartitionsMutable().push_back(make_uniq<BoundReferenceExpression>(types[i], i));
+		ExpressionBinder::PushCollation(client, expr->PartitionsMutable().back(), types[i]);
 	}
 	res.push_back(std::move(expr));
 	return res;

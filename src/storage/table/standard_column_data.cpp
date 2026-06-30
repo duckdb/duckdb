@@ -122,10 +122,14 @@ void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(std::move(child_append));
 }
 
-void StandardColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
-                                    idx_t count) {
-	ColumnData::AppendData(stats, state, vdata, count);
-	validity->AppendData(stats, state.child_appends[0], vdata, count);
+void StandardColumnData::AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
+	ColumnData::AppendData(state, vdata, count);
+	validity->AppendData(state.child_appends[0], vdata, count);
+}
+
+void StandardColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	ColumnData::FinalizeAppend(finalize_state, state);
+	validity->FinalizeAppendLocked(finalize_state, state.child_appends[0]);
 }
 
 void StandardColumnData::RevertAppend(row_t new_count) {
@@ -191,15 +195,16 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 	return stats;
 }
 
-void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
-                                  const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
-	// find the segment the row belongs to
+void StandardColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
+                                   const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
+                                   idx_t fetch_count, Vector &result, idx_t result_offset) {
 	if (state.child_states.empty()) {
-		auto child_state = make_uniq<ColumnFetchState>();
-		state.child_states.push_back(std::move(child_state));
+		state.child_states.emplace_back(make_uniq<ColumnFetchState>());
 	}
-	ColumnData::FetchRow(transaction, state, storage_index, row_id, result, result_idx);
-	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
+	// Bulk fetch the data and the validity in two passes.
+	FetchRowsAtSegmentLevel(transaction, state, offsets, sel, fetch_count, result, result_offset);
+	validity->FetchRowsAtSegmentLevel(transaction, *state.child_states[0], offsets, sel, fetch_count, result,
+	                                  result_offset);
 }
 
 void StandardColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
@@ -213,6 +218,11 @@ void StandardColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity
 	}
 	validity_p->SetParent(this);
 	this->validity = std::move(validity_p);
+}
+
+ValidityColumnData &StandardColumnData::GetValidityData() {
+	D_ASSERT(validity);
+	return *validity;
 }
 
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
@@ -322,11 +332,11 @@ void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, Bas
 }
 
 void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
-                                              vector<duckdb::idx_t> col_path,
-                                              vector<duckdb::ColumnSegmentInfo> &result) {
-	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);
+                                              vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result,
+                                              const ColumnSegmentInfoScanOptions &options) {
+	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result);
+	validity->GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result, options);
 }
 
 void StandardColumnData::Verify(RowGroup &parent) {

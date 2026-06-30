@@ -19,9 +19,13 @@ public:
 public:
 	BoundOperatorExpression(ExpressionType type, LogicalType return_type);
 
-	vector<unique_ptr<Expression>> children;
-
 public:
+	const vector<unique_ptr<Expression>> &GetChildren() const {
+		return children;
+	}
+	vector<unique_ptr<Expression>> &GetChildrenMutable() {
+		return children;
+	}
 	string ToString() const override;
 
 	bool Equals(const BaseExpression &other) const override;
@@ -30,5 +34,8 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	vector<unique_ptr<Expression>> children;
 };
 } // namespace duckdb

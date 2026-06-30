@@ -201,7 +201,7 @@ SELECT messageYear, isComment, lengthCategory
 
 # Q2. Top tags for country, age, gender, time
 # FIXME: date_part from interval
-mode skip
+mode skip unsupported
 
 statement ok
 SELECT co.pl_name AS "country.name"
@@ -522,7 +522,7 @@ SELECT p.personid AS "person.id"
 ;
 
 
-mode skip
+mode skip unsupported
 #  Q11. Unrelated replies
 # not supported: several array/string array stuff
 statement ok
@@ -637,7 +637,7 @@ HAVING count(*) > 400
  LIMIT 100
 ;
 
-mode skip
+mode skip unsupported
 # Q13. Popular Tags per month in a country
 # unsupported: ARRAY syntax
 statement ok
@@ -761,7 +761,7 @@ SELECT personid AS "person.id"
  LIMIT 100
 ;
 
-mode skip
+mode skip unsupported
 # Q16. Experts in social circle
 # FIXME: array syntax, ROW syntax
 statement ok

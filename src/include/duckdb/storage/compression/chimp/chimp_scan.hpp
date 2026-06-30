@@ -133,9 +133,9 @@ public:
 	using CHIMP_TYPE = typename ChimpType<T>::TYPE;
 
 	explicit ChimpScanState(ColumnSegment &segment) : segment(segment), segment_count(segment.count) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 
-		handle = buffer_manager.Pin(segment.block);
+		handle = buffer_manager.Pin(segment.GetBlockHandle());
 		auto dataptr = handle.GetDataMutable();
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block

@@ -17,6 +17,18 @@
       "paths": [
         "test/sql/attach/attach_filepath_roundtrip.test"
       ]
+    },
+    {
+      "reason": "Autoloading means errors will differ",
+      "paths": [
+        "test/sql/secrets/secret_autoloading_errors.test"
+      ]
+    },
+    {
+      "reason": "COPY TO local paths requires LocalFileSystem during binding/planning",
+      "paths": [
+        "test/sql/json/test_json_copy_serialize_plan.test"
+      ]
     }
   ]
 }

@@ -21,6 +21,6 @@ SECT cbl FROM (VALUES (42)) t(col)
 <REGEX>:.*Parser Error.*syntax error at or near.*
 
 statement error
-select corr('hello', 'world')
+select corr('hello'::VARCHAR, 'world'::VARCHAR)
 ----
 NO_MATCHING_FUNCTION

@@ -20,7 +20,7 @@ bool RowNumberRewriter::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 	auto &window_expr = expression->Cast<BoundWindowExpression>();
-	if (!window_expr.partitions.empty() || !window_expr.orders.empty()) {
+	if (!window_expr.Partitions().empty() || !window_expr.OrderBy().empty()) {
 		return false;
 	}
 

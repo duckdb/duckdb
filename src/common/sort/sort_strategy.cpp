@@ -44,4 +44,8 @@ unique_ptr<SortStrategy> SortStrategy::Factory(ClientContext &client,
 	}
 }
 
+void SortStrategy::RegisterHyperLogLog(LocalSinkState &, ParallelHyperLogLogLocalState &) const {
+	// NOP for all but HashedSort
+}
+
 } // namespace duckdb

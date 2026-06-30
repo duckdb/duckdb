@@ -32,7 +32,11 @@ void ShreddedVectorBuffer::VerifyInternal(const LogicalType &type, const Selecti
 string ShreddedVectorBuffer::ToString(const LogicalType &type, idx_t count) const {
 	auto &shredded = StructVector::GetEntries(*shredded_data)[1];
 	auto &unshredded = StructVector::GetEntries(*shredded_data)[0];
-	return "Shredded: " + shredded.ToString(count) + ", Unshredded: " + unshredded.ToString(count);
+	return "Shredded: " + shredded.ToString() + ", Unshredded: " + unshredded.ToString();
+}
+
+void ShreddedVectorBuffer::SetVectorType(VectorType new_vector_type) {
+	throw InternalException("ShreddedVectorBuffer::SetVectorType is not implemented and shouldn't be reached");
 }
 
 Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
@@ -44,8 +48,8 @@ Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 	auto unshredded_val = unshredded.GetValue(index);
 
 	child_list_t<LogicalType> shredded_subtypes;
-	shredded_subtypes.push_back(make_pair("unshredded", unshredded.GetType()));
-	shredded_subtypes.push_back(make_pair("shredded", shredded.GetType()));
+	shredded_subtypes.emplace_back(make_pair("unshredded", unshredded.GetType()));
+	shredded_subtypes.emplace_back(make_pair("shredded", shredded.GetType()));
 	Vector new_shredded(LogicalType::STRUCT(std::move(shredded_subtypes)));
 	StructVector::GetEntries(new_shredded)[0].Reference(unshredded_val, count_t(1));
 	StructVector::GetEntries(new_shredded)[1].Reference(shredded_val, count_t(1));
@@ -53,6 +57,20 @@ Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 	Vector result_vec(LogicalType::VARIANT(), 1);
 	VariantUtils::UnshredVariantData(new_shredded, result_vec, 1);
 	return result_vec.GetValue(0);
+}
+
+buffer_ptr<VectorBuffer> ShreddedVectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
+	// propagate the slice into the shredded data and emit a new shredded vector
+	auto count = count_t(end - offset);
+	Vector sliced(*shredded_data, offset, end);
+	return make_buffer<ShreddedVectorBuffer>(sliced, count);
+}
+
+buffer_ptr<VectorBuffer> ShreddedVectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                             idx_t count) {
+	// propagate the slice into the shredded data and emit a new shredded vector
+	Vector sliced(*shredded_data, sel, count);
+	return make_buffer<ShreddedVectorBuffer>(sliced, count_t(count));
 }
 
 buffer_ptr<VectorBuffer> ShreddedVectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
@@ -69,7 +87,7 @@ buffer_ptr<VectorBuffer> ShreddedVectorBuffer::FlattenSliceInternal(const Logica
 	FlatVector::SetSize(unshredded_vector, count);
 	VariantUtils::UnshredVariantData(*source, unshredded_vector, count);
 	// now flatten the unshredded vector
-	unshredded_vector.Flatten(count);
+	unshredded_vector.Flatten();
 	auto result = unshredded_vector.GetBufferRef();
 	result->SetVectorSize(count);
 	return result;
@@ -113,7 +131,7 @@ void ShreddedVector::Unshred(const Vector &vec, const SelectionVector &sel, idx_
 	vec.ConstReference(unshredded_vector);
 }
 
-bool ShreddedVector::IsFullyShredded(Vector &vec) {
+bool ShreddedVector::IsFullyShredded(const Vector &vec) {
 	auto &unshredded_vector = GetUnshreddedVector(vec);
 	if (unshredded_vector.GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(unshredded_vector)) {
 		return true;

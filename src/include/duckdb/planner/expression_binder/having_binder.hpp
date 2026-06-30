@@ -17,20 +17,17 @@ namespace duckdb {
 //! The HAVING binder is responsible for binding an expression within the HAVING clause of a SQL statement.
 class HavingBinder : public BaseSelectBinder {
 public:
-	HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
-	             AggregateHandling aggregate_handling);
+	HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, AggregateHandling aggregate_handling);
 
 protected:
 	BindResult BindLambdaReference(LambdaRefExpression &expr, idx_t depth);
 	BindResult BindWindowExpression(WindowExpression &expr, idx_t depth) override;
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
 
-	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error) override;
-
-	bool DoesColumnAliasExist(const ColumnRefExpression &colref) override;
+public:
+	ColumnAliasBinder column_alias_binder;
 
 private:
-	ColumnAliasBinder column_alias_binder;
 	AggregateHandling aggregate_handling;
 };
 

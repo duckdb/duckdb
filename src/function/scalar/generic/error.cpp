@@ -7,7 +7,7 @@ namespace duckdb {
 namespace {
 
 static void ErrorFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	for (auto entry : args.data[0].Values<string_t>(args.size())) {
+	for (auto entry : args.data[0].Values<string_t>()) {
 		if (!entry.IsValid()) {
 			FlatVector::SetNull(result, entry.GetIndex(), true);
 			continue;

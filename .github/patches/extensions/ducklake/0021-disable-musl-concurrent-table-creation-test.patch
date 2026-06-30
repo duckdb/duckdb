@@ -1,0 +1,13 @@
+diff --git a/test/sql/concurrent/concurrent_table_creation.test_slow b/test/sql/concurrent/concurrent_table_creation.test_slow
+index 75dbbe1f..5e63a610 100644
+--- a/test/sql/concurrent/concurrent_table_creation.test_slow
++++ b/test/sql/concurrent/concurrent_table_creation.test_slow
+@@ -6,6 +6,8 @@ require notwindows
+ 
+ require ducklake
+ 
++require notmusl
++
+ require parquet
+ 
+ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db

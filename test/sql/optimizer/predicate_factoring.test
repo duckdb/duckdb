@@ -3,6 +3,9 @@
 # group: [optimizer]
 
 statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
 CREATE TABLE t (a INTEGER, b INTEGER, c INTEGER);
 
 statement ok
@@ -19,6 +22,19 @@ SELECT * FROM t WHERE (a=1 AND b>3) OR (a=1 AND c<5)
 # Verify a=1 is pushed down into the scan as a required filter
 query II
 EXPLAIN SELECT * FROM t WHERE (a=1 AND b>3) OR (a=1 AND c<5)
+----
+physical_plan	<REGEX>:.*Filters:.*a = 1.*
+
+# Predicate factoring still works when nested conjunctions must be simplified first
+query III rowsort
+SELECT * FROM t WHERE (a=1 AND (b>3 AND TRUE)) OR (a=1 AND (TRUE AND c<5))
+----
+1	2	3
+1	5	11
+1	5	3
+
+query II
+EXPLAIN SELECT * FROM t WHERE (a=1 AND (b>3 AND TRUE)) OR (a=1 AND (TRUE AND c<5))
 ----
 physical_plan	<REGEX>:.*Filters:.*a = 1.*
 
@@ -114,4 +130,4 @@ SELECT t.a, t.b, t.c, s.x, s.y FROM t, s WHERE (t.a=1 AND s.x=1 AND t.b>3) OR (t
 query II
 EXPLAIN SELECT t.a, t.b, t.c, s.x, s.y FROM t, s WHERE (t.a=1 AND s.x=1 AND t.b>3) OR (t.a=1 AND s.x=1 AND s.y<20)
 ----
-physical_plan	<REGEX>:.*Filters:.*x = 1.*Filters:.*a = 1.*
+physical_plan	<REGEX>:.*Filters:.*a = 1.*Filters:.*x = 1.*

@@ -36,9 +36,9 @@ public:
 		result.child_data.push_back(std::move(internal_struct));
 	}
 
-	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+	static void Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(input_size, format);
+		input.ToUnifiedFormat(format);
 		idx_t size = to - from;
 		append_data.AppendValidity(format, from, to);
 		vector<sel_t> child_indices;
@@ -57,8 +57,8 @@ public:
 		key_vector_copy.Slice(key_vector, child_sel, list_size);
 		Vector value_vector_copy(value_vector.GetType());
 		value_vector_copy.Slice(value_vector, child_sel, list_size);
-		key_data.append_vector(key_data, key_vector_copy, 0, list_size, list_size);
-		value_data.append_vector(value_data, value_vector_copy, 0, list_size, list_size);
+		key_data.AppendChild(key_vector_copy, 0, list_size, list_size);
+		value_data.AppendChild(value_vector_copy, 0, list_size, list_size);
 
 		append_data.row_count += size;
 		struct_data.row_count += size;

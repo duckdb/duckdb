@@ -39,7 +39,6 @@ SourceResultType PhysicalExplainAnalyze::GetDataInternal(ExecutionContext &conte
 
 	chunk.data[0].Append(Value("analyzed_plan"));
 	chunk.data[1].Append(Value(gstate.analyzed_plan));
-	chunk.SetCardinality(1);
 
 	return SourceResultType::FINISHED;
 }

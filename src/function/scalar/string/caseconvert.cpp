@@ -39,7 +39,7 @@ static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 
 		// UTF-8.
 		int sz = 0;
-		auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+		auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz, input_length - i);
 		auto converted = IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
 		auto new_sz = Utf8Proc::CodepointLength(converted);
 		output_length += UnsafeNumericCast<idx_t>(new_sz);
@@ -55,7 +55,7 @@ static void CaseConvert(const char *input_data, idx_t input_length, char *result
 		if (input_data[i] & 0x80) {
 			// non-ascii character
 			int sz = 0, new_sz = 0;
-			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz, input_length - i);
 			auto converted_codepoint =
 			    IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
 			auto success = Utf8Proc::CodepointToUtf8(converted_codepoint, new_sz, result_data);
@@ -107,7 +107,7 @@ struct CaseConvertOperator {
 
 template <bool IS_UPPER>
 static void CaseConvertFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperator<IS_UPPER>>(args.data[0], result, args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperator<IS_UPPER>>(args.data[0], result);
 }
 
 namespace {
@@ -124,8 +124,7 @@ struct CaseConvertOperatorASCII {
 
 template <bool IS_UPPER>
 static void CaseConvertFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperatorASCII<IS_UPPER>>(args.data[0], result,
-	                                                                                     args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperatorASCII<IS_UPPER>>(args.data[0], result);
 }
 
 template <bool IS_UPPER>
@@ -135,7 +134,7 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.SetFunctionCallback(CaseConvertFunctionASCII<IS_UPPER>);
+		expr.FunctionMutable().SetFunctionCallback(CaseConvertFunctionASCII<IS_UPPER>);
 	}
 	return nullptr;
 }

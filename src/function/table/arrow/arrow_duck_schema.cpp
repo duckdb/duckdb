@@ -246,10 +246,6 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(ClientContext &context, Arrow
 	} else if (format == "+s") {
 		child_list_t<LogicalType> child_types;
 		vector<shared_ptr<ArrowType>> children;
-		if (schema.n_children == 0) {
-			throw InvalidInputException(
-			    "Attempted to convert a STRUCT with no fields to DuckDB which is not supported");
-		}
 		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(schema.n_children); type_idx++) {
 			children.emplace_back(GetArrowLogicalType(context, *schema.children[type_idx]));
 			child_types.emplace_back(schema.children[type_idx]->name, children.back()->GetDuckType());
@@ -346,13 +342,17 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 	// have to reconstruct the type
 	auto id = type.id();
 	switch (id) {
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		auto &struct_info = type_info->Cast<ArrowStructInfo>();
 		child_list_t<LogicalType> new_children;
 		for (idx_t i = 0; i < struct_info.ChildCount(); i++) {
 			auto &child = struct_info.GetChild(i);
 			auto &child_name = StructType::GetChildName(type, i);
 			new_children.emplace_back(std::make_pair(child_name, child.GetDuckType(true)));
+		}
+		if (id == LogicalTypeId::TUPLE) {
+			return LogicalType::TUPLE(std::move(new_children));
 		}
 		return LogicalType::STRUCT(std::move(new_children));
 	}

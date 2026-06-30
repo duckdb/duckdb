@@ -108,7 +108,7 @@ SELECT i1.i IS NULL FROM integers i1 FULL OUTER JOIN integers i2 ON (false) ORDE
 0
 
 # FIXME: we don't yet correctly track when columns don't contain valid values
-mode skip
+mode skip instable
 
 statement ok
 CREATE TABLE integers3 AS SELECT * FROM (VALUES (NULL), (NULL), (NULL)) tbl(i);

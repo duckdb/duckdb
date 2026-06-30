@@ -87,7 +87,7 @@ template <class TYPE, class OP, idx_t N>
 static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &lstate = state.Cast<ExecuteFunctionState>();
 	const auto &expr = lstate.expr.Cast<BoundFunctionExpression>();
-	const auto &func_name = expr.function.GetName();
+	const auto &func_name = expr.Function().GetName();
 
 	const auto count = args.size();
 	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);
@@ -100,8 +100,8 @@ static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &r
 	UnifiedVectorFormat lhs_format;
 	UnifiedVectorFormat rhs_format;
 
-	args.data[0].ToUnifiedFormat(count, lhs_format);
-	args.data[1].ToUnifiedFormat(count, rhs_format);
+	args.data[0].ToUnifiedFormat(lhs_format);
+	args.data[1].ToUnifiedFormat(rhs_format);
 
 	auto lhs_data = FlatVector::GetData<TYPE>(lhs_child);
 	auto rhs_data = FlatVector::GetData<TYPE>(rhs_child);
@@ -149,7 +149,7 @@ template <class TYPE, class OP>
 static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &lstate = state.Cast<ExecuteFunctionState>();
 	const auto &expr = lstate.expr.Cast<BoundFunctionExpression>();
-	const auto &func_name = expr.function.GetName();
+	const auto &func_name = expr.Function().GetName();
 
 	const auto count = args.size();
 	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);
@@ -161,8 +161,8 @@ static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &re
 	UnifiedVectorFormat lhs_format;
 	UnifiedVectorFormat rhs_format;
 
-	args.data[0].ToUnifiedFormat(count, lhs_format);
-	args.data[1].ToUnifiedFormat(count, rhs_format);
+	args.data[0].ToUnifiedFormat(lhs_format);
+	args.data[1].ToUnifiedFormat(rhs_format);
 
 	auto lhs_data = FlatVector::GetData<TYPE>(lhs_child);
 	auto rhs_data = FlatVector::GetData<TYPE>(rhs_child);

@@ -165,8 +165,8 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	auto empty_timestamptz_list = Value::LIST(LogicalType::TIMESTAMP_TZ, vector<Value>());
 	auto timestamptz_list =
 	    Value::LIST(LogicalType::TIMESTAMP_TZ,
-	                {Value::TIMESTAMPTZ(timestamp_tz_t()), Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::infinity())),
-	                 Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::ninfinity())), Value(LogicalType::TIMESTAMP_TZ),
+	                {Value::TIMESTAMPTZ(timestamp_tz_t()), Value::TIMESTAMPTZ(timestamp_tz_t::infinity()),
+	                 Value::TIMESTAMPTZ(timestamp_tz_t::ninfinity()), Value(LogicalType::TIMESTAMP_TZ),
 	                 Value::TIMESTAMPTZ(timestamp_tz_t(Timestamp::FromString("2022-05-12 16:23:45-07", true)))});
 	result.emplace_back(timestamptz_list_type, "timestamptz_array", empty_timestamptz_list, timestamptz_list);
 
@@ -185,36 +185,43 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 
 	// structs
 	child_list_t<LogicalType> struct_type_list;
-	struct_type_list.push_back(make_pair("a", LogicalType::INTEGER));
-	struct_type_list.push_back(make_pair("b", LogicalType::VARCHAR));
+	struct_type_list.emplace_back(make_pair("a", LogicalType::INTEGER));
+	struct_type_list.emplace_back(make_pair("b", LogicalType::VARCHAR));
 	auto struct_type = LogicalType::STRUCT(struct_type_list);
 
 	child_list_t<Value> min_struct_list;
-	min_struct_list.push_back(make_pair("a", Value(LogicalType::INTEGER)));
-	min_struct_list.push_back(make_pair("b", Value(LogicalType::VARCHAR)));
+	min_struct_list.emplace_back(make_pair("a", Value(LogicalType::INTEGER)));
+	min_struct_list.emplace_back(make_pair("b", Value(LogicalType::VARCHAR)));
 	auto min_struct_val = Value::STRUCT(std::move(min_struct_list));
 
 	child_list_t<Value> max_struct_list;
-	max_struct_list.push_back(make_pair("a", Value::INTEGER(42)));
-	max_struct_list.push_back(make_pair("b", Value("🦆🦆🦆🦆🦆🦆")));
+	max_struct_list.emplace_back(make_pair("a", Value::INTEGER(42)));
+	max_struct_list.emplace_back(make_pair("b", Value("🦆🦆🦆🦆🦆🦆")));
 	auto max_struct_val = Value::STRUCT(std::move(max_struct_list));
 
 	result.emplace_back(struct_type, "struct", min_struct_val, max_struct_val);
 
+	// Empty struct
+	child_list_t<Value> empty_struct_values;
+	child_list_t<LogicalType> empty_struct_types;
+	auto empty_struct_type = LogicalType::STRUCT(empty_struct_types);
+	auto empty_struct_val = Value::STRUCT(empty_struct_values);
+	result.emplace_back(empty_struct_type, "empty_struct", empty_struct_val, empty_struct_val);
+
 	// structs with lists
 	child_list_t<LogicalType> struct_list_type_list;
-	struct_list_type_list.push_back(make_pair("a", int_list_type));
-	struct_list_type_list.push_back(make_pair("b", varchar_list_type));
+	struct_list_type_list.emplace_back(make_pair("a", int_list_type));
+	struct_list_type_list.emplace_back(make_pair("b", varchar_list_type));
 	auto struct_list_type = LogicalType::STRUCT(struct_list_type_list);
 
 	child_list_t<Value> min_struct_vl_list;
-	min_struct_vl_list.push_back(make_pair("a", Value(int_list_type)));
-	min_struct_vl_list.push_back(make_pair("b", Value(varchar_list_type)));
+	min_struct_vl_list.emplace_back(make_pair("a", Value(int_list_type)));
+	min_struct_vl_list.emplace_back(make_pair("b", Value(varchar_list_type)));
 	auto min_struct_val_list = Value::STRUCT(std::move(min_struct_vl_list));
 
 	child_list_t<Value> max_struct_vl_list;
-	max_struct_vl_list.push_back(make_pair("a", int_list));
-	max_struct_vl_list.push_back(make_pair("b", varchar_list));
+	max_struct_vl_list.emplace_back(make_pair("a", int_list));
+	max_struct_vl_list.emplace_back(make_pair("b", varchar_list));
 	auto max_struct_val_list = Value::STRUCT(std::move(max_struct_vl_list));
 
 	result.emplace_back(struct_list_type, "struct_of_arrays", std::move(min_struct_val_list),
@@ -232,11 +239,11 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	auto min_map_value = Value::MAP(ListType::GetChildType(map_type), vector<Value>());
 
 	child_list_t<Value> map_struct1;
-	map_struct1.push_back(make_pair("key", Value("key1")));
-	map_struct1.push_back(make_pair("value", Value("🦆🦆🦆🦆🦆🦆")));
+	map_struct1.emplace_back(make_pair("key", Value("key1")));
+	map_struct1.emplace_back(make_pair("value", Value("🦆🦆🦆🦆🦆🦆")));
 	child_list_t<Value> map_struct2;
-	map_struct2.push_back(make_pair("key", Value("key2")));
-	map_struct2.push_back(make_pair("value", Value("goose")));
+	map_struct2.emplace_back(make_pair("key", Value("key2")));
+	map_struct2.emplace_back(make_pair("value", Value("goose")));
 
 	vector<Value> map_values;
 	map_values.push_back(Value::STRUCT(map_struct1));
@@ -364,6 +371,12 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 
 	result.emplace_back(LogicalType::GEOMETRY(), "geometry", min_geometry, max_geometry);
 
+	// unnamed tuple - added last so existing column positions are unchanged
+	auto tuple_type = LogicalType::TUPLE({LogicalType::INTEGER, LogicalType::VARCHAR});
+	auto min_tuple_val = Value::TUPLE({Value(LogicalType::INTEGER), Value(LogicalType::VARCHAR)});
+	auto max_tuple_val = Value::TUPLE({Value::INTEGER(42), Value("🦆🦆🦆🦆🦆🦆")});
+	result.emplace_back(tuple_type, "tuple", min_tuple_val, max_tuple_val);
+
 	return result;
 }
 
@@ -428,7 +441,6 @@ static void TestAllTypesFunction(ClientContext &context, TableFunctionInput &dat
 		}
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void TestAllTypesFun::RegisterFunction(BuiltinFunctions &set) {

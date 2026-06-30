@@ -12,6 +12,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/main/query_context.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
@@ -20,7 +21,6 @@ namespace duckdb {
 class BlockHandle;
 class BufferHandle;
 class BufferManager;
-class ClientContext;
 class DatabaseInstance;
 class MetadataManager;
 
@@ -70,7 +70,7 @@ public:
 	virtual void Read(QueryContext context, Block &block) = 0;
 
 	//! Read the content of the block from disk
-	virtual void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) = 0;
+	virtual void ReadBlocks(QueryContext context, FileBuffer &buffer, block_id_t start_block, idx_t block_count) = 0;
 	//! Writes the block to disk.
 	virtual void Write(FileBuffer &block, block_id_t block_id) = 0;
 	virtual void Write(QueryContext context, FileBuffer &block, block_id_t block_id);

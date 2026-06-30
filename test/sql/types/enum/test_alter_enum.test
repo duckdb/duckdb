@@ -44,7 +44,7 @@ select typeof(name) from person limit 1
 ENUM('Pedro', 'Mark', 'Hannes')
 
 # FIXME: dependencies between enums and tables are currently disabled
-mode skip
+mode skip unsupported
 
 # This should not be possible
 statement error

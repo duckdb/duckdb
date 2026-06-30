@@ -3,7 +3,7 @@
 # group: [bignum]
 
 # We skip this test since it tests a full integer range, only meant for local - release execution
-mode skip
+mode skip unsupported
 
 query I
 select distinct i::varchar::bignum = i::bignum from range(0, 2147483646) t(i);

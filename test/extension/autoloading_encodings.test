@@ -2,7 +2,7 @@
 # description: Test autoloading of encodings.
 # group: [extension]
 
-mode skip
+mode skip instable
 
 require-env LOCAL_EXTENSION_REPO
 

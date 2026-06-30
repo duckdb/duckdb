@@ -16,9 +16,9 @@ void ArrowUnionData::Initialize(ArrowAppendData &result, const LogicalType &type
 	}
 }
 
-void ArrowUnionData::Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+void ArrowUnionData::Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to, idx_t input_size) {
 	UnifiedVectorFormat format;
-	input.ToUnifiedFormat(input_size, format);
+	input.ToUnifiedFormat(format);
 	idx_t size = to - from;
 
 	auto &types_buffer = append_data.GetMainBuffer();
@@ -49,7 +49,7 @@ void ArrowUnionData::Append(ArrowAppendData &append_data, Vector &input, idx_t f
 	for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {
 		auto &child_buffer = append_data.child_data[child_idx];
 		auto &child = child_vectors[child_idx];
-		child_buffer->append_vector(*child_buffer, child, 0, size, size);
+		child_buffer->AppendChild(child, 0, size, size);
 	}
 	append_data.row_count += size;
 }

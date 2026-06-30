@@ -149,12 +149,13 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 			max_val = MaxValue(AbsValue(current_min), current_max);
 		} else {
 			// if both current_min and current_max are > 0, then the abs is a no-op and can be removed entirely
-			*input.expr_ptr = std::move(input.expr.children[0]);
+			*input.expr_ptr = std::move(input.expr.GetChildrenMutable()[0]);
 			return child_stats[0].ToUnique();
 		}
 		new_min = Value::Numeric(expr.GetReturnType(), min_val);
 		new_max = Value::Numeric(expr.GetReturnType(), max_val);
-		expr.function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<AbsOperator>(expr.GetReturnType()));
+		expr.FunctionMutable().SetFunctionCallback(
+		    ScalarFunction::GetScalarUnaryFunction<AbsOperator>(expr.GetReturnType()));
 	}
 	auto stats = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(stats, new_min);
@@ -351,7 +352,7 @@ struct CeilOperator {
 template <class T, class POWERS_OF_TEN, class OP>
 static void GenericRoundFunctionDecimal(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	OP::template Operation<T, POWERS_OF_TEN>(input, DecimalType::GetScale(func_expr.children[0]->GetReturnType()),
+	OP::template Operation<T, POWERS_OF_TEN>(input, DecimalType::GetScale(func_expr.GetChildren()[0]->GetReturnType()),
 	                                         result);
 }
 
@@ -391,7 +392,7 @@ struct CeilDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input <= 0) {
 				// below 0 we floor the number (e.g. -10.5 -> -10)
 				return UnsafeNumericCast<T>(input / power_of_ten);
@@ -447,7 +448,7 @@ struct FloorDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input < 0) {
 				// below 0 we ceil the number (e.g. -10.5 -> -11)
 				return UnsafeNumericCast<T>(((input + 1) / power_of_ten) - 1);
@@ -523,7 +524,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	auto fname = StringUtil::Upper(bound_function.GetName());
+	auto fname = StringUtil::Upper(bound_function.GetName().GetIdentifierName());
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
 	}
@@ -617,7 +618,7 @@ struct TruncDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			//	Always floor
 			return UnsafeNumericCast<T>((input / power_of_ten));
 		});
@@ -628,9 +629,9 @@ struct TruncDecimalNegativePrecisionOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
-		auto source_scale = DecimalType::GetScale(func_expr.children[0]->GetReturnType());
-		auto width = DecimalType::GetWidth(func_expr.children[0]->GetReturnType());
+		auto &info = func_expr.BindInfo()->Cast<RoundPrecisionFunctionData>();
+		auto source_scale = DecimalType::GetScale(func_expr.GetChildren()[0]->GetReturnType());
+		auto width = DecimalType::GetWidth(func_expr.GetChildren()[0]->GetReturnType());
 		if (info.target_scale <= -int32_t(width - source_scale)) {
 			// scale too big for width
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -641,7 +642,7 @@ struct TruncDecimalNegativePrecisionOperator {
 		    UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale]);
 		T multiply_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale]);
 
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			return UnsafeNumericCast<T>(input / divide_power_of_ten * multiply_power_of_ten);
 		});
 	}
@@ -651,10 +652,10 @@ struct TruncDecimalPositivePrecisionOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
-		auto source_scale = DecimalType::GetScale(func_expr.children[0]->GetReturnType());
+		auto &info = func_expr.BindInfo()->Cast<RoundPrecisionFunctionData>();
+		auto source_scale = DecimalType::GetScale(func_expr.GetChildren()[0]->GetReturnType());
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale]);
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(),
+		UnaryExecutor::Execute<T, T>(input.data[0], result,
 		                             [&](T input) { return UnsafeNumericCast<T>(input / power_of_ten); });
 	}
 };
@@ -805,7 +806,7 @@ struct RoundDecimalOperator {
 		// and then flooring the number
 		// e.g. 10.5 + 0.5 = 11, floor(11) = 11
 		//      10.4 + 0.5 = 10.9, floor(10.9) = 10
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input < 0) {
 				input -= addition;
 			} else {
@@ -850,9 +851,9 @@ struct DecimalRoundNegativePrecisionOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
-		auto source_scale = DecimalType::GetScale(func_expr.children[0]->GetReturnType());
-		auto width = DecimalType::GetWidth(func_expr.children[0]->GetReturnType());
+		auto &info = func_expr.BindInfo()->Cast<RoundPrecisionFunctionData>();
+		auto source_scale = DecimalType::GetScale(func_expr.GetChildren()[0]->GetReturnType());
+		auto width = DecimalType::GetWidth(func_expr.GetChildren()[0]->GetReturnType());
 		if (info.target_scale <= -int32_t(width - source_scale)) {
 			// scale too big for width
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -864,7 +865,7 @@ struct DecimalRoundNegativePrecisionOperator {
 		T multiply_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale]);
 		T addition = divide_power_of_ten / 2;
 
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input < 0) {
 				input -= addition;
 			} else {
@@ -879,11 +880,11 @@ struct DecimalRoundPositivePrecisionOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
-		auto source_scale = DecimalType::GetScale(func_expr.children[0]->GetReturnType());
+		auto &info = func_expr.BindInfo()->Cast<RoundPrecisionFunctionData>();
+		auto source_scale = DecimalType::GetScale(func_expr.GetChildren()[0]->GetReturnType());
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale]);
 		T addition = power_of_ten / 2;
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input < 0) {
 				input -= addition;
 			} else {
@@ -978,14 +979,26 @@ namespace {
 struct PowOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA base, TB exponent) {
+		if (base == 0.0 && exponent < 0.0) {
+			throw OutOfRangeException("zero raised to a negative power is undefined");
+		}
+		return std::pow(base, exponent);
+	}
+};
+
+struct IEEEPowOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA base, TB exponent) {
 		return std::pow(base, exponent);
 	}
 };
 
 } // namespace
 ScalarFunction PowOperatorFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::BinaryFunction<double, double, double, PowOperator>);
+	ScalarFunction function({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingBinary<PowOperator, IEEEPowOperator>);
+	function.SetFallible();
+	return function;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1714,6 +1727,9 @@ namespace {
 struct FactorialOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
+		if (left < 0) {
+			throw OutOfRangeException("factorial of a negative number is undefined");
+		}
 		TR ret = 1;
 		for (TA i = 2; i <= left; i++) {
 			if (!TryMultiplyOperator::Operation(ret, TR(i), ret)) {

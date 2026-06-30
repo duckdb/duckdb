@@ -1,0 +1,96 @@
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+index 82c7c3c..355d687 100644
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -846,12 +846,12 @@ KernelUtils::UnpackTransformExpression(const vector<unique_ptr<ParsedExpression>
+ 		                  root_expression->GetExpressionType());
+ 	}
+ 
+-	if (root_expression->Cast<FunctionExpression>().function_name != "delta_kernel_transform_expression") {
++	if (root_expression->Cast<FunctionExpression>().FunctionName() != "delta_kernel_transform_expression") {
+ 		throw IOException("Unexpected function of root expression returned by delta kernel: %s",
+-		                  root_expression->Cast<FunctionExpression>().function_name);
++		                  root_expression->Cast<FunctionExpression>().FunctionName());
+ 	}
+ 
+-	return root_expression->Cast<FunctionExpression>().children;
++	return root_expression->Cast<FunctionExpression>().GetChildrenMutable();
+ }
+ 
+ PredicateVisitor::PredicateVisitor(const vector<DeltaMultiFileColumnDefinition> &columns,
+@@ -1036,8 +1036,8 @@ uintptr_t PredicateVisitor::VisitFilterExpression(const string &col_name, const
+ 		if (conjunction.GetExpressionType() != ExpressionType::CONJUNCTION_AND) {
+ 			return ~0;
+ 		}
+-		auto it = conjunction.children.begin();
+-		auto end = conjunction.children.end();
++		auto it = conjunction.GetChildren().begin();
++		auto end = conjunction.GetChildren().end();
+ 		auto get_next = [this, col_name, state, &it, &end]() -> uintptr_t {
+ 			if (it == end) {
+ 				return 0;
+@@ -1049,7 +1049,7 @@ uintptr_t PredicateVisitor::VisitFilterExpression(const string &col_name, const
+ 	}
+ 	case ExpressionClass::BOUND_OPERATOR: {
+ 		auto &op = expr.Cast<BoundOperatorExpression>();
+-		if (op.children.size() != 1 || !IsSupportedFilterSubject(*op.children[0])) {
++		if (op.GetChildren().size() != 1 || !IsSupportedFilterSubject(*op.GetChildren()[0])) {
+ 			return ~0;
+ 		}
+ 		if (op.GetExpressionType() == ExpressionType::OPERATOR_IS_NULL) {
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+index 7a32faf..643fc44 100644
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -351,30 +351,30 @@ static void KernelPartitionStringVisitor(ffi::NullableCvoid engine_context, ffi:
+ 
+ static unordered_map<idx_t, Value> FindPartitionValues(ParsedExpression &transformation,
+                                                        const vector<DeltaMultiFileColumnDefinition> &cols) {
+-	if (transformation.Cast<FunctionExpression>().function_name != "delta_kernel_transform_expression") {
++	if (transformation.Cast<FunctionExpression>().FunctionName() != "delta_kernel_transform_expression") {
+ 		throw IOException("Unexpected function of root expression returned by delta kernel: %s",
+-		                  transformation.Cast<FunctionExpression>().function_name);
++		                  transformation.Cast<FunctionExpression>().FunctionName());
+ 	}
+ 
+ 	unordered_map<idx_t, Value> res;
+ 
+ 	// Iterate the children of the transform
+-	for (auto &child : transformation.Cast<FunctionExpression>().children) {
++	for (auto &child : transformation.Cast<FunctionExpression>().GetChildren()) {
+ 		auto &transform_op = child->Cast<FunctionExpression>();
+-		if (transform_op.function_name != "delta_transform_op") {
++		if (transform_op.FunctionName() != "delta_transform_op") {
+ 			throw IOException("Unexpected function for delta_transform_op returned by delta kernel: %s",
+-			                  child->Cast<FunctionExpression>().function_name);
++			                  child->Cast<FunctionExpression>().FunctionName());
+ 		}
+ 
+ 		bool is_replace = false;
+ 		string field_name;
+ 		vector<Value> values;
+ 
+-		for (auto &transform_op_child : transform_op.children) {
++		for (auto &transform_op_child : transform_op.GetChildren()) {
+ 			if (transform_op_child->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
+ 				auto name =
+-				    transform_op_child->Cast<ComparisonExpression>().left->Cast<ColumnRefExpression>().GetName();
+-				auto value = transform_op_child->Cast<ComparisonExpression>().right->Cast<ConstantExpression>().GetValue();
++				    transform_op_child->Cast<ComparisonExpression>().Left().Cast<ColumnRefExpression>().GetName();
++				auto value = transform_op_child->Cast<ComparisonExpression>().Right().Cast<ConstantExpression>().GetValue();
+ 
+ 				if (name == "is_replace") {
+ 					is_replace = value.GetValue<bool>();
+diff --git a/src/functions/expression_functions.cpp b/src/functions/expression_functions.cpp
+index c509020..99ad6a6 100644
+--- a/src/functions/expression_functions.cpp
++++ b/src/functions/expression_functions.cpp
+@@ -15,7 +15,7 @@ static void AddTestExpressions(vector<Value> &result, vector<unique_ptr<ParsedEx
+ 
+ 	auto &expression = parsed_expressions.back();
+ 	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
+-		for (auto &expr : expression->Cast<FunctionExpression>().children) {
++		for (auto &expr : expression->Cast<FunctionExpression>().GetChildren()) {
+ 			result.push_back(expr->ToString());
+ 		}
+ 	} else if (expression->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {

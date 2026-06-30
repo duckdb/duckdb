@@ -8,7 +8,9 @@ SequenceOption <-
 	SeqStartWith /
 	SeqOwnedBy
 
-SeqSetCycle <- 'NO'? 'CYCLE'
+SeqSetCycle <- SeqCycle / SeqNoCycle
+SeqCycle <- 'CYCLE'
+SeqNoCycle <- 'NO' 'CYCLE'
 SeqSetIncrement <- 'INCREMENT' 'BY'? Expression
 SeqSetMinMax <- SeqMinOrMax Expression
 SeqNoMinMax <- 'NO' SeqMinOrMax

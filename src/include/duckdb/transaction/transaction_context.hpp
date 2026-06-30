@@ -44,6 +44,7 @@ public:
 	void Commit();
 	void Rollback(optional_ptr<ErrorData>);
 	void ClearTransaction();
+	void SetAutocheckpointError(ErrorData error);
 
 	void SetAutoCommit(bool value);
 	bool IsAutoCommit() const {
@@ -56,9 +57,7 @@ public:
 	void ResetActiveQuery();
 	void SetActiveQuery(transaction_t query_number);
 
-	void SetInvalidationPolicy(TransactionInvalidationPolicy new_invalidation_policy) {
-		invalidation_policy = new_invalidation_policy;
-	};
+	void SetInvalidationPolicy(TransactionInvalidationPolicy new_invalidation_policy);
 	TransactionInvalidationPolicy GetInvalidationPolicy() {
 		return invalidation_policy;
 	};
@@ -72,10 +71,11 @@ public:
 private:
 	ClientContext &context;
 	bool auto_commit;
-	TransactionInvalidationPolicy invalidation_policy;
-	bool auto_rollback;
+	TransactionInvalidationPolicy invalidation_policy = TransactionInvalidationPolicy::STANDARD_POLICY;
+	bool auto_rollback = false;
 
 	unique_ptr<MetaTransaction> current_transaction;
+	ErrorData autocheckpoint_error;
 
 	TransactionContext(const TransactionContext &) = delete;
 };

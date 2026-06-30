@@ -1,4 +1,8 @@
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
+#include "duckdb/common/enums/table_function_identifier_conversion.hpp"
+#include "duckdb/common/sql_identifier.hpp"
+#include "duckdb/logging/logger.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/table_binding.hpp"
@@ -13,9 +17,9 @@ TableFunctionBinder::TableFunctionBinder(Binder &binder, ClientContext &context,
 }
 
 BindResult TableFunctionBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
-	D_ASSERT(lambda_bindings && expr.lambda_idx < lambda_bindings->size());
+	D_ASSERT(lambda_bindings && expr.LambdaIndex() < lambda_bindings->size());
 	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
-	return (*lambda_bindings)[expr.lambda_idx].Bind(lambda_ref, depth);
+	return (*lambda_bindings)[expr.LambdaIndex()].Bind(lambda_ref, depth);
 }
 
 BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
@@ -28,16 +32,16 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}
 
-		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
+		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(Identifier(col_ref.GetName()))) {
 			throw ParameterNotResolvedException();
 		}
-	} else if (col_ref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos && binder.macro_binding &&
-	           binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
+	} else if (col_ref.ColumnNames()[0].GetIdentifierName().find(DummyBinding::DUMMY_NAME) != string::npos &&
+	           binder.macro_binding && binder.macro_binding->HasMatchingBinding(Identifier(col_ref.GetName()))) {
 		throw ParameterNotResolvedException();
 	}
 
 	auto query_location = col_ref.GetQueryLocation();
-	auto column_names = col_ref.column_names;
+	auto column_names = col_ref.ColumnNames();
 	auto result_name = StringUtil::Join(column_names, ".");
 	if (!table_function_name.empty()) {
 		// check if this is a lateral join column/parameter
@@ -72,6 +76,21 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 		                      result_name);
 	}
 
+	auto setting = Settings::Get<TableFunctionIdentifierConversionSetting>(context);
+	auto implicit_conversion_disabled = setting == TableFunctionIdentifierConversion::DISABLE_IMPLICIT_STRING;
+	auto warn_implicit_conversion = setting == TableFunctionIdentifierConversion::DEFAULT;
+	const auto msg =
+	    StringUtil::Format("Deprecated implicit conversion of unbound identifiers to strings in table function "
+	                       "arguments detected. Please use a string literal instead, e.g. %s.\n"
+	                       "Use SET table_function_identifier_conversion='ENABLE_IMPLICIT_STRING' to revert to the "
+	                       "deprecated behavior.",
+	                       SQLString::ToString(result_name));
+	if (implicit_conversion_disabled) {
+		throw BinderException(query_location, msg);
+	}
+	if (warn_implicit_conversion) {
+		DUCKDB_LOG_WARNING(context, msg);
+	}
 	return BindResult(make_uniq<BoundConstantExpression>(Value(result_name)));
 }
 

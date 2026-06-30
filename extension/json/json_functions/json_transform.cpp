@@ -46,7 +46,7 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 	yyjson_val *key, *val;
 	yyjson_obj_foreach(obj, idx, max, key, val) {
 		val = yyjson_obj_iter_get_val(key);
-		auto key_str = unsafe_yyjson_get_str(key);
+		string key_str(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
 		if (names.find(key_str) != names.end()) {
 			JSONCommon::ThrowValFormatError("Duplicate keys in object in JSON structure: %s", val);
 		}
@@ -302,8 +302,26 @@ static bool TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 	return success;
 }
 
+static bool TryOneFormat(const StrpTimeFormat &fmt, LogicalTypeId type_id, const string_t &input, Vector &result,
+                         idx_t i, string &error_message) {
+	if (type_id == LogicalTypeId::DATE) {
+		date_t val;
+		if (!TryParseDate::Operation<date_t>(fmt, input, val, error_message)) {
+			return false;
+		}
+		FlatVector::GetDataMutable<date_t>(result)[i] = val;
+	} else {
+		timestamp_t val;
+		if (!TryParseTimeStamp::Operation<timestamp_t>(fmt, input, val, error_message)) {
+			return false;
+		}
+		FlatVector::GetDataMutable<timestamp_t>(result)[i] = val;
+	}
+	return true;
+}
+
 template <class OP, class T>
-static bool TransformStringWithFormat(Vector &string_vector, const StrpTimeFormat &format, const idx_t count,
+static bool TransformStringWithFormat(const Vector &string_vector, const StrpTimeFormat &format, const idx_t count,
                                       Vector &result, JSONTransformOptions &options) {
 	const auto source_strings = FlatVector::GetData<string_t>(string_vector);
 	const auto &source_validity = FlatVector::Validity(string_vector);
@@ -334,22 +352,47 @@ static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 		success = false;
 	}
 
-	const auto &result_type = result.GetType().id();
-	auto &format = options.date_format_map->GetFormat(result_type);
+	const auto result_type_id = result.GetType().id();
+	D_ASSERT(result_type_id == LogicalTypeId::DATE || result_type_id == LogicalTypeId::TIMESTAMP);
+	const auto &formats = options.date_format_map->GetFormats(result_type_id);
+	const auto source_strings = FlatVector::GetData<string_t>(string_vector);
+	const auto &source_validity = FlatVector::Validity(string_vector);
+	auto &target_validity = FlatVector::ValidityMutable(result);
 
-	switch (result_type) {
-	case LogicalTypeId::DATE:
-		if (!TransformStringWithFormat<TryParseDate, date_t>(string_vector, format, count, result, options)) {
-			success = false;
+	// Probe first non-null value to find the most-specific matching format for this vector
+	idx_t matched_idx = DConstants::INVALID_INDEX;
+	for (idx_t i = 0; i < count && matched_idx == DConstants::INVALID_INDEX; i++) {
+		if (!source_validity.RowIsValid(i)) {
+			continue;
 		}
-		break;
-	case LogicalTypeId::TIMESTAMP:
-		if (!TransformStringWithFormat<TryParseTimeStamp, timestamp_t>(string_vector, format, count, result, options)) {
-			success = false;
+		string error_message;
+		for (idx_t j = formats.size(); j > 0; j--) {
+			if (TryOneFormat(formats[j - 1], result_type_id, source_strings[i], result, i, error_message)) {
+				matched_idx = j - 1;
+				break;
+			}
 		}
-		break;
-	default:
-		throw InternalException("No date/timestamp formats for %s", EnumUtil::ToString(result.GetType().id()));
+	}
+
+	const idx_t parse_limit = (matched_idx != DConstants::INVALID_INDEX) ? matched_idx + 1 : formats.size();
+	for (idx_t i = 0; i < count; i++) {
+		if (!source_validity.RowIsValid(i)) {
+			target_validity.SetInvalid(i);
+			continue;
+		}
+		bool parsed = false;
+		string error_message;
+		// Reverse iter formats, beginning at matched_idx until one parses
+		for (idx_t j = parse_limit; j > 0 && !parsed; j--) {
+			parsed = TryOneFormat(formats[j - 1], result_type_id, source_strings[i], result, i, error_message);
+		}
+		if (!parsed) {
+			target_validity.SetInvalid(i);
+			if (success && options.strict_cast) {
+				options.object_index = i;
+				success = false;
+			}
+		}
 	}
 	return success;
 }
@@ -515,7 +558,7 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 		const auto actual_i = column_index ? column_index->GetChildIndex(child_i).GetPrimaryIndex() : child_i;
 		projected_indices.insert(actual_i);
 
-		child_names.push_back(StructType::GetChildName(result.GetType(), actual_i));
+		child_names.emplace_back(StructType::GetChildName(result.GetType(), actual_i));
 		child_vectors.push_back(&child_vs[actual_i]);
 	}
 
@@ -606,6 +649,60 @@ static bool TransformArrayToList(yyjson_val *arrays[], yyjson_alc *alc, Vector &
 		throw InvalidInputException(options.error_message);
 	}
 
+	return success;
+}
+
+static bool TransformArrayToTuple(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count,
+                                  JSONTransformOptions &options) {
+	// A TUPLE is serialized as a JSON array - read each array element positionally into the matching struct child
+	bool success = true;
+	auto &result_validity = FlatVector::ValidityMutable(result);
+	auto &child_vs = StructVector::GetEntries(result);
+	const idx_t child_count = child_vs.size();
+
+	// nested_vals[child_i * count + i] holds the JSON value for child child_i of row i
+	auto nested_vals = JSONCommon::AllocateArray<yyjson_val *>(alc, child_count * count);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &arr = arrays[i];
+		bool valid = arr && !unsafe_yyjson_is_null(arr) && unsafe_yyjson_is_arr(arr);
+		if (!valid) {
+			result_validity.SetInvalid(i);
+			if (success && options.strict_cast && arr && !unsafe_yyjson_is_null(arr)) {
+				options.error_message =
+				    StringUtil::Format("Expected ARRAY, but got %s: %s", JSONCommon::ValTypeToString(arr),
+				                       JSONCommon::ValToString(arr, 50));
+				options.object_index = i;
+				success = false;
+			}
+			for (idx_t child_i = 0; child_i < child_count; child_i++) {
+				nested_vals[child_i * count + i] = nullptr;
+			}
+			continue;
+		}
+		// gather up to child_count elements - missing elements become NULL, extra elements are ignored
+		size_t idx, max;
+		yyjson_val *val;
+		idx_t child_i = 0;
+		yyjson_arr_foreach(arr, idx, max, val) {
+			if (child_i < child_count) {
+				nested_vals[child_i * count + i] = val;
+			}
+			child_i++;
+		}
+		for (; child_i < child_count; child_i++) {
+			nested_vals[child_i * count + i] = nullptr;
+		}
+	}
+
+	for (idx_t child_i = 0; child_i < child_count; child_i++) {
+		if (!JSONTransform::Transform(nested_vals + child_i * count, alc, child_vs[child_i], count, options, nullptr)) {
+			success = false;
+		}
+	}
+
+	if (!options.delay_error && !success) {
+		throw InvalidInputException(options.error_message);
+	}
 	return success;
 }
 
@@ -796,7 +893,7 @@ static bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &
 	auto fields = UnionType::CopyMemberTypes(type);
 	vector<string> names;
 	for (const auto &field : fields) {
-		names.push_back(field.first);
+		names.emplace_back(field.first);
 	}
 
 	bool success = true;
@@ -919,7 +1016,6 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 			throw InternalException("Unimplemented physical type for decimal");
 		}
 	}
-	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTERVAL:
@@ -940,6 +1036,8 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 		return TransformToString(vals, alc, result, count);
 	case LogicalTypeId::STRUCT:
 		return TransformObjectInternal(vals, alc, result, count, options, column_index);
+	case LogicalTypeId::TUPLE:
+		return TransformArrayToTuple(vals, alc, result, count, options);
 	case LogicalTypeId::LIST:
 		return TransformArrayToList(vals, alc, result, count, options);
 	case LogicalTypeId::MAP:
@@ -953,10 +1051,10 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	}
 }
 
-static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &result, yyjson_alc *alc,
+static bool TransformFunctionInternal(const Vector &input, const idx_t count, Vector &result, yyjson_alc *alc,
                                       JSONTransformOptions &options) {
 	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
+	input.ToUnifiedFormat(input_data);
 	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	// Read documents
@@ -1046,6 +1144,9 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(ExtensionLoader &loader) 
 		switch (type.id()) {
 		case LogicalTypeId::STRUCT:
 			target_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
+			break;
+		case LogicalTypeId::TUPLE:
+			target_type = LogicalType::TUPLE({LogicalType::ANY});
 			break;
 		case LogicalTypeId::LIST:
 			target_type = LogicalType::LIST(LogicalType::ANY);

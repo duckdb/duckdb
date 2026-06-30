@@ -130,8 +130,13 @@ string Bit::ToString(bitstring_t str) {
 }
 
 bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_message) {
-	auto data = const_data_ptr_cast(str.GetData());
 	auto len = str.GetSize();
+	if (len == 0) {
+		str_len = ComputeBitstringLen(1);
+		return true;
+	}
+
+	auto data = const_data_ptr_cast(str.GetData());
 	idx_t bit_count = 0;
 
 	if (data[0] == 'x') {
@@ -152,11 +157,15 @@ bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_messag
 
 bool Bit::ToBit(string_t str, bitstring_t &output_str, string *error_message) {
 	auto data = str.GetData();
+	auto len = str.GetSize();
+	if (len == 0) {
+		Bit::SetEmptyBitString(output_str, 1);
+		return true;
+	}
 	if (data[0] == 'x') {
 		return HexToBit(str, output_str, error_message);
 	}
 
-	auto len = str.GetSize();
 	auto output = output_str.GetDataWriteable();
 
 	char byte = 0;

@@ -11,15 +11,15 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr)
     : wexpr(wexpr), aggr(wexpr), result_type(wexpr.GetReturnType()),
-      state_size(aggr.function.GetStateSizeCallback()(aggr.function)), exclude_mode(wexpr.exclude_clause) {
-	for (auto &child : wexpr.children) {
+      state_size(aggr.function.GetStateSizeCallback()(aggr.function)), exclude_mode(wexpr.WindowExclude()) {
+	for (auto &child : wexpr.GetChildren()) {
 		arg_types.emplace_back(child->GetReturnType());
 	}
 }
 
 WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowAggregator(wexpr) {
-	for (auto &child : wexpr.children) {
+	for (auto &child : wexpr.GetChildren()) {
 		child_idx.emplace_back(shared.RegisterCollection(child, false));
 	}
 }

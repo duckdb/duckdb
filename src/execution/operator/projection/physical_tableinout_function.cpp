@@ -112,7 +112,6 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 			ConstantVector::Reference(state.input_chunk.data[col_idx], count_t(1), input.data[col_idx], state.row_index,
 			                          input.size());
 		}
-		state.input_chunk.SetCardinality(1);
 		state.row_index++;
 		state.new_row = false;
 		state.current_ordinality_idx = 1;
@@ -153,7 +152,7 @@ InsertionOrderPreservingMap<string> PhysicalTableInOutFunction::ParamsToString()
 			result[it.first] = it.second;
 		}
 	} else {
-		result["Name"] = function.name;
+		result["Name"] = function.name.GetIdentifierName();
 	}
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;

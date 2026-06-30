@@ -8,12 +8,13 @@ on:
       - 'feature'
       - 'v*.*-*'
       - 'gh-readonly-queue/**'
-    paths-ignore:
-      - '**.md'
-      - 'tools/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/cifuzz.yml'
+    paths:
+      - '**'
+      - '!**.md'
+      - '!tools/**'
+      - '!.github/patches/duckdb-wasm/**'
+      - '!.github/workflows/**'
+      - '.github/workflows/cifuzz.yml'
 
 
 concurrency:

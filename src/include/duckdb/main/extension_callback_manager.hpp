@@ -22,6 +22,7 @@ class OperatorExtension;
 class OptimizerExtension;
 class ParserExtension;
 class PlannerExtension;
+class ProfilerExtension;
 class StorageExtension;
 struct ExtensionCallbackRegistry;
 
@@ -33,6 +34,9 @@ public:
 	ExtensionCallbackManager();
 	~ExtensionCallbackManager();
 
+	void AddExtensionSchema(const Identifier &schema);
+	vector<string> GetExtensionSchemas() const;
+
 	static ExtensionCallbackManager &Get(ClientContext &context);
 	static ExtensionCallbackManager &Get(DatabaseInstance &db);
 	static const ExtensionCallbackManager &Get(const ClientContext &context);
@@ -43,6 +47,7 @@ public:
 	void Register(shared_ptr<OperatorExtension> extension);
 	void Register(const string &name, shared_ptr<StorageExtension> extension);
 	void Register(shared_ptr<ExtensionCallback> extension);
+	void Register(const string &name, shared_ptr<ProfilerExtension> extension);
 
 	ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions() const;
 	ExtensionCallbackIteratorHelper<OptimizerExtension> OptimizerExtensions() const;
@@ -50,11 +55,13 @@ public:
 	ExtensionCallbackIteratorHelper<PlannerExtension> PlannerExtensions() const;
 	ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallbacks() const;
 	optional_ptr<StorageExtension> FindStorageExtension(const string &name) const;
+	optional_ptr<ProfilerExtension> FindProfilerExtension(const string &name) const;
 	bool HasParserExtensions() const;
 
 private:
 	mutex registry_lock;
 	shared_ptr<ExtensionCallbackRegistry> callback_registry;
+	vector<string> extension_schemas;
 };
 
 template <class T>

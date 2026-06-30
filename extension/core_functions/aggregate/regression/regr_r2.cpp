@@ -13,19 +13,15 @@ namespace duckdb {
 
 namespace {
 struct RegrR2State {
+	static constexpr const char *STATE_NAMES[] = {"corr", "var_pop_x", "var_pop_y"};
+	using STATE_TYPE = StructStateType<CorrState, StddevState, StddevState>;
+
 	CorrState corr;
 	StddevState var_pop_x;
 	StddevState var_pop_y;
 };
 
 struct RegrR2Operation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		CorrOperation::Initialize<CorrState>(state.corr);
-		STDDevBaseOperation::Initialize<StddevState>(state.var_pop_x);
-		STDDevBaseOperation::Initialize<StddevState>(state.var_pop_y);
-	}
-
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		CorrOperation::Operation<A_TYPE, B_TYPE, CorrState, OP>(state.corr, y, x, idata);
@@ -61,39 +57,11 @@ struct RegrR2Operation {
 	}
 };
 
-LogicalType GetRegrR2StateType(const BoundAggregateFunction &) {
-	child_list_t<LogicalType> covar_children;
-	covar_children.emplace_back("count", LogicalType::UBIGINT);
-	covar_children.emplace_back("meanx", LogicalType::DOUBLE);
-	covar_children.emplace_back("meany", LogicalType::DOUBLE);
-	covar_children.emplace_back("co_moment", LogicalType::DOUBLE);
-	auto cov_pop_type = LogicalType::STRUCT(std::move(covar_children));
-
-	child_list_t<LogicalType> stddev_types;
-	stddev_types.emplace_back("count", LogicalType::UBIGINT);
-	stddev_types.emplace_back("mean", LogicalType::DOUBLE);
-	stddev_types.emplace_back("dsquared", LogicalType::DOUBLE);
-	auto stddev_type = LogicalType::STRUCT(std::move(stddev_types));
-
-	child_list_t<LogicalType> corr_children;
-	corr_children.emplace_back("cov_pop", std::move(cov_pop_type));
-	corr_children.emplace_back("dev_pop_x", stddev_type);
-	corr_children.emplace_back("dev_pop_y", stddev_type);
-	auto corr_state = LogicalType::STRUCT(std::move(corr_children));
-
-	child_list_t<LogicalType> state_children;
-	state_children.emplace_back("corr", corr_state);
-	state_children.emplace_back("var_pop_x", stddev_type);
-	state_children.emplace_back("var_pop_y", stddev_type);
-	return LogicalType::STRUCT(std::move(state_children));
-}
-
 } // namespace
 
 AggregateFunction RegrR2Fun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrR2State, double, double, double, RegrR2Operation>(
-	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetRegrR2StateType);
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

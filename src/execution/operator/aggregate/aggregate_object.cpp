@@ -7,24 +7,27 @@ namespace duckdb {
 
 AggregateObject::AggregateObject(BoundAggregateFunction function, FunctionData *bind_data, idx_t child_count,
                                  idx_t payload_size, AggregateType aggr_type, PhysicalType return_type,
-                                 Expression *filter)
+                                 optional_ptr<const Expression> filter)
     : function(std::move(function)),
       bind_data_wrapper(bind_data ? make_shared_ptr<FunctionDataWrapper>(bind_data->Copy()) : nullptr),
       child_count(child_count), payload_size(payload_size), aggr_type(aggr_type), return_type(return_type),
       filter(filter) {
 }
 
-AggregateObject::AggregateObject(BoundAggregateExpression *aggr)
-    : AggregateObject(aggr->function, aggr->bind_info.get(), aggr->children.size(),
-                      AlignValue(aggr->function.GetStateSizeCallback()(aggr->function)), aggr->aggr_type,
-                      aggr->GetReturnType().InternalType(), aggr->filter.get()) {
+AggregateObject::AggregateObject(BoundAggregateExpression &aggr)
+    : AggregateObject(aggr.Function(), aggr.BindInfoMutable().get(), aggr.GetChildren().size(),
+                      AlignValue(aggr.Function().GetStateSizeCallback()(aggr.Function())), aggr.GetAggregateType(),
+                      aggr.GetReturnType().InternalType(), aggr.GetFilter().get()) {
+}
+
+AggregateObject::AggregateObject(BoundAggregateExpression *aggr) : AggregateObject(*aggr) {
 }
 
 AggregateObject::AggregateObject(const BoundWindowExpression &window)
-    : AggregateObject(*window.aggregate, window.bind_info.get(), window.children.size(),
-                      AlignValue(window.aggregate->GetStateSizeCallback()(*window.aggregate)),
-                      window.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT,
-                      window.GetReturnType().InternalType(), window.filter_expr.get()) {
+    : AggregateObject(*window.AggregateFunction(), window.BindInfo().get(), window.GetChildren().size(),
+                      AlignValue(window.AggregateFunction()->GetStateSizeCallback()(*window.AggregateFunction())),
+                      window.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT,
+                      window.GetReturnType().InternalType(), window.Filter().get()) {
 }
 
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<BoundAggregateExpression *> &bindings) {
@@ -36,7 +39,7 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<Bou
 	return aggregates;
 }
 
-AggregateFilterData::AggregateFilterData(ClientContext &context, Expression &filter_expr,
+AggregateFilterData::AggregateFilterData(ClientContext &context, const Expression &filter_expr,
                                          const vector<LogicalType> &payload_types)
     : filter_executor(context, &filter_expr), true_sel(STANDARD_VECTOR_SIZE) {
 	if (payload_types.empty()) {

@@ -49,6 +49,28 @@ TEST_CASE("Test decimal types C API", "[capi]") {
 	REQUIRE(duckdb_decimal_internal_type(nullptr) == DUCKDB_TYPE_INVALID);
 }
 
+TEST_CASE("Test duckdb_create_decimal_type width/scale validation", "[capi]") {
+	// valid width/scale combinations succeed and round-trip
+	duckdb::vector<std::pair<uint8_t, uint8_t>> valid = {{1, 0}, {4, 1}, {9, 2}, {18, 3}, {38, 4}, {38, 38}};
+	for (auto &entry : valid) {
+		auto type = duckdb_create_decimal_type(entry.first, entry.second);
+		REQUIRE(type != nullptr);
+		REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_DECIMAL);
+		REQUIRE(duckdb_decimal_width(type) == entry.first);
+		REQUIRE(duckdb_decimal_scale(type) == entry.second);
+		duckdb_destroy_logical_type(&type);
+	}
+
+	// invalid width/scale combinations return nullptr instead of throwing or returning a malformed type
+	duckdb::vector<std::pair<uint8_t, uint8_t>> invalid = {{0, 0},  // width below the minimum
+	                                                       {39, 0}, // width above the maximum (MAX_WIDTH_DECIMAL == 38)
+	                                                       {4, 5},  // scale greater than width
+	                                                       {255, 255}};
+	for (auto &entry : invalid) {
+		REQUIRE(duckdb_create_decimal_type(entry.first, entry.second) == nullptr);
+	}
+}
+
 TEST_CASE("Test enum types C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
@@ -274,9 +296,9 @@ TEST_CASE("Logical types with aliases", "[capi]") {
 	id.SetAlias(type_name);
 	CreateTypeInfo info(type_name, id);
 
-	auto &catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
+	auto catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
 	auto &transaction = MetaTransaction::Get(*connection->context);
-	auto &catalog = Catalog::GetCatalog(*connection->context, catalog_name);
+	auto &catalog = Catalog::GetCatalog(*connection->context, Identifier(catalog_name));
 	transaction.ModifyDatabase(catalog.GetAttached(), DatabaseModificationType::CREATE_CATALOG_ENTRY);
 	catalog.CreateType(*connection->context, info);
 
@@ -1090,4 +1112,48 @@ TEST_CASE("Union value construction (invalid value type)", "[capi]") {
 	duckdb_destroy_logical_type(&union_type);
 	duckdb_destroy_logical_type(&int_type);
 	duckdb_destroy_logical_type(&varchar_type);
+}
+
+TEST_CASE("C API unnamed struct cannot bypass tuple storage version gate", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto path = TestCreatePath("capi_unnamed_struct_v15.db");
+	std::remove(path.c_str());
+	std::remove((path + ".wal").c_str());
+
+	auto attach = "ATTACH '" + path + "' AS v15 (STORAGE_VERSION 'v1.5.0')";
+	auto attach_result = tester.Query(attach);
+	REQUIRE_NO_FAIL(*attach_result);
+
+	auto child_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	duckdb_logical_type child_types[] = {child_type};
+	const char *child_names[] = {""};
+
+	auto struct_type = duckdb_create_struct_type(child_types, child_names, 1);
+	REQUIRE(struct_type);
+	REQUIRE(duckdb_get_type_id(struct_type) == DUCKDB_TYPE_STRUCT);
+
+	auto child_value = duckdb_create_int32(42);
+	duckdb_value child_values[] = {child_value};
+
+	auto struct_value = duckdb_create_struct_value(struct_type, child_values);
+	REQUIRE(struct_value);
+	REQUIRE(duckdb_get_type_id(duckdb_get_value_type(struct_value)) == DUCKDB_TYPE_STRUCT);
+
+	duckdb_prepared_statement stmt;
+	REQUIRE(duckdb_prepare(tester.connection, "CREATE TABLE v15.t AS SELECT ? AS x", &stmt) == DuckDBSuccess);
+	REQUIRE(duckdb_bind_value(stmt, 1, struct_value) == DuckDBSuccess);
+
+	duckdb_result result;
+	REQUIRE(duckdb_execute_prepared(stmt, &result) == DuckDBError);
+	REQUIRE(StringUtil::Contains(string(duckdb_result_error(&result)),
+	                             "TUPLE columns are not supported in storage versions prior to v2.0.0"));
+
+	duckdb_destroy_result(&result);
+	duckdb_destroy_prepare(&stmt);
+	duckdb_destroy_value(&struct_value);
+	duckdb_destroy_value(&child_value);
+	duckdb_destroy_logical_type(&struct_type);
+	duckdb_destroy_logical_type(&child_type);
 }

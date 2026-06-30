@@ -57,7 +57,6 @@ public:
 	ParquetCacheValidity IsValid(const OpenFileInfo &info, ClientContext &context) const;
 
 private:
-	bool validate;
 	timestamp_t last_modified;
 	string version_tag;
 };

@@ -93,11 +93,18 @@ struct UpdateInfo {
 	bool HasPrev() const;
 	bool HasNext() const;
 	static UpdateInfo &Get(UndoBufferReference &entry);
-	//! Returns the total allocation size for an UpdateInfo entry, together with space for the tuple data
+	//! Returns the total allocation size for an UpdateInfo entry with max capacity (STANDARD_VECTOR_SIZE)
 	static idx_t GetAllocSize(idx_t type_size);
+	//! Returns the total allocation size for an UpdateInfo entry with a specific capacity
+	static idx_t GetAllocSize(idx_t type_size, idx_t capacity);
+	//! Computes a compact capacity for a given count (rounds up with growth headroom)
+	static idx_t GetCompactCapacity(idx_t count);
 	//! Initialize an UpdateInfo struct that has been allocated using GetAllocSize (i.e. has extra space after it)
 	static void Initialize(UpdateInfo &info, DuckTableEntry &table_entry, transaction_t transaction_id,
 	                       idx_t row_group_start);
+	//! Initialize with a specific capacity (for compact allocations)
+	static void Initialize(UpdateInfo &info, DuckTableEntry &table_entry, transaction_t transaction_id,
+	                       idx_t row_group_start, idx_t capacity);
 };
 
 } // namespace duckdb

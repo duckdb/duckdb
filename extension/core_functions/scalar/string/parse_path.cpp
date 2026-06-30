@@ -112,7 +112,7 @@ static void ReadOptionalArgs(DataChunk &args, Vector &sep, Vector &trim, const b
 	}
 	case 2: {
 		UnifiedVectorFormat sec_arg;
-		args.data[1].ToUnifiedFormat(args.size(), sec_arg);
+		args.data[1].ToUnifiedFormat(sec_arg);
 		if (sec_arg.validity.RowIsValid(0)) { // if not NULL
 			switch (args.data[1].GetType().id()) {
 			case LogicalTypeId::VARCHAR: {
@@ -133,12 +133,12 @@ static void ReadOptionalArgs(DataChunk &args, Vector &sep, Vector &trim, const b
 		if (!front_trim) {
 			// set trim_extension
 			UnifiedVectorFormat sec_arg;
-			args.data[1].ToUnifiedFormat(args.size(), sec_arg);
+			args.data[1].ToUnifiedFormat(sec_arg);
 			if (sec_arg.validity.RowIsValid(0)) {
 				trim.Reinterpret(args.data[1]);
 			}
 			UnifiedVectorFormat third_arg;
-			args.data[2].ToUnifiedFormat(args.size(), third_arg);
+			args.data[2].ToUnifiedFormat(third_arg);
 			if (third_arg.validity.RowIsValid(0)) {
 				sep.Reinterpret(args.data[2]);
 			}
@@ -155,14 +155,13 @@ static void ReadOptionalArgs(DataChunk &args, Vector &sep, Vector &trim, const b
 template <bool FRONT_TRIM>
 static void TrimPathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// set default values
-	Vector &path = args.data[0];
+	const Vector &path = args.data[0];
 	Vector separator(string_t("default"), count_t(args.size()));
 	Vector trim_extension(Value::BOOLEAN(false), count_t(args.size()));
 	ReadOptionalArgs(args, separator, trim_extension, FRONT_TRIM);
 
 	TernaryExecutor::Execute<string_t, string_t, bool, string_t>(
-	    path, separator, trim_extension, result, args.size(),
-	    [&](string_t &inputs, string_t input_sep, bool trim_extension) {
+	    path, separator, trim_extension, result, [&](string_t &inputs, string_t input_sep, bool trim_extension) {
 		    auto data = inputs.GetData();
 		    auto input_size = inputs.GetSize();
 		    auto sep = GetSeparator(input_sep.GetString());
@@ -201,14 +200,14 @@ static void TrimPathFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 static void ParseDirpathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// set default values
-	Vector &path = args.data[0];
+	const Vector &path = args.data[0];
 	Vector separator(string_t("default"), count_t(args.size()));
 	Vector trim_extension(Value::BOOLEAN(false), count_t(args.size()));
 	ReadOptionalArgs(args, separator, trim_extension, true);
 
 	auto &heap = StringVector::GetStringHeap(result);
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
-	    path, separator, result, args.size(), [&](string_t input_path, string_t input_sep) {
+	    path, separator, result, [&](string_t input_path, string_t input_sep) {
 		    auto path = input_path.GetData();
 		    auto path_size = input_path.GetSize();
 		    auto sep = GetSeparator(input_sep.GetString());
@@ -230,14 +229,14 @@ static void ParseDirpathFunction(DataChunk &args, ExpressionState &state, Vector
 static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1 || args.ColumnCount() == 2);
 	UnifiedVectorFormat input_data;
-	args.data[0].ToUnifiedFormat(args.size(), input_data);
+	args.data[0].ToUnifiedFormat(input_data);
 	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	// set the separator
 	string input_sep = "default";
 	if (args.ColumnCount() == 2) {
 		UnifiedVectorFormat sep_data;
-		args.data[1].ToUnifiedFormat(args.size(), sep_data);
+		args.data[1].ToUnifiedFormat(sep_data);
 		if (sep_data.validity.RowIsValid(0)) {
 			input_sep = UnifiedVectorFormat::GetData<string_t>(sep_data)->GetString();
 		}

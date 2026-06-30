@@ -20,21 +20,6 @@
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
-struct FunctionLocalState {
-	DUCKDB_API virtual ~FunctionLocalState();
-
-	template <class TARGET>
-	TARGET &Cast() {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<TARGET &>(*this);
-	}
-	template <class TARGET>
-	const TARGET &Cast() const {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<const TARGET &>(*this);
-	}
-};
-
 struct ScalarFunctionInfo {
 	DUCKDB_API virtual ~ScalarFunctionInfo();
 
@@ -74,12 +59,12 @@ class ScalarFunctionCatalogEntry;
 struct StatementProperties;
 
 struct FunctionStatisticsPruneInput {
-	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, BaseStatistics &stats_p)
+	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, const BaseStatistics &stats_p)
 	    : bind_data(bind_data_p), stats(stats_p) {
 	}
 
 	optional_ptr<FunctionData> bind_data;
-	BaseStatistics &stats;
+	const BaseStatistics &stats;
 };
 
 struct FunctionStatisticsInput {
@@ -115,6 +100,21 @@ struct FunctionBindExpressionInput {
 	vector<unique_ptr<Expression>> &children;
 };
 
+struct FunctionToStringInput {
+	FunctionToStringInput(const BoundScalarFunction &bound_function, optional_ptr<FunctionData> bind_data_p,
+	                      const vector<unique_ptr<Expression>> &children_p)
+	    : bound_function(bound_function), bind_data(bind_data_p), children(children_p) {
+	}
+
+	const BoundScalarFunction &bound_function;
+	optional_ptr<FunctionData> bind_data;
+	const vector<unique_ptr<Expression>> &children;
+
+	const Expression &GetChild(idx_t i) const {
+		return *children[i];
+	}
+};
+
 class BindScalarFunctionInput;
 
 //! The scalar function type
@@ -126,8 +126,10 @@ typedef unique_ptr<FunctionLocalState> (*init_local_state_t)(ExpressionState &st
                                                              const BoundFunctionExpression &expr,
                                                              FunctionData *bind_data);
 //! The type to directly access the selection vector of a scalar function
-typedef idx_t (*scalar_function_select_t)(DataChunk &args, ExpressionState &state, SelectionVector *true_sel,
-                                          SelectionVector *false_sel);
+typedef idx_t (*scalar_function_select_t)(DataChunk &args, ExpressionState &state,
+                                          optional_ptr<const SelectionVector> sel,
+                                          optional_ptr<SelectionVector> true_sel,
+                                          optional_ptr<SelectionVector> false_sel);
 //! The type to propagate statistics for this scalar function
 typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, FunctionStatisticsInput &input);
 
@@ -148,6 +150,15 @@ typedef FilterPropagateResult (*propagate_filter_t)(const FunctionStatisticsPrun
 //! The type to bind lambda-specific parameter types
 typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpressionInput &input);
 
+//! Convert a scalar function to string
+typedef string (*function_to_string_t)(FunctionToStringInput &input);
+
+//! Get the expression type of a function
+typedef ExpressionType (*function_get_expression_type_t)(FunctionToStringInput &input);
+
+//! Legacy serialize function for expressions that were converted into functions
+typedef unique_ptr<Expression> (*function_legacy_serialize_t)(FunctionToStringInput &input);
+
 class ScalarFunctionCallbacks {
 public:
 	//! The main scalar function to execute
@@ -166,9 +177,15 @@ public:
 	function_bind_expression_t bind_expression = nullptr;
 	//! Gets the modified databases (if any)
 	get_modified_databases_t get_modified_databases = nullptr;
+	//! Convert a scalar function to string
+	function_to_string_t to_string = nullptr;
+	//! Get the expression type
+	function_get_expression_type_t get_expression_type = nullptr;
 
 	function_serialize_t serialize = nullptr;
 	function_deserialize_t deserialize = nullptr;
+
+	function_legacy_serialize_t legacy_serialize = nullptr;
 
 	//! The filter prune function (if any)
 	propagate_filter_t filter_prune = nullptr;
@@ -205,6 +222,9 @@ public: // Properties
 
 	auto GetCollationHandling() const -> FunctionCollationHandling { return properties.collation_handling; }
 	auto SetCollationHandling(FunctionCollationHandling value) -> void { properties.collation_handling = value; }
+
+	auto GetCaptureArgumentAliases() const -> bool { return properties.capture_argument_aliases; }
+	auto SetCaptureArgumentAliases(bool value) -> void { properties.capture_argument_aliases = value; }
 
 	//! Set this functions error-mode as fallible (can throw runtime errors)
 	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
@@ -254,6 +274,22 @@ public: // Callbacks
 	auto HasFilterPruneCallback() const -> bool { return callbacks.filter_prune != nullptr; }
 	auto SetFilterPruneCallback(propagate_filter_t callback) -> void { callbacks.filter_prune = callback; }
 	auto GetFilterPruneCallback() const -> propagate_filter_t { return callbacks.filter_prune; }
+
+	auto HasToStringCallback() const -> bool { return callbacks.to_string != nullptr; }
+	auto SetToStringCallback(function_to_string_t callback) -> void { callbacks.to_string = callback; }
+	auto FunctionToString(FunctionToStringInput &input) const -> string { return callbacks.to_string(input); }
+
+	auto HasLegacySerializeCallback() const -> bool { return callbacks.legacy_serialize != nullptr; }
+	auto SetLegacySerializeCallback(function_legacy_serialize_t callback) -> void { callbacks.legacy_serialize = callback; }
+	auto GetLegacySerializeCallback() const -> function_legacy_serialize_t { return callbacks.legacy_serialize; }
+
+	auto SetGetExpressionTypeCallback(function_get_expression_type_t callback) -> void { callbacks.get_expression_type = callback; }
+	auto GetExpressionType(FunctionToStringInput &input) const -> ExpressionType {
+		if (callbacks.get_expression_type) {
+			return callbacks.get_expression_type(input);
+		}
+		return ExpressionType::BOUND_FUNCTION;
+	}
 	// clang-format on
 
 public:
@@ -314,7 +350,8 @@ public:
 class ScalarFunction : public BaseScalarFunction<ScalarFunction>,
                        public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
-	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
+	DUCKDB_API ScalarFunction(Identifier name, FunctionSignature sig, scalar_function_t function);
+	DUCKDB_API ScalarFunction(Identifier name, vector<LogicalType> arguments, LogicalType return_type,
 	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
@@ -345,20 +382,19 @@ public:
 	template <class TA, class TR, class OP>
 	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		D_ASSERT(input.ColumnCount() >= 1);
-		UnaryExecutor::Execute<TA, TR, OP>(input.data[0], result, input.size());
+		UnaryExecutor::Execute<TA, TR, OP>(input.data[0], result);
 	}
 
 	template <class TA, class TB, class TR, class OP>
 	static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		D_ASSERT(input.ColumnCount() == 2);
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP>(input.data[0], input.data[1], result, input.size());
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP>(input.data[0], input.data[1], result);
 	}
 
 	template <class TA, class TB, class TC, class TR, class OP>
 	static void TernaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		D_ASSERT(input.ColumnCount() == 3);
-		TernaryExecutor::ExecuteStandard<TA, TB, TC, TR, OP>(input.data[0], input.data[1], input.data[2], result,
-		                                                     input.size());
+		TernaryExecutor::ExecuteStandard<TA, TB, TC, TR, OP>(input.data[0], input.data[1], input.data[2], result);
 	}
 
 public:

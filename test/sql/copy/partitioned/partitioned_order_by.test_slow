@@ -1,0 +1,166 @@
+# name: test/sql/copy/partitioned/partitioned_order_by.test_slow
+# description: Stress sortedness within each file for COPY with PARTITION_BY and ORDER_BY
+# group: [partitioned]
+
+require parquet
+
+statement ok
+PRAGMA threads=4;
+
+statement ok
+SET partitioned_write_flush_threshold=2048;
+
+statement ok
+CREATE TABLE order_stress AS
+SELECT
+	(i % 8)::INTEGER AS p,
+	CASE WHEN i % 11 = 0 THEN NULL ELSE ((i * 13) % 257)::INTEGER END AS a,
+	((i * 7919) % 100000)::INTEGER AS b,
+	('k' || lpad(((i * 31) % 1024)::VARCHAR, 4, '0'))::VARCHAR AS s
+FROM range(262144) tbl(i);
+
+statement ok
+COPY (SELECT p, a, b, b % 17 AS b_mod FROM order_stress ORDER BY random())
+TO '{TEST_DIR}/stress_expr_nulls'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (a ASC NULLS LAST, b_mod DESC, b ASC), ROW_GROUP_SIZE 2048);
+
+query I
+WITH per_file AS (
+	SELECT
+		filename,
+		(a IS NULL)::INTEGER AS a_is_null,
+		coalesce(a, 2147483647) AS a_key,
+		b_mod,
+		b,
+		lag((a IS NULL)::INTEGER) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_a_is_null,
+		lag(coalesce(a, 2147483647)) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_a_key,
+		lag(b_mod) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_b_mod,
+		lag(b) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_b
+	FROM read_parquet(
+		'{TEST_DIR}/stress_expr_nulls/**/*.parquet',
+		filename = true,
+		file_row_number = true,
+		hive_partitioning = true
+	)
+)
+SELECT count(*)
+FROM per_file
+WHERE prev_a_is_null > a_is_null
+	OR (prev_a_is_null = a_is_null AND prev_a_key > a_key)
+	OR (prev_a_is_null = a_is_null AND prev_a_key = a_key AND prev_b_mod < b_mod)
+	OR (prev_a_is_null = a_is_null AND prev_a_key = a_key AND prev_b_mod = b_mod AND prev_b > b);
+----
+0
+
+statement ok
+COPY (SELECT p, s, b, right(s, 2) AS suffix, length(s) AS len FROM order_stress ORDER BY b DESC)
+TO '{TEST_DIR}/stress_string_expr'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (suffix DESC, len, s ASC, b DESC), ROW_GROUP_SIZE 2048);
+
+query I
+WITH per_file AS (
+	SELECT
+		filename,
+		suffix,
+		len,
+		s,
+		b,
+		lag(suffix) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_suffix,
+		lag(len) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_len,
+		lag(s) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_s,
+		lag(b) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_b
+	FROM read_parquet(
+		'{TEST_DIR}/stress_string_expr/**/*.parquet',
+		filename = true,
+		file_row_number = true,
+		hive_partitioning = true
+	)
+)
+SELECT count(*)
+FROM per_file
+WHERE prev_suffix < suffix
+	OR (prev_suffix = suffix AND prev_len > len)
+	OR (prev_suffix = suffix AND prev_len = len AND prev_s > s)
+	OR (prev_suffix = suffix AND prev_len = len AND prev_s = s AND prev_b < b);
+----
+0
+
+statement ok
+COPY (
+	SELECT
+		p,
+		a,
+		b,
+		((b * 97) % 1009)::INTEGER AS scramble,
+		CASE WHEN b % 19 = 0 THEN NULL ELSE ((b * 23) % 4096)::INTEGER END AS nullable_key
+	FROM order_stress
+	ORDER BY b, p
+)
+TO '{TEST_DIR}/stress_desc_nulls_non_hive'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (p DESC, nullable_key DESC NULLS FIRST, scramble ASC, b DESC), ROW_GROUP_SIZE 2048);
+
+query I
+SELECT count(*) > 8 FROM glob('{TEST_DIR}/stress_desc_nulls_non_hive/**/*.parquet');
+----
+true
+
+query I
+WITH per_file AS (
+	SELECT
+		filename,
+		p,
+		(nullable_key IS NOT NULL)::INTEGER AS nullable_present,
+		coalesce(nullable_key, -2147483648) AS nullable_value,
+		scramble,
+		b,
+		lag(p) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_p,
+		lag((nullable_key IS NOT NULL)::INTEGER) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_nullable_present,
+		lag(coalesce(nullable_key, -2147483648)) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_nullable_value,
+		lag(scramble) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_scramble,
+		lag(b) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_b
+	FROM read_parquet(
+		'{TEST_DIR}/stress_desc_nulls_non_hive/**/*.parquet',
+		filename = true,
+		file_row_number = true
+	)
+)
+SELECT count(*)
+FROM per_file
+WHERE prev_p < p
+	OR (prev_p = p AND prev_nullable_present > nullable_present)
+	OR (prev_p = p AND prev_nullable_present = nullable_present AND prev_nullable_value < nullable_value)
+	OR (prev_p = p AND prev_nullable_present = nullable_present AND prev_nullable_value = nullable_value AND prev_scramble > scramble)
+	OR (prev_p = p AND prev_nullable_present = nullable_present AND prev_nullable_value = nullable_value AND prev_scramble = scramble AND prev_b < b);
+----
+0
+
+# these tests exposed some binder issues before
+statement error
+copy (from range(10)) to '{TEST_DIR}/duplicated' (partition_by (range, range));
+----
+Binder Error: "partition_by" does now allow duplicate columns
+
+statement ok
+CREATE TABLE order_by_expr_repro AS
+SELECT
+	(i % 8)::INTEGER AS p,
+	CASE WHEN i % 11 = 0 THEN NULL ELSE ((i * 13) % 257)::INTEGER END AS a,
+	((i * 7919) % 100000)::INTEGER AS b,
+	('k' || lpad(((i * 31) % 1024)::VARCHAR, 4, '0'))::VARCHAR AS s
+FROM range(262144) tbl(i);
+
+statement ok
+COPY (SELECT p, a, b FROM order_by_expr_repro ORDER BY random())
+TO '{TEST_DIR}/break_order_by_arithmetic_expr'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (a ASC NULLS LAST, (b % 17) DESC, b ASC), ROW_GROUP_SIZE 2048);
+
+# Related variants that should also work once ORDER_BY expression binding is fixed.
+statement ok
+COPY (SELECT p, s, b FROM order_by_expr_repro ORDER BY b DESC)
+TO '{TEST_DIR}/break_order_by_string_expr'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (right(s, 2) DESC, length(s), s ASC, b DESC), ROW_GROUP_SIZE 2048);
+
+statement ok
+COPY (SELECT p, a, b FROM order_by_expr_repro ORDER BY b, p)
+TO '{TEST_DIR}/break_order_by_case_expr'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (p DESC, CASE WHEN b % 19 = 0 THEN NULL ELSE ((b * 23) % 4096)::INTEGER END DESC NULLS FIRST, ((b * 97) % 1009)::INTEGER ASC, b DESC), ROW_GROUP_SIZE 2048);

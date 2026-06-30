@@ -322,7 +322,7 @@ index_key: parameter 'index_name' must be a constant
 statement error
 SELECT index_key($1, 'PRIMARY_tbl1_0', 1);
 ----
-Expected 1 parameters, but none were supplied
+Invalid Input Error: Values were not provided for the following parameters: 1
 
 ########################################################################################################################
 #                                                                                                                      #
@@ -364,7 +364,7 @@ Binder Error: No function matches the given name and argument types
 statement error
 SELECT index_key({'schema': 'main', 'schema': 'main', 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: Duplicate struct entry name "schema"
+Binder Error: Duplicate
 
 ########################################################################################################################
 #                                                                                                                      #

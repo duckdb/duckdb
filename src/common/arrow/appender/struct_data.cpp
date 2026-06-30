@@ -16,9 +16,10 @@ void ArrowStructData::Initialize(ArrowAppendData &result, const LogicalType &typ
 	}
 }
 
-void ArrowStructData::Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+void ArrowStructData::Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to,
+                             idx_t input_size) {
 	UnifiedVectorFormat format;
-	input.ToUnifiedFormat(input_size, format);
+	input.ToUnifiedFormat(format);
 	idx_t size = to - from;
 	append_data.AppendValidity(format, from, to);
 	// append the children of the struct
@@ -26,7 +27,7 @@ void ArrowStructData::Append(ArrowAppendData &append_data, Vector &input, idx_t 
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 		auto &child = children[child_idx];
 		auto &child_data = *append_data.child_data[child_idx];
-		child_data.append_vector(child_data, child, from, to, size);
+		child_data.AppendChild(child, from, to, input_size);
 	}
 	append_data.row_count += size;
 }

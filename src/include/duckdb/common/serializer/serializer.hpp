@@ -11,6 +11,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/serializer/serialization_data.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
@@ -22,10 +23,10 @@
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
-#include "duckdb/common/serialization_compatibility.hpp"
+#include "duckdb/common/storage_compatibility.hpp"
+#include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 
 namespace duckdb {
-
 class SerializationOptions {
 public:
 	SerializationOptions() = default;
@@ -33,7 +34,7 @@ public:
 
 	bool serialize_enum_as_string = false;
 	bool serialize_default_values = false;
-	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
+	StorageCompatibility storage_compatibility = StorageCompatibility::Default();
 };
 
 class Serializer {
@@ -45,8 +46,12 @@ public:
 	virtual ~Serializer() {
 	}
 
-	bool ShouldSerialize(idx_t version_added) {
-		return options.serialization_compatibility.Compare(version_added);
+	bool ShouldSerializeInternal(StorageVersion version_added) const {
+		return options.storage_compatibility.Compare(version_added);
+	}
+
+	bool ShouldSerialize(StorageVersion version_added) const {
+		return ShouldSerializeInternal(version_added);
 	}
 
 	class List {
@@ -310,8 +315,8 @@ protected:
 
 	// Insertion Order Preserving Map
 	// serialized as a list of pairs
-	template <class V>
-	void WriteValue(const duckdb::InsertionOrderPreservingMap<V> &map) {
+	template <class V, class KEY, class INDEX_MAP>
+	void WriteValue(const duckdb::InsertionOrderPreservingMap<V, KEY, INDEX_MAP> &map) {
 		auto count = map.size();
 		OnListBegin(count);
 		for (auto &entry : map) {
@@ -378,6 +383,10 @@ protected:
 	virtual void WriteValue(const string &value) = 0;
 	virtual void WriteValue(const char *str) = 0;
 	virtual void WriteDataPtr(const_data_ptr_t ptr, idx_t count) = 0;
+	//! Identifiers are serialized identically to a plain string (preserving the original casing)
+	void WriteValue(const Identifier &value) {
+		WriteValue(value.GetIdentifierName());
+	}
 	void WriteValue(LogicalIndex value) {
 		WriteValue(value.index);
 	}
@@ -392,6 +401,9 @@ protected:
 	}
 	void WriteValue(optional_idx value) {
 		WriteValue(value.IsValid() ? value.GetIndex() : DConstants::INVALID_INDEX);
+	}
+	void WriteValue(PerColumnMetadataBlock value) {
+		WriteValue(value.GetPacked());
 	}
 };
 

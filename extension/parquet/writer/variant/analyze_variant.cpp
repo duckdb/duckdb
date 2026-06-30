@@ -94,7 +94,7 @@ void VariantColumnWriter::AnalyzeSchema(ParquetAnalyzeSchemaState &state_p, Vect
 	auto &state = state_p.Cast<VariantAnalyzeSchemaState>();
 
 	RecursiveUnifiedVectorFormat recursive_format;
-	Vector::RecursiveToUnifiedFormat(input, count, recursive_format);
+	Vector::RecursiveToUnifiedFormat(input, recursive_format);
 	UnifiedVariantVectorData variant(recursive_format);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -212,6 +212,9 @@ void VariantColumnWriter::AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState 
 	LogicalType shredded_type;
 	if (!ConstructShreddedType(state.analyze_data, shredded_type)) {
 		//! Can't shred, keep the original children
+		//! Mark as analyzed to prevent re-analysis from modifying child_writers
+		//! after InitializeSchemaElements has already locked in the schema
+		is_analyzed = true;
 		return;
 	}
 	is_analyzed = true;

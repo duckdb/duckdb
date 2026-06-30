@@ -30,20 +30,23 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveAndPlan(unique_ptr<LogicalOperat
 	auto &profiler = QueryProfiler::Get(context);
 
 	// Resolve the types of each operator.
-	profiler.StartPhase(MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES);
-	op->ResolveOperatorTypes();
-	profiler.EndPhase();
+	{
+		auto timer = profiler.StartTimer<MetricPhysicalPlannerResolveTypes>();
+		op->ResolveOperatorTypes();
+	}
 
 	// Resolve the column references.
-	profiler.StartPhase(MetricType::PHYSICAL_PLANNER_COLUMN_BINDING);
-	ColumnBindingResolver resolver;
-	resolver.VisitOperator(*op);
-	profiler.EndPhase();
+	{
+		auto timer = profiler.StartTimer<MetricPhysicalPlannerColumnBinding>();
+		ColumnBindingResolver resolver;
+		resolver.VisitOperator(*op);
+	}
 
 	// Create the main physical plan.
-	profiler.StartPhase(MetricType::PHYSICAL_PLANNER_CREATE_PLAN);
-	physical_plan = PlanInternal(*op);
-	profiler.EndPhase();
+	{
+		auto timer = profiler.StartTimer<MetricPhysicalPlannerCreatePlan>();
+		physical_plan = PlanInternal(*op);
+	}
 
 	// Return a reference to the root of this plan.
 	return physical_plan->Root();
@@ -60,7 +63,8 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op
 	auto debug_verify_vector = Settings::Get<DebugVerifyVectorSetting>(context);
 	if (debug_verify_vector != DebugVectorVerification::NONE) {
 		if (debug_verify_vector != DebugVectorVerification::DICTIONARY_EXPRESSION &&
-		    debug_verify_vector != DebugVectorVerification::VARIANT_VECTOR) {
+		    debug_verify_vector != DebugVectorVerification::VARIANT_VECTOR &&
+		    debug_verify_vector != DebugVectorVerification::SHREDDED_VECTOR) {
 			physical_plan->SetRoot(Make<PhysicalVerifyVector>(physical_plan->Root(), debug_verify_vector));
 		}
 	}
@@ -123,6 +127,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalUpdate>());
 	case LogicalOperatorType::LOGICAL_MERGE_INTO:
 		return CreatePlan(op.Cast<LogicalMergeInto>());
+	case LogicalOperatorType::LOGICAL_TRIGGER:
+		throw InternalException("LogicalTrigger must be rewritten before physical planning");
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		return CreatePlan(op.Cast<LogicalCreateTable>());
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
@@ -154,6 +160,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_LOAD:
 	case LogicalOperatorType::LOGICAL_ATTACH:
 	case LogicalOperatorType::LOGICAL_DETACH:
+	case LogicalOperatorType::LOGICAL_CONNECT:
+	case LogicalOperatorType::LOGICAL_DISCONNECT:
 		return CreatePlan(op.Cast<LogicalSimple>());
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		return CreatePlan(op.Cast<LogicalRecursiveCTE>());

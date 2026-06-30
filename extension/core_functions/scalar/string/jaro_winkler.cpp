@@ -22,10 +22,9 @@ static inline double JaroWinklerScalarFunction(const string_t &s1, const string_
 template <class CACHED_SIMILARITY>
 static void CachedFunction(Vector &constant, Vector &other, Vector &result, DataChunk &args) {
 	auto val = constant.GetValue(0);
-	idx_t count = args.size();
 	if (val.IsNull()) {
 		auto &result_validity = FlatVector::ValidityMutable(result);
-		result_validity.SetAllInvalid(count);
+		result_validity.SetAllInvalid(other.size());
 		return;
 	}
 
@@ -34,14 +33,14 @@ static void CachedFunction(Vector &constant, Vector &other, Vector &result, Data
 
 	D_ASSERT(args.ColumnCount() == 2 || args.ColumnCount() == 3);
 	if (args.ColumnCount() == 2) {
-		UnaryExecutor::Execute<string_t, double>(other, result, count, [&](const string_t &other_str) {
+		UnaryExecutor::Execute<string_t, double>(other, result, [&](const string_t &other_str) {
 			auto other_str_begin = other_str.GetData();
 			return cached.similarity(other_str_begin, other_str_begin + other_str.GetSize());
 		});
 	} else {
-		auto &score_cutoff = args.data[2];
+		const auto &score_cutoff = args.data[2];
 		BinaryExecutor::Execute<string_t, double_t, double>(
-		    other, score_cutoff, result, count, [&](const string_t &other_str, const double_t score_cutoff) {
+		    other, score_cutoff, result, [&](const string_t &other_str, const double_t score_cutoff) {
 			    auto other_str_begin = other_str.GetData();
 			    return cached.similarity(other_str_begin, other_str_begin + other_str.GetSize(), score_cutoff);
 		    });
@@ -57,12 +56,12 @@ static void TemplatedJaroWinklerFunction(DataChunk &args, Vector &result, SIMILA
 		D_ASSERT(args.ColumnCount() == 2 || args.ColumnCount() == 3);
 		if (args.ColumnCount() == 2) {
 			BinaryExecutor::Execute<string_t, string_t, double>(
-			    args.data[0], args.data[1], result, args.size(),
+			    args.data[0], args.data[1], result,
 			    [&](const string_t &s1, const string_t &s2) { return fun(s1, s2, 0.0); });
 			return;
 		} else {
 			TernaryExecutor::Execute<string_t, string_t, double_t, double>(args.data[0], args.data[1], args.data[2],
-			                                                               result, args.size(), fun);
+			                                                               result, fun);
 			return;
 		}
 	}

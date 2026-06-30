@@ -5,6 +5,7 @@ from utils.duckdb_installer import install_assets, install_extensions, make_cli_
 from utils.test_files_parser import load_test_files
 from utils.test_report import TestReport
 from utils.logger import make_logger
+from utils.version_list import list_supported_duckdb_versions
 import time
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock, Event
@@ -317,25 +318,7 @@ def cleanup_runtime_dir(bwc_tests_base_dir, dry_run=True):
 
 if __name__ == "__main__":
     supported_duckdb_versions = (
-        [args.old_duckdb_version]
-        if args.old_duckdb_version
-        else [
-            "v1.1.0",
-            "v1.1.2",
-            "v1.1.1",
-            "v1.2.0",
-            "v1.1.3",
-            "v1.2.2",
-            "v1.2.1",
-            "v1.3.0",
-            "v1.3.1",
-            "v1.3.2",
-            "v1.4.0",
-            "v1.4.1",
-            "v1.4.2",
-            "v1.4.3",
-            "v1.4.4",
-        ]
+        [args.old_duckdb_version] if args.old_duckdb_version else list_supported_duckdb_versions()
     )
 
     duckdb_root_dir = dirname(dirname(dirname(abspath(__file__))))

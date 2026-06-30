@@ -10,6 +10,7 @@ public:
 	~ParserTokenizer() override = default;
 
 	void OnStatementEnd(idx_t pos) override;
+	void OnLastToken(TokenizeState state, string last_word, idx_t last_pos) override;
 };
 
 } // namespace duckdb

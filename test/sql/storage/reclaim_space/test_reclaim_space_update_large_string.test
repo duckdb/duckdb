@@ -8,7 +8,7 @@ statement ok
 PRAGMA force_checkpoint;
 
 # FIXME: overflow strings are not reclaimed yet when overwritten on updates
-mode skip
+mode skip instable
 
 # create a big string
 statement ok

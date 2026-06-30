@@ -309,11 +309,13 @@ static idx_t FindOrderedRangeBound(WindowCursor &range_lo, WindowCursor &range_h
 }
 
 bool WindowBoundariesState::HasPrecedingRange(const BoundWindowExpression &wexpr) {
-	return (wexpr.start == WindowBoundary::EXPR_PRECEDING_RANGE || wexpr.end == WindowBoundary::EXPR_PRECEDING_RANGE);
+	return (wexpr.WindowStart() == WindowBoundary::EXPR_PRECEDING_RANGE ||
+	        wexpr.WindowEnd() == WindowBoundary::EXPR_PRECEDING_RANGE);
 }
 
 bool WindowBoundariesState::HasFollowingRange(const BoundWindowExpression &wexpr) {
-	return (wexpr.start == WindowBoundary::EXPR_FOLLOWING_RANGE || wexpr.end == WindowBoundary::EXPR_FOLLOWING_RANGE);
+	return (wexpr.WindowStart() == WindowBoundary::EXPR_FOLLOWING_RANGE ||
+	        wexpr.WindowEnd() == WindowBoundary::EXPR_FOLLOWING_RANGE);
 }
 
 void WindowBoundariesState::AddImpliedBounds(WindowBoundsSet &result, const BoundWindowExpression &wexpr) {
@@ -323,7 +325,7 @@ void WindowBoundariesState::AddImpliedBounds(WindowBoundsSet &result, const Boun
 		result.insert(PARTITION_END);
 
 		// if we have EXCLUDE GROUP / TIES, we also need peer boundaries
-		if (wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
+		if (wexpr.WindowExclude() != WindowExcludeMode::NO_OTHER) {
 			result.insert(PEER_BEGIN);
 			result.insert(PEER_END);
 		}
@@ -331,7 +333,7 @@ void WindowBoundariesState::AddImpliedBounds(WindowBoundsSet &result, const Boun
 		// If the frames are RANGE or GROUPS, then we need peer boundaries
 		// If they are preceding or following, RANGE also needs to know
 		// where the valid values begin or end.
-		switch (wexpr.start) {
+		switch (wexpr.WindowStart()) {
 		case WindowBoundary::CURRENT_ROW_RANGE:
 		case WindowBoundary::CURRENT_ROW_GROUPS:
 			result.insert(PEER_BEGIN);
@@ -360,7 +362,7 @@ void WindowBoundariesState::AddImpliedBounds(WindowBoundsSet &result, const Boun
 			break;
 		}
 
-		switch (wexpr.end) {
+		switch (wexpr.WindowEnd()) {
 		case WindowBoundary::CURRENT_ROW_RANGE:
 		case WindowBoundary::CURRENT_ROW_GROUPS:
 			result.insert(PEER_END);
@@ -390,8 +392,8 @@ void WindowBoundariesState::AddImpliedBounds(WindowBoundsSet &result, const Boun
 		}
 	}
 
-	const auto partition_count = wexpr.partitions.size();
-	const auto order_count = wexpr.orders.size();
+	const auto partition_count = wexpr.Partitions().size();
+	const auto order_count = wexpr.OrderBy().size();
 
 	if (result.count(VALID_END)) {
 		result.insert(PARTITION_END);
@@ -417,14 +419,15 @@ void WindowBoundariesState::AddImpliedBounds(WindowBoundsSet &result, const Boun
 WindowBoundariesState::WindowBoundariesState(ExecutionContext &context, const WindowExecutorGlobalState &gstate)
     : partition_mask(gstate.partition_mask), order_mask(gstate.order_mask),
       type(gstate.executor.wexpr.GetExpressionType()), input_size(gstate.payload_count),
-      start_boundary(gstate.executor.wexpr.start), end_boundary(gstate.executor.wexpr.end),
+      start_boundary(gstate.executor.wexpr.WindowStart()), end_boundary(gstate.executor.wexpr.WindowEnd()),
       boundary_start_idx(gstate.executor.boundary_start_idx), boundary_end_idx(gstate.executor.boundary_end_idx),
-      partition_count(gstate.executor.wexpr.partitions.size()), order_count(gstate.executor.wexpr.orders.size()),
-      range_sense(gstate.executor.wexpr.orders.empty() ? OrderType::INVALID : gstate.executor.wexpr.orders[0].type),
+      partition_count(gstate.executor.wexpr.Partitions().size()), order_count(gstate.executor.wexpr.OrderBy().size()),
+      range_sense(gstate.executor.wexpr.OrderBy().empty() ? OrderType::INVALID
+                                                          : gstate.executor.wexpr.OrderBy()[0].type),
       has_preceding_range(HasPrecedingRange(gstate.executor.wexpr)),
       has_following_range(HasFollowingRange(gstate.executor.wexpr)), range_idx(gstate.executor.range_idx) {
-	if (gstate.executor.wexpr.window) {
-		const auto &wfunc = *gstate.executor.wexpr.window;
+	if (gstate.executor.wexpr.WindowFunction()) {
+		const auto &wfunc = *gstate.executor.wexpr.WindowFunction();
 		if (wfunc.HasBoundsCallback()) {
 			wfunc.GetBounds(required, gstate.executor.wexpr);
 			AddImpliedBounds(required, gstate.executor.wexpr);
@@ -445,12 +448,10 @@ void WindowBoundariesState::Finalize(CollectionPtr collection) {
 	}
 }
 
-void WindowBoundariesState::UpdateBounds(idx_t row_idx, DataChunk &eval_chunk) {
+void WindowBoundariesState::UpdateBounds(idx_t row_idx, DataChunk &eval_chunk, idx_t count) {
 	// Evaluate the row-level arguments
 	WindowInputExpression boundary_start(eval_chunk, boundary_start_idx);
 	WindowInputExpression boundary_end(eval_chunk, boundary_end_idx);
-
-	const auto count = eval_chunk.size();
 
 	bounds.Reset();
 	D_ASSERT(bounds.ColumnCount() == 8);
@@ -487,7 +488,7 @@ void WindowBoundariesState::UpdateBounds(idx_t row_idx, DataChunk &eval_chunk) {
 	}
 	next_pos += count;
 
-	bounds.SetCardinality(count);
+	bounds.SetChildCardinality(count);
 }
 
 void WindowBoundariesState::PartitionBegin(idx_t row_idx, const idx_t count, bool is_jump) {

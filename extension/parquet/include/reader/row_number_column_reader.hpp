@@ -71,4 +71,36 @@ private:
 	idx_t row_group_offset;
 };
 
+//! Reads the file-relative row group number as a virtual column that's not actually stored in the file
+class RowGroupColumnReader : public ColumnReader {
+public:
+	static constexpr const PhysicalType TYPE = PhysicalType::INT64;
+
+public:
+	RowGroupColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
+
+public:
+	idx_t Read(ColumnReaderInput &input, Vector &result) override;
+
+	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
+
+	void Skip(idx_t num_values) override {
+	}
+	idx_t GroupRowsAvailable() override {
+		return NumericLimits<idx_t>::Maximum();
+	};
+	uint64_t TotalCompressedSize() override {
+		return 0;
+	}
+	idx_t FileOffset() const override {
+		return 0;
+	}
+	void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) override {
+	}
+
+private:
+	//! The index of the row group currently being read
+	idx_t row_group_idx = 0;
+};
+
 } // namespace duckdb

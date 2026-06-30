@@ -38,9 +38,9 @@ void ColumnList::Finalize() {
 void ColumnList::AddToNameMap(ColumnDefinition &col) {
 	if (allow_duplicate_names) {
 		idx_t index = 1;
-		string base_name = col.Name();
+		string base_name = col.Name().GetIdentifierName();
 		while (name_map.find(col.Name()) != name_map.end()) {
-			col.SetName(base_name + "_" + to_string(index++));
+			col.SetName(Identifier(base_name + "_" + to_string(index++)));
 		}
 	} else {
 		if (name_map.find(col.Name()) != name_map.end()) {
@@ -66,10 +66,10 @@ ColumnDefinition &ColumnList::GetColumnMutable(PhysicalIndex physical) {
 	return columns[logical_index];
 }
 
-ColumnDefinition &ColumnList::GetColumnMutable(const string &name) {
+ColumnDefinition &ColumnList::GetColumnMutable(const Identifier &name) {
 	auto entry = name_map.find(name);
 	if (entry == name_map.end()) {
-		throw InternalException("Column with name \"%s\" does not exist", name);
+		throw InternalException("Column with name \"%s\" does not exist", name.GetIdentifierName());
 	}
 	auto logical_index = entry->second;
 	D_ASSERT(logical_index < columns.size());
@@ -92,7 +92,7 @@ const ColumnDefinition &ColumnList::GetColumn(PhysicalIndex physical) const {
 	return columns[logical_index];
 }
 
-const ColumnDefinition &ColumnList::GetColumn(const string &name) const {
+const ColumnDefinition &ColumnList::GetColumn(const Identifier &name) const {
 	auto entry = name_map.find(name);
 	if (entry == name_map.end()) {
 		throw InternalException("Column with name \"%s\" does not exist", name);
@@ -106,7 +106,7 @@ vector<string> ColumnList::GetColumnNames() const {
 	vector<string> names;
 	names.reserve(columns.size());
 	for (auto &column : columns) {
-		names.push_back(column.Name());
+		names.emplace_back(column.Name());
 	}
 	return names;
 }
@@ -120,7 +120,7 @@ vector<LogicalType> ColumnList::GetColumnTypes() const {
 	return types;
 }
 
-bool ColumnList::ColumnExists(const string &name) const {
+bool ColumnList::ColumnExists(const Identifier &name) const {
 	auto entry = name_map.find(name);
 	return entry != name_map.end();
 }
@@ -138,7 +138,7 @@ LogicalIndex ColumnList::PhysicalToLogical(PhysicalIndex index) const {
 	return column.Logical();
 }
 
-LogicalIndex ColumnList::GetColumnIndex(string &column_name) const {
+LogicalIndex ColumnList::GetColumnIndex(Identifier &column_name) const {
 	auto entry = name_map.find(column_name);
 	if (entry == name_map.end()) {
 		return LogicalIndex(DConstants::INVALID_INDEX);

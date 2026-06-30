@@ -52,20 +52,20 @@ void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 
 unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRefExpression &expr,
                                                                   unique_ptr<Expression> *expr_ptr) {
-	if (expr.depth == 0) {
+	if (expr.Depth() == 0) {
 		return nullptr;
 	}
-	auto alias_entry = correlated_aliases.find(expr.binding);
+	auto alias_entry = correlated_aliases.find(expr.Binding());
 	if (alias_entry == correlated_aliases.end()) {
 		return nullptr;
 	}
 	auto current_entry = current_binding_map.find(alias_entry->second);
 	D_ASSERT(current_entry != current_binding_map.end());
-	auto original_binding = expr.binding;
-	expr.binding = current_entry->second;
-	RegisterCorrelatedBinding(original_binding, expr.binding);
-	D_ASSERT(expr.depth > 0);
-	expr.depth--;
+	auto original_binding = expr.Binding();
+	expr.BindingMutable() = current_entry->second;
+	RegisterCorrelatedBinding(original_binding, expr.Binding());
+	D_ASSERT(expr.Depth() > 0);
+	expr.DepthMutable()--;
 	return nullptr;
 }
 
@@ -80,12 +80,12 @@ void RewriteCountAggregates::Rewrite(LogicalOperator &op, column_binding_map_t<i
 
 unique_ptr<Expression> RewriteCountAggregates::VisitReplace(BoundColumnRefExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
-	auto entry = replacement_map.find(expr.binding);
+	auto entry = replacement_map.find(expr.Binding());
 	if (entry != replacement_map.end()) {
 		// reference to a COUNT(*) aggregate
 		// replace this with CASE WHEN COUNT(*) IS NULL THEN 0 ELSE COUNT(*) END
 		auto is_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-		is_null->children.push_back(expr.Copy());
+		is_null->GetChildrenMutable().push_back(expr.Copy());
 		auto check = std::move(is_null);
 		auto result_if_true = make_uniq<BoundConstantExpression>(Value::Numeric(expr.GetReturnType(), 0));
 		auto result_if_false = std::move(*expr_ptr);

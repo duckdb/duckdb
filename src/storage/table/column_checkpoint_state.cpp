@@ -44,7 +44,7 @@ shared_ptr<ColumnData> ColumnCheckpointState::GetFinalResult() {
 
 PartialBlockForCheckpoint::PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
                                                      BlockManager &block_manager)
-    : PartialBlock(state, block_manager, segment.block) {
+    : PartialBlock(state, block_manager, segment.GetBlockHandle()) {
 	PartialBlockForCheckpoint::AddSegmentToTail(data, segment, 0);
 }
 
@@ -80,7 +80,7 @@ void PartialBlockForCheckpoint::Flush(QueryContext context, const idx_t free_spa
 			D_ASSERT(segment.offset_in_block == 0);
 			segment.segment.ConvertToPersistent(context, &block_manager, state.block_id);
 			// update the block after it has been converted to a persistent segment
-			block_handle = segment.segment.block;
+			block_handle = segment.segment.GetBlockHandle();
 		} else {
 			// subsequent segments are MARKED as persistent - they don't need to be rewritten
 			segment.segment.MarkAsPersistent(block_handle, segment.offset_in_block);
@@ -147,13 +147,13 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 	} // LCOV_EXCL_STOP
 
 	// Merge the segment statistics into the global statistics.
-	global_stats->Merge(segment->stats.statistics);
+	global_stats->Merge(segment->GetStats());
 
 	block_id_t block_id = INVALID_BLOCK;
 	uint32_t offset_in_block = 0;
 
 	unique_lock<mutex> partial_block_lock;
-	if (segment->stats.statistics.IsConstant()) {
+	if (segment->GetStats().IsConstant()) {
 		// Constant block.
 		segment->ConvertToPersistent(partial_block_manager.GetClientContext(), nullptr, INVALID_BLOCK);
 	} else if (segment_size != 0) {
@@ -172,7 +172,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 			D_ASSERT(offset_in_block > 0);
 			auto &pstate = *allocation.partial_block;
 			// pin the source block
-			auto old_handle = buffer_manager.Pin(segment->block);
+			auto old_handle = buffer_manager.Pin(segment->GetBlockHandle());
 			// pin the target block
 			auto new_handle = buffer_manager.Pin(pstate.block_handle);
 			// memcpy the contents of the old block to the new block
@@ -196,12 +196,12 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 	} else {
 		// Empty segment, which does not have to go to disk.
 		// We still need to change its type to persistent, because we need to write its metadata.
-		segment->segment_type = ColumnSegmentType::PERSISTENT;
-		segment->block.reset();
+		segment->SetSegmentType(ColumnSegmentType::PERSISTENT);
+		segment->GetBlockHandle().reset();
 	}
 
 	// construct the data pointer
-	DataPointer data_pointer(segment->stats.statistics.Copy());
+	DataPointer data_pointer(segment->GetStats().Copy());
 	data_pointer.block_pointer.block_id = block_id;
 	data_pointer.block_pointer.offset = offset_in_block;
 	data_pointer.row_start = 0;

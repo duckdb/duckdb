@@ -13,11 +13,11 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 	auto count = input.size();
 
 	D_ASSERT(input.ColumnCount() == 1);
-	auto &variant_vec = input.data[0];
+	const auto &variant_vec = input.data[0];
 	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
 
 	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, source_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
 
 	UnifiedVariantVectorData variant(source_format);
 

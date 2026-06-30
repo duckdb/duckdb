@@ -25,10 +25,11 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::SET;
 
 public:
-	PhysicalSet(PhysicalPlan &physical_plan, const string &name_p, Value value_p, SetScope scope_p,
+	PhysicalSet(PhysicalPlan &physical_plan, const Identifier &name_p, Value value_p, SetScope scope_p,
 	            idx_t estimated_cardinality)
 	    : PhysicalOperator(physical_plan, PhysicalOperatorType::SET, {LogicalType::BOOLEAN}, estimated_cardinality),
-	      name(physical_plan.ArenaRef().MakeString(name_p)), value(std::move(value_p)), scope(scope_p) {
+	      name(physical_plan.ArenaRef().MakeString(name_p.GetIdentifierName())), value(std::move(value_p)),
+	      scope(scope_p) {
 	}
 
 public:

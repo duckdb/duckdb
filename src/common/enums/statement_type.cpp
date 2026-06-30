@@ -67,6 +67,10 @@ string StatementTypeToString(StatementType type) {
 		return "UPDATE_EXTENSIONS";
 	case StatementType::MERGE_INTO_STATEMENT:
 		return "MERGE_INTO";
+	case StatementType::CONNECT_STATEMENT:
+		return "CONNECT";
+	case StatementType::DISCONNECT_STATEMENT:
+		return "DISCONNECT";
 	case StatementType::INVALID_STATEMENT:
 		break;
 	}

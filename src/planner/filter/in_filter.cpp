@@ -6,44 +6,25 @@
 
 namespace duckdb {
 
-InFilter::InFilter(vector<Value> values_p) : TableFilter(TableFilterType::IN_FILTER), values(std::move(values_p)) {
+LegacyInFilter::LegacyInFilter(vector<Value> values_p)
+    : TableFilter(TableFilterType::LEGACY_IN_FILTER), values(std::move(values_p)) {
 	for (auto &val : values) {
 		if (val.IsNull()) {
-			throw InternalException("InFilter constant cannot be NULL - use IsNullFilter instead");
+			throw InternalException("LegacyInFilter constant cannot be NULL - use IsNullFilter instead");
 		}
 	}
 	for (idx_t i = 1; i < values.size(); i++) {
 		if (values[0].type() != values[i].type()) {
-			throw InternalException("InFilter constants must all have the same type");
+			throw InternalException("LegacyInFilter constants must all have the same type");
 		}
 	}
 	if (values.empty()) {
-		throw InternalException("InFilter constants cannot be empty");
+		throw InternalException("LegacyInFilter constants cannot be empty");
 	}
 }
 
-FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) const {
-	throw InternalException("InFilter::CheckStatistics should not be called: InFilters should be converted to "
-	                        "ExpressionFilters before statistics checking");
-}
-
-string InFilter::ToString(const string &column_name) const {
-	throw InternalException("InFilter::ToString should not be called: InFilters should be converted to "
-	                        "ExpressionFilters before rendering");
-}
-
-unique_ptr<Expression> InFilter::ToExpression(const Expression &column) const {
+unique_ptr<Expression> LegacyInFilter::ToExpression(const Expression &column) const {
 	return ExpressionFilter::CreateInExpression(column.Copy(), values);
-}
-
-bool InFilter::Equals(const TableFilter &other_p) const {
-	throw InternalException("InFilter::Equals should not be called: InFilters should be converted to "
-	                        "ExpressionFilters before equality checking");
-}
-
-unique_ptr<TableFilter> InFilter::Copy() const {
-	throw InternalException("InFilter::Copy should not be called: InFilters should be converted to "
-	                        "ExpressionFilters before copying");
 }
 
 } // namespace duckdb

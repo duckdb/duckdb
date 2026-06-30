@@ -1,4 +1,5 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/planner/subquery/delim_join_cte_rewriter.hpp"
 
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
@@ -6,13 +7,17 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
 
@@ -63,8 +68,8 @@ static bool DependsOnCorrelatedWalk(LogicalOperator &op, Binder &binder,
 			}
 			ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
 			    **expr_ptr, [&](const BoundColumnRefExpression &bound_colref) {
-				    result |= bound_colref.depth > 0 &&
-				              correlated_aliases.find(bound_colref.binding) != correlated_aliases.end();
+				    result |= bound_colref.Depth() > 0 &&
+				              correlated_aliases.find(bound_colref.Binding()) != correlated_aliases.end();
 			    });
 		});
 	}
@@ -175,7 +180,7 @@ void FlattenDependentJoins::PatchAccessingOperators(LogicalOperator &subtree_roo
 		if (reader.cte_index == table_index && reader.correlated_columns == 0) {
 			for (auto &column : correlated_columns) {
 				reader.chunk_types.push_back(column.type);
-				reader.bound_columns.push_back(column.name);
+				reader.bound_columns.emplace_back(column.name);
 			}
 			reader.correlated_columns += correlated_columns.size();
 		}
@@ -227,6 +232,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
 	flatten.DecorrelateSubtree(plan, true, {});
+	if (Settings::Get<DelimJoinAsCteSetting>(binder.context)) {
+		DelimJoinCTERewriter::Rewrite(binder, plan);
+	}
 	return plan;
 }
 
@@ -292,10 +300,10 @@ static unique_ptr<LogicalWindow> CreateRowNumberWindow(Binder &binder, unique_pt
 	auto window = make_uniq<LogicalWindow>(table_index);
 
 	auto row_number = RowNumberFun::GetFunction().Bind(binder.context);
-	row_number->partitions = std::move(partitions);
-	row_number->orders = std::move(orders);
-	row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
-	row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+	row_number->PartitionsMutable() = std::move(partitions);
+	row_number->OrderByMutable() = std::move(orders);
+	row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+	row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 	row_number->SetAlias("limit_rownum");
 
 	window->expressions.push_back(std::move(row_number));
@@ -399,8 +407,8 @@ void FlattenDependentJoins::AddCorrelatedJoinConditions(LogicalJoin &join, const
 			comp_join.conditions.push_back(std::move(cond));
 		} else {
 			auto &logical_any_join = join.Cast<LogicalAnyJoin>();
-			auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-			                                                       std::move(left), std::move(right));
+			auto comparison = BoundComparisonExpression::Create(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+			                                                    std::move(left), std::move(right));
 			auto conjunction = make_uniq<BoundConjunctionExpression>(
 			    ExpressionType::CONJUNCTION_AND, std::move(comparison), std::move(logical_any_join.condition));
 			logical_any_join.condition = std::move(conjunction);
@@ -484,7 +492,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCorrelatedNode(unique_ptr<L
 		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
 		RewriteCountAggregates::Rewrite(*plan, replacement_map);
 	}
-	ColumnBindingResolver::Verify(*plan);
+	ColumnBindingResolver::Verify(binder.context, *plan);
 	return state;
 }
 
@@ -540,7 +548,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownProjection(unique_ptr<Logic
 	AppendCorrelatedColumns(plan->expressions, state, true);
 	auto &proj = plan->Cast<LogicalProjection>();
 	auto correlated_offset = plan->expressions.size() - correlated_columns.size();
-	ColumnBindingResolver::Verify(*plan);
+	ColumnBindingResolver::Verify(binder.context, *plan);
 	return CreateContiguousState(ColumnBinding(proj.table_index, ProjectionIndex(correlated_offset)));
 }
 
@@ -605,7 +613,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownAggregate(unique_ptr<Logica
 	}
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 		D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().function;
+		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().Function();
 
 		auto count_fun = CountFunctionBase::GetFunction();
 		auto count_star_fun = CountStarFun::GetFunction();
@@ -747,14 +755,14 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownLimit(unique_ptr<LogicalOpe
 			TryAddOperator::Operation(limit_val, limit.offset_val.GetConstantValue(), limit_val);
 		}
 		auto upper_bound = make_uniq<BoundConstantExpression>(int64_t(limit_val));
-		condition = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, row_num_ref->Copy(),
-		                                                 std::move(upper_bound));
+		condition = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO, row_num_ref->Copy(),
+		                                              std::move(upper_bound));
 	}
 
 	if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
 		auto lower_bound = make_uniq<BoundConstantExpression>(int64_t(limit.offset_val.GetConstantValue()));
-		auto lower_comp = make_uniq_base<Expression, BoundComparisonExpression>(
-		    ExpressionType::COMPARE_GREATERTHAN, row_num_ref->Copy(), std::move(lower_bound));
+		auto lower_comp = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHAN, row_num_ref->Copy(),
+		                                                    std::move(lower_bound));
 
 		// Stitch together with AND if both bounds exist
 		condition = condition ? make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
@@ -780,7 +788,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownWindow(unique_ptr<LogicalOp
 	for (auto &expr : window.expressions) {
 		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &w = expr->Cast<BoundWindowExpression>();
-		AppendCorrelatedColumns(w.partitions, state, false);
+		AppendCorrelatedColumns(w.PartitionsMutable(), state, false);
 	}
 	return state;
 }
@@ -847,6 +855,10 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownExpressionGet(unique_ptr<Lo
                                                                    vector<ColumnBinding> state) {
 	state = PushDownChild(plan, propagate_null_values, std::move(state));
 
+	// Rewrite any depth>0 correlated refs already in the expression lists (VALUES (NEW.col))
+	// before appending the delim-get bindings for the join condition.
+	RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(state), correlated_aliases);
+
 	auto &expr_get = plan->Cast<LogicalExpressionGet>();
 	for (auto &expr_list : expr_get.expressions) {
 		AppendCorrelatedColumns(expr_list, state, false);
@@ -856,6 +868,29 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownExpressionGet(unique_ptr<Lo
 	}
 	auto correlated_offset = expr_get.expr_types.size() - correlated_columns.size();
 	return CreateContiguousState(ColumnBinding(expr_get.table_index, ProjectionIndex(correlated_offset)));
+}
+
+vector<ColumnBinding> FlattenDependentJoins::PushDownDML(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+                                                         vector<ColumnBinding> state) {
+	state = PushDownChild(plan, propagate_null_values, std::move(state));
+	if (plan->type == LogicalOperatorType::LOGICAL_INSERT || plan->type == LogicalOperatorType::LOGICAL_UPDATE) {
+		// PushDownChild appended the correlated columns to the child projection.
+		// PhysicalInsert requires an exact column count and PhysicalUpdate requires the row-id last,
+		// so remove the appended columns. The DELIM_GET below re-supplies them.
+		// DELETE is skipped because PhysicalDelete reads the row-id by a fixed index.
+		auto &child = *plan->children[0];
+		if (child.type == LogicalOperatorType::LOGICAL_PROJECTION &&
+		    child.expressions.size() > correlated_columns.size()) {
+			child.expressions.resize(child.expressions.size() - correlated_columns.size());
+			child.ResolveOperatorTypes();
+		}
+	}
+	// DML output does not carry the child columns, so re-expose the correlation keys in a separate DELIM_GET that
+	// the parent DelimJoin can reference.
+	auto expose_idx = binder.GenerateTableIndex();
+	unique_ptr<LogicalOperator> expose_delim = make_uniq<LogicalDelimGet>(expose_idx, delim_types);
+	plan = LogicalCrossProduct::Create(std::move(plan), std::move(expose_delim));
+	return CreateContiguousState(ColumnBinding(expose_idx, ProjectionIndex(0)));
 }
 
 vector<ColumnBinding> FlattenDependentJoins::PushDownGet(unique_ptr<LogicalOperator> &plan,
@@ -1003,6 +1038,11 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCorrelatedNode(unique_ptr<L
 	}
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		return PushDownExpressionGet(plan, propagate_null_values, std::move(state));
+	}
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE: {
+		return PushDownDML(plan, propagate_null_values, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		throw BinderException("PIVOT is not supported in correlated subqueries yet");

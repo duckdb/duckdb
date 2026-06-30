@@ -7,11 +7,11 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth) {
 	// first try to bind the child of the cast expression
-	auto error = Bind(expr.child, depth);
+	auto error = Bind(expr.ChildMutable(), depth);
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
-	auto &child = BoundExpression::GetExpression(*expr.child);
+	auto &child = BoundExpression::GetExpression(*expr.ChildMutable());
 	if (child->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -20,7 +20,7 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 	}
 	// Validate the collation, but don't use it
 	auto collation_test = make_uniq_base<Expression, BoundConstantExpression>(Value(child->GetReturnType()));
-	auto collation_type = LogicalType::VARCHAR_COLLATION(expr.collation);
+	auto collation_type = LogicalType::VARCHAR_COLLATION(expr.Collation());
 	PushCollation(context, collation_test, collation_type);
 	child->SetReturnType(collation_type);
 	return BindResult(std::move(child));

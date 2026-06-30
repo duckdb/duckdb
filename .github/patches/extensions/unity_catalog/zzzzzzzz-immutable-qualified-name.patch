@@ -1,0 +1,13 @@
+diff --git a/src/storage/unity_catalog.cpp b/src/storage/unity_catalog.cpp
+index d13f376..1bbe814 100644
+--- a/src/storage/unity_catalog.cpp
++++ b/src/storage/unity_catalog.cpp
+@@ -28,7 +28,7 @@ optional_ptr<CatalogEntry> UnityCatalog::CreateSchema(CatalogTransaction transac
+ 	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+ 		DropInfo try_drop;
+ 		try_drop.type = CatalogType::SCHEMA_ENTRY;
+-		try_drop.NameMutable() = info.GetQualifiedName().Schema();
++		try_drop.SetName(info.GetQualifiedName().Schema());
+ 		try_drop.if_not_found = OnEntryNotFound::RETURN_NULL;
+ 		try_drop.cascade = false;
+ 		schemas.DropEntry(transaction.GetContext(), try_drop);

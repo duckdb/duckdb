@@ -1,0 +1,63 @@
+# name: test/sql/storage_version/storage_hyperloglog.test
+# description: Test HyperLogLog serialization compatibility
+# group: [storage_version]
+
+require no_alternative_verify
+
+statement ok
+ATTACH '{TEST_DIR}/hll_v110.db' AS db_v110 (STORAGE_VERSION 'v1.1.0');
+
+statement ok
+CREATE TABLE db_v110.tbl AS SELECT range i FROM range(1000);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/hll_v110.db' AS db_v110;
+
+query I
+SELECT count(*) FROM db_v110.tbl;
+----
+1000
+
+query I
+SELECT sum(i) FROM db_v110.tbl;
+----
+499500
+
+statement ok
+ATTACH '{TEST_DIR}/hll_v120.db' AS db_v120 (STORAGE_VERSION 'v1.2.0');
+
+statement ok
+CREATE TABLE db_v120.tbl AS SELECT range i FROM range(1000);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/hll_v110.db' AS db_v110;
+
+statement ok
+ATTACH '{TEST_DIR}/hll_v120.db' AS db_v120;
+
+# Verify both formats round-trip correctly
+query I
+SELECT count(*) FROM db_v120.tbl;
+----
+1000
+
+query I
+SELECT sum(i) FROM db_v120.tbl;
+----
+499500
+
+# Both databases produce identical results
+query II
+SELECT (SELECT count(*) FROM db_v110.tbl), (SELECT count(*) FROM db_v120.tbl);
+----
+1000	1000

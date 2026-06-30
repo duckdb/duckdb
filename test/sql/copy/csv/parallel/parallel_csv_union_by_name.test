@@ -57,7 +57,7 @@ LIMIT 1;
 ----
 VARCHAR	BIGINT	BIGINT	VARCHAR	BIGINT
 
-mode skip
+mode skip flaky
 
 # projection pushdown
 query II

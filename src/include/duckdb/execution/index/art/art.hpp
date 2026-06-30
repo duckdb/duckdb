@@ -15,7 +15,7 @@
 namespace duckdb {
 
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
-enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACTION = 2 };
+enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1 };
 enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2, NONE = 3 };
 
 class ConflictManager;
@@ -47,7 +47,7 @@ public:
 	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 3;
 
 public:
-	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+	ART(const Identifier &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
 	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
 	    AttachedDatabase &db,
 	    const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
@@ -69,7 +69,7 @@ public:
 	//! True, if the ART owns its data.
 	bool owns_data;
 	//! Storage version that the ART was created in, used for backwards compatible key generation
-	optional_idx storage_version;
+	StorageVersion storage_version;
 
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
@@ -146,8 +146,8 @@ public:
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
 	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
-	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
-	                        unsafe_vector<ARTKey> &row_id_keys);
+	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
+	                        unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys);
 
 	//! Verifies the nodes.
 	void Verify(IndexLock &l) override;

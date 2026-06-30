@@ -14,22 +14,25 @@ static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector 
 	}
 
 	auto target_count = input.size();
-	auto &input_list = input.data[0];
-	auto &list_child = ListVector::GetChildMutable(input_list);
-	auto &target = input.data[1];
+	const auto &input_list = input.data[0];
+	const auto &list_child = ListVector::GetChild(input_list);
+	const auto &target = input.data[1];
 
 	ListSearchOp<RETURN_TYPE, FIND_NULLS>(input_list, list_child, target, result, target_count);
 }
 
 ScalarFunction ListContainsFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::TEMPLATE("T")},
-	                      LogicalType::BOOLEAN, ListSearchFunction<bool>);
+	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::TEMPLATE("T")},
+	                          LogicalType::BOOLEAN, ListSearchFunction<bool>);
+	fun.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
+	return fun;
 }
 
 ScalarFunction ListPositionFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::TEMPLATE("T")},
 	                          LogicalType::INTEGER, ListSearchFunction<int32_t, true>);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
 	return fun;
 }
 

@@ -7,29 +7,26 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
 class CardinalityEstimator;
 
+enum class DistinctCountSource : uint8_t { CARDINALITY, MIN_MAX, HLL, EXACT };
+
 struct DistinctCount {
+	DistinctCount(idx_t distinct_count, DistinctCountSource source);
+
 	idx_t distinct_count;
-	bool from_hll;
+	DistinctCountSource source;
 };
 
 struct ExpressionBinding {
 public:
-	bool FoundExpression() const {
-		return expression;
-	}
-	bool FoundColumnRef() const {
-		if (!FoundExpression()) {
-			return false;
-		}
-		return expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF;
-	}
+	bool FoundExpression() const;
+	bool FoundColumnRef() const;
 
 public:
 	optional_ptr<Expression> expression;
@@ -38,18 +35,19 @@ public:
 };
 
 struct RelationStats {
-	// column_id -> estimated distinct count for column
+public:
+	RelationStats();
+
+public:
+	//! column_id -> estimated distinct count for column
 	vector<DistinctCount> column_distinct_count;
 	idx_t cardinality;
 	double filter_strength = 1;
 	bool stats_initialized = false;
 
-	// for debug, column names and tables
-	vector<string> column_names;
-	string table_name;
-
-	RelationStats() : cardinality(1), filter_strength(1), stats_initialized(false) {
-	}
+	//! for debug, column names and tables
+	vector<Identifier> column_names;
+	Identifier table_name;
 };
 
 class RelationStatisticsHelper {
@@ -58,8 +56,6 @@ public:
 
 public:
 	static idx_t InspectTableFilter(idx_t cardinality, const TableFilter &filter, BaseStatistics &base_stats);
-	//	static idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
-	//	                                  BaseStatistics &base_stats);
 	//! Extract Statistics from a LogicalGet.
 	static RelationStats ExtractGetStats(LogicalGet &get, ClientContext &context);
 	static RelationStats ExtractDelimGetStats(LogicalDelimGet &delim_get, ClientContext &context);
@@ -81,7 +77,10 @@ public:
 	static void CopyRelationStats(RelationStats &to, const RelationStats &from);
 
 private:
-	static idx_t GetDistinctCount(LogicalGet &get, ClientContext &context, const ColumnIndex &column_id);
+	static unique_ptr<BaseStatistics> GetColumnStatistics(LogicalGet &get, ClientContext &context,
+	                                                      const ColumnIndex &column_id);
+	static DistinctCount GetDistinctCount(LogicalGet &get, ClientContext &context, const ColumnIndex &column_id,
+	                                      idx_t base_table_cardinality);
 };
 
 } // namespace duckdb

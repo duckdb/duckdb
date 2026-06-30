@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -77,10 +79,21 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		if (expr.IsVolatile()) {
 			continue;
 		}
+		// IN with enough values benefits from a hash join and is handled by InClauseRewriter - skip pushdown.
+		// Also skip throwing IN expressions: scan pushdown loses short-circuit evaluation semantics.
+		if (expr.GetExpressionType() == ExpressionType::COMPARE_IN) {
+			if (expr.CanThrow()) {
+				continue;
+			}
+			auto &in_expr = expr.Cast<BoundOperatorExpression>();
+			if (!in_expr.GetChildren().empty() &&
+			    in_expr.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+			    in_expr.GetChildren().size() - 1 >= InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD) {
+				continue;
+			}
+		}
 		// Allow pushing down filters that can throw only if there is a single expression
-		// For now, do not push down single expressions with IN either. Later we can change InClauseRewriter to handle
-		// this case
-		if (expr.CanThrow() && (expr.GetExpressionType() == ExpressionType::COMPARE_IN || filters.size() > 1)) {
+		if (expr.CanThrow() && filters.size() > 1) {
 			continue;
 		}
 		pushdown_result = combiner.TryPushdownGenericExpression(get, expr);

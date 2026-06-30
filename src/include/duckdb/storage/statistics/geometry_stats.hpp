@@ -75,6 +75,23 @@ public:
 		}
 	}
 
+	bool Has(GeometryType geom_type) const {
+		const auto geom_idx = static_cast<uint8_t>(geom_type);
+		D_ASSERT(geom_idx < PART_TYPES);
+		for (idx_t i = 0; i < VERT_TYPES; i++) {
+			if (sets[i] & (1 << geom_idx)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool Has(VertexType vert_type) const {
+		const auto vert_idx = static_cast<uint8_t>(vert_type);
+		D_ASSERT(vert_idx < VERT_TYPES);
+		return sets[vert_idx] != 0;
+	}
+
 	//! Check if only the given geometry and vertex type is present
 	//! (all others are absent)
 	bool HasOnly(GeometryType geom_type, VertexType vert_type) const {
@@ -96,6 +113,46 @@ public:
 			}
 		}
 		return true;
+	}
+
+	//! Check if only the given geometry type is present (with any vertex type),
+	//! and that at least one such geometry is present.
+	bool HasOnly(GeometryType geom_type) const {
+		const auto geom_idx = static_cast<uint8_t>(geom_type);
+		D_ASSERT(geom_idx < PART_TYPES);
+		bool found = false;
+		for (uint8_t v_idx = 0; v_idx < VERT_TYPES; v_idx++) {
+			for (uint8_t g_idx = 1; g_idx < PART_TYPES; g_idx++) {
+				if (!(sets[v_idx] & (1 << g_idx))) {
+					continue;
+				}
+				if (g_idx != geom_idx) {
+					return false;
+				}
+				found = true;
+			}
+		}
+		return found;
+	}
+
+	//! Check if only the given vertex type is present (with any geometry type),
+	//! and that at least one such geometry is present.
+	bool HasOnly(VertexType vert_type) const {
+		const auto vert_idx = static_cast<uint8_t>(vert_type);
+		D_ASSERT(vert_idx < VERT_TYPES);
+		bool found = false;
+		for (uint8_t v_idx = 0; v_idx < VERT_TYPES; v_idx++) {
+			for (uint8_t g_idx = 1; g_idx < PART_TYPES; g_idx++) {
+				if (!(sets[v_idx] & (1 << g_idx))) {
+					continue;
+				}
+				if (v_idx != vert_idx) {
+					return false;
+				}
+				found = true;
+			}
+		}
+		return found;
 	}
 
 	bool HasSingleType() const {
@@ -281,7 +338,8 @@ struct GeometryStats {
 
 	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
-	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
+	DUCKDB_API static void Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel,
+	                              idx_t count);
 
 	//! Check if a spatial predicate check with a constant could possibly be satisfied by rows given the statistics
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats,

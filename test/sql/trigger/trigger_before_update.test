@@ -1,0 +1,278 @@
+# name: test/sql/trigger/trigger_before_update.test
+# description: Test BEFORE UPDATE trigger firing via DML CTE expansion
+# group: [trigger]
+
+require noforcestorage
+
+# Basic: FOR EACH STATEMENT trigger fires once before UPDATE
+statement ok
+CREATE TABLE target (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO target VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TABLE audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_basic BEFORE UPDATE ON target FOR EACH STATEMENT
+    INSERT INTO audit VALUES ('updating');
+
+statement ok
+UPDATE target SET val = 99 WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+1
+
+# Multi-row UPDATE fires FOR EACH STATEMENT once
+statement ok
+UPDATE target SET val = 0;
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+2
+
+# Underlying UPDATE actually applied
+query I
+SELECT val FROM target WHERE id = 1;
+----
+0
+
+# BEFORE body sees the table state PRIOR to the UPDATE
+statement ok
+CREATE TABLE pre_target (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO pre_target VALUES (1, 10);
+
+statement ok
+CREATE TABLE pre_audit (val_before INTEGER);
+
+statement ok
+CREATE TRIGGER trg_pre BEFORE UPDATE ON pre_target FOR EACH STATEMENT
+    INSERT INTO pre_audit SELECT val FROM pre_target WHERE id = 1;
+
+statement ok
+UPDATE pre_target SET val = 999 WHERE id = 1;
+
+# Should record 10 (the old value, before the UPDATE)
+query I
+SELECT val_before FROM pre_audit;
+----
+10
+
+# Final state shows the UPDATE applied
+query I
+SELECT val FROM pre_target WHERE id = 1;
+----
+999
+
+# BEFORE FOR EACH ROW is rejected
+statement error
+CREATE TRIGGER trg_row BEFORE UPDATE ON target FOR EACH ROW
+    INSERT INTO audit VALUES ('row');
+----
+Not implemented Error: BEFORE FOR EACH ROW triggers are not yet supported
+
+# REFERENCING is rejected for BEFORE triggers
+statement error
+CREATE TRIGGER trg_ref BEFORE UPDATE ON target REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT
+    INSERT INTO audit SELECT 'ref' FROM old_rows;
+----
+Transition tables can only be specified for AFTER triggers
+
+# Trigger body failure rolls back the UPDATE
+statement ok
+CREATE TABLE strict_target (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO strict_target VALUES (1, 0);
+
+statement ok
+CREATE TABLE strict_log (id INTEGER UNIQUE);
+
+statement ok
+INSERT INTO strict_log VALUES (999);
+
+statement ok
+CREATE TRIGGER trg_fail BEFORE UPDATE ON strict_target FOR EACH STATEMENT
+    INSERT INTO strict_log VALUES (999);
+
+statement error
+UPDATE strict_target SET val = 1;
+----
+Constraint Error:
+
+# val unchanged: BEFORE body's failure aborted the UPDATE
+query I
+SELECT val FROM strict_target;
+----
+0
+
+query I
+SELECT COUNT(*) FROM strict_log;
+----
+1
+
+# Multiple BEFORE UPDATE triggers all fire
+statement ok
+CREATE TABLE t_multi (id INTEGER);
+
+statement ok
+INSERT INTO t_multi VALUES (1);
+
+statement ok
+CREATE TABLE t_multi_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_multi_a BEFORE UPDATE ON t_multi FOR EACH STATEMENT
+    INSERT INTO t_multi_audit VALUES ('a');
+
+statement ok
+CREATE TRIGGER trg_multi_b BEFORE UPDATE ON t_multi FOR EACH STATEMENT
+    INSERT INTO t_multi_audit VALUES ('b');
+
+statement ok
+UPDATE t_multi SET id = 2;
+
+query I
+SELECT COUNT(*) FROM t_multi_audit;
+----
+2
+
+# UPDATE OF columns: trigger only fires when listed columns are updated
+statement ok
+CREATE TABLE t_col (id INTEGER, val INTEGER, other INTEGER);
+
+statement ok
+INSERT INTO t_col VALUES (1, 10, 100);
+
+statement ok
+CREATE TABLE t_col_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_col BEFORE UPDATE OF val ON t_col FOR EACH STATEMENT
+    INSERT INTO t_col_audit VALUES ('val_changed');
+
+# Updating 'val' fires the trigger
+statement ok
+UPDATE t_col SET val = 20 WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM t_col_audit;
+----
+1
+
+# Updating 'other' (NOT in the OF list) does NOT fire the trigger
+statement ok
+UPDATE t_col SET other = 200 WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM t_col_audit;
+----
+1
+
+# Updating both 'val' and 'other' fires the trigger (overlap with OF list)
+statement ok
+UPDATE t_col SET val = 30, other = 300 WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM t_col_audit;
+----
+2
+
+# Multi-column OF: trigger fires when ANY listed column is touched
+statement ok
+CREATE TABLE t_multi_col (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO t_multi_col VALUES (1, 2, 3);
+
+statement ok
+CREATE TABLE t_multi_col_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_multi_col BEFORE UPDATE OF a, b ON t_multi_col FOR EACH STATEMENT
+    INSERT INTO t_multi_col_audit VALUES ('ab_changed');
+
+# Update 'a' alone -> fires
+statement ok
+UPDATE t_multi_col SET a = 10;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+1
+
+# Update 'b' alone -> fires
+statement ok
+UPDATE t_multi_col SET b = 20;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+2
+
+# Update 'c' alone -> does NOT fire
+statement ok
+UPDATE t_multi_col SET c = 30;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+2
+
+# Mixed (a + c) -> fires (a is in OF list)
+statement ok
+UPDATE t_multi_col SET a = 100, c = 300;
+
+query I
+SELECT COUNT(*) FROM t_multi_col_audit;
+----
+3
+
+# Case-insensitive matching: trigger created with OF "VAL" must fire when SET val = ...
+statement ok
+CREATE TABLE t_case (val INTEGER);
+
+statement ok
+INSERT INTO t_case VALUES (1);
+
+statement ok
+CREATE TABLE t_case_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_case BEFORE UPDATE OF VAL ON t_case FOR EACH STATEMENT
+    INSERT INTO t_case_audit VALUES ('case');
+
+statement ok
+UPDATE t_case SET val = 2;
+
+query I
+SELECT COUNT(*) FROM t_case_audit;
+----
+1
+
+# RETURNING works on tables with triggers
+query I
+UPDATE target SET val = 1 RETURNING id;
+----
+1
+2
+3
+
+# DROP TRIGGER works
+statement ok
+DROP TRIGGER trg_basic ON target;
+
+statement ok
+UPDATE target SET val = 7 WHERE id = 1;
+
+# Audit count reflects the RETURNING UPDATE that fired the trigger
+query I
+SELECT COUNT(*) FROM audit;
+----
+3

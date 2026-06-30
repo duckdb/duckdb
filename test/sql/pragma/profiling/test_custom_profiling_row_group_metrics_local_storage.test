@@ -1,0 +1,81 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test
+# description: Test row group profiling metrics with multiple table scans and local storage
+# group: [profiling]
+
+require json
+
+require no_vector_verification
+
+statement ok
+CREATE TABLE local_pruned(i BIGINT);
+
+statement ok
+INSERT INTO local_pruned VALUES
+	(1000000), (1000001), (1000002), (1000003), (1000004),
+	(1000005), (1000006), (1000007), (1000008), (1000009);
+
+statement ok
+CREATE TABLE persistent_only(i BIGINT);
+
+statement ok
+INSERT INTO persistent_only VALUES
+	(0), (1), (2), (3), (4),
+	(5), (6), (7), (8), (9);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO local_pruned VALUES
+	(0), (1), (2), (3), (4),
+	(5), (6), (7), (8), (9);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['operator.row_groups_scanned', 'operator.total_row_groups_to_scan', 'operator.type', 'query.total_row_groups_scanned', 'query.total_row_groups_to_scan'];
+
+statement ok
+SELECT count(*) FROM local_pruned a, persistent_only b WHERE a.i < 100 AND b.i < 100;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE VIEW operator_metrics AS
+SELECT t.type AS operator_type,
+       t.row_groups_scanned AS scanned,
+       t.total_row_groups_to_scan AS total
+FROM '{TEST_DIR}/profiling_output.json' prof,
+     LATERAL unnest(prof.operator) t0(op0),
+     LATERAL unnest(op0.children) t1(op1),
+     LATERAL unnest(op1.children) t2(op2),
+     LATERAL unnest(op2.children) t3(t)
+WHERE t.type = 'TABLE_SCAN';
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN' ORDER BY total;
+----
+TABLE_SCAN	1	1
+TABLE_SCAN	1	2
+
+# 2 row groups scanned, 3 were available to scan across all operators.
+query T
+SELECT sum(scanned)::VARCHAR || '/' || sum(total)::VARCHAR
+FROM operator_metrics
+WHERE operator_type = 'TABLE_SCAN';
+----
+2/3
+
+query II
+SELECT query.total_row_groups_scanned::BIGINT, query.total_row_groups_to_scan::BIGINT
+FROM '{TEST_DIR}/profiling_output.json';
+----
+2	3
+
+statement ok
+ROLLBACK;

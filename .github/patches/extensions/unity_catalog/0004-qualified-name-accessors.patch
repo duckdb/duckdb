@@ -1,0 +1,19 @@
+diff --git a/src/functions/uc_checkpoint.cpp b/src/functions/uc_checkpoint.cpp
+index 88ae3e7..7fbc218 100644
+--- a/src/functions/uc_checkpoint.cpp
++++ b/src/functions/uc_checkpoint.cpp
+@@ -28,9 +28,11 @@ static CheckpointTableBindData ResolveTableName(ClientContext &context, const st
+ 	auto &search_path = ClientData::Get(context).catalog_search_path->GetDefault();
+ 
+ 	CheckpointTableBindData result;
+-	result.catalog_name = qname.catalog.empty() ? search_path.catalog.GetIdentifierName() : qname.catalog.GetIdentifierName();
+-	result.schema_name = qname.schema.empty() ? search_path.schema.GetIdentifierName() : qname.schema.GetIdentifierName();
+-	result.table_name = qname.name.GetIdentifierName();
++	result.catalog_name =
++	    qname.Catalog().empty() ? search_path.catalog.GetIdentifierName() : qname.Catalog().GetIdentifierName();
++	result.schema_name =
++	    qname.Schema().empty() ? search_path.schema.GetIdentifierName() : qname.Schema().GetIdentifierName();
++	result.table_name = qname.Name().GetIdentifierName();
+ 
+ 	if (result.catalog_name.empty()) {
+ 		throw InvalidInputException(

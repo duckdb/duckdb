@@ -11,6 +11,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 class SchemaCatalogEntry;
 
@@ -19,20 +20,25 @@ enum class CreateViewBindingMode { BIND_ON_CREATE, SKIP_BINDING };
 struct CreateViewInfo : public CreateInfo {
 public:
 	CreateViewInfo();
-	CreateViewInfo(SchemaCatalogEntry &schema, string view_name);
-	CreateViewInfo(string catalog_p, string schema_p, string view_name);
+	CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name);
+	explicit CreateViewInfo(const QualifiedName &view_name);
 
 public:
 	//! View name
-	string view_name;
+	const Identifier &GetViewName() const {
+		return qualified_name.Name();
+	}
+	void SetViewName(Identifier name) {
+		qualified_name = qualified_name.WithName(std::move(name));
+	}
 	//! Aliases of the view
-	vector<string> aliases;
+	vector<Identifier> aliases;
 	//! Return types
 	vector<LogicalType> types;
 	//! Names of the query
-	vector<string> names;
+	vector<Identifier> names;
 	//! Comments on columns of the query. Note: vector can be empty when no comments are set
-	unordered_map<string, Value> column_comments_map;
+	identifier_map_t<Value> column_comments_map;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
 	//! Whether or not to bind the view on create
@@ -55,7 +61,7 @@ public:
 	string ToString() const override;
 
 private:
-	CreateViewInfo(vector<string> names, vector<Value> comments, unordered_map<string, Value> column_comments);
+	CreateViewInfo(vector<Identifier> names, vector<Value> comments, identifier_map_t<Value> column_comments);
 
 	vector<Value> GetColumnCommentsList() const;
 };

@@ -1,0 +1,13 @@
+diff --git a/src/storage/sqlite_delete.cpp b/src/storage/sqlite_delete.cpp
+index 09c3dba..a35686e 100644
+--- a/src/storage/sqlite_delete.cpp
++++ b/src/storage/sqlite_delete.cpp
+@@ -107,7 +107,7 @@ PhysicalOperator &SQLiteCatalog::PlanDelete(ClientContext &context, PhysicalPlan
+ 		throw BinderException("RETURNING clause not yet supported for deletion of a SQLite table");
+ 	}
+ 	auto &bound_ref = op.expressions[0]->Cast<BoundReferenceExpression>();
+-	auto &delete_op = planner.Make<SQLiteDelete>(op, op.table, bound_ref.index);
++	auto &delete_op = planner.Make<SQLiteDelete>(op, op.table, bound_ref.Index());
+ 	delete_op.children.push_back(plan);
+ 	return delete_op;
+ }

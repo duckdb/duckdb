@@ -39,6 +39,14 @@ PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(ExecutionContext &context,
 	sort_chunk.InitializeEmpty(types);
 }
 
+void PhysicalRangeJoin::LocalSortedTable::ResetForReuse(ExecutionContext &context) {
+	local_sink = global_table.sort->GetLocalSinkState(context);
+	has_null = 0;
+	count = 0;
+	keys.Reset();
+	sort_chunk.Reset();
+}
+
 void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataChunk &input) {
 	// Obtain sorting columns
 	keys.Reset();
@@ -62,8 +70,7 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataCh
 	for (column_t col_idx = 0; col_idx < input.ColumnCount(); ++col_idx) {
 		sort_chunk.data[col_idx + 1].Reference(input.data[col_idx]);
 	}
-	sort_chunk.SetCardinality(input);
-
+	sort_chunk.SetChildCardinality(input.size());
 	// Sink the data into the local sort state
 	InterruptState interrupt;
 	OperatorSinkInput sink {*global_table.global_sink, *local_sink, interrupt};
@@ -103,6 +110,16 @@ void PhysicalRangeJoin::GlobalSortedTable::Combine(ExecutionContext &context, Lo
 	sort->Combine(context, combine);
 	has_null += ltable.has_null;
 	count += ltable.count;
+}
+
+void PhysicalRangeJoin::GlobalSortedTable::ResetForReuse(ClientContext &client) {
+	global_sink = sort->GetGlobalSinkState(client);
+	has_null = 0;
+	count = 0;
+	tasks_completed = 0;
+	global_source.reset();
+	sorted.reset();
+	found_match.reset();
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::Finalize(ClientContext &client, InterruptState &interrupt) {
@@ -199,7 +216,7 @@ public:
 
 		// Schedule as many tasks as the sort will allow
 		auto &ts = TaskScheduler::GetScheduler(client);
-		auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
+		auto num_threads = ts.NumberOfThreads();
 		vector<shared_ptr<Task>> tasks;
 
 		const auto tasks_scheduled = MinValue<idx_t>(num_threads, table.global_source->MaxThreads());
@@ -373,7 +390,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 	const auto count = keys.size();
 
 	size_t all_constant = 0;
-	for (auto &v : keys.data) {
+	for (const auto &v : keys.data) {
 		if (v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			++all_constant;
 		}
@@ -385,7 +402,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 			if (conditions[c].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
-			auto &v = keys.data[c];
+			const auto &v = keys.data[c];
 			if (ConstantVector::IsNull(v)) {
 				ConstantVector::SetNull(primary, count_t(count));
 				return count;
@@ -394,7 +411,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		return 0;
 	} else if (keys.ColumnCount() > 1) {
 		//	Flatten the primary, as it will need to merge arbitrary validity masks
-		primary.Flatten(count);
+		primary.Flatten();
 		auto &pvalidity = FlatVector::ValidityMutable(primary);
 
 		D_ASSERT(keys.ColumnCount() == conditions.size());
@@ -404,9 +421,9 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 				continue;
 			}
 			//	ToUnifiedFormat the rest, as the sort code will do this anyway.
-			auto &v = keys.data[c];
+			const auto &v = keys.data[c];
 			UnifiedVectorFormat vdata;
-			v.ToUnifiedFormat(count, vdata);
+			v.ToUnifiedFormat(vdata);
 			auto &vvalidity = vdata.validity;
 			if (vvalidity.CannotHaveNull()) {
 				continue;
@@ -442,7 +459,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		}
 		return count - pvalidity.CountValid(count);
 	} else {
-		return count - VectorOperations::CountNotNull(primary, count);
+		return count - VectorOperations::CountNotNull(primary);
 	}
 }
 
@@ -455,7 +472,6 @@ void PhysicalRangeJoin::ProjectResult(DataChunk &chunk, DataChunk &result) const
 	for (idx_t i = 0; i < right_projection_map.size(); ++i) {
 		result.data[left_projected + i].Reference(chunk.data[left_width + right_projection_map[i]]);
 	}
-	result.SetCardinality(chunk);
 }
 
 template <SortKeyType SORT_KEY_TYPE>
@@ -467,17 +483,18 @@ static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorte
 	using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 	BLOCK_ITERATOR itr(state, chunk_idx, 0);
 
-	const auto sort_keys = FlatVector::GetDataMutable<SORT_KEY *>(sort_key_pointers);
 	const auto result_size = NumericCast<idx_t>(result.size());
-
-	for (idx_t i = 0; i < result_size; ++i) {
-		const auto idx = state.GetIndex(chunk_idx, result[i]);
-		sort_keys[i] = &itr[idx];
+	{
+		auto writer = FlatVector::Writer<SORT_KEY *>(sort_key_pointers, result_size);
+		for (idx_t i = 0; i < result_size; ++i) {
+			const auto idx = state.GetIndex(chunk_idx, result[i]);
+			writer.WriteValue(&itr[idx]);
+		}
 	}
 
 	// Scan
 	chunk.Reset();
-	scan_state.Scan(sorted_run, sort_key_pointers, result_size, chunk);
+	scan_state.Scan(sorted_run, sort_key_pointers, chunk);
 }
 
 void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table,
@@ -530,7 +547,7 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &
 	}
 }
 
-idx_t PhysicalRangeJoin::SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
+idx_t PhysicalRangeJoin::SelectJoinTail(const ExpressionType &condition, const Vector &left, const Vector &right,
                                         const SelectionVector *sel, idx_t count, SelectionVector *true_sel) {
 	switch (condition) {
 	case ExpressionType::COMPARE_NOTEQUAL:

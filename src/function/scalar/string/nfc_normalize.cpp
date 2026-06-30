@@ -25,7 +25,7 @@ struct NFCNormalizeOperator {
 void NFCNormalizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 
-	UnaryExecutor::ExecuteString<string_t, string_t, NFCNormalizeOperator>(args.data[0], result, args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, NFCNormalizeOperator>(args.data[0], result);
 	StringVector::AddHeapReference(result, args.data[0]);
 }
 

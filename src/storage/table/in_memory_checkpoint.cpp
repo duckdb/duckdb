@@ -2,7 +2,9 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
@@ -34,11 +36,15 @@ void InMemoryCheckpointer::CreateCheckpoint() {
 		});
 	}
 
+	auto debug_checkpoint_abort = Settings::Get<DebugCheckpointAbortSetting>(db.GetDatabase());
 	for (auto &table : tables) {
 		MemoryStream write_stream;
 		BinarySerializer serializer(write_stream);
 
 		WriteTable(table, serializer);
+		if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_IN_MEMORY_CHECKPOINT) {
+			throw IOException("In-memory checkpoint aborted because of PRAGMA debug_checkpoint_abort flag");
+		}
 	}
 	storage_manager.SetWALSize(0);
 }
@@ -91,7 +97,8 @@ InMemoryTableDataWriter::InMemoryTableDataWriter(InMemoryCheckpointer &checkpoin
 }
 
 void InMemoryTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
-                                                  const vector<MetaBlockPointer> &metadata_pointers, idx_t total_rows) {
+                                                  const vector<MetaBlockPointer> &metadata_pointers, idx_t total_rows,
+                                                  idx_t next_row_id) {
 }
 
 void InMemoryTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
@@ -117,7 +124,7 @@ MetadataManager &InMemoryTableDataWriter::GetMetadataManager() {
 
 InMemoryPartialBlock::InMemoryPartialBlock(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
                                            BlockManager &block_manager)
-    : PartialBlock(state, block_manager, segment.block) {
+    : PartialBlock(state, block_manager, segment.GetBlockHandle()) {
 	InMemoryPartialBlock::AddSegmentToTail(data, segment, 0);
 }
 

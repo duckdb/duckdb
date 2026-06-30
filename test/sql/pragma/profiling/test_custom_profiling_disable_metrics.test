@@ -11,7 +11,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA configure_profiling='{"CPU_TIME": "false", "EXTRA_INFO": "true", "OPERATOR_CARDINALITY": "true", "OPERATOR_TIMING": "true", "LATENCY": "true"}';
+SET tracked_metrics = ['operator.extra_info', 'operator.intermediate_rows', 'operator.timing', 'query.total_time'];
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -22,45 +22,37 @@ PRAGMA disable_profiling;
 # Evaluate results.
 
 query I rowsort
-SELECT unnest(res) FROM (
-	SELECT current_setting('configure_profiling') AS raw_setting,
-	raw_setting.trim('{}') AS setting,
-	string_split(setting, ', ') AS res
-) ORDER BY ALL;
+SELECT unnest(current_setting('tracked_metrics')) ORDER BY ALL;
 ----
-"EXTRA_INFO": "true"
-"LATENCY": "true"
-"OPERATOR_CARDINALITY": "true"
-"OPERATOR_TIMING": "true"
+operator.extra_info
+operator.intermediate_rows
+operator.timing
+query.total_time
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement error
-SELECT cpu_time FROM metrics_output;
+SELECT query.cpu_time FROM metrics_output;
 ----
-<REGEX>:Binder Error.*Referenced column "cpu_time" not found in FROM clause!.*
+<REGEX>:Binder Error.*
 
 statement ok
-SELECT extra_info, latency FROM metrics_output;
+SELECT operator[1].extra_info, query.total_time FROM metrics_output;
 
 # Re-enable the CPU TIME.
 
 statement ok
-PRAGMA configure_profiling='{"QUERY_NAME": "true", "CPU_TIME": "true", "EXTRA_INFO": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"}'
+SET tracked_metrics = ['query.sql', 'query.cpu_time', 'operator.extra_info', 'query.total_intermediate_rows', 'query.total_rows_scanned'];
 
 query I
-SELECT unnest(res) FROM (
-	SELECT current_setting('configure_profiling') AS raw_setting,
-	raw_setting.trim('{}') AS setting,
-	string_split(setting, ', ') AS res
-) ORDER BY ALL
+SELECT unnest(current_setting('tracked_metrics')) ORDER BY ALL
 ----
-"CPU_TIME": "true"
-"CUMULATIVE_CARDINALITY": "true"
-"CUMULATIVE_ROWS_SCANNED": "true"
-"EXTRA_INFO": "true"
-"QUERY_NAME": "true"
+operator.extra_info
+query.cpu_time
+query.sql
+query.total_intermediate_rows
+query.total_rows_scanned
 
 # Re-enabled profiling.
 
@@ -81,7 +73,7 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_ou
 
 query I
 SELECT
-	CASE WHEN cpu_time > 0 THEN 'true'
+	CASE WHEN query.cpu_time > 0 THEN 'true'
     ELSE 'false' END
 FROM metrics_output;
 ----
@@ -89,7 +81,7 @@ true
 
 query I
 SELECT
-	CASE WHEN cumulative_cardinality > 0 THEN 'true'
+	CASE WHEN query.total_intermediate_rows > 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
@@ -98,41 +90,43 @@ true
 # Only collect ROWS_SCANNED for table queries.
 query I
 SELECT
-	CASE WHEN cumulative_rows_scanned > 0 THEN 'true'
+	CASE WHEN query.total_rows_scanned > 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
 false
 
-# Check if the column query is present when it is requested.
+# Check if the query struct column is present when query metrics are requested.
 query I
 SELECT
 	CASE WHEN EXISTS(
 		SELECT
 			1
 		FROM information_schema.columns
-		WHERE table_name = 'metrics_output' AND column_name = 'query_name'
+		WHERE table_name = 'metrics_output' AND column_name = 'query'
 	) THEN 'true'
 	ELSE 'false' END;
 ----
 true
 
-# Check if the column `query_name` contains the query.
+# Check if query.sql contains the query.
 query I
 SELECT
-	query_name
+	query.sql
 FROM metrics_output;
 ----
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
 
+# Disable all query.* metrics to verify the query struct disappears from output.
+
 statement ok
-PRAGMA configure_profiling='{"QUERY_NAME": "false"}'
+SET tracked_metrics = [];
 
 statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '{TEST_DIR}/profiling_output_no_query_name.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output_no_query.json';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -141,16 +135,16 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output_no_query_name.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output_no_query.json';
 
-# Check if query is **not** present when it is **not** requested.
+# Check that query struct is not present when all query.* metrics are disabled.
 query I
 SELECT
 	CASE WHEN EXISTS(
 		SELECT
 			1
 		FROM information_schema.columns
-		WHERE table_name = 'metrics_output' AND column_name = 'query_name'
+		WHERE table_name = 'metrics_output' AND column_name = 'query'
 	) THEN 'true'
 	ELSE 'false' END;
 ----

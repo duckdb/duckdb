@@ -70,37 +70,37 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(BindScalarFunctionInput &in
 template <bool REVERSED>
 static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
+	auto &info = func_expr.BindInfo()->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
 		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
-	info.format.ConvertDateVector(args.data[REVERSED ? 1 : 0], result, args.size());
+	info.format.ConvertDateVector(args.data[REVERSED ? 1 : 0], result);
 }
 
 template <bool REVERSED>
 static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
+	auto &info = func_expr.BindInfo()->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
 		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
-	info.format.ConvertTimestampVector(args.data[REVERSED ? 1 : 0], result, args.size());
+	info.format.ConvertTimestampVector(args.data[REVERSED ? 1 : 0], result);
 }
 
 template <bool REVERSED>
 static void StrfTimeFunctionTimestampNS(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
+	auto &info = func_expr.BindInfo()->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
 		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
-	info.format.ConvertTimestampNSVector(args.data[REVERSED ? 1 : 0], result, args.size());
+	info.format.ConvertTimestampNSVector(args.data[REVERSED ? 1 : 0], result);
 }
 
 struct StrpTimeBindData : public FunctionData {
@@ -149,18 +149,18 @@ struct StrpTimeFunction {
 	template <typename T>
 	static void Parse(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
+		auto &info = func_expr.BindInfo()->Cast<StrpTimeBindData>();
 
 		//	There is a bizarre situation where the format column is foldable but not constant
 		//	(i.e., the statistics tell us it has only one value)
 		//	We have to check whether that value is NULL
-		auto format_entries = args.data[1].Validity(args.size());
+		auto format_entries = args.data[1].Validity();
 
 		if (!format_entries.IsValid(0)) {
 			ConstantVector::SetNull(result, count_t(args.size()));
 			return;
 		}
-		UnaryExecutor::Execute<string_t, T>(args.data[0], result, args.size(), [&](string_t input) {
+		UnaryExecutor::Execute<string_t, T>(args.data[0], result, [&](string_t input) {
 			StrpTimeFormat::ParseResult result;
 			for (auto &format : info.formats) {
 				if (format.Parse(input, result)) {
@@ -174,14 +174,14 @@ struct StrpTimeFunction {
 	template <typename T>
 	static void TryParse(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
+		auto &info = func_expr.BindInfo()->Cast<StrpTimeBindData>();
 
 		if (args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(args.data[1])) {
 			ConstantVector::SetNull(result, count_t(args.size()));
 			return;
 		}
 
-		UnaryExecutor::Execute<string_t, T>(args.data[0], result, args.size(), [&](string_t input) -> optional<T> {
+		UnaryExecutor::Execute<string_t, T>(args.data[0], result, [&](string_t input) -> optional<T> {
 			T result;
 			string error;
 			for (auto &format : info.formats) {

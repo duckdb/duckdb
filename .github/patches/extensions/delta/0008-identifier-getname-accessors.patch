@@ -1,0 +1,522 @@
+diff --git a/src/delta_extension.cpp b/src/delta_extension.cpp
+index 9ad427e..0fc18e9 100644
+--- a/src/delta_extension.cpp
++++ b/src/delta_extension.cpp
+@@ -46,7 +46,7 @@ static unique_ptr<Catalog> DeltaCatalogAttach(optional_ptr<StorageExtensionInfo>
+ 		}
+ 	}
+ 
+-	res->SetDefaultTable(DEFAULT_SCHEMA, res->GetInternalTableName());
++	res->SetDefaultTable(Identifier::DefaultSchema(), Identifier(res->GetInternalTableName()));
+ 
+ 	return std::move(res);
+ }
+diff --git a/src/delta_macros.cpp b/src/delta_macros.cpp
+index 0d43aba..a6570c5 100644
+--- a/src/delta_macros.cpp
++++ b/src/delta_macros.cpp
+@@ -58,16 +58,16 @@ void DeltaMacros::RegisterTableMacro(ExtensionLoader &loader, const string &name
+ 
+ 	auto func = make_uniq<TableMacroFunction>(std::move(node));
+ 	for (auto &param : params) {
+-		func->parameters.push_back(make_uniq<ColumnRefExpression>(param));
++		func->parameters.push_back(make_uniq<ColumnRefExpression>(Identifier(param)));
+ 	}
+ 
+ 	for (auto &param : named_params) {
+-		func->default_parameters[param.first] = make_uniq<ConstantExpression>(param.second);
++		func->default_parameters[Identifier(param.first)] = make_uniq<ConstantExpression>(Value(param.second));
+ 	}
+ 
+ 	CreateMacroInfo info(CatalogType::TABLE_MACRO_ENTRY);
+-	info.schema = DEFAULT_SCHEMA;
+-	info.name = name;
++	info.schema = Identifier::DefaultSchema();
++	info.name = Identifier(name);
+ 	info.temporary = true;
+ 	info.internal = true;
+ 	info.macros.push_back(std::move(func));
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+index 89b3cd5..ede4a48 100644
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -283,7 +283,7 @@ void ExpressionVisitor::VisitStructLiteral(void *state, uintptr_t sibling_list_i
+ 	}
+ 
+ 	for (idx_t i = 0; i < children_keys->size(); i++) {
+-		(*children_values)[i]->SetAlias((*children_keys)[i]->ToString());
++		(*children_values)[i]->SetAlias(Identifier((*children_keys)[i]->ToString()));
+ 	}
+ 
+ 	unique_ptr<ParsedExpression> expression = make_uniq<FunctionExpression>("struct_pack", std::move(*children_values));
+@@ -421,7 +421,7 @@ void ExpressionVisitor::VisitColumnExpression(void *state, uintptr_t sibling_lis
+ 		col_ref_string = col_ref_string.substr(1, col_ref_string.size() - 2);
+ 	}
+ 
+-	auto expression = make_uniq<ColumnRefExpression>(col_ref_string);
++	auto expression = make_uniq<ColumnRefExpression>(Identifier(col_ref_string));
+ 	static_cast<ExpressionVisitor *>(state)->AppendToList(sibling_list_id, std::move(expression));
+ }
+ 
+@@ -638,7 +638,7 @@ void SchemaVisitor::VisitStruct(SchemaVisitor *state, uintptr_t sibling_list_id,
+ 
+ 	child_list_t<LogicalType> children_types;
+ 	for (const auto &child_col_def : children) {
+-		children_types.push_back({child_col_def.name, child_col_def.type});
++		children_types.emplace_back(child_col_def.name, child_col_def.type);
+ 	}
+ 
+ 	auto struct_type = LogicalType::STRUCT(children_types);
+@@ -723,7 +723,7 @@ void SchemaVisitor::AppendToList(uintptr_t id, ffi::KernelStringSlice name, Delt
+ 	}
+ 
+ 	// Inject the name
+-	child.name = string(name.ptr, name.len);
++	child.name = Identifier(string(name.ptr, name.len));
+ 
+ 	it->second.emplace_back(std::move(child));
+ }
+@@ -865,7 +865,7 @@ PredicateVisitor::PredicateVisitor(const vector<DeltaMultiFileColumnDefinition>
+ 
+ 	if (filters) {
+ 		for (auto &entry : *filters) {
+-			column_filters[columns[entry.first].name] = entry.second.get();
++			column_filters[columns[entry.first].name.GetIdentifierName()] = entry.second.get();
+ 		}
+ 	}
+ }
+diff --git a/src/functions/delta_metadata_scan.cpp b/src/functions/delta_metadata_scan.cpp
+index 571136d..e9772a2 100644
+--- a/src/functions/delta_metadata_scan.cpp
++++ b/src/functions/delta_metadata_scan.cpp
+@@ -26,7 +26,7 @@ static void AddFileInfo(OpenFileInfo &file_info, DeltaFileMetaData &metadata, ve
+ 	auto partitions = metadata.partition_map;
+ 	InsertionOrderPreservingMap<string> map;
+ 	for (auto &kv : partitions) {
+-		map[kv.first] = kv.second.ToString();
++		map[kv.first.GetIdentifierName()] = kv.second.ToString();
+ 	}
+ 	row_values.emplace_back(Value::MAP(map));
+ 
+@@ -71,7 +71,7 @@ static unique_ptr<FunctionData> DeltaFileListBind(ClientContext &context, TableF
+ 	DeltaFileListOptions options;
+ 
+ 	for (auto &kv : input.named_parameters) {
+-		auto loption = StringUtil::Lower(kv.first);
++		auto loption = StringUtil::Lower(kv.first.GetIdentifierName());
+ 		auto &val = kv.second;
+ 		if (loption == "version") {
+ 			version = val.GetValue<idx_t>();
+@@ -87,7 +87,7 @@ static unique_ptr<FunctionData> DeltaFileListBind(ClientContext &context, TableF
+ 	auto file_list = make_uniq<DeltaMultiFileList>(context, input_string, version);
+ 
+ 	// TODO: this is weird
+-	vector<string> _n;
++	vector<Identifier> _n;
+ 	vector<LogicalType> _t;
+ 	file_list->Bind(_t, _n);
+ 
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+index f48db80..5f86444 100644
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -487,12 +487,12 @@ void ScanDataCallBack::VisitCallbackInternal(ffi::NullableCvoid engine_context,
+ 		auto transform_partitions =
+ 		    FindPartitionValues(*(*parsed_transformation_expression)[0], snapshot.global_columns);
+ 
+-		case_insensitive_map_t<Value> constant_map;
++		identifier_map_t<Value> constant_map;
+ 		for (idx_t i = 0; i < snapshot.partitions.size(); ++i) {
+ 			const auto &partition_id = context->snapshot.partition_ids[i];
+ 			const auto &partition_name = context->snapshot.partitions[i];
+ 
+-			constant_map[partition_name] = transform_partitions[partition_id];
++			constant_map[Identifier(partition_name)] = transform_partitions[partition_id];
+ 		}
+ 		snapshot.metadata.back()->partition_map = std::move(constant_map);
+ 		snapshot.metadata.back()->transform_expression =
+@@ -598,12 +598,12 @@ static bool ExtractHasNullConstraintsInArrays(const vector<DeltaMultiFileColumnD
+ 	return false;
+ }
+ 
+-void DeltaMultiFileList::Bind(vector<LogicalType> &return_types, vector<string> &names) {
++void DeltaMultiFileList::Bind(vector<LogicalType> &return_types, vector<Identifier> &names) {
+ 	unique_lock<mutex> lck(lock);
+ 
+ 	if (have_bound) {
+ 		for (const auto &field : global_columns) {
+-			names.push_back(field.name);
++			names.push_back(Identifier(field.name));
+ 			return_types.push_back(field.type);
+ 		}
+ 		return;
+@@ -618,7 +618,7 @@ void DeltaMultiFileList::Bind(vector<LogicalType> &return_types, vector<string>
+ 	}
+ 
+ 	for (const auto &field : visited_schema) {
+-		names.push_back(field.name);
++		names.push_back(Identifier(field.name));
+ 		return_types.push_back(field.type);
+ 	}
+ 
+@@ -925,7 +925,7 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
+ 		auto column_id = entry.first;
+ 		if (column_id < global_columns.size()) {
+ 			auto &col_name = global_columns[column_id].name;
+-			old_filters_value_list.push_back(filter.ToString(col_name));
++			old_filters_value_list.push_back(filter.ToString(col_name.GetIdentifierName()));
+ 		}
+ 	}
+ 	auto old_filters_value = Value::LIST(LogicalType::VARCHAR, old_filters_value_list);
+@@ -937,7 +937,7 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
+ 		auto &filter = *entry.second;
+ 		if (column_id < global_columns.size()) {
+ 			auto &col_name = global_columns[column_id].name;
+-			filters_value_list.push_back(filter.ToString(col_name));
++			filters_value_list.push_back(filter.ToString(col_name.GetIdentifierName()));
+ 		}
+ 	}
+ 	auto filters_value = Value::LIST(LogicalType::VARCHAR, filters_value_list);
+@@ -952,13 +952,13 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
+ 
+ 	if (should_log) {
+ 		child_list_t<Value> struct_fields;
+-		struct_fields.push_back({"path", Value(GetPath())});
+-		struct_fields.push_back({"type", Value(pushdown_type)});
+-		struct_fields.push_back({"filters_before", old_filters_value});
+-		struct_fields.push_back({"filters_after", filters_value});
++		struct_fields.emplace_back("path", Value(GetPath()));
++		struct_fields.emplace_back("type", Value(pushdown_type));
++		struct_fields.emplace_back("filters_before", old_filters_value);
++		struct_fields.emplace_back("filters_after", filters_value);
+ 		if (new_total != DConstants::INVALID_INDEX) {
+-			struct_fields.push_back({"files_before", Value::BIGINT(old_total)});
+-			struct_fields.push_back({"files_after", Value::BIGINT(new_total)});
++			struct_fields.emplace_back("files_before", Value::BIGINT(old_total));
++			struct_fields.emplace_back("files_after", Value::BIGINT(new_total));
+ 		}
+ 		auto struct_value = Value::STRUCT(struct_fields);
+ 		logger.WriteLog(delta_log_type, log_level, struct_value.ToString());
+@@ -967,7 +967,7 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
+ 
+ unique_ptr<MultiFileList>
+ DeltaMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-                                          const vector<string> &names, const vector<LogicalType> &types,
++                                          const vector<Identifier> &names, const vector<LogicalType> &types,
+                                           const vector<column_t> &column_ids, TableFilterSet &filters) const {
+ 	auto pushdown_mode = GetDeltaFilterPushdownMode(context, options);
+ 	if (pushdown_mode == DeltaFilterPushdownMode::NONE || pushdown_mode == DeltaFilterPushdownMode::CONSTANT_ONLY) {
+diff --git a/src/functions/delta_scan/delta_multi_file_reader.cpp b/src/functions/delta_scan/delta_multi_file_reader.cpp
+index 32514ee..07fc435 100644
+--- a/src/functions/delta_scan/delta_multi_file_reader.cpp
++++ b/src/functions/delta_scan/delta_multi_file_reader.cpp
+@@ -55,7 +55,7 @@ void FinalizeBindBaseOverride(MultiFileReaderData &reader_data, const MultiFileO
+ 	// create a map of name -> column index
+ 	auto &local_columns = reader_data.reader->GetColumns();
+ 	auto &filename = reader_data.reader->GetFileName();
+-	case_insensitive_map_t<idx_t> name_map;
++	identifier_map_t<idx_t> name_map;
+ 	if (file_options.union_by_name) {
+ 		for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
+ 			auto &column = local_columns[col_idx];
+@@ -104,7 +104,7 @@ void FinalizeBindBaseOverride(MultiFileReaderData &reader_data, const MultiFileO
+ }
+ 
+ bool DeltaMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+-                                vector<string> &names, MultiFileReaderBindData &bind_data) {
++                                vector<Identifier> &names, MultiFileReaderBindData &bind_data) {
+ 	auto &delta_snapshot = dynamic_cast<DeltaMultiFileList &>(files);
+ 
+ 	delta_snapshot.Bind(return_types, names);
+@@ -113,7 +113,7 @@ bool DeltaMultiFileReader::Bind(MultiFileOptions &options, MultiFileList &files,
+ }
+ 
+ void DeltaMultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &files,
+-                                       vector<LogicalType> &return_types, vector<string> &names,
++                                       vector<LogicalType> &return_types, vector<Identifier> &names,
+                                        MultiFileReaderBindData &bind_data) {
+ 	// Disable all other multifilereader options
+ 	options.auto_detect_hive_partitioning = false;
+@@ -133,7 +133,7 @@ void DeltaMultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList
+ 		for (auto &part : partitions) {
+ 			idx_t hive_partitioning_index;
+ 			auto lookup = std::find_if(names.begin(), names.end(),
+-			                           [&](const string &col_name) { return StringUtil::CIEquals(col_name, part); });
++			                           [&](const Identifier &col_name) { return col_name == part; });
+ 			if (lookup != names.end()) {
+ 				// hive partitioning column also exists in file - override
+ 				auto idx = NumericCast<idx_t>(lookup - names.begin());
+@@ -259,7 +259,7 @@ DeltaMultiFileReader::InitializeGlobalState(ClientContext &context, const MultiF
+ 		}
+ 
+ 		auto global_name = global_columns[global_id].name;
+-		selected_columns.insert({global_name, i});
++		selected_columns.insert({global_name.GetIdentifierName(), i});
+ 	}
+ 
+ 	auto res = make_uniq<DeltaMultiFileReaderGlobalState>(extra_columns, &file_list);
+diff --git a/src/functions/delta_scan/delta_scan.cpp b/src/functions/delta_scan/delta_scan.cpp
+index a26b9d8..b350152 100644
+--- a/src/functions/delta_scan/delta_scan.cpp
++++ b/src/functions/delta_scan/delta_scan.cpp
+@@ -112,10 +112,10 @@ TableFunctionSet DeltaFunctions::GetDeltaScanFunction(ExtensionLoader &loader) {
+ 		function.named_parameters["pushdown_partition_info"] = LogicalType::BOOLEAN;
+ 		function.named_parameters["pushdown_filters"] = LogicalType::VARCHAR;
+ 
+-		function.name = "delta_scan";
++		function.SetName("delta_scan");
+ 	}
+ 
+-	parquet_scan_copy.name = "delta_scan";
++	parquet_scan_copy.SetName("delta_scan");
+ 	return parquet_scan_copy;
+ }
+ 
+diff --git a/src/functions/delta_transaction_utils/idempotency_helpers.cpp b/src/functions/delta_transaction_utils/idempotency_helpers.cpp
+index 4a5558f..0f5896d 100644
+--- a/src/functions/delta_transaction_utils/idempotency_helpers.cpp
++++ b/src/functions/delta_transaction_utils/idempotency_helpers.cpp
+@@ -91,7 +91,7 @@ static unique_ptr<FunctionData> DeltaGetTransactionVersionBind(ClientContext &co
+ 	names.emplace_back("version");
+ 
+ 	// TODO: support catalog.schema.table format
+-	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, path);
++	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, Identifier(path));
+ 	auto lookup_result = Catalog::GetEntry(context, "", "", lookup, OnEntryNotFound::RETURN_NULL);
+ 	if (lookup_result.get()) {
+ 		res->delta_table_entry = lookup_result->Cast<DeltaTableEntry>();
+@@ -113,7 +113,7 @@ static unique_ptr<FunctionData> DeltaSetTransactionVersionBind(ClientContext &co
+ 	res->expected_version = input.inputs[3];
+ 
+ 	// TODO: support catalog.schema.table format
+-	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, path);
++	EntryLookupInfo lookup(CatalogType::TABLE_ENTRY, Identifier(path));
+ 	auto lookup_result = Catalog::GetEntry(context, "", "", lookup, OnEntryNotFound::RETURN_NULL);
+ 	if (lookup_result.get()) {
+ 		res->delta_table_entry = lookup_result->Cast<DeltaTableEntry>();
+diff --git a/src/functions/expression_functions.cpp b/src/functions/expression_functions.cpp
+index 5ad22f5..1227c33 100644
+--- a/src/functions/expression_functions.cpp
++++ b/src/functions/expression_functions.cpp
+@@ -46,7 +46,7 @@ static void GetDeltaTestExpression(DataChunk &input, ExpressionState &state, Vec
+ 
+ ScalarFunctionSet DeltaFunctions::GetExpressionFunction(ExtensionLoader &loader) {
+ 	ScalarFunctionSet result;
+-	result.name = "get_delta_test_expression";
++	result.SetName("get_delta_test_expression");
+ 
+ 	ScalarFunction getvar({}, LogicalType::LIST(LogicalType::VARCHAR), GetDeltaTestExpression, nullptr, nullptr);
+ 	result.AddFunction(getvar);
+diff --git a/src/functions/metadata_functions.cpp b/src/functions/metadata_functions.cpp
+index ccb794b..8a0f7f3 100644
+--- a/src/functions/metadata_functions.cpp
++++ b/src/functions/metadata_functions.cpp
+@@ -43,7 +43,7 @@ void MetadataFunctionExecute(ClientContext &context, TableFunctionInput &data_p,
+ 	output.SetCardinality(count);
+ }
+ 
+-BaseMetadataFunction::BaseMetadataFunction(string name_p, table_function_bind_t bind)
++BaseMetadataFunction::BaseMetadataFunction(Identifier name_p, table_function_bind_t bind)
+     : TableFunction(std::move(name_p), {LogicalType::VARCHAR}, MetadataFunctionExecute, bind, MetadataFunctionInit) {
+ }
+ 
+diff --git a/src/functions/util_functions.cpp b/src/functions/util_functions.cpp
+index a4da240..987ae3f 100644
+--- a/src/functions/util_functions.cpp
++++ b/src/functions/util_functions.cpp
+@@ -33,7 +33,7 @@ static void GetWriteDataFunction(DataChunk &input, ExpressionState &state, Vecto
+ 
+ ScalarFunctionSet DeltaFunctions::GetWriteFileFunction(ExtensionLoader &loader) {
+ 	ScalarFunctionSet result;
+-	result.name = "write_blob";
++	result.SetName("write_blob");
+ 
+ 	ScalarFunction write_file({LogicalType::VARCHAR, LogicalType::BLOB}, {LogicalType::BOOLEAN}, GetWriteDataFunction,
+ 	                          nullptr, nullptr);
+diff --git a/src/include/delta_functions.hpp b/src/include/delta_functions.hpp
+index 120e539..155728d 100644
+--- a/src/include/delta_functions.hpp
++++ b/src/include/delta_functions.hpp
+@@ -15,7 +15,7 @@ class ExtensionLoader;
+ 
+ class BaseMetadataFunction : public TableFunction {
+ public:
+-	BaseMetadataFunction(string name, table_function_bind_t bind);
++	BaseMetadataFunction(Identifier name, table_function_bind_t bind);
+ };
+ 
+ class DeltaFileListFunction : public BaseMetadataFunction {
+diff --git a/src/include/functions/delta_scan/delta_multi_file_list.hpp b/src/include/functions/delta_scan/delta_multi_file_list.hpp
+index 8667be4..3d51ff7 100644
+--- a/src/include/functions/delta_scan/delta_multi_file_list.hpp
++++ b/src/include/functions/delta_scan/delta_multi_file_list.hpp
+@@ -37,7 +37,7 @@ struct DeltaFileMetaData {
+ 	idx_t cardinality = DConstants::INVALID_INDEX;
+ 	ffi::KernelBoolSlice selection_vector = {nullptr, 0};
+ 
+-	case_insensitive_map_t<Value> partition_map;
++	identifier_map_t<Value> partition_map;
+ 
+ 	unique_ptr<vector<unique_ptr<ParsedExpression>>> transform_expression;
+ };
+@@ -99,13 +99,13 @@ public:
+ 
+ 	//! MultiFileList API
+ public:
+-	void Bind(vector<LogicalType> &return_types, vector<string> &names);
++	void Bind(vector<LogicalType> &return_types, vector<Identifier> &names);
+ 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+ 	                                                MultiFilePushdownInfo &info,
+ 	                                                vector<unique_ptr<Expression>> &filters) const override;
+ 
+ 	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-	                                                const vector<string> &names, const vector<LogicalType> &types,
++	                                                const vector<Identifier> &names, const vector<LogicalType> &types,
+ 	                                                const vector<column_t> &column_ids,
+ 	                                                TableFilterSet &filters) const override;
+ 
+diff --git a/src/include/functions/delta_scan/delta_multi_file_reader.hpp b/src/include/functions/delta_scan/delta_multi_file_reader.hpp
+index d56b7a0..ba8db15 100644
+--- a/src/include/functions/delta_scan/delta_multi_file_reader.hpp
++++ b/src/include/functions/delta_scan/delta_multi_file_reader.hpp
+@@ -33,12 +33,12 @@ struct DeltaMultiFileReader : public MultiFileReader {
+ 
+ 	//! Override the regular parquet bind using the MultiFileReader Bind. The bind from these are what DuckDB's file
+ 	//! readers will try read
+-	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<string> &names,
++	bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types, vector<Identifier> &names,
+ 	          MultiFileReaderBindData &bind_data) override;
+ 
+ 	//! Override the Options bind
+ 	void BindOptions(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+-	                 vector<string> &names, MultiFileReaderBindData &bind_data) override;
++	                 vector<Identifier> &names, MultiFileReaderBindData &bind_data) override;
+ 
+ 	unique_ptr<MultiFileReaderGlobalState>
+ 	InitializeGlobalState(ClientContext &context, const MultiFileOptions &file_options,
+diff --git a/src/storage/delta_insert.cpp b/src/storage/delta_insert.cpp
+index c2bae88..37ab743 100644
+--- a/src/storage/delta_insert.cpp
++++ b/src/storage/delta_insert.cpp
+@@ -269,7 +269,7 @@ string DeltaInsert::GetName() const {
+ 
+ InsertionOrderPreservingMap<string> DeltaInsert::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+-	result["Table Name"] = table ? table->name : info->Base().table;
++	result["Table Name"] = table ? table->name.GetIdentifierName() : info->Base().table.GetIdentifierName();
+ 	return result;
+ }
+ 
+@@ -280,8 +280,8 @@ static optional_ptr<CopyFunctionCatalogEntry> TryGetCopyFunction(DatabaseInstanc
+ 	D_ASSERT(!name.empty());
+ 	auto &system_catalog = Catalog::GetSystemCatalog(db);
+ 	auto data = CatalogTransaction::GetSystemTransaction(db);
+-	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
+-	return schema.GetEntry(data, CatalogType::COPY_FUNCTION_ENTRY, name)->Cast<CopyFunctionCatalogEntry>();
++	auto &schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
++	return schema.GetEntry(data, CatalogType::COPY_FUNCTION_ENTRY, Identifier(name))->Cast<CopyFunctionCatalogEntry>();
+ }
+ 
+ PhysicalOperator &DeltaCatalog::PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op,
+@@ -298,7 +298,7 @@ PhysicalOperator &DeltaCatalog::PlanInsert(ClientContext &context, PhysicalPlanG
+ 	if (child_catalog_mode) {
+ 		// We need to fetch the table ourselves
+ 		CatalogEntryRetriever retriever(context);
+-		EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, default_table);
++		EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, Identifier(default_table));
+ 		auto default_table_entry =
+ 		    LookupEntry(retriever, default_schema, lookup_info, OnEntryNotFound::THROW_EXCEPTION);
+ 		table_entry = default_table_entry.entry->Cast<DeltaTableEntry>();
+@@ -341,7 +341,7 @@ PhysicalOperator &DeltaCatalog::PlanInsert(ClientContext &context, PhysicalPlanG
+ 	auto names_to_write = columns.GetColumnNames();
+ 	auto types_to_write = columns.GetColumnTypes();
+ 
+-	auto function_data = copy_fun->function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
++	auto function_data = copy_fun->function.copy_to_bind(context, bind_input, StringsToIdentifiers(names_to_write), types_to_write);
+ 
+ 	auto &insert = planner.Make<DeltaInsert>(op, *table_entry, op.column_index_map);
+ 
+@@ -371,7 +371,7 @@ PhysicalOperator &DeltaCatalog::PlanInsert(ClientContext &context, PhysicalPlanG
+ 	physical_copy_ref.return_type = CopyFunctionReturnType::WRITTEN_FILE_STATISTICS;
+ 	physical_copy_ref.write_partition_columns = true;
+ 	physical_copy_ref.children.push_back(*plan);
+-	physical_copy_ref.names = names_to_write;
++	physical_copy_ref.names = StringsToIdentifiers(names_to_write);
+ 	physical_copy_ref.expected_types = types_to_write;
+ 	physical_copy_ref.hive_file_pattern = true;
+ 
+diff --git a/src/storage/delta_schema_entry.cpp b/src/storage/delta_schema_entry.cpp
+index 9ce962d..ac160b4 100644
+--- a/src/storage/delta_schema_entry.cpp
++++ b/src/storage/delta_schema_entry.cpp
+@@ -110,17 +110,17 @@ unique_ptr<DeltaTableEntry> DeltaSchemaEntry::CreateTableEntry(ClientContext &co
+ 
+ 	// Get the names and types from the delta snapshot
+ 	vector<LogicalType> return_types;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	snapshot->Bind(return_types, names);
+ 
+ 	// TODO: forward nullability constraints
+ 
+ 	CreateTableInfo table_info;
+ 	for (idx_t i = 0; i < return_types.size(); i++) {
+-		table_info.columns.AddColumn(ColumnDefinition(names[i], return_types[i]));
++		table_info.columns.AddColumn(ColumnDefinition(Identifier(names[i]), return_types[i]));
+ 	}
+-	table_info.table =
+-	    !delta_catalog.internal_table_name.empty() ? delta_catalog.internal_table_name : catalog.GetName();
++	table_info.table = !delta_catalog.internal_table_name.empty() ? Identifier(delta_catalog.internal_table_name)
++	                                                               : catalog.GetName();
+ 
+ 	// Copy over constraints to table info TODO: these are incompatible currently
+ 	// table_info.constraints = snapshot->not_null_constraints;}
+diff --git a/src/storage/delta_table_entry.cpp b/src/storage/delta_table_entry.cpp
+index ac50afb..1831d36 100644
+--- a/src/storage/delta_table_entry.cpp
++++ b/src/storage/delta_table_entry.cpp
+@@ -36,7 +36,7 @@ TableFunction DeltaTableEntry::GetScanFunctionInternal(ClientContext &context, u
+ 	auto &system_catalog = Catalog::GetSystemCatalog(db);
+ 
+ 	auto data = CatalogTransaction::GetSystemTransaction(db);
+-	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
++	auto &schema = system_catalog.GetSchema(data, Identifier::DefaultSchema());
+ 	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, "delta_scan");
+ 	if (!catalog_entry) {
+ 		throw InvalidInputException("Function with name \"%s\" not found in ExtensionLoader::GetTableFunction", name);
+@@ -64,13 +64,13 @@ TableFunction DeltaTableEntry::GetScanFunctionInternal(ClientContext &context, u
+ 	}
+ 
+ 	function_info->snapshot = this->snapshot;
+-	function_info->table_name = delta_catalog.GetName();
++	function_info->table_name = delta_catalog.GetName().GetIdentifierName();
+ 	delta_scan_function.function_info = std::move(function_info);
+ 
+ 	vector<Value> inputs = {delta_catalog.GetDBPath()};
+ 	named_parameter_map_t param_map;
+ 	vector<LogicalType> return_types;
+-	vector<string> names;
++	vector<Identifier> names;
+ 	TableFunctionRef empty_ref;
+ 
+ 	// Propagate settings
+@@ -80,7 +80,9 @@ TableFunction DeltaTableEntry::GetScanFunctionInternal(ClientContext &context, u
+ 	TableFunctionBindInput bind_input(inputs, param_map, return_types, names, nullptr, nullptr, delta_scan_function,
+ 	                                  empty_ref);
+ 
+-	auto result = delta_scan_function.bind(context, bind_input, return_types, names);
++	vector<string> bind_names;
++	auto result = delta_scan_function.bind(context, bind_input, return_types, bind_names);
++	names = StringsToIdentifiers(bind_names);
+ 	bind_data = std::move(result);
+ 
+ 	return delta_scan_function;
+@@ -90,7 +92,7 @@ case_insensitive_map_t<vector<NestedNotNullConstraint>> DeltaTableEntry::GetNotN
+ 	case_insensitive_map_t<vector<NestedNotNullConstraint>> result;
+ 	for (auto &constraint : snapshot->GetNestedNotNullConstraints()) {
+ 		auto &col = GetColumn(constraint.index);
+-		auto &item = result[col.Name()];
++		auto &item = result[col.Name().GetIdentifierName()];
+ 		item.push_back(constraint);
+ 	}
+ 	return result;

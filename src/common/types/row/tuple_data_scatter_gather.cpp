@@ -114,7 +114,7 @@ void TupleDataCollection::ComputeHeapSizes(TupleDataChunkState &chunk_state, con
 	std::fill_n(heap_sizes, append_count, 0);
 
 	for (idx_t col_idx = 0; col_idx < new_chunk.ColumnCount(); col_idx++) {
-		auto &source_v = new_chunk.data[col_idx];
+		const auto &source_v = new_chunk.data[col_idx];
 		auto &source_format = chunk_state.vector_data[col_idx];
 		ComputeHeapSizes(chunk_state.heap_sizes, source_v, source_format, append_sel, append_count);
 	}

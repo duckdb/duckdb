@@ -1,0 +1,25 @@
+# name: test/sql/storage_version/storage_version_bump.test
+# description: Test if storage version bumping works
+# group: [storage_version]
+
+statement ok
+ATTACH '{TEST_DIR}/v1_5_2_0.db' as db (STORAGE_VERSION 'v1.5.0');
+
+statement ok
+CREATE TABLE db.tbl AS SELECT 52 answer;
+
+restart
+
+# bump storge version to 2.0.0
+statement ok
+ATTACH '{TEST_DIR}/v1_5_2_0.db' as db (STORAGE_VERSION 'v2.0.0');
+
+statement ok
+CREATE TABLE db.tbl2 AS SELECT 52 answer;
+
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/v1_5_2_0.db' as db;
+
+

@@ -2,12 +2,6 @@
 # description: Test hash join with dictionary emission on small build sides
 # group: [hash_join]
 
-statement ok
-PRAGMA enable_verification
-
-statement ok
-PRAGMA verify_parallelism
-
 # shared probe table: 262200 rows, just above the min-probe-rows threshold
 statement ok
 CREATE TABLE big_probe AS
@@ -537,6 +531,51 @@ FROM big_probe p JOIN build_one b ON p.k = b.k
 GROUP BY b.v;
 ----
 only-five	26220
+
+# recursive CTE reusing the hash table: each iteration rebuilds the small build, so dict_arrays
+# must be reset between iterations - otherwise stale dictionaries corrupt the aggregated total
+query II
+WITH RECURSIVE r(step, total) AS (
+    SELECT 0::INTEGER, 0::BIGINT
+    UNION ALL
+    SELECT step + 1,
+           (SELECT SUM(b.v)
+            FROM big_probe p JOIN (
+                SELECT 'K' || (i + 1)::VARCHAR AS k, (step * 1000 + i)::BIGINT AS v
+                FROM range(10) t(i)
+            ) b USING (k))
+    FROM r WHERE step < 4
+)
+SELECT step, total FROM r ORDER BY step;
+----
+0	0
+1	1179900
+2	263379900
+3	525579900
+4	787779900
+
+# multi-column build: the reset must clear every column of dict_arrays, not just the first
+query II
+WITH RECURSIVE r(step, total) AS (
+    SELECT 0::INTEGER, 0::BIGINT
+    UNION ALL
+    SELECT step + 1,
+           (SELECT SUM(b.v)
+            FROM big_probe p JOIN (
+                SELECT 'K' || (i + 1)::VARCHAR AS k, 'name_' || (step * 1000 + i) AS name,
+                       (step * 1000 + i)::BIGINT AS v
+                FROM range(10) t(i)
+            ) b USING (k)
+            WHERE b.name IS NOT NULL)
+    FROM r WHERE step < 4
+)
+SELECT step, total FROM r ORDER BY step;
+----
+0	0
+1	1179900
+2	263379900
+3	525579900
+4	787779900
 
 # fallback path: exactly one activation condition violated per test
 

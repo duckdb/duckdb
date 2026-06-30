@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/storage/statistics/variant_stats.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/types/variant.hpp"
@@ -48,6 +56,11 @@ public:
 	DUCKDB_API static BaseStatistics CreateUnknown(LogicalType type);
 	DUCKDB_API static BaseStatistics CreateEmpty(LogicalType type);
 	DUCKDB_API static BaseStatistics CreateShredded(const LogicalType &shredded_type);
+	//! Propagate statistics through a cast to VARIANT - builds fully-shredded VARIANT statistics describing
+	//! a (possibly nested) non-variant value of `source_type` with statistics `child_stats`.
+	//! Returns nullptr when the type can not be represented as a single consistent shredding.
+	DUCKDB_API static unique_ptr<BaseStatistics> StatisticsPropagateToVariant(const LogicalType &source_type,
+	                                                                          const BaseStatistics &child_stats);
 
 public:
 	//! Stats related to the 'unshredded' column, which holds all data that doesn't fit in the structure of the shredded
@@ -94,7 +107,8 @@ public:
 	DUCKDB_API static child_list_t<Value> ToStruct(const BaseStatistics &stats);
 
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
-	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
+	DUCKDB_API static void Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel,
+	                              idx_t count);
 	DUCKDB_API static void Copy(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static unique_ptr<BaseStatistics> PushdownExtract(const BaseStatistics &stats,
 	                                                             const StorageIndex &index);

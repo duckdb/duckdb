@@ -114,7 +114,7 @@ SELECT * FROM histogram_values(booleans, b::INTEGER)
 0	75
 1	25
 
-mode skip
+mode skip instable
 
 # FIXME: booleans do not work yet because of quantile turning any unsupported type into VARCHAR
 query II

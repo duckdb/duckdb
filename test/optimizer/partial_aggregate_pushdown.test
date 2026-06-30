@@ -1,0 +1,348 @@
+# name: test/optimizer/partial_aggregate_pushdown.test
+# description: Test partial aggregate pushdown below joins
+# group: [optimizer]
+
+statement ok
+CREATE TABLE fact AS SELECT
+  i % 1000 AS dim_key,
+  (i * 17) % 100 AS measure
+FROM range(100000) _(i);
+
+statement ok
+CREATE TABLE dim AS SELECT
+  i AS dim_key,
+  (i % 7)  AS d_a,
+  (i % 11) AS d_b,
+  (i % 13) AS d_c,
+  (i % 17) AS d_d
+FROM range(1000) _(i);
+
+statement ok
+ANALYZE;
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query I
+SELECT round(sum(s)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+4950000
+
+query I
+SELECT count(*) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+1000
+
+statement ok
+RESET disabled_optimizers
+
+query I
+SELECT round(sum(s)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+4950000
+
+query I
+SELECT count(*) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+1000
+
+# The optimization fires and combines exported aggregate states.
+query II
+EXPLAIN
+SELECT d_a, d_b, d_c, d_d, sum(measure)
+FROM fact JOIN dim USING (dim_key)
+GROUP BY d_a, d_b, d_c, d_d
+----
+physical_plan	<REGEX>:.*combine_aggr.*
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query I
+SELECT round(sum(s)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY ROLLUP(d_a, d_b, d_c, d_d)
+)
+----
+24750000
+
+statement ok
+RESET disabled_optimizers
+
+query I
+SELECT round(sum(s)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY ROLLUP(d_a, d_b, d_c, d_d)
+)
+----
+24750000
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query I
+SELECT round(sum(avg_m)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, avg(measure)::DOUBLE AS avg_m
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+49500
+
+statement ok
+RESET disabled_optimizers
+
+query I
+SELECT round(sum(avg_m)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, avg(measure)::DOUBLE AS avg_m
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+49500
+
+# COUNT_STAR is not pushable through this path.
+query I
+SELECT count(*) FROM fact JOIN dim USING (dim_key) WHERE d_a = 3
+----
+14300
+
+query I
+SELECT count(*) FROM duckdb_optimizers() WHERE name = 'partial_aggregate_pushdown'
+----
+1
+
+statement ok
+CREATE TABLE pap_fact AS
+SELECT
+	i % 1200 AS k,
+	i % 5 AS subgrp,
+	CASE WHEN i % 37 = 0 THEN NULL ELSE ((i * 17) % 1000) - 500 END AS v,
+	CASE WHEN i % 29 = 0 THEN NULL ELSE ((i * 13) % 200) END AS w
+FROM range(240000) t(i)
+
+statement ok
+CREATE TABLE pap_dim AS
+SELECT
+	i AS k,
+	i % 7 AS d1,
+	i % 11 AS d2,
+	i % 13 AS d3,
+	i % 17 AS d4,
+	'base_' || (i % 19)::VARCHAR AS label
+FROM range(1200) t(i)
+UNION ALL
+SELECT
+	i AS k,
+	i % 7 AS d1,
+	i % 11 AS d2,
+	i % 13 AS d3,
+	i % 17 AS d4,
+	'dup_' || (i % 19)::VARCHAR AS label
+FROM range(0, 1200, 9) t(i)
+UNION ALL
+SELECT
+	NULL AS k,
+	99 AS d1,
+	99 AS d2,
+	99 AS d3,
+	99 AS d4,
+	'null_key' AS label
+
+statement ok
+ANALYZE
+
+# Stress: duplicate dimension rows, NULL aggregate inputs, four dimension
+# groups, and one extra lower aggregate-side group.
+statement ok
+CREATE TEMP TABLE pap_enabled AS
+SELECT d1, d2, d3, d4, subgrp,
+       sum(v) AS sum_v,
+       count(v) AS count_v,
+       min(v) AS min_v,
+       max(v) AS max_v,
+       avg(w)::DOUBLE AS avg_w
+FROM pap_fact JOIN pap_dim USING (k)
+GROUP BY d1, d2, d3, d4, subgrp
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+statement ok
+CREATE TEMP TABLE pap_disabled AS
+SELECT d1, d2, d3, d4, subgrp,
+       sum(v) AS sum_v,
+       count(v) AS count_v,
+       min(v) AS min_v,
+       max(v) AS max_v,
+       avg(w)::DOUBLE AS avg_w
+FROM pap_fact JOIN pap_dim USING (k)
+GROUP BY d1, d2, d3, d4, subgrp
+
+query I
+SELECT count(*) FROM (
+	SELECT * FROM pap_enabled
+	EXCEPT ALL
+	SELECT * FROM pap_disabled
+)
+----
+0
+
+query I
+SELECT count(*) FROM (
+	SELECT * FROM pap_disabled
+	EXCEPT ALL
+	SELECT * FROM pap_enabled
+)
+----
+0
+
+statement ok
+RESET disabled_optimizers
+
+query II
+EXPLAIN SELECT d1, d2, d3, d4, subgrp,
+       sum(v), count(v), min(v), max(v), avg(w)::DOUBLE
+FROM pap_fact JOIN pap_dim USING (k)
+GROUP BY d1, d2, d3, d4, subgrp
+----
+physical_plan	<REGEX>:.*combine_aggr.*
+
+# ROLLUP/GROUPING SETS should preserve upper grouping-set indices while still
+# using partial aggregate states.
+statement ok
+CREATE TEMP TABLE pap_rollup_enabled AS
+SELECT d1, d2, d3, d4,
+       sum(v) AS sum_v,
+       count(v) AS count_v,
+       min(v) AS min_v,
+       max(v) AS max_v,
+       avg(w)::DOUBLE AS avg_w
+FROM pap_fact JOIN pap_dim USING (k)
+GROUP BY ROLLUP(d1, d2, d3, d4)
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+statement ok
+CREATE TEMP TABLE pap_rollup_disabled AS
+SELECT d1, d2, d3, d4,
+       sum(v) AS sum_v,
+       count(v) AS count_v,
+       min(v) AS min_v,
+       max(v) AS max_v,
+       avg(w)::DOUBLE AS avg_w
+FROM pap_fact JOIN pap_dim USING (k)
+GROUP BY ROLLUP(d1, d2, d3, d4)
+
+query I
+SELECT count(*) FROM (
+	SELECT * FROM pap_rollup_enabled
+	EXCEPT ALL
+	SELECT * FROM pap_rollup_disabled
+)
+----
+0
+
+query I
+SELECT count(*) FROM (
+	SELECT * FROM pap_rollup_disabled
+	EXCEPT ALL
+	SELECT * FROM pap_rollup_enabled
+)
+----
+0
+
+statement ok
+RESET disabled_optimizers
+
+query II
+EXPLAIN SELECT d1, d2, d3, d4,
+       sum(v), count(v), min(v), max(v), avg(w)::DOUBLE
+FROM pap_fact JOIN pap_dim USING (k)
+GROUP BY ROLLUP(d1, d2, d3, d4)
+----
+physical_plan	<REGEX>:.*combine_aggr.*
+
+# Highly selective dimension-side filters, COUNT(*), FILTER, and DISTINCT are
+# intentionally excluded or guarded. These execution checks make sure those
+# shapes remain semantically stable even when the optimizer is enabled.
+statement ok
+CREATE TEMP TABLE pap_excluded_enabled AS
+SELECT 'selective' AS q, sum(v)::DOUBLE AS x
+FROM pap_fact JOIN pap_dim USING (k)
+WHERE d1 = 3 AND d2 = 4
+GROUP BY d1, d2, d3, d4
+UNION ALL
+SELECT 'count_star' AS q, count(*)::DOUBLE AS x
+FROM pap_fact JOIN pap_dim USING (k)
+GROUP BY d1, d2, d3, d4
+UNION ALL
+SELECT 'filter' AS q, sum(v) FILTER (WHERE v > 0)::DOUBLE AS x
+FROM pap_fact JOIN pap_dim USING (k)
+GROUP BY d1, d2, d3, d4
+UNION ALL
+SELECT 'distinct' AS q, sum(DISTINCT v)::DOUBLE AS x
+FROM pap_fact JOIN pap_dim USING (k)
+GROUP BY d1, d2, d3, d4
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+statement ok
+CREATE TEMP TABLE pap_excluded_disabled AS
+SELECT 'selective' AS q, sum(v)::DOUBLE AS x
+FROM pap_fact JOIN pap_dim USING (k)
+WHERE d1 = 3 AND d2 = 4
+GROUP BY d1, d2, d3, d4
+UNION ALL
+SELECT 'count_star' AS q, count(*)::DOUBLE AS x
+FROM pap_fact JOIN pap_dim USING (k)
+GROUP BY d1, d2, d3, d4
+UNION ALL
+SELECT 'filter' AS q, sum(v) FILTER (WHERE v > 0)::DOUBLE AS x
+FROM pap_fact JOIN pap_dim USING (k)
+GROUP BY d1, d2, d3, d4
+UNION ALL
+SELECT 'distinct' AS q, sum(DISTINCT v)::DOUBLE AS x
+FROM pap_fact JOIN pap_dim USING (k)
+GROUP BY d1, d2, d3, d4
+
+query I
+SELECT count(*) FROM (
+	SELECT * FROM pap_excluded_enabled
+	EXCEPT ALL
+	SELECT * FROM pap_excluded_disabled
+)
+----
+0
+
+query I
+SELECT count(*) FROM (
+	SELECT * FROM pap_excluded_disabled
+	EXCEPT ALL
+	SELECT * FROM pap_excluded_enabled
+)
+----
+0
+
+statement ok
+RESET disabled_optimizers

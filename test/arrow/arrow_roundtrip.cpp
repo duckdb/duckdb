@@ -89,6 +89,14 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	TestArrowRoundtrip("SELECT * FROM test_all_types()", false, true);
 }
 
+TEST_CASE("Test arrow NULL value roundtrip", "[arrow]") {
+	// null types
+	TestArrowRoundtrip("SELECT NULL");
+	TestArrowRoundtrip("SELECT [NULL, NULL]");
+	TestArrowRoundtrip("SELECT {'x': NULL, 'y': NULL}");
+	TestArrowRoundtrip("SELECT [{'x': NULL, 'y': NULL}, {'x': NULL, 'y': NULL}]");
+}
+
 TEST_CASE("Test Arrow fixed-size binary format parsing", "[arrow]") {
 	// Verify that GetTypeFromFormat correctly parses the size from "w:NN" format strings.
 	// Regression test for duckdb/duckdb-wasm#2199: format.find(':') would match colons
@@ -206,6 +214,43 @@ TEST_CASE("Test Arrow UNION type roundtrip", "[arrow]") {
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl3", false));
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl3", true));
 }
+
+// Regression for duckdb#22444: under arrow_lossless_conversion a BOOLEAN child of a
+// nested type is declared as arrow.bool8 (byte-packed) in the schema, so its data must
+// be byte-packed too. Nested BOOLEAN children used to be written bit-packed, so every
+// row past the first read back wrong.
+TEST_CASE("Test Arrow nested BOOLEAN roundtrip", "[arrow]") {
+	// BOOLEAN inside each container type.
+	TestArrowRoundtrip("SELECT {'b': (i % 2 = 0)}::STRUCT(b BOOLEAN) AS s FROM range(64) tbl(i)", false, true);
+	TestArrowRoundtrip("SELECT [(i % 2 = 0), (i % 3 = 0)]::BOOLEAN[] AS l FROM range(64) tbl(i)", false, true);
+	TestArrowRoundtrip("SELECT [(i % 2 = 0), true, (i % 3 = 0)]::BOOLEAN[3] AS a FROM range(64) tbl(i)", false, true);
+	TestArrowRoundtrip("SELECT MAP {'x': (i % 2 = 0), 'y': (i % 3 = 0)} AS m FROM range(64) tbl(i)", false, true);
+	TestArrowRoundtrip("SELECT union_value(b := (i % 2 = 0))::UNION(i INT, b BOOLEAN) AS u FROM range(64) tbl(i)",
+	                   false, true);
+
+	// BOOLEAN as a MAP key: keys used to collapse to one byte value, crashing ingest with
+	// a duplicate-key error.
+	TestArrowRoundtrip("SELECT MAP {true: i, false: i + 1} AS m FROM range(64) tbl(i)", false, true);
+
+	// Two levels of nesting.
+	TestArrowRoundtrip("SELECT [{'b': (i % 2 = 0)}]::STRUCT(b BOOLEAN)[] AS l FROM range(64) tbl(i)", false, true);
+}
+
+// A constant BOOLEAN child reaches the arrow.bool8 conversion with a non-identity
+// selection (every row maps to the single value); it must still expand to that value
+// for every row.
+TEST_CASE("Test Arrow constant BOOLEAN child roundtrip", "[arrow]") {
+	TestArrowRoundtrip("SELECT {'c': true, 'v': (i % 2 = 0)}::STRUCT(c BOOLEAN, v BOOLEAN) AS s FROM range(64) tbl(i)",
+	                   false, true);
+	TestArrowRoundtrip("SELECT [true, true]::BOOLEAN[] AS l FROM range(64) tbl(i)", false, true);
+}
+
+// A LIST(BOOLEAN) whose total child element count per chunk exceeds STANDARD_VECTOR_SIZE:
+// guards the converted vector being sized to the actual child count rather than 2048.
+TEST_CASE("Test Arrow large LIST(BOOLEAN) roundtrip", "[arrow]") {
+	TestArrowRoundtrip("SELECT [(i % 2 = 0), (i % 3 = 0), (i % 5 = 0)]::BOOLEAN[] AS l FROM range(10000) tbl(i)", false,
+	                   true);
+}
 TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	// UUID
 	TestArrowRoundtrip("SELECT '2d89ebe6-1e13-47e5-803a-b81c87660b66'::UUID str FROM range(5) tbl(i)", false, true);
@@ -283,11 +328,6 @@ TEST_CASE("Test TPCH arrow roundtrip", "[arrow][.]") {
 	DBConfig config;
 	DuckDB db(nullptr, &config);
 	Connection con(db);
-
-#if defined(D_ASSERT_IS_ENABLED) && !defined(DEBUG)
-	return; // Skip in relassert, takes too long
-#endif
-
 	if (!db.ExtensionIsLoaded("tpch")) {
 		return;
 	}

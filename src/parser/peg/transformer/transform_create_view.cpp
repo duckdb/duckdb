@@ -4,8 +4,8 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 
 namespace duckdb {
-unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode> node, const string &name,
-                                                            vector<string> &aliases,
+unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode> node, const Identifier &name,
+                                                            vector<Identifier> &aliases,
                                                             vector<unique_ptr<ParsedExpression>> &key_targets) {
 	if (node->type != QueryNodeType::SET_OPERATION_NODE) {
 		return node;
@@ -29,15 +29,12 @@ unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode
 	auto owned_set_node = unique_ptr_cast<QueryNode, SetOperationNode>(std::move(node));
 	recursive_node->union_all = owned_set_node->setop_all;
 
-	if (!owned_set_node->modifiers.empty()) {
-		for (auto &modifier : owned_set_node->modifiers) {
-			if (modifier->type == ResultModifierType::LIMIT_MODIFIER ||
-			    modifier->type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
-				throw ParserException("LIMIT or OFFSET in a recursive query is not allowed");
-			}
-			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
-				throw ParserException("ORDER BY in a recursive query is not allowed");
-			}
+	for (auto &modifier : owned_set_node->modifiers) {
+		if (modifier->type == ResultModifierType::LIMIT_MODIFIER) {
+			throw ParserException("LIMIT or OFFSET in a recursive query is not allowed");
+		}
+		if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+			throw ParserException("ORDER BY in a recursive query is not allowed");
 		}
 	}
 	if (owned_set_node->children.size() == 2) {
@@ -69,13 +66,14 @@ void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, 
 
 	cte_info->query_node = std::move(inner_node);
 
-	outer_select->cte_map.map.insert(info->view_name, std::move(cte_info));
+	outer_select->cte_map.map.insert(info->GetViewName(), std::move(cte_info));
 
 	for (const auto &column : info->aliases) {
 		outer_select->select_list.push_back(make_uniq<ColumnRefExpression>(column));
 	}
 
-	auto table_description = TableDescription(info->catalog, info->schema, info->view_name);
+	auto table_description = TableDescription(
+	    QualifiedName(info->GetQualifiedName().Catalog(), info->GetQualifiedName().Schema(), info->GetViewName()));
 	outer_select->from_table = make_uniq<BaseTableRef>(table_description);
 
 	auto outer_select_statement = make_uniq<SelectStatement>();
@@ -85,32 +83,25 @@ void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, 
 
 void PEGTransformerFactory::ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> &node) {
 	vector<unique_ptr<ParsedExpression>> empty_key_targets;
-	auto result_node = ToRecursiveCTE(std::move(node), info->view_name, info->aliases, empty_key_targets);
+	auto result_node = ToRecursiveCTE(std::move(node), info->GetViewName(), info->aliases, empty_key_targets);
 	WrapRecursiveView(info, std::move(result_node));
 }
 
-unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer,
-                                                                           ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto if_not_exists = list_pr.Child<OptionalParseResult>(2).HasResult();
-	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(3));
-	auto &insert_column_list_pr = list_pr.Child<OptionalParseResult>(4);
-	vector<string> column_list;
-	if (insert_column_list_pr.HasResult()) {
-		column_list = transformer.Transform<vector<string>>(insert_column_list_pr.GetResult());
-	}
+unique_ptr<CreateStatement>
+PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, const optional<bool> &create_recursive,
+                                               const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
+                                               const optional<vector<string>> &insert_column_list,
+                                               optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list,
+                                               unique_ptr<SelectStatement> select_statement_internal) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateViewInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	info->catalog = qualified_name.catalog;
-	info->schema = qualified_name.schema;
-	info->view_name = qualified_name.name;
-	info->aliases = column_list;
-	auto &with_list_opt = list_pr.Child<OptionalParseResult>(5);
-	if (with_list_opt.HasResult()) {
-		auto options_expr =
-		    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(with_list_opt.GetResult());
-		for (auto &option_entry : options_expr) {
+	info->SetQualifiedName(qualified_name);
+	if (insert_column_list) {
+		info->aliases = StringsToIdentifiers(*insert_column_list);
+	}
+	if (with_list) {
+		for (auto &option_entry : *with_list) {
 			if (!StringUtil::CIEquals(option_entry.first, "defer_binding")) {
 				throw ParserException("Only DEFER_BINDING is currently supported as option for CREATE VIEW");
 			}
@@ -127,15 +118,18 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateViewStmt(PEGTr
 			}
 		}
 	}
-	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(7));
-	if (list_pr.Child<OptionalParseResult>(0).HasResult()) {
-		ConvertToRecursiveView(info, select_statement->node);
+	if (create_recursive) {
+		ConvertToRecursiveView(info, select_statement_internal->node);
 	} else {
-		info->query = std::move(select_statement);
+		info->query = std::move(select_statement_internal);
 	}
 	transformer.PivotEntryCheck("view");
 	result->info = std::move(info);
 	return result;
+}
+
+bool PEGTransformerFactory::TransformCreateRecursive(PEGTransformer &transformer) {
+	return true;
 }
 
 } // namespace duckdb

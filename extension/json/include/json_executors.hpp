@@ -28,8 +28,8 @@ public:
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator->GetYYAlc();
 
-		auto &inputs = args.data[0];
-		UnaryExecutor::Execute<string_t, T>(inputs, result, args.size(), [&](string_t input) -> optional<T> {
+		const auto &inputs = args.data[0];
+		UnaryExecutor::Execute<string_t, T>(inputs, result, [&](string_t input) -> optional<T> {
 			auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
 			return fun(doc->root, alc, result);
 		});
@@ -41,16 +41,16 @@ public:
 	template <class T, bool SET_NULL_IF_NOT_FOUND = true>
 	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		const auto &info = func_expr.bind_info->Cast<JSONReadFunctionData>();
+		const auto &info = func_expr.BindInfo()->Cast<JSONReadFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator->GetYYAlc();
 
-		auto &inputs = args.data[0];
+		const auto &inputs = args.data[0];
 		if (info.constant) { // Constant path
 			const char *ptr = info.ptr;
 			const idx_t &len = info.len;
 			if (info.path_type == JSONCommon::JSONPathType::REGULAR) {
-				UnaryExecutor::Execute<string_t, T>(inputs, result, args.size(), [&](string_t input) -> optional<T> {
+				UnaryExecutor::Execute<string_t, T>(inputs, result, [&](string_t input) -> optional<T> {
 					auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
 					auto val = JSONCommon::GetUnsafe(doc->root, ptr, len);
 					if (SET_NULL_IF_NOT_FOUND && !val) {
@@ -62,7 +62,7 @@ public:
 			} else {
 				D_ASSERT(info.path_type == JSONCommon::JSONPathType::WILDCARD);
 				vector<yyjson_val *> vals;
-				UnaryExecutor::Execute<string_t, list_entry_t>(inputs, result, args.size(), [&](string_t input) {
+				UnaryExecutor::Execute<string_t, list_entry_t>(inputs, result, [&](string_t input) {
 					vals.clear();
 
 					auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
@@ -80,7 +80,7 @@ public:
 					for (idx_t i = 0; i < vals.size(); i++) {
 						auto &val = vals[i];
 						D_ASSERT(val != nullptr); // Wildcard extract shouldn't give back nullptrs
-						auto fun_result = fun(val, alc, result);
+						auto fun_result = fun(val, alc, child_entry);
 						if (fun_result.has_value()) {
 							child_vals[current_size + i] = fun_result.value();
 						} else {
@@ -120,7 +120,7 @@ public:
 	template <class T, bool SET_NULL_IF_NOT_FOUND = true>
 	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result, const json_function_t<T> fun) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		const auto &info = func_expr.bind_info->Cast<JSONReadManyFunctionData>();
+		const auto &info = func_expr.BindInfo()->Cast<JSONReadManyFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator->GetYYAlc();
 		D_ASSERT(info.ptrs.size() == info.lens.size());
@@ -131,7 +131,7 @@ public:
 
 		UnifiedVectorFormat input_data;
 		auto &input_vector = args.data[0];
-		input_vector.ToUnifiedFormat(count, input_data);
+		input_vector.ToUnifiedFormat(input_data);
 		auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 		ListVector::Reserve(result, list_size);

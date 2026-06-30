@@ -36,6 +36,11 @@ public:
 	static void BitUnpack(ByteBuffer &src, bitpacking_width_t &bitpack_pos, T *dst, idx_t count,
 	                      const bitpacking_width_t width) {
 		CheckWidth(width);
+		if (width > sizeof(T) * BITPACK_DLEN) {
+			throw IOException("The width (%d) of the bitpacked data exceeds the maximum width (%d) for "
+			                  "the target type, the file might be corrupted.",
+			                  width, sizeof(T) * BITPACK_DLEN);
+		}
 		const auto mask = BITPACK_MASKS[width];
 		src.available(count * width / BITPACK_DLEN); // check if buffer has enough space available once
 		if (bitpack_pos == 0 && count >= BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
@@ -88,6 +93,12 @@ public:
 	template <class T>
 	static void BitUnpackAlignedInternal(ByteBuffer &src, T *dst, const idx_t count, const bitpacking_width_t width) {
 		D_ASSERT(count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
+		if (width > sizeof(T) * BITPACK_DLEN) {
+			throw IOException("The width (%d) of the bitpacked data exceeds the maximum width (%d) for "
+			                  "the target type, the file might be corrupted.",
+			                  width, sizeof(T) * BITPACK_DLEN);
+		}
+
 		if (cast_pointer_to_uint64(src.ptr) % sizeof(T) == 0) {
 			// Fast path: aligned
 			BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(dst), src.ptr, count, width);

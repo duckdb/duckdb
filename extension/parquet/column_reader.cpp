@@ -1,6 +1,7 @@
 #include "column_reader.hpp"
 
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
 
 #include <algorithm>
 #include <memory>
@@ -160,7 +161,7 @@ unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vect
 }
 
 uint64_t ColumnReader::TotalCompressedSize() {
-	if (!chunk) {
+	if (IsSkipped()) {
 		return 0;
 	}
 
@@ -171,8 +172,9 @@ uint64_t ColumnReader::TotalCompressedSize() {
 // apparently is not the first page of the data. Therefore we determine the address of the first page by taking the
 // minimum of all page offsets.
 idx_t ColumnReader::FileOffset() const {
-	if (!chunk) {
-		throw std::runtime_error("FileOffset called on ColumnReader with no chunk");
+	if (IsSkipped()) {
+		//! This column reader is skipped
+		return 0;
 	}
 	auto min_offset = NumericLimits<idx_t>::Maximum();
 	if (chunk->meta_data.__isset.dictionary_page_offset) {
@@ -203,6 +205,19 @@ idx_t ColumnReader::FileOffset() const {
 
 idx_t ColumnReader::GroupRowsAvailable() {
 	return group_rows_available;
+}
+
+bool ColumnReader::AllValuesAreNull() const {
+	// for repeated columns the null_count/num_values statistics do not reliably indicate that every value is NULL
+	// (num_values counts leaf slots, not rows), so we only trust this for non-repeated columns
+	if (MaxRepeat() != 0 || !chunk || !chunk->__isset.meta_data) {
+		return false;
+	}
+	auto &chunk_meta = chunk->meta_data;
+	if (!chunk_meta.__isset.statistics || !chunk_meta.statistics.__isset.null_count) {
+		return false;
+	}
+	return chunk_meta.statistics.null_count == chunk_meta.num_values;
 }
 
 void ColumnReader::PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values) {
@@ -281,7 +296,8 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const Ta
 		}
 		auto stats =
 		    ParquetStatisticsUtils::TransformParquetStatistics(Type(), Schema(), *page_stats, /*can_have_nan=*/true);
-		if (stats && filter->CheckStatistics(*stats) == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+		auto &expr_filter = filter->Cast<ExpressionFilter>();
+		if (stats && expr_filter.CheckStatistics(*stats) == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			page_is_filtered_out = true;
 		}
 	}
@@ -326,7 +342,8 @@ void ColumnReader::ReadData(const data_ptr_t buffer, const uint32_t buffer_size,
 	}
 }
 
-void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state) {
+void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state,
+                               idx_t rows_to_skip) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
 	page_is_filtered_out = false;
@@ -348,12 +365,23 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	}
 	// some basic sanity check
 	if (page_hdr.compressed_page_size < 0 || page_hdr.uncompressed_page_size < 0) {
-		throw InvalidInputException("Failed to read file \"%s\": Page sizes can't be < 0", Reader().GetFileName());
+		throw InvalidInputException("Failed to read file \"%s\": Page sizes must be >= 0", Reader().GetFileName());
 	}
 
 	if (PageIsFilteredOut(page_hdr, filter)) {
-		// this page has been filtered out so we don't need to read it
 		return;
+	}
+
+	if (rows_to_skip > 0 && (page_hdr.type == PageType::DATA_PAGE || page_hdr.type == PageType::DATA_PAGE_V2)) {
+		bool is_v1 = page_hdr.type == PageType::DATA_PAGE;
+		idx_t page_num_values =
+		    NumericCast<idx_t>(is_v1 ? page_hdr.data_page_header.num_values : page_hdr.data_page_header_v2.num_values);
+		if (rows_to_skip >= page_num_values) {
+			trans.Skip(page_hdr.compressed_page_size);
+			page_is_filtered_out = true;
+			page_rows_available = page_num_values;
+			return;
+		}
 	}
 
 	switch (page_hdr.type) {
@@ -394,7 +422,10 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	}
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
-			throw InvalidInputException("Failed to read file \"%s\": Page size mismatch", Reader().GetFileName());
+			const auto &file_name = Reader().GetFileName();
+			throw InvalidInputException(
+			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
+			    page_hdr.uncompressed_page_size, page_hdr.compressed_page_size);
 		}
 		uncompressed = true;
 	}
@@ -403,12 +434,28 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		return;
 	}
 
-	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
-	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
-	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
-	if (uncompressed_bytes > page_hdr.uncompressed_page_size) {
+	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed.
+	// the page sizes are already validated >= 0 by the caller, but the level lengths are not, so guard
+	// them here. with all four i32 header fields non-negative, the sum below cannot overflow once widened
+	// to uint64_t, and the uint64_t casts in the comparisons below are safe.
+	if (page_hdr.data_page_header_v2.repetition_levels_byte_length < 0 ||
+	    page_hdr.data_page_header_v2.definition_levels_byte_length < 0) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": header inconsistency, repetition_levels_byte_length and "
+		    "definition_levels_byte_length must be >= 0",
+		    Reader().GetFileName());
+	}
+	uint64_t uncompressed_bytes = static_cast<uint64_t>(page_hdr.data_page_header_v2.repetition_levels_byte_length) +
+	                              page_hdr.data_page_header_v2.definition_levels_byte_length;
+	if (uncompressed_bytes > static_cast<uint64_t>(page_hdr.uncompressed_page_size)) {
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, uncompressed_page_size needs to be larger than "
+		    "repetition_levels_byte_length + definition_levels_byte_length",
+		    Reader().GetFileName());
+	}
+	if (static_cast<uint64_t>(page_hdr.compressed_page_size) < uncompressed_bytes) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is smaller than "
 		    "repetition_levels_byte_length + definition_levels_byte_length",
 		    Reader().GetFileName());
 	}
@@ -416,6 +463,13 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	ReadData(block->ptr, uncompressed_bytes, page_hdr.type);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
+
+	if (compressed_bytes == 0 && static_cast<uint64_t>(page_hdr.uncompressed_page_size) > uncompressed_bytes) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is too small for the "
+		    "declared value region",
+		    Reader().GetFileName());
+	}
 
 	if (compressed_bytes > 0) {
 		ResizeableBuffer compressed_buffer;
@@ -453,7 +507,10 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (compressed_page_size != NumericCast<uint32_t>(page_hdr.uncompressed_page_size)) {
-			throw std::runtime_error("Page size mismatch");
+			const auto &file_name = Reader().GetFileName();
+			throw InvalidInputException(
+			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
+			    page_hdr.uncompressed_page_size, compressed_page_size);
 		}
 		ReadData(block->ptr, compressed_page_size, page_hdr.type);
 		return;
@@ -634,11 +691,11 @@ void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out) {
 }
 
 idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter,
-                                    optional_ptr<TableFilterState> filter_state) {
+                                    optional_ptr<TableFilterState> filter_state, idx_t rows_to_skip) {
 	int8_t page_ordinal = 0;
 	while (page_rows_available == 0) {
 		aad_crypto_metadata.page_ordinal = page_ordinal;
-		PrepareRead(filter, filter_state);
+		PrepareRead(filter, filter_state, rows_to_skip);
 		page_ordinal++;
 	}
 	return MinValue<idx_t>(MinValue<idx_t>(max_read, page_rows_available), STANDARD_VECTOR_SIZE);
@@ -674,8 +731,8 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
                             idx_t result_offset) {
 	// flatten the result vector if required
 	if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
-		result.Flatten(result_offset);
-		result.Resize(result_offset, STANDARD_VECTOR_SIZE);
+		result.Flatten();
+		result.Reserve(STANDARD_VECTOR_SIZE);
 	}
 	if (page_is_filtered_out) {
 		// page is filtered out - emit NULL for any rows
@@ -688,6 +745,20 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 	}
 	// read the defines/repeats
 	const auto all_valid = PrepareRead(read_now, define_out, repeat_out, result_offset);
+	if (!IsRoot() && AllValuesAreNull()) {
+		// every value is NULL: the parent still needs the define/repeat levels we just read, but there are no
+		// values to decode - set the result to NULL and skip the encoding read
+		if (result_offset == 0) {
+			// we own the entire vector - emit a constant NULL
+			ConstantVector::SetNull(result, count_t(read_now));
+		} else {
+			for (idx_t i = 0; i < read_now; i++) {
+				FlatVector::SetNull(result, result_offset + i, true);
+			}
+		}
+		page_rows_available -= read_now;
+		return;
+	}
 	// read the data according to the encoder
 	const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
 	switch (encoding) {
@@ -747,6 +818,12 @@ idx_t ColumnReader::ReadInternal(ColumnReaderInput &input, Vector &result) {
 }
 
 idx_t ColumnReader::Read(ColumnReaderInput &input, Vector &result) {
+	if (IsRoot() && AllValuesAreNull()) {
+		// a top-level column that is entirely NULL - emit a constant NULL vector without reading anything.
+		// (nested columns are handled in ReadData: they still need to emit their define/repeat levels)
+		ConstantVector::SetNull(result, count_t(input.num_values));
+		return input.num_values;
+	}
 	BeginRead(input.define_out, input.repeat_out);
 	return ReadInternal(input, result);
 }
@@ -754,7 +831,7 @@ idx_t ColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 void ColumnReader::Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
                           idx_t approved_tuple_count) {
 	auto &num_values = input.num_values;
-	if (SupportsDirectSelect() && approved_tuple_count < num_values) {
+	if (SupportsDirectSelect() && approved_tuple_count < num_values && !(IsRoot() && AllValuesAreNull())) {
 		DirectSelect(input, result, sel, approved_tuple_count);
 		return;
 	}
@@ -791,7 +868,7 @@ void ColumnReader::Filter(ColumnReaderInput &input, Vector &result, const TableF
                           TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count,
                           bool is_first_filter) {
 	auto &num_values = input.num_values;
-	if (SupportsDirectFilter() && is_first_filter) {
+	if (SupportsDirectFilter() && is_first_filter && !(IsRoot() && AllValuesAreNull())) {
 		DirectFilter(input, result, filter, filter_state, sel, approved_tuple_count);
 		return;
 	}
@@ -835,9 +912,7 @@ void ColumnReader::DirectFilter(ColumnReaderInput &input, Vector &result, const 
 void ColumnReader::ApplyFilter(Vector &v, const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
                                SelectionVector &sel, idx_t &approved_tuple_count) {
 	FlatVector::SetSize(v, count_t(scan_count));
-	UnifiedVectorFormat vdata;
-	v.ToUnifiedFormat(scan_count, vdata);
-	ColumnSegment::FilterSelection(sel, v, vdata, filter, filter_state, scan_count, approved_tuple_count);
+	ColumnSegment::FilterSelection(sel, v, filter_state, scan_count, approved_tuple_count);
 }
 
 void ColumnReader::Skip(idx_t num_values) {
@@ -860,7 +935,7 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 	BeginRead(nullptr, nullptr);
 
 	while (to_skip > 0) {
-		auto skip_now = ReadPageHeaders(to_skip);
+		auto skip_now = ReadPageHeaders(to_skip, nullptr, nullptr, to_skip);
 		if (page_is_filtered_out) {
 			// the page has been filtered out entirely - skip
 			page_rows_available -= skip_now;

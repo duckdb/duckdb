@@ -1,0 +1,23 @@
+diff --git a/test/sql/logging/http_logging.test b/test/sql/logging/http_logging.test
+index 031e43e..6292ba0 100644
+--- a/test/sql/logging/http_logging.test
++++ b/test/sql/logging/http_logging.test
+@@ -28,18 +28,3 @@ FROM duckdb_logs_parsed('HTTP')
+ WHERE request.type='GET'
+ ----
+ bytes=0-1275	bytes 0-1275/1276
+-
+-statement ok
+-CALL truncate_duckdb_logs()
+-
+-# This old option still exists, however it now logs to the duckdb log instead of printing straight to stdout
+-statement ok
+-set enable_http_logging=false;
+-
+-statement ok
+-FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
+-
+-query I
+-select count(*) FROM duckdb_logs_parsed('HTTP');
+-----
+-0

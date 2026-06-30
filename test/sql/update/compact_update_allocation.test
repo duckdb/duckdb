@@ -1,0 +1,321 @@
+# name: test/sql/update/compact_update_allocation.test
+# description: Compact UpdateInfo allocation - memory footprint and correctness
+# group: [update]
+
+# disable auto-checkpoint so updates stay in-memory
+statement ok
+SET wal_autocheckpoint='1TB'
+
+statement ok
+SET threads=1
+
+# --- Memory footprint test ---
+# Create a table with multiple row groups (each ~122K rows with vectors of 2048)
+statement ok
+CREATE TABLE mem_test (a INTEGER, b INTEGER, c INTEGER, d VARCHAR)
+
+statement ok
+INSERT INTO mem_test SELECT i, i%500, i%200, 'val_' || (i%100)::VARCHAR FROM range(500000) t(i)
+
+# Record memory before updates
+statement ok
+CREATE TABLE mem_before AS SELECT memory_usage_bytes FROM duckdb_memory() WHERE tag = 'TRANSACTION'
+
+# Perform sparse updates: 1 row per vector across many vectors
+# This is the worst case for old allocation (12KB per vector, regardless of update count)
+statement ok
+UPDATE mem_test SET a = a + 1 WHERE a % 2048 = 0
+
+# Check memory after sparse updates
+# With compact allocation, updating ~244 rows (one per vector) should use much less than
+# 244 * 12KB = ~2.9MB that the old code would use for root UpdateInfo alone
+# We allow up to 1.5MB due to bump allocator block overhead
+statement ok
+CREATE TABLE mem_after AS SELECT memory_usage_bytes FROM duckdb_memory() WHERE tag = 'TRANSACTION'
+
+query I
+SELECT CASE WHEN (a.memory_usage_bytes - b.memory_usage_bytes) < 1500000
+            THEN 'ok'
+            ELSE error(concat('expected < 1.5MB increase, got ',
+                             (a.memory_usage_bytes - b.memory_usage_bytes), ' bytes'))
+       END
+FROM mem_after a, mem_before b
+----
+ok
+
+statement ok
+DROP TABLE mem_before
+
+statement ok
+DROP TABLE mem_after
+
+# --- Correctness: single row update ---
+statement ok
+CREATE TABLE single_update (i INTEGER NOT NULL, v VARCHAR)
+
+statement ok
+INSERT INTO single_update SELECT range, 'hello' FROM range(10000)
+
+statement ok
+UPDATE single_update SET v = 'updated' WHERE i = 5000
+
+query II
+SELECT i, v FROM single_update WHERE i = 5000
+----
+5000	updated
+
+query I
+SELECT count(*) FROM single_update WHERE v = 'hello'
+----
+9999
+
+# --- Correctness: multiple updates to same vector (triggers re-allocation) ---
+statement ok
+UPDATE single_update SET v = 'second' WHERE i = 5001
+
+statement ok
+UPDATE single_update SET v = 'third' WHERE i = 5002
+
+statement ok
+UPDATE single_update SET v = 'fourth' WHERE i = 5003
+
+statement ok
+UPDATE single_update SET v = 'fifth' WHERE i = 5004
+
+statement ok
+UPDATE single_update SET v = 'sixth' WHERE i = 5005
+
+statement ok
+UPDATE single_update SET v = 'seventh' WHERE i = 5006
+
+statement ok
+UPDATE single_update SET v = 'eighth' WHERE i = 5007
+
+statement ok
+UPDATE single_update SET v = 'ninth' WHERE i = 5008
+
+# Now we have 9 updates in the same vector (5000-5008 are all in one 2048-row vector)
+# This should have triggered re-allocation from capacity 8 to 16
+query I
+SELECT count(*) FROM single_update WHERE v NOT IN ('hello')
+----
+9
+
+query II
+SELECT i, v FROM single_update WHERE i BETWEEN 5000 AND 5008 ORDER BY i
+----
+5000	updated
+5001	second
+5002	third
+5003	fourth
+5004	fifth
+5005	sixth
+5006	seventh
+5007	eighth
+5008	ninth
+
+# --- Correctness: update all rows in a vector (capacity grows to 2048) ---
+statement ok
+CREATE TABLE full_vector_update (i INTEGER NOT NULL)
+
+statement ok
+INSERT INTO full_vector_update SELECT range FROM range(4096)
+
+# Update all rows in the first vector (rows 0-2047)
+statement ok
+UPDATE full_vector_update SET i = i + 10000 WHERE i < 2048
+
+query I
+SELECT MIN(i) FROM full_vector_update
+----
+2048
+
+query I
+SELECT MAX(i) FROM full_vector_update WHERE i >= 10000
+----
+12047
+
+query I
+SELECT count(*) FROM full_vector_update WHERE i >= 10000
+----
+2048
+
+# --- Correctness: updates survive checkpoint ---
+statement ok
+CREATE TABLE checkpoint_test (a INTEGER, b VARCHAR)
+
+statement ok
+INSERT INTO checkpoint_test SELECT range, 'original' FROM range(10000)
+
+statement ok
+UPDATE checkpoint_test SET b = 'modified' WHERE a % 1000 = 0
+
+query I
+SELECT count(*) FROM checkpoint_test WHERE b = 'modified'
+----
+10
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT count(*) FROM checkpoint_test WHERE b = 'modified'
+----
+10
+
+query I
+SELECT count(*) FROM checkpoint_test WHERE b = 'original'
+----
+9990
+
+# --- Correctness: rollback with compact allocation ---
+statement ok
+CREATE TABLE rollback_test (i INTEGER NOT NULL)
+
+statement ok
+INSERT INTO rollback_test SELECT range FROM range(5000)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+UPDATE rollback_test SET i = i + 99999 WHERE i = 2500
+
+query I
+SELECT i FROM rollback_test WHERE i > 99000
+----
+102499
+
+statement ok
+ROLLBACK
+
+query I
+SELECT i FROM rollback_test WHERE i = 2500
+----
+2500
+
+query I
+SELECT count(*) FROM rollback_test WHERE i > 99000
+----
+0
+
+# --- Correctness: concurrent transactions with compact allocation ---
+statement ok
+CREATE TABLE concurrent_test (i INTEGER NOT NULL)
+
+statement ok
+INSERT INTO concurrent_test SELECT range FROM range(5000)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+UPDATE concurrent_test SET i = i + 100000 WHERE i = 1000
+
+# In the same transaction, read the updated value
+query I
+SELECT i FROM concurrent_test WHERE i > 99000
+----
+101000
+
+statement ok
+COMMIT
+
+query I
+SELECT i FROM concurrent_test WHERE i > 99000
+----
+101000
+
+# --- Correctness: many scattered updates across different vectors ---
+statement ok
+CREATE TABLE scatter_test (a BIGINT NOT NULL, b DOUBLE, c VARCHAR)
+
+statement ok
+INSERT INTO scatter_test SELECT range, range * 1.5, 'str_' || range::VARCHAR FROM range(100000)
+
+# Update 1 row in each of ~49 different vectors (every 2048th row)
+statement ok
+UPDATE scatter_test SET b = -1.0, c = 'UPDATED' WHERE a % 2048 = 1024
+
+query I
+SELECT count(*) FROM scatter_test WHERE c = 'UPDATED'
+----
+49
+
+query I
+SELECT count(*) FROM scatter_test WHERE b = -1.0
+----
+49
+
+# All non-updated rows should be intact
+query I
+SELECT count(*) FROM scatter_test WHERE b != -1.0 AND b = a * 1.5
+----
+99951
+
+# --- Correctness: NULL handling with compact updates ---
+statement ok
+CREATE TABLE null_test (i INTEGER)
+
+statement ok
+INSERT INTO null_test SELECT range FROM range(5000)
+
+# Update some rows to NULL
+statement ok
+UPDATE null_test SET i = NULL WHERE i % 500 = 0
+
+query I
+SELECT count(*) FROM null_test WHERE i IS NULL
+----
+10
+
+# Update NULL rows back to a value
+statement ok
+UPDATE null_test SET i = -1 WHERE i IS NULL
+
+query I
+SELECT count(*) FROM null_test WHERE i IS NULL
+----
+0
+
+query I
+SELECT count(*) FROM null_test WHERE i = -1
+----
+10
+
+# --- Correctness: different types ---
+statement ok
+CREATE TABLE types_test (
+    ti TINYINT,
+    si SMALLINT,
+    bi BIGINT,
+    f FLOAT,
+    d DOUBLE,
+    v VARCHAR,
+    bl BOOLEAN
+)
+
+statement ok
+INSERT INTO types_test
+SELECT (range % 127)::TINYINT,
+       (range % 32000)::SMALLINT,
+       range::BIGINT,
+       range::FLOAT,
+       range::DOUBLE,
+       range::VARCHAR,
+       (range % 2 = 0)
+FROM range(5000)
+
+statement ok
+UPDATE types_test SET ti = -1, si = -1, bi = -1, f = -1.0, d = -1.0, v = 'X', bl = true WHERE bi = 2500
+
+query IIIIITI
+SELECT ti, si, bi, f, d, v, bl FROM types_test WHERE bi = -1
+----
+-1	-1	-1	-1.0	-1.0	X	true
+
+# Verify other rows are not affected
+query I
+SELECT count(*) FROM types_test WHERE bi >= 0
+----
+4999

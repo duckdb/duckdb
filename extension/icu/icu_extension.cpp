@@ -105,8 +105,8 @@ struct IcuBindData : public FunctionData {
 	static string EncodeFunctionName(const string &collation) {
 		return FUNCTION_PREFIX + collation;
 	}
-	static string DecodeFunctionName(const string &fname) {
-		return fname.substr(FUNCTION_PREFIX.size());
+	static string DecodeFunctionName(const Identifier &fname) {
+		return fname.GetIdentifierName().substr(FUNCTION_PREFIX.size());
 	}
 };
 
@@ -131,12 +131,12 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 	const char HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<IcuBindData>();
+	auto &info = func_expr.BindInfo()->Cast<IcuBindData>();
 	auto &collator = *info.collator;
 
 	duckdb::unique_ptr<char[]> buffer;
 	int32_t buffer_size = 0;
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
 		// create a sort key from the string
 		const auto string_size = idx_t(ICUGetSortKey(collator, input, buffer, buffer_size));
 		// convert the sort key to hexadecimal
@@ -200,7 +200,8 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(BindScalarFunctionInput &
 
 static ScalarFunction GetICUCollateFunction(const string &collation, const string &tag) {
 	string fname = IcuBindData::EncodeFunctionName(collation);
-	ScalarFunction result(fname, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
+	ScalarFunction result(Identifier(fname), {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction,
+	                      ICUCollateBind);
 	//! collation tag is added into the Function extra info
 	result.extra_info = tag;
 	result.SetSerializeCallback(IcuBindData::Serialize);
@@ -225,7 +226,7 @@ unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
 		return tz;
 	}
 
-	//	Map UTC±NN00 to Etc/GMT±N
+	//	Map UTC±NN00 to Etc/UTC±N
 	do {
 		if (tz_str.size() <= 4) {
 			break;
@@ -234,34 +235,63 @@ unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
 			break;
 		}
 
-		//	Parse the offset, allowing single digits
 		idx_t pos = 3;
-		int hh, mm, ss;
-		if (!Timestamp::TryParseUTCOffset(tz_str.data(), pos, tz_str.size(), hh, mm, ss, false)) {
-			break;
-		}
-		if (pos < tz_str.size() || mm || ss) {
-			break;
-		}
-
+		const auto utc = tz_str[pos++];
 		// Invert the sign (UTC and Etc use opposite sign conventions)
 		// https://en.wikipedia.org/wiki/Tz_database#Area
-		hh = -hh;
-
-		// Build the mapped timezone string with single digit hour offsets
-		string mapped = "Etc/GMT";
-		if (hh < 0) {
-			mapped += "-";
-			hh = -hh;
+		auto sign = utc;
+		if (utc == '+') {
+			sign = '-';
+			;
+		} else if (utc == '-') {
+			sign = '+';
 		} else {
-			mapped += "+";
+			break;
 		}
-		if (hh >= 10) {
-			mapped += UnsafeNumericCast<char>('0' + hh / 10);
-			hh %= 10;
-		}
-		mapped += UnsafeNumericCast<char>('0' + hh);
 
+		// Collect remaining characters (digits and colons)
+		string remainder;
+		for (; pos < tz_str.size(); ++pos) {
+			const auto ch = tz_str[pos];
+			if (ch != ':' && !StringUtil::CharacterIsDigit(ch)) {
+				break;
+			}
+			remainder += ch;
+		}
+		if (pos < tz_str.size()) {
+			break;
+		}
+
+		// Step 1: Strip leading zeros
+		idx_t start = 0;
+		while (start < remainder.size() && remainder[start] == '0') {
+			++start;
+		}
+		remainder = remainder.substr(start);
+
+		// Step 2: Parse hours based on whether colon is present
+		string hours_str;
+		auto colon_idx = remainder.find(':');
+		if (colon_idx != string::npos) {
+			// Has colon: split by colon, part before colon is hours
+			hours_str = remainder.substr(0, colon_idx);
+		} else if (remainder.size() <= 2) {
+			// 1-2 digits: entire string is hours
+			hours_str = remainder;
+		} else {
+			// No colon, 3+ digits: HHMM format, last 2 are minutes, rest are hours
+			hours_str = remainder.substr(0, remainder.size() - 2);
+		}
+
+		// Build the mapped timezone string
+		string mapped = "Etc/GMT";
+		if (hours_str.empty()) {
+			// Zero offset
+			mapped += "+0";
+		} else {
+			mapped += sign;
+			mapped += hours_str;
+		}
 		// Final sanity check
 		if (tz = GetKnownTimeZone(mapped)) {
 			tz_str = mapped;
@@ -382,7 +412,6 @@ static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data
 
 		++index;
 	}
-	output.SetCardinality(index);
 }
 
 static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parameter) {
@@ -442,7 +471,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 		}
 		collation = StringUtil::Lower(collation);
 
-		CreateCollationInfo info(collation, GetICUCollateFunction(collation, ""), false, false);
+		CreateCollationInfo info(Identifier(collation), GetICUCollateFunction(collation, ""), false, false);
 		loader.RegisterCollation(info);
 	}
 

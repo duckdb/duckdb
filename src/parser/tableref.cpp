@@ -8,14 +8,14 @@
 namespace duckdb {
 
 string TableRef::BaseToString(string result) const {
-	vector<string> column_name_alias;
+	vector<Identifier> column_name_alias;
 	return BaseToString(std::move(result), column_name_alias);
 }
 
-string TableRef::AliasToString(const vector<string> &column_name_alias) const {
+string TableRef::AliasToString(const vector<Identifier> &column_name_alias) const {
 	string result;
 	if (!alias.empty()) {
-		result += StringUtil::Format(" AS %s", SQLIdentifier(alias));
+		result += StringUtil::Format(" AS %s", alias);
 	}
 	if (!column_name_alias.empty()) {
 		D_ASSERT(!alias.empty());
@@ -43,7 +43,7 @@ string TableRef::SampleToString() const {
 	return result;
 }
 
-string TableRef::BaseToString(string result, const vector<string> &column_name_alias) const {
+string TableRef::BaseToString(string result, const vector<Identifier> &column_name_alias) const {
 	result += AliasToString(column_name_alias);
 	result += SampleToString();
 	return result;

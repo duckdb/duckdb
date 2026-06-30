@@ -52,7 +52,7 @@ void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 
 void ColumnLifetimeAnalyzer::ExtractColumnBindings(const Expression &expr, vector<ColumnBinding> &bindings) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-	    expr, [&](const BoundColumnRefExpression &bound_ref) { bindings.push_back(bound_ref.binding); });
+	    expr, [&](const BoundColumnRefExpression &bound_ref) { bindings.push_back(bound_ref.Binding()); });
 }
 
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
@@ -196,7 +196,9 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 }
 
 void ColumnLifetimeAnalyzer::Verify(LogicalOperator &op) {
-#ifdef DEBUG
+	if (!Settings::Get<DebugVerificationProjectionSetting>(optimizer.context)) {
+		return;
+	}
 	if (everything_referenced) {
 		return;
 	}
@@ -216,7 +218,6 @@ void ColumnLifetimeAnalyzer::Verify(LogicalOperator &op) {
 	default:
 		break;
 	}
-#endif
 }
 
 void ColumnLifetimeAnalyzer::AddVerificationProjection(unique_ptr<LogicalOperator> &child) {
@@ -267,7 +268,7 @@ void ColumnLifetimeAnalyzer::AddVerificationProjection(unique_ptr<LogicalOperato
 
 unique_ptr<Expression> ColumnLifetimeAnalyzer::VisitReplace(BoundColumnRefExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
-	column_references.insert(expr.binding);
+	column_references.insert(expr.Binding());
 	return nullptr;
 }
 

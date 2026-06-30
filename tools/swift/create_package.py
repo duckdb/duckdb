@@ -39,6 +39,9 @@ import package_build
 source_list = [os.path.relpath(x, target_dir) if os.path.isabs(x) else x for x in source_list]
 include_list = [os.path.join(src_dir_name, x) for x in include_list]
 define_list = ['DUCKDB_EXTENSION_{}_LINKED'.format(ext.upper()) for ext in extensions]
+# filter out jemalloc
+source_list = [x for x in source_list if not x.startswith("duckdb/third_party/jemalloc/")]
+include_list = [x for x in include_list if not x.startswith("duckdb/third_party/jemalloc/")]
 # write Package.swift
 os.chdir(base_dir)
 

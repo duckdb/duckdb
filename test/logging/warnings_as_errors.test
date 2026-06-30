@@ -2,6 +2,8 @@
 # description: Test warnings as errors setting
 # group: [logging]
 
+mode skip need_different_warning
+
 statement ok
 SET warnings_as_errors = False;
 

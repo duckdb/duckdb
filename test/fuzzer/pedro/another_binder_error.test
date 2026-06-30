@@ -2,7 +2,7 @@
 # description: Issue #4978 (issue 48): Another Binder Issue
 # group: [pedro]
 
-mode skip
+mode skip flaky
 
 statement error
 SELECT avg(0) c0, (SELECT 0 OFFSET c0);

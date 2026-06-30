@@ -1,0 +1,87 @@
+# name: test/sql/aggregate/aggregate_state_export/approx_quantile_export_state.test
+# description: Test EXPORT_STATE for approx_quantile - the t-digest state is explicitly (de)serialized
+# group: [aggregate_state_export]
+
+# empty input exports a NULL state
+query I
+SELECT approx_quantile(i, 0.5) EXPORT_STATE FROM (SELECT 1 AS i WHERE false) t;
+----
+NULL
+
+query I
+SELECT finalize(approx_quantile(i, 0.5) EXPORT_STATE) FROM (SELECT 1 AS i WHERE false) t;
+----
+NULL
+
+# the state round-trips exactly - the finalized result equals the direct result
+query I
+SELECT finalize(approx_quantile(i, 0.5) EXPORT_STATE) = approx_quantile(i, 0.5) FROM range(1, 10001) t(i);
+----
+true
+
+query I
+SELECT finalize(approx_quantile(i, [0.1, 0.5, 0.9]) EXPORT_STATE) = approx_quantile(i, [0.1, 0.5, 0.9]) FROM range(1, 10001) t(i);
+----
+true
+
+query I
+SELECT finalize(approx_quantile(d, 0.5) EXPORT_STATE) = approx_quantile(d, 0.5) FROM (SELECT range / 100.0 AS d FROM range(1000)) t;
+----
+true
+
+query I
+SELECT finalize(approx_quantile(ts, 0.5) EXPORT_STATE) = approx_quantile(ts, 0.5) FROM (SELECT TIMESTAMP '2000-01-01' + INTERVAL (range) DAY AS ts FROM range(100)) t;
+----
+true
+
+query I
+SELECT finalize(approx_quantile(d, 0.5) EXPORT_STATE) = approx_quantile(d, 0.5) FROM (VALUES (1.5::DECIMAL(4,1)), (4.5::DECIMAL(4,1)), (2.5::DECIMAL(4,1))) t(d);
+----
+true
+
+# the state stores the value count, the exact min/max and the t-digest centroids
+query III
+SELECT s."count", s."min", s."max" FROM (
+    SELECT (approx_quantile(i, 0.5) EXPORT_STATE)::STRUCT("count" UBIGINT, "min" DOUBLE, "max" DOUBLE, centroids STRUCT(mean DOUBLE, weight DOUBLE)[]) s
+    FROM range(1, 101) t(i)
+) t;
+----
+100	1.0	100.0
+
+# grouped aggregation matches the regular aggregate
+statement ok
+CREATE TABLE dummy AS SELECT range % 10 g, range d FROM range(1000);
+
+query II nosort grouped_approx
+SELECT g, approx_quantile(d, 0.5) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort grouped_approx
+SELECT g, finalize(approx_quantile(d, 0.5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# we can persist the state and finalize later
+statement ok
+CREATE TABLE approx_state AS SELECT g, approx_quantile(d, 0.5) EXPORT_STATE s FROM dummy GROUP BY g;
+
+query II nosort grouped_approx
+SELECT g, finalize(s) FROM approx_state ORDER BY g;
+----
+
+# combine_aggr across groups, including a NULL state
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT approx_quantile(i, 0.5) EXPORT_STATE AS s FROM range(1, 500) t(i)
+    UNION ALL
+    SELECT approx_quantile(i, 0.5) EXPORT_STATE AS s FROM range(500, 1001) t(i)
+    UNION ALL
+    SELECT approx_quantile(i, 0.5) EXPORT_STATE AS s FROM (SELECT 1 AS i WHERE false) t
+) t;
+----
+500
+
+# combine two states
+query I
+SELECT finalize(combine(approx_quantile(i, 0.5) EXPORT_STATE, (SELECT approx_quantile(j, 0.5) EXPORT_STATE FROM range(500, 1001) s(j)))) FROM range(1, 500) t(i);
+----
+500

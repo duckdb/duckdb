@@ -7,15 +7,14 @@
 namespace duckdb {
 
 template <class T, class RETURN_TYPE, bool FIND_NULLS>
-idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target, Vector &result, const idx_t count) {
+idx_t ListSearchSimpleOp(const Vector &input_list, const Vector &list_child, const Vector &target, Vector &result,
+                         const idx_t count) {
 	// If the return type is not a bool, return the position
 	const auto return_pos = std::is_same<RETURN_TYPE, int32_t>::value;
 
-	const auto input_count = ListVector::GetListSize(input_list);
-
-	const auto list_entries = input_list.Values<list_entry_t>(count);
-	const auto child_data = list_child.Values<T>(input_count);
-	const auto target_data = target.Values<T>(count);
+	const auto list_entries = input_list.Values<list_entry_t>();
+	const auto child_data = list_child.Values<T>();
+	const auto target_data = target.Values<T>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<RETURN_TYPE>(result, count);
@@ -87,7 +86,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 }
 
 template <class RETURN_TYPE, bool FIND_NULLS>
-idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_vec, Vector &result_vec,
+idx_t ListSearchNestedOp(const Vector &list_vec, const Vector &source_vec, const Vector &target_vec, Vector &result_vec,
                          const idx_t target_count) {
 	// Set up sort keys for nested types.
 	auto source_count = ListVector::GetListSize(list_vec);
@@ -95,6 +94,9 @@ idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 	Vector target_sort_key_vec(LogicalType::BLOB, target_count);
 
 	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+	// Pass explicit counts: source_vec and target_vec may have different sizes than source_count/target_count
+	// when called via dictionary expression optimization (TryExecuteDictionaryExpression uses the dictionary
+	// size as the chunk count, while the non-key arguments retain their original size).
 	CreateSortKeyHelpers::CreateSortKeyWithValidity(source_vec, source_sort_key_vec, order_modifiers, source_count);
 	CreateSortKeyHelpers::CreateSortKeyWithValidity(target_vec, target_sort_key_vec, order_modifiers, target_count);
 
@@ -107,7 +109,8 @@ idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 //! usually the "source" vector is the list child vector, but it is passed separately to enable searching nested
 //! children, for example when searching the keys of a MAP vectors.
 template <class RETURN_TYPE, bool FIND_NULLS = false>
-idx_t ListSearchOp(Vector &list_v, Vector &source_v, Vector &target_v, Vector &result_v, idx_t target_count) {
+idx_t ListSearchOp(const Vector &list_v, const Vector &source_v, const Vector &target_v, Vector &result_v,
+                   idx_t target_count) {
 	const auto type = target_v.GetType().InternalType();
 	switch (type) {
 	case PhysicalType::BOOL:

@@ -1,0 +1,24 @@
+# name: test/sql/storage/types/variant/variant_parquet_shredding_bug.test_slow
+# group: [variant]
+
+require json
+
+require parquet
+
+load {TEST_DIR}/repro_eka.db readwrite v1.5.0
+
+statement ok
+set threads=1;
+
+statement ok
+CREATE TABLE t AS
+  SELECT ('{"id":"' || md5(i::VARCHAR) || md5((i+9)::VARCHAR) || '","x":' || CASE WHEN i < 150000 THEN '"a string"' ELSE '[1,2,3]' END || '}')::JSON::VARIANT AS v
+FROM range(300000) tbl(i) ORDER BY i;
+
+statement ok
+COPY (from t) TO '__TEST_DIR__/variant.parquet' (file_size_bytes '2mb')
+
+query I
+SELECT count(*) FROM read_parquet('__TEST_DIR__/variant.parquet')
+----
+300000

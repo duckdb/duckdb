@@ -88,8 +88,8 @@ public:
 	const string &GetIndexType() const override {
 		return GetCreateInfo().index_type;
 	}
-	const string &GetIndexName() const override {
-		return GetCreateInfo().index_name;
+	const Identifier &GetIndexName() const override {
+		return GetCreateInfo().GetIndexName();
 	}
 	IndexConstraintType GetConstraintType() const override {
 		return GetCreateInfo().constraint_type;
@@ -103,7 +103,7 @@ public:
 	const vector<unique_ptr<ParsedExpression>> &GetParsedExpressions() const {
 		return GetCreateInfo().parsed_expressions;
 	}
-	const string &GetTableName() const {
+	const Identifier &GetTableName() const {
 		return GetCreateInfo().table;
 	}
 

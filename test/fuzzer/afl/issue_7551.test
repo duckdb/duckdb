@@ -3,7 +3,7 @@
 # group: [afl]
 
 # FIXME - internal exception is thrown
-mode skip
+mode skip flaky
 
 statement ok
 CREATE TABLE t0(c0 VARCHAR);

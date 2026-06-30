@@ -1,5 +1,98 @@
 [
 	{
+		"name": "variant_array_length",
+		"variants": [
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					}
+				],
+				"description": "Returns the number of elements in the variant, or `0` if not an array.",
+				"example": "variant_array_length(['duck', 'goose']::VARIANT)",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR"
+					}
+				],
+				"description": "Returns the number of elements in the array at the specified path in the variant, or `0` if not an array.",
+				"example": "variant_array_length({'a': ['duck', 'goose']}::VARIANT, 'a')",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR[]"
+					}
+				],
+				"description": "Returns the number of elements in the array for each specified path in the variant, or `0` if not an array.",
+				"example": "variant_array_length({'a': 1, 'b': ['duck', 'goose']}::VARIANT, ['a', 'b'])",
+				"categories": [
+					"variant"
+				]
+			}
+		],
+		"type": "scalar_function_set"
+	},
+	{
+		"name": "variant_exists",
+		"variants": [
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR"
+					}
+				],
+				"description": "Returns whether the specified path exists in the variant.",
+				"example": "variant_exists({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR[]"
+					}
+				],
+				"description": "Returns a boolean for each specified path, indicating whether that path exists in the variant.",
+				"example": "variant_exists({'a': 1, 'b': 2}::VARIANT, ['a', 'c'])",
+				"categories": [
+					"variant"
+				]
+			}
+		],
+		"type": "scalar_function_set"
+	},
+	{
 		"name": "variant_extract",
 		"variants": [
 			{
@@ -50,6 +143,16 @@
 		"type": "scalar_function"
 	},
 	{
+		"name": "variant_comparator",
+		"parameters": "input_variant",
+		"description": "Returns a binary sort key that orders `input_variant` according to the logical ordering of VARIANT values (used internally for comparison and ordering).",
+		"example": "variant_comparator({'a': 1, 'b': 2}::VARIANT)",
+		"categories": [
+			"variant"
+		],
+		"type": "scalar_function"
+	},
+	{
 		"name": "variant_typeof",
 		"parameters": "input_variant",
 		"description": "Returns the internal type of the `input_variant`.",
@@ -58,5 +161,58 @@
 			"variant"
 		],
 		"type": "scalar_function"
+	},
+	{
+		"name": "variant_keys",
+		"variants": [
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					}
+				],
+				"description": "Returns the keys present at the root level of the object.",
+				"example": "variant_keys({'a': { 'a': 1, 'b': 2}}::VARIANT)",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR"
+					}
+				],
+				"description": "Returns the keys present at the level of the specified path.",
+				"example": "variant_keys({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR[]"
+					}
+				],
+				"description": "Returns a list of keys present at the level of each specified path.",
+				"example": "variant_keys({'a': { 'a': 1, 'b': 2}, 'b': {'c': 3}}::VARIANT, ['a', 'b'])",
+				"categories": [
+					"variant"
+				]
+			}
+		],
+		"type": "scalar_function_set"
 	}
 ]

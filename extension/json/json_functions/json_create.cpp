@@ -4,29 +4,69 @@
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
 
 namespace duckdb {
 
-using StructNames = unordered_map<string, unique_ptr<Vector>>;
+static constexpr const char *JSON_COPY_TO_JSON_INTERNAL_NAME = "__internal_json_copy_to_json";
+
+struct StructNames {
+	void Insert(const string &name) {
+		values[name] = make_uniq<Vector>(Value(name), count_t(0ULL));
+	}
+
+	Vector &Get(const string &name, idx_t count) const {
+		auto &result = *values.at(name);
+		FlatVector::SetSize(result, count);
+		return result;
+	}
+
+	StructNames Copy() const {
+		StructNames result;
+		// Have to do this because we can't implicitly copy Vector
+		for (const auto &kv : values) {
+			// The vectors are const vectors of the key value
+			result.values[kv.first] = make_uniq<Vector>(Value(kv.first), count_t(0ULL));
+		}
+		return result;
+	}
+
+	bool Equals(const StructNames &other) const {
+		if (values.size() != other.values.size()) {
+			return false;
+		}
+		for (const auto &kv : values) {
+			if (other.values.find(kv.first) == other.values.end()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+private:
+	unordered_map<string, unique_ptr<Vector>> values;
+};
 
 struct JSONCreateFunctionData : public FunctionData {
 public:
-	explicit JSONCreateFunctionData(unordered_map<string, unique_ptr<Vector>> const_struct_names)
-	    : const_struct_names(std::move(const_struct_names)) {
+	explicit JSONCreateFunctionData(StructNames const_struct_names_p)
+	    : const_struct_names(std::move(const_struct_names_p)) {
 	}
 	unique_ptr<FunctionData> Copy() const override {
-		// Have to do this because we can't implicitly copy Vector
-		unordered_map<string, unique_ptr<Vector>> map_copy;
-		for (const auto &kv : const_struct_names) {
-			// The vectors are const vectors of the key value
-			map_copy[kv.first] = make_uniq<Vector>(Value(kv.first), count_t(STANDARD_VECTOR_SIZE));
-		}
-		return make_uniq<JSONCreateFunctionData>(std::move(map_copy));
+		return make_uniq<JSONCreateFunctionData>(const_struct_names.Copy());
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		return true;
@@ -35,6 +75,71 @@ public:
 public:
 	// Const struct name vectors live here so they don't have to be re-initialized for every DataChunk
 	StructNames const_struct_names;
+};
+
+struct JSONCopyFormatOptions {
+	optional_ptr<StrfTimeFormat> date_format;
+	optional_ptr<StrfTimeFormat> timestamp_format;
+	optional_ptr<ClientContext> context;
+	optional_ptr<const Expression> timestamptz_format_expression;
+	optional_ptr<const Expression> timestamptz_ns_format_expression;
+};
+
+struct JSONCopyToJSONFunctionData : public FunctionData {
+public:
+	JSONCopyToJSONFunctionData(StructNames const_struct_names_p, bool has_date_format_p, string date_format_string_p,
+	                           StrfTimeFormat date_format_p, bool has_timestamp_format_p,
+	                           string timestamp_format_string_p, StrfTimeFormat timestamp_format_p,
+	                           unique_ptr<Expression> timestamptz_format_expression_p,
+	                           unique_ptr<Expression> timestamptz_ns_format_expression_p)
+	    : const_struct_names(std::move(const_struct_names_p)), has_date_format(has_date_format_p),
+	      date_format_string(std::move(date_format_string_p)), date_format(std::move(date_format_p)),
+	      has_timestamp_format(has_timestamp_format_p), timestamp_format_string(std::move(timestamp_format_string_p)),
+	      timestamp_format(std::move(timestamp_format_p)),
+	      timestamptz_format_expression(std::move(timestamptz_format_expression_p)),
+	      timestamptz_ns_format_expression(std::move(timestamptz_ns_format_expression_p)) {
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<JSONCopyToJSONFunctionData>(
+		    const_struct_names.Copy(), has_date_format, date_format_string, date_format, has_timestamp_format,
+		    timestamp_format_string, timestamp_format,
+		    timestamptz_format_expression ? timestamptz_format_expression->Copy() : nullptr,
+		    timestamptz_ns_format_expression ? timestamptz_ns_format_expression->Copy() : nullptr);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<JSONCopyToJSONFunctionData>();
+		return has_date_format == other.has_date_format && has_timestamp_format == other.has_timestamp_format &&
+		       date_format_string == other.date_format_string &&
+		       timestamp_format_string == other.timestamp_format_string &&
+		       const_struct_names.Equals(other.const_struct_names);
+	}
+
+	JSONCopyFormatOptions GetFormatOptions(ClientContext &context) {
+		JSONCopyFormatOptions result;
+		result.date_format = has_date_format ? optional_ptr<StrfTimeFormat>(&date_format) : nullptr;
+		result.timestamp_format = has_timestamp_format ? optional_ptr<StrfTimeFormat>(&timestamp_format) : nullptr;
+		result.context = context;
+		result.timestamptz_format_expression = timestamptz_format_expression
+		                                           ? optional_ptr<const Expression>(timestamptz_format_expression.get())
+		                                           : nullptr;
+		result.timestamptz_ns_format_expression =
+		    timestamptz_ns_format_expression ? optional_ptr<const Expression>(timestamptz_ns_format_expression.get())
+		                                     : nullptr;
+		return result;
+	}
+
+public:
+	StructNames const_struct_names;
+	bool has_date_format;
+	string date_format_string;
+	StrfTimeFormat date_format;
+	bool has_timestamp_format;
+	string timestamp_format_string;
+	StrfTimeFormat timestamp_format;
+	unique_ptr<Expression> timestamptz_format_expression;
+	unique_ptr<Expression> timestamptz_ns_format_expression;
 };
 
 static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalType &type) {
@@ -61,7 +166,6 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTERVAL:
@@ -77,6 +181,8 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::DECIMAL:
 		return type;
+	case LogicalTypeId::VARIANT:
+		return LogicalType::JSON();
 	case LogicalTypeId::LIST:
 		return LogicalType::LIST(GetJSONType(const_struct_names, ListType::GetChildType(type)));
 	case LogicalTypeId::ARRAY:
@@ -86,22 +192,28 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	case LogicalTypeId::STRUCT: {
 		child_list_t<LogicalType> child_types;
 		for (const auto &child_type : StructType::GetChildTypes(type)) {
-			const_struct_names[child_type.first] =
-			    make_uniq<Vector>(Value(child_type.first), count_t(STANDARD_VECTOR_SIZE));
+			const_struct_names.Insert(child_type.first.GetIdentifierName());
 			child_types.emplace_back(child_type.first, GetJSONType(const_struct_names, child_type.second));
 		}
 		return LogicalType::STRUCT(child_types);
 	}
+	// A TUPLE is an unnamed struct: it is serialized as a JSON array (matching how Python serializes tuples)
+	case LogicalTypeId::TUPLE: {
+		vector<LogicalType> child_types;
+		for (const auto &child_type : StructType::GetChildTypes(type)) {
+			child_types.push_back(GetJSONType(const_struct_names, child_type.second));
+		}
+		return LogicalType::TUPLE(std::move(child_types));
+	}
 	case LogicalTypeId::MAP: {
-		return LogicalType::MAP(LogicalType::VARCHAR, GetJSONType(const_struct_names, MapType::ValueType(type)));
+		return LogicalType::MAP(MapType::KeyType(type), GetJSONType(const_struct_names, MapType::ValueType(type)));
 	}
 	case LogicalTypeId::UNION: {
 		child_list_t<LogicalType> member_types;
 		for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(type); member_idx++) {
 			auto &member_name = UnionType::GetMemberName(type, member_idx);
 			auto &member_type = UnionType::GetMemberType(type, member_idx);
-
-			const_struct_names[member_name] = make_uniq<Vector>(Value(member_name), count_t(STANDARD_VECTOR_SIZE));
+			const_struct_names.Insert(member_name.GetIdentifierName());
 			member_types.emplace_back(member_name, GetJSONType(const_struct_names, member_type));
 		}
 		return LogicalType::UNION(member_types);
@@ -114,7 +226,10 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 
 static unique_ptr<FunctionData> JSONCreateBindParams(BoundScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments, bool object) {
-	unordered_map<string, unique_ptr<Vector>> const_struct_names;
+	StructNames const_struct_names;
+	auto &bound_arguments = bound_function.GetArguments();
+	bound_arguments.clear();
+	bound_arguments.reserve(arguments.size());
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &type = arguments[i]->GetReturnType();
 		if (arguments[i]->HasParameter()) {
@@ -124,10 +239,10 @@ static unique_ptr<FunctionData> JSONCreateBindParams(BoundScalarFunction &bound_
 				throw BinderException("json_object() keys must be VARCHAR, add an explicit cast to argument \"%s\"",
 				                      arguments[i]->GetName());
 			}
-			bound_function.GetArguments().push_back(LogicalType::VARCHAR);
+			bound_arguments.push_back(LogicalType::VARCHAR);
 		} else {
 			// Value, cast to types that we can put in JSON
-			bound_function.GetArguments().push_back(GetJSONType(const_struct_names, type));
+			bound_arguments.push_back(GetJSONType(const_struct_names, type));
 		}
 	}
 	return make_uniq<JSONCreateFunctionData>(std::move(const_struct_names));
@@ -167,8 +282,8 @@ static unique_ptr<FunctionData> ArrayToJSONBind(BindScalarFunctionInput &input) 
 	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (arg_id != LogicalTypeId::LIST && arg_id != LogicalTypeId::SQLNULL) {
-		throw BinderException("array_to_json() argument type must be LIST");
+	if (arg_id != LogicalTypeId::LIST && arg_id != LogicalTypeId::ARRAY && arg_id != LogicalTypeId::SQLNULL) {
+		throw BinderException("array_to_json() argument type must be LIST or ARRAY");
 	}
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
@@ -187,6 +302,99 @@ static unique_ptr<FunctionData> RowToJSONBind(BindScalarFunctionInput &input) {
 		throw BinderException("row_to_json() argument type must be STRUCT");
 	}
 	return JSONCreateBindParams(bound_function, arguments, false);
+}
+
+static bool BindJSONCopyFormat(ClientContext &context, Expression &argument, const string &name, string &format_string,
+                               StrfTimeFormat &format) {
+	if (argument.HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+	if (!argument.IsFoldable()) {
+		throw InvalidInputException(argument, "json_copy_to_json %s format must be a constant", name);
+	}
+	auto value = ExpressionExecutor::EvaluateScalar(context, argument);
+	if (value.IsNull()) {
+		return false;
+	}
+	if (value.type().id() != LogicalTypeId::VARCHAR) {
+		throw BinderException("json_copy_to_json %s format must be VARCHAR or NULL", name);
+	}
+	format_string = StringValue::Get(value);
+	auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
+	if (!error.empty()) {
+		throw InvalidInputException(argument, "Failed to parse format specifier %s: %s", format_string, error);
+	}
+	return true;
+}
+
+static void ParseJSONCopyFormatString(const string &format_string, const string &name, StrfTimeFormat &format) {
+	auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
+	if (!error.empty()) {
+		throw InvalidInputException("Failed to parse %s format specifier %s: %s", name, format_string, error);
+	}
+}
+
+static unique_ptr<Expression> BindJSONCopyTimestampTZFormatter(ClientContext &context, const string &format_string,
+                                                               const LogicalType &type) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(make_uniq<BoundReferenceExpression>(type, 0));
+	children.push_back(make_uniq<BoundConstantExpression>(Value(format_string)));
+
+	FunctionBinder function_binder(context);
+	ErrorData error;
+	auto result =
+	    function_binder.BindScalarFunction(Identifier::DefaultSchema(), "strftime", std::move(children), error);
+	if (!result) {
+		error.Throw();
+	}
+	return result;
+}
+
+static unique_ptr<JSONCopyToJSONFunctionData>
+CreateJSONCopyToJSONFunctionData(ClientContext &context, StructNames const_struct_names, bool has_date_format,
+                                 string date_format_string, bool has_timestamp_format, string timestamp_format_string) {
+	StrfTimeFormat date_format;
+	StrfTimeFormat timestamp_format;
+	if (has_date_format) {
+		ParseJSONCopyFormatString(date_format_string, "date", date_format);
+	}
+	if (has_timestamp_format) {
+		ParseJSONCopyFormatString(timestamp_format_string, "timestamp", timestamp_format);
+	}
+
+	unique_ptr<Expression> timestamptz_format_expression;
+	unique_ptr<Expression> timestamptz_ns_format_expression;
+	if (has_timestamp_format) {
+		timestamptz_format_expression =
+		    BindJSONCopyTimestampTZFormatter(context, timestamp_format_string, LogicalType::TIMESTAMP_TZ);
+		timestamptz_ns_format_expression =
+		    BindJSONCopyTimestampTZFormatter(context, timestamp_format_string, LogicalType::TIMESTAMP_TZ_NS);
+	}
+
+	return make_uniq<JSONCopyToJSONFunctionData>(
+	    std::move(const_struct_names), has_date_format, std::move(date_format_string), std::move(date_format),
+	    has_timestamp_format, std::move(timestamp_format_string), std::move(timestamp_format),
+	    std::move(timestamptz_format_expression), std::move(timestamptz_ns_format_expression));
+}
+
+static unique_ptr<JSONCopyToJSONFunctionData> CreateJSONCopyToJSONFunctionData(ClientContext &context,
+                                                                               StructNames const_struct_names,
+                                                                               Expression &date_argument,
+                                                                               Expression &timestamp_argument) {
+	StrfTimeFormat date_format;
+	StrfTimeFormat timestamp_format;
+	string date_format_string;
+	string timestamp_format_string;
+	auto has_date_format = BindJSONCopyFormat(context, date_argument, "date", date_format_string, date_format);
+	auto has_timestamp_format =
+	    BindJSONCopyFormat(context, timestamp_argument, "timestamp", timestamp_format_string, timestamp_format);
+	return CreateJSONCopyToJSONFunctionData(context, std::move(const_struct_names), has_date_format,
+	                                        std::move(date_format_string), has_timestamp_format,
+	                                        std::move(timestamp_format_string));
+}
+
+static unique_ptr<FunctionData> JSONCopyToJSONBind(BindScalarFunctionInput &) {
+	throw BinderException("%s is for internal use only", JSON_COPY_TO_JSON_INTERNAL_NAME);
 }
 
 template <class INPUT_TYPE, class RESULT_TYPE>
@@ -261,27 +469,25 @@ inline yyjson_mut_val *CreateJSONValueFromJSON(yyjson_mut_doc *doc, const string
 
 // Forward declaration so we can recurse for nested types
 static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
-                         idx_t count);
+                         idx_t count, const JSONCopyFormatOptions &options = JSONCopyFormatOptions());
 
-static void AddKeyValuePairs(yyjson_mut_doc *doc, yyjson_mut_val *objs[], Vector &key_v, yyjson_mut_val *vals[],
+static void AddKeyValuePairs(yyjson_mut_doc *doc, yyjson_mut_val *objs[], const Vector &key_v, yyjson_mut_val *vals[],
                              idx_t count) {
-	UnifiedVectorFormat key_data;
-	key_v.ToUnifiedFormat(count, key_data);
-	auto keys = UnifiedVectorFormat::GetData<string_t>(key_data);
-
+	auto keys = key_v.Values<string_t>();
 	for (idx_t i = 0; i < count; i++) {
-		auto key_idx = key_data.sel->get_index(i);
-		if (!key_data.validity.RowIsValid(key_idx)) {
-			continue;
+		auto key_entry = keys[i];
+		if (!key_entry.IsValid()) {
+			throw InvalidInputException("JSON key cannot be NULL");
 		}
-		auto key = CreateJSONValue<string_t, string_t>::Operation(doc, keys[key_idx]);
+		auto key = CreateJSONValue<string_t, string_t>::Operation(doc, key_entry.GetValue());
 		yyjson_mut_obj_add(objs[i], key, vals[i]);
 	}
 }
 
 static void CreateKeyValuePairs(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *objs[],
-                                yyjson_mut_val *vals[], Vector &key_v, Vector &value_v, idx_t count) {
-	CreateValues(names, doc, vals, value_v, count);
+                                yyjson_mut_val *vals[], const Vector &key_v, Vector &value_v, idx_t count,
+                                const JSONCopyFormatOptions &options = JSONCopyFormatOptions()) {
+	CreateValues(names, doc, vals, value_v, count, options);
 	AddKeyValuePairs(doc, objs, key_v, vals, count);
 }
 
@@ -292,9 +498,9 @@ static void CreateValuesNull(yyjson_mut_doc *doc, yyjson_mut_val *vals[], idx_t 
 }
 
 template <class INPUT_TYPE, class TARGET_TYPE>
-static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count) {
+static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], const Vector &value_v, idx_t count) {
 	UnifiedVectorFormat value_data;
-	value_v.ToUnifiedFormat(count, value_data);
+	value_v.ToUnifiedFormat(value_data);
 	auto values = UnifiedVectorFormat::GetData<INPUT_TYPE>(value_data);
 
 	const auto type_is_json = value_v.GetType().IsJSONType();
@@ -311,9 +517,9 @@ static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 	}
 }
 
-static void CreateRawValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count) {
+static void CreateRawValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], const Vector &value_v, idx_t count) {
 	UnifiedVectorFormat value_data;
-	value_v.ToUnifiedFormat(count, value_data);
+	value_v.ToUnifiedFormat(value_data);
 	auto values = UnifiedVectorFormat::GetData<string_t>(value_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t val_idx = value_data.sel->get_index(i);
@@ -328,7 +534,7 @@ static void CreateRawValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector 
 }
 
 static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
-                               idx_t count) {
+                               idx_t count, const JSONCopyFormatOptions &options) {
 	// Structs become values, therefore we initialize vals to JSON values
 	for (idx_t i = 0; i < count; i++) {
 		vals[i] = yyjson_mut_obj(doc);
@@ -339,13 +545,13 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	// Add the key/value pairs to the values
 	auto &entries = StructVector::GetEntries(value_v);
 	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
-		auto &struct_key_v = *names.at(StructType::GetChildName(value_v.GetType(), entry_i));
+		auto &struct_key_v = names.Get(StructType::GetChildName(value_v.GetType(), entry_i).GetIdentifierName(), count);
 		auto &struct_val_v = entries[entry_i];
-		CreateKeyValuePairs(names, doc, vals, nested_vals, struct_key_v, struct_val_v, count);
+		CreateKeyValuePairs(names, doc, vals, nested_vals, struct_key_v, struct_val_v, count, options);
 	}
 	// Whole struct can be NULL
 	UnifiedVectorFormat struct_data;
-	value_v.ToUnifiedFormat(count, struct_data);
+	value_v.ToUnifiedFormat(struct_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = struct_data.sel->get_index(i);
 		if (!struct_data.validity.RowIsValid(idx)) {
@@ -354,23 +560,48 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	}
 }
 
+static void CreateValuesTuple(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
+                              idx_t count) {
+	// a TUPLE becomes a JSON array (matching how Python serializes tuples)
+	for (idx_t i = 0; i < count; i++) {
+		vals[i] = yyjson_mut_arr(doc);
+	}
+	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
+	auto &entries = StructVector::GetEntries(value_v);
+	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
+		CreateValues(names, doc, nested_vals, entries[entry_i], count);
+		for (idx_t i = 0; i < count; i++) {
+			yyjson_mut_arr_append(vals[i], nested_vals[i]);
+		}
+	}
+	// Whole tuple can be NULL
+	UnifiedVectorFormat tuple_data;
+	value_v.ToUnifiedFormat(tuple_data);
+	for (idx_t i = 0; i < count; i++) {
+		idx_t idx = tuple_data.sel->get_index(i);
+		if (!tuple_data.validity.RowIsValid(idx)) {
+			vals[i] = yyjson_mut_null(doc);
+		}
+	}
+}
+static void CreateValuesMapKeys(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
+                                const JSONCopyFormatOptions &options);
+
 static void CreateValuesMap(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
-                            idx_t count) {
+                            idx_t count, const JSONCopyFormatOptions &options) {
 	// Create nested keys
 	auto &map_key_v = MapVector::GetKeys(value_v);
 	auto map_key_count = ListVector::GetListSize(value_v);
-	Vector map_keys_string(LogicalType::VARCHAR, map_key_count);
-	VectorOperations::DefaultCast(map_key_v, map_keys_string, map_key_count);
 	auto nested_keys = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, map_key_count);
-	TemplatedCreateValues<string_t, string_t>(doc, nested_keys, map_keys_string, map_key_count);
+	CreateValuesMapKeys(doc, nested_keys, map_key_v, map_key_count, options);
 	// Create nested values
 	auto &map_val_v = MapVector::GetValues(value_v);
 	auto map_val_count = ListVector::GetListSize(value_v);
 	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, map_val_count);
-	CreateValues(names, doc, nested_vals, map_val_v, map_val_count);
+	CreateValues(names, doc, nested_vals, map_val_v, map_val_count, options);
 	// Add the key/value pairs to the values
 	UnifiedVectorFormat map_data;
-	value_v.ToUnifiedFormat(count, map_data);
+	value_v.ToUnifiedFormat(map_data);
 	auto map_key_list_entries = UnifiedVectorFormat::GetData<list_entry_t>(map_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = map_data.sel->get_index(i);
@@ -391,10 +622,10 @@ static void CreateValuesMap(const StructNames &names, yyjson_mut_doc *doc, yyjso
 }
 
 static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
-                              idx_t count) {
+                              idx_t count, const JSONCopyFormatOptions &options) {
 	// Structs become values, therefore we initialize vals to JSON values
 	UnifiedVectorFormat value_data;
-	value_v.ToUnifiedFormat(count, value_data);
+	value_v.ToUnifiedFormat(value_data);
 	if (value_data.validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			vals[i] = yyjson_mut_obj(doc);
@@ -416,22 +647,23 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
 
 	auto &tag_v = UnionVector::GetTags(value_v);
 	UnifiedVectorFormat tag_data;
-	tag_v.ToUnifiedFormat(count, tag_data);
+	tag_v.ToUnifiedFormat(tag_data);
 
 	// Add the key/value pairs to the values
 	for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(value_v.GetType()); member_idx++) {
 		auto &member_val_v = UnionVector::GetMember(value_v, member_idx);
-		auto &member_key_v = *names.at(UnionType::GetMemberName(value_v.GetType(), member_idx));
+		auto &member_key_v =
+		    names.Get(UnionType::GetMemberName(value_v.GetType(), member_idx).GetIdentifierName(), count);
 
 		// This implementation is not optimal since we convert the entire member vector,
 		// and then skip the rows not matching the tag afterwards.
 
-		CreateValues(names, doc, nested_vals, member_val_v, count);
+		CreateValues(names, doc, nested_vals, member_val_v, count, options);
 
 		// This is a inlined copy of AddKeyValuePairs but we also skip null tags
 		// and the rows where the member is not matching the tag
 		UnifiedVectorFormat key_data;
-		member_key_v.ToUnifiedFormat(count, key_data);
+		member_key_v.ToUnifiedFormat(key_data);
 		auto keys = UnifiedVectorFormat::GetData<string_t>(key_data);
 
 		for (idx_t i = 0; i < count; i++) {
@@ -459,16 +691,16 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
 }
 
 static void CreateValuesList(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
-                             idx_t count) {
+                             idx_t count, const JSONCopyFormatOptions &options) {
 	// Initialize array for the nested values
 	auto &child_v = ListVector::GetChildMutable(value_v);
 	auto child_count = ListVector::GetListSize(value_v);
 	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, child_count);
 	// Fill nested_vals with list values
-	CreateValues(names, doc, nested_vals, child_v, child_count);
+	CreateValues(names, doc, nested_vals, child_v, child_count, options);
 	// Now we add the values to the appropriate JSON arrays
 	UnifiedVectorFormat list_data;
-	value_v.ToUnifiedFormat(count, list_data);
+	value_v.ToUnifiedFormat(list_data);
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = list_data.sel->get_index(i);
@@ -485,8 +717,8 @@ static void CreateValuesList(const StructNames &names, yyjson_mut_doc *doc, yyjs
 }
 
 static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
-                              idx_t count) {
-	value_v.Flatten(count);
+                              idx_t count, const JSONCopyFormatOptions &options) {
+	value_v.Flatten();
 
 	// Initialize array for the nested values
 	auto &child_v = ArrayVector::GetChildMutable(value_v);
@@ -495,10 +727,10 @@ static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyj
 
 	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, child_count);
 	// Fill nested_vals with list values
-	CreateValues(names, doc, nested_vals, child_v, child_count);
+	CreateValues(names, doc, nested_vals, child_v, child_count, options);
 	// Now we add the values to the appropriate JSON arrays
 	UnifiedVectorFormat list_data;
-	value_v.ToUnifiedFormat(count, list_data);
+	value_v.ToUnifiedFormat(list_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = list_data.sel->get_index(i);
 		if (!list_data.validity.RowIsValid(idx)) {
@@ -513,8 +745,95 @@ static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyj
 	}
 }
 
+static void CreateValuesFromDefaultCast(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count) {
+	Vector string_vector(LogicalTypeId::VARCHAR, count);
+	VectorOperations::DefaultCast(value_v, string_vector, count);
+	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
+}
+
+template <class FILL>
+static void CreateValuesFormatted(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
+                                  bool has_format, FILL &&fill_strings) {
+	if (!has_format) {
+		CreateValuesFromDefaultCast(doc, vals, value_v, count);
+		return;
+	}
+	Vector string_vector(LogicalType::VARCHAR, count);
+	fill_strings(string_vector);
+	TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
+}
+
+static void CreateValuesDate(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
+                             const JSONCopyFormatOptions &options) {
+	CreateValuesFormatted(doc, vals, value_v, count, bool(options.date_format), [&](Vector &string_vector) {
+		options.date_format.get_mutable()->ConvertDateVector(value_v, string_vector);
+	});
+}
+
+static void CreateValuesTimestamp(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
+                                  const JSONCopyFormatOptions &options) {
+	if (options.timestamp_format && value_v.GetType().id() != LogicalTypeId::TIMESTAMP) {
+		Vector timestamp_vector(LogicalType::TIMESTAMP, count);
+		VectorOperations::DefaultCast(value_v, timestamp_vector, count);
+		CreateValuesTimestamp(doc, vals, timestamp_vector, count, options);
+		return;
+	}
+	CreateValuesFormatted(doc, vals, value_v, count, bool(options.timestamp_format), [&](Vector &string_vector) {
+		options.timestamp_format.get_mutable()->ConvertTimestampVector(value_v, string_vector);
+	});
+}
+
+static void CreateValuesTimestampNS(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
+                                    const JSONCopyFormatOptions &options) {
+	CreateValuesFormatted(doc, vals, value_v, count, bool(options.timestamp_format), [&](Vector &string_vector) {
+		options.timestamp_format.get_mutable()->ConvertTimestampNSVector(value_v, string_vector);
+	});
+}
+
+static void CreateValuesTimestampTZ(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
+                                    const JSONCopyFormatOptions &options) {
+	CreateValuesFormatted(doc, vals, value_v, count, bool(options.timestamp_format), [&](Vector &string_vector) {
+		auto format_expression = value_v.GetType().id() == LogicalTypeId::TIMESTAMP_TZ_NS
+		                             ? options.timestamptz_ns_format_expression
+		                             : options.timestamptz_format_expression;
+		if (!options.context || !format_expression) {
+			throw InternalException("Missing bound TIMESTAMPTZ formatter for JSON COPY");
+		}
+		DataChunk input;
+		input.InitializeEmpty({value_v.GetType()});
+		input.data[0].Reference(value_v);
+		input.CheckCardinality(count);
+		ExpressionExecutor executor(*options.context.get_mutable(), *format_expression);
+		executor.ExecuteExpression(input, string_vector);
+	});
+}
+
+static void CreateValuesMapKeys(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count,
+                                const JSONCopyFormatOptions &options) {
+	switch (value_v.GetType().id()) {
+	case LogicalTypeId::DATE:
+		CreateValuesDate(doc, vals, value_v, count, options);
+		break;
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+		CreateValuesTimestamp(doc, vals, value_v, count, options);
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		CreateValuesTimestampNS(doc, vals, value_v, count, options);
+		break;
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		CreateValuesTimestampTZ(doc, vals, value_v, count, options);
+		break;
+	default:
+		CreateValuesFromDefaultCast(doc, vals, value_v, count);
+		break;
+	}
+}
+
 static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
-                         idx_t count) {
+                         idx_t count, const JSONCopyFormatOptions &options) {
 	const auto &type = value_v.GetType();
 	switch (type.id()) {
 	case LogicalTypeId::SQLNULL:
@@ -563,40 +882,49 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		TemplatedCreateValues<string_t, string_t>(doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::STRUCT:
-		CreateValuesStruct(names, doc, vals, value_v, count);
+		CreateValuesStruct(names, doc, vals, value_v, count, options);
+		break;
+	case LogicalTypeId::TUPLE:
+		CreateValuesTuple(names, doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::MAP:
-		CreateValuesMap(names, doc, vals, value_v, count);
+		CreateValuesMap(names, doc, vals, value_v, count, options);
 		break;
 	case LogicalTypeId::LIST:
-		CreateValuesList(names, doc, vals, value_v, count);
+		CreateValuesList(names, doc, vals, value_v, count, options);
 		break;
 	case LogicalTypeId::UNION:
-		CreateValuesUnion(names, doc, vals, value_v, count);
+		CreateValuesUnion(names, doc, vals, value_v, count, options);
 		break;
 	case LogicalTypeId::ARRAY:
-		CreateValuesArray(names, doc, vals, value_v, count);
+		CreateValuesArray(names, doc, vals, value_v, count, options);
+		break;
+	case LogicalTypeId::DATE:
+		CreateValuesDate(doc, vals, value_v, count, options);
+		break;
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+		CreateValuesTimestamp(doc, vals, value_v, count, options);
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		CreateValuesTimestampNS(doc, vals, value_v, count, options);
+		break;
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		CreateValuesTimestampTZ(doc, vals, value_v, count, options);
 		break;
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::LEGACY_AGGREGATE_STATE:
 	case LogicalTypeId::ENUM:
-	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::GEOMETRY: {
-		Vector string_vector(LogicalTypeId::VARCHAR, count);
-		VectorOperations::DefaultCast(value_v, string_vector, count);
-		TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
+		CreateValuesFromDefaultCast(doc, vals, value_v, count);
 		break;
 	}
 	case LogicalTypeId::BIGNUM: {
@@ -631,14 +959,13 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::VALIDITY:
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::LAMBDA:
-	case LogicalTypeId::AGGREGATE_STATE:
 		throw InternalException("Unsupported type arrived at JSON create function");
 	}
 }
 
 static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<JSONCreateFunctionData>();
+	const auto &info = func_expr.BindInfo()->Cast<JSONCreateFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
@@ -667,7 +994,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<JSONCreateFunctionData>();
+	const auto &info = func_expr.BindInfo()->Cast<JSONCreateFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
@@ -696,17 +1023,17 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 }
 
 static void ToJSONFunctionInternal(const StructNames &names, Vector &input, const idx_t count, Vector &result,
-                                   yyjson_alc *alc) {
+                                   yyjson_alc *alc, const JSONCopyFormatOptions &options = JSONCopyFormatOptions()) {
 	// Initialize array for values
 	auto doc = JSONCommon::CreateDocument(alc);
 	auto vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
-	CreateValues(names, doc, vals, input, count);
+	CreateValues(names, doc, vals, input, count, options);
 
 	// Write JSON values to string
 	auto objects = FlatVector::GetDataMutable<string_t>(result);
 	auto &result_validity = FlatVector::ValidityMutable(result);
 	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
+	input.ToUnifiedFormat(input_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = input_data.sel->get_index(i);
 		if (input_data.validity.RowIsValid(idx)) {
@@ -725,11 +1052,82 @@ static void ToJSONFunctionInternal(const StructNames &names, Vector &input, cons
 
 static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<JSONCreateFunctionData>();
+	const auto &info = func_expr.BindInfo()->Cast<JSONCreateFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
 	ToJSONFunctionInternal(info.const_struct_names, args.data[0], args.size(), result, alc);
+}
+
+static void JSONCopyToJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.BindInfo()->Cast<JSONCopyToJSONFunctionData>();
+	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+	auto alc = lstate.json_allocator->GetYYAlc();
+	auto options = info.GetFormatOptions(state.GetContext());
+
+	ToJSONFunctionInternal(info.const_struct_names, args.data[0], args.size(), result, alc, options);
+}
+
+static void JSONCopyToJSONSerialize(Serializer &serializer, optional_ptr<FunctionData> bind_data,
+                                    const BoundScalarFunction &) {
+	if (!bind_data) {
+		throw InternalException("%s is missing bind data during serialization", JSON_COPY_TO_JSON_INTERNAL_NAME);
+	}
+	auto &data = bind_data->Cast<JSONCopyToJSONFunctionData>();
+	serializer.WriteProperty(100, "has_date_format", data.has_date_format);
+	serializer.WriteProperty(101, "date_format", data.date_format_string);
+	serializer.WriteProperty(102, "has_timestamp_format", data.has_timestamp_format);
+	serializer.WriteProperty(103, "timestamp_format", data.timestamp_format_string);
+}
+
+static unique_ptr<FunctionData> JSONCopyToJSONDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
+	auto has_date_format = deserializer.ReadProperty<bool>(100, "has_date_format");
+	auto date_format_string = deserializer.ReadProperty<string>(101, "date_format");
+	auto has_timestamp_format = deserializer.ReadProperty<bool>(102, "has_timestamp_format");
+	auto timestamp_format_string = deserializer.ReadProperty<string>(103, "timestamp_format");
+
+	auto &arguments = function.GetArguments();
+	if (arguments.size() != 3) {
+		throw InternalException("%s must have exactly three arguments during deserialization",
+		                        JSON_COPY_TO_JSON_INTERNAL_NAME);
+	}
+
+	StructNames const_struct_names;
+	GetJSONType(const_struct_names, arguments[0]);
+
+	auto &context = deserializer.Get<ClientContext &>();
+	return CreateJSONCopyToJSONFunctionData(context, std::move(const_struct_names), has_date_format,
+	                                        std::move(date_format_string), has_timestamp_format,
+	                                        std::move(timestamp_format_string));
+}
+
+unique_ptr<Expression> JSONFunctions::CreateJSONCopyToJSONExpression(ClientContext &context,
+                                                                     unique_ptr<Expression> payload,
+                                                                     unique_ptr<Expression> date_format,
+                                                                     unique_ptr<Expression> timestamp_format) {
+	StructNames const_struct_names;
+	auto json_type = GetJSONType(const_struct_names, payload->GetReturnType());
+	auto bind_data =
+	    CreateJSONCopyToJSONFunctionData(context, std::move(const_struct_names), *date_format, *timestamp_format);
+
+	payload = BoundCastExpression::AddCastToType(context, std::move(payload), json_type);
+
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(payload));
+	children.push_back(std::move(date_format));
+	children.push_back(std::move(timestamp_format));
+
+	auto function = GetJSONCopyToJSONFunction();
+	BoundScalarFunction bound_function(function);
+	auto &arguments = bound_function.GetArguments();
+	arguments.clear();
+	arguments.push_back(std::move(json_type));
+	arguments.push_back(LogicalType::VARCHAR);
+	arguments.push_back(LogicalType::VARCHAR);
+	bound_function.SetReturnType(LogicalType::JSON());
+
+	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(children), std::move(bind_data));
 }
 
 ScalarFunctionSet JSONFunctions::GetObjectFunction() {
@@ -755,6 +1153,16 @@ ScalarFunctionSet JSONFunctions::GetToJSONFunction() {
 	return ScalarFunctionSet(fun);
 }
 
+ScalarFunction JSONFunctions::GetJSONCopyToJSONFunction() {
+	ScalarFunction fun(JSON_COPY_TO_JSON_INTERNAL_NAME, {LogicalType::ANY, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                   LogicalType::JSON(), JSONCopyToJSONFunction, JSONCopyToJSONBind, nullptr,
+	                   JSONFunctionLocalState::Init);
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetSerializeCallback(JSONCopyToJSONSerialize);
+	fun.SetDeserializeCallback(JSONCopyToJSONDeserialize);
+	return fun;
+}
+
 ScalarFunctionSet JSONFunctions::GetArrayToJSONFunction() {
 	ScalarFunction fun("array_to_json", {}, LogicalType::JSON(), ToJSONFunction, ArrayToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
@@ -776,10 +1184,7 @@ public:
 
 	unique_ptr<BoundCastData> Copy() const override {
 		auto result = make_uniq<NestedToJSONCastData>();
-		for (auto &csn : const_struct_names) {
-			result->const_struct_names.emplace(
-			    csn.first, make_uniq<Vector>(csn.second->GetValue(0), count_t(STANDARD_VECTOR_SIZE)));
-		}
+		result->const_struct_names = const_struct_names.Copy();
 		return std::move(result);
 	}
 
@@ -810,6 +1215,9 @@ void JSONFunctions::RegisterJSONCreateCastFunctions(ExtensionLoader &loader) {
 		switch (type.id()) {
 		case LogicalTypeId::STRUCT:
 			source_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
+			break;
+		case LogicalTypeId::TUPLE:
+			source_type = LogicalType::TUPLE({LogicalType::ANY});
 			break;
 		case LogicalTypeId::LIST:
 			source_type = LogicalType::LIST(LogicalType::ANY);

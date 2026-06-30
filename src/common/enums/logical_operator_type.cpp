@@ -72,6 +72,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "UPDATE";
 	case LogicalOperatorType::LOGICAL_MERGE_INTO:
 		return "MERGE_INTO";
+	case LogicalOperatorType::LOGICAL_TRIGGER:
+		return "TRIGGER";
 	case LogicalOperatorType::LOGICAL_PREPARE:
 		return "PREPARE";
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
@@ -134,6 +136,10 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "PIVOT";
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
 		return "UPDATE_EXTENSIONS";
+	case LogicalOperatorType::LOGICAL_CONNECT:
+		return "CONNECT";
+	case LogicalOperatorType::LOGICAL_DISCONNECT:
+		return "DISCONNECT";
 	}
 	return "INVALID";
 }

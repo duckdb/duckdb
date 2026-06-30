@@ -142,7 +142,7 @@ idx_t JSONFileHandle::ReadInternal(char *pointer, const idx_t requested_size) {
 	// Deal with reading from pipes
 	idx_t total_read_size = 0;
 	while (total_read_size < requested_size) {
-		auto read_size = file_handle->Read(pointer + total_read_size, requested_size - total_read_size);
+		auto read_size = file_handle->Read(context, pointer + total_read_size, requested_size - total_read_size);
 		if (read_size == 0) {
 			break;
 		}
@@ -658,16 +658,21 @@ bool JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 		err.pos = json_size;
 		AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err, "Try auto-detecting the JSON format");
 		return false;
-	} else if (!options.ignore_errors && read_size < json_size) {
+	}
+	if (read_size < json_size) {
 		idx_t off = read_size;
 		idx_t rem = json_size;
 		SkipWhitespace(json_start, off, rem);
 		if (off != rem) { // Between end of document and boundary should be whitespace only
-			err.code = YYJSON_READ_ERROR_UNEXPECTED_CONTENT;
-			err.msg = "unexpected content after document";
-			err.pos = read_size;
-			AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err, "Try auto-detecting the JSON format");
-			return false;
+			if (!options.ignore_errors) {
+				err.code = YYJSON_READ_ERROR_UNEXPECTED_CONTENT;
+				err.msg = "unexpected content after document";
+				err.pos = read_size;
+				AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err,
+				              "Try auto-detecting the JSON format");
+				return false;
+			}
+			doc = nullptr;
 		}
 	}
 

@@ -25,8 +25,8 @@ mkdir -p "$ARTIFACT_DIR"/test/extension "$ARTIFACT_DIR"/src
 # Required by CI jobs that run the CLI from build/<type>/duckdb.
 cp -av "$BUILD_DIR/duckdb" "$ARTIFACT_DIR"/
 
-# Required by CI test jobs that run the prebuilt unittest binary.
-cp -av "$BUILD_DIR/test/unittest" "$ARTIFACT_DIR"/test/
+# Required by CI test jobs that run the prebuilt unittest binary and runner.
+cp -av "$BUILD_DIR/"test/{run,unittest} "$ARTIFACT_DIR"/test/
 
 # Required by ADBC and other tests that need the shared library.
 shopt -s nullglob
@@ -35,6 +35,13 @@ if ((${#so_files[@]} > 0)); then
 	cp -av "${so_files[@]}" "$ARTIFACT_DIR"/src/
 else
 	echo "No $BUILD_DIR/src/libduckdb.so* files found"
+fi
+
+# Required by jobs that link against the prebuilt static library.
+if [[ -f "$BUILD_DIR/src/libduckdb_static.a" ]]; then
+	cp -av "$BUILD_DIR/src/libduckdb_static.a" "$ARTIFACT_DIR"/src/
+else
+	echo "No $BUILD_DIR/src/libduckdb_static.a file found"
 fi
 
 # Required by regression jobs that run the prebuilt benchmark runner.

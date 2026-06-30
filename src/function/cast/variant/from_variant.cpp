@@ -2,10 +2,8 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
-#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "yyjson_utils.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
@@ -197,7 +195,7 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 }
 
 static bool FindValues(UnifiedVariantVectorData &variant, idx_t row_index, SelectionVector &sel,
-                       VariantNestedData &nested_data_entry) {
+                       const VariantNestedData &nested_data_entry) {
 	for (idx_t child_idx = 0; child_idx < nested_data_entry.child_count; child_idx++) {
 		auto value_id = variant.GetValuesIndex(row_index, nested_data_entry.children_idx + child_idx);
 		sel[child_idx] = value_id;
@@ -210,14 +208,8 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 
 static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vector &result, const SelectionVector &sel,
                                  idx_t offset, idx_t count, optional_idx row) {
-	auto &allocator = Allocator::DefaultAllocator();
-
-	AllocatedData owned_child_data;
-	VariantNestedData *child_data = nullptr;
-	if (count) {
-		owned_child_data = allocator.Allocate(sizeof(VariantNestedData) * count);
-		child_data = reinterpret_cast<VariantNestedData *>(owned_child_data.get());
-	}
+	const auto owned_child_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	const array_ptr child_data(owned_child_data.get(), count);
 
 	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
 	//! respect that)
@@ -229,8 +221,8 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 		}
 	}
 
-	auto collection_result = VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::ARRAY, sel,
-	                                                         count, row, offset, child_data, validity);
+	const auto collection_result = VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::ARRAY,
+	                                                               sel, count, row, offset, child_data, validity);
 	if (!collection_result.success) {
 		conversion_data.error =
 		    StringUtil::Format("Expected to find VARIANT(ARRAY), found VARIANT(%s) instead, can't convert",
@@ -286,14 +278,8 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 
 static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Vector &result,
                                   const SelectionVector &sel, idx_t offset, idx_t count, optional_idx row) {
-	auto &allocator = Allocator::DefaultAllocator();
-
-	AllocatedData owned_child_data;
-	VariantNestedData *child_data = nullptr;
-	if (count) {
-		owned_child_data = allocator.Allocate(sizeof(VariantNestedData) * count);
-		child_data = reinterpret_cast<VariantNestedData *>(owned_child_data.get());
-	}
+	const auto owned_child_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	const array_ptr child_data(owned_child_data.get(), count);
 
 	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
 	//! respect that)
@@ -344,7 +330,9 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 		}
 
 		FindValues(conversion_data.variant, row_index, new_sel, child_data_entry);
-		CastVariant(conversion_data, child, new_sel, total_offset, array_size, row_index);
+		if (!CastVariant(conversion_data, child, new_sel, total_offset, array_size, row_index)) {
+			return false;
+		}
 		total_offset += array_size;
 	}
 	return true;
@@ -353,14 +341,8 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, Vector &result,
                                    const SelectionVector &sel, idx_t offset, idx_t count, optional_idx row) {
 	auto &target_type = result.GetType();
-	auto &allocator = Allocator::DefaultAllocator();
-
-	AllocatedData owned_child_data;
-	VariantNestedData *child_data = nullptr;
-	if (count) {
-		owned_child_data = allocator.Allocate(sizeof(VariantNestedData) * count);
-		child_data = reinterpret_cast<VariantNestedData *>(owned_child_data.get());
-	}
+	const auto owned_child_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	array_ptr child_data(owned_child_data.get(), count);
 
 	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
 	//! respect that)
@@ -407,7 +389,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 		//! Then find the relevant child of the OBJECTs we're converting
 		//! FIXME: there is nothing preventing an OBJECT from containing the same key twice I believe ?
 		VariantPathComponent component;
-		component.key = child_name;
+		component.key = child_name.GetIdentifierName();
 		component.lookup_mode = VariantChildLookupMode::BY_KEY;
 		ValidityMask lookup_validity(count);
 		VariantUtils::FindChildValues(conversion_data.variant, component, row_sel, child_values_sel, lookup_validity,
@@ -426,6 +408,70 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 			    VariantUtils::GetObjectKeys(conversion_data.variant, row_index, child_data[nested_index.GetIndex()]);
 			conversion_data.error = StringUtil::Format("VARIANT(OBJECT(%s)) is missing key '%s'",
 			                                           StringUtil::Join(object_keys, ","), component.key);
+			return false;
+		}
+		//! Now cast all the values we found to the target type
+		auto &child = children[child_idx];
+		if (!CastVariant(conversion_data, child, child_values_sel, offset, count, row)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+//! A TUPLE is read from a variant ARRAY - each element is read positionally into the matching tuple child
+static bool ConvertVariantToTuple(FromVariantConversionData &conversion_data, Vector &result,
+                                  const SelectionVector &sel, idx_t offset, idx_t count, optional_idx row) {
+	auto &target_type = result.GetType();
+	const auto owned_child_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	array_ptr child_data(owned_child_data.get(), count);
+
+	auto &result_validity = FlatVector::ValidityMutable(result);
+	ValidityMask validity(count);
+	for (idx_t i = 0; i < count; i++) {
+		if (!result_validity.RowIsValid(offset + i)) {
+			validity.SetInvalid(i);
+		}
+	}
+
+	auto collection_result = VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::ARRAY, sel,
+	                                                         count, row, offset, child_data, validity);
+	if (!collection_result.success) {
+		conversion_data.error =
+		    StringUtil::Format("Expected to find VARIANT(ARRAY), found VARIANT(%s) instead, can't convert",
+		                       EnumUtil::ToString(collection_result.wrong_type));
+		return false;
+	}
+
+	for (idx_t i = 0; i < count; i++) {
+		if (!validity.RowIsValid(i)) {
+			FlatVector::SetNull(result, offset + i, true);
+		}
+	}
+
+	auto &children = StructVector::GetEntries(result);
+	auto &child_types = StructType::GetChildTypes(target_type);
+
+	SelectionVector child_values_sel;
+	child_values_sel.Initialize(count);
+
+	auto row_sel = SelectionVector::Incremental(0ULL, count);
+	if (row.IsValid()) {
+		auto row_index = row.GetIndex();
+		for (idx_t i = 0; i < count; i++) {
+			row_sel[i] = static_cast<uint32_t>(row_index);
+		}
+	}
+
+	for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
+		//! Find the relevant element of the ARRAYs we're converting by position
+		VariantPathComponent component(NumericCast<uint32_t>(child_idx));
+		ValidityMask lookup_validity(count);
+		VariantUtils::FindChildValues(conversion_data.variant, component, row_sel, child_values_sel, lookup_validity,
+		                              child_data, validity, count);
+		if (lookup_validity.CanHaveNull()) {
+			conversion_data.error =
+			    StringUtil::Format("VARIANT(ARRAY) is missing element at index %d, can't convert to TUPLE", child_idx);
 			return false;
 		}
 		//! Now cast all the values we found to the target type
@@ -485,6 +531,12 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 		switch (target_type.id()) {
 		case LogicalTypeId::STRUCT: {
 			if (ConvertVariantToStruct(conversion_data, result, sel, offset, count, row)) {
+				return true;
+			}
+			break;
+		}
+		case LogicalTypeId::TUPLE: {
+			if (ConvertVariantToTuple(conversion_data, result, sel, offset, count, row)) {
 				return true;
 			}
 			break;
@@ -720,7 +772,7 @@ static bool CastFromVARIANT(Vector &variant_vec, Vector &result, idx_t count, Ca
 	// fallback to conversion
 	D_ASSERT(variant_vec.GetType().id() == LogicalTypeId::VARIANT);
 	RecursiveUnifiedVectorFormat variant_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, variant_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, variant_format);
 	FromVariantConversionData conversion_data(variant_format);
 
 	reference<const SelectionVector> sel(*ConstantVector::ZeroSelectionVector());
@@ -773,6 +825,7 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP_TZ:

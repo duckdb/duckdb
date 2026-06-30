@@ -56,7 +56,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBDependenciesInit(ClientContext &conte
 	auto result = make_uniq<DuckDBDependenciesData>();
 
 	// scan all the schemas and collect them
-	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
+	auto &catalog = Catalog::GetCatalog(context, Identifier::InvalidCatalog());
 	auto dependency_manager = catalog.GetDependencyManager();
 	if (dependency_manager) {
 		dependency_manager->Scan(
@@ -113,7 +113,6 @@ void DuckDBDependenciesFunction(ClientContext &context, TableFunctionInput &data
 		data.offset++;
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBDependenciesFun::RegisterFunction(BuiltinFunctions &set) {

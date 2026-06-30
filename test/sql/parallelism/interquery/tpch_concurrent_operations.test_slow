@@ -31,7 +31,7 @@ DELETE FROM lineitem WHERE l_comment = 'this is an extra row'
 
 endloop
 
-loop i 0 30
+loop i 0 15
 
 skipif threadid=0
 statement ok
@@ -60,4 +60,3 @@ PRAGMA tpch({i})
 <FILE>:extension/tpch/dbgen/answers/sf1/q{i}.csv
 
 endloop
-

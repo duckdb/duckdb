@@ -21,7 +21,7 @@ struct ConjunctionState : public ExpressionState {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConjunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ConjunctionState>(expr, root);
-	for (auto &child : expr.children) {
+	for (auto &child : expr.GetChildren()) {
 		result->AddChild(*child);
 	}
 
@@ -33,9 +33,9 @@ void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, Express
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	// execute the children
 	state->intermediate_chunk.Reset();
-	for (idx_t i = 0; i < expr.children.size(); i++) {
+	for (idx_t i = 0; i < expr.GetChildren().size(); i++) {
 		auto &current_result = state->intermediate_chunk.data[i];
-		Execute(*expr.children[i], state->child_states[i].get(), sel, count, current_result);
+		Execute(*expr.GetChildren()[i], state->child_states[i].get(), sel, count, current_result);
 		if (i == 0) {
 			// move the result
 			result.Reference(current_result);
@@ -44,10 +44,10 @@ void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, Express
 			// AND/OR together
 			switch (expr.GetExpressionType()) {
 			case ExpressionType::CONJUNCTION_AND:
-				VectorOperations::And(current_result, result, intermediate, count);
+				VectorOperations::And(current_result, result, intermediate);
 				break;
 			case ExpressionType::CONJUNCTION_OR:
-				VectorOperations::Or(current_result, result, intermediate, count);
+				VectorOperations::Or(current_result, result, intermediate);
 				break;
 			default:
 				throw InternalException("Unknown conjunction type!");
@@ -78,9 +78,9 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			temp_true = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
 			true_sel = temp_true.get();
 		}
-		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount = Select(*expr.children[permutation[i]], state.child_states[permutation[i]].get(), current_sel,
-			                      current_count, true_sel, temp_false.get());
+		for (idx_t i = 0; i < expr.GetChildren().size(); i++) {
+			idx_t tcount = Select(*expr.GetChildren()[permutation[i]], state.child_states[permutation[i]].get(),
+			                      current_sel, current_count, true_sel, temp_false.get());
 			idx_t fcount = current_count - tcount;
 			if (fcount > 0 && false_sel) {
 				// move failing tuples into the false_sel
@@ -119,9 +119,9 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			temp_false = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
 			false_sel = temp_false.get();
 		}
-		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount = Select(*expr.children[permutation[i]], state.child_states[permutation[i]].get(), current_sel,
-			                      current_count, temp_true.get(), false_sel);
+		for (idx_t i = 0; i < expr.GetChildren().size(); i++) {
+			idx_t tcount = Select(*expr.GetChildren()[permutation[i]], state.child_states[permutation[i]].get(),
+			                      current_sel, current_count, temp_true.get(), false_sel);
 			if (tcount > 0) {
 				if (true_sel) {
 					// tuples passed, move them into the actual result vector

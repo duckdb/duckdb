@@ -58,7 +58,7 @@ void HandleCastError::AssignError(const string &error_message, string *error_mes
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
 bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	bool success = true;
-	if (VectorOperations::HasNotNull(source, count)) {
+	if (VectorOperations::HasNotNull(source)) {
 		HandleCastError::AssignError(TryCast::UnimplementedCastMessage(source.GetType(), result.GetType()), parameters);
 		success = false;
 	}
@@ -71,52 +71,8 @@ bool DefaultCasts::ReinterpretCast(Vector &source, Vector &result, idx_t count, 
 	return true;
 }
 
-static bool AggregateStateToBlobCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	if (result.GetType().id() != LogicalTypeId::BLOB) {
-		throw TypeMismatchException(source.GetType(), result.GetType(),
-		                            "Cannot cast LEGACY_AGGREGATE_STATE to anything but BLOB");
-	}
-	result.Reinterpret(source);
-	return true;
-}
-
-static bool AggregateStateToStructReinterpret(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	// Both `AGGREGATE_STATE` and `STRUCT` are `PhysicalType::STRUCT`
-	// However, we can't use Reinterpret because it's blocked by D_ASSERT for nested types
-	// Instead, we manually reference the entries
-	auto &source_entries = StructVector::GetEntries(source);
-	auto &result_entries = StructVector::GetEntries(result);
-
-	D_ASSERT(source_entries.size() == result_entries.size());
-
-	for (idx_t i = 0; i < source_entries.size(); i++) {
-		result_entries[i].Reference(source_entries[i]);
-	}
-
-	source.Flatten(count);
-	FlatVector::ValidityMutable(result) = FlatVector::Validity(source);
-	FlatVector::SetSize(result, count_t(count));
-	result.Verify(count);
-	return true;
-}
-
 bool BoundCastInfo::IsNopCast() const {
 	return function == DefaultCasts::NopCast;
-}
-
-static BoundCastInfo AggregateStateCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
-	D_ASSERT(source.IsAggregateStateStructType());
-
-	LogicalType dummy_struct = LogicalType::STRUCT(AggregateStateType::GetChildTypes(source));
-	auto cast_info = input.GetCastFunction(dummy_struct, target);
-	if (cast_info.IsNopCast()) {
-		// 1. `NopCast` cannot be used since it expects the types to be the same.
-		// 2. `ReinterpretCast` cannot be used since it's blocked for nested types.
-		// 3. We don't want to use `StructToStructCast` in this case as it introduces more complexity while we know
-		// that we don't have casting to perform
-		cast_info.SetFunction(AggregateStateToStructReinterpret);
-	}
-	return cast_info;
 }
 
 static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -194,7 +150,11 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::MAP:
 		return MapCastSwitch(input, source, target);
 	case LogicalTypeId::STRUCT:
-		return StructCastSwitch(input, source, target);
+		// an unnamed STRUCT (e.g. from variant shredding with empty keys) is cast positionally, like a TUPLE
+		return StructType::IsUnnamed(source) ? TupleCastSwitch(input, source, target)
+		                                     : StructCastSwitch(input, source, target);
+	case LogicalTypeId::TUPLE:
+		return TupleCastSwitch(input, source, target);
 	case LogicalTypeId::LIST:
 		return ListCastSwitch(input, source, target);
 	case LogicalTypeId::UNION:
@@ -211,10 +171,6 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return TypeCastSwitch(input, source, target);
 	case LogicalTypeId::BIGNUM:
 		return BignumCastSwitch(input, source, target);
-	case LogicalTypeId::LEGACY_AGGREGATE_STATE:
-		return AggregateStateToBlobCast;
-	case LogicalTypeId::AGGREGATE_STATE:
-		return AggregateStateCast(input, source, target);
 	default:
 		return nullptr;
 	}

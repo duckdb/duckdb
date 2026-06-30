@@ -22,7 +22,8 @@ add_library_unity(
   predicate_factoring.cpp
   regex_optimizations.cpp
   timestamp_comparison.cpp
-  constant_order_normalization.cpp)
+  constant_order_normalization.cpp
+  contains_to_in_clause.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer_rules>
     PARENT_SCOPE)

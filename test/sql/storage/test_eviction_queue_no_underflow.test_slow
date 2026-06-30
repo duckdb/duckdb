@@ -1,0 +1,48 @@
+# name: test/sql/storage/test_eviction_queue_no_underflow.test_slow
+# description: Concurrent high-load test ensuring eviction queue dead_nodes never underflows
+# group: [storage]
+
+statement ok
+SET threads=8;
+
+statement ok
+PRAGMA memory_limit='100MB';
+
+statement ok
+CREATE MACRO eviction_queues_sane() AS (
+  SELECT COUNT(*) = 0 FROM duckdb_eviction_queues()
+  WHERE dead_nodes < 0
+    OR dead_nodes > total_insertions
+);
+
+concurrentloop x 0 8
+
+loop i 0 200
+
+statement ok
+CREATE OR REPLACE TABLE t_{x}_{i} AS SELECT range AS id, repeat('x', 1000) AS payload FROM range(10000);
+
+statement ok
+SELECT COUNT(*) FROM t_{x}_{i} WHERE length(payload) > 0;
+
+statement ok
+DROP TABLE IF EXISTS t_{x}_{i};
+
+endloop
+
+endloop
+
+query I
+SELECT eviction_queues_sane();
+----
+1
+
+query I
+SELECT COUNT(*) = 0 FROM duckdb_eviction_queues() WHERE dead_nodes < 0;
+----
+1
+
+query I
+SELECT COUNT(*) = 0 FROM duckdb_eviction_queues() WHERE dead_nodes > total_insertions;
+----
+1

@@ -2,7 +2,7 @@
 # description: Verify that deleting rows and re-appending does not increase storage size
 # group: [vacuum]
 
-load {TEST_DIR}/vacuum_deletes_cleanup.db
+load {TEST_DIR}/vacuum_deletes_cleanup.db readwrite latest
 
 foreach storage_mode no_index index
 

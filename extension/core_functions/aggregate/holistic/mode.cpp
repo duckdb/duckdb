@@ -452,7 +452,8 @@ AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	AggregateFunction aggr({type}, type, AggregateFunction::StateSize<STATE>,
 	                       AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	                       AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
+	                       AggregateFunction::StateVoidFinalize<STATE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                       AggregateFunction::NoClusterUpdate());
 	aggr.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 	return aggr;
 }
@@ -461,9 +462,8 @@ template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
 AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
 	using OP = ModeFunction<TYPE_OP>;
-	auto func =
-	    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP, AggregateDestructorType::LEGACY>(
-	        type, type);
+	auto func = AggregateFunction::UnaryAggregate<STATE, INPUT_TYPE, INPUT_TYPE, OP, AggregateDestructorType::LEGACY>(
+	    type, type);
 	func.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>);
 	return func;
 }
@@ -518,7 +518,8 @@ unique_ptr<FunctionData> BindModeAggregate(BindAggregateFunctionInput &input) {
 AggregateFunctionSet ModeFun::GetFunctions() {
 	AggregateFunctionSet mode("mode");
 	mode.AddFunction(AggregateFunction({LogicalTypeId::ANY}, LogicalTypeId::ANY, nullptr, nullptr, nullptr, nullptr,
-	                                   nullptr, nullptr, BindModeAggregate));
+	                                   nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                                   AggregateFunction::NoClusterUpdate(), BindModeAggregate));
 	return mode;
 }
 
@@ -561,9 +562,8 @@ template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
 AggregateFunction GetTypedEntropyFunction(const LogicalType &type) {
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
 	using OP = EntropyFunction<TYPE_OP>;
-	auto func =
-	    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, double, OP, AggregateDestructorType::LEGACY>(
-	        type, LogicalType::DOUBLE);
+	auto func = AggregateFunction::UnaryAggregate<STATE, INPUT_TYPE, double, OP, AggregateDestructorType::LEGACY>(
+	    type, LogicalType::DOUBLE);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return func;
 }
@@ -574,7 +574,8 @@ AggregateFunction GetFallbackEntropyFunction(const LogicalType &type) {
 	AggregateFunction func({type}, LogicalType::DOUBLE, AggregateFunction::StateSize<STATE>,
 	                       AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	                       AggregateFunction::StateFinalize<STATE, double, OP>, nullptr);
+	                       AggregateFunction::StateFinalize<STATE, double, OP>,
+	                       FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate());
 	func.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return func;
@@ -620,7 +621,8 @@ unique_ptr<FunctionData> BindEntropyAggregate(BindAggregateFunctionInput &input)
 AggregateFunctionSet EntropyFun::GetFunctions() {
 	AggregateFunctionSet entropy("entropy");
 	entropy.AddFunction(AggregateFunction({LogicalTypeId::ANY}, LogicalType::DOUBLE, nullptr, nullptr, nullptr, nullptr,
-	                                      nullptr, nullptr, BindEntropyAggregate));
+	                                      nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                                      AggregateFunction::NoClusterUpdate(), BindEntropyAggregate));
 	return entropy;
 }
 

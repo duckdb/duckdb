@@ -15,6 +15,16 @@ ColumnDataCollectionSegment::ColumnDataCollectionSegment(shared_ptr<ColumnDataAl
       count(0), heap(make_shared_ptr<StringHeap>(allocator->GetAllocator())) {
 }
 
+void ColumnDataCollectionSegment::Reset() {
+	count = 0;
+	total_allocated = 0;
+	last_chunk_total_allocated = 0;
+	chunk_data.clear();
+	vector_data.clear();
+	child_indices.clear();
+	heap->GetAllocator().Reset();
+}
+
 idx_t ColumnDataCollectionSegment::GetDataSize(idx_t type_size) {
 	return AlignValue(type_size * STANDARD_VECTOR_SIZE);
 }
@@ -203,7 +213,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 		next_index = current_vdata.next_data;
 	}
 	// resize the result vector
-	result.Resize(0, vector_count);
+	result.Reserve(vector_count);
 	next_index = vector_index;
 	// now perform the copy of each of the vectors
 	auto target_data = FlatVector::GetDataMutable(result);
@@ -287,7 +297,7 @@ void ColumnDataCollectionSegment::ReadChunk(idx_t chunk_index, ChunkManagementSt
 		D_ASSERT(vector_idx < chunk_meta.vector_data.size());
 		ReadVector(state, chunk_meta.vector_data[vector_idx], chunk.data[i]);
 	}
-	chunk.SetCardinality(chunk_meta.count);
+	chunk.SetChildCardinality(chunk_meta.count);
 }
 
 idx_t ColumnDataCollectionSegment::ChunkCount() const {

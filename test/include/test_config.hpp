@@ -78,6 +78,7 @@ public:
 	vector<string> ErrorMessagesToBeSkipped();
 	string GetStorageVersion();
 	string GetTestEnv(const string &key, const string &default_value);
+	bool HasTestEnv(const string &key);
 	const unordered_map<string, string> &GetTestEnvMap();
 	vector<unordered_set<string>> GetSelectTagSets();
 	vector<unordered_set<string>> GetSkipTagSets();
@@ -96,9 +97,15 @@ public:
 	static void AppendSelectTagSet(const Value &tag_set);
 	static void AppendSkipTagSet(const Value &tag_set);
 
+	string GetLocalExtensionRepository() const;
+	void SetLocalExtensionRepository(const string &repo);
+
 private:
+	void LoadTestEnvFromConfig();
+
 	//! Give preference to settings from loaded configs
 	bool test_env_from_config_loaded = false;
+	unordered_set<string> test_env_from_config_keys;
 	case_insensitive_map_t<Value> options;
 	unordered_set<string> tests_to_be_skipped;
 
@@ -110,6 +117,8 @@ private:
 
 	vector<unordered_set<string>> select_tag_sets;
 	vector<unordered_set<string>> skip_tag_sets;
+
+	string local_extension_repo;
 
 private:
 	template <class T, class VAL_T = T>

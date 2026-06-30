@@ -19,11 +19,16 @@ namespace duckdb {
 template <class T>
 class FunctionSet {
 public:
-	explicit FunctionSet(string name) : name(std::move(name)) { // NOLINT
+	explicit FunctionSet(Identifier name) : name(std::move(name)) { // NOLINT
 	}
 
 	//! The name of the function set
-	string name;
+	Identifier name;
+
+public:
+	void SetName(Identifier name_p) {
+		name = std::move(name_p);
+	}
 	//! The set of functions.
 	vector<T> functions;
 
@@ -35,7 +40,7 @@ public:
 		return functions.size();
 	}
 
-	const T &GetFunctionByOffset(idx_t offset) {
+	const T &GetFunctionByOffset(idx_t offset) const {
 		D_ASSERT(offset < functions.size());
 		return functions[offset];
 	}
@@ -69,7 +74,7 @@ public:
 class ScalarFunctionSet : public FunctionSet<ScalarFunction> {
 public:
 	DUCKDB_API explicit ScalarFunctionSet();
-	DUCKDB_API explicit ScalarFunctionSet(string name);
+	DUCKDB_API explicit ScalarFunctionSet(Identifier name);
 	DUCKDB_API explicit ScalarFunctionSet(ScalarFunction fun);
 
 	DUCKDB_API const ScalarFunction &GetFunctionByArguments(ClientContext &context,
@@ -96,7 +101,7 @@ public:
 class AggregateFunctionSet : public FunctionSet<AggregateFunction> {
 public:
 	DUCKDB_API explicit AggregateFunctionSet();
-	DUCKDB_API explicit AggregateFunctionSet(string name);
+	DUCKDB_API explicit AggregateFunctionSet(Identifier name);
 	DUCKDB_API explicit AggregateFunctionSet(AggregateFunction fun);
 
 	DUCKDB_API const AggregateFunction &GetFunctionByArguments(ClientContext &context,
@@ -106,7 +111,7 @@ public:
 class WindowFunctionSet : public FunctionSet<WindowFunction> {
 public:
 	DUCKDB_API explicit WindowFunctionSet();
-	DUCKDB_API explicit WindowFunctionSet(string name);
+	DUCKDB_API explicit WindowFunctionSet(Identifier name);
 	DUCKDB_API explicit WindowFunctionSet(WindowFunction fun);
 
 	DUCKDB_API const WindowFunction &GetFunctionByArguments(ClientContext &context,
@@ -115,7 +120,7 @@ public:
 
 class TableFunctionSet : public FunctionSet<TableFunction> {
 public:
-	DUCKDB_API explicit TableFunctionSet(string name);
+	DUCKDB_API explicit TableFunctionSet(Identifier name);
 	DUCKDB_API explicit TableFunctionSet(TableFunction fun);
 
 	DUCKDB_API const TableFunction &GetFunctionByArguments(ClientContext &context,
@@ -124,7 +129,7 @@ public:
 
 class PragmaFunctionSet : public FunctionSet<PragmaFunction> {
 public:
-	DUCKDB_API explicit PragmaFunctionSet(string name);
+	DUCKDB_API explicit PragmaFunctionSet(Identifier name);
 	DUCKDB_API explicit PragmaFunctionSet(PragmaFunction fun);
 };
 

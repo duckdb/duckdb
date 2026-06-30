@@ -16,7 +16,11 @@ std::wstring WindowsUtil::UTF8ToUnicode(const char *input) {
 	if (result_size == 0) {
 		throw IOException("Failure in MultiByteToWideChar");
 	}
-	return std::wstring(buffer.get(), result_size);
+	// If cbMultiByte parameter is -1, the function processes the entire input string,
+	// including the terminating null character. Therefore, the resulting Unicode string
+	// has a terminating null character, and the length returned by the function
+	// includes this character.
+	return std::wstring(buffer.get(), result_size - 1);
 }
 
 static string WideCharToMultiByteWrapper(LPCWSTR input, uint32_t code_page) {

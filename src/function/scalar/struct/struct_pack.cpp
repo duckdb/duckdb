@@ -14,10 +14,16 @@ namespace duckdb {
 static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 #ifdef DEBUG
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<VariableReturnBindData>();
+	auto &info = func_expr.BindInfo()->Cast<VariableReturnBindData>();
 	// this should never happen if the binder below is sane
 	D_ASSERT(args.ColumnCount() == StructType::GetChildTypes(info.stype).size());
 #endif
+	if (args.ColumnCount() == 0) {
+		// empty struct: no children to reference, the value is a single non-null constant
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, false);
+		return;
+	}
 	bool all_const = true;
 	auto &child_entries = StructVector::GetEntries(result);
 	idx_t children_size = 0;
@@ -35,19 +41,17 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 	// differ when the caller is collapsing all-constant inputs to a single argument row.
 	result.BufferMutable().SetVectorTypeOnly(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	result.BufferMutable().SetVectorSizeOnly(children_size);
-	result.Verify(children_size);
+	result.Verify();
 }
 
 template <bool IS_STRUCT_PACK>
 static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	case_insensitive_set_t name_collision_set;
+	identifier_set_t name_collision_set;
 
 	// collect names and deconflict, construct return type
-	if (arguments.empty()) {
-		throw InvalidInputException("Can't pack nothing into a struct");
-	}
+	// note: zero arguments is allowed, producing an empty struct
 	child_list_t<LogicalType> struct_children;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &child = arguments[i];
@@ -56,17 +60,22 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 			if (child->GetAlias().empty()) {
 				throw BinderException("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
 			}
-			alias = child->GetAlias();
-			if (name_collision_set.find(alias) != name_collision_set.end()) {
+			alias = child->GetAlias().GetIdentifierName();
+			if (name_collision_set.find(Identifier(alias)) != name_collision_set.end()) {
 				throw BinderException("Duplicate struct entry name \"%s\"", alias);
 			}
-			name_collision_set.insert(alias);
+			name_collision_set.insert(Identifier(alias));
 		}
-		struct_children.push_back(make_pair(alias, arguments[i]->GetReturnType()));
+		struct_children.emplace_back(make_pair(alias, arguments[i]->GetReturnType()));
 	}
 
 	// this is more for completeness reasons
-	bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
+	// row() produces an unnamed TUPLE, struct_pack() produces a named STRUCT
+	if (IS_STRUCT_PACK) {
+		bound_function.SetReturnType(LogicalType::STRUCT(std::move(struct_children)));
+	} else {
+		bound_function.SetReturnType(LogicalType::TUPLE(std::move(struct_children)));
+	}
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
@@ -82,10 +91,15 @@ static unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, Functi
 
 template <bool IS_STRUCT_PACK>
 static ScalarFunction GetStructPackFunction() {
-	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {}, LogicalTypeId::STRUCT, StructPackFunction,
+	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {},
+	                   IS_STRUCT_PACK ? LogicalTypeId::STRUCT : LogicalTypeId::TUPLE, StructPackFunction,
 	                   StructPackBind<IS_STRUCT_PACK>, StructPackStats);
 	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// struct_pack/row derive their (struct field) names from argument aliases, so the binder must capture argument
+	// expression aliases as named-argument names. This also preserves the legacy behavior of allowing positional
+	// arguments after named ones (the positional arguments simply take their expression's name as the field name).
+	fun.SetCaptureArgumentAliases(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;

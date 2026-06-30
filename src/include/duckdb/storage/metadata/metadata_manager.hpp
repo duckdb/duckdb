@@ -78,8 +78,9 @@ public:
 	static MetaBlockPointer FromBlockPointer(BlockPointer block_pointer, const idx_t metadata_block_size);
 
 	//! Flush all blocks to disk
-	void Flush();
+	void Flush(QueryContext context = QueryContext());
 
+	bool BlockIsModified(const MetaBlockPointer &ptr);
 	bool BlockHasBeenCleared(const MetaBlockPointer &ptr);
 
 	void MarkBlocksAsModified();

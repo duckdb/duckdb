@@ -2,9 +2,6 @@
 # description: Test large case statement
 # group: [generic]
 
-# statement ok
-# PRAGMA enable_verification
-
 statement ok
 CREATE MACRO bigcase(a) AS CASE
     WHEN a=0 THEN 0

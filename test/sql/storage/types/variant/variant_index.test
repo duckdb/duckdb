@@ -9,7 +9,7 @@ CREATE TABLE tbl(col VARIANT UNIQUE, b INTEGER)
 Invalid type Error: Invalid Type [VARIANT]: Invalid type for index key.
 
 # See FIXME in art.cpp:ART::ART to support nested types
-mode skip
+mode skip instable
 
 statement ok
 INSERT into tbl select {'a': i, 'b': i % 5} col, i from range(1000) t(i)

@@ -48,7 +48,7 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 		return;
 	}
 
-	dictionary = DictionaryVector::CreateReusableDictionary(segment.type, index_buffer_count);
+	dictionary = DictionaryVector::CreateReusableDictionary(segment.GetType(), index_buffer_count);
 	dictionary_size = index_buffer_count;
 	auto dict_child_data = FlatVector::Writer<string_t>(dictionary->data, index_buffer_count);
 	dict_child_data.WriteNull();

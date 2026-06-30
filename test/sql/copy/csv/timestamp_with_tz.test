@@ -5,11 +5,8 @@
 statement ok
 CREATE TABLE tbl(id int, ts timestamp);
 
-# this fails without ICU loaded
-statement error
+statement ok
 COPY tbl FROM '{DATA_DIR}/csv/timestamp_with_tz.csv' (HEADER)
-----
-Error when converting column "ts". Could not convert string "2021-05-25 04:55:03.382494 EST" to 'TIMESTAMP'
 
 require icu
 
@@ -26,6 +23,9 @@ CREATE TABLE tbl_tz(id int, ts timestamptz);
 
 statement ok
 COPY tbl_tz FROM '{DATA_DIR}/csv/timestamp_with_tz.csv' (HEADER)
+
+statement ok
+SET Calendar='gregorian'
 
 statement ok
 SET TimeZone='UTC'

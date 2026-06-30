@@ -46,17 +46,15 @@ struct ExtractTimestampUuidOperator {
 template <typename INPUT, typename OP>
 void ExtractVersionFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
-	auto &input = args.data[0];
-	idx_t count = args.size();
-	UnaryExecutor::Execute<INPUT, uint32_t, OP>(input, result, count);
+	const auto &input = args.data[0];
+	UnaryExecutor::Execute<INPUT, uint32_t, OP>(input, result);
 }
 
 template <typename INPUT, typename OP>
 void ExtractTimestampFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
-	auto &input = args.data[0];
-	idx_t count = args.size();
-	UnaryExecutor::Execute<INPUT, timestamp_t, OP>(input, result, count);
+	const auto &input = args.data[0];
+	UnaryExecutor::Execute<INPUT, timestamp_t, OP>(input, result);
 }
 
 struct RandomLocalState : public FunctionLocalState {

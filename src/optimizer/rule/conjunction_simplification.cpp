@@ -17,16 +17,16 @@ ConjunctionSimplificationRule::ConjunctionSimplificationRule(ExpressionRewriter 
 
 unique_ptr<Expression> ConjunctionSimplificationRule::RemoveExpression(BoundConjunctionExpression &conj,
                                                                        const Expression &expr) {
-	for (idx_t i = 0; i < conj.children.size(); i++) {
-		if (conj.children[i].get() == &expr) {
+	for (idx_t i = 0; i < conj.GetChildrenMutable().size(); i++) {
+		if (conj.GetChildrenMutable()[i].get() == &expr) {
 			// erase the expression
-			conj.children.erase_at(i);
+			conj.GetChildrenMutable().erase_at(i);
 			break;
 		}
 	}
-	if (conj.children.size() == 1) {
+	if (conj.GetChildrenMutable().size() == 1) {
 		// one expression remaining: simply return that expression and erase the conjunction
-		return std::move(conj.children[0]);
+		return std::move(conj.GetChildrenMutable()[0]);
 	}
 	return nullptr;
 }

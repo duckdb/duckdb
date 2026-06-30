@@ -1,0 +1,192 @@
+# name: test/sql/aoc24/aoc24.test_slow
+# description: Advent of Code 2024 SQL workloads
+# group: [aoc24]
+
+# day01
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day01.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+765748	27732508
+
+# day02
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day02.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+483	528
+
+# day03
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day03.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+157621318	79845780
+
+# day04
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day04.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+2530	1921
+
+# day05
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day05.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+7307	4713
+
+# day06
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day06.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+5131	1784
+
+# day07
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day07.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+7579994664753	438027111276610
+
+# day08
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day08.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+256	1005
+
+# day09
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day09.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+1928	2858
+
+# day10
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day10.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+607	1384
+
+# day11
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day11.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+193899	229682160383225
+
+# day12
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day12.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+1573474	966476
+
+# day13
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day13.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+40369	72587986598368
+
+# day14
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day14.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+214109808	7687
+
+# day15
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day15.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+10092	9021
+
+# day18
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day18.sql'));
+
+query IT
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+348	54,44
+
+# day19
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day19.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+306	604622004681855
+
+# day20
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day20.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+1351	966130
+
+# day21
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day21.sql'));
+
+query II
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+270084	329431019997766
+
+# day23
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day23.sql'));
+
+query IT
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+1046	de,id,ke,ls,po,sn,tf,tl,tm,uj,un,xw,yz
+
+# day25
+statement ok
+SET VARIABLE aoc_sql = (SELECT content FROM read_text('benchmark/aoc24/queries/day25.sql'));
+
+query I
+SELECT * FROM query(getvariable('aoc_sql'));
+----
+3090

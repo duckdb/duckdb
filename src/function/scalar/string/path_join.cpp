@@ -50,7 +50,7 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto col_count = args.ColumnCount();
 	vector<VectorIterator<string_t>> inputs;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-		inputs.emplace_back(args.data[col_idx].Values<string_t>(count));
+		inputs.emplace_back(args.data[col_idx].Values<string_t>());
 	}
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);

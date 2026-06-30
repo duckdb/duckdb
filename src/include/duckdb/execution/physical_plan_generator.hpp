@@ -93,7 +93,9 @@ public:
 	static bool PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan);
 	//! The order preservation type of the given operator decided by recursively looking at its children
 	static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op);
-
+	//! Determine whether a child has a single value partitioning for the given expressions.
+	static bool HasSingleValuePartitions(ClientContext &context, const vector<unique_ptr<Expression>> &partitions,
+	                                     PhysicalOperator &child, vector<column_t> &partition_columns);
 	//! Make a physical operator in the physical plan.
 	template <class T, class... ARGS>
 	PhysicalOperator &Make(ARGS &&... args) {

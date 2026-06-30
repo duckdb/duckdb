@@ -430,15 +430,15 @@ unique_ptr<FunctionData> BindEquiWidthFunction(BindScalarFunctionInput &input) {
 template <class T, class OP>
 void EquiWidthBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	static constexpr int64_t MAX_BIN_COUNT = 1000000;
-	auto &min_arg = args.data[0];
-	auto &max_arg = args.data[1];
-	auto &bin_count = args.data[2];
-	auto &nice_rounding = args.data[3];
+	const auto &min_arg = args.data[0];
+	const auto &max_arg = args.data[1];
+	const auto &bin_count = args.data[2];
+	const auto &nice_rounding = args.data[3];
 
 	Vector intermediate_result(LogicalType::LIST(OP::LOGICAL_TYPE));
 	GenericExecutor::ExecuteQuaternary<PrimitiveType<T>, PrimitiveType<T>, PrimitiveType<int64_t>, PrimitiveType<bool>,
 	                                   GenericListType<PrimitiveType<T>>>(
-	    min_arg, max_arg, bin_count, nice_rounding, intermediate_result, args.size(),
+	    min_arg, max_arg, bin_count, nice_rounding, intermediate_result,
 	    [&](PrimitiveType<T> min_p, PrimitiveType<T> max_p, PrimitiveType<int64_t> bins_p,
 	        PrimitiveType<bool> nice_rounding_p) {
 		    if (max_p.val < min_p.val) {

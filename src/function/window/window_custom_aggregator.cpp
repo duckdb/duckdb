@@ -8,16 +8,16 @@ namespace duckdb {
 // WindowCustomAggregator
 //===--------------------------------------------------------------------===//
 bool WindowCustomAggregator::CanAggregate(const BoundWindowExpression &wexpr, WindowAggregationMode mode) {
-	if (!wexpr.aggregate) {
+	if (!wexpr.AggregateFunction()) {
 		return false;
 	}
 
-	if (!wexpr.aggregate->CanWindow()) {
+	if (!wexpr.AggregateFunction()->CanWindow()) {
 		return false;
 	}
 
 	//	ORDER BY arguments are not currently supported
-	if (!wexpr.arg_orders.empty()) {
+	if (!wexpr.ArgOrders().empty()) {
 		return false;
 	}
 
@@ -82,7 +82,7 @@ WindowCustomAggregatorLocalState::WindowCustomAggregatorLocalState(ExecutionCont
 
 WindowCustomAggregatorLocalState::~WindowCustomAggregatorLocalState() {
 	if (aggr.function.HasStateDestructorCallback()) {
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+		AggregateInputData aggr_input_data(aggr, allocator);
 		aggr.function.GetStateDestructorCallback()(statef, aggr_input_data, 1);
 	}
 }
@@ -120,7 +120,7 @@ void WindowCustomAggregator::Finalize(ExecutionContext &context, CollectionPtr c
 		WindowPartitionInput partition(context, inputs, count, child_idx, all_valids, filter_packed, stats,
 		                               sink.interrupt_state);
 
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), gcstate.allocator);
+		AggregateInputData aggr_input_data(aggr, gcstate.allocator);
 		aggr.function.GetWindowInitCallback()(aggr_input_data, partition, gcstate.state.data());
 	}
 
@@ -160,7 +160,7 @@ void WindowCustomAggregator::Evaluate(ExecutionContext &context, const DataChunk
 		vector<SubFrames> all_frames;
 		all_frames.reserve(count);
 		EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) { all_frames.push_back(frames); });
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lcstate.allocator);
+		AggregateInputData aggr_input_data(aggr, lcstate.allocator);
 		aggr.function.GetWindowBatchCallback()(aggr_input_data, partition, gstate_p, lcstate.state.data(),
 		                                       all_frames.data(), count, result, row_idx);
 		return;
@@ -168,7 +168,7 @@ void WindowCustomAggregator::Evaluate(ExecutionContext &context, const DataChunk
 
 	EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		// Extract the range
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lcstate.allocator);
+		AggregateInputData aggr_input_data(aggr, lcstate.allocator);
 		aggr.function.GetWindowCallback()(aggr_input_data, partition, gstate_p, lcstate.state.data(), frames, result,
 		                                  i);
 	});

@@ -21,7 +21,7 @@ void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vector &resu
 
 // current_schema
 void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	Value val(ClientData::Get(state.GetContext()).catalog_search_path->GetDefault().schema);
+	Value val(ClientData::Get(state.GetContext()).catalog_search_path->GetDefault().GetSchema());
 	result.Reference(val, count_t(input.size()));
 }
 
@@ -67,7 +67,7 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 		auto &catalog_search_path = ClientData::Get(context).catalog_search_path;
 		auto &search_path = implicit_schemas ? catalog_search_path->Get() : catalog_search_path->GetSetPaths();
 		std::transform(search_path.begin(), search_path.end(), std::back_inserter(schema_list),
-		               [](const CatalogSearchEntry &s) -> Value { return Value(s.schema); });
+		               [](const CatalogSearchEntry &s) -> Value { return Value(s.GetSchema()); });
 		result_val = Value::LIST(LogicalType::VARCHAR, schema_list);
 	}
 	return make_uniq<CurrentSchemasBindData>(std::move(result_val));
@@ -76,7 +76,7 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 // current_schemas
 void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<CurrentSchemasBindData>();
+	auto &info = func_expr.BindInfo()->Cast<CurrentSchemasBindData>();
 	result.Reference(info.result, count_t(input.size()));
 }
 
@@ -85,8 +85,9 @@ void InSearchPathFunction(DataChunk &input, ExpressionState &state, Vector &resu
 	auto &context = state.GetContext();
 	auto &search_path = ClientData::Get(context).catalog_search_path;
 	BinaryExecutor::Execute<string_t, string_t, bool>(
-	    input.data[0], input.data[1], result, input.size(), [&](string_t db_name, string_t schema_name) {
-		    return search_path->SchemaInSearchPath(context, db_name.GetString(), schema_name.GetString());
+	    input.data[0], input.data[1], result, [&](string_t db_name, string_t schema_name) {
+		    return search_path->SchemaInSearchPath(context, Identifier(db_name.GetString()),
+		                                           Identifier(schema_name.GetString()));
 	    });
 }
 

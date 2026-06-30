@@ -35,7 +35,7 @@ void CommitDropState::DropBlock(block_id_t block_id) {
 	dropped_block_ids.push_back(block_id);
 }
 
-void CommitDropState::RemoveIndex(TableIndexList &indexes, string name) {
+void CommitDropState::RemoveIndex(TableIndexList &indexes, Identifier name) {
 	pending_index_removals.push_back(PendingIndexRemoval {indexes, std::move(name)});
 }
 

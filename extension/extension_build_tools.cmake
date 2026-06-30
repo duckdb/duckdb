@@ -260,6 +260,31 @@ function(build_static_extension NAME PARAMETERS)
     list(REMOVE_AT FILES 0)
     add_library(${NAME}_extension STATIC ${FILES})
     target_link_libraries(${NAME}_extension duckdb_static)
+    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CPP")
+endfunction()
+
+function(build_static_extension_capi NAME CAPI_VERSION_MAJOR CAPI_VERSION_MINOR CAPI_VERSION_PATCH PARAMETERS)
+    set(FILES "${ARGV}")
+    list(REMOVE_AT FILES 0 1 2 3)
+    add_library(${NAME}_extension STATIC ${FILES})
+    target_link_libraries(${NAME}_extension duckdb_static)
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_BUILD_STATIC_EXTENSION)
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_MAJOR=${CAPI_VERSION_MAJOR})
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_MINOR=${CAPI_VERSION_MINOR})
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_PATCH=${CAPI_VERSION_PATCH})
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_NAME=${NAME})
+    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CAPI")
+endfunction()
+
+function(build_static_extension_capi_unstable NAME PARAMETERS)
+    set(FILES "${ARGV}")
+    list(REMOVE_AT FILES 0)
+    add_library(${NAME}_extension STATIC ${FILES})
+    target_link_libraries(${NAME}_extension duckdb_static)
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_BUILD_STATIC_EXTENSION)
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_UNSTABLE=${DUCKDB_NORMALIZED_VERSION})
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_NAME=${NAME})
+    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CAPI")
 endfunction()
 
 # Internal extension register function
@@ -316,6 +341,7 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH ${INCLUDE_PATH} PARENT_SCOPE)
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_TEST_PATH ${TEST_PATH} PARENT_SCOPE)
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION ${EXTENSION_VERSION} PARENT_SCOPE)
+
 endfunction()
 
 # Downloads the external extension repo at the specified commit and calls register_extension
@@ -328,7 +354,7 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
     elseif(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
         # Use the pre-cloned source from extension/external/<name> (populated by
         # scripts/sync_out_of_tree_extensions.py via `make sync_out_of_tree_extensions`).
-        set("${NAME}_extension_fc_SOURCE_DIR" "${CMAKE_SOURCE_DIR}/extension/external/${NAME}")
+        set("${NAME}_extension_fc_SOURCE_DIR" "${DUCKDB_MODULE_BASE_DIR}/extension/external/${NAME}")
         if(NOT EXISTS "${${NAME}_extension_fc_SOURCE_DIR}/.git")
             message(FATAL_ERROR
                 "DUCKDB_NEW_EXTENSION_BUILD is set but extension '${NAME}' was not found at "
@@ -337,7 +363,7 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
     else()
         unset(PATCH_COMMAND)
         if (${APPLY_PATCHES})
-            set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+            set(PATCH_COMMAND ${Python3_EXECUTABLE} ${DUCKDB_MODULE_BASE_DIR}/scripts/apply_extension_patches.py ${DUCKDB_MODULE_BASE_DIR}/.github/patches/extensions/${NAME}/)
         endif()
         FETCHCONTENT_DECLARE(
                 ${NAME}_extension_fc
@@ -545,6 +571,17 @@ endif()
 
 # Load extensions passed through cmake config var
 foreach(EXT IN LISTS BUILD_EXTENSIONS)
+    if("${EXT}" STREQUAL "jemalloc")
+        message(WARNING "The 'jemalloc' allocator is no longer provided as an extension, use 'ENABLE_JEMALLOC=ON' to include jemalloc instead")
+        set(ENABLE_JEMALLOC ON CACHE BOOL "Use jemalloc as the memory allocator for DuckDB" FORCE)
+        # Backward-compat shim: downstream consumers call target_link_libraries(... ${ext}_extension).
+        # We provide an empty INTERFACE target to make sure that doesn't fail.
+        if(NOT TARGET jemalloc_extension)
+            add_library(jemalloc_extension INTERFACE)
+        endif()
+        continue()
+    endif()
+
     if(NOT "${EXT}" STREQUAL "")
         if (EXISTS "${EXTENSION_CONFIG_BASE_DIR}/${EXT}.cmake")
             # out-of-tree extension: load cmake file
@@ -555,6 +592,15 @@ foreach(EXT IN LISTS BUILD_EXTENSIONS)
         endif()
     endif()
 endforeach()
+
+# Check if jemalloc is ignored, and if so disable it
+list (FIND SKIP_EXTENSIONS "jemalloc" _index)
+if (${_index} GREATER -1)
+    message(WARNING "The 'jemalloc' allocator is no longer provided as an extension, use 'ENABLE_JEMALLOC=OFF' to disable jemalloc instead")
+    set(ENABLE_JEMALLOC OFF CACHE BOOL "Use jemalloc as the memory allocator for DuckDB" FORCE)
+endif()
+
+
 
 # Custom extension configs passed in DUCKDB_EXTENSION_CONFIGS parameter
 foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)

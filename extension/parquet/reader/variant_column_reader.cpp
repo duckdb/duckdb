@@ -6,7 +6,7 @@
 
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/variant_column_reader.hpp"
-#include "reader/variant/variant_shredded_conversion.hpp"
+#include "reader/variant/parquet_variant_iterator.hpp"
 #include "column_reader.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
@@ -15,7 +15,6 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/variant_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
@@ -47,6 +46,12 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
                                          const struct ColumnIndex &index)
     : ColumnReader(reader, schema), context(context), index(index), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
+
+	for (auto &child : child_readers) {
+		if (child) {
+			child->SetParent(*this);
+		}
+	}
 
 	if (child_readers[0]->Schema().name == "metadata" && child_readers[1]->Schema().name == "value") {
 		metadata_reader_idx = 0;
@@ -101,6 +106,21 @@ static LogicalType GetIntermediateGroupType(optional_ptr<ColumnReader> typed_val
 	return LogicalType::STRUCT(std::move(children));
 }
 
+void VariantColumnReader::PrepareChunk(DataChunk &chunk, idx_t &capacity, const vector<LogicalType> &types,
+                                       idx_t count) {
+	bool needs_init = chunk.ColumnCount() != types.size() || count > capacity;
+	for (idx_t i = 0; !needs_init && i < types.size(); i++) {
+		needs_init = chunk.data[i].GetType() != types[i];
+	}
+	if (needs_init) {
+		chunk.Destroy();
+		chunk.Initialize(context, types, count);
+		capacity = count;
+	} else {
+		chunk.Reset();
+	}
+}
+
 idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	if (pending_skips > 0) {
 		throw InternalException("VariantColumnReader cannot have pending skips");
@@ -115,10 +135,10 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	// So, we just initialize them to all be valid beforehand
 	std::fill_n(define_out, num_values, MaxDefine());
 
-	optional_idx read_count;
-
-	Vector metadata_intermediate(LogicalType::BLOB, num_values);
-	Vector intermediate_group(GetIntermediateGroupType(typed_value_reader), num_values);
+	auto group_type = GetIntermediateGroupType(typed_value_reader);
+	PrepareChunk(intermediate_chunk, intermediate_capacity, {LogicalType::BLOB, group_type}, num_values);
+	auto &metadata_intermediate = intermediate_chunk.data[0];
+	auto &intermediate_group = intermediate_chunk.data[1];
 	auto &group_entries = StructVector::GetEntries(intermediate_group);
 	auto &value_intermediate = group_entries[0];
 
@@ -136,7 +156,6 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 		    "The Variant column did not contain the same amount of values for 'metadata' and 'value'");
 	}
 
-	vector<VariantValue> intermediate;
 	if (typed_value_reader) {
 		ColumnReaderInput child_input(num_values, define_out, repeat_out);
 		auto typed_values = typed_value_reader->Read(child_input, group_entries[1]);
@@ -145,32 +164,10 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 			    "The shredded Variant column did not contain the same amount of values for 'typed_value' and 'value'");
 		}
 	}
-	intermediate =
-	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values);
+	// convert the actual columns
+	Convert(metadata_intermediate, intermediate_group, result, num_values);
 
-	if (index.IsPushdownExtract()) {
-		Vector extract_intermediate(LogicalType::VARIANT(), value_values);
-		VariantValue::ToVARIANT(intermediate, extract_intermediate);
-
-		vector<VariantPathComponent> components;
-		reference<const struct ColumnIndex> path_iter(index.GetChildIndex(0));
-
-		while (true) {
-			auto &current = path_iter.get();
-			auto &field_name = current.GetFieldName();
-			components.emplace_back(field_name);
-			if (!current.HasChildren()) {
-				break;
-			}
-			path_iter = current.GetChildIndex(0);
-		}
-		VariantUtils::VariantExtract(extract_intermediate, components, result, value_values);
-	} else {
-		VariantValue::ToVARIANT(intermediate, result);
-	}
-
-	read_count = value_values;
-	return read_count.GetIndex();
+	return value_values;
 }
 
 void VariantColumnReader::Skip(idx_t num_values) {

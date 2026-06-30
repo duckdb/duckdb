@@ -25,7 +25,7 @@ struct CommonTableExpressionInfo {
 	//! Used by deserialization: prefers query_node; if null, uses query->node.
 	CommonTableExpressionInfo(unique_ptr<SelectStatement> query, unique_ptr<QueryNode> query_node);
 
-	vector<string> aliases;
+	vector<Identifier> aliases;
 	vector<unique_ptr<ParsedExpression>> key_targets;
 	vector<unique_ptr<ParsedExpression>> payload_aggregates;
 

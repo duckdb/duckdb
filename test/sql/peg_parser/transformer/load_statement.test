@@ -2,7 +2,7 @@
 # description: Test analyze and vacuum statements in peg parser
 # group: [transformer]
 
-mode skip
+mode skip instable
 
 require autocomplete
 

@@ -22,7 +22,7 @@ ParquetFileMetadataCache::ParquetFileMetadataCache(unique_ptr<duckdb_parquet::Fi
                                                    unique_ptr<GeoParquetFileMetadata> geo_metadata,
                                                    unique_ptr<FileCryptoMetaData> crypto_metadata, idx_t footer_size)
     : metadata(std::move(file_metadata)), geo_metadata(std::move(geo_metadata)),
-      crypto_metadata(std::move(crypto_metadata)), footer_size(footer_size), validate(handle.Validate()),
+      crypto_metadata(std::move(crypto_metadata)), footer_size(footer_size),
       last_modified(handle.GetLastModifiedTime()), version_tag(handle.GetVersionTag()) {
 }
 
@@ -60,7 +60,7 @@ optional_idx ParquetFileMetadataCache::GetEstimatedCacheMemory() const {
 }
 
 bool ParquetFileMetadataCache::IsValid(CachingFileHandle &new_handle) const {
-	return ExternalFileCache::IsValid(validate, version_tag, last_modified, new_handle.GetVersionTag(),
+	return ExternalFileCache::IsValid(new_handle.Validate(), version_tag, last_modified, new_handle.GetVersionTag(),
 	                                  new_handle.GetLastModifiedTime());
 }
 
@@ -69,7 +69,7 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info,
 	if (validation_mode == CacheValidationMode::NO_VALIDATION) {
 		return ParquetCacheValidity::VALID;
 	}
-	if (validation_mode == CacheValidationMode::VALIDATE_REMOTE && FileSystem::IsRemoteFile(info.path)) {
+	if (validation_mode == CacheValidationMode::VALIDATE_REMOTE && !FileSystem::IsRemoteFile(info.path)) {
 		return ParquetCacheValidity::VALID;
 	}
 	if (info.extended_info == nullptr) {

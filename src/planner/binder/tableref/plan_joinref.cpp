@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
@@ -152,14 +153,16 @@ static bool IsComparisonExpression(const Expression &expr) {
 static bool CreateJoinCondition(Expression &expr, const unordered_set<TableIndex> &left_bindings,
                                 const unordered_set<TableIndex> &right_bindings, vector<JoinCondition> &conditions) {
 	// comparison
-	auto &comparison = expr.Cast<BoundComparisonExpression>();
-	auto left_side = JoinSide::GetJoinSide(*comparison.left, left_bindings, right_bindings);
-	auto right_side = JoinSide::GetJoinSide(*comparison.right, left_bindings, right_bindings);
+	auto &comparison = expr.Cast<BoundFunctionExpression>();
+	auto &left_expr = BoundComparisonExpression::Left(comparison);
+	auto &right_expr = BoundComparisonExpression::Right(comparison);
+	auto left_side = JoinSide::GetJoinSide(left_expr, left_bindings, right_bindings);
+	auto right_side = JoinSide::GetJoinSide(right_expr, left_bindings, right_bindings);
 	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
 		// join condition can be divided in a left/right side
 		auto comp_type = expr.GetExpressionType();
-		auto left = std::move(comparison.left);
-		auto right = std::move(comparison.right);
+		auto left = std::move(BoundComparisonExpression::LeftMutable(comparison));
+		auto right = std::move(BoundComparisonExpression::RightMutable(comparison));
 		if (left_side == JoinSide::RIGHT) {
 			// left = right, right = left, flip the comparison symbol and reverse sides
 			swap(left, right);
@@ -338,7 +341,7 @@ static bool HasCorrelatedColumns(const Expression &root_expr) {
 	bool has_correlated_columns = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(root_expr,
 	                                                              [&](const BoundColumnRefExpression &colref) {
-		                                                              if (colref.depth > 0) {
+		                                                              if (colref.Depth() > 0) {
 			                                                              has_correlated_columns = true;
 		                                                              }
 	                                                              });
@@ -376,7 +379,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 
 	if (ref.type == JoinType::RIGHT && ref.ref_type != JoinRefType::ASOF &&
-	    ClientConfig::GetConfig(context).enable_optimizer &&
 	    !Optimizer::OptimizerDisabled(context, OptimizerType::BUILD_SIDE_PROBE_SIDE)) {
 		// we turn any right outer joins into left outer joins for optimization purposes
 		// they are the same but with sides flipped, so treating them the same simplifies life
@@ -413,7 +415,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		filter->AddChild(std::move(root));
 		return std::move(filter);
 	}
-
 	// now create the join operator from the join condition
 	auto result = LogicalComparisonJoin::CreateJoin(context, ref.type, ref.ref_type, std::move(left), std::move(right),
 	                                                std::move(ref.condition));

@@ -34,7 +34,7 @@ string ParseStringOption(const Value &value, const string &loption) {
 }
 
 unique_ptr<FunctionData> WriteBlobBind(ClientContext &context, CopyFunctionBindInput &input,
-                                       const vector<string> &names, const vector<LogicalType> &sql_types) {
+                                       const vector<Identifier> &names, const vector<LogicalType> &sql_types) {
 	if (sql_types.size() != 1 || sql_types.back().id() != LogicalTypeId::BLOB) {
 		throw BinderException("\"COPY (FORMAT BLOB)\" only supports a single BLOB column");
 	}
@@ -91,7 +91,7 @@ void WriteBlobData(QueryContext &query_context, FileHandle &handle, data_ptr_t b
 			throw IOException("Failed to write to file!");
 		}
 		blob_ptr += written;
-		blob_len -= written;
+		blob_len -= static_cast<idx_t>(written);
 	}
 }
 
@@ -109,7 +109,7 @@ void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFun
 
 	QueryContext query_context(context.client);
 
-	for (auto entry : input.data[0].Values<string_t>(input.size())) {
+	for (auto entry : input.data[0].Values<string_t>()) {
 		if (entry.IsValid()) {
 			auto &blob = entry.GetValue();
 			WriteBlobData(query_context, *handle, data_ptr_cast(blob.GetDataWriteable()), blob.GetSize());
@@ -131,7 +131,7 @@ unique_ptr<PreparedBatchData> WriteBlobPrepareBatch(ClientContext &context, Func
 
 	for (auto &chunk : collection->Chunks()) {
 		D_ASSERT(chunk.ColumnCount() == 1);
-		for (auto entry : chunk.data[0].Values<string_t>(chunk.size())) {
+		for (auto entry : chunk.data[0].Values<string_t>()) {
 			if (!entry.IsValid()) {
 				continue;
 			}

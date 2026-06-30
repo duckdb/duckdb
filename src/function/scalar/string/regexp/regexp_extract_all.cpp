@@ -86,7 +86,7 @@ int32_t GetGroupIndex(DataChunk &args, idx_t row, int32_t &result) {
 		result = 0;
 		return true;
 	}
-	auto entries = args.data[2].Values<int32_t>(args.size());
+	auto entries = args.data[2].Values<int32_t>();
 	auto entry = entries[row];
 	if (!entry.IsValid()) {
 		return false;
@@ -107,14 +107,14 @@ duckdb_re2::RE2 &GetPattern(const RegexpBaseBindData &info, ExpressionState &sta
 
 void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<RegexpBaseBindData>();
+	const auto &info = func_expr.BindInfo()->Cast<RegexpBaseBindData>();
 
-	auto &strings = args.data[0];
-	auto &patterns = args.data[1];
+	const auto &strings = args.data[0];
+	const auto &patterns = args.data[1];
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
-	auto strings_entries = strings.Values<string_t>(args.size());
-	auto pattern_entries = patterns.Values<string_t>(args.size());
+	auto strings_entries = strings.Values<string_t>();
+	auto pattern_entries = patterns.Values<string_t>();
 
 	// Reference the 'strings' StringBuffer, because we won't need to allocate new data
 	// for the result, all returned strings are substrings of the originals
@@ -242,13 +242,13 @@ static list_entry_t ExtractStructAllSingleTuple(const string_t &string_val, duck
 void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
 #ifdef D_ASSERT_IS_ENABLED
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<RegexpExtractAllStructBindData>();
+	const auto &info = func_expr.BindInfo()->Cast<RegexpExtractAllStructBindData>();
 	// Struct multi-match variant only supports constant pattern (enforced in Bind)
 	D_ASSERT(info.constant_pattern);
 #endif
 
 	// Expect arguments: string, pattern, list_of_group_names [, options]
-	auto &strings = args.data[0];
+	const auto &strings = args.data[0];
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto &struct_vector = ListVector::GetChildMutable(result);
@@ -262,7 +262,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 		child.SetVectorType(VectorType::FLAT_VECTOR);
 	}
 
-	auto strings_entries = strings.Values<string_t>(args.size());
+	auto strings_entries = strings.Values<string_t>();
 	ListVector::Reserve(result, STANDARD_VECTOR_SIZE);
 
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
@@ -304,8 +304,8 @@ unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(BindScalarFunctionInput &i
 	options.set_log_errors(false);
 	vector<string> group_names;
 	child_list_t<LogicalType> struct_children;
-	regexp_util::ParseGroupNameList(context, function.GetName(), *arguments[2], constant_string, options, true,
-	                                group_names, struct_children);
+	regexp_util::ParseGroupNameList(context, function.GetName().GetIdentifierName(), *arguments[2], constant_string,
+	                                options, true, group_names, struct_children);
 	function.SetReturnType(LogicalType::LIST(LogicalType::STRUCT(struct_children)));
 	return make_uniq<RegexpExtractAllStructBindData>(options, std::move(constant_string), constant_pattern,
 	                                                 std::move(group_names));

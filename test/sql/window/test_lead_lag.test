@@ -16,6 +16,37 @@ from (values
 4	NULL
 5	NULL
 
+# With named arguments
+query II
+select c1, lead("offset" := 2, col := c1) over (order by c0 rows between 2 preceding and 4 preceding) as b
+from (values
+	(1, 2),
+	(2, 3),
+	(3, 4),
+	(4, 5)
+) a(c0, c1);
+----
+2	4
+3	5
+4	NULL
+5	NULL
+
+# With named arguments an default value for offset
+query II
+select c1, lead("default" := 1337, col := c1) over (order by c0 rows between 2 preceding and 4 preceding) as b
+from (values
+	(1, 2),
+	(2, 3),
+	(3, 4),
+	(4, 5)
+) a(c0, c1);
+----
+2	3
+3	4
+4	5
+5	1337
+
+
 # Lag > 2 with explicit constant default
 statement ok
 create table win(id int, v int, t int, f float, s varchar);

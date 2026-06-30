@@ -1,0 +1,104 @@
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+index 355d687..b706e50 100644
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -833,7 +833,7 @@ string KernelUtils::FetchFromStringMap(const ffi::CStringMap *str_map, const str
+ 	return val;
+ }
+ 
+-vector<unique_ptr<ParsedExpression>> &
++vector<unique_ptr<ParsedExpression>>
+ KernelUtils::UnpackTransformExpression(const vector<unique_ptr<ParsedExpression>> &parsed_expression) {
+ 	if (parsed_expression.size() != 1) {
+ 		throw IOException("Unexpected size of transformation expression returned by delta kernel: %d",
+@@ -851,7 +851,11 @@ KernelUtils::UnpackTransformExpression(const vector<unique_ptr<ParsedExpression>
+ 		                  root_expression->Cast<FunctionExpression>().FunctionName());
+ 	}
+ 
+-	return root_expression->Cast<FunctionExpression>().GetChildrenMutable();
++	vector<unique_ptr<ParsedExpression>> children;
++	for (const auto &child : root_expression->Cast<FunctionExpression>().GetArguments()) {
++		children.push_back(child.GetExpression().Copy());
++	}
++	return children;
+ }
+ 
+ PredicateVisitor::PredicateVisitor(const vector<DeltaMultiFileColumnDefinition> &columns,
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+index 643fc44..f48db80 100644
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -359,22 +359,22 @@ static unordered_map<idx_t, Value> FindPartitionValues(ParsedExpression &transfo
+ 	unordered_map<idx_t, Value> res;
+ 
+ 	// Iterate the children of the transform
+-	for (auto &child : transformation.Cast<FunctionExpression>().GetChildren()) {
+-		auto &transform_op = child->Cast<FunctionExpression>();
++	for (auto &child : transformation.Cast<FunctionExpression>().GetArguments()) {
++		auto &transform_op = child.GetExpression().Cast<FunctionExpression>();
+ 		if (transform_op.FunctionName() != "delta_transform_op") {
+ 			throw IOException("Unexpected function for delta_transform_op returned by delta kernel: %s",
+-			                  child->Cast<FunctionExpression>().FunctionName());
++			                  child.GetExpression().Cast<FunctionExpression>().FunctionName());
+ 		}
+ 
+ 		bool is_replace = false;
+ 		string field_name;
+ 		vector<Value> values;
+ 
+-		for (auto &transform_op_child : transform_op.GetChildren()) {
+-			if (transform_op_child->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
++		for (auto &transform_op_child : transform_op.GetArguments()) {
++			if (transform_op_child.GetExpression().GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
+ 				auto name =
+-				    transform_op_child->Cast<ComparisonExpression>().Left().Cast<ColumnRefExpression>().GetName();
+-				auto value = transform_op_child->Cast<ComparisonExpression>().Right().Cast<ConstantExpression>().GetValue();
++				    transform_op_child.GetExpression().Cast<ComparisonExpression>().Left().Cast<ColumnRefExpression>().GetName();
++				auto value = transform_op_child.GetExpression().Cast<ComparisonExpression>().Right().Cast<ConstantExpression>().GetValue();
+ 
+ 				if (name == "is_replace") {
+ 					is_replace = value.GetValue<bool>();
+@@ -386,12 +386,12 @@ static unordered_map<idx_t, Value> FindPartitionValues(ParsedExpression &transfo
+ 					throw InternalException("Unexpected name for delta_transform_op returned by delta kernel: %s",
+ 					                        name);
+ 				}
+-			} else if (transform_op_child->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+-				values.push_back(transform_op_child->Cast<ConstantExpression>().GetValue());
++			} else if (transform_op_child.GetExpression().GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
++				values.push_back(transform_op_child.GetExpression().Cast<ConstantExpression>().GetValue());
+ 			} else {
+ 				throw NotImplementedException(
+ 				    "Unexpected expression for delta_transform_op returned by delta kernel: %s",
+-				    transform_op_child->ToString());
++				    transform_op_child.GetExpression().ToString());
+ 			}
+ 		}
+ 
+diff --git a/src/functions/expression_functions.cpp b/src/functions/expression_functions.cpp
+index 99ad6a6..5ad22f5 100644
+--- a/src/functions/expression_functions.cpp
++++ b/src/functions/expression_functions.cpp
+@@ -15,8 +15,8 @@ static void AddTestExpressions(vector<Value> &result, vector<unique_ptr<ParsedEx
+ 
+ 	auto &expression = parsed_expressions.back();
+ 	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
+-		for (auto &expr : expression->Cast<FunctionExpression>().GetChildren()) {
+-			result.push_back(expr->ToString());
++		for (auto &arg : expression->Cast<FunctionExpression>().GetArguments()) {
++			result.push_back(arg.GetExpression().ToString());
+ 		}
+ 	} else if (expression->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+ 		for (auto &expr : expression->Cast<ConjunctionExpression>().GetChildren()) {
+diff --git a/src/include/delta_utils.hpp b/src/include/delta_utils.hpp
+index 09f0be4..5927049 100644
+--- a/src/include/delta_utils.hpp
++++ b/src/include/delta_utils.hpp
+@@ -63,7 +63,7 @@ struct KernelUtils {
+ 		return ErrorData(ExceptionType::IO, "Invalid Delta kernel ExternResult");
+ 	}
+ 
+-	static vector<unique_ptr<ParsedExpression>> &
++	static vector<unique_ptr<ParsedExpression>>
+ 	UnpackTransformExpression(const vector<unique_ptr<ParsedExpression>> &parsed_expression);
+ };
+ 

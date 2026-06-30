@@ -111,18 +111,14 @@ string QueryNode::ResultModifiersToString() const {
 		} else if (modifier.type == ResultModifierType::LIMIT_MODIFIER) {
 			auto &limit_modifier = modifier.Cast<LimitModifier>();
 			if (limit_modifier.limit) {
-				result += " LIMIT " + limit_modifier.limit->ToString();
+				if (limit_modifier.limit_type == LimitValueType::PERCENTAGE) {
+					result += " LIMIT (" + limit_modifier.limit->ToString() + ") %";
+				} else {
+					result += " LIMIT " + limit_modifier.limit->ToString();
+				}
 			}
 			if (limit_modifier.offset) {
 				result += " OFFSET " + limit_modifier.offset->ToString();
-			}
-		} else if (modifier.type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
-			auto &limit_p_modifier = modifier.Cast<LimitPercentModifier>();
-			if (limit_p_modifier.limit) {
-				result += " LIMIT (" + limit_p_modifier.limit->ToString() + ") %";
-			}
-			if (limit_p_modifier.offset) {
-				result += " OFFSET " + limit_p_modifier.offset->ToString();
 			}
 		}
 	}
@@ -173,7 +169,7 @@ bool QueryNode::Equals(const QueryNode *other) const {
 			return false;
 		}
 	}
-	return other->type == type;
+	return true;
 }
 
 void QueryNode::CopyProperties(QueryNode &other) const {
@@ -209,8 +205,7 @@ void QueryNode::AddDistinct() {
 				// we have a DISTINCT without an ON clause - this distinct does not need to be added
 				return;
 			}
-		} else if (modifier.type == ResultModifierType::LIMIT_MODIFIER ||
-		           modifier.type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
+		} else if (modifier.type == ResultModifierType::LIMIT_MODIFIER) {
 			// we encountered a LIMIT or LIMIT PERCENT - these change the result of DISTINCT, so we do need to push a
 			// DISTINCT relation
 			break;

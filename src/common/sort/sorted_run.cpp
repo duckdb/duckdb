@@ -22,28 +22,27 @@ SortedRunScanState::SortedRunScanState(ClientContext &context, const Sort &sort_
 	decoded_key.Initialize(context, {sort.decode_sort_key->GetReturnType()});
 }
 
-void SortedRunScanState::Scan(const SortedRun &sorted_run, const Vector &sort_key_pointers, const idx_t &count,
-                              DataChunk &chunk) {
+void SortedRunScanState::Scan(const SortedRun &sorted_run, const Vector &sort_key_pointers, DataChunk &chunk) {
 	const auto sort_key_type = sort.key_layout->GetSortKeyType();
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_8>(sorted_run, sort_key_pointers, count, chunk);
+		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_8>(sorted_run, sort_key_pointers, chunk);
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_16>(sorted_run, sort_key_pointers, count, chunk);
+		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_16>(sorted_run, sort_key_pointers, chunk);
 	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_24>(sorted_run, sort_key_pointers, count, chunk);
+		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_24>(sorted_run, sort_key_pointers, chunk);
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_32>(sorted_run, sort_key_pointers, count, chunk);
+		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_32>(sorted_run, sort_key_pointers, chunk);
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedScan<SortKeyType::NO_PAYLOAD_VARIABLE_32>(sorted_run, sort_key_pointers, count, chunk);
+		return TemplatedScan<SortKeyType::NO_PAYLOAD_VARIABLE_32>(sorted_run, sort_key_pointers, chunk);
 	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedScan<SortKeyType::PAYLOAD_FIXED_16>(sorted_run, sort_key_pointers, count, chunk);
+		return TemplatedScan<SortKeyType::PAYLOAD_FIXED_16>(sorted_run, sort_key_pointers, chunk);
 	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedScan<SortKeyType::PAYLOAD_FIXED_24>(sorted_run, sort_key_pointers, count, chunk);
+		return TemplatedScan<SortKeyType::PAYLOAD_FIXED_24>(sorted_run, sort_key_pointers, chunk);
 	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedScan<SortKeyType::PAYLOAD_FIXED_32>(sorted_run, sort_key_pointers, count, chunk);
+		return TemplatedScan<SortKeyType::PAYLOAD_FIXED_32>(sorted_run, sort_key_pointers, chunk);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedScan<SortKeyType::PAYLOAD_VARIABLE_32>(sorted_run, sort_key_pointers, count, chunk);
+		return TemplatedScan<SortKeyType::PAYLOAD_VARIABLE_32>(sorted_run, sort_key_pointers, chunk);
 	default:
 		throw NotImplementedException("SortedRunMergerLocalState::ScanPartition for %s",
 		                              EnumUtil::ToString(sort_key_type));
@@ -85,9 +84,9 @@ static void GetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_ke
 }
 
 template <SortKeyType SORT_KEY_TYPE>
-void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector &sort_key_pointers, const idx_t &count,
-                                       DataChunk &chunk) {
+void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector &sort_key_pointers, DataChunk &chunk) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	const idx_t count = sort_key_pointers.size();
 
 	const auto &output_projection_columns = sort.output_projection_columns;
 	idx_t opc_idx = 0;
@@ -176,28 +175,29 @@ SortedRun::~SortedRun() {
 }
 
 template <SortKeyType SORT_KEY_TYPE>
-static void TemplatedSetPayloadPointer(Vector &key_locations, Vector &payload_locations, const idx_t count) {
+static void TemplatedSetPayloadPointer(const Vector &key_locations, const Vector &payload_locations) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	D_ASSERT(key_locations.size() == payload_locations.size());
 
-	const auto key_locations_ptr = FlatVector::GetDataMutable<SORT_KEY *>(key_locations);
+	const auto key_locations_ptr = FlatVector::GetData<SORT_KEY *>(key_locations);
 	const auto payload_locations_ptr = FlatVector::GetData<data_ptr_t>(payload_locations);
 
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < key_locations.size(); i++) {
 		key_locations_ptr[i]->SetPayload(payload_locations_ptr[i]);
 	}
 }
 
-static void SetPayloadPointer(Vector &key_locations, Vector &payload_locations, const idx_t count,
+static void SetPayloadPointer(const Vector &key_locations, const Vector &payload_locations,
                               const SortKeyType &sort_key_type) {
 	switch (sort_key_type) {
 	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_16>(key_locations, payload_locations, count);
+		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_16>(key_locations, payload_locations);
 	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_24>(key_locations, payload_locations, count);
+		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_24>(key_locations, payload_locations);
 	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_32>(key_locations, payload_locations, count);
+		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_32>(key_locations, payload_locations);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_VARIABLE_32>(key_locations, payload_locations, count);
+		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_VARIABLE_32>(key_locations, payload_locations);
 	default:
 		throw NotImplementedException("SetPayloadPointer for %s", EnumUtil::ToString(sort_key_type));
 	}
@@ -210,7 +210,7 @@ void SortedRun::Sink(DataChunk &key, DataChunk &payload) {
 		D_ASSERT(key.size() == payload.size());
 		payload_data->Append(payload_append_state, payload);
 		SetPayloadPointer(key_append_state.chunk_state.row_locations, payload_append_state.chunk_state.row_locations,
-		                  key.size(), key_data->GetLayout().GetSortKeyType());
+		                  key_data->GetLayout().GetSortKeyType());
 	}
 }
 

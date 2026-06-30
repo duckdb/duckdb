@@ -11,12 +11,15 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_data.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+#include "duckdb/storage/table/per_column_metadata_blocks.hpp"
+#include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 
 namespace duckdb {
 
@@ -135,6 +138,16 @@ public:
 		OnPropertyBegin(field_id, tag);
 		ReadDataPtr(ret, count);
 		OnPropertyEnd();
+	}
+
+	inline bool ReadOptionalProperty(const field_id_t field_id, const char *tag, data_ptr_t ret, idx_t count) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			OnOptionalPropertyEnd(false);
+			return false;
+		}
+		ReadDataPtr(ret, count);
+		OnOptionalPropertyEnd(true);
+		return true;
 	}
 
 	// Try to read a property, if it is not present, continue, otherwise read and discard the value
@@ -354,12 +367,13 @@ private:
 	template <typename T = void>
 	inline typename std::enable_if<is_insertion_preserving_map<T>::value, T>::type Read() {
 		using VALUE_TYPE = typename is_insertion_preserving_map<T>::VALUE_TYPE;
+		using KEY_TYPE = typename is_insertion_preserving_map<T>::KEY_TYPE;
 
 		T map;
 		auto size = OnListBegin();
 		for (idx_t i = 0; i < size; i++) {
 			OnObjectBegin();
-			auto key = ReadProperty<string>(0, "key");
+			auto key = ReadProperty<KEY_TYPE>(0, "key");
 			auto value = ReadProperty<VALUE_TYPE>(1, "value");
 			OnObjectEnd();
 			map[key] = std::move(value);
@@ -498,6 +512,12 @@ private:
 		return ReadString();
 	}
 
+	// Deserialize an Identifier (stored identically to a plain string)
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, Identifier>::value, T>::type Read() {
+		return Identifier(ReadString());
+	}
+
 	// Deserialize a Enum
 	template <typename T = void>
 	inline typename std::enable_if<std::is_enum<T>::value, T>::type Read() {
@@ -550,6 +570,12 @@ private:
 	inline typename std::enable_if<std::is_same<T, optional_idx>::value, T>::type Read() {
 		auto idx = ReadUnsignedInt64();
 		return idx == DConstants::INVALID_INDEX ? optional_idx() : optional_idx(idx);
+	}
+
+	// Deserialize a ProjectionIndex
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, PerColumnMetadataBlock>::value, T>::type Read() {
+		return PerColumnMetadataBlock::Unpack(ReadUnsignedInt64());
 	}
 
 protected:

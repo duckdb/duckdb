@@ -83,7 +83,7 @@ struct VariantNormalizer {
 	static void VisitDefault(VariantLogicalType type_id, const_data_ptr_t, VariantNormalizerState &state);
 
 public:
-	static void Normalize(Vector &input, Vector &output, idx_t count);
+	static void Normalize(const Vector &input, Vector &output);
 };
 
 } // namespace duckdb

@@ -67,7 +67,7 @@ function my_error_function(
     input::DuckDB.duckdb_data_chunk,
     output::DuckDB.duckdb_vector
 )
-    throw(ErrorException("Runtime error in scalar function"))
+    return throw(ErrorException("Runtime error in scalar function"))
 end
 
 

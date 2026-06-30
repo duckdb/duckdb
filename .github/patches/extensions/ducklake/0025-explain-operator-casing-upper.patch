@@ -1,0 +1,14 @@
+diff --git a/test/sql/stats/global_stats.test b/test/sql/stats/global_stats.test
+index 7ff14168..1a030474 100644
+--- a/test/sql/stats/global_stats.test
++++ b/test/sql/stats/global_stats.test
+@@ -11,6 +11,9 @@ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db
+ test-env DATA_PATH {TEST_DIR}
+ 
+ 
++statement ok
++SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
++
+ statement ok
+ ATTACH 'ducklake:{DUCKLAKE_CONNECTION}' AS ducklake (DATA_PATH '{DATA_PATH}/ducklake_global_stats', METADATA_CATALOG 'ducklake_meta')
+ 

@@ -54,6 +54,8 @@ struct CSVReaderOptions {
 	CSVOption<string> rejects_scan_name = {"reject_scans"};
 	//! Rejects table entry limit (0 = no limit)
 	idx_t rejects_limit = 0;
+	//! Rejects line size limit (0 = no limit)
+	idx_t rejects_line_size_limit = 10000;
 	//! Number of samples to buffer
 	idx_t buffer_sample_size = static_cast<idx_t>(STANDARD_VECTOR_SIZE * 50);
 	//! Specifies the strings that represents a null value
@@ -72,7 +74,7 @@ struct CSVReaderOptions {
 	// CSVAutoOptions
 	//===--------------------------------------------------------------------===//
 	//! SQL Type list mapping of name to SQL type index in sql_type_list
-	case_insensitive_map_t<idx_t> sql_types_per_column;
+	identifier_map_t<idx_t> sql_types_per_column;
 	//! User-defined SQL type list
 	vector<LogicalType> sql_type_list;
 	//! User-defined name list
@@ -80,10 +82,10 @@ struct CSVReaderOptions {
 	//! If the names and types were set by the columns parameter
 	bool columns_set = false;
 	//! Types considered as candidates for auto-detection ordered by ascending specificity (~ from low to high)
-	vector<LogicalType> auto_type_candidates = {
-	    LogicalType::VARCHAR,      LogicalType::DOUBLE,    LogicalType::BIGINT,
-	    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP, LogicalType::DATE,
-	    LogicalType::TIME,         LogicalType::BOOLEAN,   LogicalType::SQLNULL};
+	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR,   LogicalType::DOUBLE, LogicalType::BIGNUM,
+	                                            LogicalType::HUGEINT,   LogicalType::BIGINT, LogicalType::TIMESTAMP_TZ,
+	                                            LogicalType::TIMESTAMP, LogicalType::DATE,   LogicalType::TIME,
+	                                            LogicalType::BOOLEAN,   LogicalType::SQLNULL};
 	//! In case the sniffer found a mismatch error from user defined types or dialect
 	string sniffer_user_mismatch_error;
 	//! In case the sniffer found a mismatch error from user defined types or dialect

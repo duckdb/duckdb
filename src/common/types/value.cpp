@@ -152,6 +152,9 @@ Value::Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
 	value_.double_ = val;
 }
 
+Value::Value(const Identifier &val) : Value(val.GetIdentifierName()) {
+}
+
 Value::Value(const char *val) : Value(val ? string(val) : string()) {
 }
 
@@ -244,15 +247,15 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::TIMESTAMP(date, dtime_t(0));
 	}
 	case LogicalTypeId::TIMESTAMP_SEC: {
-		// Get the minimum timestamp and cast it to timestamp_sec_t.
+		// Get the minimum timestamp and convert it to timestamp_sec_t.
 		const auto min_ts = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const auto ts = Cast::Operation<timestamp_t, timestamp_sec_t>(min_ts);
+		const timestamp_sec_t ts(min_ts.value / Interval::MICROS_PER_SEC);
 		return Value::TIMESTAMPSEC(ts);
 	}
 	case LogicalTypeId::TIMESTAMP_MS: {
-		// Get the minimum timestamp and cast it to timestamp_ms_t.
+		// Get the minimum timestamp and convert it to timestamp_ms_t.
 		const auto min_ts = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const auto ts = Cast::Operation<timestamp_t, timestamp_ms_t>(min_ts);
+		const timestamp_ms_t ts(min_ts.value / Interval::MICROS_PER_MSEC);
 		return Value::TIMESTAMPMS(ts);
 	}
 	case LogicalTypeId::TIMESTAMP_NS: {
@@ -347,15 +350,15 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_SEC: {
-		// Get the maximum timestamp and cast it to timestamp_s_t.
+		// Get the maximum timestamp and convert it to timestamp_s_t.
 		const auto max_ts = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const auto ts = Cast::Operation<timestamp_t, timestamp_sec_t>(max_ts);
+		const timestamp_sec_t ts(max_ts.value / Interval::MICROS_PER_SEC);
 		return Value::TIMESTAMPSEC(ts);
 	}
 	case LogicalTypeId::TIMESTAMP_MS: {
-		// Get the maximum timestamp and cast it to timestamp_ms_t.
+		// Get the maximum timestamp and convert it to timestamp_ms_t.
 		const auto max_ts = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		const auto ts = Cast::Operation<timestamp_t, timestamp_ms_t>(max_ts);
+		const timestamp_ms_t ts(max_ts.value / Interval::MICROS_PER_MSEC);
 		return Value::TIMESTAMPMS(ts);
 	}
 	case LogicalTypeId::TIMESTAMP_NS: {
@@ -410,15 +413,15 @@ Value Value::Infinity(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t::infinity());
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TIMESTAMPSEC(timestamp_sec_t(timestamp_t::infinity().value));
+		return Value::TIMESTAMPSEC(timestamp_sec_t::infinity());
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TIMESTAMPMS(timestamp_ms_t(timestamp_t::infinity().value));
+		return Value::TIMESTAMPMS(timestamp_ms_t::infinity());
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::infinity().value));
+		return Value::TIMESTAMPNS(timestamp_ns_t::infinity());
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::infinity()));
+		return Value::TIMESTAMPTZ(timestamp_tz_t::infinity());
 	case LogicalTypeId::TIMESTAMP_TZ_NS:
-		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(timestamp_t::infinity().value));
+		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t::infinity());
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(std::numeric_limits<float>::infinity());
 	case LogicalTypeId::DOUBLE:
@@ -435,15 +438,15 @@ Value Value::NegativeInfinity(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t::ninfinity());
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TIMESTAMPSEC(timestamp_sec_t(timestamp_t::ninfinity().value));
+		return Value::TIMESTAMPSEC(timestamp_sec_t::ninfinity());
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TIMESTAMPMS(timestamp_ms_t(timestamp_t::ninfinity().value));
+		return Value::TIMESTAMPMS(timestamp_ms_t::ninfinity());
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::ninfinity().value));
+		return Value::TIMESTAMPNS(timestamp_ns_t::ninfinity());
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::ninfinity()));
+		return Value::TIMESTAMPTZ(timestamp_tz_t::ninfinity());
 	case LogicalTypeId::TIMESTAMP_TZ_NS:
-		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(timestamp_t::ninfinity().value));
+		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t::ninfinity());
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(-std::numeric_limits<float>::infinity());
 	case LogicalTypeId::DOUBLE:
@@ -574,37 +577,37 @@ bool Value::IsFinite(double input) {
 
 template <>
 bool Value::IsFinite(date_t input) {
-	return Date::IsFinite(input);
+	return input.IsFinite();
 }
 
 template <>
 bool Value::IsFinite(timestamp_t input) {
-	return Timestamp::IsFinite(input);
+	return input.IsFinite();
 }
 
 template <>
 bool Value::IsFinite(timestamp_sec_t input) {
-	return Timestamp::IsFinite(input);
+	return input.IsFinite();
 }
 
 template <>
 bool Value::IsFinite(timestamp_ms_t input) {
-	return Timestamp::IsFinite(input);
+	return input.IsFinite();
 }
 
 template <>
 bool Value::IsFinite(timestamp_ns_t input) {
-	return Timestamp::IsFinite(input);
+	return input.IsFinite();
 }
 
 template <>
 bool Value::IsFinite(timestamp_tz_t input) {
-	return Timestamp::IsFinite(input);
+	return input.IsFinite();
 }
 
 template <>
 bool Value::IsFinite(timestamp_tz_ns_t input) {
-	return Timestamp::IsFinite(input);
+	return input.IsFinite();
 }
 
 bool Value::StringIsValid(const char *str, idx_t length) {
@@ -769,12 +772,6 @@ Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, i
 	return val;
 }
 
-Value Value::AGGREGATE_STATE(const LogicalType &type, vector<Value> underlying_struct_values) {
-	// We just wrap the STRUCT value as the Vector's values are the same underneath, and also the type is being injected
-	// We do it for consistency where all LogicalType has its Value constructor defined
-	return STRUCT(type, std::move(underlying_struct_values));
-}
-
 Value Value::STRUCT(const LogicalType &type, vector<Value> struct_values) {
 	Value result;
 	auto child_types = StructType::GetChildTypes(type);
@@ -795,6 +792,15 @@ Value Value::STRUCT(child_list_t<Value> values) {
 		struct_values.push_back(std::move(child.second));
 	}
 	return Value::STRUCT(LogicalType::STRUCT(child_types), std::move(struct_values));
+}
+
+Value Value::TUPLE(vector<Value> values) {
+	vector<LogicalType> child_types;
+	child_types.reserve(values.size());
+	for (auto &child : values) {
+		child_types.push_back(child.type());
+	}
+	return Value::STRUCT(LogicalType::TUPLE(std::move(child_types)), std::move(values));
 }
 
 Value Value::VARIANT(vector<Value> val) {
@@ -855,8 +861,8 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 		struct_types.reserve(2);
 		new_children.reserve(2);
 
-		struct_types.push_back(make_pair("key", key_type));
-		struct_types.push_back(make_pair("value", value_type));
+		struct_types.emplace_back(make_pair("key", key_type));
+		struct_types.emplace_back(make_pair("value", value_type));
 
 		auto key = keys[i].DefaultCastAs(key_type);
 		MapKeyCheck(unique_keys, key);
@@ -976,7 +982,7 @@ Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
 Value Value::TYPE(const LogicalType &type) {
 	MemoryStream stream;
 	SerializationOptions options;
-	options.serialization_compatibility = SerializationCompatibility::Latest();
+	options.storage_compatibility = StorageCompatibility::Latest();
 	BinarySerializer::Serialize(type, stream, options);
 	auto data_ptr = const_char_ptr_cast(stream.GetData());
 	auto data_len = stream.GetPosition();
@@ -1687,7 +1693,7 @@ hash_t Value::Hash() const {
 	}
 	Vector input(*this, count_t(1));
 	Vector result(LogicalType::HASH, 1);
-	VectorOperations::Hash(input, result, 1);
+	VectorOperations::Hash(input, result);
 
 	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return *ConstantVector::GetData<hash_t>(result);
@@ -1733,15 +1739,17 @@ string Value::ToSQLString() const {
 		string ret = "VARIANT(";
 		Vector tmp(*this, count_t(1));
 		RecursiveUnifiedVectorFormat format;
-		Vector::RecursiveToUnifiedFormat(tmp, 1, format);
+		Vector::RecursiveToUnifiedFormat(tmp, format);
 		UnifiedVariantVectorData vector_data(format);
 		auto val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
 		ret += val.ToString();
 		ret += ")";
 		return ret;
 	}
+	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::STRUCT: {
-		bool is_unnamed = StructType::IsUnnamed(type_);
+		// a TUPLE is always unnamed (even when empty, where IsUnnamed cannot tell)
+		bool is_unnamed = type_.id() == LogicalTypeId::TUPLE || StructType::IsUnnamed(type_);
 		string ret = is_unnamed ? "(" : "{";
 		auto &child_types = StructType::GetChildTypes(type_);
 		auto &struct_values = StructValue::GetChildren(*this);
@@ -1756,6 +1764,10 @@ string Value::ToSQLString() const {
 			if (i < struct_values.size() - 1) {
 				ret += ", ";
 			}
+		}
+		// a single-element tuple needs a trailing comma to round-trip: (1,) - otherwise (1) is just grouping
+		if (is_unnamed && struct_values.size() == 1) {
+			ret += ",";
 		}
 		ret += is_unnamed ? ")" : "}";
 		return ret;
@@ -1800,6 +1812,24 @@ string Value::ToSQLString() const {
 			}
 		}
 		ret += "]";
+		return ret;
+	}
+	case LogicalTypeId::MAP: {
+		// A bare `MAP {...}` literal infers its element types from the entries
+		// (and `MAP {}` infers MAP(INTEGER, INTEGER)), so it does not faithfully
+		// round-trip on its own. Append an explicit cast to the real type
+		auto &entries = MapValue::GetChildren(*this);
+		string ret = "MAP {";
+		for (idx_t i = 0; i < entries.size(); i++) {
+			auto &kv = StructValue::GetChildren(entries[i]);
+			if (i > 0) {
+				ret += ", ";
+			}
+			ret += kv[0].ToSQLString();
+			ret += ": ";
+			ret += kv[1].ToSQLString();
+		}
+		ret += "}::" + type_.ToString();
 		return ret;
 	}
 	case LogicalTypeId::UNION: {
@@ -1984,6 +2014,15 @@ union_tag_t UnionValue::GetTag(const Value &value) {
 
 const LogicalType &UnionValue::GetType(const Value &value) {
 	return UnionType::GetMemberType(value.type(), UnionValue::GetTag(value));
+}
+
+Value VariantValue::GetValue(const Value &variant_val) {
+	D_ASSERT(variant_val.type().id() == LogicalTypeId::VARIANT && !variant_val.IsNull());
+	Vector tmp(variant_val, count_t(1));
+	RecursiveUnifiedVectorFormat format;
+	Vector::RecursiveToUnifiedFormat(tmp, format);
+	UnifiedVariantVectorData vector_data(format);
+	return VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
 }
 
 hugeint_t IntegralValue::Get(const Value &value) {
@@ -2189,7 +2228,7 @@ void Value::SerializeChildren(Serializer &serializer, const vector<Value> &child
 }
 
 void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const {
-	if (serialize_type || !serializer.ShouldSerialize(4)) {
+	if (serialize_type || !serializer.ShouldSerialize(StorageVersion::V1_2_0)) {
 		// only the root value needs to serialize its type
 		// for forwards compatibility reasons, we also serialize the type always when targeting versions < v1.2.0
 		serializer.WriteProperty(100, "type", type_);
@@ -2256,7 +2295,7 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 			auto blob_str = Blob::ToString(StringValue::Get(*this));
 			serializer.WriteProperty(102, "value", blob_str);
 		} else if (type_.id() == LogicalTypeId::GEOMETRY) {
-			if (!serializer.ShouldSerialize(7)) {
+			if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 				// Write as old-style SPATIAL format
 				string blob;
 				Geometry::ToSpatialGeometry(StringValue::Get(*this), blob);

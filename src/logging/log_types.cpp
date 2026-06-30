@@ -20,6 +20,8 @@ constexpr LogLevel PhysicalOperatorLogType::LEVEL;
 constexpr LogLevel MetricsLogType::LEVEL;
 constexpr LogLevel CheckpointLogType::LEVEL;
 constexpr LogLevel AdaptiveFilterLogType::LEVEL;
+constexpr LogLevel ParquetPrefetchLogType::LEVEL;
+constexpr LogLevel AsyncTaskScheduleLogType::LEVEL;
 
 //===--------------------------------------------------------------------===//
 // QueryLogType
@@ -65,6 +67,7 @@ LogicalType HTTPLogType::GetLogType() {
 	    {"url", LogicalType::VARCHAR},
 	    {"start_time", LogicalType::TIMESTAMP_TZ},
 	    {"duration_ms", LogicalType::BIGINT},
+	    {"request_body_length", LogicalType::UBIGINT},
 	    {"headers", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
 	};
 	auto request_type = LogicalType::STRUCT(request_child_list);
@@ -75,7 +78,6 @@ LogicalType HTTPLogType::GetLogType() {
 	    {"headers", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
 	};
 	auto response_type = LogicalType::STRUCT(response_child_list);
-	;
 
 	LogicalType result_type;
 	child_list_t<LogicalType> child_list = {{"request", request_type}, {"response", response_type}};
@@ -97,16 +99,18 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 	    {"type", Value(EnumUtil::ToString(request.type))},
 	    {"url", Value(request.url)},
 	    {"headers", CreateHTTPHeadersValue(request.headers)},
-	    {"start_time", request.have_request_timing ? Value::TIMESTAMP(request.request_start) : Value()},
-	    {"duration_ms", request.have_request_timing ? Value::BIGINT(Timestamp::GetEpochMs(request.request_end) -
-	                                                                Timestamp::GetEpochMs(request.request_start))
-	                                                : Value()}};
+	    {"start_time", request.have_request_timing ? Value::TIMESTAMP(request.request_system_start) : Value()},
+	    {"duration_ms",
+	     request.have_request_timing
+	         ? Value::BIGINT(TimePoint::ElapsedMillis(request.request_monotonic_start, request.request_monotonic_end))
+	         : Value()},
+	    {"request_body_length", request.request_body_length ? Value::UBIGINT(request.request_body_length) : Value()}};
 	auto request_value = Value::STRUCT(request_child_list);
 	Value response_value;
 	if (response) {
 		child_list_t<Value> response_child_list = {
 		    {"status", Value(EnumUtil::ToString(response->status))},
-		    {"reason", Value(response->reason)},
+		    {"reason", Value(response->reason.empty() ? response->GetRequestError() : response->reason)},
 		    {"headers", CreateHTTPHeadersValue(response->headers)},
 		};
 		response_value = Value::STRUCT(response_child_list);
@@ -172,9 +176,9 @@ LogicalType MetricsLogType::GetLogType() {
 	return LogicalType::STRUCT(child_list);
 }
 
-string MetricsLogType::ConstructLogMessage(const MetricType &metric, const Value &value) {
+string MetricsLogType::ConstructLogMessage(const string &metric, const Value &value) {
 	child_list_t<Value> child_list = {
-	    {"metric", EnumUtil::ToString(metric)},
+	    {"metric", metric},
 	    {"value", value.ToString()},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
@@ -200,9 +204,9 @@ LogicalType CheckpointLogType::GetLogType() {
 string CheckpointLogType::CreateLog(const AttachedDatabase &db, DataTableInfo &table, const char *op_name,
                                     vector<Value> map_keys, vector<Value> map_values) {
 	child_list_t<Value> child_list = {
-	    {"database", db.name},
-	    {"schema", table.GetSchemaName()},
-	    {"table", table.GetTableName()},
+	    {"database", db.name.GetIdentifierName()},
+	    {"schema", table.GetSchemaName().GetIdentifierName()},
+	    {"table", table.GetTableName().GetIdentifierName()},
 	    {"type", op_name},
 	    {"info", Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(map_keys), std::move(map_values))},
 	};
@@ -246,7 +250,7 @@ LogicalType TransactionLogType::GetLogType() {
 string TransactionLogType::ConstructLogMessage(const AttachedDatabase &db, const char *log_type,
                                                transaction_t transaction_id) {
 	child_list_t<Value> child_list = {
-	    {"database", db.name},
+	    {"database", db.name.GetIdentifierName()},
 	    {"type", log_type},
 	    {"transaction_id", transaction_id == MAX_TRANSACTION_ID ? Value() : Value::UBIGINT(transaction_id)},
 	};
@@ -280,6 +284,78 @@ string AdaptiveFilterLogType::ConstructLogMessage(const char *event, const strin
 	    {"file_path", Value(file_path)},
 	    {"permutation", Value(std::move(permutation_str))},
 	    {"info", StringPairIterableToMap(info)},
+	};
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+//===--------------------------------------------------------------------===//
+// ParquetPrefetchLogType
+//===--------------------------------------------------------------------===//
+ParquetPrefetchLogType::ParquetPrefetchLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType ParquetPrefetchLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"file_path", LogicalType::VARCHAR},
+	    {"row_group_id", LogicalType::BIGINT},
+	    {"fully_filtered", LogicalType::BOOLEAN},
+	    {"strategy", LogicalType::VARCHAR},
+	    {"prefetch_groups", LogicalType::LIST(LogicalType::LIST(LogicalType::VARCHAR))},
+	    {"minimal_filters", LogicalType::LIST(LogicalType::VARCHAR)},
+	    {"accepted_column_gap", LogicalType::UBIGINT},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string ParquetPrefetchLogType::ConstructLogMessage(const string &file_path, idx_t row_group_id, bool fully_filtered,
+                                                   const char *strategy, const vector<vector<string>> &prefetch_groups,
+                                                   const vector<string> &minimal_filters,
+                                                   uint64_t accepted_column_gap) {
+	vector<Value> outer;
+	outer.reserve(prefetch_groups.size());
+	for (auto &group : prefetch_groups) {
+		vector<Value> inner;
+		inner.reserve(group.size());
+		for (auto &name : group) {
+			inner.emplace_back(name);
+		}
+		outer.push_back(Value::LIST(LogicalType::VARCHAR, std::move(inner)));
+	}
+	vector<Value> minimal;
+	minimal.reserve(minimal_filters.size());
+	for (auto &name : minimal_filters) {
+		minimal.emplace_back(name);
+	}
+	child_list_t<Value> child_list = {
+	    {"file_path", Value(file_path)},
+	    {"row_group_id", Value::BIGINT(static_cast<int64_t>(row_group_id))},
+	    {"fully_filtered", Value::BOOLEAN(fully_filtered)},
+	    {"strategy", strategy ? Value(strategy) : Value(LogicalType::VARCHAR)},
+	    {"prefetch_groups", Value::LIST(LogicalType::LIST(LogicalType::VARCHAR), std::move(outer))},
+	    {"minimal_filters", Value::LIST(LogicalType::VARCHAR, std::move(minimal))},
+	    {"accepted_column_gap", Value::UBIGINT(accepted_column_gap)},
+	};
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+//===--------------------------------------------------------------------===//
+// AsyncTaskScheduleLogType
+//===--------------------------------------------------------------------===//
+AsyncTaskScheduleLogType::AsyncTaskScheduleLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType AsyncTaskScheduleLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"pool", LogicalType::VARCHAR},
+	    {"task_count", LogicalType::BIGINT},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string AsyncTaskScheduleLogType::ConstructLogMessage(const string &pool, idx_t task_count) {
+	child_list_t<Value> child_list = {
+	    {"pool", Value(pool)},
+	    {"task_count", Value::BIGINT(static_cast<int64_t>(task_count))},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }

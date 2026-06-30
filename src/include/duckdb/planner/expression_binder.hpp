@@ -34,14 +34,17 @@ class ScalarFunctionCatalogEntry;
 class AggregateFunctionCatalogEntry;
 class WindowFunctionCatalogEntry;
 class ScalarMacroCatalogEntry;
+class ScalarMacroFunction;
 class CatalogEntry;
 class SimpleFunction;
+class HavingBinder;
+class ColumnAliasBinder;
 
 struct DummyBinding;
 struct SelectBindState;
 
 struct BoundColumnReferenceInfo {
-	string name;
+	Identifier name;
 	optional_idx query_location;
 };
 
@@ -72,7 +75,7 @@ class ExpressionBinder {
 	friend class StackChecker<ExpressionBinder>;
 
 public:
-	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
+	ExpressionBinder(Binder &binder, ClientContext &context);
 	virtual ~ExpressionBinder();
 
 	virtual bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
@@ -80,8 +83,12 @@ public:
 		return false;
 	}
 
-	virtual bool DoesColumnAliasExist(const ColumnRefExpression &colref) {
+	virtual bool IsLateralBinder() const {
 		return false;
+	}
+
+	Binder &GetBinder() const {
+		return binder;
 	}
 
 	// Returns true if the ColumnRef could be an alias reference (unqualified or qualified with table name "alias")
@@ -105,33 +112,27 @@ public:
 	const vector<BoundColumnReferenceInfo> &GetBoundColumns() {
 		return bound_columns;
 	}
+	void TruncateBoundColumns(idx_t count) {
+		if (bound_columns.size() > count) {
+			bound_columns.resize(count);
+		}
+	}
 
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	ErrorData Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
 
 	//! Returns the STRUCT_EXTRACT operator expression
-	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const string &field_name);
+	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const Identifier &field_name);
 	//! Returns a STRUCT_PACK function expression
 	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &col_ref);
 
-	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
+	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const Identifier &table_name);
 
-	//! Returns a qualified column reference from a column name
-	unique_ptr<ParsedExpression> QualifyColumnName(const ParsedExpression &expr, const string &column_name,
-	                                               ErrorData &error);
-	//! Returns a qualified column reference from a column reference with column_names.size() > 2
-	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref, ErrorData &error);
-	//! Returns a qualified column reference from a column reference
-	virtual unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error);
-	//! Enables special-handling of lambda parameters by tracking them in the lambda_params vector
-	void QualifyColumnNamesInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
-	//! Recursively qualifies the column references in the (children) of the expression. Passes on the
-	//! within_function_expression state from outer expressions, or sets it
-	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params,
-	                        const bool within_function_expression = false);
 	//! Entry point for qualifying the column references of the expression
-	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
+	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr,
+	                               optional_ptr<ColumnAliasBinder> alias_binder = nullptr);
 	static void QualifyColumnNames(ExpressionBinder &binder, unique_ptr<ParsedExpression> &expr);
+	static void QualifyColumnNames(HavingBinder &having_binder, unique_ptr<ParsedExpression> &expr);
 
 	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
 	                          CollationType type = CollationType::ALL_COLLATIONS);
@@ -154,15 +155,17 @@ public:
 
 	//! FIXME: Generalise this for extensibility.
 	//! Recursively replaces macro parameters with the provided input parameters.
-	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
+	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<identifier_set_t> &lambda_params);
 	//! Enables special-handling of lambda parameters during macro replacement by tracking them in the lambda_params
 	//! vector.
-	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
+	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<identifier_set_t> &lambda_params);
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
+	virtual unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error);
+
 	//! Returns true if the function name is an alias for the UNNEST function
-	static bool IsUnnestFunction(const string &function_name);
+	static bool IsUnnestFunction(const Identifier &function_name);
 
 private:
 	//! Current stack depth
@@ -204,7 +207,7 @@ protected:
 	                          const optional_ptr<BindLambdaContext> bind_lambda_context,
 	                          const vector<LogicalType> &function_child_types);
 
-	virtual unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+	unique_ptr<ParsedExpression> GetSQLValueFunction(const Identifier &column_name);
 
 	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
 	LogicalType ResolveCoalesceType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
@@ -212,7 +215,7 @@ protected:
 
 	BindResult BindUnsupportedExpression(ParsedExpression &expr, idx_t depth, const string &message);
 
-	optional_ptr<CatalogEntry> BindAndQualifyFunction(FunctionExpression &function, bool allow_throw);
+	CatalogEntry &BindFunction(FunctionExpression &function);
 
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
@@ -223,25 +226,25 @@ protected:
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression);
 	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry &macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> &expr_ptr);
+	void FindAggregateExprs(unique_ptr<ParsedExpression> &expr, vector<reference<unique_ptr<ParsedExpression>>> &exprs);
+	void UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> &expr, ScalarMacroFunction &macro_def);
 	void UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
 	                           unique_ptr<ParsedExpression> &expr, idx_t depth);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedWindowMessage();
 	virtual string UnsupportedUnnestMessage();
-	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
+	optional_ptr<CatalogEntry> GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 
 	Binder &binder;
 	ClientContext &context;
-	optional_ptr<ExpressionBinder> stored_binder;
 	vector<BoundColumnReferenceInfo> bound_columns;
+	bool inside_try = false;
 
 	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
 	                               const LambdaSyntaxType syntax_type);
 
-	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDotsInternal(ColumnRefExpression &col_ref, ErrorData &error,
-	                                                                   idx_t &struct_extract_start);
 	virtual void ThrowIfUnnestInLambda(const ColumnBinding &column_binding);
 };
 

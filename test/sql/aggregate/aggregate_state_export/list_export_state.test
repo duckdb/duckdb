@@ -1,0 +1,180 @@
+# name: test/sql/aggregate/aggregate_state_export/list_export_state.test
+# description: Test EXPORT_STATE for the list aggregate
+# group: [aggregate_state_export]
+
+# list order is only deterministic single-threaded - with multiple threads the combine order of the
+# thread-local states is arbitrary (relevant for small vector sizes, where even small inputs span many chunks)
+statement ok
+SET threads=1;
+
+# basic roundtrip
+query I
+SELECT finalize(list(i) EXPORT_STATE) FROM (VALUES (1), (2), (3)) t(i);
+----
+[1, 2, 3]
+
+# the exported state is the list itself
+query I
+SELECT list(i) EXPORT_STATE FROM (VALUES (1), (2), (3)) t(i);
+----
+[1, 2, 3]
+
+query I
+SELECT (list(42) EXPORT_STATE)::INTEGER[];
+----
+[42]
+
+# NULL values are kept in the list
+query I
+SELECT finalize(list(i) EXPORT_STATE) FROM (VALUES (1), (NULL), (3)) t(i);
+----
+[1, NULL, 3]
+
+query I
+SELECT finalize(list(NULL::INTEGER) EXPORT_STATE);
+----
+[NULL]
+
+# empty input exports a NULL state
+query I
+SELECT list(i) EXPORT_STATE FROM (SELECT NULL::INTEGER AS i WHERE false) t;
+----
+NULL
+
+query I
+SELECT finalize(list(i) EXPORT_STATE) FROM (SELECT NULL::INTEGER AS i WHERE false) t;
+----
+NULL
+
+# strings - both inlined and non-inlined
+query I
+SELECT finalize(list(v) EXPORT_STATE) FROM (VALUES ('apple'), ('this-is-a-very-long-string-that-is-not-inlined'), (NULL), ('')) t(v);
+----
+[apple, this-is-a-very-long-string-that-is-not-inlined, NULL, '']
+
+# nested lists
+query I
+SELECT finalize(list(l) EXPORT_STATE) FROM (VALUES ([1, 2]), ([]), (NULL), ([3])) t(l);
+----
+[[1, 2], [], NULL, [3]]
+
+# deeply nested lists with strings
+query I
+SELECT finalize(list(l) EXPORT_STATE) FROM (VALUES ([['a'], ['bb-cc-dd-ee-ff-gg-hh', NULL]]), ([[]]), ([NULL])) t(l);
+----
+[[[a], [bb-cc-dd-ee-ff-gg-hh, NULL]], [[]], [NULL]]
+
+# list of structs
+query I
+SELECT finalize(list(s) EXPORT_STATE) FROM (VALUES ({'a': 1, 'b': 'x'}), (NULL), ({'a': 2, 'b': NULL})) t(s);
+----
+[{'a': 1, 'b': x}, NULL, {'a': 2, 'b': NULL}]
+
+# struct containing a list
+query I
+SELECT finalize(list(s) EXPORT_STATE) FROM (VALUES ({'l': [1, 2], 'v': 'abc'}), ({'l': NULL, 'v': NULL})) t(s);
+----
+[{'l': [1, 2], 'v': abc}, {'l': NULL, 'v': NULL}]
+
+# list of arrays
+query I
+SELECT finalize(list(a) EXPORT_STATE) FROM (VALUES ([1, 2, 3]::INTEGER[3]), ([4, 5, 6]::INTEGER[3])) t(a);
+----
+[[1, 2, 3], [4, 5, 6]]
+
+# list of maps
+query I
+SELECT finalize(list(m) EXPORT_STATE) FROM (VALUES (MAP {'k': 1}), (MAP {})) t(m);
+----
+[{k=1}, {}]
+
+# larger input - the linked list spans many segments
+query II
+SELECT len(l), list_aggregate(l, 'sum') FROM (SELECT finalize(list(r) EXPORT_STATE) l FROM range(1000) t(r));
+----
+1000	499500
+
+statement ok
+CREATE TABLE dummy AS SELECT range % 10 g, range d FROM range(100);
+
+# grouped aggregation matches the regular list aggregate
+query II nosort grouped_list
+SELECT g, list_sort(list(d)) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort grouped_list
+SELECT g, list_sort(finalize(list(d) EXPORT_STATE)) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# we can persist the state and finalize later
+statement ok
+CREATE TABLE list_state AS SELECT g, list(d) EXPORT_STATE l FROM dummy GROUP BY g;
+
+query II nosort grouped_list
+SELECT g, list_sort(finalize(l)) FROM list_state ORDER BY g;
+----
+
+# combine two states
+query I
+SELECT list_sort(finalize(combine(list(i) EXPORT_STATE, (SELECT list(j) EXPORT_STATE FROM (VALUES (3), (4)) s(j))))) FROM (VALUES (1), (2)) t(i);
+----
+[1, 2, 3, 4]
+
+# combine with a NULL state
+query I
+SELECT finalize(combine(list(i) EXPORT_STATE, (SELECT list(j) EXPORT_STATE FROM (SELECT NULL::INTEGER j WHERE false) s))) FROM (VALUES (1), (2)) t(i);
+----
+[1, 2]
+
+# combining two NULL states gives NULL
+query I
+SELECT finalize(combine(l, l)) FROM (SELECT list(i) EXPORT_STATE l FROM (SELECT NULL::INTEGER AS i WHERE false) t) s;
+----
+NULL
+
+# combine_aggr across groups
+query I
+SELECT list_sort(finalize(combine_aggr(s))) FROM (
+    SELECT list(v) EXPORT_STATE AS s FROM (VALUES (1), (2)) t(v)
+    UNION ALL
+    SELECT list(v) EXPORT_STATE AS s FROM (VALUES (3), (4)) t(v)
+) t;
+----
+[1, 2, 3, 4]
+
+# combine_aggr with NULL states (empty groups)
+query I
+SELECT list_sort(finalize(combine_aggr(s))) FROM (
+    SELECT list(v) EXPORT_STATE AS s FROM (VALUES (1), (2)) t(v)
+    UNION ALL
+    SELECT list(v) EXPORT_STATE AS s FROM (SELECT NULL::INTEGER AS v WHERE false) t
+) t;
+----
+[1, 2]
+
+# combine_aggr with nested types
+query I
+SELECT list_sort(finalize(combine_aggr(s))) FROM (
+    SELECT list(v) EXPORT_STATE AS s FROM (VALUES ([1, 2]), ([NULL])) t(v)
+    UNION ALL
+    SELECT list(v) EXPORT_STATE AS s FROM (VALUES ([]::INTEGER[]), ([3])) t(v)
+) t;
+----
+[[], [1, 2], [3], [NULL]]
+
+# to_aggregate_state converts a plain list back into an aggregate state
+query I
+SELECT finalize(to_aggregate_state([1, 2, 3], 'list', ['INTEGER']));
+----
+[1, 2, 3]
+
+query I
+SELECT finalize(combine(to_aggregate_state([1, 2], 'list', ['INTEGER']), to_aggregate_state([3], 'list', ['INTEGER'])));
+----
+[3, 1, 2]
+
+# stress test - list export/import roundtrips for all types
+query I
+SELECT list_bool_and([*columns(*)]) = true FROM (SELECT finalize(list(columns(*)) EXPORT_STATE) IS NOT DISTINCT FROM list(columns(*)) FROM test_all_types());
+----
+true

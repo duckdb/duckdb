@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
@@ -227,7 +228,8 @@ private:
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
-
+	//! The query context for this scan
+	QueryContext context;
 	//! The current row_group we are scanning
 	optional_ptr<SegmentNode<RowGroup>> row_group;
 	//! The vector index within the row_group
@@ -250,11 +252,14 @@ public:
 
 	RandomEngine random;
 
+	//! The amount of tuples considered by a scan, before applying filters
+	idx_t rows_scanned = 0;
+
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;
 
 public:
-	void Initialize(const QueryContext &context, const vector<LogicalType> &types);
+	void Initialize(const QueryContext &context_p, const vector<LogicalType> &types);
 	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();
@@ -272,8 +277,14 @@ private:
 struct ScanSamplingInfo {
 	//! Whether or not to do a system sample during scanning
 	bool do_system_sample = false;
-	//! The sampling rate to use
+	//! The sampling rate to use (for percentage-based sampling)
 	double sample_rate;
+	//! The seeded phase used for row-count based systematic sampling
+	double sample_phase = 0;
+	//! Whether the sampling is row-count based or percentage-based
+	bool is_percentage = false;
+	//! Target number of rows to sample (for row-count based sampling)
+	idx_t target_sample_rows = 0;
 };
 
 struct TableScanOptions {
@@ -311,7 +322,7 @@ public:
 public:
 	void Initialize(vector<StorageIndex> column_ids, optional_ptr<ClientContext> context = nullptr,
 	                optional_ptr<TableFilterSet> table_filters = nullptr,
-	                optional_ptr<SampleOptions> table_sampling = nullptr);
+	                optional_ptr<SampleOptions> table_sampling = nullptr, idx_t estimated_table_row_count = 0);
 
 	const vector<StorageIndex> &GetColumnIds();
 
@@ -326,6 +337,7 @@ private:
 
 struct ParallelCollectionScanState {
 	ParallelCollectionScanState();
+	void AssignRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group);
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(RowGroupSegmentTree &row_groups) const;
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(RowGroupSegmentTree &row_groups,
 	                                                    SegmentNode<RowGroup> &row_group) const;
@@ -343,6 +355,13 @@ struct ParallelCollectionScanState {
 
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;
+	//! Subset of partition indices to scan, if null, scan all
+	optional_ptr<const unordered_set<idx_t>> partitions_to_scan;
+
+	//! Whether this row group should be scanned
+	bool ShouldScanPartition(SegmentNode<RowGroup> &row_group) const {
+		return !partitions_to_scan || partitions_to_scan->count(row_group.GetIndex()) > 0;
+	}
 };
 
 struct ParallelTableScanState {

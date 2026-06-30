@@ -53,7 +53,12 @@ public:
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context) override;
+	vector<ColumnSegmentInfo>
+	GetColumnSegmentInfo(const QueryContext &context,
+	                     const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {}) override;
+	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) override;
+	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+	                           vector<ColumnSegmentInfo> &result) override;
 
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
 
@@ -70,7 +75,7 @@ public:
 	//! Scan all triggers without a transaction (used by checkpoint writer)
 	void ScanTriggersNonTransactional(const std::function<void(CatalogEntry &)> &callback);
 	//! Drop a trigger by name
-	bool DropTrigger(CatalogTransaction transaction, const string &name, bool cascade);
+	bool DropTrigger(CatalogTransaction transaction, const Identifier &name, bool cascade);
 
 private:
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);

@@ -22,9 +22,12 @@ public:
 	Vector data;
 	//! Optional id to uniquely identify re-occurring dictionaries
 	string id;
-	//! For caching the hashes of a child buffer
-	mutex cached_hashes_lock;
-	unique_ptr<Vector> cached_hashes;
+	//! True iff the producer wraps this same entry in every output chunk for its lifetime (stable id, no flat
+	//! fall-through), making it a global dictionary. Set only via CreateReusableGlobalDictionary.
+	bool global_dictionary = false;
+	//! For caching the hashes of a child buffer (mutable: cache is logically const)
+	mutable mutex cached_hashes_lock;
+	mutable unique_ptr<Vector> cached_hashes;
 };
 
 //! The DictionaryBuffer holds a selection vector and a reference to a DictionaryEntry
@@ -79,7 +82,7 @@ public:
 public:
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
 	idx_t GetAllocationSize() const override;
-	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
+	void ToUnifiedFormat(UnifiedVectorFormat &format) const override;
 	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
 	buffer_ptr<VectorBuffer> SliceWithCache(SelCache &cache, const LogicalType &type, const SelectionVector &sel,
@@ -151,7 +154,16 @@ struct DictionaryVector {
 		return DictionarySize(vector).IsValid() && !DictionaryId(vector).empty() && CanCacheHashes(vector.GetType());
 	}
 	static buffer_ptr<DictionaryEntry> CreateReusableDictionary(const LogicalType &type, const idx_t &size);
-	static const Vector &GetCachedHashes(Vector &input);
+	//! Mint a reusable dictionary entry whose lifetime spans the entire producing operator instance
+	static buffer_ptr<DictionaryEntry> CreateReusableGlobalDictionary(const LogicalType &type, const idx_t &size);
+	//! True iff vector is a DICTIONARY_VECTOR whose entry is a global dictionary
+	static inline bool IsGlobalDictionary(const Vector &vector) {
+		if (vector.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+			return false;
+		}
+		return vector.Buffer().Cast<DictionaryBuffer>().GetEntry().global_dictionary;
+	}
+	static const Vector &GetCachedHashes(const Vector &input);
 };
 
 } // namespace duckdb

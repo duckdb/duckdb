@@ -95,9 +95,7 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 	}
 
 	// Now apply the filter
-	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(count, vdata);
-	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, count, count);
+	ColumnSegment::FilterSelection(sel, result, filter_state, count, count);
 }
 
 void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -115,12 +113,15 @@ idx_t RowIdColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resul
 	throw InternalException("Fetch is not supported for row id columns");
 }
 
-void RowIdColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
-                               row_t row_id, Vector &result, idx_t result_idx) {
+void RowIdColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                                const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count, Vector &result,
+                                idx_t result_offset) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto data = FlatVector::GetDataMutable<row_t>(result);
 	auto row_start = state.row_group->GetRowStart();
-	data[result_idx] = UnsafeNumericCast<row_t>(row_start) + row_id;
+	for (idx_t idx = 0; idx < fetch_count; idx++) {
+		data[result_offset + idx] = NumericCast<row_t>(row_start + offsets[sel.get_index(idx)]);
+	}
 }
 
 void RowIdColumnData::Skip(ColumnScanState &state, idx_t count) {
@@ -132,12 +133,11 @@ void RowIdColumnData::InitializeAppend(ColumnAppendState &state) {
 	throw InternalException("RowIdColumnData cannot be appended to");
 }
 
-void RowIdColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
+void RowIdColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
 	throw InternalException("RowIdColumnData cannot be appended to");
 }
 
-void RowIdColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
-                                 idx_t count) {
+void RowIdColumnData::AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
 	throw InternalException("RowIdColumnData cannot be appended to");
 }
 

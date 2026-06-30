@@ -63,7 +63,8 @@ private:
 };
 
 struct AnalyzeState {
-	explicit AnalyzeState(const CompressionInfo &info) : info(info) {};
+	explicit AnalyzeState(BlockManager &block_manager_p) : block_manager(block_manager_p), info(block_manager) {
+	}
 	virtual ~AnalyzeState() {
 	}
 
@@ -78,11 +79,12 @@ struct AnalyzeState {
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
+	BlockManager &block_manager;
 	CompressionInfo info;
 };
 
 struct CompressionState {
-	explicit CompressionState(const CompressionInfo &info) : info(info) {};
+	explicit CompressionState(ColumnDataCheckpointData &checkpoint_data, CompressionType compression_type);
 	virtual ~CompressionState() {
 	}
 
@@ -96,7 +98,14 @@ struct CompressionState {
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+	const LogicalType &GetType();
 
+	unique_ptr<ColumnSegment> CreateNewSegment();
+
+public:
+	ColumnDataCheckpointData &checkpoint_data;
+	const CompressionFunction &function;
+	BlockManager &block_manager;
 	CompressionInfo info;
 };
 
@@ -154,7 +163,7 @@ struct CompressionAppendState {
 
 //! The system then decides which compression function to use based on the analyzed score (returned from final_analyze)
 typedef unique_ptr<AnalyzeState> (*compression_init_analyze_t)(ColumnData &col_data, PhysicalType type);
-typedef bool (*compression_analyze_t)(AnalyzeState &state, Vector &input, idx_t count);
+typedef bool (*compression_analyze_t)(AnalyzeState &state, const Vector &input);
 typedef idx_t (*compression_final_analyze_t)(AnalyzeState &state);
 
 //===--------------------------------------------------------------------===//
@@ -162,7 +171,7 @@ typedef idx_t (*compression_final_analyze_t)(AnalyzeState &state);
 //===--------------------------------------------------------------------===//
 typedef unique_ptr<CompressionState> (*compression_init_compression_t)(ColumnDataCheckpointData &checkpoint_data,
                                                                        unique_ptr<AnalyzeState> state);
-typedef void (*compression_compress_data_t)(CompressionState &state, Vector &scan_vector, idx_t count);
+typedef void (*compression_compress_data_t)(CompressionState &state, const Vector &scan_vector);
 typedef void (*compression_compress_finalize_t)(CompressionState &state);
 
 //===--------------------------------------------------------------------===//
@@ -199,8 +208,8 @@ typedef unique_ptr<CompressedSegmentState> (*compression_init_segment_t)(
     ColumnSegment &segment, block_id_t block_id, optional_ptr<ColumnSegmentState> segment_state);
 typedef unique_ptr<CompressionAppendState> (*compression_init_append_t)(ColumnSegment &segment);
 typedef idx_t (*compression_append_t)(CompressionAppendState &append_state, ColumnSegment &segment,
-                                      SegmentStatistics &stats, UnifiedVectorFormat &data, idx_t offset, idx_t count);
-typedef idx_t (*compression_finalize_append_t)(ColumnSegment &segment, SegmentStatistics &stats);
+                                      BaseStatistics &stats, UnifiedVectorFormat &data, idx_t offset, idx_t count);
+typedef idx_t (*compression_finalize_append_t)(ColumnSegment &segment, BaseStatistics &stats);
 typedef void (*compression_revert_append_t)(ColumnSegment &segment, idx_t new_count);
 
 //===--------------------------------------------------------------------===//

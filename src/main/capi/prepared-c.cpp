@@ -45,7 +45,7 @@ static void duckdb_prepare_param_index_to_name_map_internal(PreparedStatementWra
 	auto &named_param_map = wrapper->statement->named_param_map;
 	auto &cache = wrapper->param_index_to_name;
 	for (auto &kv : named_param_map) {
-		cache[kv.second] = kv.first;
+		cache[kv.second] = kv.first.GetIdentifierName();
 	}
 }
 
@@ -170,12 +170,12 @@ duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared
 
 	LogicalType param_type;
 
-	if (wrapper->statement->data->TryGetType(identifier, param_type)) {
+	if (wrapper->statement->data->TryGetType(duckdb::Identifier(identifier), param_type)) {
 		return reinterpret_cast<duckdb_logical_type>(new LogicalType(param_type));
 	}
 	// The value_map is gone after executing the prepared statement
 	// See if this is the case and we still have a value registered for it
-	auto it = wrapper->values.find(identifier);
+	auto it = wrapper->values.find(duckdb::Identifier(identifier));
 	if (it != wrapper->values.end()) {
 		return reinterpret_cast<duckdb_logical_type>(new LogicalType(it->second.return_type));
 	}
@@ -251,7 +251,7 @@ duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx
 		return DuckDBError;
 	}
 	auto identifier = duckdb_parameter_name_internal(prepared_statement, param_idx);
-	wrapper->values[identifier] = duckdb::BoundParameterData(*value);
+	wrapper->values[duckdb::Identifier(identifier)] = duckdb::BoundParameterData(*value);
 	return DuckDBSuccess;
 }
 
@@ -266,7 +266,7 @@ duckdb_state duckdb_bind_parameter_index(duckdb_prepared_statement prepared_stat
 	}
 	auto name = std::string(name_p);
 	for (auto &pair : wrapper->statement->named_param_map) {
-		if (duckdb::StringUtil::CIEquals(pair.first, name)) {
+		if (pair.first == name) {
 			*param_idx_out = pair.second;
 			return DuckDBSuccess;
 		}

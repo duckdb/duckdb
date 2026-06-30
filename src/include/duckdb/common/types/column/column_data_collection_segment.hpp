@@ -106,6 +106,8 @@ public:
 	shared_ptr<StringHeap> heap;
 
 public:
+	//! Reset this segment for reuse, clearing all metadata while keeping allocated buffers
+	void Reset();
 	void AllocateNewChunk();
 	//! Allocate space for a vector of a specific type in the segment
 	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,

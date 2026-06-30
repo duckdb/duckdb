@@ -9,10 +9,11 @@ namespace duckdb {
 
 void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &config,
                                            ExtensionOption &extension_option) const {
+	auto effective_scope = scope == SetScope::AUTOMATIC ? extension_option.default_scope : scope;
 	if (extension_option.set_function) {
-		extension_option.set_function(context.client, scope, extension_option.default_value);
+		extension_option.set_function(context.client, effective_scope, extension_option.default_value);
 	}
-	if (scope == SetScope::GLOBAL) {
+	if (effective_scope == SetScope::GLOBAL) {
 		config.ResetOption(extension_option);
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context.client);

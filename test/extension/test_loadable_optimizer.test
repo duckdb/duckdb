@@ -6,7 +6,7 @@ require skip_reload
 
 require notmingw
 
-mode skip
+mode skip instable
 
 # FIXME: not going to do this now
 statement ok

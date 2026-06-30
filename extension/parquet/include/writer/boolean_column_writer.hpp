@@ -26,7 +26,7 @@ struct ParquetColumnSchema;
 
 class BooleanColumnWriter : public PrimitiveColumnWriter {
 public:
-	BooleanColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p);
+	BooleanColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<Identifier> schema_path_p);
 	~BooleanColumnWriter() override = default;
 
 public:

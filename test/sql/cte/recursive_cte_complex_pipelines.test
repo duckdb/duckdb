@@ -128,3 +128,30 @@ SELECT * FROM t ORDER BY 1 NULLS LAST;
 4
 8
 16
+
+# recursive CTE inside lateral join with inherited correlations
+query I
+SELECT 1
+FROM (VALUES (1::INT4)) a(v),
+LATERAL (
+	WITH RECURSIVE
+		b AS (
+			SELECT 0::INT4 AS i
+			WHERE a.v IS NOT NULL
+		),
+		c AS (
+			SELECT 0::INT8 AS i
+			UNION ALL
+			SELECT d.i + 1::INT8
+			FROM c d,
+			LATERAL (
+				SELECT 1
+				FROM b e
+				WHERE e.i = d.i
+			) f
+		)
+	SELECT * FROM c
+) g
+LIMIT 1;
+----
+1

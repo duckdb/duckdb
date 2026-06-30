@@ -9,16 +9,17 @@
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 
 namespace duckdb {
 
 void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expression,
                                                  const std::function<void(const ParsedExpression &child)> &callback) {
-	EnumerateChildren((ParsedExpression &)expression, [&](unique_ptr<ParsedExpression> &child) {
-		D_ASSERT(child);
-		callback(*child);
-	});
+	for (const auto &child : expression.Children()) {
+		callback(child);
+	}
 }
 
 void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
@@ -31,136 +32,8 @@ void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
 
 void ParsedExpressionIterator::EnumerateChildren(
     ParsedExpression &expr, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
-	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::BETWEEN: {
-		auto &cast_expr = expr.Cast<BetweenExpression>();
-		callback(cast_expr.input);
-		callback(cast_expr.lower);
-		callback(cast_expr.upper);
-		break;
-	}
-	case ExpressionClass::CASE: {
-		auto &case_expr = expr.Cast<CaseExpression>();
-		for (auto &check : case_expr.case_checks) {
-			callback(check.when_expr);
-			callback(check.then_expr);
-		}
-		callback(case_expr.else_expr);
-		break;
-	}
-	case ExpressionClass::CAST: {
-		auto &cast_expr = expr.Cast<CastExpression>();
-		callback(cast_expr.child);
-		break;
-	}
-	case ExpressionClass::COLLATE: {
-		auto &cast_expr = expr.Cast<CollateExpression>();
-		callback(cast_expr.child);
-		break;
-	}
-	case ExpressionClass::COMPARISON: {
-		auto &comp_expr = expr.Cast<ComparisonExpression>();
-		callback(comp_expr.left);
-		callback(comp_expr.right);
-		break;
-	}
-	case ExpressionClass::CONJUNCTION: {
-		auto &conj_expr = expr.Cast<ConjunctionExpression>();
-		for (auto &child : conj_expr.children) {
-			callback(child);
-		}
-		break;
-	}
-
-	case ExpressionClass::FUNCTION: {
-		auto &func_expr = expr.Cast<FunctionExpression>();
-		for (auto &child : func_expr.children) {
-			callback(child);
-		}
-		if (func_expr.filter) {
-			callback(func_expr.filter);
-		}
-		if (func_expr.order_bys) {
-			for (auto &order : func_expr.order_bys->orders) {
-				callback(order.expression);
-			}
-		}
-		break;
-	}
-	case ExpressionClass::TYPE: {
-		auto &type_expr = expr.Cast<TypeExpression>();
-		for (auto &child : type_expr.GetChildren()) {
-			callback(child);
-		}
-		break;
-	}
-	case ExpressionClass::LAMBDA: {
-		auto &lambda_expr = expr.Cast<LambdaExpression>();
-		callback(lambda_expr.lhs);
-		callback(lambda_expr.expr);
-		break;
-	}
-	case ExpressionClass::OPERATOR: {
-		auto &op_expr = expr.Cast<OperatorExpression>();
-		for (auto &child : op_expr.children) {
-			callback(child);
-		}
-		break;
-	}
-	case ExpressionClass::STAR: {
-		auto &star_expr = expr.Cast<StarExpression>();
-		if (star_expr.expr) {
-			callback(star_expr.expr);
-		}
-		for (auto &item : star_expr.replace_list) {
-			callback(item.second);
-		}
-		break;
-	}
-	case ExpressionClass::SUBQUERY: {
-		auto &subquery_expr = expr.Cast<SubqueryExpression>();
-		if (subquery_expr.child) {
-			callback(subquery_expr.child);
-		}
-		break;
-	}
-	case ExpressionClass::WINDOW: {
-		auto &window_expr = expr.Cast<WindowExpression>();
-		for (auto &partition : window_expr.partitions) {
-			callback(partition);
-		}
-		for (auto &order : window_expr.orders) {
-			callback(order.expression);
-		}
-		for (auto &child : window_expr.children) {
-			callback(child);
-		}
-		if (window_expr.filter_expr) {
-			callback(window_expr.filter_expr);
-		}
-		if (window_expr.start_expr) {
-			callback(window_expr.start_expr);
-		}
-		if (window_expr.end_expr) {
-			callback(window_expr.end_expr);
-		}
-		for (auto &order : window_expr.arg_orders) {
-			callback(order.expression);
-		}
-		break;
-	}
-	case ExpressionClass::BOUND_EXPRESSION:
-	case ExpressionClass::COLUMN_REF:
-	case ExpressionClass::LAMBDA_REF:
-	case ExpressionClass::CONSTANT:
-	case ExpressionClass::DEFAULT:
-	case ExpressionClass::PARAMETER:
-	case ExpressionClass::POSITIONAL_REFERENCE:
-		// these node types have no children
-		break;
-	default:
-		// called on non ParsedExpression type!
-		throw NotImplementedException("Unimplemented expression class");
+	for (auto &child : expr.ChildrenMutable()) {
+		callback(child);
 	}
 }
 
@@ -177,17 +50,6 @@ void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
 				callback(limit_modifier.offset);
 			}
 		} break;
-
-		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-			auto &limit_modifier = modifier->Cast<LimitPercentModifier>();
-			if (limit_modifier.limit) {
-				callback(limit_modifier.limit);
-			}
-			if (limit_modifier.offset) {
-				callback(limit_modifier.offset);
-			}
-		} break;
-
 		case ResultModifierType::ORDER_MODIFIER: {
 			auto &order_modifier = modifier->Cast<OrderModifier>();
 			for (auto &order : order_modifier.orders) {
@@ -360,6 +222,40 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		}
 		if (ins_node.on_conflict_info && ins_node.on_conflict_info->condition) {
 			expr_callback(ins_node.on_conflict_info->condition);
+		}
+		break;
+	}
+	case QueryNodeType::MERGE_QUERY_NODE: {
+		auto &merge_node = node.Cast<MergeQueryNode>();
+		if (merge_node.target) {
+			EnumerateTableRefChildren(*merge_node.target, expr_callback, ref_callback);
+		}
+		if (merge_node.source) {
+			EnumerateTableRefChildren(*merge_node.source, expr_callback, ref_callback);
+		}
+		if (merge_node.join_condition) {
+			expr_callback(merge_node.join_condition);
+		}
+		for (auto &entry : merge_node.actions) {
+			for (auto &action : entry.second) {
+				if (action->condition) {
+					expr_callback(action->condition);
+				}
+				if (action->update_info) {
+					for (auto &expr : action->update_info->expressions) {
+						expr_callback(expr);
+					}
+					if (action->update_info->condition) {
+						expr_callback(action->update_info->condition);
+					}
+				}
+				for (auto &expr : action->expressions) {
+					expr_callback(expr);
+				}
+			}
+		}
+		for (auto &expr : merge_node.returning_list) {
+			expr_callback(expr);
 		}
 		break;
 	}

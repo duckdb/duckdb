@@ -11,40 +11,32 @@
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class BoundFunctionExpression;
 
-class BoundBetweenExpression : public Expression {
-public:
-	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_BETWEEN;
+//! The BoundBetweenExpression has been moved to a function expression
+//! This class exists only as a set of helper methods
+struct BoundBetweenExpression {
+	static unique_ptr<Expression> Create(unique_ptr<Expression> input, unique_ptr<Expression> lower,
+	                                     unique_ptr<Expression> upper, bool lower_inclusive, bool upper_inclusive);
 
-public:
-	BoundBetweenExpression(unique_ptr<Expression> input, unique_ptr<Expression> lower, unique_ptr<Expression> upper,
-	                       bool lower_inclusive, bool upper_inclusive);
+	static bool LowerInclusive(const BoundFunctionExpression &between_expr);
+	static bool UpperInclusive(const BoundFunctionExpression &between_expr);
 
-	unique_ptr<Expression> input;
-	unique_ptr<Expression> lower;
-	unique_ptr<Expression> upper;
-	bool lower_inclusive;
-	bool upper_inclusive;
+	static const Expression &Input(const BoundFunctionExpression &between_expr);
+	static const Expression &LowerBound(const BoundFunctionExpression &between_expr);
+	static const Expression &UpperBound(const BoundFunctionExpression &between_expr);
 
-public:
-	string ToString() const override;
+	static unique_ptr<Expression> &InputMutable(BoundFunctionExpression &between_expr);
+	static unique_ptr<Expression> &LowerBoundMutable(BoundFunctionExpression &between_expr);
+	static unique_ptr<Expression> &UpperBoundMutable(BoundFunctionExpression &between_expr);
 
-	bool Equals(const BaseExpression &other) const override;
-
-	unique_ptr<Expression> Copy() const override;
-
-	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
-
-public:
-	ExpressionType LowerComparisonType() const {
-		return lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
+	static ExpressionType LowerComparisonType(const BoundFunctionExpression &between_expr) {
+		return LowerInclusive(between_expr) ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
+		                                    : ExpressionType::COMPARE_GREATERTHAN;
 	}
-	ExpressionType UpperComparisonType() const {
-		return upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
+	static ExpressionType UpperComparisonType(const BoundFunctionExpression &between_expr) {
+		return UpperInclusive(between_expr) ? ExpressionType::COMPARE_LESSTHANOREQUALTO
+		                                    : ExpressionType::COMPARE_LESSTHAN;
 	}
-
-private:
-	BoundBetweenExpression();
 };
 } // namespace duckdb

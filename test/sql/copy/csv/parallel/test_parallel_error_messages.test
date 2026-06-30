@@ -34,7 +34,7 @@ SELECT * FROM read_csv('{DATA_DIR}/csv/wrongtype.csv', sep=',', columns={'h1': i
 Column at position: 0 Set type: INTEGER Sniffed type: VARCHAR
 
 # FIXME sporadically a few of these succeed
-mode skip
+mode skip flaky
 
 # the first error is on line 10002
 statement error

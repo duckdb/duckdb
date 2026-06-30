@@ -2,7 +2,7 @@
 # description: Test sampling of larger relations
 # group: [table_samples]
 
-mode skip
+mode skip flaky
 
 # test valid sampling types (for now only integral types)
 

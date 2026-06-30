@@ -4565,6 +4565,7 @@ namespace Catch {
         virtual int endOffset() const = 0;
         virtual int endOffsetPercentage() const = 0;
         virtual bool outputSQL() const = 0;
+        virtual bool printFailingTests() const = 0;
         virtual UseColour::YesOrNo useColour() const = 0;
         virtual std::vector<std::string> const& getSectionsToRun() const = 0;
         virtual Verbosity verbosity() const = 0;
@@ -5329,6 +5330,7 @@ namespace Catch {
         int endOffsetPercentage = -1;
 
 	    bool outputSQL = false;
+	    bool printFailingTests = false;
 
         bool benchmarkNoAnalysis = false;
         unsigned int benchmarkSamples = 100;
@@ -5400,6 +5402,7 @@ namespace Catch {
         int endOffset() const override;
         int endOffsetPercentage() const override;
         bool outputSQL() const override;
+        bool printFailingTests() const override;
         UseColour::YesOrNo useColour() const override;
         bool shouldDebugBreak() const override;
         int abortAfter() const override;
@@ -6255,6 +6258,7 @@ namespace Catch {
 
     private:
         bool m_headerPrinted = false;
+        std::vector<std::string> m_failedTestNames;
     };
 
 } // end namespace Catch
@@ -9966,6 +9970,9 @@ namespace Catch {
             | Opt( config.outputSQL, "true|false" )
                 ["--output-sql"]
                 ( "if set, only output SQL statements to stderr rather than running the tests" )
+            | Opt( config.printFailingTests )
+                ["--print-failing-tests"]
+                ( "if set, print the names of all failing tests at the end of the run" )
             | Opt( config.libIdentify )
                 ["--libidentify"]
                 ( "report name and version according to libidentify standard" )
@@ -10095,6 +10102,7 @@ namespace Catch {
     int Config::startOffsetPercentage() const          { return m_data.startOffsetPercentage; }
     int Config::endOffsetPercentage() const            { return m_data.endOffsetPercentage; }
     bool Config::outputSQL() const                     { return m_data.outputSQL; }
+    bool Config::printFailingTests() const             { return m_data.printFailingTests; }
     UseColour::YesOrNo Config::useColour() const       { return m_data.useColour; }
     bool Config::shouldDebugBreak() const              { return m_data.shouldDebugBreak; }
     int Config::abortAfter() const                     { return m_data.abortAfter; }
@@ -11166,8 +11174,20 @@ namespace Catch {
 // end catch_reporter_listening.h
 namespace Catch {
 
+    namespace {
+        struct NullStreambuf : std::streambuf {
+            int overflow(int c) override { return c; }
+        };
+        std::ostream& getNullStream() {
+            static NullStreambuf nullBuf;
+            static std::ostream nullStream(&nullBuf);
+            return nullStream;
+        }
+    }
+
     ReporterConfig::ReporterConfig( IConfigPtr const& _fullConfig )
-    :   m_stream( &_fullConfig->stream() ), m_fullConfig( _fullConfig ) {}
+    :   m_stream( _fullConfig->printFailingTests() ? &getNullStream() : &_fullConfig->stream() ),
+        m_fullConfig( _fullConfig ) {}
 
     ReporterConfig::ReporterConfig( IConfigPtr const& _fullConfig, std::ostream& _stream )
     :   m_stream( &_stream ), m_fullConfig( _fullConfig ) {}
@@ -13457,10 +13477,16 @@ namespace Catch {
             return reporter;
         }
 
-        void renderTestProgress(int current_test, int total_tests, std::string next_test) {
+        void renderTestProgress(int current_test, int total_tests, std::string next_test, double elapsed_seconds = -1) {
             double progress = (double) current_test / (double) total_tests;
             std::string prefix = "[" + std::to_string(current_test) + "/" + std::to_string(total_tests) + "] (" + std::to_string(int(progress * 100)) + "%): ";
-            std::string result = prefix + next_test;
+            std::string test_label = next_test;
+            if (elapsed_seconds >= 0) {
+                char elapsed_buffer[64];
+                snprintf(elapsed_buffer, sizeof(elapsed_buffer), " took %.3fs", elapsed_seconds);
+                test_label += elapsed_buffer;
+            }
+            std::string result = prefix + test_label;
 
             if (IsTerminal()) {
                 // For terminals, we want to overwrite the previous line to not flood the window with successful tests.
@@ -13475,9 +13501,9 @@ namespace Catch {
                     result += std::string(render_width - result.size(), ' ');
                 } else if (result.size() > static_cast<size_t>(render_width)) {
                     int available_for_test = render_width - prefix.size() - 3; // 3 for "..."
-                    if (available_for_test > 0 && next_test.size() > static_cast<size_t>(available_for_test)) {
+                    if (available_for_test > 0 && test_label.size() > static_cast<size_t>(available_for_test)) {
                         // Replace the start of the test name with "..." to indicate truncation
-                        result = prefix + "..." + next_test.substr(next_test.size() - available_for_test);
+                        result = prefix + "..." + test_label.substr(test_label.size() - available_for_test);
                     } else {
                         // If prefix is too long for terminal width, fall back to simple truncation
                         result = result.substr(0, render_width - 3) + "...";
@@ -13540,6 +13566,7 @@ namespace Catch {
 
                 int total_tests_run = m_tests.size();
                 int current_test = 0;
+                bool rendered_initial_progress = false;
 
                 int start_offset = 0;
                 int end_offset = total_tests_run;
@@ -13560,12 +13587,20 @@ namespace Catch {
                             current_test++;
                             continue;
                         }
-                        renderTestProgress(current_test, total_tests_run, testCase->name);
-                        totals += m_context.runTest(*testCase);
-                        current_test++;
-                        if (current_test == total_tests_run) {
+                        if (!m_config->printFailingTests() && !rendered_initial_progress) {
                             renderTestProgress(current_test, total_tests_run, testCase->name);
-                            std::cout << std::endl;
+                            rendered_initial_progress = true;
+                        }
+                        Timer timer;
+                        timer.start();
+                        totals += m_context.runTest(*testCase);
+                        double elapsed_seconds = timer.getElapsedSeconds();
+                        current_test++;
+                        if (!m_config->printFailingTests()) {
+                            renderTestProgress(current_test, total_tests_run, testCase->name, elapsed_seconds);
+                            if (current_test == total_tests_run) {
+                                std::cout << std::endl;
+                            }
                         }
                     } else {
                         m_context.reporter().skipTest(*testCase);
@@ -16802,6 +16837,9 @@ void ConsoleReporter::benchmarkFailed(std::string const& error) {
 
 void ConsoleReporter::testCaseEnded(TestCaseStats const& _testCaseStats) {
     m_tablePrinter->close();
+    if (_testCaseStats.totals.testCases.failed > 0) {
+        m_failedTestNames.push_back(_testCaseStats.testInfo.name);
+    }
     StreamingReporterBase::testCaseEnded(_testCaseStats);
     m_headerPrinted = false;
 }
@@ -16815,9 +16853,15 @@ void ConsoleReporter::testGroupEnded(TestGroupStats const& _testGroupStats) {
     StreamingReporterBase::testGroupEnded(_testGroupStats);
 }
 void ConsoleReporter::testRunEnded(TestRunStats const& _testRunStats) {
-    printTotalsDivider(_testRunStats.totals);
-    printTotals(_testRunStats.totals);
-    stream << std::endl;
+    if (m_config->printFailingTests()) {
+        for (auto const& name : m_failedTestNames) {
+            std::cout << name << "\n";
+        }
+    } else {
+        printTotalsDivider(_testRunStats.totals);
+        printTotals(_testRunStats.totals);
+        stream << std::endl;
+    }
     StreamingReporterBase::testRunEnded(_testRunStats);
 }
 void ConsoleReporter::testRunStarting(TestRunInfo const& _testInfo) {
@@ -16964,13 +17008,6 @@ void ConsoleReporter::printTotals( Totals const& totals ) {
 
         printSummaryRow("test cases", columns, 0);
         printSummaryRow("assertions", columns, 1);
-    }
-    if (!totals.skippedTestReasons.empty()) {
-        stream << '\n';
-        stream << Colour(Colour::Warning) << "Skipped tests for the following reasons:" << '\n';
-        for(auto &entry : totals.skippedTestReasons) {
-            stream << Colour(Colour::Warning) << entry.first << ": " << entry.second << '\n';
-        }
     }
 }
 void ConsoleReporter::printSummaryRow(std::string const& label, std::vector<SummaryColumn> const& cols, std::size_t row) {

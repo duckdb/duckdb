@@ -12,6 +12,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception_format_value.hpp"
 #include "sqllogic_command.hpp"
+#include <istream>
 
 namespace duckdb {
 
@@ -41,6 +42,7 @@ enum class SQLLogicTokenType {
 	SQLLOGIC_UNZIP,
 	SQLLOGIC_TAGS,
 	SQLLOGIC_CONTINUE,
+	SQLLOGIC_INCLUDE
 };
 
 class SQLLogicToken {
@@ -52,14 +54,14 @@ public:
 class SQLLogicParser {
 public:
 	string file_name;
-	//! The lines of the current text file
-	vector<string> lines;
 	//! The current line number
 	idx_t current_line = 0;
 	//! Whether or not the input should be printed to stdout as it is executed
 	bool print_input = false;
 	//! Whether or not we have seen a statement
 	bool seen_statement = false;
+	//! Include files
+	unique_ptr<SQLLogicParser> current_include;
 
 public:
 	static bool EmptyOrComment(const string &line);
@@ -71,6 +73,9 @@ public:
 
 	//! Opens the file, returns whether or not reading was successful
 	bool OpenFile(const string &path);
+	bool OpenStream(std::istream &input, const string &source_name);
+
+	void IncludeFile(const string &file_name);
 
 	//! Moves the current line to the beginning of the next statement
 	//! Returns false if there is no next statement (i.e. we reached the end of the file)
@@ -100,6 +105,9 @@ public:
 	}
 
 private:
+	bool HasLine(idx_t line_idx);
+	string &GetLine(idx_t line_idx);
+	void PruneLines();
 	SQLLogicTokenType CommandToToken(const string &token);
 
 	void FailRecursive(const string &msg, vector<ExceptionFormatValue> &values);
@@ -109,6 +117,13 @@ private:
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		FailRecursive(msg, values, params...);
 	}
+
+private:
+	unique_ptr<std::istream> owned_stream;
+	optional_ptr<std::istream> stream;
+	vector<string> lines;
+	idx_t line_start = 0;
+	bool stream_finished = false;
 };
 
 } // namespace duckdb

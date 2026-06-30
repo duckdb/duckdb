@@ -1,0 +1,25 @@
+diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
+index 390ba22..995a189 100644
+--- a/src/hnsw/hnsw_optimize_join.cpp
++++ b/src/hnsw/hnsw_optimize_join.cpp
+@@ -481,16 +481,16 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 		return false;
+ 	}
+ 	auto &window_expr = window.expressions.back()->Cast<BoundWindowExpression>();
+-	if (window_expr.orders.size() != 1) {
++	if (window_expr.OrderBy().size() != 1) {
+ 		return false;
+ 	}
+-	if (window_expr.orders.back().type != OrderType::ASCENDING) {
++	if (window_expr.OrderBy().back().type != OrderType::ASCENDING) {
+ 		return false;
+ 	}
+-	if (window_expr.orders.back().expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
++	if (window_expr.OrderBy().back().expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+ 		return false;
+ 	}
+-	const auto &distance_ref_expr = window_expr.orders.back().expression->Cast<BoundColumnRefExpression>();
++	const auto &distance_ref_expr = window_expr.OrderBy().back().expression->Cast<BoundColumnRefExpression>();
+ 	// Verify that this column ref references the distance expression in the projection
+ 	if (distance_ref_expr.Binding().table_index != inner_proj.table_index) {
+ 		return false;

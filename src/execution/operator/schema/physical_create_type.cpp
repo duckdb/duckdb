@@ -41,11 +41,11 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 	}
 	if (total_row_count > gstate.capacity) {
 		// We must resize our result vector
-		gstate.result.Resize(gstate.capacity, gstate.capacity * 2);
+		gstate.result.Reserve(gstate.capacity * 2);
 		gstate.capacity *= 2;
 	}
 
-	auto entries = chunk.data[0].Values<string_t>(chunk.size());
+	auto entries = chunk.data[0].Values<string_t>();
 	auto result_data = FlatVector::ScatterWriter<string_t>(gstate.result);
 	// Input vector has NULL value, we just throw an exception
 	for (idx_t i = 0; i < chunk.size(); i++) {
@@ -63,6 +63,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 		gstate.found_strings.insert(result_data[gstate.size]);
 		gstate.size++;
 	}
+	FlatVector::SetSize(gstate.result, gstate.size);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -77,7 +78,7 @@ SourceResultType PhysicalCreateType::GetDataInternal(ExecutionContext &context, 
 		info->type = LogicalType::ENUM(g_sink_state.result, g_sink_state.size);
 	}
 
-	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
+	auto &catalog = Catalog::GetCatalog(context.client, info->GetQualifiedName().Catalog());
 	catalog.CreateType(context.client, *info);
 	return SourceResultType::FINISHED;
 }

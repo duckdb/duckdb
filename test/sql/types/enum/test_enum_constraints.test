@@ -3,7 +3,7 @@
 # group: [enum]
 
 # FIXME: dependencies between enums and tables are currently disabled
-mode skip
+mode skip unsupported
 
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');

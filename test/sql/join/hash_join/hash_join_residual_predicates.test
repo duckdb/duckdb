@@ -2,10 +2,12 @@
 # description: Test hash join with residual predicates (non-pushdown conditions in ON clause)
 # group: [hash_join]
 
-require tpch
-
 statement ok
-CALL dbgen(sf=0);
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+set variable sf 0
+
+include test/sql/tpch/tpch_setup.test_template
 
 statement ok
 set disabled_optimizers to 'build_side_probe_side';

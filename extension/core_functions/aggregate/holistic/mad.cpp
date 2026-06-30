@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/abs.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
 
 namespace duckdb {
@@ -134,7 +135,7 @@ struct MadAccessor<date_t, interval_t, timestamp_t> {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto dt = Cast::Operation<date_t, timestamp_t>(input);
-		const auto delta = dt - median;
+		const auto delta = SubtractOperator::Operation<timestamp_t, MEDIAN_TYPE, int64_t>(dt, median);
 		return Interval::FromMicro(TryAbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };
@@ -149,7 +150,7 @@ struct MadAccessor<timestamp_t, interval_t, timestamp_t> {
 	explicit MadAccessor(const MEDIAN_TYPE &median_p) : median(median_p) {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
-		const auto delta = input - median;
+		const auto delta = SubtractOperator::Operation<timestamp_t, MEDIAN_TYPE, int64_t>(input, median);
 		return Interval::FromMicro(TryAbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };
@@ -173,7 +174,7 @@ template <typename MEDIAN_TYPE>
 struct MedianAbsoluteDeviationOperation : QuantileOperation {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.v.empty()) {
+		if (state.linked_list.total_capacity == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
@@ -182,11 +183,12 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto &q = bind_data.quantiles[0];
-		QuantileInterpolator<false> interp(q, state.v.size(), false);
-		const auto med = interp.template Operation<INPUT_TYPE, MEDIAN_TYPE>(state.v.data(), finalize_data.result);
+		auto &flattened = FlattenedQuantileValues<INPUT_TYPE>::Flatten(finalize_data, state.linked_list);
+		QuantileInterpolator<false> interp(q, state.linked_list.total_capacity, false);
+		const auto med = interp.template Operation<INPUT_TYPE, MEDIAN_TYPE>(flattened.Data(), finalize_data.result);
 
 		MadAccessor<INPUT_TYPE, T, MEDIAN_TYPE> accessor(med);
-		target = interp.template Operation<INPUT_TYPE, T>(state.v.data(), finalize_data.result, accessor);
+		target = interp.template Operation<INPUT_TYPE, T>(flattened.Data(), finalize_data.result, accessor);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
@@ -268,11 +270,11 @@ unique_ptr<FunctionData> BindMAD(BindAggregateFunctionInput &input) {
 template <typename INPUT_TYPE, typename MEDIAN_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const LogicalType &input_type,
                                                                    const LogicalType &target_type) {
-	using STATE = QuantileState<INPUT_TYPE, QuantileStandardType>;
+	using STATE = QuantileState<INPUT_TYPE>;
 	using OP = MedianAbsoluteDeviationOperation<MEDIAN_TYPE>;
-	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP,
-	                                                       AggregateDestructorType::LEGACY>(input_type, target_type);
+	auto fun = QuantileBufferingAggregate<STATE, TARGET_TYPE, OP>(input_type, target_type);
 	fun.SetBindCallback(BindMAD);
+	fun.SetStructStateExport(QuantileStateLayout<STATE>);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 #ifndef DUCKDB_SMALLER_BINARY
 	fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
@@ -340,7 +342,8 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(BindAggregateFunctio
 AggregateFunctionSet MadFun::GetFunctions() {
 	AggregateFunctionSet mad("mad");
 	mad.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, nullptr, BindMedianAbsoluteDeviationDecimal));
+	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                                  AggregateFunction::NoClusterUpdate(), BindMedianAbsoluteDeviationDecimal));
 
 	const vector<LogicalType> MAD_TYPES = {LogicalType::FLOAT,     LogicalType::DOUBLE, LogicalType::DATE,
 	                                       LogicalType::TIMESTAMP, LogicalType::TIME,   LogicalType::TIMESTAMP_TZ,

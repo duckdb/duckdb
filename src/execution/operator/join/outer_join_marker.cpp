@@ -18,6 +18,9 @@ void OuterJoinMarker::Reset() {
 	if (!enabled) {
 		return;
 	}
+	if (count == 0) {
+		return;
+	}
 	memset(found_match.get(), 0, sizeof(bool) * count);
 }
 
@@ -97,7 +100,6 @@ void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanS
 				result.data[col_idx].Slice(lstate.scan_chunk.data[col_idx - left_column_count], lstate.match_sel,
 				                           result_count);
 			}
-			result.SetCardinality(result_count);
 			return;
 		}
 	}

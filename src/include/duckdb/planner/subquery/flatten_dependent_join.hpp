@@ -98,6 +98,8 @@ private:
 	vector<ColumnBinding> PushDownDistinct(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownExpressionGet(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                            vector<ColumnBinding> state);
+	vector<ColumnBinding> PushDownDML(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
+	                                  vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownGet(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownCTE(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                  vector<ColumnBinding> state);

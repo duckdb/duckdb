@@ -1,9 +1,21 @@
 #include "duckdb/common/opener_file_system.hpp"
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {
+
+unique_ptr<MemoryMappedFile> OpenerFileSystem::MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
+                                                             const MMapOptions &options,
+                                                             optional_ptr<FileOpener> opener) {
+	VerifyNoOpener(opener);
+	VerifyCanAccessFile(path.path);
+	if (IsDuckDBExtensionName(path.path)) {
+		VerifyCanAccessExtension(path.path, flags);
+	}
+	return GetFileSystem().MemoryMapFile(path, flags, options, GetOpener());
+}
 
 void OpenerFileSystem::VerifyNoOpener(optional_ptr<FileOpener> opener) {
 	if (opener) {

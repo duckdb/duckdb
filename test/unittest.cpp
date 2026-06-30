@@ -5,6 +5,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "sqlite/sqllogic_test_logger.hpp"
+#include "sqlite/sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
 #include "test_config.hpp"
 
@@ -16,6 +17,8 @@ int main(int argc_in, char *argv[]) {
 
 	auto &test_config = TestConfiguration::Get();
 	test_config.Initialize();
+	bool keep_home = false;
+	bool use_stdin = false;
 
 	idx_t argc = NumericCast<idx_t>(argc_in);
 	int new_argc = 0;
@@ -35,9 +38,20 @@ int main(int argc_in, char *argv[]) {
 			SetTestDirectory(test_dir);
 		} else if (argument == "--require") {
 			AddRequire(string(argv[++i]));
-		} else if (!test_config.ParseArgument(argument, argc, argv, i)) {
-			new_argv[new_argc] = argv[i];
-			new_argc++;
+		} else if (argument == "--keep-home") {
+			keep_home = true;
+		} else if (argument == "--stdin") {
+			use_stdin = true;
+		} else {
+			try {
+				if (!test_config.ParseArgument(argument, argc, argv, i)) {
+					new_argv[new_argc] = argv[i];
+					new_argc++;
+				}
+			} catch (std::exception &ex) {
+				fprintf(stderr, "%s\n", ex.what());
+				return 1;
+			}
 		}
 	}
 	test_config.ChangeWorkingDirectory(test_directory);
@@ -54,22 +68,28 @@ int main(int argc_in, char *argv[]) {
 	}
 
 	// Override the home dir so the .duckdb dir is isolated per test process.
+	if (!keep_home) {
 #ifdef DUCKDB_WINDOWS
-	if (_putenv_s("USERPROFILE", dir.c_str()) != 0) {
-		fprintf(stderr, "Failed to set USERPROFILE environment variable\n");
-		return 1;
-	}
+		if (_putenv_s("USERPROFILE", dir.c_str()) != 0) {
+			fprintf(stderr, "Failed to set USERPROFILE environment variable\n");
+			return 1;
+		}
 #else
-	if (setenv("HOME", dir.c_str(), 1) != 0) {
-		fprintf(stderr, "Failed to set HOME environment variable\n");
-		return 1;
-	}
+		if (setenv("HOME", dir.c_str(), 1) != 0) {
+			fprintf(stderr, "Failed to set HOME environment variable\n");
+			return 1;
+		}
 #endif
+	}
 
-	if (test_config.GetSkipCompiledTests()) {
+	if (use_stdin || test_config.GetSkipCompiledTests()) {
 		Catch::getMutableRegistryHub().clearTests();
 	}
-	RegisterSqllogictests();
+	if (use_stdin) {
+		RegisterSqllogictestStdin();
+	} else {
+		RegisterSqllogictests();
+	}
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
 	std::string failures_summary = FailureSummary::GetFailureSummary();
@@ -85,6 +105,12 @@ int main(int argc_in, char *argv[]) {
 		std::cerr << "================  FAILURES SUMMARY  ================" << std::endl;
 		std::cerr << "====================================================\n" << std::endl;
 		std::cerr << failures_summary;
+	}
+	std::string skip_reason_summary = SQLLogicTestRunner::GetSkipReasonSummary();
+	if (!skip_reason_summary.empty()) {
+		std::cerr << "\n"
+		          << "Skipped tests for the following reasons:" << std::endl;
+		std::cerr << skip_reason_summary;
 	}
 
 	if (DeleteTestPath()) {

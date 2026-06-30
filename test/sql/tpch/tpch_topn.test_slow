@@ -2,10 +2,9 @@
 # description: Test top-n queries on TPC-H
 # group: [tpch]
 
-require tpch
+set variable sf 1
 
-statement ok
-CALL dbgen(sf=1);
+include test/sql/tpch/tpch_setup.test_template
 
 query IIIIIIII
 SELECT o_orderkey, o_custkey, o_orderstatus, o_totalprice, o_orderdate, o_orderpriority, o_clerk, o_shippriority FROM orders ORDER BY o_orderkey LIMIT 5;

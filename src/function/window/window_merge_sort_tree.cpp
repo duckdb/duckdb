@@ -79,7 +79,6 @@ void WindowMergeSortTreeLocalState::Sink(ExecutionContext &context, DataChunk &c
 	for (column_t c = 0; c < order_idx.size(); ++c) {
 		sort_chunk.data[c].Reference(chunk.data[order_idx[c]]);
 	}
-	sort_chunk.SetCardinality(chunk);
 
 	//	Apply FILTER clause, if any
 	if (filter_sel) {

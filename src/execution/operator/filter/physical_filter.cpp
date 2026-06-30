@@ -16,7 +16,7 @@ PhysicalFilter::PhysicalFilter(PhysicalPlan &physical_plan, vector<LogicalType> 
 	// Create a conjunction from the select list.
 	auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 	for (auto &expr : select_list) {
-		conjunction->children.push_back(std::move(expr));
+		conjunction->GetChildrenMutable().push_back(std::move(expr));
 	}
 	expression = std::move(conjunction);
 }
@@ -33,6 +33,14 @@ public:
 public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		context.thread.profiler.Flush(op);
+	}
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset() override {
+		ResetCachingState();
 	}
 };
 
@@ -55,7 +63,7 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 
 InsertionOrderPreservingMap<string> PhysicalFilter::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["__expression__"] = expression->GetName();
+	result["__expression__"] = expression->GetName().GetIdentifierName();
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }

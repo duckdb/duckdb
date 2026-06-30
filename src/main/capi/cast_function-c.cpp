@@ -56,7 +56,7 @@ struct CCastFunctionData final : public BoundCastData {
 
 static bool CAPICastFunction(Vector &input, Vector &output, idx_t count, CastParameters &parameters) {
 	const auto is_const = input.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	input.Flatten(count);
+	input.Flatten();
 
 	CCastExecuteInfo exec_info(parameters);
 	const auto &data = parameters.cast_data->Cast<CCastFunctionData>();
