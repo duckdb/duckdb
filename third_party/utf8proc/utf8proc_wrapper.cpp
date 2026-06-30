@@ -366,34 +366,37 @@ int32_t Utf8Proc::UTF8ToCodepoint(const char *u_input, int &sz, const size_t len
 		sz = 1;
 		return u0;
 	}
-	if (length < 2) {
-		throw InternalException("truncated UTF-8 sequence detected in Utf8Proc::UTF8ToCodepoint");
+	// work out the sequence length from the lead byte and make sure the continuation bytes are present before
+	// reading them, otherwise a truncated trailing sequence reads past the end of the buffer
+	size_t needed;
+	if (u0 >= 240 && u0 <= 247) {
+		needed = 4;
+	} else if (u0 >= 224 && u0 <= 239) {
+		needed = 3;
+	} else if (u0 >= 192 && u0 <= 223) {
+		needed = 2;
+	} else {
+		throw InvalidInputException("invalid lead byte detected in Utf8Proc::UTF8ToCodepoint, likely due to invalid UTF-8");
+	}
+	if (length < needed) {
+		throw InvalidInputException("truncated UTF-8 sequence detected in Utf8Proc::UTF8ToCodepoint");
 	}
 	unsigned char u1 = u[1];
-	if (u0 >= 192 && u0 <= 223) {
+	if (needed == 2) {
 		sz = 2;
 		return (u0 - 192) * 64 + (u1 - 128);
 	}
-	if (u[0] == 0xed && (u[1] & 0xa0) == 0xa0) {
-		throw InternalException("invalid code point detected in Utf8Proc::UTF8ToCodepoint (0xd800 to 0xdfff), likely due to invalid UTF-8");
-	}
-	if (length < 3) {
-		throw InternalException("truncated UTF-8 sequence detected in Utf8Proc::UTF8ToCodepoint");
+	if (u0 == 0xed && (u1 & 0xa0) == 0xa0) {
+		throw InvalidInputException("invalid code point detected in Utf8Proc::UTF8ToCodepoint (0xd800 to 0xdfff), likely due to invalid UTF-8");
 	}
 	unsigned char u2 = u[2];
-	if (u0 >= 224 && u0 <= 239) {
+	if (needed == 3) {
 		sz = 3;
 		return (u0 - 224) * 4096 + (u1 - 128) * 64 + (u2 - 128);
 	}
-	if (length < 4) {
-		throw InternalException("truncated UTF-8 sequence detected in Utf8Proc::UTF8ToCodepoint");
-	}
 	unsigned char u3 = u[3];
-	if (u0 >= 240 && u0 <= 247) {
-		sz = 4;
-		return (u0 - 240) * 262144 + (u1 - 128) * 4096 + (u2 - 128) * 64 + (u3 - 128);
-	}
-	throw InternalException("invalid code point detected in Utf8Proc::UTF8ToCodepoint, likely due to invalid UTF-8");
+	sz = 4;
+	return (u0 - 240) * 262144 + (u1 - 128) * 4096 + (u2 - 128) * 64 + (u3 - 128);
 }
 
 size_t Utf8Proc::RenderWidth(const char *s, size_t len, size_t pos) {
