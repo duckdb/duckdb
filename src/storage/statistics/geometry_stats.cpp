@@ -231,5 +231,4 @@ const GeometryStatsFlags &GeometryStats::GetFlags(const BaseStatistics &stats) {
 	return GetDataUnsafe(stats).flags;
 }
 
-
 } // namespace duckdb
