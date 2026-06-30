@@ -69,8 +69,7 @@ static unique_ptr<SelectStatement> BuildPITQueryAST(const FeatureCatalogEntry &f
 }
 
 static unique_ptr<CreateStatement> BuildCreateTableAsStatement(const string &catalog, const string &schema,
-                                                               const string &table,
-                                                               unique_ptr<SelectStatement> query) {
+                                                               const string &table, unique_ptr<SelectStatement> query) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTableInfo>(catalog, schema, table);
 	info->query = std::move(query);
@@ -171,8 +170,8 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 	try {
 		if (feat.refresh_mode == FeatureRefreshMode::FULL) {
 			// FULL refresh: create new version table with all rows
-			auto create_statement = BuildCreateTableAsStatement(feat_catalog.GetName(), feat_schema.name, new_table_name,
-			                                                    BuildPITQueryAST(feat));
+			auto create_statement = BuildCreateTableAsStatement(feat_catalog.GetName(), feat_schema.name,
+			                                                    new_table_name, BuildPITQueryAST(feat));
 			auto create_result = con.Query(std::move(create_statement));
 			if (create_result->HasError()) {
 				throw InternalException("Failed to refresh feature '%s': %s", feature_name, create_result->GetError());

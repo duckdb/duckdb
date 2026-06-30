@@ -83,9 +83,9 @@ unique_ptr<SelectStatement> BuildFeaturePITQuery(const SelectNode &select_node,
 		result_select->select_list.push_back(FeatureColumnRef("anchor", entity_column));
 		result_select->groups.group_expressions.push_back(FeatureColumnRef("anchor", entity_column));
 
-		auto entity_condition = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
-		                                                       FeatureColumnRef(parameters.source_table, entity_column),
-		                                                       FeatureColumnRef("anchor", entity_column));
+		auto entity_condition = make_uniq<ComparisonExpression>(
+		    ExpressionType::COMPARE_EQUAL, FeatureColumnRef(parameters.source_table, entity_column),
+		    FeatureColumnRef("anchor", entity_column));
 		join_condition = join_condition ? FeatureConjoin(std::move(join_condition), std::move(entity_condition))
 		                                : std::move(entity_condition);
 	}
@@ -104,15 +104,16 @@ unique_ptr<SelectStatement> BuildFeaturePITQuery(const SelectNode &select_node,
 		result_select->select_list.push_back(std::move(feature_expression));
 	}
 
-	auto timestamp_upper_bound = make_uniq<ComparisonExpression>(
-	    ExpressionType::COMPARE_LESSTHANOREQUALTO, FeatureColumnRef(parameters.source_table, parameters.timestamp_column),
-	    FeatureColumnRef("anchor", "feature_timestamp"));
+	auto timestamp_upper_bound =
+	    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+	                                    FeatureColumnRef(parameters.source_table, parameters.timestamp_column),
+	                                    FeatureColumnRef("anchor", "feature_timestamp"));
 	join_condition = join_condition ? FeatureConjoin(std::move(join_condition), std::move(timestamp_upper_bound))
 	                                : std::move(timestamp_upper_bound);
 
-	auto window_start = FeatureBinaryFunction(
-	    "-", FeatureColumnRef("anchor", "feature_timestamp"),
-	    make_uniq<ConstantExpression>(Value::INTERVAL(parameters.window_interval)));
+	auto window_start =
+	    FeatureBinaryFunction("-", FeatureColumnRef("anchor", "feature_timestamp"),
+	                          make_uniq<ConstantExpression>(Value::INTERVAL(parameters.window_interval)));
 	auto timestamp_lower_bound = make_uniq<ComparisonExpression>(
 	    ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 	    FeatureColumnRef(parameters.source_table, parameters.timestamp_column), std::move(window_start));
