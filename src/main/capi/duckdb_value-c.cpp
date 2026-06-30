@@ -333,7 +333,7 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 		return nullptr;
 	}
 	const auto &logical_type = UnwrapType(type);
-	if (logical_type.id() != duckdb::LogicalTypeId::STRUCT) {
+	if (!duckdb::StructType::IsStruct(logical_type)) {
 		return nullptr;
 	}
 	if (duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::INVALID) ||
@@ -618,7 +618,7 @@ duckdb_value duckdb_get_struct_child(duckdb_value value, idx_t index) {
 	}
 
 	auto val = UnwrapValue(value);
-	if (val.type().id() != LogicalTypeId::STRUCT || val.IsNull()) {
+	if (!duckdb::StructType::IsStruct(val.type()) || val.IsNull()) {
 		return nullptr;
 	}
 

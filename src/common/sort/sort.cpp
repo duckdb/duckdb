@@ -36,7 +36,7 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 		auto col_type = order.expression->GetReturnType();
 		decode_child_list.emplace_back(col_name, col_type);
 		col_type = TypeVisitor::VisitReplace(col_type, [](const LogicalType &type) {
-			if (type.id() != LogicalTypeId::STRUCT) {
+			if (!StructType::IsStruct(type)) {
 				return type;
 			}
 			child_list_t<LogicalType> internal_child_list;

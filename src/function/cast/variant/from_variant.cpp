@@ -419,6 +419,70 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 	return true;
 }
 
+//! A TUPLE is read from a variant ARRAY - each element is read positionally into the matching tuple child
+static bool ConvertVariantToTuple(FromVariantConversionData &conversion_data, Vector &result,
+                                  const SelectionVector &sel, idx_t offset, idx_t count, optional_idx row) {
+	auto &target_type = result.GetType();
+	const auto owned_child_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	array_ptr child_data(owned_child_data.get(), count);
+
+	auto &result_validity = FlatVector::ValidityMutable(result);
+	ValidityMask validity(count);
+	for (idx_t i = 0; i < count; i++) {
+		if (!result_validity.RowIsValid(offset + i)) {
+			validity.SetInvalid(i);
+		}
+	}
+
+	auto collection_result = VariantUtils::CollectNestedData(conversion_data.variant, VariantLogicalType::ARRAY, sel,
+	                                                         count, row, offset, child_data, validity);
+	if (!collection_result.success) {
+		conversion_data.error =
+		    StringUtil::Format("Expected to find VARIANT(ARRAY), found VARIANT(%s) instead, can't convert",
+		                       EnumUtil::ToString(collection_result.wrong_type));
+		return false;
+	}
+
+	for (idx_t i = 0; i < count; i++) {
+		if (!validity.RowIsValid(i)) {
+			FlatVector::SetNull(result, offset + i, true);
+		}
+	}
+
+	auto &children = StructVector::GetEntries(result);
+	auto &child_types = StructType::GetChildTypes(target_type);
+
+	SelectionVector child_values_sel;
+	child_values_sel.Initialize(count);
+
+	auto row_sel = SelectionVector::Incremental(0ULL, count);
+	if (row.IsValid()) {
+		auto row_index = row.GetIndex();
+		for (idx_t i = 0; i < count; i++) {
+			row_sel[i] = static_cast<uint32_t>(row_index);
+		}
+	}
+
+	for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
+		//! Find the relevant element of the ARRAYs we're converting by position
+		VariantPathComponent component(NumericCast<uint32_t>(child_idx));
+		ValidityMask lookup_validity(count);
+		VariantUtils::FindChildValues(conversion_data.variant, component, row_sel, child_values_sel, lookup_validity,
+		                              child_data, validity, count);
+		if (lookup_validity.CanHaveNull()) {
+			conversion_data.error =
+			    StringUtil::Format("VARIANT(ARRAY) is missing element at index %d, can't convert to TUPLE", child_idx);
+			return false;
+		}
+		//! Now cast all the values we found to the target type
+		auto &child = children[child_idx];
+		if (!CastVariant(conversion_data, child, child_values_sel, offset, count, row)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector &result, const SelectionVector &sel,
                               idx_t offset, idx_t count, optional_idx row) {
 	auto &error = conversion_data.error;
@@ -467,6 +531,12 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 		switch (target_type.id()) {
 		case LogicalTypeId::STRUCT: {
 			if (ConvertVariantToStruct(conversion_data, result, sel, offset, count, row)) {
+				return true;
+			}
+			break;
+		}
+		case LogicalTypeId::TUPLE: {
+			if (ConvertVariantToTuple(conversion_data, result, sel, offset, count, row)) {
 				return true;
 			}
 			break;
@@ -755,6 +825,7 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP_TZ:

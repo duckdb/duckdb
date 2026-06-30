@@ -1,0 +1,392 @@
+/* DuckDB coverage report theme for genhtml output. */
+:root {
+	--bg: #f7f8fa;
+	--panel: #ffffff;
+	--panel-alt: #f1f5f9;
+	--line: #d8dee8;
+	--text: #172033;
+	--muted: #64748b;
+	--link: #0f5e9c;
+	--link-visited: #6d28d9;
+	--head: #1f2937;
+	--head-text: #ffffff;
+	--good: #20b26b;
+	--good-bg: #dff7eb;
+	--mid: #c9860a;
+	--mid-bg: #fff0c2;
+	--bad: #cf3f3f;
+	--bad-bg: #ffe1e1;
+	--code-bg: #fbfcfe;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	padding: 22px;
+	color: var(--text);
+	background: var(--bg);
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+	font-size: 14px;
+	line-height: 1.45;
+}
+
+a:link,
+a:visited,
+a:active {
+	color: var(--link);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+table {
+	border-spacing: 0;
+	border-collapse: separate;
+}
+
+td.title {
+	padding: 4px 0 18px;
+	color: var(--text);
+	font-size: 26px;
+	font-style: normal;
+	font-weight: 700;
+	text-align: left;
+}
+
+td.ruler {
+	height: 1px;
+	background: var(--line);
+}
+
+td.versionInfo,
+td.footnote {
+	color: var(--muted);
+	background: transparent;
+	font-size: 12px;
+	font-style: normal;
+}
+
+td.headerItem {
+	padding: 4px 10px 4px 0;
+	color: var(--muted);
+	font-weight: 600;
+	text-align: right;
+	white-space: nowrap;
+}
+
+td.headerValue {
+	padding: 4px 0;
+	color: var(--text);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+td.headerCovTableHead {
+	padding: 6px 10px;
+	color: var(--muted);
+	font-size: 12px;
+	font-weight: 600;
+	text-align: center;
+	white-space: nowrap;
+}
+
+td.headerCovTableEntry,
+td.headerCovTableEntryHi,
+td.headerCovTableEntryMed,
+td.headerCovTableEntryLo {
+	padding: 6px 10px;
+	border-top: 1px solid var(--line);
+	font-weight: 700;
+	text-align: right;
+	white-space: nowrap;
+}
+
+td.headerCovTableEntry {
+	color: var(--link);
+	background: var(--panel-alt);
+}
+
+td.headerCovTableEntryHi {
+	color: #0f5132;
+	background: var(--good-bg);
+}
+
+td.headerCovTableEntryMed {
+	color: #7a4b00;
+	background: var(--mid-bg);
+}
+
+td.headerCovTableEntryLo {
+	color: #842029;
+	background: var(--bad-bg);
+}
+
+td.headerValueLeg {
+	padding: 4px 8px;
+	color: var(--muted);
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+td.tableHead,
+td.subTableHeader {
+	padding: 7px 12px;
+	color: var(--head-text);
+	background: var(--head);
+	font-size: 13px;
+	font-weight: 700;
+	text-align: center;
+	white-space: nowrap;
+}
+
+span.tableHeadSort {
+	display: inline-flex;
+	margin-left: 4px;
+	vertical-align: middle;
+}
+
+td.coverFile,
+td.coverDirectory,
+td.overallOwner,
+td.coverPerHi,
+td.coverPerMed,
+td.coverPerLo,
+td.coverNumHi,
+td.coverNumMed,
+td.coverNumLo,
+td.coverNumDflt,
+td.coverBar {
+	padding: 6px 12px;
+	border-bottom: 1px solid var(--line);
+}
+
+td.coverFile,
+td.coverDirectory {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+	text-align: left;
+	white-space: nowrap;
+}
+
+td.coverFile {
+	background: var(--panel);
+	min-width: 32ch;
+}
+
+td.coverDirectory {
+	background: var(--panel-alt);
+	font-weight: 600;
+}
+
+td.coverBar {
+	width: 132px;
+	min-width: 132px;
+	background: var(--panel);
+	text-align: center;
+}
+
+td.coverBar table {
+	margin: 0 auto;
+	border-collapse: collapse;
+}
+
+td.coverPerHi,
+td.coverNumHi {
+	color: #0f5132;
+	background: var(--good-bg);
+	font-weight: 700;
+	text-align: right;
+}
+
+td.coverPerMed,
+td.coverNumMed {
+	color: #7a4b00;
+	background: var(--mid-bg);
+	font-weight: 700;
+	text-align: right;
+}
+
+td.coverPerLo,
+td.coverNumLo {
+	color: #842029;
+	background: var(--bad-bg);
+	font-weight: 700;
+	text-align: right;
+}
+
+td.coverPerHi,
+td.coverPerMed,
+td.coverPerLo {
+	min-width: 8ch;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+td.coverNumDflt {
+	color: var(--text);
+	background: var(--panel);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	white-space: nowrap;
+}
+
+td.lineNum,
+td.lineNumCov,
+td.lineNumNoCov,
+span.lineNum {
+	padding: 0 10px;
+	border-right: 1px solid var(--line);
+	color: var(--muted);
+	background: var(--panel-alt);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+	font-size: 12px;
+	text-align: right;
+	white-space: nowrap;
+}
+
+span.lineNum {
+	display: inline-block;
+	width: 8ch;
+}
+
+td.lineNoCov,
+td.lineCov,
+td.lineNoCov > pre,
+td.lineCov > pre,
+td.source,
+pre.source,
+pre.sourceHeading {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+	font-size: 12px;
+	line-height: 1.55;
+}
+
+td.source,
+pre.source,
+td.lineCov {
+	background: var(--code-bg);
+}
+
+td.lineNoCov,
+span.tlaUNC {
+	background: var(--bad-bg);
+}
+
+pre.source > span[id^="L"] {
+	display: inline-block;
+	width: 100%;
+	vertical-align: top;
+}
+
+pre.source > span:has(.tlaUNC) {
+	background: var(--bad-bg);
+}
+
+pre.source > span:has(.tlaGNC) {
+	background: var(--panel);
+}
+
+span.lineCov {
+	background: var(--good-bg);
+}
+
+span.tlaGNC {
+	background: transparent;
+}
+
+span.lineNoCov {
+	background: var(--bad-bg);
+}
+
+pre.source > span:not(:has(.tlaGNC)):not(:has(.tlaUNC)) {
+	opacity: 0.55;
+}
+
+span.tlaGNC {
+	color: #0f5132;
+}
+
+span.tlaUNC {
+	color: #842029;
+	background: transparent;
+}
+
+span.coverLegendCov {
+	color: #0f5132;
+	background: var(--good-bg);
+}
+
+span.coverLegendNoCov {
+	color: #842029;
+	background: var(--bad-bg);
+}
+
+div.coverBarOutline,
+td.coverBarOutline {
+	padding: 0;
+	border: 1px solid var(--line);
+	background: var(--panel-alt);
+	line-height: 0;
+	white-space: nowrap;
+}
+
+td.coverBarOutline img {
+	display: inline-block;
+	vertical-align: top;
+}
+
+div.coverBarHi,
+div.coverBarMed,
+div.coverBarLo {
+	height: 12px;
+	border-radius: 999px;
+}
+
+div.coverBarHi {
+	background: var(--good);
+}
+
+div.coverBarMed {
+	background: var(--mid);
+}
+
+div.coverBarLo {
+	background: var(--bad);
+}
+
+td.coverFn,
+td.coverFnAlias,
+td.coverFnHi,
+td.coverFnLo,
+td.coverFnAliasHi,
+td.coverFnAliasLo {
+	padding: 7px 10px;
+	border-bottom: 1px solid var(--line);
+}
+
+td.coverFn,
+td.coverFnAlias {
+	background: var(--panel);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+	text-align: left;
+}
+
+td.coverFnHi,
+td.coverFnAliasHi {
+	color: #0f5132;
+	background: var(--good-bg);
+	font-weight: 700;
+	text-align: right;
+}
+
+td.coverFnLo,
+td.coverFnAliasLo {
+	color: #842029;
+	background: var(--bad-bg);
+	font-weight: 700;
+	text-align: right;
+}

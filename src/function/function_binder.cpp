@@ -854,9 +854,10 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 		// TODO: Support union types with template member types.
 		throw NotImplementedException("Union types cannot infer templated member types yet!");
 	} break;
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		// Structs are only implicitly castable to structs, so we only need to handle this case here.
-		if (target.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(source)) {
+		if (StructType::IsStruct(target) && StructType::IsUnnamed(source)) {
 			const auto &source_children = StructType::GetChildTypes(source);
 			const auto &target_children = StructType::GetChildTypes(target);
 

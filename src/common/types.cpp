@@ -129,6 +129,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
@@ -260,8 +261,9 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalTypeId::TIME_TZ,   LogicalTypeId::TIME_NS,       LogicalTypeId::BIT,
 	    LogicalTypeId::BIGNUM,    LogicalTypeId::UHUGEINT,      LogicalTypeId::HUGEINT,
 	    LogicalTypeId::UUID,      LogicalTypeId::GEOMETRY,      LogicalTypeId::STRUCT,
-	    LogicalTypeId::LIST,      LogicalTypeId::MAP,           LogicalTypeId::ENUM,
-	    LogicalTypeId::UNION,     LogicalTypeId::ARRAY,         LogicalTypeId::VARIANT,
+	    LogicalTypeId::TUPLE,     LogicalTypeId::LIST,          LogicalTypeId::MAP,
+	    LogicalTypeId::ENUM,      LogicalTypeId::UNION,         LogicalTypeId::ARRAY,
+	    LogicalTypeId::VARIANT,
 	};
 	return types;
 }
@@ -407,6 +409,24 @@ string LogicalType::ToString() const {
 		}
 	}
 	switch (id_) {
+	case LogicalTypeId::TUPLE: {
+		if (!type_info_) {
+			return "TUPLE";
+		}
+		auto &child_types = StructType::GetChildTypes(*this);
+		if (child_types.empty()) {
+			return "TUPLE";
+		}
+		string ret = "TUPLE(";
+		for (size_t i = 0; i < child_types.size(); i++) {
+			ret += child_types[i].second.ToString();
+			if (i < child_types.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += ")";
+		return ret;
+	}
 	case LogicalTypeId::STRUCT: {
 		if (!type_info_) {
 			return "STRUCT";
@@ -528,7 +548,6 @@ string LogicalType::ToString() const {
 		return EnumUtil::ToString(id_);
 	}
 }
-// LCOV_EXCL_STOP
 
 LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
 	auto type = DefaultTypeGenerator::GetDefaultType(Identifier(str));
@@ -663,6 +682,7 @@ bool LogicalType::IsComplete() const {
 			}
 			break;
 		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::TUPLE:
 		case LogicalTypeId::UNION:
 		case LogicalTypeId::VARIANT:
 			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::STRUCT_TYPE_INFO) {
@@ -692,9 +712,9 @@ bool LogicalType::IsComplete() const {
 		D_ASSERT(type.AuxInfo());
 		switch (type.AuxInfo()->type) {
 		case ExtraTypeInfoType::STRUCT_TYPE_INFO:
-			// empty STRUCTs are complete (children, if any, are checked by recursion)
+			// empty STRUCTs/TUPLEs are complete (children, if any, are checked by recursion)
 			// UNION/VARIANT (which also use STRUCT_TYPE_INFO) cannot be empty
-			if (type.id() == LogicalTypeId::STRUCT) {
+			if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::TUPLE) {
 				return false;
 			}
 			return type.AuxInfo()->Cast<StructTypeInfo>().child_types.empty();
@@ -720,7 +740,8 @@ bool LogicalType::SupportsRegularUpdate() const {
 	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::GEOMETRY: // If geometry is shredded, its parts (lists/structs) can't be regularly updated.
 		return false;
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		auto &child_types = StructType::GetChildTypes(*this);
 		for (auto &entry : child_types) {
 			if (!entry.second.SupportsRegularUpdate()) {
@@ -1103,6 +1124,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 104;
 	// nested types
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 		return 125;
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::ARRAY:
@@ -1185,6 +1207,14 @@ void LogicalType::Verify() const {
 		}
 		break;
 	}
+	case LogicalTypeId::TUPLE: {
+		// verify child types - all names must be empty
+		for (auto &entry : StructType::GetChildTypes(*this)) {
+			D_ASSERT(entry.first.empty());
+			entry.second.Verify();
+		}
+		break;
+	}
 	case LogicalTypeId::LIST:
 		ListType::GetChildType(*this).Verify();
 		break;
@@ -1245,7 +1275,14 @@ void LogicalType::Serialize(Serializer &serializer) const {
 			// Ignore errors, just try to write as a USER type instead
 		}
 	}
-	serializer.WriteProperty<LogicalTypeId>(100, "id", id_);
+	// TUPLE is a recent type. We store its own id when targeting a recent storage version (V2_0_0+), but for older
+	// formats we write it as an unnamed STRUCT for backwards compatibility (older engines read it as an unnamed
+	// struct - its children carry empty names - and we convert unnamed structs back to TUPLE on deserialize).
+	auto serialized_id = id_;
+	if (id_ == LogicalTypeId::TUPLE && !serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serialized_id = LogicalTypeId::STRUCT;
+	}
+	serializer.WriteProperty<LogicalTypeId>(100, "id", serialized_id);
 	serializer.WritePropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info", type_info_);
 }
 
@@ -1257,11 +1294,16 @@ LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 		return LogicalType::BLOB;
 	}
 
-	LogicalType result(id, std::move(type_info));
+	LogicalType result(id, type_info);
 
 	if (Geometry::IsSpatialGeometryType(result)) {
 		// This is a legacy geometry type, deserialize as geometry
 		return LogicalType::GEOMETRY();
+	}
+
+	// Convert unnamed (non-empty) STRUCTs back to TUPLE
+	if (id == LogicalTypeId::STRUCT && type_info && StructType::IsUnnamed(result)) {
+		return LogicalType(LogicalTypeId::TUPLE, std::move(type_info));
 	}
 
 	return result;
@@ -1406,8 +1448,8 @@ LogicalType LogicalType::LIST(const LogicalType &child) {
 // Struct Type
 //===--------------------------------------------------------------------===//
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION ||
-	         type.id() == LogicalTypeId::VARIANT);
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::TUPLE ||
+	         type.id() == LogicalTypeId::UNION || type.id() == LogicalTypeId::VARIANT);
 
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
@@ -1439,7 +1481,11 @@ idx_t StructType::GetChildIndexUnsafe(const LogicalType &type, const string &nam
 idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
 }
+
 bool StructType::IsUnnamed(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::TUPLE) {
+		return true;
+	}
 	auto &child_types = StructType::GetChildTypes(type);
 	if (child_types.empty()) {
 		return false;
@@ -1450,6 +1496,48 @@ bool StructType::IsUnnamed(const LogicalType &type) {
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	auto info = make_shared_ptr<StructTypeInfo>(std::move(children));
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
+}
+
+bool StructType::IsStruct(const LogicalType &type) {
+	return StructType::IsStruct(type.id());
+}
+
+bool StructType::IsStruct(LogicalTypeId id) {
+	return id == LogicalTypeId::STRUCT || id == LogicalTypeId::TUPLE;
+}
+
+string TupleType::GetChildName(idx_t index) {
+	return "element" + to_string(index + 1);
+}
+
+child_list_t<LogicalType> TupleType::NamedChildren(const LogicalType &type) {
+	auto &child_types = StructType::GetChildTypes(type);
+	child_list_t<LogicalType> result;
+	result.reserve(child_types.size());
+	for (idx_t i = 0; i < child_types.size(); i++) {
+		auto &child = child_types[i];
+		auto name = child.first.empty() ? TupleType::GetChildName(i) : child.first.GetIdentifierName();
+		result.emplace_back(Identifier(std::move(name)), child.second);
+	}
+	return result;
+}
+
+LogicalType LogicalType::TUPLE(child_list_t<LogicalType> children) {
+	// a TUPLE is an unnamed struct - all member names are empty
+	for (auto &child : children) {
+		child.first.clear();
+	}
+	auto info = make_shared_ptr<StructTypeInfo>(std::move(children));
+	return LogicalType(LogicalTypeId::TUPLE, std::move(info));
+}
+
+LogicalType LogicalType::TUPLE(vector<LogicalType> children) {
+	child_list_t<LogicalType> child_list;
+	child_list.reserve(children.size());
+	for (auto &child : children) {
+		child_list.emplace_back(string(), std::move(child));
+	}
+	return LogicalType::TUPLE(std::move(child_list));
 }
 
 //===--------------------------------------------------------------------===//

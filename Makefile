@@ -478,6 +478,9 @@ wasm_threads: ${EXTENSION_CONFIG_STEP}
 cldebug: ${EXTENSION_CONFIG_STEP}
 	$(call cmake_build,build/cldebug,Debug,-DENABLE_SANITIZER=0 -DENABLE_UBSAN=0)
 
+codecov: ${EXTENSION_CONFIG_STEP}
+	$(call cmake_build,build/codecov,Release,-DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCOVERAGE=1)
+
 clreldebug:
 	mkdir -p ./build/clreldebug && \
 	cd build/clreldebug && \
