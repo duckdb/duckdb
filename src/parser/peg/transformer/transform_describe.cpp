@@ -3,11 +3,38 @@
 
 namespace duckdb {
 
+static const TransformFrameOps &GetDescribeTrampolineOps(const string &rule_name) {
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(rule_name);
+	if (ops_entry == ops_map.end()) {
+		throw NotImplementedException("No trampoline transformer for rule '%s'", rule_name);
+	}
+	return *ops_entry->second;
+}
+
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformDescribeStatement(PEGTransformer &transformer,
                                                                               unique_ptr<QueryNode> child) {
 	auto select_statement = make_uniq<SelectStatement>();
 	select_statement->node = std::move(child);
 	return select_statement;
+}
+
+void PEGTransformerFactory::InitializeDescribeStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(choice_result, GetDescribeTrampolineOps(choice_result.name),
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDescribeStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto child = frame.TakeResult<unique_ptr<QueryNode>>(0);
+	auto result = TransformDescribeStatement(transformer, std::move(child));
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
 }
 
 unique_ptr<QueryNode>

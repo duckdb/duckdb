@@ -37,6 +37,11 @@ rules:
     init: InitializeExecuteStatementTrampoline
     finalize: FinalizeExecuteStatementTrampoline
 
+  DescribeStatement:
+    mode: manual
+    init: InitializeDescribeStatementTrampoline
+    finalize: FinalizeDescribeStatementTrampoline
+
   ColId:
     mode: manual
     init: InitializeColIdTrampoline
@@ -79,6 +84,11 @@ rules:
     mode: manual
     init: InitializeFunctionIdentifierTrampoline
     finalize: FinalizeFunctionIdentifierTrampoline
+
+  ColumnReference:
+    mode: manual
+    init: InitializeColumnReferenceTrampoline
+    finalize: FinalizeColumnReferenceTrampoline
 
   ColLabelOrString:
     mode: manual
