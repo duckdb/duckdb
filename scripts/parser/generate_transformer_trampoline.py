@@ -455,7 +455,7 @@ class UseGramPreviewEmitter:
         if self.is_forward_rule(rule_name):
             return self.emit_forward_rule(rule_name, ast)
         if literal_string_values(ast) is not None:
-            return self.emit_syntax_only_rule(rule_name)
+            return self.emit_syntax_only_rule(rule_name, ast)
         if isinstance(ast, ChoiceNode):
             if self.is_manual_finalize_rule(rule_name):
                 raise NotImplementedError("manual_finalize choice rules are not currently supported")
@@ -561,18 +561,27 @@ class UseGramPreviewEmitter:
         lines.append("}")
         return lines
 
-    def emit_syntax_only_rule(self, rule_name):
+    def emit_syntax_only_rule(self, rule_name, ast):
         lines = self.emit_syntax_only_initialize(rule_name)
         if self.is_manual_finalize_rule(rule_name):
             return lines
         cpp_type = self.cpp_type(rule_name)
         by_value = self.by_value(rule_name)
+        literal_values = literal_string_values(ast)
         lines.append("")
         lines.append(
             f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"TransformStack &stack, TransformStackFrame &frame) {{"
         )
-        lines.append(f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer);")
+        if cpp_type == "string" and literal_values is not None:
+            if len(literal_values) == 1:
+                lines.append(f'\tstring result = "{literal_values[0]}";')
+            else:
+                lines.append("\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
+                lines.append("\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);")
+                lines.append("\tauto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;")
+        else:
+            lines.append(f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer);")
         lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', by_value)};")
         lines.append("}")
         return lines

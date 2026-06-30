@@ -2580,7 +2580,7 @@ void PEGTransformerFactory::InitializeOptAnalyzeTrampoline(PEGTransformer &trans
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOptAnalyzeTrampoline(PEGTransformer &transformer,
                                                                                      TransformStack &stack,
                                                                                      TransformStackFrame &frame) {
-	auto result = PEGTransformerFactory::TransformOptAnalyze(transformer);
+	string result = "ANALYZE";
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -2592,7 +2592,7 @@ void PEGTransformerFactory::InitializeOptFullTrampoline(PEGTransformer &transfor
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOptFullTrampoline(PEGTransformer &transformer,
                                                                                   TransformStack &stack,
                                                                                   TransformStackFrame &frame) {
-	auto result = PEGTransformerFactory::TransformOptFull(transformer);
+	string result = "FULL";
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -2604,7 +2604,7 @@ void PEGTransformerFactory::InitializeOptFreezeTrampoline(PEGTransformer &transf
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOptFreezeTrampoline(PEGTransformer &transformer,
                                                                                     TransformStack &stack,
                                                                                     TransformStackFrame &frame) {
-	auto result = PEGTransformerFactory::TransformOptFreeze(transformer);
+	string result = "FREEZE";
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -2616,7 +2616,7 @@ void PEGTransformerFactory::InitializeOptVerboseTrampoline(PEGTransformer &trans
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOptVerboseTrampoline(PEGTransformer &transformer,
                                                                                      TransformStack &stack,
                                                                                      TransformStackFrame &frame) {
-	auto result = PEGTransformerFactory::TransformOptVerbose(transformer);
+	string result = "VERBOSE";
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 

@@ -363,6 +363,18 @@ MethodArguments PEGTransformerFactory::TransformFunctionExpressionArgumentList(
 	return result;
 }
 
+MethodArguments
+PEGTransformerFactory::TransformFunctionExpressionArguments(PEGTransformer &transformer,
+                                                            MethodArguments function_expression_argument_list) {
+	return function_expression_argument_list;
+}
+
+vector<FunctionArgument>
+PEGTransformerFactory::TransformFunctionArgumentList(PEGTransformer &transformer,
+                                                     vector<FunctionArgument> function_argument) {
+	return function_argument;
+}
+
 vector<OrderByNode> PEGTransformerFactory::TransformWithinGroupClause(PEGTransformer &transformer,
                                                                       vector<OrderByNode> order_by_clause) {
 	return order_by_clause;
@@ -588,6 +600,12 @@ PEGTransformerFactory::TransformExpression(PEGTransformer &transformer,
 	return std::move(lambda_arrow_expression);
 }
 
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformColumnDefaultExpr(PEGTransformer &transformer,
+                                                  unique_ptr<ParsedExpression> col_def_or_expr) {
+	return col_def_or_expr;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLambdaArrowExpression(
     PEGTransformer &transformer, unique_ptr<ParsedExpression> logical_or_expression,
     optional<vector<unique_ptr<ParsedExpression>>> single_arrow_pair) {
@@ -599,6 +617,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLambdaArrowExpressi
 		expr = make_uniq<LambdaExpression>(std::move(expr), std::move(right_expr));
 	}
 	return expr;
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformSingleArrowPair(PEGTransformer &transformer,
+                                                unique_ptr<ParsedExpression> logical_or_expression) {
+	return logical_or_expression;
 }
 
 static unique_ptr<ParsedExpression> FoldConjunctionExpression(PEGTransformer &transformer,
@@ -623,11 +647,23 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalOrExpression
 	                                 std::move(logical_or_expression_tail), ExpressionType::CONJUNCTION_OR);
 }
 
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformLogicalOrExpressionTail(PEGTransformer &transformer,
+                                                        unique_ptr<ParsedExpression> logical_and_expression) {
+	return logical_and_expression;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalAndExpression(
     PEGTransformer &transformer, unique_ptr<ParsedExpression> logical_not_expression,
     optional<vector<unique_ptr<ParsedExpression>>> logical_and_expression_tail) {
 	return FoldConjunctionExpression(transformer, std::move(logical_not_expression),
 	                                 std::move(logical_and_expression_tail), ExpressionType::CONJUNCTION_AND);
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformLogicalAndExpressionTail(PEGTransformer &transformer,
+                                                         unique_ptr<ParsedExpression> logical_not_expression) {
+	return logical_not_expression;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColDefOrExpr(
@@ -637,11 +673,23 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColDefOrExpr(
 	                                 ExpressionType::CONJUNCTION_OR);
 }
 
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformColDefOrExpressionTail(PEGTransformer &transformer,
+                                                       unique_ptr<ParsedExpression> col_def_and_expr) {
+	return col_def_and_expr;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColDefAndExpr(
     PEGTransformer &transformer, unique_ptr<ParsedExpression> is_distinct_from_expression,
     optional<vector<unique_ptr<ParsedExpression>>> col_def_and_expression_tail) {
 	return FoldConjunctionExpression(transformer, std::move(is_distinct_from_expression),
 	                                 std::move(col_def_and_expression_tail), ExpressionType::CONJUNCTION_AND);
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformColDefAndExpressionTail(PEGTransformer &transformer,
+                                                        unique_ptr<ParsedExpression> is_distinct_from_expression) {
+	return is_distinct_from_expression;
 }
 
 unique_ptr<ParsedExpression>
@@ -657,6 +705,11 @@ PEGTransformerFactory::TransformLogicalNotExpression(PEGTransformer &transformer
 		expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(inner_list_children));
 	}
 	return expr;
+}
+
+vector<bool> PEGTransformerFactory::TransformNotExpression(PEGTransformer &transformer,
+                                                           const vector<bool> &not_keyword) {
+	return not_keyword;
 }
 
 unique_ptr<ParsedExpression>
@@ -705,6 +758,11 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNotNullOperator(PEG
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsNullOperator(PEGTransformer &transformer) {
 	return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, nullptr);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsNull(PEGTransformer &transformer,
+                                                                    unique_ptr<ParsedExpression> is_null_operator) {
+	return is_null_operator;
 }
 
 bool PEGTransformerFactory::TransformNotKeyword(PEGTransformer &transformer) {
@@ -1258,6 +1316,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCollateExpression(
 	return expr;
 }
 
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformCollateExpressionTail(PEGTransformer &transformer,
+                                                      unique_ptr<ParsedExpression> at_time_zone_expression) {
+	return at_time_zone_expression;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAtTimeZoneExpression(
     PEGTransformer &transformer, unique_ptr<ParsedExpression> prefix_expression,
     optional<vector<unique_ptr<ParsedExpression>>> at_time_zone_expression_tail) {
@@ -1274,6 +1338,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAtTimeZoneExpressio
 		expr = std::move(func_expr);
 	}
 	return expr;
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformAtTimeZoneExpressionTail(PEGTransformer &transformer,
+                                                         unique_ptr<ParsedExpression> prefix_expression) {
+	return prefix_expression;
 }
 
 bool IsNumberLiteral(ParseResult &pr) {
@@ -1568,6 +1638,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPostfixOperator(PEG
 	return make_uniq<FunctionExpression>("factorial", std::move(func_children));
 }
 
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformIndirectionList(PEGTransformer &transformer,
+                                                vector<unique_ptr<ParsedExpression>> indirection) {
+	return indirection;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCastOperator(PEGTransformer &transformer,
                                                                           const LogicalType &type) {
 	// We input a dummy constant expression but replace this later with the real expression that precedes this post-fix
@@ -1716,6 +1792,12 @@ Identifier PEGTransformerFactory::TransformTableQualification(PEGTransformer &tr
 string PEGTransformerFactory::TransformColIdDot(PEGTransformer &transformer, const Identifier &col_id) {
 	return col_id.GetIdentifierName();
 }
+
+vector<string> PEGTransformerFactory::TransformStarQualifierList(PEGTransformer &transformer,
+                                                                 const vector<string> &col_id_dot) {
+	return col_id_dot;
+}
+
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(
     PEGTransformer &transformer, const optional<vector<string>> &star_qualifier_list,
     const optional<qualified_column_set_t> &exclude_list,

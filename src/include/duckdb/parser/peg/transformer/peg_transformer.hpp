@@ -2671,6 +2671,8 @@ public:
 	                            optional<unique_ptr<WindowExpression>> over_clause);
 	static unique_ptr<TransformResultValue> TransformFunctionExpressionArgumentsInternal(PEGTransformer &transformer,
 	                                                                                     ParseResult &parse_result);
+	static MethodArguments TransformFunctionExpressionArguments(PEGTransformer &transformer,
+	                                                            MethodArguments function_expression_argument_list);
 	static unique_ptr<TransformResultValue> TransformFunctionExpressionArgumentListInternal(PEGTransformer &transformer,
 	                                                                                        ParseResult &parse_result);
 	static MethodArguments
@@ -2680,6 +2682,8 @@ public:
 	                                        const optional<bool> &ignore_or_respect_nulls);
 	static unique_ptr<TransformResultValue> TransformFunctionArgumentListInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
+	static vector<FunctionArgument> TransformFunctionArgumentList(PEGTransformer &transformer,
+	                                                              vector<FunctionArgument> function_argument);
 	static unique_ptr<TransformResultValue> TransformFunctionIdentifierInternal(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
 	static QualifiedName TransformFunctionIdentifier(PEGTransformer &transformer, ParseResult &choice_result);
@@ -2775,6 +2779,7 @@ public:
 	                        const optional<qualified_column_map_t<string>> &rename_list);
 	static unique_ptr<TransformResultValue> TransformStarQualifierListInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
+	static vector<string> TransformStarQualifierList(PEGTransformer &transformer, const vector<string> &col_id_dot);
 	static unique_ptr<TransformResultValue> TransformExcludeListInternal(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
 	static qualified_column_set_t TransformExcludeList(PEGTransformer &transformer,
@@ -3082,6 +3087,8 @@ public:
 	                                                        unique_ptr<ParsedExpression> lambda_arrow_expression);
 	static unique_ptr<TransformResultValue> TransformColumnDefaultExprInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformColumnDefaultExpr(PEGTransformer &transformer,
+	                                                               unique_ptr<ParsedExpression> col_def_or_expr);
 	static unique_ptr<TransformResultValue> TransformLambdaArrowExpressionInternal(PEGTransformer &transformer,
 	                                                                               ParseResult &parse_result);
 	static unique_ptr<ParsedExpression>
@@ -3089,6 +3096,8 @@ public:
 	                               optional<vector<unique_ptr<ParsedExpression>>> single_arrow_pair);
 	static unique_ptr<TransformResultValue> TransformSingleArrowPairInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformSingleArrowPair(PEGTransformer &transformer,
+	                                                             unique_ptr<ParsedExpression> logical_or_expression);
 	static unique_ptr<TransformResultValue> TransformLogicalOrExpressionInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<ParsedExpression>
@@ -3096,6 +3105,8 @@ public:
 	                             optional<vector<unique_ptr<ParsedExpression>>> logical_or_expression_tail);
 	static unique_ptr<TransformResultValue> TransformLogicalOrExpressionTailInternal(PEGTransformer &transformer,
 	                                                                                 ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformLogicalOrExpressionTail(PEGTransformer &transformer, unique_ptr<ParsedExpression> logical_and_expression);
 	static unique_ptr<TransformResultValue> TransformColDefOrExprInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static unique_ptr<ParsedExpression>
@@ -3103,6 +3114,8 @@ public:
 	                      optional<vector<unique_ptr<ParsedExpression>>> col_def_or_expression_tail);
 	static unique_ptr<TransformResultValue> TransformColDefOrExpressionTailInternal(PEGTransformer &transformer,
 	                                                                                ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformColDefOrExpressionTail(PEGTransformer &transformer,
+	                                                                    unique_ptr<ParsedExpression> col_def_and_expr);
 	static unique_ptr<TransformResultValue> TransformLogicalAndExpressionInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
 	static unique_ptr<ParsedExpression>
@@ -3110,6 +3123,8 @@ public:
 	                              optional<vector<unique_ptr<ParsedExpression>>> logical_and_expression_tail);
 	static unique_ptr<TransformResultValue> TransformLogicalAndExpressionTailInternal(PEGTransformer &transformer,
 	                                                                                  ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformLogicalAndExpressionTail(PEGTransformer &transformer, unique_ptr<ParsedExpression> logical_not_expression);
 	static unique_ptr<TransformResultValue> TransformColDefAndExprInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<ParsedExpression>
@@ -3117,6 +3132,9 @@ public:
 	                       optional<vector<unique_ptr<ParsedExpression>>> col_def_and_expression_tail);
 	static unique_ptr<TransformResultValue> TransformColDefAndExpressionTailInternal(PEGTransformer &transformer,
 	                                                                                 ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformColDefAndExpressionTail(PEGTransformer &transformer,
+	                                 unique_ptr<ParsedExpression> is_distinct_from_expression);
 	static unique_ptr<TransformResultValue> TransformLogicalNotExpressionInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformLogicalNotExpression(PEGTransformer &transformer,
@@ -3124,6 +3142,7 @@ public:
 	                                                                  unique_ptr<ParsedExpression> is_expression);
 	static unique_ptr<TransformResultValue> TransformNotExpressionInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
+	static vector<bool> TransformNotExpression(PEGTransformer &transformer, const vector<bool> &not_keyword);
 	static unique_ptr<TransformResultValue> TransformNotKeywordInternal(PEGTransformer &transformer,
 	                                                                    ParseResult &parse_result);
 	static bool TransformNotKeyword(PEGTransformer &transformer);
@@ -3153,6 +3172,8 @@ public:
 	static unique_ptr<ParsedExpression> TransformNotNullOperator(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformIsNullInternal(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformIsNull(PEGTransformer &transformer,
+	                                                    unique_ptr<ParsedExpression> is_null_operator);
 	static unique_ptr<TransformResultValue> TransformIsNullOperatorInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformIsNullOperator(PEGTransformer &transformer);
@@ -3363,6 +3384,8 @@ public:
 	                           optional<vector<unique_ptr<ParsedExpression>>> collate_expression_tail);
 	static unique_ptr<TransformResultValue> TransformCollateExpressionTailInternal(PEGTransformer &transformer,
 	                                                                               ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformCollateExpressionTail(PEGTransformer &transformer, unique_ptr<ParsedExpression> at_time_zone_expression);
 	static unique_ptr<TransformResultValue> TransformAtTimeZoneExpressionInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
 	static unique_ptr<ParsedExpression>
@@ -3370,6 +3393,8 @@ public:
 	                              optional<vector<unique_ptr<ParsedExpression>>> at_time_zone_expression_tail);
 	static unique_ptr<TransformResultValue> TransformAtTimeZoneExpressionTailInternal(PEGTransformer &transformer,
 	                                                                                  ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformAtTimeZoneExpressionTail(PEGTransformer &transformer, unique_ptr<ParsedExpression> prefix_expression);
 	static unique_ptr<TransformResultValue> TransformPrefixOperatorInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformMinusPrefixOperatorInternal(PEGTransformer &transformer,
@@ -3385,6 +3410,8 @@ public:
 	                        optional<vector<unique_ptr<ParsedExpression>>> indirection_list);
 	static unique_ptr<TransformResultValue> TransformIndirectionListInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>>
+	TransformIndirectionList(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> indirection);
 	static unique_ptr<TransformResultValue> TransformIndirectionInternal(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformCastOperatorInternal(PEGTransformer &transformer,
