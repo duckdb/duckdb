@@ -591,6 +591,24 @@ ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption
 }
 
 template <>
+const char *EnumUtil::ToChars<ParquetReaderProjectionExpressionType>(ParquetReaderProjectionExpressionType value) {
+	switch (value) {
+	case ParquetReaderProjectionExpressionType::BYTE_LENGTH:
+		return "BYTE_LENGTH";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+ParquetReaderProjectionExpressionType EnumUtil::FromString<ParquetReaderProjectionExpressionType>(const char *value) {
+	if (StringUtil::Equals(value, "BYTE_LENGTH")) {
+		return ParquetReaderProjectionExpressionType::BYTE_LENGTH;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template <>
 const char *EnumUtil::ToChars<GeoParquetVersion>(GeoParquetVersion value) {
 	switch (value) {
 	case GeoParquetVersion::NONE:
