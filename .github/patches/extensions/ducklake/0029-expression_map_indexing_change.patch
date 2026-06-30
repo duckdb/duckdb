@@ -1,0 +1,17 @@
+diff --git a/src/storage/ducklake_inlined_data_reader.cpp b/src/storage/ducklake_inlined_data_reader.cpp
+index 7d99e668..a46ed087 100644
+--- a/src/storage/ducklake_inlined_data_reader.cpp
++++ b/src/storage/ducklake_inlined_data_reader.cpp
+@@ -177,9 +177,11 @@ bool DuckLakeInlinedDataReader::TryInitializeScan(ClientContext &context, Global
+ 		data->data->InitializeScan(state, scan_column_ids);
+ 	}
+ 	for (auto &entry : expression_map) {
++		auto &column_index = column_indexes[entry.first];
++		auto column_id = column_index.GetPrimaryIndex();
+ 		auto &expression_data = entry.second;
+ 		auto &expression = *expression_data.expression;
+-		expression_executors[entry.first] = make_uniq<ExpressionExecutor>(context, expression);
++		expression_executors[column_id] = make_uniq<ExpressionExecutor>(context, expression);
+ 	}
+ 	return true;
+ }
