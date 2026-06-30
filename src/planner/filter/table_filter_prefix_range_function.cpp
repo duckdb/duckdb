@@ -547,26 +547,31 @@ FilterPropagateResult PrefixRangeScalarFun::FilterPrune(const FunctionStatistics
 	if (!data.filter || !data.filter->IsInitialized()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	switch (input.stats.GetStatsType()) {
+	auto column_stats = input.ChildStats(0);
+	if (!column_stats) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto &stats = *column_stats;
+	switch (stats.GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS: {
-		if (!NumericStats::HasMinMax(input.stats)) {
+		if (!NumericStats::HasMinMax(stats)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		const auto min = NumericStats::Min(input.stats);
-		const auto max = NumericStats::Max(input.stats);
+		const auto min = NumericStats::Min(stats);
+		const auto max = NumericStats::Max(stats);
 		if (min > max) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 		return data.filter->LookupRange(min, max);
 	}
 	case StatisticsType::STRING_STATS: {
-		if (!StringStats::HasMinMax(input.stats)) {
+		if (!StringStats::HasMinMax(stats)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 		// String stats may contain raw parquet bytes that are not valid UTF-8. Reconstruct them as BLOBs so the
 		// prefix-range comparable logic can inspect the raw bytes without value-construction validation.
-		return data.filter->LookupRange(Value::BLOB_RAW(StringStats::Min(input.stats)),
-		                                Value::BLOB_RAW(StringStats::Max(input.stats)));
+		return data.filter->LookupRange(Value::BLOB_RAW(StringStats::Min(stats)),
+		                                Value::BLOB_RAW(StringStats::Max(stats)));
 	}
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
