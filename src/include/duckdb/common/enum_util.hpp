@@ -326,6 +326,8 @@ enum class MultiFileDecodeResult : uint8_t;
 
 enum class MultiFileFileState : uint8_t;
 
+enum class MultiFileFinishResult : uint8_t;
+
 enum class MultiFileJobState : uint8_t;
 
 enum class NType : uint8_t;
@@ -1009,6 +1011,9 @@ const char* EnumUtil::ToChars<MultiFileDecodeResult>(MultiFileDecodeResult value
 
 template<>
 const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value);
+
+template<>
+const char* EnumUtil::ToChars<MultiFileFinishResult>(MultiFileFinishResult value);
 
 template<>
 const char* EnumUtil::ToChars<MultiFileJobState>(MultiFileJobState value);
@@ -1814,6 +1819,9 @@ MultiFileDecodeResult EnumUtil::FromString<MultiFileDecodeResult>(const char *va
 
 template<>
 MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value);
+
+template<>
+MultiFileFinishResult EnumUtil::FromString<MultiFileFinishResult>(const char *value);
 
 template<>
 MultiFileJobState EnumUtil::FromString<MultiFileJobState>(const char *value);
