@@ -98,6 +98,8 @@ public:
 	//! The default storage backends
 	static constexpr const char *TEMPORARY_STORAGE_NAME = "memory";
 	static constexpr const char *LOCAL_FILE_STORAGE_NAME = "local_file";
+	//! Connection-scoped storage: secrets live only for the creating connection and are reaped when it closes.
+	static constexpr const char *CONNECTION_STORAGE_NAME = "connection";
 
 	//! Static Helper Functions
 	DUCKDB_API static SecretManager &Get(ClientContext &context);
