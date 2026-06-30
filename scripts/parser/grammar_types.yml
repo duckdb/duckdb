@@ -490,6 +490,7 @@ Expression:
     - CharacterSimpleType
     - QualifiedSimpleType
     - MapType
+    - TupleType
     - RowType
     - GeometryType
     - VariantType
@@ -730,11 +731,8 @@ QualifiedName:
     - SchemaReservedTypeName
     - CatalogReservedSchemaTypeName
     - QualifiedName
-    - QualifiedSchemaName
     - QualifiedIndexName
-    - QualifiedSchemaNameString
     - QualifiedIndexNameString
-    - CatalogReservedSchema
     - SchemaReservedIndex
     - CatalogReservedSchemaIndex
     - FunctionIdentifier

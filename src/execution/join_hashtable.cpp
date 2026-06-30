@@ -129,9 +129,10 @@ void JoinHashTable::FinishInitWithLayout(shared_ptr<TupleDataLayout> published_l
 	pointer_offset = offsets.back();
 	entry_size = layout_ptr->GetRowWidth();
 
-	data_collection = make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE);
+	data_collection =
+	    make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE, nullptr, context);
 	sink_collection = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
-	                                                       radix_bits, layout_ptr->ColumnCount() - 1);
+	                                                       radix_bits, layout_ptr->ColumnCount() - 1, context);
 
 	dead_end = make_unsafe_uniq_array_uninitialized<data_t>(layout_ptr->GetRowWidth());
 	memset(dead_end.get(), 0, layout_ptr->GetRowWidth());
@@ -2314,7 +2315,7 @@ void JoinHashTable::SetRepartitionRadixBits(const idx_t max_ht_size, const idx_t
 	}
 	radix_bits += added_bits;
 	sink_collection = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
-	                                                       radix_bits, layout_ptr->ColumnCount() - 1);
+	                                                       radix_bits, layout_ptr->ColumnCount() - 1, context);
 
 	// Need to initialize again after changing the number of bits
 	InitializePartitionMasks();
@@ -2348,8 +2349,9 @@ idx_t JoinHashTable::FinishedPartitionCount() const {
 }
 
 void JoinHashTable::Repartition(JoinHashTable &global_ht) {
-	auto new_sink_collection = make_uniq<RadixPartitionedTupleData>(
-	    buffer_manager, layout_ptr, MemoryTag::HASH_TABLE, global_ht.radix_bits, layout_ptr->ColumnCount() - 1);
+	auto new_sink_collection =
+	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE, global_ht.radix_bits,
+	                                         layout_ptr->ColumnCount() - 1, context);
 	sink_collection->Repartition(context, *new_sink_collection);
 	sink_collection = std::move(new_sink_collection);
 	global_ht.Merge(*this);
@@ -2395,7 +2397,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	if (radix_bits != 0) {
 		radix_bits = 0;
 		sink_collection = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
-		                                                       idx_t(0), layout_ptr->ColumnCount() - 1);
+		                                                       idx_t(0), layout_ptr->ColumnCount() - 1, context);
 	} else {
 		sink_collection->Reset();
 	}

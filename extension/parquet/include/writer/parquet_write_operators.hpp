@@ -317,7 +317,7 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 struct ParquetTimeTZOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
-		return input.time().micros;
+		return input.time().value;
 	}
 
 	template <class SRC, class TGT>

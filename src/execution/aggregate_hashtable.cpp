@@ -84,7 +84,7 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 	    RadixPartitioning::RadixBitsOfPowerOfTwo(partitioned_data->PartitionCount()) != radix_bits) {
 		D_ASSERT(!partitioned_data || partitioned_data->Count() == 0);
 		partitioned_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
-		                                                        radix_bits, layout_ptr->ColumnCount() - 1);
+		                                                        radix_bits, layout_ptr->ColumnCount() - 1, context);
 	} else {
 		partitioned_data->Reset();
 	}
@@ -101,7 +101,7 @@ void GroupedAggregateHashTable::InitializeUnpartitionedData() {
 	D_ASSERT(radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD);
 	if (!unpartitioned_data) {
 		unpartitioned_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
-		                                                          0ULL, layout_ptr->ColumnCount() - 1);
+		                                                          0ULL, layout_ptr->ColumnCount() - 1, context);
 	} else {
 		unpartitioned_data->Reset();
 	}

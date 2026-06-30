@@ -45,8 +45,9 @@ create table wide as select
 	(range::VARCHAR || '0044') kk from range(8000);
 
 
-# wide should be the probe side, skinny should be on the build side
+# wide should be the probe side (serialized first), skinny should be on the build side
+# use json format so the child order is checked independently of the rendered box layout
 query II
-explain select * from wide w, skinny s where w.pk=s.a;
+explain (format json) select * from wide w, skinny s where w.pk=s.a;
 ----
 physical_plan	<REGEX>:.*wide.*skinny.*

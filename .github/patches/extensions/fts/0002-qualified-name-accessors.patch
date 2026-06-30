@@ -1,5 +1,5 @@
 diff --git a/extension/fts/fts_indexing.cpp b/extension/fts/fts_indexing.cpp
-index a63ed4e..061864b 100644
+index a63ed4e..b8f9bc3 100644
 --- a/extension/fts/fts_indexing.cpp
 +++ b/extension/fts/fts_indexing.cpp
 @@ -12,15 +12,15 @@ namespace duckdb {
@@ -52,7 +52,7 @@ index a63ed4e..061864b 100644
  
  static void CheckIfTableExists(ClientContext &context, QualifiedName &qname) {
 -	Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
-+	Catalog::GetEntry<TableCatalogEntry>(context, qname.Catalog(), qname.Schema(), qname.Name());
++	Catalog::GetEntry<TableCatalogEntry>(context, qname);
  }
  
  string FTSIndexing::CreateFTSIndexQuery(ClientContext &context, const FunctionParameters &parameters) {
@@ -72,7 +72,7 @@ index a63ed4e..061864b 100644
  	auto doc_id = StringValue::Get(parameters.values[1]);
  	// check all specified columns
 -	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
-+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, qname.Catalog(), qname.Schema(), qname.Name());
++	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, qname);
  	vector<string> doc_values;
  	for (idx_t i = 2; i < parameters.values.size(); i++) {
  		string col_name = StringValue::Get(parameters.values[i]);

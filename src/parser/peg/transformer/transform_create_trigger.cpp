@@ -34,7 +34,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTriggerInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	info->trigger_name = trigger_name;
+	info->SetTriggerName(trigger_name);
 	info->timing = trigger_timing;
 	info->event_type = trigger_event.event_type;
 	info->columns = trigger_event.columns;

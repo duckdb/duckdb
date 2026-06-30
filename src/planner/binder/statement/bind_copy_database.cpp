@@ -29,7 +29,8 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(Catalog &from_databas
 	auto info = make_uniq<CopyDatabaseInfo>(target_database_name);
 	for (auto &entry : catalog_entries) {
 		auto create_info = entry.get().GetInfo();
-		create_info->catalog = target_database_name;
+		create_info->SetQualifiedName(QualifiedName(target_database_name, create_info->GetQualifiedName().Schema(),
+		                                            create_info->GetQualifiedName().Name()));
 		auto on_conflict = create_info->type == CatalogType::SCHEMA_ENTRY ? OnCreateConflict::IGNORE_ON_CONFLICT
 		                                                                  : OnCreateConflict::ERROR_ON_CONFLICT;
 		// Update all the dependencies of the entry to point to the newly created entries on the target database
@@ -61,14 +62,10 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		// generate the insert statement
 		InsertStatement insert_stmt;
 		auto &insert_node = *insert_stmt.node;
-		insert_node.catalog = target_database_name;
-		insert_node.schema = table.ParentSchema().name;
-		insert_node.table = table.name;
+		insert_node.qualified_name = QualifiedName(target_database_name, table.ParentSchema().name, table.name);
 
 		auto from_tbl = make_uniq<BaseTableRef>();
-		from_tbl->catalog_name = source_catalog.GetName();
-		from_tbl->schema_name = table.ParentSchema().name;
-		from_tbl->table_name = table.name;
+		from_tbl->SetQualifiedName(QualifiedName(source_catalog.GetName(), table.ParentSchema().name, table.name));
 
 		auto select_node = make_uniq<SelectNode>();
 		auto &select_list = select_node->select_list;

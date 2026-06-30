@@ -186,7 +186,7 @@ duckdb_value duckdb_create_time(duckdb_time input) {
 	return CAPICreateValue(duckdb::dtime_t(input.micros));
 }
 duckdb_time duckdb_get_time(duckdb_value val) {
-	return {CAPIGetValue<duckdb::dtime_t, LogicalTypeId::TIME>(val).micros};
+	return {CAPIGetValue<duckdb::dtime_t, LogicalTypeId::TIME>(val).value};
 }
 duckdb_value duckdb_create_time_tz_value(duckdb_time_tz input) {
 	return CAPICreateValue(duckdb::dtime_tz_t(input.bits));
@@ -198,7 +198,7 @@ duckdb_value duckdb_create_time_ns(duckdb_time_ns input) {
 	return CAPICreateValue(duckdb::dtime_ns_t(input.nanos));
 }
 duckdb_time_ns duckdb_get_time_ns(duckdb_value val) {
-	return {CAPIGetValue<duckdb::dtime_ns_t, LogicalTypeId::TIME_NS>(val).micros};
+	return {CAPIGetValue<duckdb::dtime_ns_t, LogicalTypeId::TIME_NS>(val).value};
 }
 
 duckdb_value duckdb_create_timestamp(duckdb_timestamp input) {
@@ -333,7 +333,7 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 		return nullptr;
 	}
 	const auto &logical_type = UnwrapType(type);
-	if (logical_type.id() != duckdb::LogicalTypeId::STRUCT) {
+	if (!duckdb::StructType::IsStruct(logical_type)) {
 		return nullptr;
 	}
 	if (duckdb::TypeVisitor::Contains(logical_type, duckdb::LogicalTypeId::INVALID) ||
@@ -618,7 +618,7 @@ duckdb_value duckdb_get_struct_child(duckdb_value value, idx_t index) {
 	}
 
 	auto val = UnwrapValue(value);
-	if (val.type().id() != LogicalTypeId::STRUCT || val.IsNull()) {
+	if (!duckdb::StructType::IsStruct(val.type()) || val.IsNull()) {
 		return nullptr;
 	}
 

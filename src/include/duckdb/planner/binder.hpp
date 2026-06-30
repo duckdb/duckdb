@@ -62,7 +62,9 @@ class AtClause;
 class BoundAtClause;
 
 struct CreateInfo;
+struct CreateSchemaInfo;
 struct CreateTriggerInfo;
+struct QualifiedName;
 struct BoundCreateTableInfo;
 struct BoundOnConflictInfo;
 struct CommonTableExpressionInfo;
@@ -262,6 +264,12 @@ public:
 	                     vector<Identifier> &result_names);
 
 	void SearchSchema(CreateInfo &info);
+	//! Resolve the leading component of a (possibly qualified) name into a catalog: if it names an attached database
+	//! it becomes the catalog, otherwise the default catalog is prepended. The result has the catalog as the first
+	//! schema-path element.
+	QualifiedName ResolveCatalog(ClientContext &context, const QualifiedName &name);
+	//! Resolve the (possibly nested) name of a CREATE SCHEMA statement into a canonical [catalog, parents..., schema]
+	void BindCreateSchema(CreateSchemaInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateTriggerInfo(CreateTriggerInfo &info);
@@ -311,6 +319,7 @@ public:
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, Identifier &catalog, Identifier &schema);
+	static void BindSchemaOrCatalog(ClientContext &context, QualifiedName &qualified_name);
 
 	void BindLogicalType(LogicalType &type);
 
@@ -580,6 +589,9 @@ private:
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(Identifier &catalog_name, Identifier &schema_name);
 	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &catalog, Identifier &schema);
+	//! Resolve the (optional) schema/catalog of a qualified name in-place, overwriting it with the resolved name
+	void BindSchemaOrCatalog(QualifiedName &qualified_name);
+	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &qualified_name);
 	Identifier BindCatalog(const Identifier &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 

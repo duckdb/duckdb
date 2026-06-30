@@ -613,6 +613,9 @@ private:
 };
 
 class PartitionWriteManager {
+	using ActiveWrites = vector_of_value_map_t<unique_ptr<PartitionWriteInfo>>;
+	using ActiveWriteIterator = ActiveWrites::iterator;
+
 public:
 	class ReservationLock {
 	public:
@@ -639,16 +642,18 @@ public:
 	ReservationLock LockForReservation() DUCKDB_EXCLUDES(lock);
 	PartitionFileStateReservation ReserveFileState(ReservationLock &reservation_lock, const vector<Value> &values,
 	                                               FileCreationReason reason) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
+	FileStateHandle TryTakeInactiveFileState(const vector<Value> &values) DUCKDB_EXCLUDES(lock);
 	vector<FileStateHandle> TakeOpenFileStates() DUCKDB_EXCLUDES(lock);
 
 private:
+	FileStateHandle TakeInactiveFileStateLocked(ActiveWriteIterator entry) DUCKDB_REQUIRES(lock);
 	void Release(PartitionWriteInfo &write_info) DUCKDB_EXCLUDES(lock);
 
 private:
 	const PhysicalCopyToFile &op;
 	ClientContext &context;
 	mutable annotated_mutex lock;
-	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_writes DUCKDB_GUARDED_BY(lock);
+	ActiveWrites active_writes DUCKDB_GUARDED_BY(lock);
 	vector_of_value_map_t<idx_t> previous_partitions DUCKDB_GUARDED_BY(lock);
 	idx_t global_offset DUCKDB_GUARDED_BY(lock) = 0;
 
@@ -1224,7 +1229,7 @@ public:
 	bool HasCompleted() const;
 	optional<PartitionedCopyTask> TryAssignTask();
 	void ExecuteTask(ExecutionContext &execution_context, const PartitionedCopyTask &task, InterruptState &interrupt);
-	void FinishTask(const PartitionedCopyTask &task);
+	vector<vector<Value>> FinishTask(const PartitionedCopyTask &task);
 
 public:
 	//! The PartitionedCopy that this state belongs to
@@ -1304,6 +1309,7 @@ public:
 	void RequestPartitionFileState(FileStateHandle &file_state, const vector<Value> &values,
 	                               FileCreationReason reason = FileCreationReason::NORMAL)
 	    DUCKDB_EXCLUDES(copy_gstate.lock);
+	void TryFinalizePartitionWrite(const vector<Value> &values) DUCKDB_EXCLUDES(copy_gstate.lock);
 	void FinalizeActiveWrites() DUCKDB_EXCLUDES(copy_gstate.lock);
 	void FinalizeFileStates(vector<FileStateHandle> files_to_finalize) DUCKDB_EXCLUDES(copy_gstate.lock);
 
@@ -1753,9 +1759,7 @@ PartitionWriteManager::ReserveFileState(ReservationLock &reservation_lock, const
 	if (active_writes.size() >= Settings::Get<PartitionedWriteMaxOpenFilesSetting>(context)) {
 		for (auto it = active_writes.begin(); it != active_writes.end(); ++it) {
 			if (it->second->active_writes == 0) {
-				reservation.files_to_finalize.push_back(std::move(it->second->file_state));
-				++previous_partitions[it->first];
-				active_writes.erase(it);
+				reservation.files_to_finalize.push_back(TakeInactiveFileStateLocked(it));
 				break;
 			}
 		}
@@ -1787,6 +1791,27 @@ vector<FileStateHandle> PartitionWriteManager::TakeOpenFileStates() {
 		active_writes.clear();
 	}
 	return files_to_finalize;
+}
+
+FileStateHandle PartitionWriteManager::TakeInactiveFileStateLocked(ActiveWriteIterator entry) {
+	D_ASSERT(entry != active_writes.end());
+	D_ASSERT(entry->second->active_writes == 0);
+
+	auto file_state = std::move(entry->second->file_state);
+	if (op.hive_file_pattern) {
+		++previous_partitions[entry->first];
+	}
+	active_writes.erase(entry);
+	return file_state;
+}
+
+FileStateHandle PartitionWriteManager::TryTakeInactiveFileState(const vector<Value> &values) {
+	annotated_lock_guard<annotated_mutex> guard(lock);
+	auto entry = active_writes.find(values);
+	if (entry == active_writes.end() || entry->second->active_writes > 0) {
+		return FileStateHandle();
+	}
+	return TakeInactiveFileStateLocked(entry);
 }
 
 void PartitionWriteManager::Release(PartitionWriteInfo &write_info) {
@@ -2278,6 +2303,8 @@ void PartitionedCopyHashGroup::Flush(ExecutionContext &execution_context, Interr
 	D_ASSERT(flush_action.write_lease);
 	partitioned_copy.FlushPreparedPartitionRun(flush_action.values, *flush_action.write_lease,
 	                                           std::move(flush_action.batches));
+	flush_action.write_lease.Reset();
+	partitioned_copy.TryFinalizePartitionWrite(flush_action.values);
 }
 
 //===--------------------------------------------------------------------===//
@@ -2427,17 +2454,28 @@ void PartitionedCopyState::ExecuteTask(ExecutionContext &execution_context, cons
 	default:
 		throw InternalException("Invalid PartitionedCopyStage in PartitionedCopyState::ExecuteTask");
 	}
-	FinishTask(task);
+	auto partitions_to_finalize = FinishTask(task);
+	for (const auto &values : partitions_to_finalize) {
+		partitioned_copy.TryFinalizePartitionWrite(values);
+	}
 }
 
-void PartitionedCopyState::FinishTask(const PartitionedCopyTask &task) {
+vector<vector<Value>> PartitionedCopyState::FinishTask(const PartitionedCopyTask &task) {
 	const auto group_idx = task.group_idx;
 	auto &finished_hash_group = hash_groups[group_idx];
+	vector<vector<Value>> partitions_to_finalize;
 
 	bool hash_group_completed = false;
 	if (task.stage == PartitionedCopyStage::FLUSH) {
 		annotated_lock_guard<annotated_mutex> group_guard(finished_hash_group->lock);
 		hash_group_completed = ++finished_hash_group->flushed == finished_hash_group->batch_states.size();
+		if (hash_group_completed) {
+			partitions_to_finalize.reserve(finished_hash_group->batch_states.size());
+			for (const auto &batch_state : finished_hash_group->batch_states) {
+				D_ASSERT(batch_state);
+				partitions_to_finalize.push_back(batch_state->Values());
+			}
+		}
 	}
 
 	if (hash_group_completed) {
@@ -2446,6 +2484,7 @@ void PartitionedCopyState::FinishTask(const PartitionedCopyTask &task) {
 		v.erase(std::remove(v.begin(), v.end(), group_idx), v.end());
 		finished_hash_group.reset();
 	}
+	return partitions_to_finalize;
 }
 
 //===--------------------------------------------------------------------===//
@@ -3043,10 +3082,12 @@ void PartitionedCopy::FlushPartitionCollection(ExecutionContext &execution_conte
 
 			auto write_lease = partition_writes.Acquire(flush.values);
 			FlushDelayedPartitionRun(flush.values, *write_lease, *flush.data.collection);
+			write_lease.Reset();
 		}
 
 		auto next = delayed_guard.Complete();
 		if (!next) {
+			TryFinalizePartitionWrite(flush.values);
 			return;
 		}
 		flush = std::move(*next);
@@ -3145,6 +3186,26 @@ void PartitionedCopy::EnsureFreshPartitionFile(PartitionWriteInfo &write_info, c
 	}
 
 	copy_gstate.FinalizeFileState(std::move(old_file_state));
+}
+
+void PartitionedCopy::TryFinalizePartitionWrite(const vector<Value> &values) {
+	if (!finalized.load(std::memory_order_relaxed)) {
+		return;
+	}
+	{
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		if (sinking_state) {
+			return;
+		}
+	}
+	if (HasDelayedPartition(values)) {
+		return;
+	}
+
+	auto file_state = partition_writes.TryTakeInactiveFileState(values);
+	if (file_state) {
+		copy_gstate.FinalizeFileState(std::move(file_state));
+	}
 }
 
 void PartitionedCopy::FinalizeActiveWrites() {

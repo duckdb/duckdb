@@ -21,7 +21,7 @@ LogicalExport::LogicalExport(ClientContext &context, unique_ptr<ParseInfo> copy_
 
 CopyFunction LogicalExport::GetCopyFunction(ClientContext &context, CopyInfo &info) {
 	auto &copy_entry = Catalog::GetEntry<CopyFunctionCatalogEntry>(
-	    context, Identifier::InvalidCatalog(), Identifier::DefaultSchema(), Identifier(info.format));
+	    context, QualifiedName(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), Identifier(info.format)));
 	return copy_entry.function;
 }
 

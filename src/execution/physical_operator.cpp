@@ -29,13 +29,13 @@ string PhysicalOperator::GetName() const {
 	return PhysicalOperatorToString(type);
 }
 
-string PhysicalOperator::ToString(const ProfilerPrintFormat &format) const {
-	auto renderer = TreeRenderer::CreateRenderer(format);
+string PhysicalOperator::ToString(optional_ptr<ClientContext> context, const ProfilerPrintFormat &format) const {
+	auto renderer = context ? TreeRenderer::CreateRenderer(*context, format) : TreeRenderer::CreateRenderer(format);
 	if (!renderer) {
 		// formats without output (e.g. "no_output") render nothing
 		return string();
 	}
-	stringstream ss;
+	StringTreeRenderer ss;
 	auto tree = RenderTree::CreateRenderTree(*this);
 	renderer->ToStream(*tree, ss);
 	return ss.str();
@@ -306,7 +306,8 @@ bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
 	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::VARIANT:
 		return false;
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		auto &entries = StructType::GetChildTypes(type);
 		for (auto &entry : entries) {
 			if (!CanCacheType(entry.second)) {

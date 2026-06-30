@@ -253,7 +253,8 @@ enum class LogicalTypeId : uint8_t {
 	LAMBDA = 106,
 	UNION = 107,
 	ARRAY = 108,
-	VARIANT = 109
+	VARIANT = 109,
+	TUPLE = 110 /* unnamed struct - shares the physical representation of STRUCT */
 };
 
 struct ExtraTypeInfo;
@@ -452,6 +453,9 @@ public:
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);                   // NOLINT
 	DUCKDB_API static LogicalType LIST(const LogicalType &child);                        // NOLINT
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);            // NOLINT
+	//! Unnamed struct - shares the physical representation of STRUCT but is a distinct logical type
+	DUCKDB_API static LogicalType TUPLE(child_list_t<LogicalType> children); // NOLINT
+	DUCKDB_API static LogicalType TUPLE(vector<LogicalType> children);       // NOLINT
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);                         // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value);               // NOLINT
 	DUCKDB_API static LogicalType UNION(child_list_t<LogicalType> members);              // NOLINT
@@ -524,6 +528,20 @@ struct StructType {
 	DUCKDB_API static idx_t GetChildIndexUnsafe(const LogicalType &type, const string &name);
 	DUCKDB_API static idx_t GetChildCount(const LogicalType &type);
 	DUCKDB_API static bool IsUnnamed(const LogicalType &type);
+	//! Whether the type is backed by StructTypeInfo and laid out as a struct (STRUCT or TUPLE)
+	DUCKDB_API static bool IsStruct(const LogicalType &type);
+	DUCKDB_API static bool IsStruct(LogicalTypeId id);
+};
+
+//! Helpers for the unnamed-struct TUPLE type. A TUPLE has no member names; when a name is required (e.g. when
+//! converting to a format that mandates field names), positional names "element1", "element2", ... are synthesized -
+//! matching the names produced by UNNEST of a struct.
+struct TupleType {
+	//! The synthesized positional name for the i-th (0-based) member: "element1", "element2", ...
+	DUCKDB_API static string GetChildName(idx_t index);
+	//! Returns the child types of a struct-like type, with synthesized names for any unnamed (empty-named) members.
+	//! Members that already have a name keep it.
+	DUCKDB_API static child_list_t<LogicalType> NamedChildren(const LogicalType &type);
 };
 
 struct MapType {

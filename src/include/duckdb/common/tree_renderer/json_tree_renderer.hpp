@@ -33,15 +33,15 @@ public:
 	string ToString(const ProfilingNode &op);
 	string ToString(const Pipeline &op);
 
-	void Render(const LogicalOperator &op, std::ostream &ss);
-	void Render(const PhysicalOperator &op, std::ostream &ss);
-	void Render(const ProfilingNode &op, std::ostream &ss) override;
-	void Render(const Pipeline &op, std::ostream &ss);
+	void Render(const LogicalOperator &op, BaseTreeRenderer &ss);
+	void Render(const PhysicalOperator &op, BaseTreeRenderer &ss);
+	void Render(const ProfilingNode &op, BaseTreeRenderer &ss) override;
+	void Render(const Pipeline &op, BaseTreeRenderer &ss);
 
-	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
+	void ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) override;
 
 	//! Profiler JSON output: the full query profile result tree (with query-level metrics)
-	string RenderProfiler(const QueryProfiler &profiler) override;
+	void RenderProfiler(const QueryProfiler &profiler, BaseTreeRenderer &ss) override;
 	string RenderProfilerDisabled() override;
 };
 

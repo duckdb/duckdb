@@ -50,7 +50,6 @@ bool AdaptiveFilter::Remap(const TableFilterSet &new_filters, vector<idx_t> new_
 	for (idx_t i = 0; i < filter_global_pos.size(); i++) {
 		auto it = new_position_by_identity.find(filter_global_pos[i]);
 		if (it == new_position_by_identity.end()) {
-			// missing filter cant remap
 			return false;
 		}
 		old_to_new[i] = it->second;
@@ -93,7 +92,7 @@ AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
 		return AdaptiveFilterState();
 	}
 	AdaptiveFilterState state;
-	state.start_time = high_resolution_clock::now();
+	state.monotonic_start = TimePoint::Tick();
 	return state;
 }
 
@@ -102,8 +101,7 @@ void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
 		// nothing to permute
 		return;
 	}
-	auto end_time = high_resolution_clock::now();
-	AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - state.start_time).count());
+	AdaptRuntimeStatistics(state.monotonic_start.ElapsedSeconds());
 }
 
 void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {

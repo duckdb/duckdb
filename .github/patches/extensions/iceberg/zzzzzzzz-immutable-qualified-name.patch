@@ -1,0 +1,22 @@
+diff --git a/src/catalog/rest/transaction/iceberg_transaction.cpp b/src/catalog/rest/transaction/iceberg_transaction.cpp
+index f3ee57b..95f2cad 100644
+--- a/src/catalog/rest/transaction/iceberg_transaction.cpp
++++ b/src/catalog/rest/transaction/iceberg_transaction.cpp
+@@ -527,7 +527,7 @@ void IcebergTransaction::DoTableRename(IcebergTransactionRenameUpdate &rename_up
+ 	IRCAPI::CommitTableRename(context, catalog, transaction_json);
+ 
+ 	DropInfo drop_info;
+-	drop_info.NameMutable() = Identifier(table_name);
++	drop_info.SetName(Identifier(table_name));
+ 	drop_info.if_not_found = OnEntryNotFound::THROW_EXCEPTION;
+ 	schema.DropEntry(context, drop_info, true);
+ 
+@@ -551,7 +551,7 @@ void IcebergTransaction::DoTableDeletes(IcebergTransactionDeleteUpdate &delete_u
+ 	// remove the table entry from the catalog
+ 	auto &schema_entry = ic_catalog.schemas.GetEntry(schema_key.GetIdentifierName()).Cast<IcebergSchemaEntry>();
+ 	DropInfo drop_info;
+-	drop_info.NameMutable() = Identifier(table_name);
++	drop_info.SetName(Identifier(table_name));
+ 	drop_info.if_not_found = OnEntryNotFound::RETURN_NULL;
+ 	schema_entry.DropEntry(context, drop_info, true);
+ }

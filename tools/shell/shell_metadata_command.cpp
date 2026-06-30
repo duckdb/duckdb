@@ -272,7 +272,19 @@ MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult OpenProfileWeb(ShellState &state, const vector<string> &args) {
+	if (state.safe_mode) {
+		state.Print(PrintOutput::STDERR, ".web cannot be used in -safe mode\n");
+		return MetadataResult::FAIL;
+	}
+	return OpenProfileInBrowser(state) ? MetadataResult::SUCCESS : MetadataResult::FAIL;
+}
+
 MetadataResult RenderLastResult(ShellState &state, const vector<string> &args) {
+	// if the last query produced a profiling tree (e.g. EXPLAIN ANALYZE), show the full expanded query tree
+	if (RenderExpandedQueryTree(state)) {
+		return MetadataResult::SUCCESS;
+	}
 	if (state.last_result) {
 		auto renderer = state.GetRenderer();
 		renderer->RemoveRenderLimits();
@@ -918,7 +930,8 @@ static const MetadataCommand metadata_commands[] = {
     {"keyword", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for keywords", 0, nullptr},
 #endif
-    {"last", 1, RenderLastResult, "", "Render the last result without truncating", 0, ""},
+    {"last", 1, RenderLastResult, "",
+     "Render the last result in full (after EXPLAIN ANALYZE: the full, expanded query tree)", 0, ""},
     {"large_number_rendering", 2, SetLargeNumberRendering, "MODE",
      "Toggle readable rendering of large numbers (duckbox only)", 0, "Mode: all|footer|off"},
     {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0, ""},
@@ -988,6 +1001,7 @@ static const MetadataCommand metadata_commands[] = {
     {"timer", 2, ShellState::ToggleTimer, "on|off", "Turn SQL timer on or off", 0, ""},
     {"ui_command", 0, SetUICommand, "[command]", "Set the UI command", 0, ""},
     {"version", 1, ShowVersion, "", "Show the version", 0, ""},
+    {"web", 1, OpenProfileWeb, "", "Open the last query profile (EXPLAIN ANALYZE) in a web browser", 0, ""},
     {"width", 0, SetWidths, "NUM1 NUM2 ...", "Set minimum column widths for columnar output", 0,
      "Negative values right-justify"},
 #if defined(_WIN32) || defined(WIN32)

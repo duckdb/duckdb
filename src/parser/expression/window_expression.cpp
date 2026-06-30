@@ -89,7 +89,7 @@ string WindowExpression::ExpressionTypeToWindow(ExpressionType expression_type) 
 }
 
 void WindowExpression::SetFunctionName(const string &function_name_p) {
-	qualified_name.NameMutable() = Identifier(function_name_p);
+	qualified_name = qualified_name.WithName(Identifier(function_name_p));
 	type = WindowToExpressionType(qualified_name.Name().GetIdentifierName());
 }
 
@@ -167,9 +167,10 @@ void WindowExpression::Serialize(Serializer &serializer) const {
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<WindowExpression>(new WindowExpression());
-	deserializer.ReadPropertyWithDefault<Identifier>(200, "function_name", result->qualified_name.NameMutable());
-	deserializer.ReadPropertyWithDefault<Identifier>(201, "schema", result->qualified_name.SchemaMutable());
-	deserializer.ReadPropertyWithDefault<Identifier>(202, "catalog", result->qualified_name.CatalogMutable());
+	auto function_name = deserializer.ReadPropertyWithDefault<Identifier>(200, "function_name");
+	auto schema = deserializer.ReadPropertyWithDefault<Identifier>(201, "schema");
+	auto catalog = deserializer.ReadPropertyWithDefault<Identifier>(202, "catalog");
+	result->SetQualifiedName(std::move(catalog), std::move(schema), std::move(function_name));
 
 	// Legacy children deserialization
 	vector<unique_ptr<ParsedExpression>> children;

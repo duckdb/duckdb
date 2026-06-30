@@ -1,0 +1,56 @@
+From 985f30a9ca5bdf61eaf4ba0e0cfd849965ff01d2 Mon Sep 17 00:00:00 2001
+From: duckdb <x@x>
+Date: Thu, 25 Jun 2026 23:16:38 +0200
+Subject: [PATCH] zzzzz-getqualifiedname-accessors.patch
+
+---
+ src/storage/quack_schema.cpp | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/src/storage/quack_schema.cpp b/src/storage/quack_schema.cpp
+index 96af6ec..c92d91f 100644
+--- a/src/storage/quack_schema.cpp
++++ b/src/storage/quack_schema.cpp
+@@ -86,8 +86,8 @@ optional_ptr<CatalogEntry> QuackSchemaCatalogEntry::CreateFunction(CatalogTransa
+ optional_ptr<CatalogEntry> QuackSchemaCatalogEntry::CreateTable(CatalogTransaction transaction,
+                                                                 BoundCreateTableInfo &info) {
+ 	auto create_table_info = info.Base().Copy();
+-	create_table_info->CatalogMutable() = GetInfo()->Catalog();
+-	create_table_info->SchemaMutable() = GetInfo()->Schema();
++	create_table_info->CatalogMutable() = GetInfo()->GetQualifiedName().Catalog();
++	create_table_info->SchemaMutable() = GetInfo()->GetQualifiedName().Schema();
+ 
+ 	auto &quack_transaction = QuackTransaction::Get(transaction);
+ 	quack_transaction.Query(create_table_info->ToString());
+@@ -97,8 +97,8 @@ optional_ptr<CatalogEntry> QuackSchemaCatalogEntry::CreateTable(CatalogTransacti
+ 
+ optional_ptr<CatalogEntry> QuackSchemaCatalogEntry::CreateView(CatalogTransaction transaction, CreateViewInfo &info) {
+ 	auto create_view_info = info.Copy();
+-	create_view_info->CatalogMutable() = GetInfo()->Catalog();
+-	create_view_info->SchemaMutable() = GetInfo()->Schema();
++	create_view_info->CatalogMutable() = GetInfo()->GetQualifiedName().Catalog();
++	create_view_info->SchemaMutable() = GetInfo()->GetQualifiedName().Schema();
+ 
+ 	// create the view verbatim in the serer
+ 	auto &quack_transaction = QuackTransaction::Get(transaction);
+@@ -138,7 +138,7 @@ optional_ptr<CatalogEntry> QuackSchemaCatalogEntry::CreateType(CatalogTransactio
+ 
+ void QuackSchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo &info_p) {
+ 	auto drop_info = info_p.Copy();
+-	drop_info->CatalogMutable() = GetInfo()->Catalog();
++	drop_info->CatalogMutable() = GetInfo()->GetQualifiedName().Catalog();
+ 	drop_info->SchemaMutable() = name;
+ 	switch (drop_info->type) {
+ 	case CatalogType::TABLE_ENTRY:
+@@ -149,7 +149,7 @@ void QuackSchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo &info_p
+ 	}
+ 	auto &transaction = QuackTransaction::Get(context, ParentCatalog());
+ 	transaction.Query(drop_info->ToString());
+-	tables->DropEntry(info_p.Name().GetIdentifierName());
++	tables->DropEntry(info_p.GetQualifiedName().Name().GetIdentifierName());
+ }
+ void QuackSchemaCatalogEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
+ 	throw NotImplementedException("Alter not implemented yet, Alter!");
+-- 
+2.39.5 (Apple Git-154)
+

@@ -1249,6 +1249,19 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMapTypeInternal
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTupleTypeInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<LogicalType> type;
+	auto type_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(1)));
+	for (auto &type_item : type_items) {
+		auto type_value = transformer.Transform<LogicalType>(type_item.get());
+		type.push_back(type_value);
+	}
+	auto result = TransformTupleType(transformer, type);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColIdTypeInternal(PEGTransformer &transformer,
                                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -3828,13 +3841,13 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDropSchemaInter
 		auto if_exists_value = transformer.Transform<bool>(if_exists_opt.GetResult());
 		if_exists = if_exists_value;
 	}
-	vector<QualifiedName> qualified_schema_name;
-	auto qualified_schema_name_items = ExtractParseResultsFromList(list_pr.GetChild(2));
-	for (auto &qualified_schema_name_item : qualified_schema_name_items) {
-		auto qualified_schema_name_value = transformer.Transform<QualifiedName>(qualified_schema_name_item.get());
-		qualified_schema_name.push_back(qualified_schema_name_value);
+	vector<QualifiedName> qualified_name;
+	auto qualified_name_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	for (auto &qualified_name_item : qualified_name_items) {
+		auto qualified_name_value = transformer.Transform<QualifiedName>(qualified_name_item.get());
+		qualified_name.push_back(qualified_name_value);
 	}
-	auto result = TransformDropSchema(transformer, if_exists, qualified_schema_name);
+	auto result = TransformDropSchema(transformer, if_exists, qualified_name);
 	return make_uniq<TypedTransformResult<unique_ptr<DropStatement>>>(std::move(result));
 }
 
@@ -4037,32 +4050,6 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIfExistsInterna
                                                                                   ParseResult &parse_result) {
 	auto result = TransformIfExists(transformer);
 	return make_uniq<TypedTransformResult<bool>>(result);
-}
-
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::TransformQualifiedSchemaNameInternal(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<QualifiedName>(choice_pr.GetResult());
-	return make_uniq<TypedTransformResult<QualifiedName>>(result);
-}
-
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::TransformQualifiedSchemaNameStringInternal(PEGTransformer &transformer,
-                                                                  ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto schema_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
-	auto result = TransformQualifiedSchemaNameString(transformer, schema_name);
-	return make_uniq<TypedTransformResult<QualifiedName>>(result);
-}
-
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::TransformCatalogReservedSchemaInternal(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto catalog_qualification = transformer.Transform<Identifier>(list_pr.GetChild(0));
-	auto reserved_schema_name = list_pr.GetChild(1).Cast<IdentifierParseResult>().identifier;
-	auto result = TransformCatalogReservedSchema(transformer, catalog_qualification, reserved_schema_name);
-	return make_uniq<TypedTransformResult<QualifiedName>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDropSecretStorageInternal(PEGTransformer &transformer,
@@ -4447,11 +4434,17 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRespectNullsInt
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformParenthesisExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<unique_ptr<ParsedExpression>> expression;
-	auto expression_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
-	for (auto &expression_item : expression_items) {
-		auto expression_value = transformer.Transform<unique_ptr<ParsedExpression>>(expression_item.get());
-		expression.push_back(std::move(expression_value));
+	optional<vector<unique_ptr<ParsedExpression>>> expression {};
+	auto &expression_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
+	if (expression_opt.HasResult()) {
+		vector<unique_ptr<ParsedExpression>> expression_value;
+		auto expression_value_items_1 = ExtractParseResultsFromList(expression_opt.GetResult());
+		for (auto &expression_value_item_1 : expression_value_items_1) {
+			auto expression_value_value_1 =
+			    transformer.Transform<unique_ptr<ParsedExpression>>(expression_value_item_1.get());
+			expression_value.push_back(std::move(expression_value_value_1));
+		}
+		expression = std::move(expression_value);
 	}
 	auto result = TransformParenthesisExpression(transformer, std::move(expression));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -5171,11 +5164,16 @@ PEGTransformerFactory::TransformBoundedListExpressionInternal(PEGTransformer &tr
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformStructExpressionInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<FunctionArgument> struct_field;
-	auto struct_field_items = ExtractParseResultsFromList(list_pr.GetChild(1));
-	for (auto &struct_field_item : struct_field_items) {
-		auto struct_field_value = transformer.Transform<FunctionArgument>(struct_field_item.get());
-		struct_field.push_back(std::move(struct_field_value));
+	optional<vector<FunctionArgument>> struct_field {};
+	auto &struct_field_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (struct_field_opt.HasResult()) {
+		vector<FunctionArgument> struct_field_value;
+		auto struct_field_value_items_1 = ExtractParseResultsFromList(struct_field_opt.GetResult());
+		for (auto &struct_field_value_item_1 : struct_field_value_items_1) {
+			auto struct_field_value_value_1 = transformer.Transform<FunctionArgument>(struct_field_value_item_1.get());
+			struct_field_value.push_back(std::move(struct_field_value_value_1));
+		}
+		struct_field = std::move(struct_field_value);
 	}
 	auto result = TransformStructExpression(transformer, std::move(struct_field));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -6677,9 +6675,9 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPositionExpress
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPositionArgumentsInternal(PEGTransformer &transformer,
                                                                                            ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto single_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
-	auto single_expression_1 = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2));
-	auto result = TransformPositionArguments(transformer, std::move(single_expression), std::move(single_expression_1));
+	auto other_operator_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2));
+	auto result = TransformPositionArguments(transformer, std::move(other_operator_expression), std::move(expression));
 	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
 }
 
@@ -10134,6 +10132,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"UnionType", &PEGTransformerFactory::TransformUnionTypeInternal},
 	    {"ColIdTypeList", &PEGTransformerFactory::TransformColIdTypeListInternal},
 	    {"MapType", &PEGTransformerFactory::TransformMapTypeInternal},
+	    {"TupleType", &PEGTransformerFactory::TransformTupleTypeInternal},
 	    {"ColIdType", &PEGTransformerFactory::TransformColIdTypeInternal},
 	    {"ArrayBounds", &PEGTransformerFactory::TransformArrayBoundsInternal},
 	    {"ArrayKeyword", &PEGTransformerFactory::TransformArrayKeywordInternal},
@@ -10400,9 +10399,6 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CascadeDropBehavior", &PEGTransformerFactory::TransformCascadeDropBehaviorInternal},
 	    {"RestrictDropBehavior", &PEGTransformerFactory::TransformRestrictDropBehaviorInternal},
 	    {"IfExists", &PEGTransformerFactory::TransformIfExistsInternal},
-	    {"QualifiedSchemaName", &PEGTransformerFactory::TransformQualifiedSchemaNameInternal},
-	    {"QualifiedSchemaNameString", &PEGTransformerFactory::TransformQualifiedSchemaNameStringInternal},
-	    {"CatalogReservedSchema", &PEGTransformerFactory::TransformCatalogReservedSchemaInternal},
 	    {"DropSecretStorage", &PEGTransformerFactory::TransformDropSecretStorageInternal},
 	    {"ExecuteStatement", &PEGTransformerFactory::TransformExecuteStatementInternal},
 	    {"ExplainStatement", &PEGTransformerFactory::TransformExplainStatementInternal},

@@ -1,0 +1,1364 @@
+
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DuckDB Query Plan</title>
+<style>
+:root {
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+}
+/* Palette mirrors duckdb.org: grey scale (grey-05..grey-100), brand yellow #fff100, accents from the site's blue/red. */
+html[data-theme="light"] {
+    --bg: #fafafa;                /* duckdb.org body background */
+    --bg-grid: #ececec;
+    --panel: #ffffff;
+    --panel-2: #f4f4f5;
+    --border: #e8e8e8;
+    --border-strong: #d6d6d6;
+    --text: #0d0d0d;
+    --text-muted: #5f5f5f;
+    --text-faint: #9a9a9a;
+    --accent: #fff100;            /* DuckDB yellow, as the site uses in light mode */
+    --accent-on: #0d0d0d;
+    --connector: #cfcfcf;
+    --shadow: 0 1px 2px rgba(13,13,13,.04), 0 3px 10px rgba(13,13,13,.06);
+    --shadow-hover: 0 2px 6px rgba(13,13,13,.07), 0 12px 26px rgba(13,13,13,.10);
+    --duck: #fff100;
+    --match: #2eafff;
+}
+html[data-theme="dark"] {
+    --bg: #0d0d0d;
+    --bg-grid: #1a1a1a;
+    --panel: #1a1a1a;
+    --panel-2: #141414;
+    --border: #333333;
+    --border-strong: #4c4c4c;
+    --text: #f2f2f2;
+    --text-muted: #b2b2b2;
+    --text-faint: #808080;
+    --accent: #fff100;
+    --accent-on: #0d0d0d;
+    --connector: #4c4c4c;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 16px rgba(0,0,0,.45);
+    --shadow-hover: 0 2px 8px rgba(0,0,0,.5), 0 16px 32px rgba(0,0,0,.6);
+    --duck: #fff100;
+    --match: #2eafff;
+}
+* { box-sizing: border-box; }
+html, body {
+    margin: 0; padding: 0; height: 100%;
+    font-family: var(--font);
+    color: var(--text);
+    background: var(--bg);
+    overflow: hidden;
+}
+
+/* ---------- Toolbar ---------- */
+#toolbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 20;
+    display: flex; align-items: center; gap: 14px;
+    padding: 0 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 0 rgba(0,0,0,.02);
+}
+#brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px; letter-spacing: -.2px; white-space: nowrap; }
+#brand .logo {
+    width: 22px; height: 22px; border-radius: 6px; background: var(--duck);
+    display: flex; align-items: center; justify-content: center;
+}
+#brand .logo svg { display: block; }
+#brand .sub { color: var(--text-muted); font-weight: 500; }
+#stats { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
+.stat {
+    display: inline-flex; align-items: baseline; gap: 6px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 7px; padding: 4px 10px; white-space: nowrap;
+}
+.stat .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-faint); font-weight: 600; }
+.stat .v { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.spacer { flex: 1; }
+.search-wrap { position: relative; }
+#search {
+    width: 200px; height: 32px; padding: 0 30px 0 30px;
+    border: 1px solid var(--border-strong); border-radius: 8px;
+    background: var(--panel-2); color: var(--text); font-size: 13px; font-family: var(--font);
+    outline: none; transition: border-color .15s, box-shadow .15s;
+}
+#search { padding-right: 50px; }
+#search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.search-wrap .icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--text-faint); pointer-events: none; }
+#search-count { position: absolute; right: 26px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; pointer-events: none; }
+#search-clear {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    width: 18px; height: 18px; display: none; align-items: center; justify-content: center;
+    border-radius: 50%; color: var(--text-faint); font-size: 16px; line-height: 1; cursor: pointer;
+}
+#search-clear.show { display: flex; }
+#search-clear:hover { background: var(--bg-grid); color: var(--text); }
+/* matched-substring highlight inside titles / details */
+mark.hl { background: color-mix(in srgb, var(--match) 30%, transparent); color: inherit; border-radius: 2px; padding: 0 1px; }
+.btn {
+    height: 32px; min-width: 32px; padding: 0 10px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border: 1px solid var(--border-strong); border-radius: 8px;
+    background: var(--panel-2); color: var(--text); cursor: pointer;
+    font-size: 12.5px; font-weight: 500; font-family: var(--font);
+    transition: background .12s, border-color .12s, color .12s;
+    user-select: none;
+}
+.btn:hover { background: var(--bg-grid); border-color: var(--text-faint); }
+.btn.active { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+.btn svg { display: block; }
+.group { display: inline-flex; align-items: center; }
+.group .btn { border-radius: 0; border-right-width: 0; }
+.group .btn:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+.group .btn:last-child { border-radius: 0 8px 8px 0; border-right-width: 1px; }
+/* instant tooltip (native title hover is slow/unreliable) */
+.btn[data-tip] { position: relative; overflow: visible; }
+.btn[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute; top: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg);
+    font-size: 11px; font-weight: 500; white-space: nowrap;
+    padding: 4px 8px; border-radius: 6px; box-shadow: var(--shadow);
+    z-index: 30; pointer-events: none;
+}
+
+/* ---------- Canvas / viewport ---------- */
+#viewport {
+    position: fixed; top: 52px; left: 0; right: 0; bottom: 0;
+    overflow: hidden; cursor: grab;
+    background-color: var(--bg);
+    background-image: radial-gradient(var(--bg-grid) 1.1px, transparent 1.1px);
+    background-size: 22px 22px;
+}
+#viewport.panning { cursor: grabbing; }
+/* No permanent will-change: a promoted layer gets bitmap-scaled (blurry) when zoomed in. We enable it only
+   while actively panning/zooming (see JS) so text stays crisp at rest. */
+#canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; padding: 48px; }
+#canvas.interacting { will-change: transform; }
+
+/* ---------- Tree (nested ul/li; edges are drawn as SVG curves behind the cards by drawEdges()) ---------- */
+.tree, .tree ul { position: relative; padding: 0; margin: 0; list-style: none; }
+.tree ul { display: flex; padding-top: 34px; }
+.tree li {
+    position: relative; display: flex; flex-direction: column; align-items: center;
+    padding: 34px 14px 0;
+}
+.tree > li { padding-top: 0; }
+/* collapsed node: hide its children (and so its edges) */
+.tree li.collapsed > ul { display: none; }
+/* SVG layer holding the curved connectors, behind the cards */
+#edges { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; overflow: visible; }
+.edge { fill: none; stroke: var(--connector); stroke-linecap: round; }
+
+/* ---------- Node card ---------- */
+.node-wrap { position: relative; display: inline-block; z-index: 1; }
+.node {
+    position: relative; min-width: 168px; max-width: 320px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: var(--shadow);
+    transition: box-shadow .15s, border-color .15s, transform .12s, opacity .15s;
+    overflow: hidden; cursor: pointer;
+    /* the whole card is a click target, so don't let clicks/double-clicks select its text */
+    user-select: none; -webkit-user-select: none;
+}
+/* keep detail values selectable so expressions/filters can still be copied */
+.node-details .dv { user-select: text; -webkit-user-select: text; cursor: text; }
+.node:hover { box-shadow: var(--shadow-hover); border-color: var(--border-strong); }
+.node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow-hover); }
+.node.dim { opacity: .32; }
+.node.match { border-color: var(--match); box-shadow: 0 0 0 2px color-mix(in srgb, var(--match) 60%, transparent), var(--shadow); }
+
+/* kind accent stripe on the left */
+.node .accent { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--k-color, var(--border-strong)); }
+.node-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 11px 9px 14px; cursor: pointer; user-select: none;
+}
+.node-headings { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.node-title { font-weight: 700; font-size: 13px; letter-spacing: -.1px; line-height: 1.25; }
+.node-source { font-size: 11px; font-family: var(--mono); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-kind-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--k-color, var(--border-strong)); flex-shrink: 0; }
+/* caret indicating the card can be clicked to reveal details */
+.details-caret { flex-shrink: 0; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; color: var(--text-faint); }
+.details-caret svg { transition: transform .15s; }
+.node.open-details .details-caret svg { transform: rotate(180deg); }
+.node-head:hover .details-caret { color: var(--text); }
+
+/* metrics row */
+.node-metrics { display: flex; gap: 0; padding: 0 12px 9px 14px; flex-wrap: wrap; }
+.metric { display: flex; flex-direction: column; gap: 1px; margin-right: 14px; }
+.metric .label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-faint); font-weight: 600; }
+.metric .num { font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--text); }
+.metric .num.est { color: var(--text-muted); font-weight: 500; }
+.metric.timing .num { color: var(--t-color, var(--text)); }
+
+/* time share bar */
+.timebar { height: 3px; background: var(--panel-2); border-radius: 2px; margin: 0 12px 9px 14px; overflow: hidden; }
+.timebar > i { display: block; height: 100%; background: var(--t-color, var(--border-strong)); border-radius: 2px; }
+
+/* details */
+.node-details { border-top: 1px solid var(--border); background: var(--panel-2); display: none; }
+.node.open-details .node-details { display: block; }
+.detail { padding: 7px 14px; border-bottom: 1px solid var(--border); }
+.detail:last-child { border-bottom: none; }
+.detail .dk { font-size: 9.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-faint); font-weight: 700; margin-bottom: 3px; }
+.detail .dv { font-size: 12px; font-family: var(--mono); color: var(--text); word-break: break-word; line-height: 1.45; }
+.detail .dv .row { display: block; }
+/* ---------- Collapse handle (sits on the connector line below a parent) ---------- */
+.collapse-handle {
+    position: absolute; left: 50%; bottom: -28px; transform: translateX(-50%);
+    width: 21px; height: 21px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--panel); border: 1.5px solid var(--border-strong);
+    color: var(--text-muted); font-size: 15px; font-weight: 700; line-height: 1;
+    cursor: pointer; z-index: 4; user-select: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,.14);
+    opacity: 0; transition: opacity .12s, background .12s, color .12s, border-color .12s, transform .1s;
+}
+/* only reveal the handle when the pointer is near the operator (or it is collapsed, so the user can re-expand) */
+.node-wrap:hover .collapse-handle,
+.tree li.collapsed > .node-wrap .collapse-handle { opacity: 1; }
+.collapse-handle:hover { border-color: var(--accent); color: var(--text); background: var(--bg-grid); transform: translateX(-50%) scale(1.12); }
+.collapse-count {
+    position: absolute; left: 50%; bottom: -50px; transform: translateX(-50%);
+    font-size: 9.5px; font-weight: 700; color: var(--text-muted);
+    background: var(--panel); border: 1px solid var(--border-strong);
+    border-radius: 9px; padding: 1px 7px; white-space: nowrap; display: none; z-index: 4;
+}
+
+/* heatmap mode: tint the card AND outline heavy hitters so the whole box reads as hot (DuckDB red/orange/gold) */
+.tree.heat .node.heat-critical {
+    --k-color: #cc0000; background: color-mix(in srgb, #cc0000 10%, var(--panel));
+    border-color: #cc0000; border-width: 2px;
+    box-shadow: 0 0 0 3px color-mix(in srgb, #cc0000 22%, transparent), var(--shadow);
+}
+.tree.heat .node.heat-high {
+    --k-color: #ff6900; background: color-mix(in srgb, #ff6900 9%, var(--panel));
+    border-color: #ff6900; border-width: 2px;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #ff6900 16%, transparent), var(--shadow);
+}
+.tree.heat .node.heat-moderate {
+    --k-color: #ccbd00; background: color-mix(in srgb, #ccbd00 12%, var(--panel));
+    border-color: #ccbd00; border-width: 2px;
+}
+
+/* ---------- Condensed low-impact chain ---------- */
+.group > .node-wrap > .group-stack { display: none; }
+.group.expanded > .node-wrap > .group-card { display: none; }
+.group.expanded > .node-wrap > .group-stack { display: flex; flex-direction: column; align-items: center; }
+.group-card {
+    min-width: 168px; max-width: 300px; cursor: pointer;
+    background: var(--panel-2); border: 1.5px dashed var(--border-strong);
+    border-radius: 10px; box-shadow: var(--shadow);
+    transition: border-color .15s, box-shadow .15s;
+    user-select: none; -webkit-user-select: none;
+}
+.group-card:hover { border-color: var(--accent); box-shadow: var(--shadow-hover); }
+.group-card .gc-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.group-card .gc-title { flex: 1; font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
+.group-card .gc-badge { font-size: 10px; font-weight: 700; color: var(--text-muted); background: var(--panel); border: 1px solid var(--border); border-radius: 9px; padding: 1px 7px; }
+.group-card .gc-list { padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+.group-card .gc-op { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); }
+.group-card .gc-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--text-faint); }
+.group-card .gc-nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-card .gc-hint { font-size: 10px; color: var(--text-faint); text-align: center; padding: 2px 0 8px; }
+.group-recollapse {
+    font-size: 10.5px; font-weight: 700; color: var(--text-muted); cursor: pointer;
+    padding: 3px 11px; margin-bottom: 6px;
+    border: 1px solid var(--border-strong); border-radius: 8px; background: var(--panel);
+    text-transform: uppercase; letter-spacing: .4px;
+}
+.group-recollapse:hover { border-color: var(--accent); color: var(--text); }
+.group-stack-item { position: relative; }
+.group-stack-item + .group-stack-item { margin-top: 24px; }
+.group-stack-item + .group-stack-item::before {
+    content: ""; position: absolute; top: -24px; left: 50%; transform: translateX(-50%);
+    width: 2px; height: 24px; background: var(--connector);
+}
+
+/* ---------- Legend ---------- */
+#legend {
+    position: fixed; bottom: 14px; left: 14px; z-index: 15;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: var(--shadow); padding: 9px 12px; font-size: 11px;
+    display: flex; flex-direction: column; gap: 5px;
+    width: max-content; min-width: 184px; max-width: min(620px, calc(100vw - 28px));
+}
+#legend.clickable { cursor: pointer; }
+#legend.clickable:hover { border-color: var(--border-strong); }
+#legend .lg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 2px; }
+#legend .lg-title { font-size: 9.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-faint); font-weight: 700; }
+#legend .lg-row { display: flex; align-items: center; gap: 7px; color: var(--text-muted); }
+#legend .lg-row .nm { flex: 1; }
+#legend .lg-row .pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+#legend .sw { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+
+/* ---------- Legend drill-down (operators of a category) ---------- */
+#legend .lg-row.clickable { cursor: pointer; padding: 2px 4px; margin: 0 -4px; border-radius: 6px; }
+#legend .lg-row.clickable:hover { background: var(--panel-2); color: var(--text); }
+#legend .lg-back { cursor: pointer; color: var(--text-faint); font-size: 15px; line-height: 1; margin-left: auto; padding: 0 3px; border-radius: 5px; }
+#legend .lg-back:hover { background: var(--bg-grid); color: var(--text); }
+#legend .lg-title .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
+#legend .lg-oplist { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+#legend .lg-more { font-size: 10.5px; color: var(--text-faint); font-weight: 600; padding: 3px 5px; }
+.lg-op .nm { max-width: 92ch; }
+.lg-op { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-muted); padding: 3px 5px; margin: 0 -4px; border-radius: 6px; }
+.lg-op.clickable { cursor: pointer; }
+.lg-op.clickable:hover { background: var(--panel-2); color: var(--text); }
+.lg-op .nm { flex: 1; font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-op .rows { font-variant-numeric: tabular-nums; color: var(--text-faint); font-size: 10.5px; white-space: nowrap; flex-shrink: 0; }
+.lg-op .pct { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+
+/* ---------- Phase timings (floating top-right button + panel) ---------- */
+#timings-fab {
+    position: fixed; top: 64px; right: 14px; z-index: 16;
+    display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px;
+    background: var(--panel); color: var(--text); border: 1px solid var(--border-strong); border-radius: 8px;
+    box-shadow: var(--shadow); cursor: pointer; font-size: 12px; font-weight: 600; font-family: var(--font);
+    transition: background .12s, border-color .12s;
+}
+#timings-fab:hover { background: var(--panel-2); border-color: var(--text-faint); }
+#timings-fab.active { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+#timings-fab svg { display: block; }
+#timings-panel {
+    position: fixed; top: 102px; right: 14px; z-index: 17; display: none;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow-hover); padding: 10px 12px 12px; width: 290px; max-height: 60vh; overflow-y: auto;
+}
+#timings-panel.show { display: block; }
+.tm-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.tm-head .t { font-size: 12.5px; font-weight: 700; }
+.tm-close { cursor: pointer; color: var(--text-faint); font-size: 17px; line-height: 1; padding: 0 5px; border-radius: 6px; }
+.tm-close:hover { background: var(--bg-grid); color: var(--text); }
+.tm-row { display: flex; align-items: center; gap: 7px; padding: 3px 6px 3px 0; border-radius: 6px; font-size: 11.5px; color: var(--text-muted); }
+.tm-row.clickable { cursor: pointer; }
+.tm-row.clickable:hover { background: var(--panel-2); color: var(--text); }
+.tm-caret { width: 10px; font-size: 8px; color: var(--text-faint); flex-shrink: 0; }
+.tm-nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-pc { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+
+/* ---------- SQL panel ---------- */
+#sql-panel {
+    position: fixed; top: 60px; left: 16px; z-index: 18; display: none;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow-hover); width: min(640px, calc(100vw - 32px)); max-height: 60vh; overflow: hidden;
+}
+#sql-panel.show { display: flex; flex-direction: column; }
+.sql-head { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+.sql-head .t { font-size: 12.5px; font-weight: 700; }
+.sql-close { cursor: pointer; color: var(--text-faint); font-size: 17px; line-height: 1; padding: 0 5px; border-radius: 6px; }
+.sql-close:hover { background: var(--bg-grid); color: var(--text); }
+#sql-body { margin: 0; padding: 12px 14px; overflow: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--text); }
+.sql-kw { color: var(--accent); font-weight: 700; }
+html[data-theme="light"] .sql-kw { color: #0070d2; }
+.sql-str { color: #00a36c; }
+.sql-num { color: #d2691e; }
+.sql-comment { color: #6a737d; font-style: italic; }
+
+/* nodes highlighted by a selected pie slice */
+.node.kind-dim { opacity: .22; }
+.node.kind-sel { border-color: var(--k-color, var(--accent)); box-shadow: 0 0 0 2px var(--k-color, var(--accent)), var(--shadow-hover); }
+/* other operators belonging to the same CTE as the selected one */
+.node.cte-linked { border-color: #a855f7; box-shadow: 0 0 0 2px #a855f7, var(--shadow-hover); }
+/* build / probe side labels shown on a selected hash join or CTE */
+.side-badge {
+    position: absolute; top: -9px; right: 10px; z-index: 6;
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+    padding: 1px 7px; border-radius: 8px; border: 1px solid; white-space: nowrap;
+    box-shadow: var(--shadow);
+}
+.side-badge.build { background: #7d66ff; color: #fff; border-color: #7d66ff; }
+.side-badge.probe { background: var(--panel); color: var(--text-muted); border-color: var(--border-strong); }
+.side-badge.cte { background: #a855f7; color: #fff; border-color: #a855f7; }
+
+/* ---------- Zoom indicator ---------- */
+#zoom-ind {
+    position: fixed; bottom: 14px; right: 14px; z-index: 15;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: var(--shadow); padding: 5px 10px; font-size: 12px; font-weight: 600;
+    color: var(--text-muted); font-variant-numeric: tabular-nums;
+}
+.icon-btn-only { padding: 0; width: 32px; }
+@media (max-width: 720px) {
+    #stats { display: none; }
+    #search { width: 130px; }
+}
+</style>
+</head>
+<body>
+<div id="toolbar">
+    <div id="brand"><span class="logo"><svg viewBox="0 0 100 100" width="15" height="15" aria-label="DuckDB"><path fill="#0d0d0d" d="M50,1C22.9,1,1,22.9,1,50c0,27.1,21.9,49,49,49s49-21.9,49-49C99,22.9,77.1,1,50,1z M38.3,70.3C27.1,70.3,18,61.2,18,50 s9.1-20.3,20.3-20.3S58.6,38.8,58.6,50S49.5,70.3,38.3,70.3z M74.7,57.2h-9.6V42.7h9.6c4,0,7.3,3.2,7.3,7.2S78.7,57.2,74.7,57.2z"/></svg></span><span>DuckDB</span><span class="sub" id="brand-sub">Query Plan</span></div>
+    <button class="btn" id="sql-chip" title="Show query SQL">SQL</button>
+    <div id="stats"></div>
+    <div class="spacer"></div>
+    <div class="search-wrap">
+        <span class="icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
+        <input id="search" type="text" placeholder="Search nodes…" autocomplete="off" spellcheck="false">
+        <span id="search-count"></span>
+        <span id="search-clear" title="Clear search">×</span>
+    </div>
+    <div class="group">
+        <button class="btn icon-btn-only" id="zoom-out" title="Zoom out">−</button>
+        <button class="btn" id="zoom-fit" title="Fit to screen">Fit</button>
+        <button class="btn icon-btn-only" id="zoom-in" title="Zoom in">+</button>
+    </div>
+    <div class="group">
+        <button class="btn icon-btn-only" id="collapse-all" data-tip="Collapse: hide the extra info in every operator">⊟</button>
+        <button class="btn icon-btn-only" id="expand-all" data-tip="Expand: show the extra info in every operator">⊞</button>
+    </div>
+    <button class="btn" id="heat-toggle" title="Toggle time heatmap">Heatmap</button>
+    <button class="btn icon-btn-only" id="theme-toggle" title="Toggle theme">◐</button>
+</div>
+
+<div id="viewport">
+    <div id="canvas"><svg id="edges"></svg><ul class="tree" id="tree"></ul></div>
+</div>
+
+<div id="legend"></div>
+<button id="timings-fab" title="Phase timings (parser / planner / optimizer / …)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M12 2h0M9 2h6"/></svg><span>Timings</span></button>
+<div id="timings-panel"></div>
+<div id="sql-panel"><div class="sql-head"><span class="t">Query</span><span class="sql-close" id="sql-close">×</span></div><pre id="sql-body"></pre></div>
+<div id="zoom-ind">100%</div>
+
+<script id="plan-data" type="application/json">__PLAN_JSON__</script>
+<script>
+"use strict";
+(function () {
+    var PLAN = JSON.parse(document.getElementById("plan-data").textContent);
+    var ANALYZE = !!PLAN.analyze;
+    var TOTAL_TIME = PLAN.total_time || 0;
+
+    // For EXPLAIN ANALYZE the real plan is wrapped in RESULT_COLLECTOR -> EXPLAIN_ANALYZE; drop that scaffolding so the
+    // displayed root is the query's top operator (and the result rows are its cardinality).
+    (function () {
+        var r = PLAN.root;
+        while (r && r.children && r.children.length === 1 &&
+               (r.name === "RESULT_COLLECTOR" || r.name === "EXPLAIN_ANALYZE")) {
+            r = r.children[0];
+        }
+        PLAN.root = r;
+    })();
+
+    var KINDS = {
+        scan:       { color: "#00c770", label: "Scan" },         // DuckDB green
+        join:       { color: "#7d66ff", label: "Join" },         // DuckDB purple
+        aggregate:  { color: "#2eafff", label: "Aggregate" },    // DuckDB blue
+        window:     { color: "#e93d82", label: "Window" },       // pink
+        filter:     { color: "#06b6d4", label: "Filter" },       // cyan
+        order:      { color: "#ff8733", label: "Order / Top-N" }, // DuckDB orange
+        union:      { color: "#12a594", label: "Union" },        // teal
+        cte:        { color: "#bf7d3a", label: "CTE" },          // bronze
+        projection: { color: "#808080", label: "Projection" },   // grey
+        generic:    { color: "#b0b0b0", label: "Other" }         // light grey
+    };
+
+    // First value for a detail key, or "" if absent.
+    function detailVal(data, key) {
+        var dl = data.details || [];
+        for (var i = 0; i < dl.length; i++) {
+            if (dl[i].key === key) return (dl[i].values || [])[0] || "";
+        }
+        return "";
+    }
+    // Rows flowing out of a node (actual when profiled, else estimated) — drives connector thickness.
+    function rowsOf(d) { return d.cardinality != null ? d.cardinality : (d.estimated_cardinality != null ? d.estimated_cardinality : 0); }
+    var MAX_ROWS = 0;
+    (function scanRows(n) { if (!n) return; var r = rowsOf(n); if (r > MAX_ROWS) MAX_ROWS = r; (n.children || []).forEach(scanRows); })(PLAN.root);
+    function edgeWidth(d) { return MAX_ROWS > 0 ? 1.6 + Math.sqrt(rowsOf(d) / MAX_ROWS) * 6 : 2; }
+
+    // Map of CTE table-index -> CTE name, so a CTE_SCAN can show the name of the CTE it scans.
+    var CTE_NAMES = {};
+    (function collectCTEs(n) {
+        if (!n) return;
+        var name = detailVal(n, "CTE Name"), ti = detailVal(n, "Table Index");
+        if (name && ti) CTE_NAMES[ti] = name;
+        (n.children || []).forEach(collectCTEs);
+    })(PLAN.root);
+
+    // The identifying name shown as a node's title: scanned table/function, or the CTE name for CTE / CTE_SCAN nodes.
+    // Catalog/schema qualifiers are stripped from table names (e.g. "tpch.sf1.partsupp" -> "partsupp").
+    function nodeSource(data) {
+        var dl = data.details || [];
+        for (var i = 0; i < dl.length; i++) {
+            var k = dl[i].key, v = (dl[i].values || [])[0] || "";
+            if (k === "Table") { var parts = v.split("."); return parts[parts.length - 1]; }
+            if (k === "Function") return v;
+            if (k === "CTE Name") return v;
+            if (k === "CTE Index") return CTE_NAMES[v] || "";
+        }
+        return "";
+    }
+    // Title-case an operator name ("TABLE_SCAN" -> "Table Scan"), keeping known acronyms capitalized.
+    function prettyName(name) {
+        var t = name.toLowerCase().split("_").map(function (w) {
+            return w ? w.charAt(0).toUpperCase() + w.slice(1) : w;
+        }).join(" ");
+        return t.replace(/\bCte\b/g, "CTE").replace(/\bIe Join\b/g, "IE Join");
+    }
+    // A human label for an operator: source table (where there is one) plus the operator type.
+    function displayLabel(data) {
+        var s = nodeSource(data);
+        return s ? s + " · " + prettyName(data.name) : prettyName(data.name);
+    }
+
+    // ---------- number / time formatting ----------
+    function fmtInt(n) {
+        if (n === null || n === undefined) return "–";
+        return n.toLocaleString("en-US");
+    }
+    function fmtCompact(n) {
+        if (n === null || n === undefined) return "–";
+        var a = Math.abs(n);
+        if (a >= 1e9) return (n / 1e9).toFixed(a >= 1e10 ? 0 : 1) + "B";
+        if (a >= 1e6) return (n / 1e6).toFixed(a >= 1e7 ? 0 : 1) + "M";
+        if (a >= 1e3) return (n / 1e3).toFixed(a >= 1e4 ? 0 : 1) + "K";
+        return String(n);
+    }
+    function fmtTime(s) {
+        if (s === null || s === undefined) return "–";
+        if (s >= 1) return s.toFixed(2) + "s";
+        if (s >= 0.001) return (s * 1e3).toFixed(s >= 0.1 ? 0 : 1) + "ms";
+        if (s > 0) return (s * 1e6).toFixed(0) + "µs";
+        return "0";
+    }
+    function fmtBytes(n) {
+        if (n === null || n === undefined) return "–";
+        if (n < 1024) return n + " B";
+        var u = ["KB", "MB", "GB", "TB", "PB"], i = -1, v = n;
+        do { v /= 1024; i++; } while (v >= 1024 && i < u.length - 1);
+        return v.toFixed(v >= 100 || i === 0 ? 0 : 1) + " " + u[i];
+    }
+    function heatClass(frac) {
+        if (frac >= 0.25) return "heat-critical";
+        if (frac >= 0.10) return "heat-high";
+        if (frac >= 0.01) return "heat-moderate";
+        return "";
+    }
+    function heatColor(frac) {
+        if (frac >= 0.25) return "#cc0000";
+        if (frac >= 0.10) return "#ff6900";
+        if (frac >= 0.01) return "#ccbd00";
+        return "var(--text-muted)";
+    }
+
+    // ---------- build DOM ----------
+    var allNodes = [];           // every rendered operator card (used by search / legend / pie)
+    var groups = [];             // condensed-chain <li> elements
+    var GROUPING = false;        // whether low-impact chains are condensed (decided after a trial layout)
+    var FLATTEN_FRACTION = 0.01; // operators below this share of total time are eligible to be condensed
+    var MIN_GROUP = 2;           // only condense a chain of at least this many operators
+    var building = false;        // true while (re)building the tree, so edge redraws are deferred until it is done
+    var SVGNS = "http://www.w3.org/2000/svg";
+
+    // Build the operator card (.node) for a plan node: heading, metrics, timing bar and collapsible details.
+    // Returns { node, hl } where hl lists the text spans that search can highlight.
+    function buildCard(data) {
+        var hl = [];
+        var node = document.createElement("div");
+        node.className = "node";
+        var kind = KINDS[data.kind] || KINDS.generic;
+        node.style.setProperty("--k-color", kind.color);
+
+        var frac = (ANALYZE && TOTAL_TIME > 0 && data.timing != null) ? data.timing / TOTAL_TIME : 0;
+        if (ANALYZE && data.timing != null) {
+            var hc = heatClass(frac);
+            if (hc) node.classList.add(hc);
+            node.style.setProperty("--t-color", heatColor(frac));
+        }
+
+        var accent = document.createElement("div");
+        accent.className = "accent";
+        node.appendChild(accent);
+
+        // head: kind dot, operator name (+ source table/function for scans), details caret
+        var head = document.createElement("div");
+        head.className = "node-head";
+        var dot = document.createElement("span"); dot.className = "node-kind-dot";
+        var headings = document.createElement("span"); headings.className = "node-headings";
+        var src = nodeSource(data);
+        var title = document.createElement("span"); title.className = "node-title"; title.textContent = src || prettyName(data.name);
+        headings.appendChild(title); hl.push({ el: title, text: title.textContent });
+        if (src) {
+            var srcEl = document.createElement("span"); srcEl.className = "node-source"; srcEl.textContent = prettyName(data.name);
+            headings.appendChild(srcEl); hl.push({ el: srcEl, text: srcEl.textContent });
+        }
+        head.appendChild(dot); head.appendChild(headings);
+        node.appendChild(head);
+
+        // detail rows; for ANALYZE the estimated cardinality lives here rather than in the headline metrics
+        var details = (data.details || []).slice();
+        if (ANALYZE && data.estimated_cardinality != null) {
+            details.push({ key: "Estimated Cardinality", values: [fmtInt(data.estimated_cardinality)] });
+        }
+
+        var metrics = document.createElement("div");
+        metrics.className = "node-metrics";
+        if (data.cardinality != null) {
+            metrics.appendChild(metric("Rows", fmtCompact(data.cardinality), "", fmtInt(data.cardinality)));
+        }
+        if (!ANALYZE && data.estimated_cardinality != null) {
+            metrics.appendChild(metric("Est. Rows", fmtCompact(data.estimated_cardinality), "est", fmtInt(data.estimated_cardinality)));
+        }
+        if (ANALYZE && data.timing != null) {
+            var tm = metric("Time", fmtTime(data.timing), "", fmtTime(data.timing) + (TOTAL_TIME > 0 ? "  ·  " + (frac * 100).toFixed(1) + "%" : ""));
+            tm.classList.add("timing");
+            metrics.appendChild(tm);
+        }
+        if (metrics.children.length) node.appendChild(metrics);
+
+        if (ANALYZE && data.timing != null && TOTAL_TIME > 0) {
+            var bar = document.createElement("div"); bar.className = "timebar";
+            var fill = document.createElement("i"); fill.style.width = Math.max(2, frac * 100).toFixed(1) + "%";
+            bar.appendChild(fill); node.appendChild(bar);
+        }
+
+        if (details.length) {
+            var caret = document.createElement("span"); caret.className = "details-caret";
+            caret.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg>';
+            head.appendChild(caret);
+            var dwrap = document.createElement("div");
+            dwrap.className = "node-details";
+            details.forEach(function (d) {
+                var dd = document.createElement("div"); dd.className = "detail";
+                var dk = document.createElement("div"); dk.className = "dk"; dk.textContent = d.key;
+                hl.push({ el: dk, text: dk.textContent });
+                var dv = document.createElement("div"); dv.className = "dv";
+                (d.values || []).forEach(function (v) {
+                    var r = document.createElement("span"); r.className = "row"; r.textContent = v; dv.appendChild(r);
+                    hl.push({ el: r, text: v });
+                });
+                dd.appendChild(dk); dd.appendChild(dv); dwrap.appendChild(dd);
+            });
+            node.appendChild(dwrap);
+        }
+
+        node.addEventListener("click", function () {
+            select(node);
+            // toggling the details changes the card height, so redraw the connectors to follow it
+            if (details.length) { node.classList.toggle("open-details"); scheduleEdges(); }
+        });
+        return { node: node, hl: hl };
+    }
+
+    // Render a plan node (and its subtree) as a normal operator <li>. Returns its rec.
+    function makeNode(data) {
+        var li = document.createElement("li");
+        var hasChildren = data.children && data.children.length > 0;
+        var card = buildCard(data);
+        var node = card.node;
+
+        var wrap = document.createElement("div");
+        wrap.className = "node-wrap";
+        wrap.appendChild(node);
+        li.appendChild(wrap);
+
+        var rec = { li: li, node: node, data: data, hl: card.hl, size: 1, handle: null, count: null, groupLi: null, childHeads: [] };
+        li._rec = rec; node._rec = rec;
+        allNodes.push(rec);
+
+        if (hasChildren) {
+            var ul = document.createElement("ul");
+            var sub = 0;
+            data.children.forEach(function (c) {
+                var r = renderSubtree(c);
+                ul.appendChild(r.li);
+                sub += r.size;
+                rec.childHeads.push(r.head);
+            });
+            li.appendChild(ul);
+            rec.size += sub;
+
+            var handle = document.createElement("div");
+            handle.className = "collapse-handle";
+            handle.textContent = "−";
+            handle.title = "Collapse / expand subtree";
+            var countEl = document.createElement("div");
+            countEl.className = "collapse-count";
+            countEl.textContent = sub + " hidden";
+            wrap.appendChild(handle);
+            wrap.appendChild(countEl);
+            rec.handle = handle;
+            rec.count = countEl;
+            handle.addEventListener("click", function (e) { e.stopPropagation(); toggleCollapse(rec); });
+        }
+        return rec;
+    }
+
+    // True when a node takes a negligible share of the total query time.
+    function lowImpact(d) { return TOTAL_TIME > 0 && (d.timing || 0) / TOTAL_TIME < FLATTEN_FRACTION; }
+
+    // Collect a maximal chain of consecutive low-impact, single-child operators starting at "data".
+    function collectRun(data) {
+        var run = [], cur = data;
+        while (cur && lowImpact(cur) && cur.children && cur.children.length === 1) {
+            run.push(cur);
+            cur = cur.children[0];
+        }
+        return run;
+    }
+
+    function setGroupExpanded(li, expanded) { li.classList.toggle("expanded", !!expanded); scheduleEdges(); }
+
+    // Render a condensed chain: a placeholder card listing the operator names that expands into the real cards.
+    function makeGroup(run) {
+        var li = document.createElement("li");
+        li.className = "group";
+        var continuation = run[run.length - 1].children[0];
+
+        var wrap = document.createElement("div");
+        wrap.className = "node-wrap group-wrap";
+
+        // collapsed view: a dashed card listing the condensed operators
+        var card = document.createElement("div");
+        card.className = "group-card";
+        var gh = document.createElement("div"); gh.className = "gc-head";
+        var gt = document.createElement("span"); gt.className = "gc-title"; gt.textContent = "Low-impact chain";
+        var gb = document.createElement("span"); gb.className = "gc-badge"; gb.textContent = run.length + " ops";
+        gh.appendChild(gt); gh.appendChild(gb); card.appendChild(gh);
+        var glist = document.createElement("div"); glist.className = "gc-list";
+        run.forEach(function (d) {
+            var op = document.createElement("div"); op.className = "gc-op";
+            var gdot = document.createElement("span"); gdot.className = "gc-dot";
+            gdot.style.setProperty("background", (KINDS[d.kind] || KINDS.generic).color);
+            var gnm = document.createElement("span"); gnm.className = "gc-nm"; gnm.textContent = displayLabel(d);
+            op.appendChild(gdot); op.appendChild(gnm); glist.appendChild(op);
+        });
+        card.appendChild(glist);
+        var hint = document.createElement("div"); hint.className = "gc-hint"; hint.textContent = "click to expand";
+        card.appendChild(hint);
+        card.addEventListener("click", function () { setGroupExpanded(li, true); });
+        wrap.appendChild(card);
+
+        // expanded view: the individual operator cards stacked vertically
+        var stack = document.createElement("div");
+        stack.className = "group-stack";
+        var recollapse = document.createElement("div"); recollapse.className = "group-recollapse"; recollapse.textContent = "⤡ condense chain";
+        recollapse.addEventListener("click", function (e) { e.stopPropagation(); setGroupExpanded(li, false); });
+        stack.appendChild(recollapse);
+        run.forEach(function (d) {
+            var item = document.createElement("div"); item.className = "group-stack-item";
+            var c = buildCard(d);
+            item.appendChild(c.node);
+            stack.appendChild(item);
+            var srec = { li: li, node: c.node, data: d, hl: c.hl, size: 1, handle: null, count: null, groupLi: li, childHeads: [] };
+            c.node._rec = srec;
+            allNodes.push(srec);
+        });
+        wrap.appendChild(stack);
+        li.appendChild(wrap);
+
+        var ul = document.createElement("ul");
+        var cont = renderSubtree(continuation);
+        ul.appendChild(cont.li);
+        li.appendChild(ul);
+
+        groups.push(li);
+        setGroupExpanded(li, false);
+        return { li: li, size: run.length + cont.size, head: card };
+    }
+
+    // Render a node, condensing it into a group when grouping is on and it starts a qualifying chain.
+    // Returns { li, size, head, edgeW } where head is the top card element (for build/probe badges).
+    function renderSubtree(data) {
+        var res = null;
+        if (GROUPING && ANALYZE && TOTAL_TIME > 0) {
+            var run = collectRun(data);
+            if (run.length >= MIN_GROUP) res = makeGroup(run);
+        }
+        if (!res) { var rec = makeNode(data); res = { li: rec.li, size: rec.size, head: rec.node }; }
+        res.edgeW = edgeWidth(data);
+        res.li._edgeW = res.edgeW; // consumed by drawEdges() for the connector stroke width
+        return res;
+    }
+
+    function metric(label, value, cls, tooltip) {
+        var m = document.createElement("div"); m.className = "metric";
+        var l = document.createElement("span"); l.className = "label"; l.textContent = label;
+        var n = document.createElement("span"); n.className = "num" + (cls ? " " + cls : ""); n.textContent = value;
+        if (tooltip) m.title = tooltip;
+        m.appendChild(l); m.appendChild(n);
+        return m;
+    }
+
+    function setCollapsed(rec, collapsed) {
+        rec.li.classList.toggle("collapsed", collapsed);
+        if (rec.handle) rec.handle.textContent = collapsed ? "+" : "−";
+        if (rec.count) rec.count.style.display = collapsed ? "block" : "none";
+        scheduleEdges();
+    }
+    // Toggle while keeping the clicked node fixed on screen, so the camera doesn't jump as the tree reflows.
+    function toggleCollapse(rec) {
+        var before = rec.node.getBoundingClientRect();
+        setCollapsed(rec, !rec.li.classList.contains("collapsed"));
+        var after = rec.node.getBoundingClientRect();
+        tx += before.left - after.left;
+        ty += before.top - after.top;
+        applyTransform();
+        scheduleEdges();
+    }
+
+    // The CTE table-index a node belongs to (CTE materialization or any of its scans), or "".
+    function cteIndexOf(d) {
+        if (d.kind !== "cte") return "";
+        return detailVal(d, "CTE Index") || detailVal(d, "Table Index") || "";
+    }
+
+    var sideBadges = [];
+    function clearSideBadges() {
+        sideBadges.forEach(function (b) { if (b.parentElement) b.parentElement.removeChild(b); });
+        sideBadges = [];
+    }
+    function addSideBadge(head, text, cls) {
+        if (!head || !head.parentElement) return;
+        var b = document.createElement("div"); b.className = "side-badge " + cls; b.textContent = text;
+        head.parentElement.appendChild(b); // append to the (un-clipped) wrap, not the card
+        sideBadges.push(b);
+    }
+    // For a selected hash join / CTE, label which child is the build side.
+    function updateSideBadges(rec) {
+        clearSideBadges();
+        if (!rec || !rec.childHeads || rec.childHeads.length !== 2) return;
+        if (rec.data.kind === "join" && rec.data.name.indexOf("HASH_JOIN") >= 0) {
+            addSideBadge(rec.childHeads[0], "Probe", "probe");
+            addSideBadge(rec.childHeads[1], "Build", "build");
+        } else if (rec.data.kind === "cte" && rec.data.name === "CTE") {
+            addSideBadge(rec.childHeads[0], "Build", "build");
+            addSideBadge(rec.childHeads[1], "Main", "probe");
+        }
+    }
+    // Highlight the other operators of the same CTE (same index) in a distinct colour, and badge their role.
+    function updateCTELink(rec) {
+        allNodes.forEach(function (r) { r.node.classList.remove("cte-linked"); });
+        if (!rec) return;
+        var idx = cteIndexOf(rec.data);
+        if (!idx) return;
+        allNodes.forEach(function (r) {
+            if (r.node !== rec.node && cteIndexOf(r.data) === idx) {
+                r.node.classList.add("cte-linked");
+                addSideBadge(r.node, r.data.name === "CTE" ? "CTE" : "Scan", "cte");
+            }
+        });
+    }
+
+    var selected = null;
+    function select(node) {
+        if (selected) selected.classList.remove("selected");
+        selected = node; node.classList.add("selected");
+        var rec = node._rec;
+        updateSideBadges(rec);
+        updateCTELink(rec);
+    }
+
+    var tree = document.getElementById("tree");
+    var rootRender = null;
+
+    // (Re)build the operator tree from PLAN.root, resetting the node/group bookkeeping.
+    function buildTree() {
+        building = true;
+        allNodes.length = 0;
+        groups.length = 0;
+        tree.innerHTML = "";
+        rootRender = renderSubtree(PLAN.root);
+        tree.appendChild(rootRender.li);
+        building = false;
+    }
+
+    // ---------- summary header ----------
+    function buildSummary() {
+        var stats = document.getElementById("stats");
+        stats.innerHTML = "";
+        document.getElementById("brand-sub").textContent = ANALYZE ? "Query Profile" : "Query Plan";
+        function addStat(k, v) {
+            var s = document.createElement("div"); s.className = "stat";
+            s.innerHTML = '<span class="k">' + k + '</span><span class="v">' + v + '</span>';
+            stats.appendChild(s);
+        }
+        if (ANALYZE) {
+            var qm = PLAN.query || {};
+            // real (wall-clock) time from the query metrics; CPU time is the cumulative operator timing
+            if (qm.real_time != null) addStat("Total Time", fmtTime(qm.real_time));
+            addStat("Total CPU Time", fmtTime(TOTAL_TIME));
+            if (PLAN.root && PLAN.root.cardinality != null) addStat("Result Rows", fmtInt(PLAN.root.cardinality));
+            if (qm.bytes_read) addStat("Data Read", fmtBytes(qm.bytes_read));
+            if (qm.bytes_written) addStat("Data Written", fmtBytes(qm.bytes_written));
+        }
+    }
+
+    // ---------- legend (drill-down: categories -> operators) ----------
+    function pctOf(t) { return TOTAL_TIME > 0 ? t / TOTAL_TIME * 100 : 0; }
+    function highlightKind(k) {
+        groups.forEach(function (g) { setGroupExpanded(g, true); }); // show the actual operators, not the condensed chains
+        allNodes.forEach(function (r) {
+            var rk = KINDS[r.data.kind] ? r.data.kind : "generic";
+            r.node.classList.toggle("kind-sel", rk === k);
+            r.node.classList.toggle("kind-dim", rk !== k);
+        });
+    }
+    function clearKindHighlight() { allNodes.forEach(function (r) { r.node.classList.remove("kind-sel", "kind-dim"); }); }
+
+    function buildLegend() {
+        var kindStats = {};
+        Object.keys(KINDS).forEach(function (k) { kindStats[k] = { time: 0, recs: [] }; });
+        allNodes.forEach(function (r) {
+            var k = KINDS[r.data.kind] ? r.data.kind : "generic";
+            kindStats[k].time += (r.data.timing || 0);
+            kindStats[k].recs.push(r);
+        });
+        var presentKinds = Object.keys(KINDS).filter(function (k) { return kindStats[k].recs.length > 0; });
+        var hasTime = ANALYZE && TOTAL_TIME > 0;
+        var lg = document.getElementById("legend");
+
+        function showCategories() {
+            clearKindHighlight();
+            lg.innerHTML = "";
+            var head = document.createElement("div"); head.className = "lg-head";
+            head.innerHTML = '<span class="lg-title">Operators</span>';
+            lg.appendChild(head);
+            presentKinds.forEach(function (k) {
+                var row = document.createElement("div"); row.className = "lg-row" + (hasTime ? " clickable" : "");
+                var sw = document.createElement("span"); sw.className = "sw"; sw.style.setProperty("background", KINDS[k].color);
+                var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = KINDS[k].label + " (" + kindStats[k].recs.length + ")";
+                var pc = document.createElement("span"); pc.className = "pct"; pc.textContent = hasTime ? Math.round(pctOf(kindStats[k].time)) + "%" : "";
+                row.appendChild(sw); row.appendChild(nm); row.appendChild(pc);
+                if (hasTime) row.addEventListener("click", function () { showOperators(k); });
+                lg.appendChild(row);
+            });
+        }
+
+        function showOperators(k) {
+            highlightKind(k);
+            lg.innerHTML = "";
+            var head = document.createElement("div"); head.className = "lg-head";
+            var back = document.createElement("span"); back.className = "lg-back"; back.textContent = "×";
+            back.title = "Back to operators"; back.addEventListener("click", function () { showCategories(); });
+            var title = document.createElement("span"); title.className = "lg-title";
+            title.innerHTML = '<span class="sw" style="background:' + KINDS[k].color + '"></span>' + KINDS[k].label;
+            var pc = document.createElement("span"); pc.className = "pct"; pc.textContent = Math.round(pctOf(kindStats[k].time)) + "%";
+            head.appendChild(title); head.appendChild(pc); head.appendChild(back);
+            lg.appendChild(head);
+            var list = document.createElement("div"); list.className = "lg-oplist"; lg.appendChild(list);
+            var members = kindStats[k].recs.slice().sort(function (a, b) { return (b.data.timing || 0) - (a.data.timing || 0); });
+            var LIMIT = 10;
+            members.slice(0, LIMIT).forEach(function (r) {
+                var row = document.createElement("div"); row.className = "lg-op clickable";
+                // the category already conveys the operator type, so show just the source (e.g. table) where there is one
+                var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = nodeSource(r.data) || prettyName(r.data.name);
+                row.appendChild(nm);
+                if (r.data.cardinality != null) {
+                    var rw = document.createElement("span"); rw.className = "rows"; rw.textContent = fmtCompact(r.data.cardinality) + " rows";
+                    row.appendChild(rw);
+                }
+                var pc2 = document.createElement("span"); pc2.className = "pct"; pc2.textContent = (r.data.timing != null) ? fmtTime(r.data.timing) : "";
+                row.appendChild(pc2);
+                row.title = "Pan to this operator";
+                row.addEventListener("click", function () { revealRec(r); select(r.node); panToNode(r.node); });
+                list.appendChild(row);
+            });
+            if (members.length > LIMIT) {
+                var more = document.createElement("div"); more.className = "lg-more";
+                more.textContent = "+ " + (members.length - LIMIT) + " more (sorted by time)";
+                list.appendChild(more);
+            }
+        }
+
+        showCategories();
+    }
+
+    // ---------- pan & zoom ----------
+    var viewport = document.getElementById("viewport");
+    var canvas = document.getElementById("canvas");
+    var scale = 1, tx = 0, ty = 0;
+    var zoomInd = document.getElementById("zoom-ind");
+    function applyTransform() {
+        canvas.style.transform = "translate(" + tx + "px," + ty + "px) scale(" + scale + ")";
+        zoomInd.textContent = Math.round(scale * 100) + "%";
+    }
+    function zoomAt(cx, cy, factor) {
+        var ns = Math.min(2.5, Math.max(0.1, scale * factor));
+        var k = ns / scale;
+        tx = cx - (cx - tx) * k;
+        ty = cy - (cy - ty) * k;
+        scale = ns;
+        applyTransform();
+    }
+    // Promote the canvas to its own layer only while interacting, then drop it so text re-rasterizes sharply.
+    var idleTimer = null;
+    function beginInteract() { canvas.classList.add("interacting"); if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } }
+    function endInteractSoon() { if (idleTimer) clearTimeout(idleTimer); idleTimer = setTimeout(function () { canvas.classList.remove("interacting"); }, 200); }
+
+    viewport.addEventListener("wheel", function (e) {
+        e.preventDefault();
+        canvas.style.transition = "";
+        beginInteract();
+        var rect = viewport.getBoundingClientRect();
+        var factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+        zoomAt(e.clientX - rect.left, e.clientY - rect.top, factor);
+        endInteractSoon();
+    }, { passive: false });
+
+    var dragging = false, sx = 0, sy = 0, stx = 0, sty = 0;
+    viewport.addEventListener("mousedown", function (e) {
+        if (e.button !== 0) return;
+        canvas.style.transition = "";
+        beginInteract();
+        dragging = true; sx = e.clientX; sy = e.clientY; stx = tx; sty = ty;
+        viewport.classList.add("panning");
+    });
+    window.addEventListener("mousemove", function (e) {
+        if (!dragging) return;
+        tx = stx + (e.clientX - sx); ty = sty + (e.clientY - sy);
+        applyTransform();
+    });
+    window.addEventListener("mouseup", function () { dragging = false; viewport.classList.remove("panning"); endInteractSoon(); });
+
+    function fit() {
+        // reset transform to measure natural size
+        scale = 1; tx = 0; ty = 0; applyTransform();
+        // zero the edge layer first so its size doesn't inflate the measurement: fit to the operators as shown now
+        edgesSvg.setAttribute("width", 0);
+        edgesSvg.setAttribute("height", 0);
+        var cw = canvas.scrollWidth, ch = canvas.scrollHeight;
+        var vw = viewport.clientWidth, vh = viewport.clientHeight;
+        var s = Math.min(vw / cw, vh / ch, 1);
+        s = Math.max(s, 0.1);
+        scale = s;
+        tx = (vw - cw * s) / 2;
+        ty = Math.max(16, (vh - ch * s) / 2);
+        applyTransform();
+        scheduleEdges();
+    }
+
+    // ---------- curved SVG edges between cards ----------
+    var edgesSvg = document.getElementById("edges");
+    var edgesRAF = null;
+    function hasClass(el, c) { return el && el.classList && el.classList.contains(c); }
+    function firstByClass(el, c) {
+        if (!el || !el.children) return null;
+        for (var i = 0; i < el.children.length; i++) {
+            if (hasClass(el.children[i], c)) return el.children[i];
+            var f = firstByClass(el.children[i], c);
+            if (f) return f;
+        }
+        return null;
+    }
+    function collectNodeCards(el, out) {
+        if (hasClass(el, "node")) { out.push(el); return; } // a card; don't descend further
+        if (!el || !el.children) return;
+        for (var i = 0; i < el.children.length; i++) collectNodeCards(el.children[i], out);
+    }
+    // The card to anchor an edge on for a given <li>: handles condensed groups (collapsed card vs first/last stacked card).
+    function cardOf(li, bottom) {
+        if (!li || !li.children) return null;
+        var wrap = li.children[0];
+        if (!wrap) return null;
+        if (hasClass(wrap, "group-wrap")) {
+            if (hasClass(li, "expanded")) {
+                var stack = firstByClass(wrap, "group-stack"), nodes = [];
+                if (stack) collectNodeCards(stack, nodes);
+                if (nodes.length) return bottom ? nodes[nodes.length - 1] : nodes[0];
+            }
+            return firstByClass(wrap, "group-card");
+        }
+        return firstByClass(wrap, "node");
+    }
+    function directChildUL(li) {
+        for (var i = 0; i < li.children.length; i++) {
+            if (li.children[i].tagName === "UL") return li.children[i];
+        }
+        return null;
+    }
+    function drawEdges() {
+        if (!edgesSvg || !tree.children.length) return;
+        edgesSvg.innerHTML = "";
+        // zero the SVG before measuring: its own width/height prop the canvas open, so otherwise the content size can
+        // never shrink back after details/chains are collapsed (and Fit would keep fitting the old expanded size)
+        edgesSvg.setAttribute("width", 0);
+        edgesSvg.setAttribute("height", 0);
+        var fullW = canvas.scrollWidth, fullH = canvas.scrollHeight;
+        edgesSvg.setAttribute("width", fullW);
+        edgesSvg.setAttribute("height", fullH);
+        var crect = canvas.getBoundingClientRect();
+        var s = scale || 1;
+        function anchor(el, bottom) {
+            var r = el.getBoundingClientRect();
+            return [(r.left + r.width / 2 - crect.left) / s, ((bottom ? r.bottom : r.top) - crect.top) / s];
+        }
+        function visit(li) {
+            if (hasClass(li, "collapsed")) return;
+            var ul = directChildUL(li);
+            if (!ul) return;
+            var pcard = cardOf(li, true);
+            for (var i = 0; i < ul.children.length; i++) {
+                var cli = ul.children[i];
+                if (cli.tagName !== "LI") continue;
+                var ccard = cardOf(cli, false);
+                if (pcard && ccard) {
+                    var p = anchor(pcard, true), c = anchor(ccard, false);
+                    var dy = Math.max(16, (c[1] - p[1]) * 0.5);
+                    var d = "M" + p[0].toFixed(1) + " " + p[1].toFixed(1) +
+                            "C" + p[0].toFixed(1) + " " + (p[1] + dy).toFixed(1) +
+                            " " + c[0].toFixed(1) + " " + (c[1] - dy).toFixed(1) +
+                            " " + c[0].toFixed(1) + " " + c[1].toFixed(1);
+                    var path = document.createElementNS(SVGNS, "path");
+                    path.setAttribute("class", "edge");
+                    path.setAttribute("d", d);
+                    path.setAttribute("stroke-width", (cli._edgeW || 2).toFixed(1));
+                    edgesSvg.appendChild(path);
+                }
+                visit(cli);
+            }
+        }
+        visit(tree.children[0]);
+    }
+    function scheduleEdges() {
+        if (building || edgesRAF) return;
+        edgesRAF = requestAnimationFrame(function () { edgesRAF = null; drawEdges(); });
+    }
+
+    // Smoothly bring a node to the centre of the viewport, keeping the current zoom.
+    function panToNode(node) {
+        var vp = viewport.getBoundingClientRect();
+        var r = node.getBoundingClientRect();
+        tx += (vp.left + vp.width / 2) - (r.left + r.width / 2);
+        ty += (vp.top + vp.height / 2) - (r.top + r.height / 2);
+        canvas.style.transition = "transform .28s ease";
+        beginInteract();
+        applyTransform();
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(function () { canvas.classList.remove("interacting"); }, 350);
+    }
+
+    document.getElementById("zoom-in").addEventListener("click", function () {
+        canvas.style.transition = "";
+        zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, 1.2);
+    });
+    document.getElementById("zoom-out").addEventListener("click", function () {
+        zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, 1 / 1.2);
+    });
+    document.getElementById("zoom-fit").addEventListener("click", fit);
+
+    // ---------- search ----------
+    var search = document.getElementById("search");
+    var searchCount = document.getElementById("search-count");
+    var clearBtn = document.getElementById("search-clear");
+    var matches = [], matchIdx = -1, autoOpened = null;
+
+    function escHtml(s) { return s.replace(/[&<>]/g, function (c) { return c === "&" ? "&amp;" : c === "<" ? "&lt;" : "&gt;"; }); }
+    function highlightHtml(text, q) {
+        var lower = text.toLowerCase(), i = lower.indexOf(q);
+        if (i < 0) return escHtml(text);
+        var out = "", from = 0;
+        while (i >= 0) {
+            out += escHtml(text.slice(from, i)) + '<mark class="hl">' + escHtml(text.slice(i, i + q.length)) + "</mark>";
+            from = i + q.length;
+            i = lower.indexOf(q, from);
+        }
+        return out + escHtml(text.slice(from));
+    }
+    function applyHighlight(rec, q) { rec.hl.forEach(function (h) { h.el.innerHTML = highlightHtml(h.text, q); }); }
+    function clearHighlight(rec) { rec.hl.forEach(function (h) { h.el.textContent = h.text; }); }
+
+    // Reveal a node by expanding any collapsed ancestors and the group it may live in.
+    function revealRec(r) {
+        if (r.groupLi) setGroupExpanded(r.groupLi, true);
+        var p = r.li.parentElement;
+        while (p && p !== tree) {
+            if (p.tagName === "LI" && p._rec) setCollapsed(p._rec, false);
+            p = p.parentElement;
+        }
+    }
+    // Close the details we opened for a detail-only match (unless the user already had them open).
+    function closeAutoOpened() {
+        if (autoOpened && !autoOpened.hadOpen) autoOpened.node.classList.remove("open-details");
+        autoOpened = null;
+    }
+    function gotoMatch(i) {
+        if (!matches.length) return;
+        matchIdx = (i + matches.length) % matches.length;
+        var m = matches[matchIdx];
+        revealRec(m.rec);
+        closeAutoOpened();
+        if (m.detailOnly) {
+            // temporarily open the details so the matched (and highlighted) row is visible
+            var hadOpen = m.rec.node.classList.contains("open-details");
+            m.rec.node.classList.add("open-details");
+            autoOpened = { node: m.rec.node, hadOpen: hadOpen };
+        }
+        searchCount.textContent = (matchIdx + 1) + "/" + matches.length;
+        requestAnimationFrame(function () { panToNode(m.rec.node); });
+    }
+    function runSearch() {
+        var q = search.value.trim().toLowerCase();
+        clearBtn.classList.toggle("show", search.value.length > 0);
+        closeAutoOpened();
+        matches = [];
+        matchIdx = -1;
+        if (!q) {
+            allNodes.forEach(function (r) { r.node.classList.remove("match", "dim"); clearHighlight(r); });
+            searchCount.textContent = "";
+            return;
+        }
+        // rank title/name matches ahead of detail-only matches
+        var titleHits = [], detailHits = [];
+        allNodes.forEach(function (r) {
+            var titleHay = (r.data.name + " " + prettyName(r.data.name) + " " + nodeSource(r.data)).toLowerCase();
+            var detailHay = "";
+            (r.data.details || []).forEach(function (d) {
+                detailHay += " " + d.key.toLowerCase() + " " + (d.values || []).join(" ").toLowerCase();
+            });
+            var nameMatch = titleHay.indexOf(q) >= 0;
+            var detailMatch = detailHay.indexOf(q) >= 0;
+            var matched = nameMatch || detailMatch;
+            r.node.classList.toggle("match", matched);
+            r.node.classList.toggle("dim", !matched);
+            if (matched) {
+                applyHighlight(r, q);
+                (nameMatch ? titleHits : detailHits).push({ rec: r, detailOnly: !nameMatch });
+            } else {
+                clearHighlight(r);
+            }
+        });
+        matches = titleHits.concat(detailHits);
+        if (matches.length) {
+            gotoMatch(0); // jump to the first (title) hit while typing
+        } else {
+            searchCount.textContent = "0";
+        }
+    }
+    function clearSearch() { search.value = ""; runSearch(); search.focus(); }
+    search.addEventListener("input", runSearch);
+    search.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && matches.length) {
+            e.preventDefault();
+            gotoMatch(matchIdx + (e.shiftKey ? -1 : 1)); // Enter: next, Shift+Enter: previous
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            clearSearch();
+        }
+    });
+    clearBtn.addEventListener("click", clearSearch);
+
+    // ---------- heatmap toggle ----------
+    var heatBtn = document.getElementById("heat-toggle");
+    function setHeat(on) {
+        tree.classList.toggle("heat", on);
+        heatBtn.classList.toggle("active", on);
+    }
+    heatBtn.addEventListener("click", function () { setHeat(!tree.classList.contains("heat")); });
+
+    // ---------- expand / collapse the extra info in every operator ----------
+    // Shows/hides each operator's detail rows and expands/condenses the low-impact chains, without touching the
+    // chain-collapse handles (those keep working independently). The default view is "Collapsed".
+    var expandBtn = document.getElementById("expand-all");
+    var collapseBtn = document.getElementById("collapse-all");
+    function setDetailsAll(open) {
+        groups.forEach(function (g) { setGroupExpanded(g, open); });
+        allNodes.forEach(function (r) { r.node.classList.toggle("open-details", open); });
+        scheduleEdges();
+    }
+    expandBtn.addEventListener("click", function () { setDetailsAll(true); });
+    collapseBtn.addEventListener("click", function () { setDetailsAll(false); });
+
+    // ---------- theme: follow the OS setting unless the user toggles it ----------
+    var themeMedia = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+    var manualTheme = false;
+    function applyTheme(t) { document.documentElement.setAttribute("data-theme", t); }
+    function systemTheme() { return (themeMedia && themeMedia.matches) ? "dark" : "light"; }
+    applyTheme(systemTheme());
+    if (themeMedia && themeMedia.addEventListener) {
+        themeMedia.addEventListener("change", function () { if (!manualTheme) applyTheme(systemTheme()); });
+    }
+    document.getElementById("theme-toggle").addEventListener("click", function () {
+        manualTheme = true;
+        applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+    });
+
+    // ---------- SQL preview ----------
+    function buildSQL() {
+        // the query is pretty-printed and syntax-highlighted server-side (HTMLTreeRenderer), so PLAN.query.sql is HTML
+        var sql = (PLAN.query && PLAN.query.sql) ? PLAN.query.sql : "";
+        var chip = document.getElementById("sql-chip");
+        if (!sql.trim()) { chip.style.display = "none"; return; }
+        document.getElementById("sql-body").innerHTML = sql;
+        var panel = document.getElementById("sql-panel");
+        chip.addEventListener("click", function () { panel.classList.toggle("show"); });
+        document.getElementById("sql-close").addEventListener("click", function () { panel.classList.remove("show"); });
+    }
+
+    // ---------- phase timings (cascaded) ----------
+    function buildTimings() {
+        var btn = document.getElementById("timings-fab");
+        var panel = document.getElementById("timings-panel");
+        var timings = (PLAN.query && PLAN.query.timings) ? PLAN.query.timings : [];
+        var map = {};
+        timings.forEach(function (t) { map[t.key] = t.seconds; });
+        var phases = [{ key: "parser", label: "Parser" }, { key: "planner", label: "Planner" },
+                      { key: "optimizer", label: "Optimizer" }, { key: "physical_planner", label: "Physical Planner" }];
+        function val(k) { return map[k] || 0; }
+        var planTotal = phases.reduce(function (a, p) { return a + val(p.key + ".total_time"); }, 0);
+        if (planTotal <= 0) { btn.style.display = "none"; return; }
+
+        var planNode = { label: "Plan Time", secs: planTotal, children: phases.map(function (p) {
+            var subs = timings.filter(function (t) { return t.key.indexOf(p.key + ".") === 0 && t.key !== p.key + ".total_time" && t.seconds > 0; })
+                              .sort(function (a, b) { return b.seconds - a.seconds; })
+                              .map(function (t) { return { label: t.key.split(".").slice(1).join("."), secs: t.seconds, children: [] }; });
+            return { label: p.label, secs: val(p.key + ".total_time"), children: subs };
+        }) };
+
+        function renderTNode(node, depth) {
+            var wrap = document.createElement("div");
+            var row = document.createElement("div"); row.className = "tm-row"; row.style.paddingLeft = (10 + depth * 15) + "px";
+            var hasKids = node.children && node.children.length;
+            var caret = document.createElement("span"); caret.className = "tm-caret"; caret.textContent = hasKids ? "▸" : "";
+            var nm = document.createElement("span"); nm.className = "tm-nm"; nm.textContent = node.label;
+            var pc = document.createElement("span"); pc.className = "tm-pc"; pc.textContent = fmtTime(node.secs);
+            row.appendChild(caret); row.appendChild(nm); row.appendChild(pc);
+            wrap.appendChild(row);
+            if (hasKids) {
+                var kids = document.createElement("div"); kids.className = "tm-kids";
+                node.children.forEach(function (c) { kids.appendChild(renderTNode(c, depth + 1)); });
+                wrap.appendChild(kids);
+                var open = depth === 0;
+                kids.style.display = open ? "block" : "none"; caret.textContent = open ? "▾" : "▸";
+                row.classList.add("clickable");
+                row.addEventListener("click", function () {
+                    var o = kids.style.display === "none"; kids.style.display = o ? "block" : "none"; caret.textContent = o ? "▾" : "▸";
+                });
+            }
+            return wrap;
+        }
+        panel.innerHTML = "";
+        var head = document.createElement("div"); head.className = "tm-head";
+        head.innerHTML = '<span class="t">Phase timings</span><span class="tm-close" id="tm-close">×</span>';
+        panel.appendChild(head);
+        panel.appendChild(renderTNode(planNode, 0));
+        btn.addEventListener("click", function () { panel.classList.toggle("show"); btn.classList.toggle("active"); });
+        document.getElementById("tm-close").addEventListener("click", function () { panel.classList.remove("show"); btn.classList.remove("active"); });
+    }
+
+    // ---------- init ----------
+    // Build once; if the result does not comfortably fit on screen, condense low-impact chains and rebuild.
+    buildTree();
+    fit();
+    if (ANALYZE && TOTAL_TIME > 0 && scale < 1) {
+        GROUPING = true;
+        buildTree();
+        fit();
+    }
+    buildSummary();
+    buildLegend();
+    buildSQL();
+    buildTimings();
+    if (ANALYZE) setHeat(true);
+    requestAnimationFrame(function () { fit(); drawEdges(); });
+    window.addEventListener("resize", function () { /* keep current transform */ });
+})();
+</script>
+</body>
+</html>

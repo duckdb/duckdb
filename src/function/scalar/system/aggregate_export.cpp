@@ -511,7 +511,8 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
                                                           const vector<LogicalType> &argument_types,
                                                           const map<idx_t, Value> &constant_parameters) {
 	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
-	    context, Identifier::DefaultSchema(), Identifier(function_name));
+	    context, QualifiedName(Catalog::GetSystemCatalog(context).GetName(), Identifier::DefaultSchema(),
+	                           Identifier(function_name)));
 	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		throw InternalException("Could not find aggregate %s", function_name);
 	}
@@ -727,11 +728,11 @@ void CombineAggrStateDestroy(Vector &state, AggregateInputData &aggr_input_data,
 }
 
 unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
-	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 
-	auto bind_data = BindAggregateStateInternal(context, function, arguments);
+	D_ASSERT(arguments.size() == 1 || arguments.size() == 2);
+	auto bind_data = BindAggregateStateInternal(input.GetClientContext(), function, arguments);
 
 	// Copy underlying aggregate's callbacks into this function (same pattern as `ExportAggregateFunction::Bind`)
 	function.SetStateSizeCallback(bind_data->aggr.GetStateSizeCallback());
@@ -748,7 +749,7 @@ unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
 
 void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
                        idx_t count) {
-	D_ASSERT(input_count == 1);
+	D_ASSERT(input_count == 1 || input_count == 2);
 
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
 	auto &underlying_aggr = bind_data.aggr;
@@ -776,12 +777,18 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 		target_data.WriteValue(state_values[i].GetValue());
 	}
 
-	DeserializeState(underlying_aggr, layout, inputs[0], count, temp_state_buf.get(), aggr_input_data.allocator);
-
-	AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
-	                                 AggregateCombineType::ALLOW_DESTRUCTIVE);
-	underlying_aggr.GetStateCombineCallback()(source_vec, target_vec, combine_input, count);
-	// the target states are the real combine_aggr states (kept); the source states are scratch - destroy them
+	try {
+		DeserializeState(underlying_aggr, layout, inputs[0], count, temp_state_buf.get(), aggr_input_data.allocator);
+		AggregateInputData combine_input(bind_data.aggr, bind_data.bind_data.get(), aggr_input_data.allocator,
+		                                 AggregateCombineType::ALLOW_DESTRUCTIVE);
+		if (input_count == 2) {
+			combine_input.combine_multiplicities = inputs[1];
+		}
+		underlying_aggr.GetStateCombineCallback()(source_vec, target_vec, combine_input, count);
+	} catch (...) {
+		DestroyExportStates(underlying_aggr, bind_data.bind_data.get(), source_vec, count, aggr_input_data.allocator);
+		throw;
+	}
 	DestroyExportStates(underlying_aggr, bind_data.bind_data.get(), source_vec, count, aggr_input_data.allocator);
 }
 
@@ -1158,6 +1165,18 @@ AggregateFunction CombineAggrFun::GetFunction() {
 	                      CombineAggrBind, nullptr, nullptr, nullptr);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return function;
+}
+
+AggregateFunctionSet CombineAggrFun::GetFunctions() {
+	AggregateFunctionSet set("combine_aggr");
+	set.AddFunction(GetFunction());
+	auto repeated =
+	    AggregateFunction("combine_aggr", {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalTypeId::ANY, nullptr,
+	                      nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize,
+	                      FunctionNullHandling::SPECIAL_HANDLING, nullptr, CombineAggrBind, nullptr, nullptr, nullptr);
+	repeated.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	set.AddFunction(std::move(repeated));
+	return set;
 }
 
 } // namespace duckdb

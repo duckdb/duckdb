@@ -10,18 +10,18 @@ namespace duckdb {
 
 CreateViewInfo::CreateViewInfo() : CreateInfo(CatalogType::VIEW_ENTRY, Identifier::InvalidSchema()) {
 }
-CreateViewInfo::CreateViewInfo(Identifier catalog_p, Identifier schema_p, Identifier view_name_p)
-    : CreateInfo(CatalogType::VIEW_ENTRY, std::move(schema_p), std::move(catalog_p)),
-      view_name(std::move(view_name_p)) {
+CreateViewInfo::CreateViewInfo(const QualifiedName &view_name)
+    : CreateInfo(CatalogType::VIEW_ENTRY, view_name.Schema(), view_name.Catalog()) {
+	SetViewName(view_name.Name());
 }
 
 CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name)
-    : CreateViewInfo(schema.catalog.GetName(), schema.name, std::move(view_name)) {
+    : CreateViewInfo(QualifiedName(schema.catalog.GetName(), schema.name, std::move(view_name))) {
 }
 
 string CreateViewInfo::ToString() const {
 	string result = GetCreatePrefix("VIEW");
-	result += QualifierToString(temporary ? Identifier() : catalog, schema, view_name);
+	result += QualifiedNameToString();
 	if (!aliases.empty()) {
 		result += " (";
 		result +=
@@ -38,7 +38,7 @@ string CreateViewInfo::ToString() const {
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
-	auto result = make_uniq<CreateViewInfo>(catalog, schema, view_name);
+	auto result = make_uniq<CreateViewInfo>(GetQualifiedName());
 	CopyProperties(*result);
 	result->aliases = aliases;
 	result->types = types;
@@ -63,7 +63,7 @@ unique_ptr<SelectStatement> CreateViewInfo::ParseSelect(const string &sql) {
 
 unique_ptr<CreateViewInfo> CreateViewInfo::FromSelect(ClientContext &context, unique_ptr<CreateViewInfo> info) {
 	D_ASSERT(info);
-	D_ASSERT(!info->view_name.empty());
+	D_ASSERT(!info->GetViewName().empty());
 	D_ASSERT(!info->sql.empty());
 	D_ASSERT(!info->query);
 
@@ -91,8 +91,8 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context
 	}
 
 	auto result = unique_ptr_cast<CreateInfo, CreateViewInfo>(std::move(create_statement.info));
-	result->catalog = schema.ParentCatalog().GetName();
-	result->schema = schema.name;
+	result->SetQualifiedName(
+	    QualifiedName(schema.ParentCatalog().GetName(), schema.name, result->GetQualifiedName().Name()));
 
 	auto view_binder = Binder::CreateBinder(context);
 	view_binder->BindCreateViewInfo(*result);
@@ -114,8 +114,8 @@ vector<Value> CreateViewInfo::GetColumnCommentsList() const {
 		auto it = std::find_if(names.begin(), names.end(), [&](const Identifier &n) { return entry.first == n; });
 		if (it == names.end()) {
 			throw InternalException(
-			    "While serializing comments for view \"%s\" - did not find column \"%s\" in list of names", view_name,
-			    entry.first.GetIdentifierName());
+			    "While serializing comments for view \"%s\" - did not find column \"%s\" in list of names",
+			    GetViewName(), entry.first.GetIdentifierName());
 		}
 		result[NumericCast<idx_t>(it - names.begin())] = entry.second;
 	}

@@ -81,8 +81,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::FUNCTION;
 
 public:
-	DUCKDB_API FunctionExpression(Identifier catalog_name, Identifier schema_name, const Identifier &function_name,
-	                              vector<unique_ptr<ParsedExpression>> children,
+	DUCKDB_API FunctionExpression(const QualifiedName &function_name, vector<unique_ptr<ParsedExpression>> children,
 	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
@@ -90,8 +89,8 @@ public:
 	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
-	DUCKDB_API FunctionExpression(Identifier catalog_name, Identifier schema_name, const Identifier &function_name,
-	                              vector<FunctionArgument> children, unique_ptr<ParsedExpression> filter = nullptr,
+	DUCKDB_API FunctionExpression(const QualifiedName &function_name, vector<FunctionArgument> children,
+	                              unique_ptr<ParsedExpression> filter = nullptr,
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
 	DUCKDB_API FunctionExpression(const Identifier &function_name, vector<FunctionArgument> children,
@@ -106,26 +105,17 @@ public:
 	QualifiedName &GetQualifiedNameMutable() {
 		return qualified_name;
 	}
-	const Identifier &Catalog() const {
-		return qualified_name.Catalog();
+	void SetQualifiedName(QualifiedName name) {
+		qualified_name = std::move(name);
 	}
-	Identifier &CatalogMutable() {
-		return qualified_name.CatalogMutable();
-	}
-	const Identifier &Schema() const {
-		return qualified_name.Schema();
-	}
-	Identifier &SchemaMutable() {
-		return qualified_name.SchemaMutable();
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
 	}
 	const Identifier &FunctionName() const {
 		return qualified_name.Name();
 	}
-	Identifier &FunctionNameMutable() {
-		return qualified_name.NameMutable();
-	}
 	void SetFunctionName(string function_name_p) {
-		qualified_name.NameMutable() = Identifier(std::move(function_name_p));
+		qualified_name = qualified_name.WithName(Identifier(std::move(function_name_p)));
 	}
 	bool IsOperator() const {
 		return is_operator;

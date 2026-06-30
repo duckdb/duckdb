@@ -45,6 +45,12 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
     : ColumnReader(reader, schema), context(context), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
 
+	for (auto &child : child_readers) {
+		if (child) {
+			child->SetParent(*this);
+		}
+	}
+
 	if (child_readers[0]->Schema().name == "metadata" && child_readers[1]->Schema().name == "value") {
 		metadata_reader_idx = 0;
 		value_reader_idx = 1;

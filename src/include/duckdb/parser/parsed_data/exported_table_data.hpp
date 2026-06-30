@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/identifier.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/types/value.hpp"
 
@@ -16,14 +17,12 @@ namespace duckdb {
 class TableCatalogEntry;
 
 struct ExportedTableData {
-	//! Name of the exported table
-	Identifier table_name;
+	//! The qualified name of the exported table (database = catalog, schema, table = name)
+	QualifiedName qualified_name;
 
-	//! Name of the schema
-	Identifier schema_name;
-
-	//! Name of the database
-	Identifier database_name;
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
+	}
 
 	//! Path to be exported
 	string file_path;

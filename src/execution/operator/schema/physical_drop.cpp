@@ -21,24 +21,29 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 	case CatalogType::PREPARED_STATEMENT: {
 		// DEALLOCATE silently ignores errors
 		auto &statements = ClientData::Get(context.client).prepared_statements;
-		auto stmt_iter = statements.find(info->name);
+		auto stmt_iter = statements.find(info->GetQualifiedName().Name());
 		if (stmt_iter != statements.end()) {
 			statements.erase(stmt_iter);
 		}
 		break;
 	}
 	case CatalogType::SCHEMA_ENTRY: {
-		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
+		// the catalog is the leading component of the resolved path ([catalog, parent schemas..., schema])
+		auto &catalog_name = info->GetQualifiedName().Path().front();
+		auto &catalog = Catalog::GetCatalog(context.client, catalog_name);
 		catalog.DropEntry(context.client, *info);
 
-		// Check if the dropped schema was set as the current schema
+		// Check if the dropped schema was set as the current schema. Compare the resolved catalog names: the dropped
+		// schema's catalog is catalog.GetName(); the current default catalog may be empty (= the default database).
 		auto &client_data = ClientData::Get(context.client);
 		auto &default_entry = client_data.catalog_search_path->GetDefault();
-		auto &current_catalog = default_entry.catalog;
-		auto &current_schema = default_entry.schema;
-		D_ASSERT(info->name != DEFAULT_SCHEMA);
+		auto &current_catalog = default_entry.GetCatalog();
+		auto &current_schema = default_entry.GetSchema();
+		D_ASSERT(info->GetQualifiedName().Name() != DEFAULT_SCHEMA);
 
-		if (info->catalog == current_catalog && current_schema == info->name) {
+		auto resolved_current_catalog =
+		    IsInvalidCatalog(current_catalog) ? DatabaseManager::GetDefaultDatabase(context.client) : current_catalog;
+		if (catalog.GetName() == resolved_current_catalog && current_schema == info->GetQualifiedName().Name()) {
 			// Reset the schema to default
 			SchemaSetting::SetLocal(context.client, DEFAULT_SCHEMA);
 		}
@@ -49,8 +54,8 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		D_ASSERT(info->extra_drop_info);
 		auto &extra_info = info->extra_drop_info->Cast<ExtraDropSecretInfo>();
 		SecretManager::Get(context.client)
-		    .DropSecretByName(context.client, info->name, info->if_not_found, extra_info.persist_mode,
-		                      Identifier(extra_info.secret_storage));
+		    .DropSecretByName(context.client, info->GetQualifiedName().Name(), info->if_not_found,
+		                      extra_info.persist_mode, Identifier(extra_info.secret_storage));
 		break;
 	}
 	case CatalogType::TRIGGER_ENTRY: {
@@ -63,20 +68,19 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 			throw InternalException("DROP TRIGGER: ExtraDropTriggerInfo has no base_table");
 		}
 		auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
-		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context.client, info->catalog, info->schema,
-		                                                         base_table_ref.table_name);
+		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context.client, base_table_ref.GetQualifiedName());
 		auto &duck_table = table_entry.Cast<DuckTableEntry>();
 		auto transaction = duck_table.catalog.GetCatalogTransaction(context.client);
-		if (!duck_table.DropTrigger(transaction, info->name, info->cascade)) {
+		if (!duck_table.DropTrigger(transaction, info->GetQualifiedName().Name(), info->cascade)) {
 			if (info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"", info->name,
-				                       base_table_ref.table_name);
+				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"",
+				                       info->GetQualifiedName().Name(), base_table_ref.Table());
 			}
 		}
 		break;
 	}
 	default: {
-		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
+		auto &catalog = Catalog::GetCatalog(context.client, info->GetQualifiedName().Catalog());
 		catalog.DropEntry(context.client, *info);
 		break;
 	}

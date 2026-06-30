@@ -12,6 +12,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/time_point.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -20,8 +21,6 @@ class Logger;
 class HTTPUtil;
 class FileOpener;
 struct FileOpenerInfo;
-
-struct HTTPLogWriter {};
 
 struct HTTPParams {
 	explicit HTTPParams(HTTPUtil &http_util) : http_util(http_util) {
@@ -151,8 +150,11 @@ struct BaseRequest {
 
 	//! Requests will optionally contain their timings
 	bool have_request_timing = false;
-	timestamp_t request_start;
-	timestamp_t request_end;
+	// System clock start timestamp
+	timestamp_t request_system_start;
+	// Monotonic clock start and end timestamp
+	TimePoint request_monotonic_start;
+	TimePoint request_monotonic_end;
 	//! Request body size in bytes (the Content-Length we send). Only set for PUT/POST.
 	idx_t request_body_length = 0;
 
