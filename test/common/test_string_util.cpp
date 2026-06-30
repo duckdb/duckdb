@@ -145,6 +145,15 @@ TEST_CASE("Test join vector items", "[string_util]") {
 	}
 }
 
+TEST_CASE("Test replace strings", "[string_util]") {
+	REQUIRE(StringUtil::Replace("abcabc", "ab", "x") == "xcxc");
+	REQUIRE(StringUtil::Replace("aaaa", "aa", "b") == "bb");
+	REQUIRE(StringUtil::Replace("xx", "x", "yx") == "yxyx");
+	REQUIRE(StringUtil::Replace("aaa{SNAPSHOT_ID}bbb{SNAPSHOT_ID}", "{SNAPSHOT_ID}", "1") == "aaa1bbb1");
+	REQUIRE(StringUtil::Replace("", "x", "y") == "");
+	REQUIRE_THROWS(StringUtil::Replace("abc", "", "x"));
+}
+
 TEST_CASE("Test SplitWithParentheses", "[string_util]") {
 	SECTION("Standard split") {
 		REQUIRE(StringUtil::SplitWithParentheses("") == duckdb::vector<string> {});
