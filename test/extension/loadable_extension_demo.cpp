@@ -31,6 +31,8 @@
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
@@ -354,6 +356,32 @@ struct QuackExtensionData : public ParserExtensionParseData {
 	}
 };
 
+enum class ContextPreprocessMode : uint8_t {
+	SUCCESS,
+	MULTI,
+	PRAGMA,
+	TRANSACTION,
+	EMPTY,
+	RECURSE,
+	FAIL,
+	NULL_STATEMENT
+};
+
+struct ContextPreprocessData : public ParserExtensionParseData {
+	explicit ContextPreprocessData(ContextPreprocessMode mode) : mode(mode) {
+	}
+
+	ContextPreprocessMode mode;
+
+	duckdb::unique_ptr<ParserExtensionParseData> Copy() const override {
+		return make_uniq<ContextPreprocessData>(mode);
+	}
+
+	string ToString() const override {
+		return "CONTEXT PREPROCESS";
+	}
+};
+
 class QuackExtension : public ParserExtension {
 public:
 	QuackExtension() {
@@ -427,6 +455,101 @@ public:
 			return ParserOverrideResult();
 		}
 		return ParserOverrideResult(std::move(statements));
+	}
+};
+
+class ContextPreprocessExtension : public ParserExtension {
+public:
+	ContextPreprocessExtension() {
+		parse_function = ParseFunction;
+		preprocess_function = PreprocessFunction;
+	}
+
+	static ParserExtensionParseResult ParseFunction(ParserExtensionInfo *info, const vector<SimpleToken> &tokens) {
+		ContextPreprocessMode mode;
+		if (!ParseMode(tokens, mode)) {
+			return ParserExtensionParseResult();
+		}
+		auto result = ParserExtensionParseResult(make_uniq<ContextPreprocessData>(mode));
+		result.consumed_tokens = 4;
+		return result;
+	}
+
+	static bool ParseMode(const vector<SimpleToken> &tokens, ContextPreprocessMode &mode) {
+		if (tokens.size() < 4 || !StringUtil::CIEquals(tokens[0].text, "context") ||
+		    !StringUtil::CIEquals(tokens[1].text, "preprocess")) {
+			return false;
+		}
+		const auto next_type = tokens[3].type;
+		if (next_type != TokenType::TERMINATOR && next_type != TokenType::END_OF_INPUT &&
+		    next_type != TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			return false;
+		}
+		if (StringUtil::CIEquals(tokens[2].text, "success")) {
+			mode = ContextPreprocessMode::SUCCESS;
+		} else if (StringUtil::CIEquals(tokens[2].text, "multi")) {
+			mode = ContextPreprocessMode::MULTI;
+		} else if (StringUtil::CIEquals(tokens[2].text, "pragma")) {
+			mode = ContextPreprocessMode::PRAGMA;
+		} else if (StringUtil::CIEquals(tokens[2].text, "transaction")) {
+			mode = ContextPreprocessMode::TRANSACTION;
+		} else if (StringUtil::CIEquals(tokens[2].text, "empty")) {
+			mode = ContextPreprocessMode::EMPTY;
+		} else if (StringUtil::CIEquals(tokens[2].text, "recurse")) {
+			mode = ContextPreprocessMode::RECURSE;
+		} else if (StringUtil::CIEquals(tokens[2].text, "fail")) {
+			mode = ContextPreprocessMode::FAIL;
+		} else if (StringUtil::CIEquals(tokens[2].text, "null")) {
+			mode = ContextPreprocessMode::NULL_STATEMENT;
+		} else {
+			return false;
+		}
+		return true;
+	}
+
+	static vector<unique_ptr<SQLStatement>> ParseStatements(ClientContext &context, const string &query) {
+		Parser parser(context.GetParserOptions());
+		parser.ParseQuery(query);
+		return std::move(parser.statements);
+	}
+
+	static vector<unique_ptr<SQLStatement>> CreateMultiStatement(ClientContext &context) {
+		auto parsed = ParseStatements(context, "SELECT 1; SELECT 2");
+		auto multi_statement = make_uniq<MultiStatement>();
+		multi_statement->statements = std::move(parsed);
+		vector<unique_ptr<SQLStatement>> result;
+		result.push_back(std::move(multi_statement));
+		return result;
+	}
+
+	static vector<unique_ptr<SQLStatement>>
+	PreprocessFunction(ParserExtensionInfo *info, ClientContext &context,
+	                   duckdb::unique_ptr<ParserExtensionParseData> parse_data) {
+		auto &preprocess_data = dynamic_cast<ContextPreprocessData &>(*parse_data);
+		switch (preprocess_data.mode) {
+		case ContextPreprocessMode::SUCCESS:
+			return ParseStatements(context, "SELECT 1");
+		case ContextPreprocessMode::MULTI:
+			return CreateMultiStatement(context);
+		case ContextPreprocessMode::PRAGMA:
+			return ParseStatements(context, "PRAGMA version");
+		case ContextPreprocessMode::TRANSACTION:
+			return ParseStatements(context, "BEGIN TRANSACTION");
+		case ContextPreprocessMode::EMPTY:
+			return vector<unique_ptr<SQLStatement>>();
+		case ContextPreprocessMode::RECURSE:
+			return ParseStatements(context, "CONTEXT PREPROCESS RECURSE");
+		case ContextPreprocessMode::FAIL:
+			return ParseStatements(context, "CREATE TABLE context_preprocess_rollback AS SELECT 1 AS i; "
+			                                "SELECT * FROM context_preprocess_missing");
+		case ContextPreprocessMode::NULL_STATEMENT: {
+			vector<unique_ptr<SQLStatement>> result;
+			result.push_back(nullptr);
+			return result;
+		}
+		default:
+			throw InternalException("Unsupported context preprocess mode");
+		}
 	}
 };
 
@@ -1201,6 +1324,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);
 	ParserExtension::Register(config, QuackExtension());
+	ParserExtension::Register(config, ContextPreprocessExtension());
 	ExtensionCallback::Register(config, make_shared_ptr<QuackLoadExtension>());
 
 	// add a planner extension that adds an extra column to queries
