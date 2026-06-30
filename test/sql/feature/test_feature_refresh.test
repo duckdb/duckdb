@@ -431,6 +431,69 @@ statement ok
 DROP TABLE watermark_events;
 
 # ============================================================
+# INCREMENTAL refresh: empty initial version falls back to full materialization
+# ============================================================
+
+statement ok
+CREATE TABLE empty_initial_events (
+    entity VARCHAR,
+    val INTEGER,
+    ts TIMESTAMP
+);
+
+statement ok
+CREATE FEATURE empty_initial
+    TIMESTAMP ts
+    WINDOW 7 DAYS
+    REFRESH INCREMENTAL
+    RETAIN 1
+    AS (SELECT entity, SUM(val) AS total FROM empty_initial_events GROUP BY entity);
+
+# Initial materialization created an empty v1 table.
+query I
+SELECT COUNT(*) FROM empty_initial;
+----
+0
+
+statement ok
+INSERT INTO empty_initial_events VALUES
+    ('a', 10, '2024-01-01 08:00:00'),
+    ('a', 20, '2024-01-02 08:00:00');
+
+# With no existing max feature timestamp, incremental refresh materializes all rows.
+query I
+REFRESH FEATURE empty_initial;
+----
+2
+
+query I
+SELECT current_version FROM duckdb_features() WHERE feature_name = 'empty_initial';
+----
+2
+
+query I
+SELECT COUNT(*) FROM empty_initial;
+----
+2
+
+query RT rowsort
+SELECT total, feature_timestamp FROM empty_initial WHERE entity = 'a';
+----
+10	2024-01-01 08:00:00
+30	2024-01-02 08:00:00
+
+statement error
+SELECT COUNT(*) FROM empty_initial__v1;
+----
+<REGEX>:.*does not exist.*
+
+statement ok
+DROP FEATURE empty_initial;
+
+statement ok
+DROP TABLE empty_initial_events;
+
+# ============================================================
 # Error cases
 # ============================================================
 
