@@ -401,6 +401,33 @@ FunctionArgument PEGTransformerFactory::TransformPositionalFunctionArgument(PEGT
 	return FunctionArgument(std::move(expression));
 }
 
+void PEGTransformerFactory::InitializeNamedParameterTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	stack.PushFrame(list_pr.GetChild(3), GetSelectTrampolineOps("Expression"),
+	                TransformFrameResultTarget(frame.frame_index, 0));
+	auto &type_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (type_opt.HasResult()) {
+		stack.PushFrame(type_opt.GetResult(), GetSelectTrampolineOps("Type"),
+		                TransformFrameResultTarget(frame.frame_index, 1));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNamedParameterTrampoline(PEGTransformer &transformer,
+                                                                                         TransformStack &stack,
+                                                                                         TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto type_func_name = Identifier(TransformIdentifierOrKeyword(transformer, list_pr.GetChild(0)));
+	optional<LogicalType> type;
+	if (frame.child_results[1]) {
+		type = frame.TakeResult<LogicalType>(1);
+	}
+	auto expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
+	auto result = TransformNamedParameter(transformer, type_func_name, type, std::move(expression));
+	return make_uniq<TypedTransformResult<MacroParameter>>(std::move(result));
+}
+
 MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &transformer,
                                                               const Identifier &type_func_name,
                                                               const optional<LogicalType> &type,

@@ -1232,15 +1232,44 @@ static const TransformFrameOps CATALOG_RESERVED_SCHEMA_TABLE_OPS = {
 static const TransformFrameOps COL_ID_EXPRESSION_OPS = {"ColIdExpression",
                                                         &PEGTransformerFactory::InitializeColIdExpressionTrampoline,
                                                         &PEGTransformerFactory::FinalizeColIdExpressionTrampoline};
+static const TransformFrameOps ASCENDING_ORDER_OPS = {"AscendingOrder",
+                                                      &PEGTransformerFactory::InitializeAscendingOrderTrampoline,
+                                                      &PEGTransformerFactory::FinalizeAscendingOrderTrampoline};
+static const TransformFrameOps DESCENDING_ORDER_OPS = {"DescendingOrder",
+                                                       &PEGTransformerFactory::InitializeDescendingOrderTrampoline,
+                                                       &PEGTransformerFactory::FinalizeDescendingOrderTrampoline};
+static const TransformFrameOps DESC_OR_ASC_OPS = {"DescOrAsc", &PEGTransformerFactory::InitializeDescOrAscTrampoline,
+                                                  &PEGTransformerFactory::FinalizeDescOrAscTrampoline};
 static const TransformFrameOps EXPRESSION_AS_COLLABEL_OPS = {
     "ExpressionAsCollabel", &PEGTransformerFactory::InitializeExpressionAsCollabelTrampoline,
     &PEGTransformerFactory::FinalizeExpressionAsCollabelTrampoline};
 static const TransformFrameOps FUNCTION_ARGUMENT_OPS = {"FunctionArgument",
                                                         &PEGTransformerFactory::InitializeFunctionArgumentTrampoline,
                                                         &PEGTransformerFactory::FinalizeFunctionArgumentTrampoline};
+static const TransformFrameOps NAMED_FUNCTION_ARGUMENT_OPS = {
+    "NamedFunctionArgument", &PEGTransformerFactory::InitializeNamedFunctionArgumentTrampoline,
+    &PEGTransformerFactory::FinalizeNamedFunctionArgumentTrampoline};
+static const TransformFrameOps NAMED_PARAMETER_OPS = {"NamedParameter",
+                                                      &PEGTransformerFactory::InitializeNamedParameterTrampoline,
+                                                      &PEGTransformerFactory::FinalizeNamedParameterTrampoline};
+static const TransformFrameOps NULLS_FIRST_OPS = {"NullsFirst", &PEGTransformerFactory::InitializeNullsFirstTrampoline,
+                                                  &PEGTransformerFactory::FinalizeNullsFirstTrampoline};
+static const TransformFrameOps NULLS_FIRST_OR_LAST_OPS = {"NullsFirstOrLast",
+                                                          &PEGTransformerFactory::InitializeNullsFirstOrLastTrampoline,
+                                                          &PEGTransformerFactory::FinalizeNullsFirstOrLastTrampoline};
+static const TransformFrameOps NULLS_LAST_OPS = {"NullsLast", &PEGTransformerFactory::InitializeNullsLastTrampoline,
+                                                 &PEGTransformerFactory::FinalizeNullsLastTrampoline};
 static const TransformFrameOps ORDER_BY_CLAUSE_OPS = {"OrderByClause",
                                                       &PEGTransformerFactory::InitializeOrderByClauseTrampoline,
                                                       &PEGTransformerFactory::FinalizeOrderByClauseTrampoline};
+static const TransformFrameOps ORDER_BY_ALL_OPS = {"OrderByAll", &PEGTransformerFactory::InitializeOrderByAllTrampoline,
+                                                   &PEGTransformerFactory::FinalizeOrderByAllTrampoline};
+static const TransformFrameOps ORDER_BY_EXPRESSION_OPS = {"OrderByExpression",
+                                                          &PEGTransformerFactory::InitializeOrderByExpressionTrampoline,
+                                                          &PEGTransformerFactory::FinalizeOrderByExpressionTrampoline};
+static const TransformFrameOps ORDER_BY_EXPRESSION_LIST_OPS = {
+    "OrderByExpressionList", &PEGTransformerFactory::InitializeOrderByExpressionListTrampoline,
+    &PEGTransformerFactory::FinalizeOrderByExpressionListTrampoline};
 static const TransformFrameOps ORDER_BY_EXPRESSIONS_OPS = {
     "OrderByExpressions", &PEGTransformerFactory::InitializeOrderByExpressionsTrampoline,
     &PEGTransformerFactory::FinalizeOrderByExpressionsTrampoline};
@@ -1681,9 +1710,20 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"SchemaReservedTable", &SCHEMA_RESERVED_TABLE_OPS},
 	    {"CatalogReservedSchemaTable", &CATALOG_RESERVED_SCHEMA_TABLE_OPS},
 	    {"ColIdExpression", &COL_ID_EXPRESSION_OPS},
+	    {"AscendingOrder", &ASCENDING_ORDER_OPS},
+	    {"DescendingOrder", &DESCENDING_ORDER_OPS},
+	    {"DescOrAsc", &DESC_OR_ASC_OPS},
 	    {"ExpressionAsCollabel", &EXPRESSION_AS_COLLABEL_OPS},
 	    {"FunctionArgument", &FUNCTION_ARGUMENT_OPS},
+	    {"NamedFunctionArgument", &NAMED_FUNCTION_ARGUMENT_OPS},
+	    {"NamedParameter", &NAMED_PARAMETER_OPS},
+	    {"NullsFirst", &NULLS_FIRST_OPS},
+	    {"NullsFirstOrLast", &NULLS_FIRST_OR_LAST_OPS},
+	    {"NullsLast", &NULLS_LAST_OPS},
 	    {"OrderByClause", &ORDER_BY_CLAUSE_OPS},
+	    {"OrderByAll", &ORDER_BY_ALL_OPS},
+	    {"OrderByExpression", &ORDER_BY_EXPRESSION_OPS},
+	    {"OrderByExpressionList", &ORDER_BY_EXPRESSION_LIST_OPS},
 	    {"OrderByExpressions", &ORDER_BY_EXPRESSIONS_OPS},
 	    {"PositionalFunctionArgument", &POSITIONAL_FUNCTION_ARGUMENT_OPS},
 	    {"SubqueryReference", &SUBQUERY_REFERENCE_OPS},
@@ -3335,27 +3375,6 @@ PEGTransformerFactory::FinalizeFunctionArgumentListTrampoline(PEGTransformer &tr
 	}
 	auto result = PEGTransformerFactory::TransformFunctionArgumentList(transformer, std::move(function_argument));
 	return make_uniq<TypedTransformResult<vector<FunctionArgument>>>(std::move(result));
-}
-
-void PEGTransformerFactory::InitializeFunctionIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
-                                                                   TransformStackFrame &frame) {
-	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto &choice_result = choice_pr.GetResult();
-	frame.ReserveChildSlots(1);
-	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
-	auto ops_entry = ops_map.find(choice_result.name);
-	if (ops_entry == ops_map.end()) {
-		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
-	}
-	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
-}
-
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeFunctionIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
-                                                            TransformStackFrame &frame) {
-	auto result = frame.TakeResult<QualifiedName>(0);
-	return make_uniq<TypedTransformResult<QualifiedName>>(result);
 }
 
 void PEGTransformerFactory::InitializeCatalogReservedSchemaFunctionNameTrampoline(PEGTransformer &transformer,
@@ -10161,6 +10180,51 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColIdExpressionT
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+void PEGTransformerFactory::InitializeAscendingOrderTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeAscendingOrderTrampoline(PEGTransformer &transformer,
+                                                                                         TransformStack &stack,
+                                                                                         TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformAscendingOrder(transformer);
+	return make_uniq<TypedTransformResult<OrderType>>(result);
+}
+
+void PEGTransformerFactory::InitializeDescendingOrderTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDescendingOrderTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformDescendingOrder(transformer);
+	return make_uniq<TypedTransformResult<OrderType>>(result);
+}
+
+void PEGTransformerFactory::InitializeDescOrAscTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                          TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDescOrAscTrampoline(PEGTransformer &transformer,
+                                                                                    TransformStack &stack,
+                                                                                    TransformStackFrame &frame) {
+	auto result = frame.TakeResult<OrderType>(0);
+	return make_uniq<TypedTransformResult<OrderType>>(result);
+}
+
 void PEGTransformerFactory::InitializeExpressionAsCollabelTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                      TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
@@ -10200,6 +10264,67 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeFunctionArgument
 	return make_uniq<TypedTransformResult<FunctionArgument>>(std::move(result));
 }
 
+void PEGTransformerFactory::InitializeNamedFunctionArgumentTrampoline(PEGTransformer &transformer,
+                                                                      TransformStack &stack,
+                                                                      TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), NAMED_PARAMETER_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeNamedFunctionArgumentTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	auto named_parameter = frame.TakeResult<MacroParameter>(0);
+	auto result = PEGTransformerFactory::TransformNamedFunctionArgument(transformer, std::move(named_parameter));
+	return make_uniq<TypedTransformResult<FunctionArgument>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeNullsFirstTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNullsFirstTrampoline(PEGTransformer &transformer,
+                                                                                     TransformStack &stack,
+                                                                                     TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformNullsFirst(transformer);
+	return make_uniq<TypedTransformResult<OrderByNullType>>(result);
+}
+
+void PEGTransformerFactory::InitializeNullsFirstOrLastTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNullsFirstOrLastTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto result = frame.TakeResult<OrderByNullType>(0);
+	return make_uniq<TypedTransformResult<OrderByNullType>>(result);
+}
+
+void PEGTransformerFactory::InitializeNullsLastTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                          TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNullsLastTrampoline(PEGTransformer &transformer,
+                                                                                    TransformStack &stack,
+                                                                                    TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformNullsLast(transformer);
+	return make_uniq<TypedTransformResult<OrderByNullType>>(result);
+}
+
 void PEGTransformerFactory::InitializeOrderByClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                               TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
@@ -10212,6 +10337,97 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOrderByClauseTra
                                                                                         TransformStackFrame &frame) {
 	auto order_by_expressions = frame.TakeResult<vector<OrderByNode>>(0);
 	auto result = PEGTransformerFactory::TransformOrderByClause(transformer, std::move(order_by_expressions));
+	return make_uniq<TypedTransformResult<vector<OrderByNode>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeOrderByAllTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	auto &nulls_first_or_last_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (nulls_first_or_last_opt.HasResult()) {
+		stack.PushFrame(nulls_first_or_last_opt.GetResult(), NULLS_FIRST_OR_LAST_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 1));
+	}
+	auto &desc_or_asc_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (desc_or_asc_opt.HasResult()) {
+		stack.PushFrame(desc_or_asc_opt.GetResult(), DESC_OR_ASC_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOrderByAllTrampoline(PEGTransformer &transformer,
+                                                                                     TransformStack &stack,
+                                                                                     TransformStackFrame &frame) {
+	optional<OrderType> desc_or_asc {};
+	if (frame.child_results[0]) {
+		desc_or_asc = frame.TakeResult<OrderType>(0);
+	}
+	optional<OrderByNullType> nulls_first_or_last {};
+	if (frame.child_results[1]) {
+		nulls_first_or_last = frame.TakeResult<OrderByNullType>(1);
+	}
+	auto result = PEGTransformerFactory::TransformOrderByAll(transformer, desc_or_asc, nulls_first_or_last);
+	return make_uniq<TypedTransformResult<vector<OrderByNode>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeOrderByExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(3);
+	auto &nulls_first_or_last_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (nulls_first_or_last_opt.HasResult()) {
+		stack.PushFrame(nulls_first_or_last_opt.GetResult(), NULLS_FIRST_OR_LAST_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 2));
+	}
+	auto &desc_or_asc_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (desc_or_asc_opt.HasResult()) {
+		stack.PushFrame(desc_or_asc_opt.GetResult(), DESC_OR_ASC_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+	}
+	stack.PushFrame(list_pr.GetChild(0), EXPRESSION_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeOrderByExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
+	optional<OrderType> desc_or_asc {};
+	if (frame.child_results[1]) {
+		desc_or_asc = frame.TakeResult<OrderType>(1);
+	}
+	optional<OrderByNullType> nulls_first_or_last {};
+	if (frame.child_results[2]) {
+		nulls_first_or_last = frame.TakeResult<OrderByNullType>(2);
+	}
+	auto result = PEGTransformerFactory::TransformOrderByExpression(transformer, std::move(expression), desc_or_asc,
+	                                                                nulls_first_or_last);
+	return make_uniq<TypedTransformResult<OrderByNode>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeOrderByExpressionListTrampoline(PEGTransformer &transformer,
+                                                                      TransformStack &stack,
+                                                                      TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(1 + dynamic_child_count - 1);
+	for (idx_t i = list_items.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		stack.PushFrame(list_items[child_idx].get(), ORDER_BY_EXPRESSION_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0 + child_idx));
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeOrderByExpressionListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	auto dynamic_child_count = dynamic_list_items.size();
+	vector<OrderByNode> order_by_expression;
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+		order_by_expression.push_back(frame.TakeResult<OrderByNode>(i));
+	}
+	auto result = PEGTransformerFactory::TransformOrderByExpressionList(transformer, std::move(order_by_expression));
 	return make_uniq<TypedTransformResult<vector<OrderByNode>>>(std::move(result));
 }
 

@@ -75,6 +75,11 @@ rules:
     init: InitializePrefixExpressionTrampoline
     finalize: FinalizePrefixExpressionTrampoline
 
+  FunctionIdentifier:
+    mode: manual
+    init: InitializeFunctionIdentifierTrampoline
+    finalize: FinalizeFunctionIdentifierTrampoline
+
   ColLabelOrString:
     mode: manual
     init: InitializeColLabelOrStringTrampoline
@@ -89,6 +94,11 @@ rules:
     mode: manual
     init: InitializeSelectStatementInternalTrampoline
     finalize: FinalizeSelectStatementInternalTrampoline
+
+  NamedParameter:
+    mode: manual
+    init: InitializeNamedParameterTrampoline
+    finalize: FinalizeNamedParameterTrampoline
 
   SimpleSelect:
     mode: manual
