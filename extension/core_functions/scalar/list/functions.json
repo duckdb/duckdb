@@ -212,5 +212,14 @@
         "categories": ["list"],
         "type": "scalar_function",
         "aliases": ["array_has_all", "@>", "<@"]
+    },
+    {
+        "name": "slice",
+        "parameters": "list,begin,end[,step]",
+        "description": "Extracts a sublist or substring using slice conventions. Negative values are accepted.",
+        "example": "slice([4, 5, 6], 2, 3)",
+        "categories": ["list", "string"],
+        "type": "scalar_function_set",
+        "struct": "SliceListFun"
     }
 ]

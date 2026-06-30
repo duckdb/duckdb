@@ -19,5 +19,13 @@
         "description": "Create a single member UNION containing the argument value. The tag of the value will be the bound variable name",
         "example": "union_value(k := 'hello')",
         "type": "scalar_function"
+    },
+    {
+        "name": "field",
+        "parameters": "union,tag",
+        "description": "Extract the value with the named tag from the union. NULL if the tag is not currently selected.",
+        "example": "field(union_value(k := 42), 'k')",
+        "type": "scalar_function",
+        "struct": "UnionFieldFun"
     }
 ]

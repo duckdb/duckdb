@@ -115,4 +115,34 @@ struct DecimalDivisionFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct ElementFun {
+	static constexpr const char *Name = "element";
+	static constexpr const char *Parameters = "collection,index";
+	static constexpr const char *Description = "Extracts an element from a collection by index or key. Backs the `collection[index]` syntax.";
+	static constexpr const char *Example = "element([4, 5, 6], 3)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct FieldFun {
+	static constexpr const char *Name = "field";
+	static constexpr const char *Parameters = "value,name";
+	static constexpr const char *Description = "Extracts a named field from a value. Backs the `value.name` syntax.";
+	static constexpr const char *Example = "field({'i': 3, 'v2': 3, 'v3': 0}, 'i')";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct SliceFun {
+	static constexpr const char *Name = "slice";
+	static constexpr const char *Parameters = "collection,begin,end[,step]";
+	static constexpr const char *Description = "Extracts a sub-collection using slice conventions. Backs the `collection[begin:end]` syntax.";
+	static constexpr const char *Example = "slice([4, 5, 6], 2, 3)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb

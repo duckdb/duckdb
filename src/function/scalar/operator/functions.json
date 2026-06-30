@@ -59,5 +59,29 @@
         "example": "decimal_division(10.00::DECIMAL(10,2), 3.00::DECIMAL(10,2))",
         "type": "scalar_function_set",
         "struct": "DecimalDivisionFun"
+    },
+    {
+        "name": "element",
+        "parameters": "collection,index",
+        "description": "Extracts an element from a collection by index or key. Backs the `collection[index]` syntax.",
+        "example": "element([4, 5, 6], 3)",
+        "type": "scalar_function_set",
+        "struct": "ElementFun"
+    },
+    {
+        "name": "field",
+        "parameters": "value,name",
+        "description": "Extracts a named field from a value. Backs the `value.name` syntax.",
+        "example": "field({'i': 3, 'v2': 3, 'v3': 0}, 'i')",
+        "type": "scalar_function_set",
+        "struct": "FieldFun"
+    },
+    {
+        "name": "slice",
+        "parameters": "collection,begin,end[,step]",
+        "description": "Extracts a sub-collection using slice conventions. Backs the `collection[begin:end]` syntax.",
+        "example": "slice([4, 5, 6], 2, 3)",
+        "type": "scalar_function_set",
+        "struct": "SliceFun"
     }
 ]

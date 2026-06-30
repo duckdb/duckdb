@@ -112,4 +112,8 @@ ScalarFunction UnionExtractFun::GetFunction() {
 	                      UnionExtractBind, nullptr, nullptr);
 }
 
+ScalarFunction UnionFieldFun::GetFunction() {
+	return UnionExtractFun::GetFunction();
+}
+
 } // namespace duckdb

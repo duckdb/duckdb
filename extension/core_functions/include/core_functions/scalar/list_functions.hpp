@@ -409,4 +409,14 @@ struct ListHasAllFunAlias2 {
 	static constexpr const char *Name = "<@";
 };
 
+struct SliceListFun {
+	static constexpr const char *Name = "slice";
+	static constexpr const char *Parameters = "list,begin,end[,step]";
+	static constexpr const char *Description = "Extracts a sublist or substring using slice conventions. Negative values are accepted.";
+	static constexpr const char *Example = "slice([4, 5, 6], 2, 3)";
+	static constexpr const char *Categories = "list,string";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb
