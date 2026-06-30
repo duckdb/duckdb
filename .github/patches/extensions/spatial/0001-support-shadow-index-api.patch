@@ -1,5 +1,5 @@
 diff --git a/src/spatial/index/rtree/rtree.hpp b/src/spatial/index/rtree/rtree.hpp
-index e35f303..cb688e5 100644
+index e35f303..98ce90f 100644
 --- a/src/spatial/index/rtree/rtree.hpp
 +++ b/src/spatial/index/rtree/rtree.hpp
 @@ -31,8 +31,13 @@ public:
@@ -18,7 +18,7 @@ index e35f303..cb688e5 100644
  	}
  
  	void Insert(const RTreeEntry &entry) {
-@@ -107,8 +112,8 @@ private:
+@@ -107,12 +112,12 @@ private:
  	void ReInsertNode(RTreeEntry &root, RTreeEntry &target);
  
  private:
@@ -29,8 +29,14 @@ index e35f303..cb688e5 100644
  
  	RTreeEntry root;
  
+ 	const RTreeConfig config;
+ };
+ 
+-} // namespace duckdb
+\ No newline at end of file
++} // namespace duckdb
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index 347e815..6351cbe 100644
+index f793b05..f70bf0c 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
 +++ b/src/spatial/index/rtree/rtree_index.cpp
 @@ -9,6 +9,7 @@
@@ -41,17 +47,7 @@ index 347e815..6351cbe 100644
  #include "duckdb/main/database.hpp"
  #include "spatial/spatial_types.hpp"
  #include "spatial/geometry/geometry_serialization.hpp"
-@@ -112,7 +113,8 @@ RTreeIndex::RTreeIndex(const Identifier &name, IndexConstraintType index_constra
- 	// Construct the key expression executor
- 	auto &source_type = unbound_expressions[0]->GetReturnType();
- 	auto &catalog = Catalog::GetSystemCatalog(context);
--	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "ST_Extent_Approx");
-+	auto &entry =
-+	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), "ST_Extent_Approx");
- 	const auto &func = entry.functions.GetFunctionByArguments(context, {source_type});
- 	auto child_expr = make_uniq<BoundReferenceExpression>(source_type, 0);
- 
-@@ -125,6 +127,31 @@ RTreeIndex::RTreeIndex(const Identifier &name, IndexConstraintType index_constra
+@@ -126,6 +127,31 @@ RTreeIndex::RTreeIndex(const Identifier &name, IndexConstraintType index_constra
  	key_chunk.Initialize(context, {GeoTypes::BOX_2DF()});
  }
  
@@ -83,7 +79,7 @@ index 347e815..6351cbe 100644
  unique_ptr<IndexScanState> RTreeIndex::InitializeScan(const RTreeBounds &query) const {
  	auto state = make_uniq<RTreeIndexScanState>();
  	state->query_bounds = query;
-@@ -233,32 +260,32 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &row_vec) {
+@@ -234,32 +260,32 @@ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &row_vec) {
  	ConvertToEntries(box_vec, row_vec, count, [&](const RTreeEntry &entry) { tree->Delete(entry); });
  }
  
