@@ -1008,7 +1008,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"NullIfExpression <- 'NULLIF' Parens(NullIfArguments)\n"
 	"NullIfArguments <- Expression ',' Expression\n"
 	"PositionExpression <- 'POSITION' Parens(PositionArguments)\n"
-	"PositionArguments <- SingleExpression 'IN' SingleExpression\n"
+	"PositionArguments <- OtherOperatorExpression 'IN' Expression\n"
 	"RowExpression <- 'ROW' Parens(List(Expression)?)\n"
 	"SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)\n"
 	"SubstringArguments <- SubstringParameters / SubstringExpressionList\n"

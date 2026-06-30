@@ -2802,8 +2802,8 @@ public:
 	static unique_ptr<TransformResultValue> TransformPositionArgumentsInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>>
-	TransformPositionArguments(PEGTransformer &transformer, unique_ptr<ParsedExpression> single_expression,
-	                           unique_ptr<ParsedExpression> single_expression_1);
+	TransformPositionArguments(PEGTransformer &transformer, unique_ptr<ParsedExpression> other_operator_expression,
+	                           unique_ptr<ParsedExpression> expression);
 	static unique_ptr<TransformResultValue> TransformRowExpressionInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<ParsedExpression>
