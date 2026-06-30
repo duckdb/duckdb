@@ -1,0 +1,508 @@
+# name: test/sql/storage/subscan_batch_size.test
+# description: Test adaptive sub-vector batch scanning with scan_target_size_bytes
+# group: [storage]
+
+require noforcestorage
+
+load {TEST_DIR}/subscan_batch.db
+
+statement ok
+PRAGMA threads=4
+
+# ============================================================
+# TC1: Setting validation
+# ============================================================
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+statement ok
+SET scan_target_size_bytes=100
+
+statement ok
+SET scan_target_size_bytes=0
+
+# Reset to default
+statement ok
+RESET scan_target_size_bytes
+
+query I
+SELECT current_setting('scan_target_size_bytes')
+----
+0
+
+# ============================================================
+# TC2: Basic correctness with target size
+# ============================================================
+
+statement ok
+CREATE TABLE t_basic AS SELECT i, repeat('x', 100) as v FROM range(0, 5000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+query II
+SELECT MIN(i), MAX(i) FROM t_basic
+----
+0	4999
+
+query I
+SELECT COUNT(*) FROM t_basic
+----
+5000
+
+statement ok
+SET scan_target_size_bytes=4096
+
+query I
+SELECT SUM(i) FROM t_basic
+----
+12497500
+
+statement ok
+SET scan_target_size_bytes=100
+
+query II
+SELECT MIN(i), MAX(i) FROM t_basic
+----
+0	4999
+
+statement ok
+SET scan_target_size_bytes=0
+
+query I
+SELECT COUNT(*) FROM t_basic
+----
+5000
+
+# ============================================================
+# TC3: Large BLOB column correctness
+# ============================================================
+
+statement ok
+CREATE TABLE t_blob (id INTEGER, data VARCHAR)
+
+statement ok
+INSERT INTO t_blob SELECT i, repeat(chr((65 + (i % 26))::INTEGER), 10000) FROM range(0, 200) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+query I
+SELECT COUNT(*) FROM t_blob
+----
+200
+
+query I
+SELECT SUM(LENGTH(data)) FROM t_blob
+----
+2000000
+
+query III
+SELECT MIN(id), MAX(id), COUNT(DISTINCT LENGTH(data)) FROM t_blob
+----
+0	199	1
+
+query II
+SELECT id, LEFT(data, 3) FROM t_blob WHERE id = 25
+----
+25	ZZZ
+
+# ============================================================
+# TC4: Fallback — deleted rows
+# ============================================================
+
+statement ok
+CREATE TABLE t_delete AS SELECT i, repeat('d', 500) as v FROM range(0, 4096) tbl(i)
+
+statement ok
+DELETE FROM t_delete WHERE i % 10 = 0
+
+statement ok
+SET scan_target_size_bytes=524288
+
+query I
+SELECT COUNT(*) FROM t_delete
+----
+3686
+
+query II
+SELECT MIN(i), MAX(i) FROM t_delete
+----
+1	4095
+
+# ============================================================
+# TC5: Fallback — filters
+# ============================================================
+
+statement ok
+CREATE TABLE t_filter AS SELECT i, repeat('f', 200) as v FROM range(0, 5000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=262144
+
+query I
+SELECT COUNT(*) FROM t_filter WHERE i > 2000
+----
+2999
+
+query I
+SELECT SUM(i) FROM t_filter WHERE i BETWEEN 100 AND 200
+----
+15150
+
+# ============================================================
+# TC6: Fallback — updates
+# ============================================================
+
+statement ok
+CREATE TABLE t_update AS SELECT i, repeat('u', 300) as v FROM range(0, 4096) tbl(i)
+
+statement ok
+UPDATE t_update SET v = repeat('U', 300) WHERE i < 100
+
+statement ok
+SET scan_target_size_bytes=524288
+
+query I
+SELECT COUNT(*) FROM t_update
+----
+4096
+
+query I
+SELECT COUNT(*) FROM t_update WHERE LEFT(v, 1) = 'U'
+----
+100
+
+query I
+SELECT COUNT(*) FROM t_update WHERE LEFT(v, 1) = 'u'
+----
+3996
+
+# ============================================================
+# TC7: Partial last vector
+# ============================================================
+
+statement ok
+CREATE TABLE t_edge AS SELECT i, repeat('e', 50) as v FROM range(0, 5000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=262144
+
+query I
+SELECT COUNT(*) FROM t_edge
+----
+5000
+
+query II
+SELECT MIN(i), MAX(i) FROM t_edge
+----
+0	4999
+
+statement ok
+CREATE TABLE t_exact AS SELECT i, repeat('x', 50) as v FROM range(0, 2048) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+query I
+SELECT COUNT(*) FROM t_exact
+----
+2048
+
+# ============================================================
+# TC8: Empty table
+# ============================================================
+
+statement ok
+CREATE TABLE t_empty (id INTEGER, data VARCHAR)
+
+statement ok
+SET scan_target_size_bytes=262144
+
+query I
+SELECT COUNT(*) FROM t_empty
+----
+0
+
+# ============================================================
+# TC9: Cross row-group (200K rows)
+# ============================================================
+
+statement ok
+CREATE TABLE t_multi_rg AS SELECT i, repeat('m', 100) as v FROM range(0, 200000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+query I
+SELECT COUNT(*) FROM t_multi_rg
+----
+200000
+
+query II
+SELECT MIN(i), MAX(i) FROM t_multi_rg
+----
+0	199999
+
+query I
+SELECT SUM(i) FROM t_multi_rg
+----
+19999900000
+
+# ============================================================
+# TC10: Parallel scan correctness
+# ============================================================
+
+statement ok
+CREATE TABLE t_parallel AS SELECT i, repeat('p', 200) as v FROM range(0, 100000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=524288
+
+statement ok
+PRAGMA threads=4
+
+query I
+SELECT COUNT(*) FROM t_parallel
+----
+100000
+
+query I
+SELECT SUM(i) FROM t_parallel
+----
+4999950000
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), SUM(LENGTH(v)) FROM t_parallel
+----
+0	99999	100000	20000000
+
+# ============================================================
+# TC11: Prefetch (restart, read from disk)
+# ============================================================
+
+restart
+
+statement ok
+SET scan_target_size_bytes=262144
+
+query I
+SELECT COUNT(*) FROM t_blob
+----
+200
+
+query I
+SELECT SUM(LENGTH(data)) FROM t_blob
+----
+2000000
+
+# ============================================================
+# TC12: Sampling
+# ============================================================
+
+statement ok
+SET scan_target_size_bytes=524288
+
+query I nosort sampling_result
+SELECT COUNT(*) FROM t_basic TABLESAMPLE SYSTEM(50 PERCENT) REPEATABLE(42)
+----
+
+# ============================================================
+# TC13: Zonemap interaction
+# ============================================================
+
+statement ok
+CREATE TABLE t_zonemap AS SELECT i, repeat('z', 100) as v FROM range(0, 10000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=262144
+
+query I
+SELECT COUNT(*) FROM t_zonemap WHERE i > 9000
+----
+999
+
+# ============================================================
+# TC14: Default (0 = disabled, original full-vector path)
+# ============================================================
+
+statement ok
+SET scan_target_size_bytes=0
+
+query I
+SELECT COUNT(*) FROM t_basic
+----
+5000
+
+query I
+SELECT SUM(i) FROM t_basic
+----
+12497500
+
+# ============================================================
+# TC15: Dynamic setting change mid-session
+# ============================================================
+
+statement ok
+SET scan_target_size_bytes=2097152
+
+query I
+SELECT COUNT(*) FROM t_basic
+----
+5000
+
+statement ok
+SET scan_target_size_bytes=8192
+
+query I
+SELECT COUNT(*) FROM t_basic
+----
+5000
+
+statement ok
+SET scan_target_size_bytes=0
+
+query I
+SELECT COUNT(*) FROM t_basic
+----
+5000
+
+# ============================================================
+# TC16: Multi-column scan
+# ============================================================
+
+statement ok
+CREATE TABLE t_multi_col (a INTEGER, b VARCHAR, c DOUBLE, d BLOB)
+
+statement ok
+INSERT INTO t_multi_col SELECT i, repeat('b', 500), i * 1.5, encode(repeat('d', 200)) FROM range(0, 3000) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=524288
+
+query IIRI
+SELECT MIN(a), MAX(a), SUM(c), COUNT(d) FROM t_multi_col
+----
+0	2999	6748500.000000	3000
+
+# ============================================================
+# TC17: ORDER BY interaction
+# ============================================================
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+query I
+SELECT i FROM t_basic ORDER BY i DESC LIMIT 5
+----
+4999
+4998
+4997
+4996
+4995
+
+query I
+SELECT i FROM t_basic ORDER BY i ASC LIMIT 5
+----
+0
+1
+2
+3
+4
+
+# ============================================================
+# TC18: Memory pressure — OOM without adaptive scan, success with
+# ============================================================
+
+# Use a clean database for memory pressure tests
+load {TEST_DIR}/subscan_oom.db
+
+statement ok
+CREATE TABLE t_oom AS SELECT i, repeat(chr((65 + (i % 26))::INTEGER), 50000) as blob_data FROM range(0, 2048) tbl(i)
+
+restart
+
+statement ok
+PRAGMA temp_directory=''
+
+statement ok
+PRAGMA threads=1
+
+statement ok
+SET memory_limit='15MB'
+
+# Disabled: full vector of 50KB blobs needs ~100MB → OOM with 15MB limit
+statement ok
+SET scan_target_size_bytes=0
+
+statement error
+SELECT SUM(LENGTH(blob_data)) FROM t_oom
+----
+Out of Memory
+
+# Enable adaptive scan: predictor estimates ~20 rows per 1MB target → fits in 15MB
+statement ok
+SET scan_target_size_bytes=1048576
+
+query I
+SELECT COUNT(*) FROM t_oom
+----
+2048
+
+query I
+SELECT SUM(LENGTH(blob_data)) FROM t_oom
+----
+102400000
+
+# Verify content correctness under memory pressure
+query II
+SELECT i, LEFT(blob_data, 3) FROM t_oom WHERE i = 25
+----
+25	ZZZ
+
+query I
+SELECT COUNT(DISTINCT LEFT(blob_data, 1)) FROM t_oom
+----
+26
+
+# ============================================================
+# TC19: Parallel adaptive scan under memory pressure
+# ============================================================
+
+load {TEST_DIR}/subscan_oom_parallel.db
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+CREATE TABLE t_oom_parallel AS SELECT i, repeat('P', 50000) as blob_data FROM range(0, 4096) tbl(i)
+
+restart
+
+statement ok
+PRAGMA temp_directory=''
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+SET memory_limit='30MB'
+
+statement ok
+SET scan_target_size_bytes=1048576
+
+query I
+SELECT COUNT(*) FROM t_oom_parallel
+----
+4096
+
+query I
+SELECT SUM(LENGTH(blob_data)) FROM t_oom_parallel
+----
+204800000
+
+query II
+SELECT MIN(i), MAX(i) FROM t_oom_parallel
+----
+0	4095

@@ -1814,6 +1814,18 @@ struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct ScanTargetSizeBytesSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "scan_target_size_bytes";
+	static constexpr const char *Description =
+	    "Target maximum size in bytes for each scan result chunk. When set, the scan dynamically reduces the number of "
+	    "rows per chunk to stay under this limit. 0 = disabled (scan full vectors of 2048 rows).";
+	static constexpr const char *InputType = "UBIGINT";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct SchedulerProcessPartialSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "scheduler_process_partial";

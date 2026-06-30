@@ -4,6 +4,7 @@
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/typedefs.hpp"
@@ -316,12 +317,15 @@ public:
 		}
 
 		l_state->scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context.client);
+		l_state->scan_state.options.scan_target_size_bytes =
+		    ClientConfig::GetConfig(context.client).scan_target_size_bytes;
 		return std::move(l_state);
 	}
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context);
+		l_state.scan_state.options.scan_target_size_bytes = ClientConfig::GetConfig(context).scan_target_size_bytes;
 
 		do {
 			if (bind_data.is_create_index) {
@@ -346,12 +350,14 @@ public:
 				// We can avoid looping, and just return as appropriate
 				if (l_state.rows_in_current_row_group == 0) {
 					data_p.async_result = AsyncResultType::FINISHED;
+					LogPredictorStats(context, l_state);
 				} else {
 					data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
 				}
 				return;
 			}
 			if (l_state.rows_in_current_row_group == 0) {
+				LogPredictorStats(context, l_state);
 				return;
 			}
 
@@ -398,6 +404,23 @@ public:
 	idx_t TableScanRowGroupsScanned(LocalTableFunctionState &state) override {
 		auto &l_state = state.Cast<TableScanLocalState>();
 		return l_state.row_groups_scanned;
+	}
+
+private:
+	// Log accumulated prediction accuracy stats at scan completion (TRACE level).
+	// Useful for diagnosing batch sizing behavior without exposing a pragma function.
+	void LogPredictorStats(ClientContext &context, TableScanLocalState &l_state) {
+		auto &predictor = l_state.scan_state.table_state.size_predictor;
+		if (predictor.total_batches == 0) {
+			return;
+		}
+		double avg_ratio = predictor.sum_overshoot_ratio / static_cast<double>(predictor.total_batches);
+		DUCKDB_LOG_TRACE(context,
+		                 "ScanSizePredictor: total_batches=%llu total_predicted_bytes=%llu "
+		                 "total_actual_bytes=%llu avg_overshoot_ratio=%.4f max_overshoot_ratio=%.4f "
+		                 "first_batch_ratio=%.4f",
+		                 predictor.total_batches, predictor.total_predicted_bytes, predictor.total_actual_bytes,
+		                 avg_ratio, predictor.max_overshoot_ratio, predictor.first_batch_ratio);
 	}
 };
 
