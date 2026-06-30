@@ -23,6 +23,7 @@ from transformer_plan import (
     ParensNode,
     DirectOptionalPresenceArg,
     ReferenceNode,
+    RepeatNode,
     RequiredRepeatStackChild,
     RepeatStackChild,
     SequenceNode,
@@ -467,6 +468,8 @@ class UseGramPreviewEmitter:
             return self.emit_sequence_rule(rule_name, SequenceNode([ast]))
         if isinstance(ast, ListMacroNode):
             return self.emit_sequence_rule(rule_name, SequenceNode([ast]))
+        if isinstance(ast, RepeatNode):
+            return self.emit_sequence_rule(rule_name, SequenceNode([ast]))
         raise NotImplementedError(f"unsupported preview shape for {rule_name}: {type(ast).__name__}")
 
     def emit_initialize_rule(self, rule_name, ast):
@@ -482,6 +485,8 @@ class UseGramPreviewEmitter:
             return self.emit_sequence_initialize(rule_name, SequenceNode([ast]))
         if isinstance(ast, ListMacroNode):
             return self.emit_sequence_initialize(rule_name, SequenceNode([ast]))
+        if isinstance(ast, RepeatNode):
+            return self.emit_sequence_initialize(rule_name, SequenceNode([ast]))
         raise NotImplementedError(f"unsupported preview shape for {rule_name}: {type(ast).__name__}")
 
     def identifier_var_name(self, rule_name):
@@ -491,6 +496,48 @@ class UseGramPreviewEmitter:
         if self.by_value(rule_name):
             return f"std::move({var_name})"
         return var_name
+
+    def dynamic_child(self, plan):
+        return plan.repeat_child or plan.optional_list_child or plan.required_repeat_child or plan.list_child
+
+    def adjusted_slot_expr(self, plan, slot_idx):
+        dynamic_child = self.dynamic_child(plan)
+        if dynamic_child and slot_idx > dynamic_child.slot_start:
+            return f"{slot_idx} + dynamic_child_count - 1"
+        return str(slot_idx)
+
+    def emit_dynamic_child_count(self, plan):
+        dynamic_child = self.dynamic_child(plan)
+        if not dynamic_child:
+            return []
+        lines = []
+        if plan.list_child:
+            list_child = plan.list_child
+            lines.append(f"\tauto dynamic_list_items = ExtractParseResultsFromList({list_child.parse_expr});")
+            lines.append("\tauto dynamic_child_count = dynamic_list_items.size();")
+        elif plan.optional_list_child:
+            list_child = plan.optional_list_child
+            lines.append("\tidx_t dynamic_child_count = 0;")
+            lines.append(f"\tauto &dynamic_list_opt = {list_child.parse_expr}.Cast<OptionalParseResult>();")
+            lines.append("\tif (dynamic_list_opt.HasResult()) {")
+            lines.append("\t\tauto dynamic_list_items = ExtractParseResultsFromList(dynamic_list_opt.GetResult());")
+            lines.append("\t\tdynamic_child_count = dynamic_list_items.size();")
+            lines.append("\t}")
+        elif plan.required_repeat_child:
+            repeat_child = plan.required_repeat_child
+            lines.append(f"\tauto &dynamic_repeat_pr = {repeat_child.parse_expr}.Cast<RepeatParseResult>();")
+            lines.append("\tauto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();")
+            lines.append("\tauto dynamic_child_count = dynamic_repeat_children.size();")
+        else:
+            repeat_child = plan.repeat_child
+            lines.append("\tidx_t dynamic_child_count = 0;")
+            lines.append(f"\tauto &dynamic_repeat_opt = {repeat_child.parse_expr}.Cast<OptionalParseResult>();")
+            lines.append("\tif (dynamic_repeat_opt.HasResult()) {")
+            lines.append("\t\tauto &dynamic_repeat_pr = dynamic_repeat_opt.GetResult().Cast<RepeatParseResult>();")
+            lines.append("\t\tauto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();")
+            lines.append("\t\tdynamic_child_count = dynamic_repeat_children.size();")
+            lines.append("\t}")
+        return lines
 
     def emit_forward_rule(self, rule_name, ast):
         if not isinstance(ast, ReferenceNode):
@@ -581,7 +628,13 @@ class UseGramPreviewEmitter:
         lines = self.emit_sequence_initialize(rule_name, ast)
         if self.is_manual_finalize_rule(rule_name):
             return lines
-        plan = plan_trampoline_sequence_rule_with_terminals(ast, self.matcher_overrides, self.syntax_only_rules)
+        plan = plan_trampoline_sequence_rule_with_terminals(
+            ast,
+            self.matcher_overrides,
+            self.syntax_only_rules,
+            allow_dynamic_stack_followers=True,
+            allow_top_level_repeat=True,
+        )
         cpp_type = self.cpp_type(rule_name)
         by_value = self.by_value(rule_name)
 
@@ -600,6 +653,9 @@ class UseGramPreviewEmitter:
                     DirectOptionalPresenceArg,
                     DirectRepeatArg,
                     DirectListArg,
+                    RepeatStackChild,
+                    RequiredRepeatStackChild,
+                    ListStackChild,
                     OptionalListStackChild,
                     TrailingOptionalStackChild,
                 ),
@@ -608,6 +664,7 @@ class UseGramPreviewEmitter:
         )
         if needs_list_pr:
             lines.append("\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
+        lines.extend(self.emit_dynamic_child_count(plan))
         arg_names = []
         for arg in plan.finalize_args:
             if isinstance(arg, DirectParseArg):
@@ -657,13 +714,15 @@ class UseGramPreviewEmitter:
                 arg_names.append(arg.var_name)
             elif isinstance(arg, StackChild):
                 var_name = self.identifier_var_name(arg.rule_name)
-                lines.append(f"\tauto {var_name} = frame.TakeResult<{self.cpp_type(arg.rule_name)}>({arg.slot_idx});")
+                slot_expr = self.adjusted_slot_expr(plan, arg.slot_idx)
+                lines.append(f"\tauto {var_name} = frame.TakeResult<{self.cpp_type(arg.rule_name)}>({slot_expr});")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
             elif isinstance(arg, OptionalStackChild):
                 var_name = arg.var_name
+                slot_expr = self.adjusted_slot_expr(plan, arg.slot_idx)
                 lines.append(f"\toptional<{self.cpp_type(arg.rule_name)}> {var_name} {{}};")
-                lines.append(f"\tif (frame.child_results[{arg.slot_idx}]) {{")
-                value_expr = f"frame.TakeResult<{self.cpp_type(arg.rule_name)}>({arg.slot_idx})"
+                lines.append(f"\tif (frame.child_results[{slot_expr}]) {{")
+                value_expr = f"frame.TakeResult<{self.cpp_type(arg.rule_name)}>({slot_expr})"
                 if self.by_value(arg.rule_name):
                     value_expr = f"std::move({value_expr})"
                 lines.append(f"\t\t{var_name} = {value_expr};")
@@ -684,23 +743,9 @@ class UseGramPreviewEmitter:
             elif isinstance(arg, RepeatStackChild):
                 var_name = self.identifier_var_name(arg.rule_name)
                 lines.append(f"\toptional<vector<{self.cpp_type(arg.rule_name)}>> {var_name} {{}};")
-                if arg.slot_start == 0:
-                    lines.append("\tif (!frame.child_results.empty()) {")
-                else:
-                    lines.append(f"\tif (frame.child_results.size() > {arg.slot_start}) {{")
+                lines.append("\tif (dynamic_child_count > 0) {")
                 lines.append(f"\t\tvector<{self.cpp_type(arg.rule_name)}> {var_name}_value;")
-                if plan.trailing_optional_stack_child:
-                    trailing = plan.trailing_optional_stack_child
-                    lines.append("\t\tauto end_idx = frame.child_results.size();")
-                    lines.append(
-                        f"\t\tauto &{trailing.var_name}_range_opt = {trailing.parse_expr}.Cast<OptionalParseResult>();"
-                    )
-                    lines.append(f"\t\tif ({trailing.var_name}_range_opt.HasResult()) {{")
-                    lines.append("\t\t\tend_idx--;")
-                    lines.append("\t\t}")
-                    loop_end = "end_idx"
-                else:
-                    loop_end = "frame.child_results.size()"
+                loop_end = f"{arg.slot_start} + dynamic_child_count"
                 lines.append(f"\t\tfor (idx_t i = {arg.slot_start}; i < {loop_end}; i++) {{")
                 lines.append(f"\t\t\t{var_name}_value.push_back(frame.TakeResult<{self.cpp_type(arg.rule_name)}>(i));")
                 lines.append("\t\t}")
@@ -713,7 +758,8 @@ class UseGramPreviewEmitter:
                 lines.append(f"\tauto &{var_name}_opt = {arg.parse_expr}.Cast<OptionalParseResult>();")
                 lines.append(f"\tif ({var_name}_opt.HasResult()) {{")
                 lines.append(f"\t\tvector<{self.cpp_type(arg.rule_name)}> {var_name}_value;")
-                lines.append(f"\t\tfor (idx_t i = {arg.slot_start}; i < frame.child_results.size(); i++) {{")
+                loop_end = f"{arg.slot_start} + dynamic_child_count"
+                lines.append(f"\t\tfor (idx_t i = {arg.slot_start}; i < {loop_end}; i++) {{")
                 lines.append(f"\t\t\t{var_name}_value.push_back(frame.TakeResult<{self.cpp_type(arg.rule_name)}>(i));")
                 lines.append("\t\t}")
                 lines.append(f"\t\t{var_name} = std::move({var_name}_value);")
@@ -722,18 +768,7 @@ class UseGramPreviewEmitter:
             elif isinstance(arg, RequiredRepeatStackChild):
                 var_name = self.identifier_var_name(arg.rule_name)
                 lines.append(f"\tvector<{self.cpp_type(arg.rule_name)}> {var_name};")
-                if plan.trailing_optional_stack_child:
-                    trailing = plan.trailing_optional_stack_child
-                    lines.append("\tauto end_idx = frame.child_results.size();")
-                    lines.append(
-                        f"\tauto &{trailing.var_name}_range_opt = {trailing.parse_expr}.Cast<OptionalParseResult>();"
-                    )
-                    lines.append(f"\tif ({trailing.var_name}_range_opt.HasResult()) {{")
-                    lines.append("\t\tend_idx--;")
-                    lines.append("\t}")
-                    loop_end = "end_idx"
-                else:
-                    loop_end = "frame.child_results.size()"
+                loop_end = f"{arg.slot_start} + dynamic_child_count"
                 lines.append(f"\tfor (idx_t i = {arg.slot_start}; i < {loop_end}; i++) {{")
                 lines.append(f"\t\t{var_name}.push_back(frame.TakeResult<{self.cpp_type(arg.rule_name)}>(i));")
                 lines.append("\t}")
@@ -741,18 +776,7 @@ class UseGramPreviewEmitter:
             elif isinstance(arg, ListStackChild):
                 var_name = self.identifier_var_name(arg.rule_name)
                 lines.append(f"\tvector<{self.cpp_type(arg.rule_name)}> {var_name};")
-                if plan.trailing_optional_stack_child:
-                    trailing = plan.trailing_optional_stack_child
-                    lines.append("\tauto end_idx = frame.child_results.size();")
-                    lines.append(
-                        f"\tauto &{trailing.var_name}_range_opt = {trailing.parse_expr}.Cast<OptionalParseResult>();"
-                    )
-                    lines.append(f"\tif ({trailing.var_name}_range_opt.HasResult()) {{")
-                    lines.append("\t\tend_idx--;")
-                    lines.append("\t}")
-                    loop_end = "end_idx"
-                else:
-                    loop_end = "frame.child_results.size()"
+                loop_end = f"{arg.slot_start} + dynamic_child_count"
                 lines.append(f"\tfor (idx_t i = {arg.slot_start}; i < {loop_end}; i++) {{")
                 lines.append(f"\t\t{var_name}.push_back(frame.TakeResult<{self.cpp_type(arg.rule_name)}>(i));")
                 lines.append("\t}")
@@ -766,38 +790,48 @@ class UseGramPreviewEmitter:
         return lines
 
     def emit_sequence_initialize(self, rule_name, ast):
-        plan = plan_trampoline_sequence_rule_with_terminals(ast, self.matcher_overrides, self.syntax_only_rules)
+        plan = plan_trampoline_sequence_rule_with_terminals(
+            ast,
+            self.matcher_overrides,
+            self.syntax_only_rules,
+            allow_dynamic_stack_followers=True,
+            allow_top_level_repeat=True,
+        )
         lines = []
         lines.append(
             f"void PEGTransformerFactory::{init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
             f"TransformStackFrame &frame) {{"
         )
         frame_children = [arg for arg in plan.finalize_args if isinstance(arg, (StackChild, OptionalStackChild))]
-        fixed_child_slots = len(frame_children)
+        fixed_child_slots = max([arg.slot_idx + 1 for arg in frame_children], default=0)
         trailing_optional = plan.trailing_optional_stack_child
-        dynamic_child = plan.repeat_child or plan.optional_list_child or plan.required_repeat_child or plan.list_child
+        dynamic_child = self.dynamic_child(plan)
+        logical_child_slots = fixed_child_slots
+        if dynamic_child:
+            logical_child_slots = max(logical_child_slots, dynamic_child.slot_start + 1)
         if frame_children or dynamic_child:
             lines.append("\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
         if dynamic_child:
             if plan.list_child:
                 list_child = plan.list_child
                 lines.append(f"\tauto list_items = ExtractParseResultsFromList({list_child.parse_expr});")
+                lines.append("\tauto dynamic_child_count = list_items.size();")
                 if trailing_optional:
                     lines.append(
                         f"\tauto &{trailing_optional.var_name}_opt = {trailing_optional.parse_expr}.Cast<OptionalParseResult>();"
                     )
                     lines.append(
-                        f"\tframe.ReserveChildSlots({list_child.slot_start} + list_items.size() + ({trailing_optional.var_name}_opt.HasResult() ? 1 : 0));"
+                        f"\tframe.ReserveChildSlots({logical_child_slots} + dynamic_child_count - 1 + ({trailing_optional.var_name}_opt.HasResult() ? 1 : 0));"
                     )
                     lines.append(f"\tif ({trailing_optional.var_name}_opt.HasResult()) {{")
                     child_expr = trailing_optional.result_expr_template.format(opt=f"{trailing_optional.var_name}_opt")
                     lines.append(
                         f"\t\tstack.PushFrame({child_expr}, {ops_name(trailing_optional.rule_name)}, "
-                        f"TransformFrameResultTarget(frame.frame_index, {list_child.slot_start} + list_items.size()));"
+                        f"TransformFrameResultTarget(frame.frame_index, {logical_child_slots} + dynamic_child_count - 1));"
                     )
                     lines.append("\t}")
                 else:
-                    lines.append(f"\tframe.ReserveChildSlots({list_child.slot_start} + list_items.size());")
+                    lines.append(f"\tframe.ReserveChildSlots({logical_child_slots} + dynamic_child_count - 1);")
                 lines.append("\tfor (idx_t i = list_items.size(); i > 0; i--) {")
                 lines.append("\t\tauto child_idx = i - 1;")
                 lines.append(
@@ -808,9 +842,11 @@ class UseGramPreviewEmitter:
             elif plan.optional_list_child:
                 list_child = plan.optional_list_child
                 lines.append(f"\tauto &list_opt = {list_child.parse_expr}.Cast<OptionalParseResult>();")
+                lines.append("\tidx_t dynamic_child_count = 0;")
                 lines.append("\tif (list_opt.HasResult()) {")
                 lines.append("\t\tauto list_items = ExtractParseResultsFromList(list_opt.GetResult());")
-                lines.append(f"\t\tframe.ReserveChildSlots({list_child.slot_start} + list_items.size());")
+                lines.append("\t\tdynamic_child_count = list_items.size();")
+                lines.append(f"\t\tframe.ReserveChildSlots({logical_child_slots} + dynamic_child_count - 1);")
                 lines.append("\t\tfor (idx_t i = list_items.size(); i > 0; i--) {")
                 lines.append("\t\t\tauto child_idx = i - 1;")
                 lines.append(
@@ -819,28 +855,29 @@ class UseGramPreviewEmitter:
                 )
                 lines.append("\t\t}")
                 lines.append("\t} else {")
-                lines.append(f"\t\tframe.ReserveChildSlots({list_child.slot_start});")
+                lines.append(f"\t\tframe.ReserveChildSlots({logical_child_slots} - 1);")
                 lines.append("\t}")
             elif plan.required_repeat_child:
                 repeat_child = plan.required_repeat_child
                 lines.append(f"\tauto &repeat_pr = {repeat_child.parse_expr}.Cast<RepeatParseResult>();")
                 lines.append("\tauto repeat_children = repeat_pr.GetChildren();")
+                lines.append("\tauto dynamic_child_count = repeat_children.size();")
                 if trailing_optional:
                     lines.append(
                         f"\tauto &{trailing_optional.var_name}_opt = {trailing_optional.parse_expr}.Cast<OptionalParseResult>();"
                     )
                     lines.append(
-                        f"\tframe.ReserveChildSlots({repeat_child.slot_start} + repeat_children.size() + ({trailing_optional.var_name}_opt.HasResult() ? 1 : 0));"
+                        f"\tframe.ReserveChildSlots({logical_child_slots} + dynamic_child_count - 1 + ({trailing_optional.var_name}_opt.HasResult() ? 1 : 0));"
                     )
                     lines.append(f"\tif ({trailing_optional.var_name}_opt.HasResult()) {{")
                     child_expr = trailing_optional.result_expr_template.format(opt=f"{trailing_optional.var_name}_opt")
                     lines.append(
                         f"\t\tstack.PushFrame({child_expr}, {ops_name(trailing_optional.rule_name)}, "
-                        f"TransformFrameResultTarget(frame.frame_index, {repeat_child.slot_start} + repeat_children.size()));"
+                        f"TransformFrameResultTarget(frame.frame_index, {logical_child_slots} + dynamic_child_count - 1));"
                     )
                     lines.append("\t}")
                 else:
-                    lines.append(f"\tframe.ReserveChildSlots({repeat_child.slot_start} + repeat_children.size());")
+                    lines.append(f"\tframe.ReserveChildSlots({logical_child_slots} + dynamic_child_count - 1);")
                 lines.append("\tfor (idx_t i = repeat_children.size(); i > 0; i--) {")
                 lines.append("\t\tauto child_idx = i - 1;")
                 lines.append(
@@ -851,10 +888,12 @@ class UseGramPreviewEmitter:
             else:
                 repeat_child = plan.repeat_child
                 lines.append(f"\tauto &repeat_opt = {repeat_child.parse_expr}.Cast<OptionalParseResult>();")
+                lines.append("\tidx_t dynamic_child_count = 0;")
                 lines.append("\tif (repeat_opt.HasResult()) {")
                 lines.append("\t\tauto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();")
                 lines.append("\t\tauto repeat_children = repeat_pr.GetChildren();")
-                lines.append(f"\t\tframe.ReserveChildSlots({repeat_child.slot_start} + repeat_children.size());")
+                lines.append("\t\tdynamic_child_count = repeat_children.size();")
+                lines.append(f"\t\tframe.ReserveChildSlots({logical_child_slots} + dynamic_child_count - 1);")
                 lines.append("\t\tfor (idx_t i = repeat_children.size(); i > 0; i--) {")
                 lines.append("\t\t\tauto child_idx = i - 1;")
                 lines.append(
@@ -863,12 +902,13 @@ class UseGramPreviewEmitter:
                 )
                 lines.append("\t\t}")
                 lines.append("\t} else {")
-                lines.append(f"\t\tframe.ReserveChildSlots({repeat_child.slot_start});")
+                lines.append(f"\t\tframe.ReserveChildSlots({logical_child_slots} - 1);")
                 lines.append("\t}")
         else:
             lines.append(f"\tframe.ReserveChildSlots({fixed_child_slots});")
         for stack_child in reversed(frame_children):
             if isinstance(stack_child, OptionalStackChild):
+                slot_expr = self.adjusted_slot_expr(plan, stack_child.slot_idx)
                 lines.append(
                     f"\tauto &{stack_child.var_name}_opt = {stack_child.parse_expr}.Cast<OptionalParseResult>();"
                 )
@@ -876,13 +916,14 @@ class UseGramPreviewEmitter:
                 child_expr = stack_child.result_expr_template.format(opt=f"{stack_child.var_name}_opt")
                 lines.append(
                     f"\t\tstack.PushFrame({child_expr}, {ops_name(stack_child.rule_name)}, "
-                    f"TransformFrameResultTarget(frame.frame_index, {stack_child.slot_idx}));"
+                    f"TransformFrameResultTarget(frame.frame_index, {slot_expr}));"
                 )
                 lines.append("\t}")
             else:
+                slot_expr = self.adjusted_slot_expr(plan, stack_child.slot_idx)
                 lines.append(
                     f"\tstack.PushFrame({stack_child.parse_expr}, {ops_name(stack_child.rule_name)}, "
-                    f"TransformFrameResultTarget(frame.frame_index, {stack_child.slot_idx}));"
+                    f"TransformFrameResultTarget(frame.frame_index, {slot_expr}));"
                 )
         lines.append("}")
         return lines

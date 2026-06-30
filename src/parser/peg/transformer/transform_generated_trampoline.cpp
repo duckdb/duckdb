@@ -1418,7 +1418,8 @@ void PEGTransformerFactory::InitializeDropTableTrampoline(PEGTransformer &transf
                                                           TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
-	frame.ReserveChildSlots(2 + list_items.size());
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(3 + dynamic_child_count - 1);
 	for (idx_t i = list_items.size(); i > 0; i--) {
 		auto child_idx = i - 1;
 		stack.PushFrame(list_items[child_idx].get(), BASE_TABLE_NAME_OPS,
@@ -1434,13 +1435,16 @@ void PEGTransformerFactory::InitializeDropTableTrampoline(PEGTransformer &transf
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDropTableTrampoline(PEGTransformer &transformer,
                                                                                     TransformStack &stack,
                                                                                     TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	auto dynamic_child_count = dynamic_list_items.size();
 	auto table_or_view = frame.TakeResult<CatalogType>(0);
 	optional<bool> if_exists {};
 	if (frame.child_results[1]) {
 		if_exists = frame.TakeResult<bool>(1);
 	}
 	vector<unique_ptr<BaseTableRef>> base_table_name;
-	for (idx_t i = 2; i < frame.child_results.size(); i++) {
+	for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
 		base_table_name.push_back(frame.TakeResult<unique_ptr<BaseTableRef>>(i));
 	}
 	auto result =
@@ -1482,7 +1486,8 @@ void PEGTransformerFactory::InitializeDropFunctionTrampoline(PEGTransformer &tra
                                                              TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
-	frame.ReserveChildSlots(2 + list_items.size());
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(3 + dynamic_child_count - 1);
 	for (idx_t i = list_items.size(); i > 0; i--) {
 		auto child_idx = i - 1;
 		stack.PushFrame(list_items[child_idx].get(), FUNCTION_IDENTIFIER_OPS,
@@ -1498,13 +1503,16 @@ void PEGTransformerFactory::InitializeDropFunctionTrampoline(PEGTransformer &tra
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDropFunctionTrampoline(PEGTransformer &transformer,
                                                                                        TransformStack &stack,
                                                                                        TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	auto dynamic_child_count = dynamic_list_items.size();
 	auto function_type_macro = frame.TakeResult<bool>(0);
 	optional<bool> if_exists {};
 	if (frame.child_results[1]) {
 		if_exists = frame.TakeResult<bool>(1);
 	}
 	vector<QualifiedName> function_identifier;
-	for (idx_t i = 2; i < frame.child_results.size(); i++) {
+	for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
 		function_identifier.push_back(frame.TakeResult<QualifiedName>(i));
 	}
 	auto result =
@@ -1516,7 +1524,8 @@ void PEGTransformerFactory::InitializeDropSchemaTrampoline(PEGTransformer &trans
                                                            TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
-	frame.ReserveChildSlots(1 + list_items.size());
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(2 + dynamic_child_count - 1);
 	for (idx_t i = list_items.size(); i > 0; i--) {
 		auto child_idx = i - 1;
 		stack.PushFrame(list_items[child_idx].get(), QUALIFIED_SCHEMA_NAME_OPS,
@@ -1531,12 +1540,15 @@ void PEGTransformerFactory::InitializeDropSchemaTrampoline(PEGTransformer &trans
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDropSchemaTrampoline(PEGTransformer &transformer,
                                                                                      TransformStack &stack,
                                                                                      TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	auto dynamic_child_count = dynamic_list_items.size();
 	optional<bool> if_exists {};
 	if (frame.child_results[0]) {
 		if_exists = frame.TakeResult<bool>(0);
 	}
 	vector<QualifiedName> qualified_schema_name;
-	for (idx_t i = 1; i < frame.child_results.size(); i++) {
+	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		qualified_schema_name.push_back(frame.TakeResult<QualifiedName>(i));
 	}
 	auto result = PEGTransformerFactory::TransformDropSchema(transformer, if_exists, qualified_schema_name);
@@ -1547,7 +1559,8 @@ void PEGTransformerFactory::InitializeDropIndexTrampoline(PEGTransformer &transf
                                                           TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
-	frame.ReserveChildSlots(1 + list_items.size());
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(2 + dynamic_child_count - 1);
 	for (idx_t i = list_items.size(); i > 0; i--) {
 		auto child_idx = i - 1;
 		stack.PushFrame(list_items[child_idx].get(), QUALIFIED_INDEX_NAME_OPS,
@@ -1562,12 +1575,15 @@ void PEGTransformerFactory::InitializeDropIndexTrampoline(PEGTransformer &transf
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDropIndexTrampoline(PEGTransformer &transformer,
                                                                                     TransformStack &stack,
                                                                                     TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	auto dynamic_child_count = dynamic_list_items.size();
 	optional<bool> if_exists {};
 	if (frame.child_results[0]) {
 		if_exists = frame.TakeResult<bool>(0);
 	}
 	vector<QualifiedName> qualified_index_name;
-	for (idx_t i = 1; i < frame.child_results.size(); i++) {
+	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		qualified_index_name.push_back(frame.TakeResult<QualifiedName>(i));
 	}
 	auto result = PEGTransformerFactory::TransformDropIndex(transformer, if_exists, qualified_index_name);
@@ -1654,7 +1670,8 @@ void PEGTransformerFactory::InitializeDropSequenceTrampoline(PEGTransformer &tra
                                                              TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
-	frame.ReserveChildSlots(1 + list_items.size());
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(2 + dynamic_child_count - 1);
 	for (idx_t i = list_items.size(); i > 0; i--) {
 		auto child_idx = i - 1;
 		stack.PushFrame(list_items[child_idx].get(), QUALIFIED_SEQUENCE_NAME_OPS,
@@ -1669,12 +1686,15 @@ void PEGTransformerFactory::InitializeDropSequenceTrampoline(PEGTransformer &tra
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDropSequenceTrampoline(PEGTransformer &transformer,
                                                                                        TransformStack &stack,
                                                                                        TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	auto dynamic_child_count = dynamic_list_items.size();
 	optional<bool> if_exists {};
 	if (frame.child_results[0]) {
 		if_exists = frame.TakeResult<bool>(0);
 	}
 	vector<QualifiedName> qualified_sequence_name;
-	for (idx_t i = 1; i < frame.child_results.size(); i++) {
+	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		qualified_sequence_name.push_back(frame.TakeResult<QualifiedName>(i));
 	}
 	auto result = PEGTransformerFactory::TransformDropSequence(transformer, if_exists, qualified_sequence_name);
@@ -1685,7 +1705,8 @@ void PEGTransformerFactory::InitializeDropCollationTrampoline(PEGTransformer &tr
                                                               TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
-	frame.ReserveChildSlots(1 + list_items.size());
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(2 + dynamic_child_count - 1);
 	for (idx_t i = list_items.size(); i > 0; i--) {
 		auto child_idx = i - 1;
 		stack.PushFrame(list_items[child_idx].get(), COLLATION_NAME_OPS,
@@ -1700,12 +1721,15 @@ void PEGTransformerFactory::InitializeDropCollationTrampoline(PEGTransformer &tr
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDropCollationTrampoline(PEGTransformer &transformer,
                                                                                         TransformStack &stack,
                                                                                         TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	auto dynamic_child_count = dynamic_list_items.size();
 	optional<bool> if_exists {};
 	if (frame.child_results[0]) {
 		if_exists = frame.TakeResult<bool>(0);
 	}
 	vector<Identifier> collation_name;
-	for (idx_t i = 1; i < frame.child_results.size(); i++) {
+	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		collation_name.push_back(frame.TakeResult<Identifier>(i));
 	}
 	auto result = PEGTransformerFactory::TransformDropCollation(transformer, if_exists, collation_name);
@@ -1716,7 +1740,8 @@ void PEGTransformerFactory::InitializeDropTypeTrampoline(PEGTransformer &transfo
                                                          TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
-	frame.ReserveChildSlots(1 + list_items.size());
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(2 + dynamic_child_count - 1);
 	for (idx_t i = list_items.size(); i > 0; i--) {
 		auto child_idx = i - 1;
 		stack.PushFrame(list_items[child_idx].get(), QUALIFIED_TYPE_NAME_OPS,
@@ -1731,12 +1756,15 @@ void PEGTransformerFactory::InitializeDropTypeTrampoline(PEGTransformer &transfo
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDropTypeTrampoline(PEGTransformer &transformer,
                                                                                    TransformStack &stack,
                                                                                    TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	auto dynamic_child_count = dynamic_list_items.size();
 	optional<bool> if_exists {};
 	if (frame.child_results[0]) {
 		if_exists = frame.TakeResult<bool>(0);
 	}
 	vector<QualifiedName> qualified_type_name;
-	for (idx_t i = 1; i < frame.child_results.size(); i++) {
+	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
 		qualified_type_name.push_back(frame.TakeResult<QualifiedName>(i));
 	}
 	auto result = PEGTransformerFactory::TransformDropType(transformer, if_exists, qualified_type_name);
@@ -2341,17 +2369,19 @@ void PEGTransformerFactory::InitializeUseTargetCatalogSchemaTrampoline(PEGTransf
                                                                        TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto &repeat_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	idx_t dynamic_child_count = 0;
 	if (repeat_opt.HasResult()) {
 		auto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();
 		auto repeat_children = repeat_pr.GetChildren();
-		frame.ReserveChildSlots(0 + repeat_children.size());
+		dynamic_child_count = repeat_children.size();
+		frame.ReserveChildSlots(1 + dynamic_child_count - 1);
 		for (idx_t i = repeat_children.size(); i > 0; i--) {
 			auto child_idx = i - 1;
 			stack.PushFrame(repeat_children[child_idx].get(), DOT_IDENTIFIER_OPS,
 			                TransformFrameResultTarget(frame.frame_index, 0 + child_idx));
 		}
 	} else {
-		frame.ReserveChildSlots(0);
+		frame.ReserveChildSlots(1 - 1);
 	}
 }
 
@@ -2359,12 +2389,19 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeUseTargetCatalogSchemaTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                 TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	idx_t dynamic_child_count = 0;
+	auto &dynamic_repeat_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (dynamic_repeat_opt.HasResult()) {
+		auto &dynamic_repeat_pr = dynamic_repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+		dynamic_child_count = dynamic_repeat_children.size();
+	}
 	auto catalog_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	auto reserved_schema_name = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;
 	optional<vector<Identifier>> dot_identifier {};
-	if (!frame.child_results.empty()) {
+	if (dynamic_child_count > 0) {
 		vector<Identifier> dot_identifier_value;
-		for (idx_t i = 0; i < frame.child_results.size(); i++) {
+		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			dot_identifier_value.push_back(frame.TakeResult<Identifier>(i));
 		}
 		dot_identifier = std::move(dot_identifier_value);
@@ -2445,7 +2482,8 @@ void PEGTransformerFactory::InitializeVacuumParensOptionsTrampoline(PEGTransform
                                                                     TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
-	frame.ReserveChildSlots(0 + list_items.size());
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(1 + dynamic_child_count - 1);
 	for (idx_t i = list_items.size(); i > 0; i--) {
 		auto child_idx = i - 1;
 		stack.PushFrame(list_items[child_idx].get(), VACUUM_OPTION_OPS,
@@ -2456,8 +2494,11 @@ void PEGTransformerFactory::InitializeVacuumParensOptionsTrampoline(PEGTransform
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeVacuumParensOptionsTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                              TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto dynamic_child_count = dynamic_list_items.size();
 	vector<string> vacuum_option;
-	for (idx_t i = 0; i < frame.child_results.size(); i++) {
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		vacuum_option.push_back(frame.TakeResult<string>(i));
 	}
 	auto result = PEGTransformerFactory::TransformVacuumParensOptions(transformer, vacuum_option);
@@ -2583,7 +2624,8 @@ void PEGTransformerFactory::InitializeNameListTrampoline(PEGTransformer &transfo
                                                          TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
-	frame.ReserveChildSlots(0 + list_items.size());
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(1 + dynamic_child_count - 1);
 	for (idx_t i = list_items.size(); i > 0; i--) {
 		auto child_idx = i - 1;
 		stack.PushFrame(list_items[child_idx].get(), COL_ID_OPS,
@@ -2594,8 +2636,11 @@ void PEGTransformerFactory::InitializeNameListTrampoline(PEGTransformer &transfo
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNameListTrampoline(PEGTransformer &transformer,
                                                                                    TransformStack &stack,
                                                                                    TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto dynamic_child_count = dynamic_list_items.size();
 	vector<Identifier> col_id;
-	for (idx_t i = 0; i < frame.child_results.size(); i++) {
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 		col_id.push_back(frame.TakeResult<Identifier>(i));
 	}
 	auto result = PEGTransformerFactory::TransformNameList(transformer, col_id);
@@ -2716,17 +2761,19 @@ void PEGTransformerFactory::InitializeDottedIdentifierTrampoline(PEGTransformer 
                                                                  TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto &repeat_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	idx_t dynamic_child_count = 0;
 	if (repeat_opt.HasResult()) {
 		auto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();
 		auto repeat_children = repeat_pr.GetChildren();
-		frame.ReserveChildSlots(0 + repeat_children.size());
+		dynamic_child_count = repeat_children.size();
+		frame.ReserveChildSlots(1 + dynamic_child_count - 1);
 		for (idx_t i = repeat_children.size(); i > 0; i--) {
 			auto child_idx = i - 1;
 			stack.PushFrame(repeat_children[child_idx].get(), DOT_COL_LABEL_OPS,
 			                TransformFrameResultTarget(frame.frame_index, 0 + child_idx));
 		}
 	} else {
-		frame.ReserveChildSlots(0);
+		frame.ReserveChildSlots(1 - 1);
 	}
 }
 
@@ -2734,11 +2781,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDottedIdentifier
                                                                                            TransformStack &stack,
                                                                                            TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	idx_t dynamic_child_count = 0;
+	auto &dynamic_repeat_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (dynamic_repeat_opt.HasResult()) {
+		auto &dynamic_repeat_pr = dynamic_repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+		dynamic_child_count = dynamic_repeat_children.size();
+	}
 	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	optional<vector<string>> dot_col_label {};
-	if (!frame.child_results.empty()) {
+	if (dynamic_child_count > 0) {
 		vector<string> dot_col_label_value;
-		for (idx_t i = 0; i < frame.child_results.size(); i++) {
+		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
 			dot_col_label_value.push_back(frame.TakeResult<string>(i));
 		}
 		dot_col_label = std::move(dot_col_label_value);
