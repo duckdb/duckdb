@@ -1601,11 +1601,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 	state.column_readers.resize(column_indexes.size());
 	for (idx_t i = 0; i < column_indexes.size(); i++) {
-		auto &index = column_indexes[i];
-		auto column_id = index.GetPrimaryIndex();
-		auto &schema = root_schema->children[column_id];
-		auto column_reader = CreateReaderRecursive(context, index, schema);
-		auto it = expression_map.find(column_id);
+		auto it = expression_map.find(i);
 		if (it != expression_map.end()) {
 			auto &expression_data = it->second;
 			auto &expression = expression_data.expression;
@@ -1623,6 +1619,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 			                                                     std::move(expr_schema));
 			state.column_readers[i] = std::move(expr_reader);
 		} else {
+			auto &index = column_indexes[i];
+			auto column_id = index.GetPrimaryIndex();
 			auto &schema = root_schema->children[column_id];
 			auto column_reader = CreateReaderRecursive(context, index, schema);
 			state.column_readers[i] = std::move(column_reader);

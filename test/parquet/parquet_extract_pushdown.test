@@ -139,13 +139,8 @@ COPY (
 	)
 ) TO '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet';
 
-statement error
-SELECT COUNT(*) FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE v.x=5
-----
-Invalid Input Error: Can't compare values of type VARCHAR (test) and type INTEGER (5) - an explicit cast is required
-
 query I
-SELECT COUNT(*) FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE variant_typeof(v.x) == 'INT64' AND v.x=5
+SELECT COUNT(*) FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE v.x=5
 ----
 1
 
