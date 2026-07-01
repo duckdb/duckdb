@@ -1021,8 +1021,8 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 	auto &con = *conn;
 	try {
 		auto iterator = con.context->IterateStatements(zSql);
-		while (iterator.Peek(*con.context)) {
-			auto statement = iterator.GetStatement(*con.context);
+		while (iterator.Peek()) {
+			auto statement = iterator.GetStatement();
 			if (!statement) {
 				continue; // a peel that preprocessing swallowed
 			}
