@@ -415,9 +415,9 @@ void PEGTransformerFactory::InitializeSimpleNumericTypeTrampoline(PEGTransformer
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 
-unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSimpleNumericTypeTrampoline(PEGTransformer &transformer,
-                                                                                            TransformStack &stack,
-                                                                                            TransformStackFrame &frame) {
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeSimpleNumericTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
 	auto child = frame.TakeResult<string>(0);
 	auto result = TransformSimpleNumericType(transformer, child);
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));

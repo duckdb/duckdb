@@ -104,6 +104,9 @@ struct TransformFrameOps {
 	transform_frame_finalize_t finalize;
 };
 
+template <typename T>
+unique_ptr<TypedTransformResult<T>> TryBridgeTransformResultValue(TransformResultValue &base_result);
+
 struct TransformFrameResultTarget {
 	TransformFrameResultTarget(transform_frame_index_t frame_index, idx_t slot);
 
@@ -125,6 +128,12 @@ struct TransformStackFrame {
 		}
 		auto *typed_result = dynamic_cast<TypedTransformResult<T> *>(child_results[slot].get());
 		if (!typed_result) {
+			auto bridged = TryBridgeTransformResultValue<T>(*child_results[slot]);
+			if (bridged) {
+				auto bridged_result = std::move(bridged->value);
+				child_results[slot].reset();
+				return bridged_result;
+			}
 			throw InternalException("Unexpected trampoline transformer result type for slot %llu in rule '%s'", slot,
 			                        ops.name);
 		}
@@ -235,7 +244,7 @@ public:
 	//! The generic form performs no bridging; the specializations below convert transparently.
 	template <typename T>
 	static unique_ptr<TypedTransformResult<T>> TryBridgeTransformResult(TransformResultValue &base_result) {
-		return nullptr;
+		return TryBridgeTransformResultValue<T>(base_result);
 	}
 
 	template <typename T>
@@ -328,10 +337,15 @@ public:
 	ParserOptions options;
 };
 
+template <typename T>
+inline unique_ptr<TypedTransformResult<T>> TryBridgeTransformResultValue(TransformResultValue &base_result) {
+	return nullptr;
+}
+
 //! Transparent bridging between string-typed and Identifier-typed transform results.
 template <>
 inline unique_ptr<TypedTransformResult<string>>
-PEGTransformer::TryBridgeTransformResult<string>(TransformResultValue &base_result) {
+TryBridgeTransformResultValue<string>(TransformResultValue &base_result) {
 	if (auto *ident = dynamic_cast<TypedTransformResult<Identifier> *>(&base_result)) {
 		return make_uniq<TypedTransformResult<string>>(ident->value.GetIdentifierName());
 	}
@@ -340,7 +354,7 @@ PEGTransformer::TryBridgeTransformResult<string>(TransformResultValue &base_resu
 
 template <>
 inline unique_ptr<TypedTransformResult<Identifier>>
-PEGTransformer::TryBridgeTransformResult<Identifier>(TransformResultValue &base_result) {
+TryBridgeTransformResultValue<Identifier>(TransformResultValue &base_result) {
 	if (auto *str = dynamic_cast<TypedTransformResult<string> *>(&base_result)) {
 		return make_uniq<TypedTransformResult<Identifier>>(Identifier(str->value));
 	}
@@ -349,7 +363,7 @@ PEGTransformer::TryBridgeTransformResult<Identifier>(TransformResultValue &base_
 
 template <>
 inline unique_ptr<TypedTransformResult<vector<string>>>
-PEGTransformer::TryBridgeTransformResult<vector<string>>(TransformResultValue &base_result) {
+TryBridgeTransformResultValue<vector<string>>(TransformResultValue &base_result) {
 	if (auto *idents = dynamic_cast<TypedTransformResult<vector<Identifier>> *>(&base_result)) {
 		return make_uniq<TypedTransformResult<vector<string>>>(IdentifiersToStrings(idents->value));
 	}
@@ -358,7 +372,7 @@ PEGTransformer::TryBridgeTransformResult<vector<string>>(TransformResultValue &b
 
 template <>
 inline unique_ptr<TypedTransformResult<vector<Identifier>>>
-PEGTransformer::TryBridgeTransformResult<vector<Identifier>>(TransformResultValue &base_result) {
+TryBridgeTransformResultValue<vector<Identifier>>(TransformResultValue &base_result) {
 	if (auto *strs = dynamic_cast<TypedTransformResult<vector<string>> *>(&base_result)) {
 		return make_uniq<TypedTransformResult<vector<Identifier>>>(StringsToIdentifiers(strs->value));
 	}
@@ -798,6 +812,14 @@ public:
 	                                              TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeCollationNameTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeNumberLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeNumberLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeStringLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeStringLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                     TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -2959,6 +2981,10 @@ public:
 	                                              TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeOtherOperatorTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeOperatorLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeOperatorLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeAnyAllOperatorTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>

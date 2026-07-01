@@ -264,6 +264,12 @@ class UseGramPreviewEmitter:
             return RuleCapability(rule_name, RuleCapabilityStatus.PROVIDED, "internal matcher rule")
         if rule_name in INTERNAL_GRAMMAR_RULES:
             return RuleCapability(rule_name, RuleCapabilityStatus.PROVIDED, "internal matcher rule")
+        if rule_name in self.matcher_overrides and rule_name in self.rule_types:
+            try:
+                self.emit_matcher_override_rule(rule_name)
+            except NotImplementedError as e:
+                return RuleCapability(rule_name, RuleCapabilityStatus.UNSUPPORTED, str(e))
+            return RuleCapability(rule_name, RuleCapabilityStatus.GENERATED, "provided by matcher_rule_overrides")
         if rule_name in self.matcher_overrides:
             return RuleCapability(rule_name, RuleCapabilityStatus.PROVIDED, "provided by matcher_rule_overrides")
         if rule_name in self.excluded_rules:
@@ -364,6 +370,10 @@ class UseGramPreviewEmitter:
             capability = self.rule_capabilities[rule_name]
             if capability.status not in (RuleCapabilityStatus.GENERATED, RuleCapabilityStatus.MANUAL_FINALIZE):
                 continue
+            if rule_name in self.matcher_overrides:
+                lines.extend(self.emit_rule(rule_name, None))
+                lines.append("")
+                continue
             lines.extend(self.emit_rule(rule_name, tokens_to_ast(rule.tokens)))
             lines.append("")
         lines.append("} // namespace duckdb")
@@ -416,6 +426,8 @@ class UseGramPreviewEmitter:
         return lines
 
     def emit_rule(self, rule_name, ast):
+        if rule_name in self.matcher_overrides:
+            return self.emit_matcher_override_rule(rule_name)
         if self.is_forward_rule(rule_name):
             return self.emit_forward_rule(rule_name, ast)
         if literal_string_values(ast) is not None:
@@ -437,6 +449,25 @@ class UseGramPreviewEmitter:
         if isinstance(ast, OptionalNode):
             return self.emit_sequence_rule(rule_name, SequenceNode([ast]))
         raise NotImplementedError(f"unsupported preview shape for {rule_name}: {type(ast).__name__}")
+
+    def emit_matcher_override_rule(self, rule_name):
+        result_expr = self.matcher_transform_expr(rule_name, "frame.parse_result")
+        lines = []
+        lines.append(
+            f"void PEGTransformerFactory::{init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
+            f"TransformStackFrame &frame) {{"
+        )
+        lines.append("\tframe.ReserveChildSlots(0);")
+        lines.append("}")
+        lines.append("")
+        lines.append(
+            f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+            f"TransformStack &stack, TransformStackFrame &frame) {{"
+        )
+        lines.append(f"\tauto result = {result_expr};")
+        lines.append(f"\treturn {typed_result_expr(self.cpp_type(rule_name), 'result', self.by_value(rule_name))};")
+        lines.append("}")
+        return lines
 
     def emit_initialize_rule(self, rule_name, ast):
         if literal_string_values(ast) is not None:

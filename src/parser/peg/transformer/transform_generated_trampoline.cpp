@@ -192,6 +192,12 @@ static const TransformFrameOps CONSTRAINT_NAME_OPS = {"ConstraintName",
 static const TransformFrameOps COLLATION_NAME_OPS = {"CollationName",
                                                      &PEGTransformerFactory::InitializeCollationNameTrampoline,
                                                      &PEGTransformerFactory::FinalizeCollationNameTrampoline};
+static const TransformFrameOps NUMBER_LITERAL_OPS = {"NumberLiteral",
+                                                     &PEGTransformerFactory::InitializeNumberLiteralTrampoline,
+                                                     &PEGTransformerFactory::FinalizeNumberLiteralTrampoline};
+static const TransformFrameOps STRING_LITERAL_OPS = {"StringLiteral",
+                                                     &PEGTransformerFactory::InitializeStringLiteralTrampoline,
+                                                     &PEGTransformerFactory::FinalizeStringLiteralTrampoline};
 static const TransformFrameOps TYPE_OPS = {"Type", &PEGTransformerFactory::InitializeTypeTrampoline,
                                            &PEGTransformerFactory::FinalizeTypeTrampoline};
 static const TransformFrameOps TYPE_VARIATIONS_OPS = {"TypeVariations",
@@ -1658,6 +1664,9 @@ static const TransformFrameOps OTHER_OPERATOR_TAIL_OPS = {"OtherOperatorTail",
 static const TransformFrameOps OTHER_OPERATOR_OPS = {"OtherOperator",
                                                      &PEGTransformerFactory::InitializeOtherOperatorTrampoline,
                                                      &PEGTransformerFactory::FinalizeOtherOperatorTrampoline};
+static const TransformFrameOps OPERATOR_LITERAL_OPS = {"OperatorLiteral",
+                                                       &PEGTransformerFactory::InitializeOperatorLiteralTrampoline,
+                                                       &PEGTransformerFactory::FinalizeOperatorLiteralTrampoline};
 static const TransformFrameOps ANY_ALL_OPERATOR_OPS = {"AnyAllOperator",
                                                        &PEGTransformerFactory::InitializeAnyAllOperatorTrampoline,
                                                        &PEGTransformerFactory::FinalizeAnyAllOperatorTrampoline};
@@ -2794,6 +2803,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ExpressionAlias", &EXPRESSION_ALIAS_OPS},
 	    {"ConstraintName", &CONSTRAINT_NAME_OPS},
 	    {"CollationName", &COLLATION_NAME_OPS},
+	    {"NumberLiteral", &NUMBER_LITERAL_OPS},
+	    {"StringLiteral", &STRING_LITERAL_OPS},
 	    {"Type", &TYPE_OPS},
 	    {"TypeVariations", &TYPE_VARIATIONS_OPS},
 	    {"SimpleType", &SIMPLE_TYPE_OPS},
@@ -3311,6 +3322,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"OtherOperatorExpression", &OTHER_OPERATOR_EXPRESSION_OPS},
 	    {"OtherOperatorTail", &OTHER_OPERATOR_TAIL_OPS},
 	    {"OtherOperator", &OTHER_OPERATOR_OPS},
+	    {"OperatorLiteral", &OPERATOR_LITERAL_OPS},
 	    {"AnyAllOperator", &ANY_ALL_OPERATOR_OPS},
 	    {"AnyOrAll", &ANY_OR_ALL_OPS},
 	    {"SubqueryAny", &SUBQUERY_ANY_OPS},
@@ -4997,6 +5009,30 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCollationNameTra
 	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	auto result = PEGTransformerFactory::TransformCollationName(transformer, identifier);
 	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeNumberLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNumberLiteralTrampoline(PEGTransformer &transformer,
+                                                                                        TransformStack &stack,
+                                                                                        TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformNumberLiteral(transformer, frame.parse_result);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeStringLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeStringLiteralTrampoline(PEGTransformer &transformer,
+                                                                                        TransformStack &stack,
+                                                                                        TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformStringLiteral(transformer, frame.parse_result);
+	return make_uniq<TypedTransformResult<string>>(result);
 }
 
 void PEGTransformerFactory::InitializeTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -15128,6 +15164,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOtherOperatorTra
                                                                                         TransformStackFrame &frame) {
 	auto result = frame.TakeResult<ParsedOperator>(0);
 	return make_uniq<TypedTransformResult<ParsedOperator>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeOperatorLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOperatorLiteralTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto result = frame.parse_result.Cast<OperatorParseResult>().operator_token;
+	return make_uniq<TypedTransformResult<string>>(result);
 }
 
 void PEGTransformerFactory::InitializeAnyAllOperatorTrampoline(PEGTransformer &transformer, TransformStack &stack,

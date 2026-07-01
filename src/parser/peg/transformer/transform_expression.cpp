@@ -420,12 +420,28 @@ QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer 
 
 void PEGTransformerFactory::InitializeFunctionIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                    TransformStackFrame &frame) {
-	frame.ReserveChildSlots(0);
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	if (choice_result.name.empty()) {
+		return;
+	}
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
 }
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeFunctionIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                             TransformStackFrame &frame) {
+	if (frame.child_results[0]) {
+		auto result = frame.TakeResult<QualifiedName>(0);
+		return make_uniq<TypedTransformResult<QualifiedName>>(result);
+	}
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = TransformFunctionIdentifier(transformer, choice_pr.GetResult());
