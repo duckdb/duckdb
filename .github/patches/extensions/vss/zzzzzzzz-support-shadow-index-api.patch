@@ -1,5 +1,5 @@
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index 3f2b26d..e2b8b6e 100644
+index 3f2b26d..cb7f7bf 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
 @@ -1,4 +1,3 @@
@@ -71,6 +71,15 @@ index 3f2b26d..e2b8b6e 100644
  idx_t HNSWIndex::GetVectorSize() const {
  	return index.dimensions();
  }
+@@ -540,7 +557,7 @@ void HNSWIndex::PersistToDisk() {
+ 	}
+ 
+ 	// Write
+-	if (root_block_ptr.Get() == 0) {
++	if (linked_block_allocator->Empty()) {
+ 		root_block_ptr = linked_block_allocator->New();
+ 	}
+ 
 @@ -554,35 +571,46 @@ void HNSWIndex::PersistToDisk() {
  	is_dirty = false;
  }
@@ -109,7 +118,7 @@ index 3f2b26d..e2b8b6e 100644
 -	return info;
 +	// Create a new index based on the stream format, so we only copy over non-NULL slots.
 +	auto shadow_index = USearchIndexType::make(index.metric(), index.config());
-+	if (root_block_ptr.Get() != 0 && !linked_block_allocator->Empty()) {
++	if (!linked_block_allocator->Empty()) {
 +		LinkedBlockReader reader(*linked_block_allocator, root_block_ptr);
 +		const auto load_result = shadow_index.load_from_stream([&](void *data, const size_t size) {
 +			return size == reader.ReadData(static_cast<data_ptr_t>(data), size);
