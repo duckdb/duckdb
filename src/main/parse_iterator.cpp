@@ -85,13 +85,7 @@ bool ParseIterator::Peek() {
 	if (!parser) {
 		parser = make_uniq<Parser>(options);
 	}
-	if (!tokens) {
-		// Tokenize the full input once. Subsequent Peek calls walk through `tokens` via
-		// `token_cursor`; we never re-tokenize.
-		tokens = make_uniq<vector<MatcherToken>>();
-		ParserTokenizer tokenizer(sql, *tokens);
-		tokenizer.TokenizeInput();
-	}
+	EnsureTokenized();
 	// Walk the token cursor through the cached `tokens`, calling Parser::ParseTopLevelStatement
 	// repeatedly. A nullptr return with cursor advanced means a separator-only TopLevelStatement
 	// (e.g. between statements or trailing ';'s); we loop past it. A nullptr return with cursor
@@ -142,6 +136,43 @@ bool ParseIterator::Peek() {
 		}
 		// separator-only TLS in the middle of the input — loop and try the next.
 	}
+}
+
+void ParseIterator::EnsureTokenized() {
+	if (!tokens) {
+		// Tokenize the full input once. Subsequent Peek/HasMore calls walk through `tokens` via
+		// `token_cursor`; we never re-tokenize. Tokenization is grammar-free.
+		tokens = make_uniq<vector<MatcherToken>>();
+		ParserTokenizer tokenizer(sql, *tokens);
+		tokenizer.TokenizeInput();
+	}
+}
+
+bool ParseIterator::HasMore() {
+	// A statement is already parsed and buffered by a prior Peek.
+	if (current_statement) {
+		return true;
+	}
+	if (exhausted) {
+		return false;
+	}
+	// parser_override path: yield remaining overridden statements.
+	if (overridden_statements) {
+		return override_cursor < overridden_statements->size();
+	}
+	// PEG path: walk the token cursor without parsing. There is another statement iff a real token
+	// (neither a `;` separator nor the end-of-input sentinel) remains ahead of the cursor.
+	EnsureTokenized();
+	for (idx_t i = token_cursor; i < tokens->size(); i++) {
+		const auto type = (*tokens)[i].type;
+		if (type == TokenType::END_OF_INPUT) {
+			return false;
+		}
+		if (type != TokenType::TERMINATOR) {
+			return true;
+		}
+	}
+	return false;
 }
 
 unique_ptr<SQLStatement> ParseIterator::GetStatement() {

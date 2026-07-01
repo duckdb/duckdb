@@ -50,8 +50,18 @@ public:
 	//! statement is buffered — the caller should call Peek() first.
 	DUCKDB_API unique_ptr<SQLStatement> GetStatement();
 
+	//! Grammar-free predicate: does another statement remain in the input? Unlike Peek() this never
+	//! invokes the parser (only tokenizes / walks the token cursor, skipping separators), so it never
+	//! throws a parser error and is safe as a look-ahead before the current statement has executed.
+	//! Assumes the input has already been resolved by a prior Peek() (true for all current callers).
+	DUCKDB_API bool HasMore();
+
 	//! The context this iterator is bound to (used by StatementIterator to inherit it).
 	DUCKDB_API ClientContext &GetClientContext();
+
+private:
+	//! Tokenize the full input once (grammar-free); no-op if already tokenized.
+	void EnsureTokenized();
 
 private:
 	//! The bound context, used for parser options / metrics / override extensions.

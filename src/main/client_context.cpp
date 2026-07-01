@@ -1172,13 +1172,14 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 			return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
 		}
 
-		// Peek ahead (parse-only); if the next statement fails to parse, defer the error until after
-		// we run what we already have.
-		bool has_next = false;
-		unique_ptr<QueryResult> deferred_parse_error = peek_or_error(has_next);
+		// Look ahead WITHOUT parsing: HasMore() only walks the token cursor, so it never parses (and
+		// never throws) the next statement here. The next statement is parsed later, in this loop's
+		// next GetStatementWithLock — after the current statement has executed. This lets a statement
+		// register grammar (e.g. LOAD an extension) that a following statement then uses.
+		bool has_next = iterator.HasMore();
 
 		if (statement) {
-			bool is_last_overall = !has_next && !deferred_parse_error;
+			bool is_last_overall = !has_next;
 			PendingQueryParameters parameters;
 			parameters.query_parameters = query_parameters;
 			if (!is_last_overall) {
@@ -1215,9 +1216,6 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 			D_ASSERT(last_result);
 		}
 
-		if (deferred_parse_error) {
-			return deferred_parse_error;
-		}
 		has_current = has_next;
 	}
 	return result;

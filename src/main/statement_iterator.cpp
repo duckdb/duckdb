@@ -24,6 +24,15 @@ bool StatementIterator::Peek() {
 	return source.Peek();
 }
 
+bool StatementIterator::HasMore() {
+	// Buffered engine statements from the current peel still remain?
+	if (buffer_cursor < buffer.size()) {
+		return true;
+	}
+	// Otherwise defer to the parse-facing source's grammar-free existence check.
+	return source.HasMore();
+}
+
 unique_ptr<SQLStatement> StatementIterator::GetStatementInternal(optional_ptr<ClientContextLock> lock) {
 	// Drain the current peel's expansion first.
 	if (buffer_cursor < buffer.size()) {

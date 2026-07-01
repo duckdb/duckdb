@@ -46,6 +46,11 @@ public:
 	//! statement to pull). Parses ahead as needed but does NOT preprocess — safe as a lookahead.
 	DUCKDB_API bool Peek();
 
+	//! Grammar-free predicate: is there another statement after the current one? Never parses and
+	//! never throws (see ParseIterator::HasMore), so it is safe to consult before the current
+	//! statement has executed — e.g. to decide whether the current statement is the last.
+	DUCKDB_API bool HasMore();
+
 	//! Pull + preprocess the next engine-facing statement. Returns nullptr when a peel preprocesses
 	//! to nothing (skip with `continue`) or when the input is exhausted (Peek would return false).
 	//! Self-locking variant for callers that do not hold the context lock.
