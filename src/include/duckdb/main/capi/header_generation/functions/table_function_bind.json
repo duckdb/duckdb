@@ -129,6 +129,28 @@
             }
         },
         {
+            "name": "duckdb_bind_has_named_parameter",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_bind_info",
+                    "name": "info"
+                },
+                {
+                    "type": "const char *",
+                    "name": "name"
+                }
+            ],
+            "comment": {
+                "description": "Returns whether a named parameter with the given name was provided to the function.\n\nThis can be used to differentiate between an omitted named parameter and one that was set to `NULL`.\n\n",
+                "param_comments": {
+                    "info": "The info object",
+                    "name": "The name of the parameter"
+                },
+                "return_value": "True if the named parameter was provided, false otherwise."
+            }
+        },
+        {
             "name": "duckdb_bind_set_bind_data",
             "return_type": "void",
             "params": [
