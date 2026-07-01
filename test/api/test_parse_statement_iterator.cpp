@@ -2,7 +2,7 @@
 #include "test_helpers.hpp"
 
 #include "duckdb/main/parse_iterator.hpp"
-#include "duckdb/main/engine_iterator.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
@@ -10,11 +10,12 @@
 
 using namespace duckdb;
 
-// ParseIterator and EngineIterator no longer share a contract:
-//   ParseIterator : Peek(ctx) parses + buffers one statement; GetStatement() returns it (no ctx,
-//                   no preprocessing). GetStatement() before Peek returns nullptr.
-//   EngineIterator: Peek(ctx) answers "is there more input?" (parses ahead, NO preprocessing);
-//                   GetStatement(ctx) parses + preprocesses the next peel and may return nullptr
+// ParseIterator and StatementIterator no longer share a contract. Both bind their ClientContext at
+// construction, so Peek()/GetStatement() take no context argument:
+//   ParseIterator : Peek() parses + buffers one statement; GetStatement() returns it (no
+//                   preprocessing). GetStatement() before Peek returns nullptr.
+//   StatementIterator: Peek() answers "is there more input?" (parses ahead, NO preprocessing);
+//                   GetStatement() parses + preprocesses the next peel and may return nullptr
 //                   when that peel preprocesses to nothing. GetStatement is self-sufficient (works
 //                   without a prior Peek).
 // So the two are tested separately below.
@@ -23,9 +24,9 @@ using namespace duckdb;
 // ParseIterator
 //===--------------------------------------------------------------------===//
 
-static vector<unique_ptr<SQLStatement>> DrainParse(ParseIterator &it, ClientContext &context) {
+static vector<unique_ptr<SQLStatement>> DrainParse(ParseIterator &it) {
 	vector<unique_ptr<SQLStatement>> result;
-	while (it.Peek(context)) {
+	while (it.Peek()) {
 		auto stmt = it.GetStatement();
 		REQUIRE(stmt);
 		result.push_back(std::move(stmt));
@@ -38,12 +39,12 @@ TEST_CASE("ParseIterator: single statement", "[api][parse_iterator]") {
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	ParseIterator it("SELECT 1;");
-	REQUIRE(it.Peek(ctx));
+	ParseIterator it(ctx, "SELECT 1;");
+	REQUIRE(it.Peek());
 	auto stmt = it.GetStatement();
 	REQUIRE(stmt);
 	REQUIRE(stmt->type == StatementType::SELECT_STATEMENT);
-	REQUIRE_FALSE(it.Peek(ctx));
+	REQUIRE_FALSE(it.Peek());
 	REQUIRE_FALSE(it.GetStatement());
 }
 
@@ -52,10 +53,10 @@ TEST_CASE("ParseIterator: empty and whitespace input yields nothing", "[api][par
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	ParseIterator empty("");
-	REQUIRE_FALSE(empty.Peek(ctx));
-	ParseIterator ws("   \n\t  ");
-	REQUIRE_FALSE(ws.Peek(ctx));
+	ParseIterator empty(ctx, "");
+	REQUIRE_FALSE(empty.Peek());
+	ParseIterator ws(ctx, "   \n\t  ");
+	REQUIRE_FALSE(ws.Peek());
 }
 
 TEST_CASE("ParseIterator: multiple statements in order", "[api][parse_iterator]") {
@@ -63,8 +64,8 @@ TEST_CASE("ParseIterator: multiple statements in order", "[api][parse_iterator]"
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	ParseIterator it("SELECT 1; SELECT 2; SELECT 3;");
-	auto stmts = DrainParse(it, ctx);
+	ParseIterator it(ctx, "SELECT 1; SELECT 2; SELECT 3;");
+	auto stmts = DrainParse(it);
 	REQUIRE(stmts.size() == 3);
 	for (auto &stmt : stmts) {
 		REQUIRE(stmt->type == StatementType::SELECT_STATEMENT);
@@ -76,14 +77,14 @@ TEST_CASE("ParseIterator: Peek is idempotent until consumed", "[api][parse_itera
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	ParseIterator it("SELECT 1; SELECT 2;");
-	REQUIRE(it.Peek(ctx));
-	REQUIRE(it.Peek(ctx));
-	REQUIRE(it.Peek(ctx));
+	ParseIterator it(ctx, "SELECT 1; SELECT 2;");
+	REQUIRE(it.Peek());
+	REQUIRE(it.Peek());
+	REQUIRE(it.Peek());
 	REQUIRE(it.GetStatement());
-	REQUIRE(it.Peek(ctx));
+	REQUIRE(it.Peek());
 	REQUIRE(it.GetStatement());
-	REQUIRE_FALSE(it.Peek(ctx));
+	REQUIRE_FALSE(it.Peek());
 }
 
 TEST_CASE("ParseIterator: GetStatement without prior Peek returns nullptr", "[api][parse_iterator]") {
@@ -91,9 +92,9 @@ TEST_CASE("ParseIterator: GetStatement without prior Peek returns nullptr", "[ap
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	ParseIterator it("SELECT 1;");
+	ParseIterator it(ctx, "SELECT 1;");
 	REQUIRE_FALSE(it.GetStatement());
-	REQUIRE(it.Peek(ctx));
+	REQUIRE(it.Peek());
 	REQUIRE(it.GetStatement());
 }
 
@@ -102,8 +103,8 @@ TEST_CASE("ParseIterator: mixed statement types", "[api][parse_iterator]") {
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	ParseIterator it("CREATE TABLE t (a INT); INSERT INTO t VALUES (1); SELECT * FROM t;");
-	auto stmts = DrainParse(it, ctx);
+	ParseIterator it(ctx, "CREATE TABLE t (a INT); INSERT INTO t VALUES (1); SELECT * FROM t;");
+	auto stmts = DrainParse(it);
 	REQUIRE(stmts.size() == 3);
 	REQUIRE(stmts[0]->type == StatementType::CREATE_STATEMENT);
 	REQUIRE(stmts[1]->type == StatementType::INSERT_STATEMENT);
@@ -115,8 +116,8 @@ TEST_CASE("ParseIterator: parser errors surface through Peek", "[api][parse_iter
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	ParseIterator it("SELECT FROM;");
-	REQUIRE_THROWS(it.Peek(ctx));
+	ParseIterator it(ctx, "SELECT FROM;");
+	REQUIRE_THROWS(it.Peek());
 }
 
 TEST_CASE("ParseIterator: movable and move-assignable", "[api][parse_iterator]") {
@@ -124,23 +125,23 @@ TEST_CASE("ParseIterator: movable and move-assignable", "[api][parse_iterator]")
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	ParseIterator it("SELECT 1; SELECT 2;");
-	REQUIRE(it.Peek(ctx));
+	ParseIterator it(ctx, "SELECT 1; SELECT 2;");
+	REQUIRE(it.Peek());
 	REQUIRE(it.GetStatement());
 
 	ParseIterator moved(std::move(it));
-	REQUIRE(moved.Peek(ctx));
+	REQUIRE(moved.Peek());
 	REQUIRE(moved.GetStatement());
-	REQUIRE_FALSE(moved.Peek(ctx));
+	REQUIRE_FALSE(moved.Peek());
 
-	ParseIterator target("SELECT 99;");
-	ParseIterator src("SELECT 1; SELECT 2;");
-	REQUIRE(src.Peek(ctx));
+	ParseIterator target(ctx, "SELECT 99;");
+	ParseIterator src(ctx, "SELECT 1; SELECT 2;");
+	REQUIRE(src.Peek());
 	REQUIRE(src.GetStatement());
 	target = std::move(src);
-	REQUIRE(target.Peek(ctx));
+	REQUIRE(target.Peek());
 	REQUIRE(target.GetStatement());
-	REQUIRE_FALSE(target.Peek(ctx));
+	REQUIRE_FALSE(target.Peek());
 }
 
 TEST_CASE("ParseIterator: separators are skipped, no trailing separator needed", "[api][parse_iterator]") {
@@ -148,11 +149,11 @@ TEST_CASE("ParseIterator: separators are skipped, no trailing separator needed",
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	ParseIterator only_seps(";;;;;;;;;;;");
-	REQUIRE_FALSE(only_seps.Peek(ctx));
+	ParseIterator only_seps(ctx, ";;;;;;;;;;;");
+	REQUIRE_FALSE(only_seps.Peek());
 
-	ParseIterator heavy(";;;;;;;;;; SELECT 42;;;;;; SELECT 1000");
-	auto stmts = DrainParse(heavy, ctx);
+	ParseIterator heavy(ctx, ";;;;;;;;;; SELECT 42;;;;;; SELECT 1000");
+	auto stmts = DrainParse(heavy);
 	REQUIRE(stmts.size() == 2);
 	REQUIRE(StringUtil::Contains(stmts[0]->query, "42"));
 	REQUIRE(StringUtil::Contains(stmts[1]->query, "1000"));
@@ -163,8 +164,8 @@ TEST_CASE("ParseIterator: statement query text is populated and normalized", "[a
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	ParseIterator it("SELECT 1; SELECT 2;");
-	REQUIRE(it.Peek(ctx));
+	ParseIterator it(ctx, "SELECT 1; SELECT 2;");
+	REQUIRE(it.Peek());
 	auto s0 = it.GetStatement();
 	REQUIRE(s0);
 	REQUIRE(StringUtil::Contains(s0->query, "SELECT 1"));
@@ -182,8 +183,8 @@ TEST_CASE("ParseIterator: CREATE propagates query into CreateInfo", "[api][parse
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	ParseIterator it("CREATE TABLE t (a INT);");
-	REQUIRE(it.Peek(ctx));
+	ParseIterator it(ctx, "CREATE TABLE t (a INT);");
+	REQUIRE(it.Peek());
 	auto stmt = it.GetStatement();
 	REQUIRE(stmt);
 	auto &create = stmt->Cast<CreateStatement>();
@@ -196,21 +197,21 @@ TEST_CASE("ParseIterator: semicolons in strings and comments handled", "[api][pa
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	ParseIterator in_string("SELECT 'a;b;c' AS x;");
-	REQUIRE(DrainParse(in_string, ctx).size() == 1);
+	ParseIterator in_string(ctx, "SELECT 'a;b;c' AS x;");
+	REQUIRE(DrainParse(in_string).size() == 1);
 
-	ParseIterator with_comments("/* block */ SELECT 1; -- line comment\nSELECT 2;");
-	REQUIRE(DrainParse(with_comments, ctx).size() == 2);
+	ParseIterator with_comments(ctx, "/* block */ SELECT 1; -- line comment\nSELECT 2;");
+	REQUIRE(DrainParse(with_comments).size() == 2);
 }
 
 //===--------------------------------------------------------------------===//
-// EngineIterator (new contract: Peek = "more input?", Get = work, may be null)
+// StatementIterator (new contract: Peek = "more input?", Get = work, may be null)
 //===--------------------------------------------------------------------===//
 
-static vector<unique_ptr<SQLStatement>> DrainEngine(EngineIterator &it, ClientContext &context) {
+static vector<unique_ptr<SQLStatement>> DrainStatements(StatementIterator &it) {
 	vector<unique_ptr<SQLStatement>> result;
-	while (it.Peek(context)) {
-		auto stmt = it.GetStatement(context);
+	while (it.Peek()) {
+		auto stmt = it.GetStatement();
 		if (!stmt) {
 			continue; // a peel that preprocessing swallowed
 		}
@@ -219,116 +220,116 @@ static vector<unique_ptr<SQLStatement>> DrainEngine(EngineIterator &it, ClientCo
 	return result;
 }
 
-TEST_CASE("EngineIterator: single statement", "[api][engine_iterator]") {
+TEST_CASE("StatementIterator: single statement", "[api][statement_iterator]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	EngineIterator it {ParseIterator("SELECT 1;")};
-	REQUIRE(it.Peek(ctx));
-	auto stmt = it.GetStatement(ctx);
+	StatementIterator it {ParseIterator(ctx, "SELECT 1;")};
+	REQUIRE(it.Peek());
+	auto stmt = it.GetStatement();
 	REQUIRE(stmt);
 	REQUIRE(stmt->type == StatementType::SELECT_STATEMENT);
-	REQUIRE_FALSE(it.Peek(ctx));
-	REQUIRE_FALSE(it.GetStatement(ctx));
+	REQUIRE_FALSE(it.Peek());
+	REQUIRE_FALSE(it.GetStatement());
 }
 
-TEST_CASE("EngineIterator: empty input yields nothing", "[api][engine_iterator]") {
+TEST_CASE("StatementIterator: empty input yields nothing", "[api][statement_iterator]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	EngineIterator it {ParseIterator("")};
-	REQUIRE_FALSE(it.Peek(ctx));
-	REQUIRE_FALSE(it.GetStatement(ctx));
+	StatementIterator it {ParseIterator(ctx, "")};
+	REQUIRE_FALSE(it.Peek());
+	REQUIRE_FALSE(it.GetStatement());
 }
 
-TEST_CASE("EngineIterator: multiple statements in order", "[api][engine_iterator]") {
+TEST_CASE("StatementIterator: multiple statements in order", "[api][statement_iterator]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	EngineIterator it {ParseIterator("SELECT 1; SELECT 2; SELECT 3;")};
-	auto stmts = DrainEngine(it, ctx);
+	StatementIterator it {ParseIterator(ctx, "SELECT 1; SELECT 2; SELECT 3;")};
+	auto stmts = DrainStatements(it);
 	REQUIRE(stmts.size() == 3);
 	for (auto &stmt : stmts) {
 		REQUIRE(stmt->type == StatementType::SELECT_STATEMENT);
 	}
 }
 
-TEST_CASE("EngineIterator: mixed statement types", "[api][engine_iterator]") {
+TEST_CASE("StatementIterator: mixed statement types", "[api][statement_iterator]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	EngineIterator it {ParseIterator("CREATE TABLE t (a INT); INSERT INTO t VALUES (1); SELECT * FROM t;")};
-	auto stmts = DrainEngine(it, ctx);
+	StatementIterator it {ParseIterator(ctx, "CREATE TABLE t (a INT); INSERT INTO t VALUES (1); SELECT * FROM t;")};
+	auto stmts = DrainStatements(it);
 	REQUIRE(stmts.size() == 3);
 	REQUIRE(stmts[0]->type == StatementType::CREATE_STATEMENT);
 	REQUIRE(stmts[1]->type == StatementType::INSERT_STATEMENT);
 	REQUIRE(stmts[2]->type == StatementType::SELECT_STATEMENT);
 }
 
-TEST_CASE("EngineIterator: separator-only input yields nothing", "[api][engine_iterator]") {
+TEST_CASE("StatementIterator: separator-only input yields nothing", "[api][statement_iterator]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	EngineIterator it {ParseIterator(";;;;;;")};
-	REQUIRE_FALSE(it.Peek(ctx));
+	StatementIterator it {ParseIterator(ctx, ";;;;;;")};
+	REQUIRE_FALSE(it.Peek());
 }
 
-TEST_CASE("EngineIterator: Peek is a pure predicate, GetStatement does the work", "[api][engine_iterator]") {
+TEST_CASE("StatementIterator: Peek is a pure predicate, GetStatement does the work", "[api][statement_iterator]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	EngineIterator it {ParseIterator("SELECT 1; SELECT 2;")};
+	StatementIterator it {ParseIterator(ctx, "SELECT 1; SELECT 2;")};
 	// Repeated Peek does not consume.
-	REQUIRE(it.Peek(ctx));
-	REQUIRE(it.Peek(ctx));
-	auto a = it.GetStatement(ctx);
+	REQUIRE(it.Peek());
+	REQUIRE(it.Peek());
+	auto a = it.GetStatement();
 	REQUIRE(a);
-	REQUIRE(it.Peek(ctx));
-	auto b = it.GetStatement(ctx);
+	REQUIRE(it.Peek());
+	auto b = it.GetStatement();
 	REQUIRE(b);
-	REQUIRE_FALSE(it.Peek(ctx));
+	REQUIRE_FALSE(it.Peek());
 }
 
-TEST_CASE("EngineIterator: GetStatement works without a prior Peek", "[api][engine_iterator]") {
+TEST_CASE("StatementIterator: GetStatement works without a prior Peek", "[api][statement_iterator]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	// Unlike ParseIterator, EngineIterator's GetStatement is self-sufficient: it pulls + preprocesses
+	// Unlike ParseIterator, StatementIterator's GetStatement is self-sufficient: it pulls + preprocesses
 	// on demand, no priming Peek required.
-	EngineIterator it {ParseIterator("SELECT 7;")};
-	auto stmt = it.GetStatement(ctx);
+	StatementIterator it {ParseIterator(ctx, "SELECT 7;")};
+	auto stmt = it.GetStatement();
 	REQUIRE(stmt);
 	REQUIRE(StringUtil::Contains(stmt->query, "7"));
-	REQUIRE_FALSE(it.Peek(ctx));
+	REQUIRE_FALSE(it.Peek());
 }
 
-TEST_CASE("EngineIterator: parser errors surface through Peek", "[api][engine_iterator]") {
+TEST_CASE("StatementIterator: parser errors surface through Peek", "[api][statement_iterator]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	EngineIterator it {ParseIterator("SELECT FROM;")};
-	REQUIRE_THROWS(it.Peek(ctx));
+	StatementIterator it {ParseIterator(ctx, "SELECT FROM;")};
+	REQUIRE_THROWS(it.Peek());
 }
 
-TEST_CASE("EngineIterator: movable", "[api][engine_iterator]") {
+TEST_CASE("StatementIterator: movable", "[api][statement_iterator]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto &ctx = *con.context;
 
-	EngineIterator it {ParseIterator("SELECT 1; SELECT 2;")};
-	REQUIRE(it.Peek(ctx));
-	REQUIRE(it.GetStatement(ctx));
+	StatementIterator it {ParseIterator(ctx, "SELECT 1; SELECT 2;")};
+	REQUIRE(it.Peek());
+	REQUIRE(it.GetStatement());
 
-	EngineIterator moved(std::move(it));
-	REQUIRE(moved.Peek(ctx));
-	REQUIRE(moved.GetStatement(ctx));
-	REQUIRE_FALSE(moved.Peek(ctx));
+	StatementIterator moved(std::move(it));
+	REQUIRE(moved.Peek());
+	REQUIRE(moved.GetStatement());
+	REQUIRE_FALSE(moved.Peek());
 }

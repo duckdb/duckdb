@@ -209,8 +209,8 @@ public:
 	//! Register function in the temporary schema
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
 
-	//! Iterate a query's statements as an StatementIterator (iterator-style API). The caller drives
-	//! Peek(context) + GetStatement(context) to walk through ready-to-execute statements one by one
+	//! Iterate a query's statements as a StatementIterator (iterator-style API). The caller drives
+	//! Peek() + GetStatement() to walk through ready-to-execute statements one by one
 	DUCKDB_API StatementIterator IterateStatements(const string &query);
 
 	//! Extract the logical plan of a query

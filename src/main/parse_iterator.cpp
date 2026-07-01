@@ -13,7 +13,8 @@
 
 namespace duckdb {
 
-ParseIterator::ParseIterator(const string &sql_p) : sql(Parser::NormalizeSQLString(sql_p)) {
+ParseIterator::ParseIterator(ClientContext &context_p, const string &sql_p)
+    : context(context_p), sql(Parser::NormalizeSQLString(sql_p)) {
 }
 
 ParseIterator::~ParseIterator() = default;
@@ -21,7 +22,12 @@ ParseIterator::~ParseIterator() = default;
 ParseIterator::ParseIterator(ParseIterator &&) noexcept = default;
 ParseIterator &ParseIterator::operator=(ParseIterator &&) noexcept = default;
 
-bool ParseIterator::Peek(ClientContext &context) {
+ClientContext &ParseIterator::GetClientContext() {
+	return context.get();
+}
+
+bool ParseIterator::Peek() {
+	auto &client_context = context.get();
 	// Already buffered from a prior Peek — just report it.
 	if (current_statement) {
 		return true;
@@ -31,8 +37,8 @@ bool ParseIterator::Peek(ClientContext &context) {
 	}
 	// Charge the time spent tokenizing/parsing on this Peek to MetricParserTotalTime so callers
 	// get parse metrics without each having to remember to wrap us in a timer.
-	auto parser_timer = QueryProfiler::Get(context).StartTimer<MetricParserTotalTime>();
-	auto options = context.GetParserOptions();
+	auto parser_timer = QueryProfiler::Get(client_context).StartTimer<MetricParserTotalTime>();
+	auto options = client_context.GetParserOptions();
 	// On the very first Peek, give `parser_override` extensions a chance to claim the whole
 	// query. If one does, we yield its statements one at a time and skip the PEG path entirely.
 	if (!override_resolved) {

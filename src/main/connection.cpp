@@ -188,8 +188,8 @@ vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &que
 	auto &client_context = *context;
 	auto iterator = client_context.IterateStatements(query);
 	vector<unique_ptr<SQLStatement>> result;
-	while (iterator.Peek(client_context)) {
-		if (auto statement = iterator.GetStatement(client_context)) {
+	while (iterator.Peek()) {
+		if (auto statement = iterator.GetStatement()) {
 			result.push_back(std::move(statement));
 		}
 	}

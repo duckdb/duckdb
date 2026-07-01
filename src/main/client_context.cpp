@@ -792,7 +792,7 @@ StatementIterator ClientContext::IterateStatements(const string &query) {
 	// MULTI_STATEMENT unpack and transaction wrapping per peel — matches the eager API users expect.
 	// Callers that want raw parse-facing statements and drive their own preprocessing construct a
 	// ParseIterator directly (e.g. Query / ParseStatementsInternal below, which hold the lock).
-	return StatementIterator(ParseIterator(query));
+	return StatementIterator(ParseIterator(*this, query));
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
@@ -800,10 +800,10 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 		QueryProfiler::Get(*this).StartQuery(query);
 
 		// Drain the lazy iterator into a vector for callers that want the eager shape.
-		StatementIterator iterator {ParseIterator(query)};
+		StatementIterator iterator {ParseIterator(*this, query)};
 		vector<unique_ptr<SQLStatement>> result;
-		while (iterator.Peek(*this)) {
-			auto stmt = iterator.GetStatementWithLock(*this, lock);
+		while (iterator.Peek()) {
+			auto stmt = iterator.GetStatementWithLock(lock);
 			if (!stmt) {
 				continue; // a peel that preprocessing swallowed
 			}
@@ -1112,7 +1112,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 	optional_ptr<StatementIterator> iterator_ptr;
 	unique_ptr<StatementIterator> iterator_storage;
 	try {
-		iterator_storage = make_uniq<StatementIterator>(ParseIterator(query));
+		iterator_storage = make_uniq<StatementIterator>(ParseIterator(*this, query));
 		iterator_ptr = *iterator_storage;
 	} catch (const std::exception &ex) {
 		return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
@@ -1121,7 +1121,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 
 	auto peek_or_error = [&](bool &has_now) -> unique_ptr<QueryResult> {
 		try {
-			has_now = iterator.Peek(*this);
+			has_now = iterator.Peek();
 			return nullptr;
 		} catch (const std::exception &ex) {
 			return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
@@ -1151,7 +1151,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 		// nothing, in which case statement is null and there is nothing to execute.
 		unique_ptr<SQLStatement> statement;
 		try {
-			statement = iterator.GetStatementWithLock(*this, *lock);
+			statement = iterator.GetStatementWithLock(*lock);
 		} catch (const std::exception &ex) {
 			return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);
 		}

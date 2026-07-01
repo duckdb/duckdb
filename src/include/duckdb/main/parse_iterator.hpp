@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
@@ -21,8 +22,8 @@ struct MatcherToken;
 //! Iterator over the parse-facing statements of a multi-statement query.
 //!
 //! Usage:
-//!   ParseIterator it(sql);
-//!   while (it.Peek(context)) {
+//!   ParseIterator it(context, sql);
+//!   while (it.Peek()) {
 //!       auto stmt = it.GetStatement();
 //!       // raw, just-parsed statement
 //!   }
@@ -31,8 +32,9 @@ struct MatcherToken;
 //! always sees either a real statement or a clean exhaustion.
 class ParseIterator {
 public:
-	//! Peel parse-facing statements out of a SQL string (PEG / parser_override).
-	DUCKDB_API explicit ParseIterator(const string &sql);
+	//! Peel parse-facing statements out of a SQL string (PEG / parser_override). The context is
+	//! bound for the lifetime of the iterator and must outlive it.
+	DUCKDB_API ParseIterator(ClientContext &context, const string &sql);
 	DUCKDB_API ~ParseIterator();
 
 	ParseIterator(const ParseIterator &) = delete;
@@ -42,13 +44,18 @@ public:
 
 	//! Returns true if a statement is currently available (after parsing as needed). Returns
 	//! false when the iterator is exhausted. Non-const: parses on demand and buffers the result.
-	DUCKDB_API bool Peek(ClientContext &context);
+	DUCKDB_API bool Peek();
 
 	//! Returns the next buffered statement and clears the buffer. Returns nullptr if no
-	//! statement is buffered — the caller should call Peek(context) first.
+	//! statement is buffered — the caller should call Peek() first.
 	DUCKDB_API unique_ptr<SQLStatement> GetStatement();
 
+	//! The context this iterator is bound to (used by StatementIterator to inherit it).
+	DUCKDB_API ClientContext &GetClientContext();
+
 private:
+	//! The bound context, used for parser options / metrics / override extensions.
+	reference<ClientContext> context;
 	string sql;
 	//! Parser instance kept alive across Peek calls so its PEG matcher / transformer caches
 	//! stay warm. Constructed lazily on the first Peek.
