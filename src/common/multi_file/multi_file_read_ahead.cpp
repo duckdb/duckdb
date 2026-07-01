@@ -82,6 +82,15 @@ unique_ptr<MultiFileScanJob> MultiFileReadAhead::ClaimJob() {
 	return job;
 }
 
+bool MultiFileReadAhead::TryBecomeProducer() {
+	bool expected = false;
+	return producing.compare_exchange_strong(expected, true);
+}
+
+void MultiFileReadAhead::EndProducer() {
+	producing = false;
+}
+
 void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
 	if (job.io_tasks_pending) {
 		auto &pending = *job.io_tasks_pending;

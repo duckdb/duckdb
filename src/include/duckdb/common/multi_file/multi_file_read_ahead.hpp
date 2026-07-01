@@ -44,6 +44,10 @@ public:
 	//! Pop the oldest queued job
 	unique_ptr<MultiFileScanJob> ClaimJob();
 
+
+	bool TryBecomeProducer();
+	void EndProducer();
+
 	//! Block until the claimed job's scheduled I/O has completed
 	void WaitForJob(MultiFileScanJob &job);
 
@@ -57,6 +61,8 @@ private:
 	deque<unique_ptr<MultiFileScanJob>> ready_queue;
 	atomic<idx_t> active_jobs {0};
 	atomic<bool> done {false};
+	//! Set while a thread is producing, so only one thread fills the queue at a time, so we can keep batch_index in order
+	atomic<bool> producing {false};
 	//! Async I/O executor (async pool).
 	unique_ptr<TaskExecutor> executor;
 };

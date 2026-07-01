@@ -760,25 +760,37 @@ public:
 		return MultiFileDecodeResult::JOB_FINISHED;
 	}
 
-	static void FillReadAheadQueue(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &gstate) {
+	static void FillReadAheadQueue(ClientContext &context, const MultiFileBindData &bind_data,
+	                               MultiFileGlobalState &gstate) {
 		auto &read_ahead = *gstate.read_ahead;
-		while (!read_ahead.IsDone() && read_ahead.ActiveJobs() < read_ahead.ReadAheadDepth()) {
-			// We still have work to do and our budget is not full
-			auto job = make_uniq<MultiFileScanJob>();
-			job->reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
-			if (!ClaimNextJob(context, bind_data, gstate, *job)) {
-				// If there are no more jobs we are done
-				read_ahead.SetDone();
-				break;
-			}
-			auto scheduled = job->reader->ScheduleIO(context, *gstate.global_state, *job->reader_scan_state);
-			vector<unique_ptr<AsyncTask>> io_tasks;
-			if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
-				// if we got blocked, we have taks for the pool
-				io_tasks = scheduled.ExtractAsyncTasks();
-			}
-			read_ahead.PushJob(std::move(job), std::move(io_tasks));
+		if (!read_ahead.TryBecomeProducer()) {
+			// Some other thread is already producing
+			return;
 		}
+		try {
+			while (!read_ahead.IsDone() && read_ahead.ActiveJobs() < read_ahead.ReadAheadDepth()) {
+				// We still have work to do and our budget is not full
+				auto job = make_uniq<MultiFileScanJob>();
+				job->reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
+				if (!ClaimNextJob(context, bind_data, gstate, *job)) {
+					// If there are no more jobs we are done
+					read_ahead.SetDone();
+					break;
+				}
+				auto scheduled = job->reader->ScheduleIO(context, *gstate.global_state, *job->reader_scan_state);
+				vector<unique_ptr<AsyncTask>> io_tasks;
+				if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
+					// if we got blocked, we have tasks for the pool
+					io_tasks = scheduled.ExtractAsyncTasks();
+				}
+				read_ahead.PushJob(std::move(job), std::move(io_tasks));
+			}
+		} catch (...) {
+			// if something went wrong we should clean up the producer
+			read_ahead.EndProducer();
+			throw;
+		}
+		read_ahead.EndProducer();
 	}
 
 	struct PerThreadJobSource final : MultiFileJobSource {
@@ -812,11 +824,9 @@ public:
 		}
 	};
 
-
 	struct ReadAheadJobSource final : MultiFileJobSource {
-		MultiFileAcquireResult AcquireNext(ClientContext &context, TableFunctionInput &,
-		                                   MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
-		                                   MultiFileBindData &bind_data) override {
+		MultiFileAcquireResult AcquireNext(ClientContext &context, TableFunctionInput &, MultiFileLocalState &lstate,
+		                                   MultiFileGlobalState &gstate, MultiFileBindData &bind_data) override {
 			auto &read_ahead = *gstate.read_ahead;
 			while (true) {
 				// top up the queue, then pop the oldest job
