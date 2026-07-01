@@ -2121,11 +2121,11 @@ void RowGroupCollection::CommitDropTable() {
 //===--------------------------------------------------------------------===//
 // GetPartitionStats
 //===--------------------------------------------------------------------===//
-vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
+vector<PartitionStatistics> RowGroupCollection::GetPartitionStats(TransactionData transaction) const {
 	vector<PartitionStatistics> result;
 	auto row_groups = GetRowGroups();
 	for (auto &entry : row_groups->SegmentNodes()) {
-		result.push_back(RowGroup::GetPartitionStats(entry));
+		result.push_back(RowGroup::GetPartitionStats(entry, transaction));
 	}
 	return result;
 }

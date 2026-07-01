@@ -51,14 +51,14 @@ SELECT count(*) FROM big WHERE g = 7
 ----
 1010
 
-# In-process deletes: version info contains deletions, so neither count nor min/max is exact.
+# In-process deletes: count is transaction-visible and exact, while min/max remains inexact.
 statement ok
 DELETE FROM big WHERE id = 0;
 
 query II
 EXPLAIN SELECT count(*) FROM big
 ----
-physical_plan	<REGEX>:.*Sequential Scan.*
+physical_plan	<!REGEX>:.*Sequential Scan.*
 
 query II
 EXPLAIN SELECT min(id), max(id) FROM big
@@ -68,18 +68,18 @@ physical_plan	<REGEX>:.*Sequential Scan.*
 statement ok
 CHECKPOINT;
 
-# Still in-process after checkpoint with loaded deletes: count and min/max remain inexact.
+# Still in-process after checkpoint with loaded deletes: count remains exact, min/max remains inexact.
 query II
 EXPLAIN SELECT count(*) FROM big
 ----
-physical_plan	<REGEX>:.*Sequential Scan.*
+physical_plan	<!REGEX>:.*Sequential Scan.*
 
 query II
 EXPLAIN SELECT min(id), max(id) FROM big
 ----
 physical_plan	<REGEX>:.*Sequential Scan.*
 
-# After restart: deletes persisted but both deletion and version info not loaded, both count and min/max inexact.
+# After restart: persisted deletes are not loaded during optimization, so count and min/max are inexact.
 restart
 
 query II
@@ -107,7 +107,7 @@ DELETE FROM big WHERE id BETWEEN 1 AND 10
 query II
 EXPLAIN SELECT count(*) FROM big
 ----
-physical_plan	<REGEX>:.*Sequential Scan.*
+physical_plan	<!REGEX>:.*Sequential Scan.*
 
 query I
 SELECT count(*) FROM big

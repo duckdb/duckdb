@@ -1908,18 +1908,28 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	}
 };
 
-PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group) {
+PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group, TransactionData transaction) {
 	auto &row_group_ref = row_group.GetNode();
 
 	PartitionStatistics result;
 	result.row_start = row_group.GetRowStart();
-	result.count = row_group_ref.count;
+	if (row_group_ref.HasUnloadedDeletes()) {
+		result.count = row_group_ref.count;
+		result.count_type = CountType::COUNT_APPROXIMATE;
+		result.partition_row_group =
+		    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), /*is_exact_p=*/false);
+		return result;
+	}
 
-	// Stats are exact only when there are no deletes.
 	auto vinfo = row_group_ref.GetVersionInfoIfLoaded();
-	const bool is_exact = !row_group_ref.HasUnloadedDeletes() && (!vinfo || !vinfo->HasDeletes());
-	result.count_type = is_exact ? CountType::COUNT_EXACT : CountType::COUNT_APPROXIMATE;
-	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), is_exact);
+	if (vinfo) {
+		result.count = row_group_ref.GetVisibleRowCount(transaction);
+	} else {
+		result.count = row_group_ref.count;
+	}
+	result.count_type = CountType::COUNT_EXACT;
+	const bool min_max_exact = result.count == row_group_ref.count && (!vinfo || !vinfo->HasDeletes());
+	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), min_max_exact);
 
 	return result;
 }
