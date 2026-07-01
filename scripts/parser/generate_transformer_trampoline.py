@@ -52,6 +52,7 @@ DEFAULT_GRAMMAR_FILES = [
     "comment.gram",
     "connect.gram",
     "create_schema.gram",
+    "create_type.gram",
     "deallocate.gram",
     "describe.gram",
     "detach.gram",

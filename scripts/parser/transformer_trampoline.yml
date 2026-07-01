@@ -42,6 +42,11 @@ rules:
     init: InitializePrepareStatementTrampoline
     finalize: FinalizePrepareStatementTrampoline
 
+  EnumStringLiteralList:
+    mode: manual
+    init: InitializeEnumStringLiteralListTrampoline
+    finalize: FinalizeEnumStringLiteralListTrampoline
+
   DescribeStatement:
     mode: manual
     init: InitializeDescribeStatementTrampoline

@@ -85,6 +85,20 @@ static const TransformFrameOps CATALOG_SESSION_TARGET_OPS = {
 static const TransformFrameOps CREATE_SCHEMA_STMT_OPS = {"CreateSchemaStmt",
                                                          &PEGTransformerFactory::InitializeCreateSchemaStmtTrampoline,
                                                          &PEGTransformerFactory::FinalizeCreateSchemaStmtTrampoline};
+static const TransformFrameOps CREATE_TYPE_STMT_OPS = {"CreateTypeStmt",
+                                                       &PEGTransformerFactory::InitializeCreateTypeStmtTrampoline,
+                                                       &PEGTransformerFactory::FinalizeCreateTypeStmtTrampoline};
+static const TransformFrameOps CREATE_TYPE_OPS = {"CreateType", &PEGTransformerFactory::InitializeCreateTypeTrampoline,
+                                                  &PEGTransformerFactory::FinalizeCreateTypeTrampoline};
+static const TransformFrameOps CREATE_TYPE_FROM_TYPE_OPS = {
+    "CreateTypeFromType", &PEGTransformerFactory::InitializeCreateTypeFromTypeTrampoline,
+    &PEGTransformerFactory::FinalizeCreateTypeFromTypeTrampoline};
+static const TransformFrameOps ENUM_SELECT_TYPE_OPS = {"EnumSelectType",
+                                                       &PEGTransformerFactory::InitializeEnumSelectTypeTrampoline,
+                                                       &PEGTransformerFactory::FinalizeEnumSelectTypeTrampoline};
+static const TransformFrameOps ENUM_STRING_LITERAL_LIST_OPS = {
+    "EnumStringLiteralList", &PEGTransformerFactory::InitializeEnumStringLiteralListTrampoline,
+    &PEGTransformerFactory::FinalizeEnumStringLiteralListTrampoline};
 static const TransformFrameOps DEALLOCATE_STATEMENT_OPS = {
     "DeallocateStatement", &PEGTransformerFactory::InitializeDeallocateStatementTrampoline,
     &PEGTransformerFactory::FinalizeDeallocateStatementTrampoline};
@@ -1579,6 +1593,11 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"StringSessionTarget", &STRING_SESSION_TARGET_OPS},
 	    {"CatalogSessionTarget", &CATALOG_SESSION_TARGET_OPS},
 	    {"CreateSchemaStmt", &CREATE_SCHEMA_STMT_OPS},
+	    {"CreateTypeStmt", &CREATE_TYPE_STMT_OPS},
+	    {"CreateType", &CREATE_TYPE_OPS},
+	    {"CreateTypeFromType", &CREATE_TYPE_FROM_TYPE_OPS},
+	    {"EnumSelectType", &ENUM_SELECT_TYPE_OPS},
+	    {"EnumStringLiteralList", &ENUM_STRING_LITERAL_LIST_OPS},
 	    {"DeallocateStatement", &DEALLOCATE_STATEMENT_OPS},
 	    {"DeallocatePrepare", &DEALLOCATE_PREPARE_OPS},
 	    {"DescribeStatement", &DESCRIBE_STATEMENT_OPS},
@@ -2514,6 +2533,85 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCreateSchemaStmt
 	auto qualified_name = frame.TakeResult<QualifiedName>(1);
 	auto result = PEGTransformerFactory::TransformCreateSchemaStmt(transformer, if_not_exists, qualified_name);
 	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeCreateTypeStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(3);
+	stack.PushFrame(list_pr.GetChild(4), CREATE_TYPE_OPS, TransformFrameResultTarget(frame.frame_index, 2));
+	stack.PushFrame(list_pr.GetChild(2), QUALIFIED_NAME_OPS, TransformFrameResultTarget(frame.frame_index, 1));
+	auto &if_not_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (if_not_exists_opt.HasResult()) {
+		stack.PushFrame(if_not_exists_opt.GetResult(), IF_NOT_EXISTS_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCreateTypeStmtTrampoline(PEGTransformer &transformer,
+                                                                                         TransformStack &stack,
+                                                                                         TransformStackFrame &frame) {
+	optional<bool> if_not_exists {};
+	if (frame.child_results[0]) {
+		if_not_exists = frame.TakeResult<bool>(0);
+	}
+	auto qualified_name = frame.TakeResult<QualifiedName>(1);
+	auto create_type = frame.TakeResult<unique_ptr<CreateTypeInfo>>(2);
+	auto result = PEGTransformerFactory::TransformCreateTypeStmt(transformer, if_not_exists, qualified_name,
+	                                                             std::move(create_type));
+	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeCreateTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCreateTypeTrampoline(PEGTransformer &transformer,
+                                                                                     TransformStack &stack,
+                                                                                     TransformStackFrame &frame) {
+	auto result = frame.TakeResult<unique_ptr<CreateTypeInfo>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<CreateTypeInfo>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeCreateTypeFromTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), TYPE_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCreateTypeFromTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	auto type = frame.TakeResult<LogicalType>(0);
+	auto result = PEGTransformerFactory::TransformCreateTypeFromType(transformer, type);
+	return make_uniq<TypedTransformResult<unique_ptr<CreateTypeInfo>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeEnumSelectTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(ExtractResultFromParens(list_pr.GetChild(1)), SELECT_STATEMENT_INTERNAL_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeEnumSelectTypeTrampoline(PEGTransformer &transformer,
+                                                                                         TransformStack &stack,
+                                                                                         TransformStackFrame &frame) {
+	auto select_statement_internal = frame.TakeResult<unique_ptr<SelectStatement>>(0);
+	auto result = PEGTransformerFactory::TransformEnumSelectType(transformer, std::move(select_statement_internal));
+	return make_uniq<TypedTransformResult<unique_ptr<CreateTypeInfo>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeDeallocateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
