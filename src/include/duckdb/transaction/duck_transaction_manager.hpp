@@ -130,12 +130,12 @@ private:
 
 	//! Register a commit that is about to write its WAL flush marker and defer its publish, identified by a
 	//! monotonic publish sequence number assigned in WAL order (used by WaitForPublishTurn to publish in order).
-	void RegisterPendingCommit(transaction_t publish_seq);
+	void RegisterPendingCommit(idx_t publish_seq);
 	//! Wait until all earlier pending commits have been published. Publishing in WAL (publish-sequence) order
 	//! keeps recently_committed_transactions ordered on commit_id and matches WAL replay order.
-	void WaitForPublishTurn(transaction_t publish_seq);
+	void WaitForPublishTurn(idx_t publish_seq);
 	//! Mark a pending commit as published (or abandoned on fatal failure) and wake up waiters.
-	void FinishPendingCommit(transaction_t publish_seq);
+	void FinishPendingCommit(idx_t publish_seq);
 
 private:
 	//! The current start timestamp used by transactions
@@ -174,11 +174,11 @@ private:
 	//! published/visible. Ordered by publish sequence (= WAL order) so publishes happen in WAL order.
 	//! Lock ordering: transaction_lock -> publish_lock. Waiting on publish_cv requires holding neither
 	//! the transaction lock nor the WAL lock.
-	set<transaction_t> pending_commit_publishes;
+	set<idx_t> pending_commit_publishes;
 	//! Monotonic sequence assigned to deferred commits in WAL order (under the transaction lock), used to order
 	//! their publishes. Decoupled from the commit timestamp, which is only assigned at publish time so that a
 	//! starting transaction can never observe a commit id that is not yet published.
-	transaction_t next_publish_sequence = 1;
+	idx_t next_publish_sequence = 1;
 
 	//! Row groups retired by a checkpoint, kept alive until the database is quiescent so that undo buffers can no
 	//! longer reference their UpdateSegments (see RetireAfterCheckpoint).

@@ -314,12 +314,12 @@ void DuckTransactionManager::CleanupTransactions() {
 	}
 }
 
-void DuckTransactionManager::RegisterPendingCommit(transaction_t publish_seq) {
+void DuckTransactionManager::RegisterPendingCommit(idx_t publish_seq) {
 	lock_guard<mutex> guard(publish_lock);
 	pending_commit_publishes.insert(publish_seq);
 }
 
-void DuckTransactionManager::WaitForPublishTurn(transaction_t publish_seq) {
+void DuckTransactionManager::WaitForPublishTurn(idx_t publish_seq) {
 	std::unique_lock<mutex> guard(publish_lock);
 	publish_cv.wait(guard, [&]() {
 		D_ASSERT(!pending_commit_publishes.empty());
@@ -327,7 +327,7 @@ void DuckTransactionManager::WaitForPublishTurn(transaction_t publish_seq) {
 	});
 }
 
-void DuckTransactionManager::FinishPendingCommit(transaction_t publish_seq) {
+void DuckTransactionManager::FinishPendingCommit(idx_t publish_seq) {
 	{
 		lock_guard<mutex> guard(publish_lock);
 		pending_commit_publishes.erase(publish_seq);
@@ -472,7 +472,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	bool defer_publish =
 	    !error.HasError() && commit_state && !has_catalog_changes && !checkpoint_decision.can_checkpoint;
 	// the publish sequence orders deferred publishes in WAL order; it is independent of the commit timestamp
-	transaction_t publish_seq = 0;
+	idx_t publish_seq = 0;
 	if (defer_publish) {
 		// assign the publish sequence and register for in-order publishing. A concurrent catalog change cannot
 		// interleave: it takes the WAL lock EXCLUSIVELY (BlockPendingCommits) while we hold it SHARED through publish.
