@@ -411,10 +411,10 @@ unique_ptr<GlobalTableFunctionState> JSONMultiFileInfo::InitializeGlobalState(Cl
 	return std::move(json_state);
 }
 
-unique_ptr<LocalTableFunctionState> JSONMultiFileInfo::InitializeLocalState(ExecutionContext &context,
+unique_ptr<LocalTableFunctionState> JSONMultiFileInfo::InitializeLocalState(ClientContext &context,
                                                                             GlobalTableFunctionState &global_state) {
 	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>();
-	auto result = make_uniq<JSONLocalTableFunctionState>(context.client, gstate.state);
+	auto result = make_uniq<JSONLocalTableFunctionState>(context, gstate.state);
 
 	// Copy the transform options / date format map because we need to do thread-local stuff
 	result->state.transform_options = gstate.state.transform_options;
