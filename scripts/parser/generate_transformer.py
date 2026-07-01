@@ -1189,6 +1189,8 @@ def _matcher_override_expr(rule_name, override):
     if matcher == "reserved_identifier":
         if suggestion:
             return f"allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::{suggestion}))"
+    if matcher == "identifier_string":
+        return "allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE))"
     if matcher == "number_literal":
         return "allocator.Allocate(make_uniq<NumberLiteralMatcher>())"
     if matcher == "string_literal":

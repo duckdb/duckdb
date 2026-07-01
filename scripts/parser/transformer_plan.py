@@ -230,7 +230,7 @@ class MatcherOverride:
         return self.matcher in ("identifier", "reserved_identifier")
 
     def is_terminal(self):
-        return self.matcher in ("number_literal", "string_literal", "operator")
+        return self.matcher in ("number_literal", "string_literal", "operator", "identifier_string")
 
 
 @dataclass

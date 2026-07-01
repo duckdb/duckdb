@@ -1518,7 +1518,9 @@ overrides:
   ColIdType: "pair<Identifier, LogicalType>"
   ColIdTypeList: "child_list_t<LogicalType>"
   # create_index.gram
-  RelOption: "pair<Identifier, unique_ptr<ParsedExpression>>"
+  RelOption:
+    type: "pair<Identifier, unique_ptr<ParsedExpression>>"
+    by_value: true
   # create_table.gram
   ColumnDefinition:
     type: "ConstraintColumnDefinition"
@@ -1671,6 +1673,9 @@ matcher_rule_overrides:
   ReservedFunctionName:
     matcher: reserved_identifier
     suggestion: SUGGEST_SCALAR_FUNCTION_NAME
+  ReservedKeyword:
+    allow_type_overlap: true
+    matcher: identifier_string
   TableFunctionName:
     matcher: identifier
     suggestion: SUGGEST_TABLE_FUNCTION_NAME
