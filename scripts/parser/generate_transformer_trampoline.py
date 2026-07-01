@@ -71,6 +71,7 @@ DEFAULT_GRAMMAR_FILES = [
     "prepare.gram",
     "set.gram",
     "transaction.gram",
+    "update.gram",
     "use.gram",
     "vacuum.gram",
 ]
@@ -106,13 +107,6 @@ DEFAULT_EXTRA_RULES = {
     "create_trigger.gram": ["TriggerName"],
     "alter.gram": ["IdentifierDot", "NestedColumnName", "QualifiedSequenceName"],
     "delete.gram": ["TruncateStatement"],
-    "update.gram": [
-        "UpdateSetClause",
-        "UpdateSetTuple",
-        "UpdateSetElementList",
-        "UpdateSetElement",
-        "UpdateSetColumnTarget",
-    ],
     "select.gram": [
         "SelectStatement",
         "SelectStatementInternal",
