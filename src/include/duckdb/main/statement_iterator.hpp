@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/engine_iterator.hpp
+// duckdb/main/statement_iterator.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,7 +21,7 @@ class SQLStatement;
 //! Iterator over the engine-facing statements of a query.
 //!
 //! Usage:
-//!   EngineIterator it(ParseIterator(sql));
+//!   StatementIterator it(ParseIterator(sql));
 //!   while (it.Peek(context)) {
 //!       auto stmt = it.GetStatement(context);
 //!       if (!stmt) {
@@ -30,16 +30,16 @@ class SQLStatement;
 //!       // ready-to-execute statement
 //!   }
 //!
-class EngineIterator {
+class StatementIterator {
 public:
 	//! Wrap a lazy parse-facing stream (consumed by move).
-	DUCKDB_API explicit EngineIterator(ParseIterator &&parse_iterator);
-	DUCKDB_API ~EngineIterator();
+	DUCKDB_API explicit StatementIterator(ParseIterator &&parse_iterator);
+	DUCKDB_API ~StatementIterator();
 
-	EngineIterator(const EngineIterator &) = delete;
-	EngineIterator &operator=(const EngineIterator &) = delete;
-	DUCKDB_API EngineIterator(EngineIterator &&) noexcept;
-	DUCKDB_API EngineIterator &operator=(EngineIterator &&) noexcept;
+	StatementIterator(const StatementIterator &) = delete;
+	StatementIterator &operator=(const StatementIterator &) = delete;
+	DUCKDB_API StatementIterator(StatementIterator &&) noexcept;
+	DUCKDB_API StatementIterator &operator=(StatementIterator &&) noexcept;
 
 	//! Returns true while more input remains (a buffered engine statement, or another parse-facing
 	//! statement to pull). Parses ahead as needed but does NOT preprocess — safe as a lookahead.

@@ -24,7 +24,7 @@
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/main/pending_query_result.hpp"
-#include "duckdb/main/engine_iterator.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
@@ -76,7 +76,7 @@ class ClientContext : public enable_shared_from_this<ClientContext> {
 	friend class SimpleBufferedData;  // ExecuteTaskInternal
 	friend class BatchedBufferedData; // ExecuteTaskInternal
 	friend class StreamQueryResult;   // LockContext
-	friend class EngineIterator;      // LockContext
+	friend class StatementIterator;      // LockContext
 	friend class ConnectionManager;
 
 public:
@@ -209,9 +209,9 @@ public:
 	//! Register function in the temporary schema
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
 
-	//! Iterate a query's statements as an EngineIterator (iterator-style API). The caller drives
+	//! Iterate a query's statements as an StatementIterator (iterator-style API). The caller drives
 	//! Peek(context) + GetStatement(context) to walk through ready-to-execute statements one by one
-	DUCKDB_API EngineIterator IterateStatements(const string &query);
+	DUCKDB_API StatementIterator IterateStatements(const string &query);
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);

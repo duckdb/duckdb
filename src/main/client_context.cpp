@@ -19,7 +19,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/engine_iterator.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/parse_iterator.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
@@ -787,12 +787,12 @@ void ClientContext::InitialCleanup(ClientContextLock &lock) {
 	interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
 }
 
-EngineIterator ClientContext::IterateStatements(const string &query) {
+StatementIterator ClientContext::IterateStatements(const string &query) {
 	// The iterator yields ready-to-execute (engine-facing) statements: PRAGMA reparse,
 	// MULTI_STATEMENT unpack and transaction wrapping per peel — matches the eager API users expect.
 	// Callers that want raw parse-facing statements and drive their own preprocessing construct a
 	// ParseIterator directly (e.g. Query / ParseStatementsInternal below, which hold the lock).
-	return EngineIterator(ParseIterator(query));
+	return StatementIterator(ParseIterator(query));
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
@@ -800,7 +800,7 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 		QueryProfiler::Get(*this).StartQuery(query);
 
 		// Drain the lazy iterator into a vector for callers that want the eager shape.
-		EngineIterator iterator {ParseIterator(query)};
+		StatementIterator iterator {ParseIterator(query)};
 		vector<unique_ptr<SQLStatement>> result;
 		while (iterator.Peek(*this)) {
 			auto stmt = iterator.GetStatementWithLock(*this, lock);
@@ -1109,10 +1109,10 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 	profiler.StartQuery(query);
 	// ParseIterator's constructor runs UTF-8 validation / Unicode-space strip and can throw — route
 	// through ErrorResult so the source location attaches the same way Peek failures do.
-	optional_ptr<EngineIterator> iterator_ptr;
-	unique_ptr<EngineIterator> iterator_storage;
+	optional_ptr<StatementIterator> iterator_ptr;
+	unique_ptr<StatementIterator> iterator_storage;
 	try {
-		iterator_storage = make_uniq<EngineIterator>(ParseIterator(query));
+		iterator_storage = make_uniq<StatementIterator>(ParseIterator(query));
 		iterator_ptr = *iterator_storage;
 	} catch (const std::exception &ex) {
 		return ErrorResult<MaterializedQueryResult>(ErrorData(ex), query);

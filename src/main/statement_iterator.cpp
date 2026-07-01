@@ -1,4 +1,4 @@
-#include "duckdb/main/engine_iterator.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 
 #include "duckdb/common/enums/current_transaction_state.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -7,15 +7,15 @@
 
 namespace duckdb {
 
-EngineIterator::EngineIterator(ParseIterator &&parse_iterator) : source(std::move(parse_iterator)) {
+StatementIterator::StatementIterator(ParseIterator &&parse_iterator) : source(std::move(parse_iterator)) {
 }
 
-EngineIterator::~EngineIterator() = default;
+StatementIterator::~StatementIterator() = default;
 
-EngineIterator::EngineIterator(EngineIterator &&) noexcept = default;
-EngineIterator &EngineIterator::operator=(EngineIterator &&) noexcept = default;
+StatementIterator::StatementIterator(StatementIterator &&) noexcept = default;
+StatementIterator &StatementIterator::operator=(StatementIterator &&) noexcept = default;
 
-bool EngineIterator::Peek(ClientContext &context) {
+bool StatementIterator::Peek(ClientContext &context) {
 	// More buffered engine statements from the current peel's expansion?
 	if (buffer_cursor < buffer.size()) {
 		return true;
@@ -25,7 +25,7 @@ bool EngineIterator::Peek(ClientContext &context) {
 	return source.Peek(context);
 }
 
-unique_ptr<SQLStatement> EngineIterator::GetStatementInternal(ClientContext &context,
+unique_ptr<SQLStatement> StatementIterator::GetStatementInternal(ClientContext &context,
                                                               optional_ptr<ClientContextLock> lock) {
 	// Drain the current peel's expansion first.
 	if (buffer_cursor < buffer.size()) {
@@ -59,11 +59,11 @@ unique_ptr<SQLStatement> EngineIterator::GetStatementInternal(ClientContext &con
 	return std::move(buffer[0]);
 }
 
-unique_ptr<SQLStatement> EngineIterator::GetStatement(ClientContext &context) {
+unique_ptr<SQLStatement> StatementIterator::GetStatement(ClientContext &context) {
 	return GetStatementInternal(context, nullptr);
 }
 
-unique_ptr<SQLStatement> EngineIterator::GetStatementWithLock(ClientContext &context, ClientContextLock &lock) {
+unique_ptr<SQLStatement> StatementIterator::GetStatementWithLock(ClientContext &context, ClientContextLock &lock) {
 	return GetStatementInternal(context, &lock);
 }
 
