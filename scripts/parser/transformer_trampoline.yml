@@ -18,6 +18,11 @@ rules:
     init: InitializePivotStatementTrampoline
     finalize: FinalizePivotStatementTrampoline
 
+  UnpivotStatement:
+    mode: manual
+    init: InitializeUnpivotStatementTrampoline
+    finalize: FinalizeUnpivotStatementTrampoline
+
   CommentValue:
     mode: manual
     init: InitializeCommentValueTrampoline

@@ -76,14 +76,14 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformPivotStatement(PEGTr
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 
 	auto current_param_count = transformer.ParamCount();
-	auto source = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(1));
+	auto source = TransformTableRef(transformer, list_pr.GetChild(1));
 	auto next_param_count = transformer.ParamCount();
 	bool has_parameters = next_param_count > current_param_count;
 	auto &pivot_columns = list_pr.Child<OptionalParseResult>(2);
 	auto select_node = make_uniq<SelectNode>();
 	auto &pivot_group = list_pr.Child<OptionalParseResult>(4);
 	if (!pivot_columns.HasResult()) {
-		select_node->from_table = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(1));
+		select_node->from_table = TransformTableRef(transformer, list_pr.GetChild(1));
 		if (pivot_group.HasResult()) {
 			auto pivot_group_list = transformer.Transform<vector<string>>(pivot_group.GetResult());
 			GroupingSet set;
@@ -150,6 +150,18 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformPivotStatement(PEGTr
 	return select_statement;
 }
 
+void PEGTransformerFactory::InitializePivotStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotStatementTrampoline(PEGTransformer &transformer,
+                                                                                         TransformStack &stack,
+                                                                                         TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformPivotStatement(transformer, frame.parse_result);
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
+}
+
 vector<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformPivotUsing(PEGTransformer &transformer,
                                            vector<unique_ptr<ParsedExpression>> target_list) {
@@ -180,7 +192,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformUnpivotStatement(PEG
                                                                              ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto current_param_count = transformer.ParamCount();
-	auto source = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(1));
+	auto source = TransformTableRef(transformer, list_pr.GetChild(1));
 	auto next_param_count = transformer.ParamCount();
 	bool has_parameters = next_param_count > current_param_count;
 	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.GetChild(3));
@@ -247,6 +259,17 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformUnpivotStatement(PEG
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	result->node = std::move(select_node);
 	return result;
+}
+
+void PEGTransformerFactory::InitializeUnpivotStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeUnpivotStatementTrampoline(
+    PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformUnpivotStatement(transformer, frame.parse_result);
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
 }
 
 UnpivotNameValues PEGTransformerFactory::TransformIntoNameValues(PEGTransformer &transformer,

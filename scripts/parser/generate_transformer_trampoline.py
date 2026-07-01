@@ -80,6 +80,7 @@ DEFAULT_GRAMMAR_FILES = [
     "load.gram",
     "merge_into.gram",
     "pragma.gram",
+    "pivot.gram",
     "prepare.gram",
     "set.gram",
     "transaction.gram",

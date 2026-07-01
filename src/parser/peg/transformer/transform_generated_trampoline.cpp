@@ -2077,6 +2077,49 @@ static const TransformFrameOps BY_SOURCE_OPS = {"BySource", &PEGTransformerFacto
                                                 &PEGTransformerFactory::FinalizeBySourceTrampoline};
 static const TransformFrameOps BY_TARGET_OPS = {"ByTarget", &PEGTransformerFactory::InitializeByTargetTrampoline,
                                                 &PEGTransformerFactory::FinalizeByTargetTrampoline};
+static const TransformFrameOps PIVOT_STATEMENT_OPS = {"PivotStatement",
+                                                      &PEGTransformerFactory::InitializePivotStatementTrampoline,
+                                                      &PEGTransformerFactory::FinalizePivotStatementTrampoline};
+static const TransformFrameOps PIVOT_ON_OPS = {"PivotOn", &PEGTransformerFactory::InitializePivotOnTrampoline,
+                                               &PEGTransformerFactory::FinalizePivotOnTrampoline};
+static const TransformFrameOps PIVOT_USING_OPS = {"PivotUsing", &PEGTransformerFactory::InitializePivotUsingTrampoline,
+                                                  &PEGTransformerFactory::FinalizePivotUsingTrampoline};
+static const TransformFrameOps PIVOT_COLUMN_LIST_OPS = {"PivotColumnList",
+                                                        &PEGTransformerFactory::InitializePivotColumnListTrampoline,
+                                                        &PEGTransformerFactory::FinalizePivotColumnListTrampoline};
+static const TransformFrameOps PIVOT_COLUMN_ENTRY_OPS = {"PivotColumnEntry",
+                                                         &PEGTransformerFactory::InitializePivotColumnEntryTrampoline,
+                                                         &PEGTransformerFactory::FinalizePivotColumnEntryTrampoline};
+static const TransformFrameOps PIVOT_COLUMN_EXPRESSION_OPS = {
+    "PivotColumnExpression", &PEGTransformerFactory::InitializePivotColumnExpressionTrampoline,
+    &PEGTransformerFactory::FinalizePivotColumnExpressionTrampoline};
+static const TransformFrameOps PIVOT_COLUMN_SUBQUERY_OPS = {
+    "PivotColumnSubquery", &PEGTransformerFactory::InitializePivotColumnSubqueryTrampoline,
+    &PEGTransformerFactory::FinalizePivotColumnSubqueryTrampoline};
+static const TransformFrameOps UNPIVOT_STATEMENT_OPS = {"UnpivotStatement",
+                                                        &PEGTransformerFactory::InitializeUnpivotStatementTrampoline,
+                                                        &PEGTransformerFactory::FinalizeUnpivotStatementTrampoline};
+static const TransformFrameOps INTO_NAME_VALUES_OPS = {"IntoNameValues",
+                                                       &PEGTransformerFactory::InitializeIntoNameValuesTrampoline,
+                                                       &PEGTransformerFactory::FinalizeIntoNameValuesTrampoline};
+static const TransformFrameOps INCLUDE_OR_EXCLUDE_NULLS_OPS = {
+    "IncludeOrExcludeNulls", &PEGTransformerFactory::InitializeIncludeOrExcludeNullsTrampoline,
+    &PEGTransformerFactory::FinalizeIncludeOrExcludeNullsTrampoline};
+static const TransformFrameOps INCLUDE_NULLS_OPS = {"IncludeNulls",
+                                                    &PEGTransformerFactory::InitializeIncludeNullsTrampoline,
+                                                    &PEGTransformerFactory::FinalizeIncludeNullsTrampoline};
+static const TransformFrameOps EXCLUDE_NULLS_OPS = {"ExcludeNulls",
+                                                    &PEGTransformerFactory::InitializeExcludeNullsTrampoline,
+                                                    &PEGTransformerFactory::FinalizeExcludeNullsTrampoline};
+static const TransformFrameOps UNPIVOT_HEADER_OPS = {"UnpivotHeader",
+                                                     &PEGTransformerFactory::InitializeUnpivotHeaderTrampoline,
+                                                     &PEGTransformerFactory::FinalizeUnpivotHeaderTrampoline};
+static const TransformFrameOps UNPIVOT_HEADER_SINGLE_OPS = {
+    "UnpivotHeaderSingle", &PEGTransformerFactory::InitializeUnpivotHeaderSingleTrampoline,
+    &PEGTransformerFactory::FinalizeUnpivotHeaderSingleTrampoline};
+static const TransformFrameOps UNPIVOT_HEADER_LIST_OPS = {"UnpivotHeaderList",
+                                                          &PEGTransformerFactory::InitializeUnpivotHeaderListTrampoline,
+                                                          &PEGTransformerFactory::FinalizeUnpivotHeaderListTrampoline};
 static const TransformFrameOps PRAGMA_STATEMENT_OPS = {"PragmaStatement",
                                                        &PEGTransformerFactory::InitializePragmaStatementTrampoline,
                                                        &PEGTransformerFactory::FinalizePragmaStatementTrampoline};
@@ -3289,6 +3332,21 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"BySourceOrTarget", &BY_SOURCE_OR_TARGET_OPS},
 	    {"BySource", &BY_SOURCE_OPS},
 	    {"ByTarget", &BY_TARGET_OPS},
+	    {"PivotStatement", &PIVOT_STATEMENT_OPS},
+	    {"PivotOn", &PIVOT_ON_OPS},
+	    {"PivotUsing", &PIVOT_USING_OPS},
+	    {"PivotColumnList", &PIVOT_COLUMN_LIST_OPS},
+	    {"PivotColumnEntry", &PIVOT_COLUMN_ENTRY_OPS},
+	    {"PivotColumnExpression", &PIVOT_COLUMN_EXPRESSION_OPS},
+	    {"PivotColumnSubquery", &PIVOT_COLUMN_SUBQUERY_OPS},
+	    {"UnpivotStatement", &UNPIVOT_STATEMENT_OPS},
+	    {"IntoNameValues", &INTO_NAME_VALUES_OPS},
+	    {"IncludeOrExcludeNulls", &INCLUDE_OR_EXCLUDE_NULLS_OPS},
+	    {"IncludeNulls", &INCLUDE_NULLS_OPS},
+	    {"ExcludeNulls", &EXCLUDE_NULLS_OPS},
+	    {"UnpivotHeader", &UNPIVOT_HEADER_OPS},
+	    {"UnpivotHeaderSingle", &UNPIVOT_HEADER_SINGLE_OPS},
+	    {"UnpivotHeaderList", &UNPIVOT_HEADER_LIST_OPS},
 	    {"PragmaStatement", &PRAGMA_STATEMENT_OPS},
 	    {"PragmaAssignOrFunction", &PRAGMA_ASSIGN_OR_FUNCTION_OPS},
 	    {"PragmaAssign", &PRAGMA_ASSIGN_OPS},
@@ -17896,6 +17954,249 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeByTargetTrampoli
                                                                                    TransformStackFrame &frame) {
 	auto result = PEGTransformerFactory::TransformByTarget(transformer);
 	return make_uniq<TypedTransformResult<MergeActionCondition>>(result);
+}
+
+void PEGTransformerFactory::InitializePivotOnTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                        TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(1), PIVOT_COLUMN_LIST_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotOnTrampoline(PEGTransformer &transformer,
+                                                                                  TransformStack &stack,
+                                                                                  TransformStackFrame &frame) {
+	auto pivot_column_list = frame.TakeResult<vector<PivotColumn>>(0);
+	auto result = PEGTransformerFactory::TransformPivotOn(transformer, std::move(pivot_column_list));
+	return make_uniq<TypedTransformResult<vector<PivotColumn>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializePivotUsingTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(1), TARGET_LIST_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotUsingTrampoline(PEGTransformer &transformer,
+                                                                                     TransformStack &stack,
+                                                                                     TransformStackFrame &frame) {
+	auto target_list = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0);
+	auto result = PEGTransformerFactory::TransformPivotUsing(transformer, std::move(target_list));
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializePivotColumnListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(1 + dynamic_child_count - 1);
+	for (idx_t i = list_items.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		stack.PushFrame(list_items[child_idx].get(), PIVOT_COLUMN_ENTRY_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0 + child_idx));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotColumnListTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	auto dynamic_child_count = dynamic_list_items.size();
+	vector<PivotColumn> pivot_column_entry;
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+		pivot_column_entry.push_back(frame.TakeResult<PivotColumn>(i));
+	}
+	auto result = PEGTransformerFactory::TransformPivotColumnList(transformer, std::move(pivot_column_entry));
+	return make_uniq<TypedTransformResult<vector<PivotColumn>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializePivotColumnEntryTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotColumnEntryTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto result = frame.TakeResult<PivotColumn>(0);
+	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializePivotColumnExpressionTrampoline(PEGTransformer &transformer,
+                                                                      TransformStack &stack,
+                                                                      TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), EXPRESSION_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizePivotColumnExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	auto expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
+	auto result = PEGTransformerFactory::TransformPivotColumnExpression(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializePivotColumnSubqueryTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	stack.PushFrame(ExtractResultFromParens(list_pr.GetChild(2)), SELECT_STATEMENT_INTERNAL_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 1));
+	stack.PushFrame(list_pr.GetChild(0), BASE_EXPRESSION_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizePivotColumnSubqueryTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto base_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
+	auto select_statement_internal = frame.TakeResult<unique_ptr<SelectStatement>>(1);
+	auto result = PEGTransformerFactory::TransformPivotColumnSubquery(transformer, std::move(base_expression),
+	                                                                  std::move(select_statement_internal));
+	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeIntoNameValuesTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(2), COL_ID_OR_STRING_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeIntoNameValuesTrampoline(PEGTransformer &transformer,
+                                                                                         TransformStack &stack,
+                                                                                         TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto col_id_or_string = frame.TakeResult<Identifier>(0);
+	vector<Identifier> identifier;
+	auto identifier_items = ExtractParseResultsFromList(list_pr.GetChild(4));
+	for (auto &identifier_item : identifier_items) {
+		identifier.push_back(identifier_item.get().Cast<IdentifierParseResult>().identifier);
+	}
+	auto result = PEGTransformerFactory::TransformIntoNameValues(transformer, col_id_or_string, identifier);
+	return make_uniq<TypedTransformResult<UnpivotNameValues>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeIncludeOrExcludeNullsTrampoline(PEGTransformer &transformer,
+                                                                      TransformStack &stack,
+                                                                      TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeIncludeOrExcludeNullsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	auto result = frame.TakeResult<bool>(0);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeIncludeNullsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeIncludeNullsTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformIncludeNulls(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeExcludeNullsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExcludeNullsTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	auto result = PEGTransformerFactory::TransformExcludeNulls(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeUnpivotHeaderTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeUnpivotHeaderTrampoline(PEGTransformer &transformer,
+                                                                                        TransformStack &stack,
+                                                                                        TransformStackFrame &frame) {
+	auto result = frame.TakeResult<vector<string>>(0);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
+void PEGTransformerFactory::InitializeUnpivotHeaderSingleTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), COL_ID_OR_STRING_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeUnpivotHeaderSingleTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto col_id_or_string = frame.TakeResult<Identifier>(0);
+	auto result = PEGTransformerFactory::TransformUnpivotHeaderSingle(transformer, col_id_or_string);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
+void PEGTransformerFactory::InitializeUnpivotHeaderListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(1 + dynamic_child_count - 1);
+	for (idx_t i = list_items.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		stack.PushFrame(list_items[child_idx].get(), COL_ID_OR_STRING_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0 + child_idx));
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeUnpivotHeaderListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto dynamic_child_count = dynamic_list_items.size();
+	vector<Identifier> col_id_or_string;
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+		col_id_or_string.push_back(frame.TakeResult<Identifier>(i));
+	}
+	auto result = PEGTransformerFactory::TransformUnpivotHeaderList(transformer, col_id_or_string);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
 }
 
 void PEGTransformerFactory::InitializePragmaStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
