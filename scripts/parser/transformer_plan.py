@@ -268,6 +268,14 @@ class DirectOptionalArg:
 
 
 @dataclass
+class DirectOptionalMatcherArg:
+    parse_expr: str
+    rule_name: str
+    var_name: str
+    result_expr_template: str = "{opt}.GetResult()"
+
+
+@dataclass
 class DirectOptionalPresenceArg:
     parse_expr: str
     var_name: str
@@ -312,6 +320,7 @@ class OptionalListStackChild:
     rule_name: str
     slot_start: int
     var_name: str
+    result_expr_template: str = "{opt}.GetResult()"
 
 
 @dataclass
@@ -418,6 +427,13 @@ def is_syntax_only_child(node, syntax_only_rules):
     return False
 
 
+def _unwrap_parens_node(node, source_expr_template):
+    while isinstance(node, ParensNode):
+        source_expr_template = f"ExtractResultFromParens({source_expr_template})"
+        node = node.inner
+    return node, source_expr_template
+
+
 def _is_identifier_override(rule_name, matcher_overrides):
     override = matcher_overrides.get(rule_name)
     return override is not None and override.is_identifier()
@@ -490,7 +506,7 @@ def plan_trampoline_sequence_rule_with_terminals(
                 arg = DirectOptionalArg(parse_expr, child.child.name, to_snake_case(child.child.name))
                 direct_optional_args.append(arg)
             elif _is_terminal_override(child.child.name, matcher_overrides):
-                raise NotImplementedError("optional terminal override child is currently unsupported")
+                arg = DirectOptionalMatcherArg(parse_expr, child.child.name, to_snake_case(child.child.name))
             else:
                 if has_dynamic_child:
                     if not allow_dynamic_stack_followers:
@@ -517,7 +533,9 @@ def plan_trampoline_sequence_rule_with_terminals(
             if _is_identifier_override(rule_name, matcher_overrides):
                 raise NotImplementedError("wrapped optional identifier child is currently unsupported")
             if _is_terminal_override(rule_name, matcher_overrides):
-                raise NotImplementedError("wrapped optional terminal override child is currently unsupported")
+                arg = DirectOptionalMatcherArg(parse_expr, rule_name, to_snake_case(rule_name), result_expr_template)
+                finalize_args.append(arg)
+                continue
             if has_dynamic_child:
                 if not allow_dynamic_stack_followers:
                     if trailing_optional_stack_child is not None:
@@ -575,6 +593,10 @@ def plan_trampoline_sequence_rule_with_terminals(
                 continue
         if isinstance(child, OptionalNode) and isinstance(child.child, ListMacroNode):
             list_node = child.child.inner
+            result_expr_template = "{opt}.GetResult()"
+            if isinstance(child.child, ParensNode):
+                list_node = child.child.inner
+                result_expr_template = "ExtractResultFromParens({opt}.GetResult())"
             if isinstance(list_node, ReferenceNode):
                 if _is_identifier_override(list_node.name, matcher_overrides):
                     raise NotImplementedError("optional identifier list is currently unsupported")
@@ -588,7 +610,28 @@ def plan_trampoline_sequence_rule_with_terminals(
                 ):
                     raise NotImplementedError("only one dynamic stack child is currently supported")
                 optional_list_child = OptionalListStackChild(
-                    parse_expr, list_node.name, next_slot, to_snake_case(list_node.name)
+                    parse_expr, list_node.name, next_slot, to_snake_case(list_node.name), result_expr_template
+                )
+                next_slot += 1
+                finalize_args.append(optional_list_child)
+                continue
+        if isinstance(child, OptionalNode):
+            list_container, result_expr_template = _unwrap_parens_node(child.child, "{opt}.GetResult()")
+            if isinstance(list_container, ListMacroNode) and isinstance(list_container.inner, ReferenceNode):
+                list_node = list_container.inner
+                if _is_identifier_override(list_node.name, matcher_overrides):
+                    raise NotImplementedError("optional identifier list is currently unsupported")
+                if _is_terminal_override(list_node.name, matcher_overrides):
+                    raise NotImplementedError("optional terminal override list is currently unsupported")
+                if (
+                    list_child is not None
+                    or repeat_child is not None
+                    or optional_list_child is not None
+                    or required_repeat_child is not None
+                ):
+                    raise NotImplementedError("only one dynamic stack child is currently supported")
+                optional_list_child = OptionalListStackChild(
+                    parse_expr, list_node.name, next_slot, to_snake_case(list_node.name), result_expr_template
                 )
                 next_slot += 1
                 finalize_args.append(optional_list_child)

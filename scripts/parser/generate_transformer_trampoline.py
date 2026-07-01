@@ -11,6 +11,7 @@ from transformer_trampoline_config import TrampolineRuleMode, load_transformer_t
 from transformer_plan import (
     ChoiceNode,
     DirectOptionalArg,
+    DirectOptionalMatcherArg,
     DirectListArg,
     DirectMatcherArg,
     DirectParseArg,
@@ -50,6 +51,7 @@ DEFAULT_GRAMMAR_FILES = [
     "call.gram",
     "checkpoint.gram",
     "comment.gram",
+    "common.gram",
     "connect.gram",
     "create_schema.gram",
     "create_type.gram",
@@ -116,19 +118,6 @@ DEFAULT_EXTRA_RULES = {
         "LocalScope",
         "SessionScope",
         "GlobalScope",
-    ],
-    "common.gram": [
-        "ArrayBounds",
-        "CollationName",
-        "ExpressionAlias",
-        "ExpressionStatement",
-        "Interval",
-        "Type",
-        "TypeVariations",
-        "QualifiedTypeName",
-        "TypeNameAsQualifiedName",
-        "CatalogReservedSchemaTypeName",
-        "SchemaReservedTypeName",
     ],
     "select.gram": [
         "SelectStatement",
@@ -637,7 +626,8 @@ class UseGramPreviewEmitter:
             lines.append("\tidx_t dynamic_child_count = 0;")
             lines.append(f"\tauto &dynamic_list_opt = {list_child.parse_expr}.Cast<OptionalParseResult>();")
             lines.append("\tif (dynamic_list_opt.HasResult()) {")
-            lines.append("\t\tauto dynamic_list_items = ExtractParseResultsFromList(dynamic_list_opt.GetResult());")
+            child_expr = list_child.result_expr_template.format(opt="dynamic_list_opt")
+            lines.append(f"\t\tauto dynamic_list_items = ExtractParseResultsFromList({child_expr});")
             lines.append("\t\tdynamic_child_count = dynamic_list_items.size();")
             lines.append("\t}")
         elif plan.required_repeat_child:
@@ -776,6 +766,7 @@ class UseGramPreviewEmitter:
                     DirectParseArg,
                     DirectMatcherArg,
                     DirectOptionalArg,
+                    DirectOptionalMatcherArg,
                     DirectOptionalPresenceArg,
                     DirectRepeatArg,
                     DirectListArg,
@@ -808,6 +799,18 @@ class UseGramPreviewEmitter:
                 )
                 lines.append("\t}")
                 arg_names.append(arg.var_name)
+            elif isinstance(arg, DirectOptionalMatcherArg):
+                cpp_type = self.cpp_type(arg.rule_name)
+                lines.append(f"\toptional<{cpp_type}> {arg.var_name} {{}};")
+                lines.append(f"\tauto &{arg.var_name}_opt = {arg.parse_expr}.Cast<OptionalParseResult>();")
+                lines.append(f"\tif ({arg.var_name}_opt.HasResult()) {{")
+                child_expr = arg.result_expr_template.format(opt=f"{arg.var_name}_opt")
+                value_expr = self.matcher_transform_expr(arg.rule_name, child_expr)
+                if self.by_value(arg.rule_name):
+                    value_expr = f"std::move({value_expr})"
+                lines.append(f"\t\t{arg.var_name} = {value_expr};")
+                lines.append("\t}")
+                arg_names.append(self.transform_arg_expr(arg.rule_name, arg.var_name))
             elif isinstance(arg, DirectOptionalPresenceArg):
                 lines.append(f"\tbool {arg.var_name} {{}};")
                 lines.append(f"\tauto &{arg.var_name}_opt = {arg.parse_expr}.Cast<OptionalParseResult>();")
@@ -972,7 +975,8 @@ class UseGramPreviewEmitter:
                 lines.append(f"\tauto &list_opt = {list_child.parse_expr}.Cast<OptionalParseResult>();")
                 lines.append("\tidx_t dynamic_child_count = 0;")
                 lines.append("\tif (list_opt.HasResult()) {")
-                lines.append("\t\tauto list_items = ExtractParseResultsFromList(list_opt.GetResult());")
+                child_expr = list_child.result_expr_template.format(opt="list_opt")
+                lines.append(f"\t\tauto list_items = ExtractParseResultsFromList({child_expr});")
                 lines.append("\t\tdynamic_child_count = list_items.size();")
                 lines.append(f"\t\tframe.ReserveChildSlots({logical_child_slots} + dynamic_child_count - 1);")
                 lines.append("\t\tfor (idx_t i = list_items.size(); i > 0; i--) {")

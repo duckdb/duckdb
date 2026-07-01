@@ -11,6 +11,15 @@
 
 namespace duckdb {
 
+static const TransformFrameOps &GetCommonTrampolineOps(const string &rule_name) {
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(rule_name);
+	if (ops_entry == ops_map.end()) {
+		throw NotImplementedException("No trampoline transformer for rule '%s'", rule_name);
+	}
+	return *ops_entry->second;
+}
+
 string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result) {
 	if (parse_result.type == ParseResultType::IDENTIFIER) {
 		return parse_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
@@ -394,6 +403,24 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBitType(
     PEGTransformer &transformer, const bool &has_result,
     optional<vector<unique_ptr<ParsedExpression>>> expression) { // NOLINT(performance-unnecessary-value-param)
 	return make_uniq<TypeExpression>(Identifier("BIT"), vector<unique_ptr<ParsedExpression>> {});
+}
+
+void PEGTransformerFactory::InitializeSimpleNumericTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(choice_result, GetCommonTrampolineOps(choice_result.name),
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSimpleNumericTypeTrampoline(PEGTransformer &transformer,
+                                                                                            TransformStack &stack,
+                                                                                            TransformStackFrame &frame) {
+	auto child = frame.TakeResult<string>(0);
+	auto result = TransformSimpleNumericType(transformer, child);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIntervalWithoutSpecifier(PEGTransformer &transformer) {

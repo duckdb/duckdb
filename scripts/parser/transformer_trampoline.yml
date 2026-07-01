@@ -8,14 +8,10 @@ rules:
     mode: excluded
 
   TopLevelStatement:
-    mode: manual
-    init: InitializeTopLevelStatementTrampoline
-    finalize: FinalizeTopLevelStatementTrampoline
+    mode: excluded
 
   Statement:
-    mode: manual
-    init: InitializeStatementTrampoline
-    finalize: FinalizeStatementTrampoline
+    mode: excluded
 
   PivotStatement:
     mode: manual
@@ -46,6 +42,11 @@ rules:
     mode: manual
     init: InitializeEnumStringLiteralListTrampoline
     finalize: FinalizeEnumStringLiteralListTrampoline
+
+  SimpleNumericType:
+    mode: manual
+    init: InitializeSimpleNumericTypeTrampoline
+    finalize: FinalizeSimpleNumericTypeTrampoline
 
   DescribeStatement:
     mode: manual
