@@ -42,12 +42,9 @@ struct MultiFileReaderInterface {
 	                                FileExpandResult expand_result);
 	virtual unique_ptr<GlobalTableFunctionState>
 	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state) = 0;
-	virtual unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &,
-	                                                                 GlobalTableFunctionState &) = 0;
-
-	virtual unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) {
-		throw InternalException("This reader does not support read-ahead local state initialization");
-	}
+	//! Create the per-job reader scan state. Called on the per-thread path and (off the operator thread) by the
+	//! read-ahead producer, so it takes a ClientContext rather than an ExecutionContext.
+	virtual unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) = 0;
 
 	virtual bool SupportsReadAhead() const {
 		return false;
@@ -536,7 +533,7 @@ public:
 		result->source = make_uniq<PerThreadJobSource>();
 
 		result->job.batch_index = 0;
-		result->job.reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
+		result->job.reader_scan_state = bind_data.interface->InitializeLocalState(context.client, *gstate.global_state);
 
 		if (!ClaimNextJob(context.client, bind_data, gstate, result->job)) {
 			return nullptr;
