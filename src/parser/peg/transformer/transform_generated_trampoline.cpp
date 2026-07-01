@@ -218,6 +218,9 @@ static const TransformFrameOps CATALOG_RESERVED_SCHEMA_OPS = {
 static const TransformFrameOps DROP_SECRET_STORAGE_OPS = {"DropSecretStorage",
                                                           &PEGTransformerFactory::InitializeDropSecretStorageTrampoline,
                                                           &PEGTransformerFactory::FinalizeDropSecretStorageTrampoline};
+static const TransformFrameOps EXECUTE_STATEMENT_OPS = {"ExecuteStatement",
+                                                        &PEGTransformerFactory::InitializeExecuteStatementTrampoline,
+                                                        &PEGTransformerFactory::FinalizeExecuteStatementTrampoline};
 static const TransformFrameOps EXPLAIN_STATEMENT_OPS = {"ExplainStatement",
                                                         &PEGTransformerFactory::InitializeExplainStatementTrampoline,
                                                         &PEGTransformerFactory::FinalizeExplainStatementTrampoline};
@@ -1027,6 +1030,11 @@ static const TransformFrameOps FROM_SOURCE_STRING_OPS = {"FromSourceString",
 static const TransformFrameOps VERSION_NUMBER_OPS = {"VersionNumber",
                                                      &PEGTransformerFactory::InitializeVersionNumberTrampoline,
                                                      &PEGTransformerFactory::FinalizeVersionNumberTrampoline};
+static const TransformFrameOps PREPARE_STATEMENT_OPS = {"PrepareStatement",
+                                                        &PEGTransformerFactory::InitializePrepareStatementTrampoline,
+                                                        &PEGTransformerFactory::FinalizePrepareStatementTrampoline};
+static const TransformFrameOps TYPE_LIST_OPS = {"TypeList", &PEGTransformerFactory::InitializeTypeListTrampoline,
+                                                &PEGTransformerFactory::FinalizeTypeListTrampoline};
 static const TransformFrameOps TRANSACTION_STATEMENT_OPS = {
     "TransactionStatement", &PEGTransformerFactory::InitializeTransactionStatementTrampoline,
     &PEGTransformerFactory::FinalizeTransactionStatementTrampoline};
@@ -1176,9 +1184,6 @@ static const TransformFrameOps QUALIFIED_SEQUENCE_NAME_OPS = {
 static const TransformFrameOps TRUNCATE_STATEMENT_OPS = {"TruncateStatement",
                                                          &PEGTransformerFactory::InitializeTruncateStatementTrampoline,
                                                          &PEGTransformerFactory::FinalizeTruncateStatementTrampoline};
-static const TransformFrameOps EXECUTE_STATEMENT_OPS = {"ExecuteStatement",
-                                                        &PEGTransformerFactory::InitializeExecuteStatementTrampoline,
-                                                        &PEGTransformerFactory::FinalizeExecuteStatementTrampoline};
 static const TransformFrameOps IMPORT_STATEMENT_OPS = {"ImportStatement",
                                                        &PEGTransformerFactory::InitializeImportStatementTrampoline,
                                                        &PEGTransformerFactory::FinalizeImportStatementTrampoline};
@@ -1597,6 +1602,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"QualifiedSchemaNameString", &QUALIFIED_SCHEMA_NAME_STRING_OPS},
 	    {"CatalogReservedSchema", &CATALOG_RESERVED_SCHEMA_OPS},
 	    {"DropSecretStorage", &DROP_SECRET_STORAGE_OPS},
+	    {"ExecuteStatement", &EXECUTE_STATEMENT_OPS},
 	    {"ExplainStatement", &EXPLAIN_STATEMENT_OPS},
 	    {"ExplainAnalyze", &EXPLAIN_ANALYZE_OPS},
 	    {"ExplainOptionList", &EXPLAIN_OPTION_LIST_OPS},
@@ -1876,6 +1882,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"FromSourceIdentifier", &FROM_SOURCE_IDENTIFIER_OPS},
 	    {"FromSourceString", &FROM_SOURCE_STRING_OPS},
 	    {"VersionNumber", &VERSION_NUMBER_OPS},
+	    {"PrepareStatement", &PREPARE_STATEMENT_OPS},
+	    {"TypeList", &TYPE_LIST_OPS},
 	    {"TransactionStatement", &TRANSACTION_STATEMENT_OPS},
 	    {"BeginTransaction", &BEGIN_TRANSACTION_OPS},
 	    {"RollbackTransaction", &ROLLBACK_TRANSACTION_OPS},
@@ -1930,7 +1938,6 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"NestedColumnName", &NESTED_COLUMN_NAME_OPS},
 	    {"QualifiedSequenceName", &QUALIFIED_SEQUENCE_NAME_OPS},
 	    {"TruncateStatement", &TRUNCATE_STATEMENT_OPS},
-	    {"ExecuteStatement", &EXECUTE_STATEMENT_OPS},
 	    {"ImportStatement", &IMPORT_STATEMENT_OPS},
 	    {"ResetStatement", &RESET_STATEMENT_OPS},
 	    {"SetVariableOrSetting", &SET_VARIABLE_OR_SETTING_OPS},
@@ -9155,6 +9162,33 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeVersionNumberTra
 	auto identifier_or_string_literal = frame.TakeResult<QualifiedName>(0);
 	auto result = PEGTransformerFactory::TransformVersionNumber(transformer, identifier_or_string_literal);
 	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+void PEGTransformerFactory::InitializeTypeListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                         TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(1 + dynamic_child_count - 1);
+	for (idx_t i = list_items.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		stack.PushFrame(list_items[child_idx].get(), TYPE_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0 + child_idx));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTypeListTrampoline(PEGTransformer &transformer,
+                                                                                   TransformStack &stack,
+                                                                                   TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto dynamic_child_count = dynamic_list_items.size();
+	vector<LogicalType> type;
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+		type.push_back(frame.TakeResult<LogicalType>(i));
+	}
+	auto result = PEGTransformerFactory::TransformTypeList(transformer, type);
+	return make_uniq<TypedTransformResult<vector<LogicalType>>>(result);
 }
 
 void PEGTransformerFactory::InitializeTransactionStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,

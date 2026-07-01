@@ -37,6 +37,11 @@ rules:
     init: InitializeExecuteStatementTrampoline
     finalize: FinalizeExecuteStatementTrampoline
 
+  PrepareStatement:
+    mode: manual
+    init: InitializePrepareStatementTrampoline
+    finalize: FinalizePrepareStatementTrampoline
+
   DescribeStatement:
     mode: manual
     init: InitializeDescribeStatementTrampoline
