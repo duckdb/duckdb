@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
