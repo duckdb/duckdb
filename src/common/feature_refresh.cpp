@@ -128,8 +128,8 @@ static unique_ptr<CreateStatement> BuildCopyUnaffectedRowsStatement(const string
 }
 
 static unique_ptr<InsertStatement> BuildInsertIntoTableStatement(const string &catalog, const string &schema,
-                                                                const string &table,
-                                                                unique_ptr<SelectStatement> query) {
+                                                                 const string &table,
+                                                                 unique_ptr<SelectStatement> query) {
 	auto result = make_uniq<InsertStatement>();
 	result->node->catalog = catalog;
 	result->node->schema = schema;
@@ -139,7 +139,7 @@ static unique_ptr<InsertStatement> BuildInsertIntoTableStatement(const string &c
 }
 
 static unique_ptr<DropStatement> BuildDropVersionTableStatement(const string &catalog, const string &schema,
-                                                               const string &table) {
+                                                                const string &table) {
 	auto result = make_uniq<DropStatement>();
 	result->info->catalog = catalog;
 	result->info->schema = schema;
@@ -241,7 +241,8 @@ FeatureRefreshResult RefreshFeature(ClientContext &context, const string &featur
 					                        create_result->GetError());
 				}
 
-				auto count_statement = BuildCountTableStatement(feat_catalog.GetName(), feat_schema.name, new_table_name);
+				auto count_statement =
+				    BuildCountTableStatement(feat_catalog.GetName(), feat_schema.name, new_table_name);
 				auto count_result = con.Query(std::move(count_statement));
 				if (!count_result->HasError() && count_result->RowCount() > 0) {
 					result.rows_affected = count_result->GetValue(0, 0).GetValue<idx_t>();
@@ -250,9 +251,8 @@ FeatureRefreshResult RefreshFeature(ClientContext &context, const string &featur
 				auto recompute_from = BuildRefreshBoundaryExpression(max_timestamp, feat.watermark_interval);
 
 				// Create the new version table with unaffected rows copied forward from the current version table.
-				auto create_statement = BuildCopyUnaffectedRowsStatement(feat_catalog.GetName(), feat_schema.name,
-				                                                          new_table_name, cur_table_name,
-				                                                          recompute_from->Copy());
+				auto create_statement = BuildCopyUnaffectedRowsStatement(
+				    feat_catalog.GetName(), feat_schema.name, new_table_name, cur_table_name, recompute_from->Copy());
 				auto create_result = con.Query(std::move(create_statement));
 				if (create_result->HasError()) {
 					throw InternalException("Failed to copy unaffected rows for '%s': %s", feature_name,
@@ -261,9 +261,9 @@ FeatureRefreshResult RefreshFeature(ClientContext &context, const string &featur
 
 				// Recompute the tail while the join still looks back the full window for correct aggregation.
 				auto tail_filter = BuildTailAnchorFilter(feat.timestamp_column, std::move(recompute_from));
-				auto insert_statement = BuildInsertIntoTableStatement(feat_catalog.GetName(), feat_schema.name,
-				                                                      new_table_name,
-				                                                      BuildPITQueryAST(feat, std::move(tail_filter)));
+				auto insert_statement =
+				    BuildInsertIntoTableStatement(feat_catalog.GetName(), feat_schema.name, new_table_name,
+				                                  BuildPITQueryAST(feat, std::move(tail_filter)));
 				auto ins_result = con.Query(std::move(insert_statement));
 				if (ins_result->HasError()) {
 					throw InternalException("Failed to incrementally refresh feature '%s': %s", feature_name,
