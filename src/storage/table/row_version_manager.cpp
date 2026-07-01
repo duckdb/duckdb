@@ -295,6 +295,30 @@ bool RowVersionManager::HasUnserializedChanges() {
 	return uncheckpointed_delete_commit.IsValid();
 }
 
+bool RowVersionManager::HasDeletes() {
+	lock_guard<mutex> lock(version_lock);
+	for (auto &info : vector_info) {
+		if (!info) {
+			continue;
+		}
+		switch (info->type) {
+		case ChunkInfoType::CONSTANT_INFO:
+			if (info->Cast<ChunkConstantInfo>().delete_id != NOT_DELETED_ID) {
+				return true;
+			}
+			break;
+		case ChunkInfoType::VECTOR_INFO:
+			if (info->Cast<ChunkVectorInfo>().AnyDeleted()) {
+				return true;
+			}
+			break;
+		default:
+			break;
+		}
+	}
+	return false;
+}
+
 vector<MetaBlockPointer> RowVersionManager::GetStoragePointers() {
 	lock_guard<mutex> lock(version_lock);
 	D_ASSERT(!uncheckpointed_delete_commit.IsValid());

@@ -1,0 +1,81 @@
+# name: test/optimizer/partition_stats_exactness.test
+# description: Partition stats exactness for count / min / max with version info and deletes
+# group: [optimizer]
+
+load {TEST_DIR}/partition_stats_exactness.db
+
+statement ok
+CREATE TABLE big AS
+SELECT i AS id, (i % 100) AS g
+FROM range(0, 100_000) t(i);
+
+# Append-only version info in memory (no deletes).
+statement ok
+INSERT INTO big SELECT i, i % 100 FROM range(100_000, 101_000) t(i);
+
+# Same process, before checkpoint: committed count is still exact.
+query II
+EXPLAIN SELECT count(*) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+# Force reload: memory version_info gone; append-only has no deletes_pointers.
+restart
+
+# Reloaded append-only table: count and min/max still exact → no table scan.
+query II
+EXPLAIN SELECT count(*) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+SELECT min(id), max(id) FROM big
+----
+0	100999
+
+# 1000 from CTAS (g = i % 100) + 10 from INSERT range(100_000, 101_000)
+query I
+SELECT count(*) FROM big WHERE g = 7
+----
+1010
+
+# In-process deletes: version info loaded with HasDeletes — count exact, min/max not.
+statement ok
+DELETE FROM big WHERE id = 0;
+
+query II
+EXPLAIN SELECT count(*) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM big
+----
+physical_plan	<REGEX>:.*Sequential Scan.*
+
+statement ok
+CHECKPOINT;
+
+# Still in-process after checkpoint with loaded deletes: same exactness split.
+query II
+EXPLAIN SELECT count(*) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM big
+----
+physical_plan	<REGEX>:.*Sequential Scan.*
