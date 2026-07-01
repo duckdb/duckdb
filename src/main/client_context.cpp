@@ -886,26 +886,41 @@ StatementSignature ClientContext::BindStatement(unique_ptr<SQLStatement> stateme
 	auto lock = LockContext();
 	auto named_param_map = statement->named_param_map;
 	StatementSignature signature;
+	ErrorData bind_error;
 	RunFunctionInTransactionInternal(
 	    *lock,
 	    [&]() {
-		    Planner planner(*this);
-		    planner.CreatePlan(std::move(statement));
-		    signature.names = planner.names;
-		    signature.types = planner.types;
-		    signature.properties = std::move(planner.properties);
-		    // Parameter types from the bound parameter map (as in PreparedStatementData::TryGetType).
-		    for (auto &entry : named_param_map) {
-			    LogicalType type(LogicalTypeId::UNKNOWN);
-			    auto it = planner.value_map.find(entry.first);
-			    if (it != planner.value_map.end()) {
-				    type = it->second->return_type.id() != LogicalTypeId::INVALID ? it->second->return_type
-				                                                                  : it->second->GetValue().type();
+		    try {
+			    Planner planner(*this);
+			    planner.CreatePlan(std::move(statement));
+			    signature.names = planner.names;
+			    signature.types = planner.types;
+			    signature.properties = std::move(planner.properties);
+			    // Parameter types from the bound parameter map (as in PreparedStatementData::TryGetType).
+			    for (auto &entry : named_param_map) {
+				    LogicalType type(LogicalTypeId::UNKNOWN);
+				    auto it = planner.value_map.find(entry.first);
+				    if (it != planner.value_map.end()) {
+					    type = it->second->return_type.id() != LogicalTypeId::INVALID ? it->second->return_type
+					                                                                  : it->second->GetValue().type();
+				    }
+				    signature.parameters.push_back({entry.first, entry.second, std::move(type)});
 			    }
-			    signature.parameters.push_back({entry.first, entry.second, std::move(type)});
+		    } catch (const std::exception &ex) {
+			    ErrorData error(ex);
+			    // Binding is read-only: a recoverable bind error changed nothing, so leave
+			    // the caller's transaction intact (rethrow after the wrapper). A database-
+			    // fatal error still propagates so invalidation runs as usual.
+			    if (Exception::InvalidatesDatabase(error.Type())) {
+				    throw;
+			    }
+			    bind_error = std::move(error);
 		    }
 	    },
 	    false);
+	if (bind_error.HasError()) {
+		bind_error.Throw();
+	}
 	return signature;
 }
 
