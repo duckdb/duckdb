@@ -1920,12 +1920,11 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 	} else {
 		result.count = row_group_ref.GetCommittedRowCount();
 		result.count_type = CountType::COUNT_EXACT;
-		// Version info alone (e.g. append-only inserts) does not invalidate segment min/max.
-		// Only actual deletes make base column stats inexact for remaining rows.
 		auto vinfo = row_group_ref.GetVersionInfoIfLoaded();
+		// No version info means no deletes were ever recorded (either in memory on disk), so base stats still cover
+		// every committed row in the segment.
 		const bool min_max_exact = !vinfo || !vinfo->HasDeletes();
-		result.partition_row_group =
-		    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), min_max_exact);
+		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), min_max_exact);
 	}
 
 	return result;
