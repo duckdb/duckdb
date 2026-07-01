@@ -18,6 +18,7 @@
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/planner/operator/logical_unnest.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 
 namespace duckdb {
@@ -82,6 +83,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		result = PropagateStatistics(node.Cast<LogicalWindow>(), node_ptr);
 		break;
+	case LogicalOperatorType::LOGICAL_UNNEST:
+		result = PropagateStatistics(node.Cast<LogicalUnnest>(), node_ptr);
+		break;
 	default:
 		result = PropagateChildren(node, node_ptr);
 	}
@@ -137,6 +141,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 		return PropagateExpression(expr.Cast<BoundColumnRefExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_OPERATOR:
 		return PropagateExpression(expr.Cast<BoundOperatorExpression>(), expr_ptr);
+	case ExpressionClass::BOUND_REF:
+		return PropagateExpression(expr.Cast<BoundReferenceExpression>(), expr_ptr);
 	default:
 		break;
 	}

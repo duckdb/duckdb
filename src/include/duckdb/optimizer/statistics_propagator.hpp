@@ -40,6 +40,12 @@ public:
 	static unique_ptr<BaseStatistics> TryPropagateCast(const BaseStatistics &stats, const LogicalType &source,
 	                                                   const LogicalType &target);
 
+	//! Propagate statistics into a lambda body, seeding the given statistics for the BoundReferenceExpressions
+	//! in the body (indexed by reference index; null slots / out-of-range indices propagate as unknown).
+	//! Used by the lambda scalar functions (list_transform/list_filter/list_reduce) via their statistics callback.
+	void PropagateLambdaStatistics(unique_ptr<Expression> &lambda_body,
+	                               const vector<unique_ptr<BaseStatistics>> &lambda_ref_stats);
+
 private:
 	//! Propagate statistics through an operator
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &node, unique_ptr<LogicalOperator> &node_ptr);
@@ -58,6 +64,7 @@ private:
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalLimit &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOrder &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalWindow &op, unique_ptr<LogicalOperator> &node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalUnnest &op, unique_ptr<LogicalOperator> &node_ptr);
 
 	unique_ptr<NodeStatistics> PropagateChildren(LogicalOperator &node, unique_ptr<LogicalOperator> &node_ptr);
 
@@ -107,6 +114,7 @@ private:
 	unique_ptr<BaseStatistics> PropagateExpression(BoundConstantExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundColumnRefExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundOperatorExpression &expr, unique_ptr<Expression> &expr_ptr);
+	unique_ptr<BaseStatistics> PropagateExpression(BoundReferenceExpression &expr, unique_ptr<Expression> &expr_ptr);
 
 	unique_ptr<BaseStatistics> PropagateComparison(BoundFunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
 
@@ -126,6 +134,9 @@ private:
 	optional_ptr<LogicalOperator> root;
 	//! The map of ColumnBinding -> statistics for the various nodes
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
+	//! While propagating into a lambda body: maps lambda body reference index -> statistics (null => unknown).
+	//! Only set for the duration of PropagateLambdaStatistics; null during normal expression propagation.
+	optional_ptr<const vector<unique_ptr<BaseStatistics>>> lambda_ref_stats;
 	//! Node stats for the current node
 	unique_ptr<NodeStatistics> node_stats;
 };
