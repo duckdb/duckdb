@@ -13,6 +13,9 @@ statement ok
 SET threads=1
 
 statement ok
+SET read_ahead_depth=0
+
+statement ok
 COPY (SELECT range AS i FROM range(100000)) TO '{TEST_DIR}/async_pool.parquet' (ROW_GROUP_SIZE 10000)
 
 statement ok

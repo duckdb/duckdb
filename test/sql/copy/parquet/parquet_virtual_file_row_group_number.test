@@ -6,6 +6,9 @@ require parquet
 
 require json
 
+statement ok
+SET read_ahead_depth=0
+
 # write a parquet file with 5 row groups (2048 rows each, except the last)
 statement ok
 copy (select i, i * 2 as j from range(10000) t(i)) to '{TEST_DIR}/rg.parquet' (format parquet, ROW_GROUP_SIZE 2048);
