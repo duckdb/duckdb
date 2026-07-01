@@ -162,7 +162,7 @@ SELECT * FROM cumulative_metrics;
 ----
 0	0
 
-# --- Single-row-group table: 1 / 1 ---
+# --- Single-row-group table: folded count(*) skips the scan ---
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -182,14 +182,14 @@ PRAGMA disable_profiling;
 query III
 SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
 ----
-TABLE_SCAN	1	1
+TABLE_SCAN	0	0
 
 query II
 SELECT * FROM cumulative_metrics;
 ----
-1	1
+0	0
 
-# --- Cumulative metrics are correct when only scanning a single table ---
+# --- Cumulative metrics are correct when count(*) is folded ---
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -209,14 +209,14 @@ PRAGMA disable_profiling;
 query III
 SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
 ----
-TABLE_SCAN	4	4
+TABLE_SCAN	0	0
 
 query II
 SELECT * FROM cumulative_metrics;
 ----
-4	4
+0	0
 
-# --- Multi-threaded scan: cross-thread sum still equals 4 ---
+# --- Multi-threaded folded count(*) also skips the scan ---
 
 statement ok
 PRAGMA threads=4;
@@ -239,12 +239,12 @@ PRAGMA disable_profiling;
 query III
 SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
 ----
-TABLE_SCAN	4	4
+TABLE_SCAN	0	0
 
 query II
 SELECT * FROM cumulative_metrics;
 ----
-4	4
+0	0
 
 # --- Multi-threaded filtered scan: pruning still leaves 1 ---
 
@@ -477,13 +477,26 @@ SELECT * FROM cumulative_metrics;
 statement ok
 ROLLBACK;
 
-# --- Transaction-local append: one persistent and one local row group ---
+# --- Transaction-local append: folded count(*) skips the scan ---
 
 statement ok
 BEGIN TRANSACTION;
 
 statement ok
 INSERT INTO persistent_local_rg SELECT range + 10 FROM range(10);
+
+# Reset profiling output after the previous filtered scan left stale TABLE_SCAN metrics.
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SELECT count(*) FROM empty_t;
+
+statement ok
+PRAGMA disable_profiling;
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -503,23 +516,35 @@ PRAGMA disable_profiling;
 query III
 SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
 ----
-TABLE_SCAN	2	2
+TABLE_SCAN	0	0
 
 query II
 SELECT * FROM cumulative_metrics;
 ----
-2	2
+0	0
 
 statement ok
 ROLLBACK;
 
-# --- Transaction-local append: total includes uncommitted local row groups ---
+# --- Transaction-local append: folded count(*) on large local table ---
 
 statement ok
 BEGIN TRANSACTION;
 
 statement ok
 INSERT INTO local_t SELECT range FROM range(400000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SELECT count(*) FROM empty_t;
+
+statement ok
+PRAGMA disable_profiling;
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -539,12 +564,12 @@ PRAGMA disable_profiling;
 query III
 SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
 ----
-TABLE_SCAN	4	4
+TABLE_SCAN	0	0
 
 query II
 SELECT * FROM cumulative_metrics;
 ----
-4	4
+0	0
 
 statement ok
 ROLLBACK;
