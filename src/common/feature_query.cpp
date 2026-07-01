@@ -46,6 +46,15 @@ static unique_ptr<ParsedExpression> FeatureBinaryFunction(const string &function
 	return make_uniq<FunctionExpression>(function_name, std::move(children), nullptr, nullptr, false, true);
 }
 
+static void FeatureAddGroupExpression(SelectNode &select_node, unique_ptr<ParsedExpression> expression) {
+	auto group_index = ProjectionIndex(select_node.groups.group_expressions.size());
+	select_node.groups.group_expressions.push_back(std::move(expression));
+	if (select_node.groups.grouping_sets.empty()) {
+		select_node.groups.grouping_sets.emplace_back();
+	}
+	select_node.groups.grouping_sets[0].insert(group_index);
+}
+
 bool FeatureColumnListContains(const vector<string> &columns, const string &column_name) {
 	for (auto &column : columns) {
 		if (StringUtil::CIEquals(column, column_name)) {
@@ -81,7 +90,7 @@ unique_ptr<SelectStatement> BuildFeaturePITQuery(const SelectNode &select_node,
 	for (auto &entity_column : parameters.entity_columns) {
 		anchor_select->select_list.push_back(FeatureColumnRef(entity_column));
 		result_select->select_list.push_back(FeatureColumnRef("anchor", entity_column));
-		result_select->groups.group_expressions.push_back(FeatureColumnRef("anchor", entity_column));
+		FeatureAddGroupExpression(*result_select, FeatureColumnRef("anchor", entity_column));
 
 		auto entity_condition = make_uniq<ComparisonExpression>(
 		    ExpressionType::COMPARE_EQUAL, FeatureColumnRef(parameters.source_table, entity_column),
@@ -99,7 +108,7 @@ unique_ptr<SelectStatement> BuildFeaturePITQuery(const SelectNode &select_node,
 	}
 
 	result_select->select_list.push_back(FeatureColumnRef("anchor", "feature_timestamp"));
-	result_select->groups.group_expressions.push_back(FeatureColumnRef("anchor", "feature_timestamp"));
+	FeatureAddGroupExpression(*result_select, FeatureColumnRef("anchor", "feature_timestamp"));
 	for (auto &feature_expression : feature_expressions) {
 		result_select->select_list.push_back(std::move(feature_expression));
 	}
