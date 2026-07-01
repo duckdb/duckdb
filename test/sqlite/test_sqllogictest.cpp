@@ -91,6 +91,18 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	runner.environment_variables["WORKING_DIR"] = TestGetCurrentDirectory();
 	runner.environment_variables["TEST_NAME"] = name;
 	runner.environment_variables["TEST_NAME__NO_SLASH"] = StringUtil::Replace(name, "/", "_");
+	runner.environment_variables["TEST_ID"] = StringUtil::Replace(name, "/", "_"); // == TEST_NAME__NO_SLASH
+	// TEMP_DIR -> assigned per-test to $BASE[/$RUN_ID][/$TEST_ID] -- RUN_ID and TEST_ID when enabled
+	runner.environment_variables["TEMP_DIR"] = test_dir_path;
+	{
+		auto local_fs = FileSystem::CreateLocal();
+		string temp_abs = test_dir_path;
+		if (!FileSystem::IsRemoteFile(test_dir_path) && !local_fs->IsPathAbsolute(temp_abs)) {
+			temp_abs = local_fs->JoinPath(TestGetCurrentDirectory(), temp_abs);
+		}
+		runner.environment_variables["TEMP_DIR_ABSOLUTE"] = temp_abs;
+	}
+	runner.environment_variables["CATALOG_DIR"] = test_dir_path + "/" + runner.environment_variables["TEST_UUID"];
 
 	ErrorData error;
 	try {
@@ -126,8 +138,10 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 		}
 	}
 
-	// clear test directory after running tests
-	ClearTestDirectory();
+	// $TEST_ID destroy: execute this test's destroy disposition using its pass/fail. On the
+	// on-success default a passing test's dir is reclaimed now; a failing test's is retained
+	// (main's DestroyTempDir then reclaims the whole run root only on overall success).
+	DestroyTestTempDir(!error.HasError());
 
 	if (error.HasError()) {
 		FAIL(error.Message());

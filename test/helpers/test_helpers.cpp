@@ -14,16 +14,31 @@
 #include "pid.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include <algorithm>
 #include <cmath>
+#include <ctime>
 #include <fstream>
 
 #define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
 
 namespace duckdb {
-static string custom_test_directory;
 static case_insensitive_set_t required_requires;
 static bool delete_test_path = true;
 static bool emit_on_skip = false; // --emit-on-skip opt-in: emit a [SKIP_TEST] marker per skipped test
+
+// --temp-dir-* family state: TEMP_DIR = $BASE/[RUN_ID]/[TEST_ID] (see DISPOSITIONS.md).
+static string temp_dir_base = TESTING_DIRECTORY_NAME; // $BASE; default duckdb_unittest_tempdir
+static bool temp_dir_run_id_in_path = true;           // --temp-dir-run-id {on|off}: RUN_ID as a path level
+static string temp_dir_run_id;                        // RUN_ID value (--run-id, or generated when absent)
+static bool temp_dir_test_id = true;
+static TempDirCreate temp_dir_create = TempDirCreate::ON_ABSENT;
+static TempDirDestroy temp_dir_destroy = TempDirDestroy::ON_SUCCESS;
+// Levels THIS invocation created (outermost..leaf), split by lifecycle so each
+// destroy step reclaims only what its own step made.
+static vector<string> temp_dir_run_created_levels;  // $BASE..$RUN_ID (main / Prepare|DestroyTempDir)
+static vector<string> temp_dir_test_created_levels; // $TEST_ID (per-test path)
+static string temp_dir_active_test_leaf;            // currently-materialized TEST_ID dir ("" when none)
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
@@ -64,9 +79,6 @@ string TestGetCurrentDirectory() {
 }
 
 void DeleteDatabase(string path) {
-	if (!custom_test_directory.empty()) {
-		return;
-	}
 	TestDeleteFile(path);
 	TestDeleteFile(path + ".wal");
 }
@@ -79,10 +91,6 @@ void TestCreateDirectory(string path) {
 string TestJoinPath(string path1, string path2) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	return fs->JoinPath(path1, path2);
-}
-
-void SetTestDirectory(string path) {
-	custom_test_directory = path;
 }
 
 void SetEmitOnSkip(bool emit) {
@@ -101,29 +109,318 @@ bool IsRequired(string require) {
 	return required_requires.count(require);
 }
 
-string GetTestDirectory() {
-	if (custom_test_directory.empty()) {
-		return TESTING_DIRECTORY_NAME;
-	}
-	return custom_test_directory;
+// -----------------------------------------------------------------------------
+// --temp-dir-* family
+//
+
+static string ResolveRunId(); // resolved RUN_ID value (always set; generated even when off); defined below
+
+void SetTempDirBase(const string &base) {
+	temp_dir_base = base;
 }
 
-string TestDirectoryPath() {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	auto test_directory = GetTestDirectory();
-	if (!fs->DirectoryExists(test_directory)) {
-		fs->CreateDirectory(test_directory);
-	}
-	string path;
-	if (custom_test_directory.empty()) {
-		// add the PID to the test directory - but only if it was not specified explicitly by the user
-		auto pid = getpid();
-		path = fs->JoinPath(test_directory, to_string(pid));
+string GetTempDirBase() {
+	return temp_dir_base;
+}
+
+string GetTempDirRunId() {
+	return ResolveRunId();
+}
+
+void SetRunId(const string &id) {
+	// The run identity → RUN_ID env (and the path segment when --temp-dir-run-id on). "auto"
+	// (or absent) generates one on first resolve; any other value is a caller-supplied fixed id
+	// (pytest passes one shared id so a run's many unittest batches co-locate).
+	temp_dir_run_id = (id == "auto") ? "" : id;
+}
+
+bool SetTempDirRunIdInPath(const string &mode) {
+	if (mode == "on") {
+		temp_dir_run_id_in_path = true;
+	} else if (mode == "off") {
+		temp_dir_run_id_in_path = false;
 	} else {
-		path = test_directory;
+		return false;
 	}
-	if (!fs->DirectoryExists(path)) {
-		fs->CreateDirectory(path);
+	return true;
+}
+
+bool SetTempDirTestId(const string &mode) {
+	if (mode == "on") {
+		temp_dir_test_id = true;
+	} else if (mode == "off") {
+		temp_dir_test_id = false;
+	} else {
+		return false;
+	}
+	return true;
+}
+
+bool SetTempDirCreate(const string &mode) {
+	if (mode == "never") {
+		temp_dir_create = TempDirCreate::NEVER;
+	} else if (mode == "on-absent") {
+		temp_dir_create = TempDirCreate::ON_ABSENT;
+	} else if (mode == "always") {
+		temp_dir_create = TempDirCreate::ALWAYS;
+	} else {
+		return false;
+	}
+	return true;
+}
+
+bool SetTempDirDestroy(const string &mode) {
+	if (mode == "never") {
+		temp_dir_destroy = TempDirDestroy::NEVER;
+	} else if (mode == "on-success") {
+		temp_dir_destroy = TempDirDestroy::ON_SUCCESS;
+	} else if (mode == "always") {
+		temp_dir_destroy = TempDirDestroy::ALWAYS;
+	} else {
+		return false;
+	}
+	return true;
+}
+
+// Join a leaf onto a parent. Remote parents are appended as pure strings (no VFS/mkdir);
+// local parents use the platform path join. An empty leaf yields the parent unchanged.
+static string JoinTempLevel(const string &parent, const string &leaf) {
+	if (leaf.empty()) {
+		return parent;
+	}
+	if (FileSystem::IsRemoteFile(parent)) {
+		if (parent.empty()) {
+			return leaf;
+		}
+		return (parent.back() == '/') ? parent + leaf : parent + "/" + leaf;
+	}
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	return fs->JoinPath(parent, leaf);
+}
+
+// RUN_ID auto value: sortable timestamp + a memorable mnemonic, e.g.
+// 2026-07-01T14-30-22Z--crimson-torus-07 (UTC). Mirrors the pytest driver's run-id shape
+// (test/py/driver/mnemonic.py: <ISO-basic>--<word>-<word>-<NN>) but uses DISTINCT word
+// banks — colors + shapes here vs the driver's adjectives + animals — so the run id's
+// vocabulary reveals its source: a color-shape run id was minted by the unittest binary, an
+// adjective-animal one by pytest.
+static const char *const TEMP_DIR_COLORS[] = {"crimson", "scarlet", "azure",   "cobalt", "teal",    "olive",
+                                              "maroon",  "indigo",  "violet",  "coral",  "ochre",   "umber",
+                                              "jade",    "ivory",   "slate",   "sienna", "magenta", "cyan",
+                                              "khaki",   "russet",  "saffron", "mauve",  "bronze",  "copper"};
+static const char *const TEMP_DIR_SHAPES[] = {"cube",    "prism",   "sphere",  "cone",  "torus",   "helix",
+                                              "wedge",   "disc",    "ring",    "arch",  "spiral",  "prong",
+                                              "vane",    "cusp",    "node",    "facet", "obelisk", "pylon",
+                                              "lattice", "rhombus", "spindle", "dome",  "ingot",   "girder"};
+
+static string GenerateAutoRunId() {
+	std::time_t now = std::time(nullptr);
+	char ts[24] = {0};
+	std::strftime(ts, sizeof(ts), "%Y-%m-%dT%H-%M-%SZ", std::gmtime(&now));
+	// hugeint_t carries independent entropy in lower/upper; index each bank + the 2 digits.
+	auto uuid = UUID::GenerateRandomUUID();
+	auto n_colors = sizeof(TEMP_DIR_COLORS) / sizeof(TEMP_DIR_COLORS[0]);
+	auto n_shapes = sizeof(TEMP_DIR_SHAPES) / sizeof(TEMP_DIR_SHAPES[0]);
+	const char *color = TEMP_DIR_COLORS[uuid.lower % n_colors];
+	const char *shape = TEMP_DIR_SHAPES[static_cast<uint64_t>(uuid.upper) % n_shapes];
+	auto nn = static_cast<int>((uuid.lower >> 32) % 100);
+	string digits = (nn < 10 ? "0" : "") + std::to_string(nn);
+	return string(ts) + "--" + color + "-" + shape + "-" + digits;
+}
+
+// Resolved RUN_ID value ("" when off). AUTO generates once and caches for the invocation.
+static string ResolveRunId() {
+	// The RUN_ID value is always resolved — the caller's --run-id, or a generated one when none
+	// was given — so the RUN_ID env var is populated even when run-id is not a TEMP_DIR path
+	// segment. Path inclusion is gated separately in ResolveRunIdRoot().
+	if (temp_dir_run_id.empty()) {
+		temp_dir_run_id = GenerateAutoRunId();
+	}
+	return temp_dir_run_id;
+}
+
+// $BASE/[RUN_ID] -- the run-id root; stable across the invocation. String-only (no IO).
+static string ResolveRunIdRoot() {
+	// run-id is a TEMP_DIR path segment only when --temp-dir-run-id on; the value still exists
+	// as the RUN_ID env var either way.
+	if (!temp_dir_run_id_in_path) {
+		return temp_dir_base;
+	}
+	return JoinTempLevel(temp_dir_base, ResolveRunId());
+}
+
+// $TEST_NAME__NO_SLASH for the currently-executing test ("" when TEST_ID off or no test
+// is active, e.g. at startup -- the test name isn't known until a test runs).
+static string ResolveTestId() {
+	if (!temp_dir_test_id) {
+		return "";
+	}
+	string name;
+	try {
+		name = Catch::getResultCapture().getCurrentTestName();
+	} catch (...) {
+		name = "";
+	}
+	if (name.empty()) {
+		return "";
+	}
+	return StringUtil::Replace(name, "/", "_");
+}
+
+// Full resolved path $BASE/[RUN_ID]/[TEST_ID]. String-only (no IO).
+static string ResolveTempDirPath() {
+	return JoinTempLevel(ResolveRunIdRoot(), ResolveTestId());
+}
+
+static bool DirectoryIsEmpty(FileSystem &fs, const string &path) {
+	bool empty = true;
+	fs.ListFiles(path, [&](const string &, bool) { empty = false; });
+	return empty;
+}
+
+// mkdir-p `path`, recording into `created` (outermost..leaf) which levels did not
+// previously exist so the matching destroy step removes only what it created. The walk
+// stops at the first pre-existing ancestor, so shared/parent levels created by an earlier
+// lifecycle step (or a prior run) are never recorded here.
+static void RecordAndCreateLevels(FileSystem &fs, const string &path, vector<string> &created) {
+	vector<string> to_create; // innermost first
+	string p = path;
+	while (!p.empty() && !fs.DirectoryExists(p)) {
+		to_create.push_back(p);
+		auto parent = StringUtil::GetFilePath(p);
+		if (parent.empty() || parent == p) {
+			break;
+		}
+		p = parent;
+	}
+	fs.CreateDirectoriesRecursive(path);
+	std::reverse(to_create.begin(), to_create.end()); // outermost..leaf
+	created = to_create;
+}
+
+// Recursive bottom-up reclaim: remove `leaf` (and its contents), then walk up `created`
+// removing each ancestor iff it is empty and this step created it; stop at the first
+// non-empty / not-this-step-created level. Shared by both destroy lifecycle steps.
+static void ReclaimLevels(FileSystem &fs, const string &leaf, const vector<string> &created) {
+	if (fs.DirectoryExists(leaf)) {
+		try {
+			fs.RemoveDirectory(leaf); // recursive
+		} catch (...) {
+		}
+	}
+	for (idx_t idx = created.size(); idx-- > 0;) {
+		const auto &level = created[idx];
+		if (level == leaf) {
+			continue; // already removed above
+		}
+		if (!fs.DirectoryExists(level)) {
+			continue;
+		}
+		if (!DirectoryIsEmpty(fs, level)) {
+			break; // shared with someone else's content -> stop
+		}
+		try {
+			fs.RemoveDirectory(level);
+		} catch (...) {
+			break;
+		}
+	}
+}
+
+static bool DestroyFires(TempDirDestroy disposition, bool success) {
+	switch (disposition) {
+	case TempDirDestroy::ON_SUCCESS:
+		return success;
+	case TempDirDestroy::ALWAYS:
+		return true;
+	case TempDirDestroy::NEVER:
+	default:
+		return false;
+	}
+}
+
+bool PrepareTempDir(string &error) {
+	if (temp_dir_base.empty()) {
+		error = "the --temp-dir-* family requires a non-empty base";
+		return false;
+	}
+	// Remote clamp: a remote base forces create=NEVER + destroy=NEVER; nothing to
+	// materialize here (object stores create-on-write; the test owns materialization).
+	if (FileSystem::IsRemoteFile(temp_dir_base)) {
+		return true;
+	}
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	string root = ResolveRunIdRoot(); // $BASE/[RUN_ID]
+	switch (temp_dir_create) {
+	case TempDirCreate::NEVER:
+		if (!fs->DirectoryExists(root)) {
+			error = "temp dir does not exist and --temp-dir-create=never: " + root;
+			return false;
+		}
+		break;
+	case TempDirCreate::ON_ABSENT:
+		RecordAndCreateLevels(*fs, root, temp_dir_run_created_levels);
+		break;
+	case TempDirCreate::ALWAYS:
+		if (fs->DirectoryExists(root)) {
+			fs->RemoveDirectory(root); // recursive
+		}
+		RecordAndCreateLevels(*fs, root, temp_dir_run_created_levels);
+		break;
+	}
+	return true;
+}
+
+void DestroyTempDir(bool success) {
+	// Remote clamp: destroy is forced to NEVER for remote bases.
+	if (FileSystem::IsRemoteFile(temp_dir_base)) {
+		return;
+	}
+	if (!DestroyFires(temp_dir_destroy, success)) {
+		return;
+	}
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	// Remove the run-id root recursively (subsumes any leftover per-test dirs), then reclaim
+	// this-run-created ancestors up to (but not past) a pre-existing $BASE.
+	ReclaimLevels(*fs, ResolveRunIdRoot(), temp_dir_run_created_levels);
+}
+
+void DestroyTestTempDir(bool success) {
+	// TEST_ID destroy: fired at test end using THIS test's pass/fail. Reclaims only the
+	// $TEST_ID level this test's path created -- $RUN_ID/$BASE pre-existed (created by
+	// PrepareTempDir at startup), so ReclaimLevels stops there.
+	if (!FileSystem::IsRemoteFile(temp_dir_base)) {
+		string leaf = temp_dir_active_test_leaf;
+		if (!leaf.empty() && DestroyFires(temp_dir_destroy, success)) {
+			duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+			ReclaimLevels(*fs, leaf, temp_dir_test_created_levels);
+		}
+	}
+	temp_dir_active_test_leaf.clear();
+	temp_dir_test_created_levels.clear();
+}
+// -----------------------------------------------------------------------------
+
+string TestDirectoryPath() {
+	string path = ResolveTempDirPath(); // $BASE/[RUN_ID]/[TEST_ID]
+	// Remote base: pure string, no mkdir (the test owns materialization).
+	if (FileSystem::IsRemoteFile(temp_dir_base)) {
+		return path;
+	}
+	// $TEST_ID is resolved and materialized here, lazily, the first time a given test's
+	// dir is requested (the test name isn't known until a test runs; $BASE/$RUN_ID were
+	// already materialized by PrepareTempDir at startup). We record only the levels this
+	// per-test path creates so DestroyTestTempDir reclaims exactly those.
+	string root = ResolveRunIdRoot();
+	if (path != root && path != temp_dir_active_test_leaf) {
+		temp_dir_active_test_leaf = path;
+		temp_dir_test_created_levels.clear();
+		if (temp_dir_create != TempDirCreate::NEVER) {
+			duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+			if (!fs->DirectoryExists(path)) {
+				RecordAndCreateLevels(*fs, path, temp_dir_test_created_levels);
+			}
+		}
 	}
 	return path;
 }
