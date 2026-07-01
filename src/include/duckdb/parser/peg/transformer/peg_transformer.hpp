@@ -859,6 +859,18 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeExplainableStatementsTrampoline(PEGTransformer &transformer,
 	                                                                                TransformStack &stack,
 	                                                                                TransformStackFrame &frame);
+	static void InitializeExportStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeExportStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeExportSourceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeExportSourceTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeImportStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeImportStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeCatalogReservedSchemaTableColumnNameTrampoline(PEGTransformer &transformer,
 	                                                                     TransformStack &stack,
 	                                                                     TransformStackFrame &frame);
@@ -2225,10 +2237,36 @@ public:
 	                                                  TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeTruncateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeImportStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                TransformStackFrame &frame);
+	static void InitializeGenericCopyOptionListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeGenericCopyOptionListTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
+	static void InitializeGenericCopyOptionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
-	FinalizeImportStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	FinalizeGenericCopyOptionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeGenericCopyOptionValueTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                       TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeGenericCopyOptionValueTrampoline(PEGTransformer &transformer,
+	                                                                                 TransformStack &stack,
+	                                                                                 TransformStackFrame &frame);
+	static void InitializeGenericCopyOptionOrderListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeGenericCopyOptionOrderListTrampoline(PEGTransformer &transformer,
+	                                                                                     TransformStack &stack,
+	                                                                                     TransformStackFrame &frame);
+	static void InitializeGenericCopyOptionExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeGenericCopyOptionExpressionTrampoline(PEGTransformer &transformer,
+	                                                                                      TransformStack &stack,
+	                                                                                      TransformStackFrame &frame);
+	static void InitializeGenericCopyOptionParenthesizedExpressionListTrampoline(PEGTransformer &transformer,
+	                                                                             TransformStack &stack,
+	                                                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeGenericCopyOptionParenthesizedExpressionListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                               TransformStackFrame &frame);
 	static void InitializeResetStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>

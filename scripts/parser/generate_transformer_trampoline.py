@@ -58,6 +58,7 @@ DEFAULT_GRAMMAR_FILES = [
     "drop.gram",
     "execute.gram",
     "explain.gram",
+    "export.gram",
     "expression.gram",
     "load.gram",
     "prepare.gram",
@@ -96,7 +97,14 @@ DEFAULT_EXTRA_RULES = {
     "create_trigger.gram": ["TriggerName"],
     "alter.gram": ["IdentifierDot", "NestedColumnName", "QualifiedSequenceName"],
     "delete.gram": ["TruncateStatement"],
-    "export.gram": ["ImportStatement"],
+    "copy.gram": [
+        "GenericCopyOptionList",
+        "GenericCopyOption",
+        "GenericCopyOptionValue",
+        "GenericCopyOptionOrderList",
+        "GenericCopyOptionExpression",
+        "GenericCopyOptionParenthesizedExpressionList",
+    ],
     "set.gram": [
         "ResetStatement",
         "SetVariableOrSetting",

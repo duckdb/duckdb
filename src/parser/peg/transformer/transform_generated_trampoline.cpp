@@ -242,6 +242,15 @@ static const TransformFrameOps EXPLAIN_SELECT_STATEMENT_OPS = {
 static const TransformFrameOps EXPLAINABLE_STATEMENTS_OPS = {
     "ExplainableStatements", &PEGTransformerFactory::InitializeExplainableStatementsTrampoline,
     &PEGTransformerFactory::FinalizeExplainableStatementsTrampoline};
+static const TransformFrameOps EXPORT_STATEMENT_OPS = {"ExportStatement",
+                                                       &PEGTransformerFactory::InitializeExportStatementTrampoline,
+                                                       &PEGTransformerFactory::FinalizeExportStatementTrampoline};
+static const TransformFrameOps EXPORT_SOURCE_OPS = {"ExportSource",
+                                                    &PEGTransformerFactory::InitializeExportSourceTrampoline,
+                                                    &PEGTransformerFactory::FinalizeExportSourceTrampoline};
+static const TransformFrameOps IMPORT_STATEMENT_OPS = {"ImportStatement",
+                                                       &PEGTransformerFactory::InitializeImportStatementTrampoline,
+                                                       &PEGTransformerFactory::FinalizeImportStatementTrampoline};
 static const TransformFrameOps COLUMN_REFERENCE_OPS = {"ColumnReference",
                                                        &PEGTransformerFactory::InitializeColumnReferenceTrampoline,
                                                        &PEGTransformerFactory::FinalizeColumnReferenceTrampoline};
@@ -1184,9 +1193,25 @@ static const TransformFrameOps QUALIFIED_SEQUENCE_NAME_OPS = {
 static const TransformFrameOps TRUNCATE_STATEMENT_OPS = {"TruncateStatement",
                                                          &PEGTransformerFactory::InitializeTruncateStatementTrampoline,
                                                          &PEGTransformerFactory::FinalizeTruncateStatementTrampoline};
-static const TransformFrameOps IMPORT_STATEMENT_OPS = {"ImportStatement",
-                                                       &PEGTransformerFactory::InitializeImportStatementTrampoline,
-                                                       &PEGTransformerFactory::FinalizeImportStatementTrampoline};
+static const TransformFrameOps GENERIC_COPY_OPTION_LIST_OPS = {
+    "GenericCopyOptionList", &PEGTransformerFactory::InitializeGenericCopyOptionListTrampoline,
+    &PEGTransformerFactory::FinalizeGenericCopyOptionListTrampoline};
+static const TransformFrameOps GENERIC_COPY_OPTION_OPS = {"GenericCopyOption",
+                                                          &PEGTransformerFactory::InitializeGenericCopyOptionTrampoline,
+                                                          &PEGTransformerFactory::FinalizeGenericCopyOptionTrampoline};
+static const TransformFrameOps GENERIC_COPY_OPTION_VALUE_OPS = {
+    "GenericCopyOptionValue", &PEGTransformerFactory::InitializeGenericCopyOptionValueTrampoline,
+    &PEGTransformerFactory::FinalizeGenericCopyOptionValueTrampoline};
+static const TransformFrameOps GENERIC_COPY_OPTION_ORDER_LIST_OPS = {
+    "GenericCopyOptionOrderList", &PEGTransformerFactory::InitializeGenericCopyOptionOrderListTrampoline,
+    &PEGTransformerFactory::FinalizeGenericCopyOptionOrderListTrampoline};
+static const TransformFrameOps GENERIC_COPY_OPTION_EXPRESSION_OPS = {
+    "GenericCopyOptionExpression", &PEGTransformerFactory::InitializeGenericCopyOptionExpressionTrampoline,
+    &PEGTransformerFactory::FinalizeGenericCopyOptionExpressionTrampoline};
+static const TransformFrameOps GENERIC_COPY_OPTION_PARENTHESIZED_EXPRESSION_LIST_OPS = {
+    "GenericCopyOptionParenthesizedExpressionList",
+    &PEGTransformerFactory::InitializeGenericCopyOptionParenthesizedExpressionListTrampoline,
+    &PEGTransformerFactory::FinalizeGenericCopyOptionParenthesizedExpressionListTrampoline};
 static const TransformFrameOps RESET_STATEMENT_OPS = {"ResetStatement",
                                                       &PEGTransformerFactory::InitializeResetStatementTrampoline,
                                                       &PEGTransformerFactory::FinalizeResetStatementTrampoline};
@@ -1610,6 +1635,9 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ExplainOptionName", &EXPLAIN_OPTION_NAME_OPS},
 	    {"ExplainSelectStatement", &EXPLAIN_SELECT_STATEMENT_OPS},
 	    {"ExplainableStatements", &EXPLAINABLE_STATEMENTS_OPS},
+	    {"ExportStatement", &EXPORT_STATEMENT_OPS},
+	    {"ExportSource", &EXPORT_SOURCE_OPS},
+	    {"ImportStatement", &IMPORT_STATEMENT_OPS},
 	    {"ColumnReference", &COLUMN_REFERENCE_OPS},
 	    {"CatalogReservedSchemaTableColumnName", &CATALOG_RESERVED_SCHEMA_TABLE_COLUMN_NAME_OPS},
 	    {"SchemaReservedTableColumnName", &SCHEMA_RESERVED_TABLE_COLUMN_NAME_OPS},
@@ -1938,7 +1966,12 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"NestedColumnName", &NESTED_COLUMN_NAME_OPS},
 	    {"QualifiedSequenceName", &QUALIFIED_SEQUENCE_NAME_OPS},
 	    {"TruncateStatement", &TRUNCATE_STATEMENT_OPS},
-	    {"ImportStatement", &IMPORT_STATEMENT_OPS},
+	    {"GenericCopyOptionList", &GENERIC_COPY_OPTION_LIST_OPS},
+	    {"GenericCopyOption", &GENERIC_COPY_OPTION_OPS},
+	    {"GenericCopyOptionValue", &GENERIC_COPY_OPTION_VALUE_OPS},
+	    {"GenericCopyOptionOrderList", &GENERIC_COPY_OPTION_ORDER_LIST_OPS},
+	    {"GenericCopyOptionExpression", &GENERIC_COPY_OPTION_EXPRESSION_OPS},
+	    {"GenericCopyOptionParenthesizedExpressionList", &GENERIC_COPY_OPTION_PARENTHESIZED_EXPRESSION_LIST_OPS},
 	    {"ResetStatement", &RESET_STATEMENT_OPS},
 	    {"SetVariableOrSetting", &SET_VARIABLE_OR_SETTING_OPS},
 	    {"SetVariable", &SET_VARIABLE_OPS},
@@ -3611,6 +3644,68 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeExplainableStatementsTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                TransformStackFrame &frame) {
 	auto result = frame.TakeResult<unique_ptr<SQLStatement>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeExportStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	auto &generic_copy_option_list_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (generic_copy_option_list_opt.HasResult()) {
+		stack.PushFrame(generic_copy_option_list_opt.GetResult(), GENERIC_COPY_OPTION_LIST_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 1));
+	}
+	auto &export_source_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (export_source_opt.HasResult()) {
+		stack.PushFrame(export_source_opt.GetResult(), EXPORT_SOURCE_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExportStatementTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	optional<string> export_source {};
+	if (frame.child_results[0]) {
+		export_source = frame.TakeResult<string>(0);
+	}
+	auto string_literal = PEGTransformerFactory::TransformStringLiteral(transformer, list_pr.GetChild(3));
+	optional<vector<GenericCopyOption>> generic_copy_option_list {};
+	if (frame.child_results[1]) {
+		generic_copy_option_list = frame.TakeResult<vector<GenericCopyOption>>(1);
+	}
+	auto result = PEGTransformerFactory::TransformExportStatement(transformer, export_source, string_literal,
+	                                                              generic_copy_option_list);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeExportSourceTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExportSourceTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto catalog_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
+	auto result = PEGTransformerFactory::TransformExportSource(transformer, catalog_name);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+void PEGTransformerFactory::InitializeImportStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeImportStatementTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto string_literal = PEGTransformerFactory::TransformStringLiteral(transformer, list_pr.GetChild(2));
+	auto result = PEGTransformerFactory::TransformImportStatement(transformer, string_literal);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
@@ -10156,18 +10251,129 @@ PEGTransformerFactory::FinalizeTruncateStatementTrampoline(PEGTransformer &trans
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
-void PEGTransformerFactory::InitializeImportStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
-                                                                TransformStackFrame &frame) {
-	frame.ReserveChildSlots(0);
+void PEGTransformerFactory::InitializeGenericCopyOptionListTrampoline(PEGTransformer &transformer,
+                                                                      TransformStack &stack,
+                                                                      TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(1 + dynamic_child_count - 1);
+	for (idx_t i = list_items.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		stack.PushFrame(list_items[child_idx].get(), GENERIC_COPY_OPTION_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0 + child_idx));
+	}
 }
 
-unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeImportStatementTrampoline(PEGTransformer &transformer,
-                                                                                          TransformStack &stack,
-                                                                                          TransformStackFrame &frame) {
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeGenericCopyOptionListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto string_literal = PEGTransformerFactory::TransformStringLiteral(transformer, list_pr.GetChild(2));
-	auto result = PEGTransformerFactory::TransformImportStatement(transformer, string_literal);
-	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	auto dynamic_child_count = dynamic_list_items.size();
+	vector<GenericCopyOption> generic_copy_option;
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+		generic_copy_option.push_back(frame.TakeResult<GenericCopyOption>(i));
+	}
+	auto result = PEGTransformerFactory::TransformGenericCopyOptionList(transformer, generic_copy_option);
+	return make_uniq<TypedTransformResult<vector<GenericCopyOption>>>(result);
+}
+
+void PEGTransformerFactory::InitializeGenericCopyOptionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                  TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	auto &generic_copy_option_value_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (generic_copy_option_value_opt.HasResult()) {
+		stack.PushFrame(generic_copy_option_value_opt.GetResult(), GENERIC_COPY_OPTION_VALUE_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeGenericCopyOptionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto copy_option_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
+	optional<GenericCopyOptionValue> generic_copy_option_value {};
+	if (frame.child_results[0]) {
+		generic_copy_option_value = std::move(frame.TakeResult<GenericCopyOptionValue>(0));
+	}
+	auto result = PEGTransformerFactory::TransformGenericCopyOption(transformer, copy_option_name,
+	                                                                std::move(generic_copy_option_value));
+	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
+}
+
+void PEGTransformerFactory::InitializeGenericCopyOptionValueTrampoline(PEGTransformer &transformer,
+                                                                       TransformStack &stack,
+                                                                       TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeGenericCopyOptionValueTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	auto result = frame.TakeResult<GenericCopyOptionValue>(0);
+	return make_uniq<TypedTransformResult<GenericCopyOptionValue>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeGenericCopyOptionOrderListTrampoline(PEGTransformer &transformer,
+                                                                           TransformStack &stack,
+                                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), GENERIC_COPY_OPTION_PARENTHESIZED_EXPRESSION_LIST_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeGenericCopyOptionOrderListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                    TransformStackFrame &frame) {
+	auto generic_copy_option_parenthesized_expression_list = frame.TakeResult<vector<OrderByNode>>(0);
+	auto result = PEGTransformerFactory::TransformGenericCopyOptionOrderList(
+	    transformer, std::move(generic_copy_option_parenthesized_expression_list));
+	return make_uniq<TypedTransformResult<GenericCopyOptionValue>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeGenericCopyOptionExpressionTrampoline(PEGTransformer &transformer,
+                                                                            TransformStack &stack,
+                                                                            TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), EXPRESSION_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeGenericCopyOptionExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                     TransformStackFrame &frame) {
+	auto expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
+	auto result = PEGTransformerFactory::TransformGenericCopyOptionExpression(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<GenericCopyOptionValue>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeGenericCopyOptionParenthesizedExpressionListTrampoline(
+    PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(ExtractResultFromParens(list_pr.GetChild(0)), ORDER_BY_EXPRESSION_LIST_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeGenericCopyOptionParenthesizedExpressionListTrampoline(
+    PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame) {
+	auto order_by_expression_list = frame.TakeResult<vector<OrderByNode>>(0);
+	auto result = PEGTransformerFactory::TransformGenericCopyOptionParenthesizedExpressionList(
+	    transformer, std::move(order_by_expression_list));
+	return make_uniq<TypedTransformResult<vector<OrderByNode>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeResetStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
