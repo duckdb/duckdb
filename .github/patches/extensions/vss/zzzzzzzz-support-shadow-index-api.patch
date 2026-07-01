@@ -1,5 +1,5 @@
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index 3f2b26d..17061e0 100644
+index 3f2b26d..e2b8b6e 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
 @@ -1,4 +1,3 @@
@@ -71,7 +71,7 @@ index 3f2b26d..17061e0 100644
  idx_t HNSWIndex::GetVectorSize() const {
  	return index.dimensions();
  }
-@@ -554,35 +571,39 @@ void HNSWIndex::PersistToDisk() {
+@@ -554,35 +571,46 @@ void HNSWIndex::PersistToDisk() {
  	is_dirty = false;
  }
  
@@ -107,23 +107,30 @@ index 3f2b26d..17061e0 100644
 -	info.allocator_infos.push_back(linked_block_allocator->GetInfo());
  
 -	return info;
++	// Create a new index based on the stream format, so we only copy over non-NULL slots.
++	auto shadow_index = USearchIndexType::make(index.metric(), index.config());
++	if (root_block_ptr.Get() != 0 && !linked_block_allocator->Empty()) {
++		LinkedBlockReader reader(*linked_block_allocator, root_block_ptr);
++		const auto load_result = shadow_index.load_from_stream([&](void *data, const size_t size) {
++			return size == reader.ReadData(static_cast<data_ptr_t>(data), size);
++		});
++		if (!load_result) {
++			throw InternalException("Failed to load checkpointed HNSW index: %s", load_result.error.what());
++		}
++	}
++
 +	auto &partial_block_manager = writer.GetPartialBlockManager();
 +	auto new_linked_block_allocator = linked_block_allocator->Persist(partial_block_manager);
 +	new_linked_block_allocator->RemoveEmptyBuffers();
 +
 +	info.allocator_infos.push_back(new_linked_block_allocator->GetInfo());
 +
-+	auto index_copy = index.copy();
-+	if (!index_copy) {
-+		throw InternalException("Failed to copy the HNSW index: %s", index_copy.error.what());
-+	}
-+
-+	auto shadow = CreateShadow(std::move(index_copy.index), root_block_ptr, std::move(new_linked_block_allocator));
++	auto shadow = CreateShadow(std::move(shadow_index), root_block_ptr, std::move(new_linked_block_allocator));
 +	return {std::move(info), std::move(shadow)};
  }
  
  idx_t HNSWIndex::GetInMemorySize(IndexLock &state) {
-@@ -612,7 +633,8 @@ void HNSWIndex::VerifyAllocations(IndexLock &state) {
+@@ -612,7 +640,8 @@ void HNSWIndex::VerifyAllocations(IndexLock &state) {
  //------------------------------------------------------------------------------
  // Can rewrite index expression?
  //------------------------------------------------------------------------------
@@ -133,7 +140,7 @@ index 3f2b26d..17061e0 100644
                                             const vector<ColumnIndex> &table_columns, bool &success, bool &found) {
  
  	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-@@ -656,8 +678,7 @@ bool HNSWIndex::TryBindIndexExpression(LogicalGet &get, unique_ptr<Expression> &
+@@ -656,8 +685,7 @@ bool HNSWIndex::TryBindIndexExpression(LogicalGet &get, unique_ptr<Expression> &
  	return false;
  }
  
@@ -143,7 +150,7 @@ index 3f2b26d..17061e0 100644
  	return function_matcher->Match(expr, bindings);
  }
  
-@@ -698,7 +719,6 @@ void HNSWIndex::VerifyBuffers(IndexLock &lock) {
+@@ -698,7 +726,6 @@ void HNSWIndex::VerifyBuffers(IndexLock &lock) {
  	linked_block_allocator->VerifyBuffers();
  }
  
