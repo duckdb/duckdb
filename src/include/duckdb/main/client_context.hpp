@@ -80,14 +80,6 @@ struct StatementSignature {
 	StatementProperties properties;
 };
 
-//! The result of binding a single expression: its return type and whether it contains an aggregate/window.
-//! The expression may be scalar, an aggregate, or a window function (the latter two are what the traits report).
-struct ExpressionBindResult {
-	LogicalType type;
-	bool contains_aggregate = false;
-	bool contains_window = false;
-};
-
 //! Interrupt state for the client context
 enum class ClientInterruptState : uint8_t { NOT_INTERRUPTED, INTERRUPTED, INTERRUPTS_SUPPRESSED };
 
@@ -210,11 +202,6 @@ public:
 	//! Bind a statement and return its signature, without building a PreparedStatement, optimizing, or
 	//! executing. Read-only: binding touches no in-flight query state, so a live result survives. Throws on error.
 	DUCKDB_API StatementSignature BindStatement(unique_ptr<SQLStatement> statement);
-	//! Bind a single expression against an input schema (column names + types), returning its return type
-	//! and aggregate/window traits. The expression may be scalar, an aggregate, or a window. Read-only,
-	//! like BindStatement. Throws on error.
-	DUCKDB_API ExpressionBindResult BindExpression(const vector<Identifier> &names, const vector<LogicalType> &types,
-	                                               unique_ptr<ParsedExpression> expr);
 
 	//! Create a pending query result from a prepared statement with the given name and set of parameters
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is

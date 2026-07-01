@@ -10,7 +10,6 @@ add_subdirectory(capi)
 
 set(TEST_API_OBJECTS
     test_api.cpp
-    test_bind_expression.cpp
     test_bind_statement.cpp
     test_config.cpp
     test_custom_allocator.cpp
