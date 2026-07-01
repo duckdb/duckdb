@@ -392,9 +392,9 @@ static void StructComparator(const Vector &left, const Vector &right, int8_t *re
 			const uint8_t *key_data = UnifiedVectorFormat::GetData<uint8_t>(key_format);
 			for (idx_t i = 0; i < remaining_count; i++) {
 				const auto remaining_idx = remaining_result_sel.get_index(i);
-				const idx_t key_idx = key_format.sel->get_index(remaining_idx);
+				const idx_t key_idx = key_format.sel->get_index(remaining_lhs_sel.get_index(i));
 				//	Skip if not the current column
-				if (key_data[key_idx] + 1 != child_idx) {
+				if (key_data[key_idx] != child_idx - 1) {
 					remaining_lhs_sel.set_index(new_remaining_count, remaining_lhs_sel.get_index(i));
 					remaining_rhs_sel.set_index(new_remaining_count, remaining_rhs_sel.get_index(i));
 					remaining_result_sel.set_index(new_remaining_count, remaining_idx);
