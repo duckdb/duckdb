@@ -19,7 +19,12 @@ static void RewriteJoinCondition(unique_ptr<Expression> &root_expr, idx_t offset
 }
 
 PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoin &op) {
-	// now visit the children
+	// Refresh join output types from children before planning; keeps MARK plans consistent when logical types lag
+	// behind child layouts (see ColumnBindingResolver after optimizer rewrites). Skip for delim joins: resolving
+	// before child plans are built breaks LogicalRecursiveCTE::ResolveTypes (recursive CTE key aggregation).
+	if (op.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		op.ResolveOperatorTypes();
+	}
 	D_ASSERT(op.children.size() == 2);
 	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);
 	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
