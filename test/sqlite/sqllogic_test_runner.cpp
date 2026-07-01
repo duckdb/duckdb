@@ -953,7 +953,13 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 						reason += " " + token.parameters[i];
 					}
 				}
-				AddSkipReason("mode skip " + reason);
+				auto skip_reason = "mode skip " + reason;
+				AddSkipReason(skip_reason);
+				// Also emit the parseable marker (gated on --emit-on-skip inside PrintSkip), tagged
+				// partial: unlike SkipTest() this does NOT abort via Catch — `mode skip` is a region
+				// skip (skip_level), so the test keeps running (and may `mode unskip`), hence
+				// [SKIP_TEST_PARTIAL] rather than the whole-test [SKIP_TEST].
+				SQLLogicTestLogger::PrintSkip(file_name, skip_reason, /* partial */ true);
 				skip_level++;
 			} else if (parameter == "unskip") {
 				skip_level--;
