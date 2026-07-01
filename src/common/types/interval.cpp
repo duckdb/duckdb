@@ -280,7 +280,8 @@ interval_parse_ago:
 		}
 	}
 	// invert all the values
-	if (result.months == NumericLimits<int32_t>::Minimum() || result.days == NumericLimits<int32_t>::Minimum()) {
+	if (result.months == NumericLimits<int32_t>::Minimum() || result.days == NumericLimits<int32_t>::Minimum() ||
+	    result.micros == NumericLimits<int64_t>::Minimum()) {
 		throw OutOfRangeException("AGO interval value is out of range");
 	}
 

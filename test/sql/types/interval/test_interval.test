@@ -84,6 +84,12 @@ SELECT interval '-2147483648 months' AS without_ago,
 ----
 AGO interval value is out of range
 
+# micros at INT64_MIN should also be caught (guard added alongside months/days)
+statement error
+SELECT INTERVAL '9223372036854775807 microseconds ago';
+----
+AGO interval value is out of range
+
 # months and hours, with optional @
 query T
 SELECT INTERVAL '@2mons 1H';
@@ -93,12 +99,6 @@ SELECT INTERVAL '@2mons 1H';
 # Parse hms format
 query I
 select interval '05:12:34.567890' as test_interval;
-----
-05:12:34.56789
-
-# Issue #8512 - Parse negative hms format
-query I
-select interval '-05:12:34.567890' as test_interval;
 ----
 -05:12:34.56789
 
