@@ -30,6 +30,7 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'mbedtls', 'include')]
     includes += [os.path.join('third_party', 'mbedtls', 'library')]
     includes += [os.path.join('third_party', 'miniz')]
+    includes += [os.path.join('third_party', 'nanoarrow')]
     includes += [os.path.join('third_party', 'pcg')]
     includes += [os.path.join('third_party', 'pdqsort')]
     includes += [os.path.join('third_party', 're2')]
@@ -58,6 +59,7 @@ def third_party_sources():
     sources += [os.path.join('third_party', 'mbedtls')]
     sources += [os.path.join('third_party', 'yyjson')]
     sources += [os.path.join('third_party', 'zstd')]
+    sources += [os.path.join('third_party', 'nanoarrow')]
     return sources
 
 

@@ -1,3 +1,4 @@
+include_directories(${PROJECT_SOURCE_DIR}/third_party/nanoarrow)
 add_library_unity(test_sql_adbc OBJECT test_adbc.cpp driver_manager.cpp)
 
 set(ALL_OBJECT_FILES

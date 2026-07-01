@@ -31,6 +31,7 @@ struct DuckDBErrorDetails {
 #include <string.h>
 
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 
 #include "duckdb/parser/keyword_helper.hpp"
 
@@ -93,8 +94,8 @@ AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *err
 		adbc_driver->ConnectionGetOptionBytes = duckdb_adbc::ConnectionGetOptionBytes;
 		adbc_driver->ConnectionGetOptionDouble = duckdb_adbc::ConnectionGetOptionDouble;
 		adbc_driver->ConnectionGetOptionInt = duckdb_adbc::ConnectionGetOptionInt;
-		adbc_driver->ConnectionGetStatistics = nullptr;
-		adbc_driver->ConnectionGetStatisticNames = nullptr;
+		adbc_driver->ConnectionGetStatistics = duckdb_adbc::ConnectionGetStatistics;
+		adbc_driver->ConnectionGetStatisticNames = duckdb_adbc::ConnectionGetStatisticNames;
 		adbc_driver->ConnectionSetOptionBytes = duckdb_adbc::ConnectionSetOptionBytes;
 		adbc_driver->ConnectionSetOptionInt = duckdb_adbc::ConnectionSetOptionInt;
 		adbc_driver->ConnectionSetOptionDouble = duckdb_adbc::ConnectionSetOptionDouble;
@@ -2626,6 +2627,319 @@ AdbcStatusCode ConnectionGetTableTypes(struct AdbcConnection *connection, struct
                                        struct AdbcError *error) {
 	const auto q = "SELECT DISTINCT table_type FROM information_schema.tables ORDER BY table_type";
 	return QueryInternal(connection, out, q, error);
+}
+
+//===--------------------------------------------------------------------===//
+// Statistics (ADBC 1.1.0)
+//===--------------------------------------------------------------------===//
+// The `statistic_value` column of GetStatistics must be a dense union per
+// the ADBC spec. DuckDB's Arrow export only produces sparse unions, so the
+// result batch cannot be produced with QueryInternal; instead it is built
+// using the nanoarrow builder API (third_party/nanoarrow).
+
+#define CHECK_NA(EXPR)                                                                                                 \
+	do {                                                                                                               \
+		if ((EXPR) != NANOARROW_OK) {                                                                                  \
+			SetError(error, "Failed to build Arrow data for statistics result");                                       \
+			return ADBC_STATUS_INTERNAL;                                                                               \
+		}                                                                                                              \
+	} while (0)
+
+// Builds the GetStatistics result schema defined in adbc.h. The caller is
+// responsible for releasing `schema` on failure.
+static AdbcStatusCode BuildGetStatisticsSchema(struct ArrowSchema &schema, struct AdbcError *error) {
+	ArrowSchemaInit(&schema);
+	CHECK_NA(ArrowSchemaSetTypeStruct(&schema, 2));
+
+	CHECK_NA(ArrowSchemaSetType(schema.children[0], NANOARROW_TYPE_STRING));
+	CHECK_NA(ArrowSchemaSetName(schema.children[0], "catalog_name"));
+
+	CHECK_NA(ArrowSchemaSetType(schema.children[1], NANOARROW_TYPE_LIST));
+	CHECK_NA(ArrowSchemaSetName(schema.children[1], "catalog_db_schemas"));
+	schema.children[1]->flags &= ~ARROW_FLAG_NULLABLE;
+
+	// children[1]->children[0] is auto-allocated and named "item" by ArrowSchemaSetType(LIST)
+	auto *db_schema_schema = schema.children[1]->children[0];
+	CHECK_NA(ArrowSchemaSetTypeStruct(db_schema_schema, 2));
+
+	CHECK_NA(ArrowSchemaSetType(db_schema_schema->children[0], NANOARROW_TYPE_STRING));
+	CHECK_NA(ArrowSchemaSetName(db_schema_schema->children[0], "db_schema_name"));
+
+	CHECK_NA(ArrowSchemaSetType(db_schema_schema->children[1], NANOARROW_TYPE_LIST));
+	CHECK_NA(ArrowSchemaSetName(db_schema_schema->children[1], "db_schema_statistics"));
+	db_schema_schema->children[1]->flags &= ~ARROW_FLAG_NULLABLE;
+
+	auto *statistics_schema = db_schema_schema->children[1]->children[0];
+	CHECK_NA(ArrowSchemaSetTypeStruct(statistics_schema, 5));
+
+	CHECK_NA(ArrowSchemaSetType(statistics_schema->children[0], NANOARROW_TYPE_STRING));
+	CHECK_NA(ArrowSchemaSetName(statistics_schema->children[0], "table_name"));
+	statistics_schema->children[0]->flags &= ~ARROW_FLAG_NULLABLE;
+
+	CHECK_NA(ArrowSchemaSetType(statistics_schema->children[1], NANOARROW_TYPE_STRING));
+	CHECK_NA(ArrowSchemaSetName(statistics_schema->children[1], "column_name"));
+
+	CHECK_NA(ArrowSchemaSetType(statistics_schema->children[2], NANOARROW_TYPE_INT16));
+	CHECK_NA(ArrowSchemaSetName(statistics_schema->children[2], "statistic_key"));
+	statistics_schema->children[2]->flags &= ~ARROW_FLAG_NULLABLE;
+
+	// statistic_value: dense union with four variants (int64, uint64, float64, binary)
+	CHECK_NA(ArrowSchemaSetTypeUnion(statistics_schema->children[3], NANOARROW_TYPE_DENSE_UNION, 4));
+	CHECK_NA(ArrowSchemaSetName(statistics_schema->children[3], "statistic_value"));
+	statistics_schema->children[3]->flags &= ~ARROW_FLAG_NULLABLE;
+
+	auto *value_schema = statistics_schema->children[3];
+	CHECK_NA(ArrowSchemaSetType(value_schema->children[0], NANOARROW_TYPE_INT64));
+	CHECK_NA(ArrowSchemaSetName(value_schema->children[0], "int64"));
+	CHECK_NA(ArrowSchemaSetType(value_schema->children[1], NANOARROW_TYPE_UINT64));
+	CHECK_NA(ArrowSchemaSetName(value_schema->children[1], "uint64"));
+	CHECK_NA(ArrowSchemaSetType(value_schema->children[2], NANOARROW_TYPE_DOUBLE));
+	CHECK_NA(ArrowSchemaSetName(value_schema->children[2], "float64"));
+	CHECK_NA(ArrowSchemaSetType(value_schema->children[3], NANOARROW_TYPE_BINARY));
+	CHECK_NA(ArrowSchemaSetName(value_schema->children[3], "binary"));
+
+	CHECK_NA(ArrowSchemaSetType(statistics_schema->children[4], NANOARROW_TYPE_BOOL));
+	CHECK_NA(ArrowSchemaSetName(statistics_schema->children[4], "statistic_is_approximate"));
+	statistics_schema->children[4]->flags &= ~ARROW_FLAG_NULLABLE;
+
+	return ADBC_STATUS_OK;
+}
+
+// Builds the GetStatisticNames result schema (statistic_name utf8 not null,
+// statistic_key int16 not null). The caller releases `schema` on failure.
+static AdbcStatusCode BuildGetStatisticNamesSchema(struct ArrowSchema &schema, struct AdbcError *error) {
+	ArrowSchemaInit(&schema);
+	CHECK_NA(ArrowSchemaSetTypeStruct(&schema, 2));
+	CHECK_NA(ArrowSchemaSetType(schema.children[0], NANOARROW_TYPE_STRING));
+	CHECK_NA(ArrowSchemaSetName(schema.children[0], "statistic_name"));
+	schema.children[0]->flags &= ~ARROW_FLAG_NULLABLE;
+	CHECK_NA(ArrowSchemaSetType(schema.children[1], NANOARROW_TYPE_INT16));
+	CHECK_NA(ArrowSchemaSetName(schema.children[1], "statistic_key"));
+	schema.children[1]->flags &= ~ARROW_FLAG_NULLABLE;
+	return ADBC_STATUS_OK;
+}
+
+#undef CHECK_NA
+
+namespace {
+// Row-count statistics grouped as catalog -> schema -> table, mirroring the
+// nesting of the GetStatistics result schema.
+struct StatisticsTableEntry {
+	duckdb::string table_name;
+	uint64_t row_count;
+};
+struct StatisticsSchemaGroup {
+	duckdb::string name;
+	duckdb::vector<StatisticsTableEntry> tables;
+};
+struct StatisticsCatalogGroup {
+	duckdb::string name;
+	duckdb::vector<StatisticsSchemaGroup> schemas;
+};
+
+// Releases a schema/array pair unless ownership was transferred to a stream
+// (BatchToArrayStream zeroes its inputs on success, making this a no-op).
+struct StatisticsBatchGuard {
+	StatisticsBatchGuard(struct ArrowSchema &schema_p, struct ArrowArray &array_p) : schema(schema_p), array(array_p) {
+	}
+	~StatisticsBatchGuard() {
+		if (schema.release) {
+			schema.release(&schema);
+		}
+		if (array.release) {
+			array.release(&array);
+		}
+	}
+	struct ArrowSchema &schema;
+	struct ArrowArray &array;
+};
+} // namespace
+
+#define CHECK_NA(EXPR)                                                                                                 \
+	do {                                                                                                               \
+		if ((EXPR) != NANOARROW_OK) {                                                                                  \
+			SetError(error, "Failed to build Arrow data for statistics result");                                       \
+			return ADBC_STATUS_INTERNAL;                                                                               \
+		}                                                                                                              \
+	} while (0)
+
+// Builds the nested GetStatistics result batch using the nanoarrow builder API.
+// DuckDB only reports approximate row-count statistics (statistic_is_approximate=true)
+// stored in the float64 union variant (type id 2).
+static AdbcStatusCode BuildGetStatisticsArray(struct ArrowSchema &schema, struct ArrowArray &array,
+                                              const duckdb::vector<StatisticsCatalogGroup> &catalogs,
+                                              struct AdbcError *error) {
+	struct ArrowError na_error;
+	memset(&na_error, 0, sizeof(na_error));
+	CHECK_NA(ArrowArrayInitFromSchema(&array, &schema, &na_error));
+	CHECK_NA(ArrowArrayStartAppending(&array));
+
+	auto *catalog_name_col = array.children[0];
+	auto *schemas_list = array.children[1];
+	auto *schema_struct = schemas_list->children[0];
+	auto *db_schema_name_col = schema_struct->children[0];
+	auto *stats_list = schema_struct->children[1];
+	auto *stats_struct = stats_list->children[0];
+	auto *table_name_col = stats_struct->children[0];
+	auto *column_name_col = stats_struct->children[1];
+	auto *key_col = stats_struct->children[2];
+	auto *value_col = stats_struct->children[3];
+	auto *approx_col = stats_struct->children[4];
+	// ROW_COUNT is approximate, stored as float64 (type id 2 in the dense union)
+	auto *float64_col = value_col->children[2];
+	constexpr int8_t kStatVariantFloat64 = 2;
+
+	for (auto &catalog : catalogs) {
+		CHECK_NA(ArrowArrayAppendString(catalog_name_col,
+		                                ArrowStringView {catalog.name.c_str(), (int64_t)catalog.name.size()}));
+
+		for (auto &schema_group : catalog.schemas) {
+			CHECK_NA(ArrowArrayAppendString(
+			    db_schema_name_col, ArrowStringView {schema_group.name.c_str(), (int64_t)schema_group.name.size()}));
+
+			for (auto &table : schema_group.tables) {
+				CHECK_NA(ArrowArrayAppendString(
+				    table_name_col, ArrowStringView {table.table_name.c_str(), (int64_t)table.table_name.size()}));
+				CHECK_NA(ArrowArrayAppendNull(column_name_col, 1));
+				CHECK_NA(ArrowArrayAppendInt(key_col, ADBC_STATISTIC_ROW_COUNT_KEY));
+				CHECK_NA(ArrowArrayAppendDouble(float64_col, static_cast<double>(table.row_count)));
+				CHECK_NA(ArrowArrayFinishUnionElement(value_col, kStatVariantFloat64));
+				CHECK_NA(ArrowArrayAppendInt(approx_col, 1));
+				CHECK_NA(ArrowArrayFinishElement(stats_struct));
+			}
+
+			CHECK_NA(ArrowArrayFinishElement(stats_list));
+			CHECK_NA(ArrowArrayFinishElement(schema_struct));
+		}
+
+		CHECK_NA(ArrowArrayFinishElement(schemas_list));
+		CHECK_NA(ArrowArrayFinishElement(&array));
+	}
+
+	CHECK_NA(ArrowArrayFinishBuildingDefault(&array, &na_error));
+	return ADBC_STATUS_OK;
+}
+
+#undef CHECK_NA
+
+AdbcStatusCode ConnectionGetStatistics(struct AdbcConnection *connection, const char *catalog, const char *db_schema,
+                                       const char *table_name, char approximate, struct ArrowArrayStream *out,
+                                       struct AdbcError *error) {
+	if (!connection || !connection->private_data) {
+		SetError(error, "Connection is invalid");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (!out) {
+		SetError(error, "Output parameter was not provided");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+	if (!conn_wrapper->connection) {
+		SetError(error, "Connection is not initialized");
+		return ADBC_STATUS_INVALID_STATE;
+	}
+	// Running a query on this connection invalidates any open streaming results.
+	conn_wrapper->MaterializeStreams();
+	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
+
+	// DuckDB only exposes cheap row-count estimates, so statistics are always
+	// returned with statistic_is_approximate = true; the spec allows returning
+	// approximate values regardless of the `approximate` argument.
+	auto query = duckdb::StringUtil::Format(R"(
+		SELECT database_name, schema_name, table_name, estimated_size
+		FROM duckdb_tables()
+		WHERE NOT internal
+			AND database_name LIKE %s
+			AND schema_name LIKE %s
+			AND table_name LIKE %s
+		ORDER BY database_name, schema_name, table_name
+	)",
+	                                        createFilter(catalog), createFilter(db_schema), createFilter(table_name));
+	auto result = conn->Query(query);
+	if (result->HasError()) {
+		SetError(error, result->GetError());
+		return ADBC_STATUS_INTERNAL;
+	}
+
+	duckdb::vector<StatisticsCatalogGroup> catalogs;
+	for (idx_t row_idx = 0; row_idx < result->RowCount(); row_idx++) {
+		auto size_value = result->GetValue(3, row_idx);
+		if (size_value.IsNull()) {
+			continue;
+		}
+		auto estimated_size = size_value.GetValue<int64_t>();
+		if (estimated_size < 0) {
+			continue;
+		}
+		auto catalog_name = result->GetValue(0, row_idx).GetValue<duckdb::string>();
+		auto schema_name = result->GetValue(1, row_idx).GetValue<duckdb::string>();
+		auto current_table = result->GetValue(2, row_idx).GetValue<duckdb::string>();
+		if (catalogs.empty() || catalogs.back().name != catalog_name) {
+			catalogs.push_back({catalog_name, {}});
+		}
+		auto &catalog_group = catalogs.back();
+		if (catalog_group.schemas.empty() || catalog_group.schemas.back().name != schema_name) {
+			catalog_group.schemas.push_back({schema_name, {}});
+		}
+		catalog_group.schemas.back().tables.push_back({current_table, static_cast<uint64_t>(estimated_size)});
+	}
+
+	struct ArrowSchema schema;
+	memset(&schema, 0, sizeof(schema));
+	struct ArrowArray array;
+	memset(&array, 0, sizeof(array));
+	StatisticsBatchGuard guard(schema, array);
+
+	auto status = BuildGetStatisticsSchema(schema, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = BuildGetStatisticsArray(schema, array, catalogs, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	// Per ADBC semantics `out` is a pure output parameter that may contain
+	// uninitialized stack garbage, so it must be zeroed rather than letting
+	// BatchToArrayStream inspect `out->release`.
+	memset(out, 0, sizeof(*out));
+	// On success ownership of schema/array moves into the stream and the guard
+	// becomes a no-op.
+	return BatchToArrayStream(&array, &schema, out, error);
+}
+
+AdbcStatusCode ConnectionGetStatisticNames(struct AdbcConnection *connection, struct ArrowArrayStream *out,
+                                           struct AdbcError *error) {
+	if (!connection || !connection->private_data) {
+		SetError(error, "Connection is invalid");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (!out) {
+		SetError(error, "Output parameter was not provided");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	// DuckDB defines no driver-specific statistics (keys >= 1024), so the
+	// result is always empty.
+	struct ArrowSchema schema;
+	memset(&schema, 0, sizeof(schema));
+	struct ArrowArray array;
+	memset(&array, 0, sizeof(array));
+	StatisticsBatchGuard guard(schema, array);
+
+	auto status = BuildGetStatisticNamesSchema(schema, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	struct ArrowError na_error;
+	memset(&na_error, 0, sizeof(na_error));
+	if (ArrowArrayInitFromSchema(&array, &schema, &na_error) != NANOARROW_OK ||
+	    ArrowArrayStartAppending(&array) != NANOARROW_OK ||
+	    ArrowArrayFinishBuildingDefault(&array, &na_error) != NANOARROW_OK) {
+		SetError(error, "Failed to build Arrow data for statistics result");
+		return ADBC_STATUS_INTERNAL;
+	}
+	// `out` may contain uninitialized stack garbage; see ConnectionGetStatistics.
+	memset(out, 0, sizeof(*out));
+	return BatchToArrayStream(&array, &schema, out, error);
 }
 
 int ErrorGetDetailCount(const struct AdbcError *error) {
