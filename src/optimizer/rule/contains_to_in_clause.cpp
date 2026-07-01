@@ -9,7 +9,8 @@ namespace duckdb {
 
 ContainsToInClauseRule::ContainsToInClauseRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto func = make_uniq<FunctionExpressionMatcher>();
-	func->function = make_uniq<SpecificFunctionMatcher>("contains");
+	identifier_set_t functions = {"contains", "list_contains", "list_has", "array_contains", "array_has"};
+	func->function = make_uniq<ManyFunctionMatcher>(functions);
 	func->matchers.push_back(make_uniq<FoldableConstantMatcher>());
 	func->matchers.push_back(make_uniq<ExpressionMatcher>());
 	func->policy = SetMatcher::Policy::ORDERED;
@@ -22,15 +23,27 @@ unique_ptr<Expression> ContainsToInClauseRule::Apply(LogicalOperator &op, vector
 	auto &list_arg = expr.GetChildren()[0];
 	auto &probe_arg = expr.GetChildren()[1];
 
-	if (probe_arg->IsFoldable()) {
-		return nullptr;
-	}
-
 	Value list_val;
 	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), *list_arg, list_val)) {
 		return nullptr;
 	}
-	if (list_val.IsNull() || list_val.type().id() != LogicalTypeId::LIST || ListValue::GetChildren(list_val).empty()) {
+	// Null list: result is always NULL regardless of the probe value.
+	if (list_val.IsNull()) {
+		changes_made = true;
+		return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
+	}
+	// For other types (i.e., string/map/struct) leave them alone.
+	if (list_val.type().id() != LogicalTypeId::LIST) {
+		return nullptr;
+	}
+	// Empty list: never contains a non-NULL value.
+	if (ListValue::GetChildren(list_val).empty()) {
+		changes_made = true;
+		return ExpressionRewriter::ConstantOrNull(probe_arg->Copy(), Value::BOOLEAN(false));
+	}
+
+	// Fully constant probe: let constant folding handle it.
+	if (probe_arg->IsFoldable()) {
 		return nullptr;
 	}
 
