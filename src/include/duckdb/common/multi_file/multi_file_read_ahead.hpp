@@ -27,6 +27,10 @@ public:
 	~MultiFileReadAhead();
 
 public:
+	//! Resolve the effective read-ahead depth from the read_ahead_depth setting (-1 = auto from thread count).
+	//! Returns 0 when read-ahead is disabled.
+	static idx_t ResolveDepth(ClientContext &context, idx_t max_threads);
+
 	//! Maximum number of jobs we try keep scheduled.
 	idx_t ReadAheadDepth() const {
 		return read_ahead_depth;

@@ -14,7 +14,6 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include <numeric>
@@ -526,13 +525,10 @@ public:
 
 		auto result = make_uniq<MultiFileLocalState>(context.client);
 
-		// The factory is the ONE place the scan mode is chosen; everything downstream is mode-agnostic.
 		if (gstate.read_ahead) {
 			// read-ahead path: jobs (each with their own scan state) are produced and pulled from the queue
-			result->source = make_uniq<ReadAheadJobSource>();
 			return std::move(result);
 		}
-		result->source = make_uniq<PerThreadJobSource>();
 
 		result->job.batch_index = 0;
 		result->job.reader_scan_state = bind_data.interface->InitializeLocalState(context.client, *gstate.global_state);
@@ -550,14 +546,7 @@ public:
 		    TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
 			return;
 		}
-		auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
-		idx_t depth;
-		if (configured_depth < 0) {
-			// TODO: We probably want to to make this depend on a memory budget
-			depth = gstate.max_threads + MaxValue<idx_t>(gstate.max_threads / 4, 4);
-		} else {
-			depth = NumericCast<idx_t>(configured_depth);
-		}
+		auto depth = MultiFileReadAhead::ResolveDepth(context, gstate.max_threads);
 		if (depth > 0) {
 			gstate.read_ahead = make_uniq<MultiFileReadAhead>(context, depth);
 		}
@@ -795,72 +784,66 @@ public:
 		read_ahead.EndProducer();
 	}
 
-	struct PerThreadJobSource final : MultiFileJobSource {
-		MultiFileAcquireResult AcquireNext(ClientContext &context, TableFunctionInput &input,
-		                                   MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
-		                                   MultiFileBindData &bind_data) override {
-			if (lstate.job_state == MultiFileJobState::NONE) {
-				if (!ClaimNextJob(context, bind_data, gstate, lstate.job)) {
-					return MultiFileAcquireResult::EXHAUSTED;
-				}
-				lstate.job_state = MultiFileJobState::SCHEDULE;
-			}
-			if (lstate.job_state == MultiFileJobState::SCHEDULE) {
-				auto scheduled =
-				    lstate.job.reader->ScheduleIO(context, *gstate.global_state, *lstate.job.reader_scan_state);
-				lstate.job_state = MultiFileJobState::DECODE;
-				if (scheduled.GetResultType() == AsyncResultType::BLOCKED && HandleBlocked(input, scheduled)) {
-					return MultiFileAcquireResult::PARKED;
-				}
-			}
-			return MultiFileAcquireResult::ACQUIRED;
-		}
-
-		MultiFileFinishResult Finish(ClientContext &context, MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
-		                             MultiFileBindData &bind_data) override {
+	static MultiFileAcquireResult AcquireNextPerThread(ClientContext &context, TableFunctionInput &input,
+	                                                   MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
+	                                                   MultiFileBindData &bind_data) {
+		if (lstate.job_state == MultiFileJobState::NONE) {
 			if (!ClaimNextJob(context, bind_data, gstate, lstate.job)) {
-				return MultiFileFinishResult::EXHAUSTED;
+				return MultiFileAcquireResult::EXHAUSTED;
 			}
 			lstate.job_state = MultiFileJobState::SCHEDULE;
-			return MultiFileFinishResult::CONTINUE;
 		}
-	};
-
-	struct ReadAheadJobSource final : MultiFileJobSource {
-		MultiFileAcquireResult AcquireNext(ClientContext &context, TableFunctionInput &, MultiFileLocalState &lstate,
-		                                   MultiFileGlobalState &gstate, MultiFileBindData &bind_data) override {
-			auto &read_ahead = *gstate.read_ahead;
-			while (true) {
-				// top up the queue, then pop the oldest job
-				FillReadAheadQueue(context, bind_data, gstate);
-				auto job = read_ahead.ClaimJob();
-				if (job) {
-					// block until the job's prefetched I/O has completed
-					read_ahead.WaitForJob(*job);
-					lstate.job = std::move(*job);
-					lstate.job_state = MultiFileJobState::DECODE;
-					return MultiFileAcquireResult::ACQUIRED;
-				}
-				if (read_ahead.IsDone()) {
-					return MultiFileAcquireResult::EXHAUSTED;
-				}
-				// stop spinning if the query was interrupted
-				if (context.IsInterrupted()) {
-					throw InterruptException();
-				}
-				// queue empty but scan not done, another thread is producing, wait for it to enqueue
-				TaskScheduler::YieldThread();
+		if (lstate.job_state == MultiFileJobState::SCHEDULE) {
+			auto scheduled = lstate.job.reader->ScheduleIO(context, *gstate.global_state, *lstate.job.reader_scan_state);
+			lstate.job_state = MultiFileJobState::DECODE;
+			if (scheduled.GetResultType() == AsyncResultType::BLOCKED && HandleBlocked(input, scheduled)) {
+				return MultiFileAcquireResult::PARKED;
 			}
 		}
+		return MultiFileAcquireResult::ACQUIRED;
+	}
 
-		MultiFileFinishResult Finish(ClientContext &, MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
-		                             MultiFileBindData &) override {
-			// free this job's in-flight slot, the next AcquireNext pulls the next queued job
-			gstate.read_ahead->FinishJob();
-			lstate.job_state = MultiFileJobState::NONE;
-			return MultiFileFinishResult::CONTINUE;
+	static MultiFileFinishResult FinishPerThread(ClientContext &context, MultiFileLocalState &lstate,
+	                                             MultiFileGlobalState &gstate, MultiFileBindData &bind_data) {
+		if (!ClaimNextJob(context, bind_data, gstate, lstate.job)) {
+			return MultiFileFinishResult::EXHAUSTED;
 		}
-	};
+		lstate.job_state = MultiFileJobState::SCHEDULE;
+		return MultiFileFinishResult::CONTINUE;
+	}
+
+	static MultiFileAcquireResult AcquireNextReadAhead(ClientContext &context, MultiFileLocalState &lstate,
+	                                                   MultiFileGlobalState &gstate, MultiFileBindData &bind_data) {
+		auto &read_ahead = *gstate.read_ahead;
+		while (true) {
+			// top up the queue, then pop the oldest job
+			FillReadAheadQueue(context, bind_data, gstate);
+			auto job = read_ahead.ClaimJob();
+			if (job) {
+				// block until the job's prefetched I/O has completed
+				read_ahead.WaitForJob(*job);
+				lstate.job = std::move(*job);
+				lstate.job_state = MultiFileJobState::DECODE;
+				return MultiFileAcquireResult::ACQUIRED;
+			}
+			if (read_ahead.IsDone()) {
+				return MultiFileAcquireResult::EXHAUSTED;
+			}
+			// stop spinning if the query was interrupted
+			if (context.IsInterrupted()) {
+				throw InterruptException();
+			}
+			// queue empty but scan not done, another thread is producing, wait for it to enqueue
+			TaskScheduler::YieldThread();
+		}
+	}
+
+	static MultiFileFinishResult FinishReadAhead(MultiFileLocalState &lstate, MultiFileGlobalState &gstate) {
+		// free this job's in-flight slot, the next AcquireNext pulls the next queued job
+		gstate.read_ahead->FinishJob();
+		lstate.job_state = MultiFileJobState::NONE;
+		return MultiFileFinishResult::CONTINUE;
+	}
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
@@ -876,11 +859,12 @@ public:
 			return;
 		}
 
-		auto &source = *data.source;
 		do {
 			// Acquire a job whenever we don't hold one ready to decode
 			if (data.job_state != MultiFileJobState::DECODE) {
-				switch (source.AcquireNext(context, data_p, data, gstate, bind_data)) {
+				auto acquired = gstate.read_ahead ? AcquireNextReadAhead(context, data, gstate, bind_data)
+				                                  : AcquireNextPerThread(context, data_p, data, gstate, bind_data);
+				switch (acquired) {
 				case MultiFileAcquireResult::PARKED:
 					return;
 				case MultiFileAcquireResult::EXHAUSTED:
@@ -895,8 +879,10 @@ public:
 				continue;
 			case MultiFileDecodeResult::RETURN_TO_CALLER:
 				return;
-			case MultiFileDecodeResult::JOB_FINISHED:
-				if (source.Finish(context, data, gstate, bind_data) == MultiFileFinishResult::EXHAUSTED) {
+			case MultiFileDecodeResult::JOB_FINISHED: {
+				auto finished = gstate.read_ahead ? FinishReadAhead(data, gstate)
+				                                  : FinishPerThread(context, data, gstate, bind_data);
+				if (finished == MultiFileFinishResult::EXHAUSTED) {
 					if (output.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
 						gstate.finished = true;
 						data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
@@ -910,6 +896,7 @@ public:
 					return;
 				}
 				continue;
+			}
 			}
 		} while (true);
 	}

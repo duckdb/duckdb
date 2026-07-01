@@ -1,6 +1,7 @@
 #include "duckdb/common/multi_file/multi_file_read_ahead.hpp"
 
 #include "duckdb/common/multi_file/multi_file_states.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -29,11 +30,18 @@ private:
 };
 
 MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p)
-    : read_ahead_depth(MaxValue<idx_t>(read_ahead_depth_p, 1)) {
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-	if (scheduler.NumberOfAsyncThreads() > 0) {
-		executor = make_uniq<TaskExecutor>(context, TaskSchedulerType::ASYNC);
+    : read_ahead_depth(read_ahead_depth_p) {
+	D_ASSERT(read_ahead_depth_p > 0);
+	executor = make_uniq<TaskExecutor>(context, TaskSchedulerType::ASYNC);
+}
+
+idx_t MultiFileReadAhead::ResolveDepth(ClientContext &context, idx_t max_threads) {
+	auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
+	if (configured_depth < 0) {
+		// TODO: We probably want to make this depend on a memory budget
+		return max_threads + MaxValue<idx_t>(max_threads / 4, 4);
 	}
+	return NumericCast<idx_t>(configured_depth);
 }
 
 MultiFileReadAhead::~MultiFileReadAhead() {
@@ -55,17 +63,9 @@ bool MultiFileReadAhead::IsDone() const {
 void MultiFileReadAhead::PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks) {
 	auto pending = make_shared_ptr<atomic<idx_t>>(io_tasks.size());
 	job->io_tasks_pending = pending;
-	if (executor && !io_tasks.empty()) {
-		// schedule the reads detached on the async pool
-		for (auto &task : io_tasks) {
-			executor->ScheduleTask(make_uniq<ReadAheadIOTask>(*executor, std::move(task), pending));
-		}
-	} else {
-		// run the read synchronously
-		for (auto &task : io_tasks) {
-			task->Execute();
-		}
-		pending->store(0);
+	// schedule the reads detached on the async pool
+	for (auto &task : io_tasks) {
+		executor->ScheduleTask(make_uniq<ReadAheadIOTask>(*executor, std::move(task), pending));
 	}
 	// bump active_jobs together with the enqueue so a throw above (before any state is published) cannot desync the
 	// count
@@ -97,11 +97,11 @@ void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
 	if (job.io_tasks_pending) {
 		auto &pending = *job.io_tasks_pending;
 		while (pending.load() > 0) {
-			if (executor && executor->HasError()) {
+			if (executor->HasError()) {
 				executor->ThrowError();
 			}
 			shared_ptr<Task> task;
-			if (executor && executor->GetTask(task)) {
+			if (executor->GetTask(task)) {
 				// pull a queued I/O task off the executor and run it on this thread
 				task->Execute(TaskExecutionMode::PROCESS_ALL);
 				task.reset();
@@ -110,7 +110,7 @@ void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
 			}
 		}
 	}
-	if (executor && executor->HasError()) {
+	if (executor->HasError()) {
 		executor->ThrowError();
 	}
 }
@@ -121,9 +121,6 @@ void MultiFileReadAhead::FinishJob() {
 }
 
 void MultiFileReadAhead::Drain() noexcept {
-	if (!executor) {
-		return;
-	}
 	try {
 		executor->WorkOnTasks();
 	} catch (...) { // LCOV_EXCL_START

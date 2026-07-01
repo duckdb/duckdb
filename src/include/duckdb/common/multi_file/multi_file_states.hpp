@@ -19,8 +19,6 @@
 namespace duckdb {
 struct MultiFileReaderInterface;
 class ClientContext;
-struct TableFunctionInput;
-struct MultiFileLocalState;
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
@@ -220,19 +218,6 @@ enum class MultiFileFinishResult : uint8_t {
 	EXHAUSTED //! the scan is finished
 };
 
-
-struct MultiFileJobSource {
-	virtual ~MultiFileJobSource() = default;
-
-
-	virtual MultiFileAcquireResult AcquireNext(ClientContext &context, TableFunctionInput &input,
-	                                           MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
-	                                           MultiFileBindData &bind_data) = 0;
-	//! Called after a job is fully decoded
-	virtual MultiFileFinishResult Finish(ClientContext &context, MultiFileLocalState &lstate,
-	                                     MultiFileGlobalState &gstate, MultiFileBindData &bind_data) = 0;
-};
-
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)
 struct MultiFileScanJob {
 	//! The reader producing this job
@@ -255,7 +240,6 @@ public:
 	}
 
 public:
-	unique_ptr<MultiFileJobSource> source;
 	//! The job currently being scanned by this thread
 	MultiFileScanJob job;
 	//! Job's state
