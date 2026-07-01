@@ -59,6 +59,7 @@ DEFAULT_GRAMMAR_FILES = [
     "create_schema.gram",
     "create_type.gram",
     "deallocate.gram",
+    "delete.gram",
     "describe.gram",
     "detach.gram",
     "drop.gram",
@@ -106,7 +107,6 @@ DEFAULT_EXTRA_RULES = {
     "create_secret.gram": ["SecretName"],
     "create_trigger.gram": ["TriggerName"],
     "alter.gram": ["IdentifierDot", "NestedColumnName", "QualifiedSequenceName"],
-    "delete.gram": ["TruncateStatement"],
     "select.gram": [
         "SelectStatement",
         "SelectStatementInternal",
