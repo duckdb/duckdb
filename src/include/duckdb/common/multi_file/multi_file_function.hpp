@@ -527,6 +527,7 @@ public:
 
 		if (gstate.read_ahead) {
 			// read-ahead path: jobs (each with their own scan state) are produced and pulled from the queue
+			result->read_ahead = gstate.read_ahead.get();
 			return std::move(result);
 		}
 

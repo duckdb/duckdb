@@ -238,12 +238,20 @@ struct MultiFileLocalState : public LocalTableFunctionState {
 public:
 	explicit MultiFileLocalState(ClientContext &context) : executor(context) {
 	}
+	~MultiFileLocalState() override {
+		// release the job's slot if this thread is torn down before finishing it (e.g. an early LIMIT exit)
+		if (read_ahead && job_state == MultiFileJobState::DECODE) {
+			read_ahead->FinishJob();
+		}
+	}
 
 public:
 	//! The job currently being scanned by this thread
 	MultiFileScanJob job;
 	//! Job's state
 	MultiFileJobState job_state = MultiFileJobState::NONE;
+	//! The read-ahead driving this scan, null when read-ahead is off
+	optional_ptr<MultiFileReadAhead> read_ahead;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
 	DataChunk scan_chunk;
 	//! Set when the previous Scan() returned BLOCKED, so the next Scan() preserves the partial chunk
