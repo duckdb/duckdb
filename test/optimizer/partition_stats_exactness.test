@@ -96,3 +96,29 @@ query III
 SELECT count(*), min(id), max(id) FROM big
 ----
 100999	1	100999
+
+# count(*) inside a transaction must reflect the transaction's own uncommitted deletes
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM big WHERE id BETWEEN 1 AND 10
+
+query II
+EXPLAIN SELECT count(*) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query I
+SELECT count(*) FROM big
+----
+100989
+
+statement ok
+ROLLBACK
+
+# After rollback the uncommitted deletes are gone again
+query I
+SELECT count(*) FROM big
+----
+100999
