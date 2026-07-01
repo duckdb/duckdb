@@ -287,19 +287,19 @@ public:
 	bool HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type);
 	void SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info);
 	void VacuumIndexes();
-	void VerifyIndexBuffers();
+	void VerifyIndexBuffers() const;
 	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
 	void Destroy();
 
 	Identifier GetTableName() const;
 	void SetTableName(Identifier new_name);
 
-	TableStorageInfo GetStorageInfo();
+	TableStorageInfo GetStorageInfo() const;
 
 	idx_t GetRowGroupSize() const;
 
 	//! Verify any unique indexes using optional delete indexes in the local storage.
-	void VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalTableStorage> storage, DataChunk &chunk,
+	void VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<LocalTableStorage> storage, DataChunk &chunk,
 	                         optional_ptr<ConflictManager> manager);
 	//! AddIndex initializes an index and adds it to the table's index list.
 	//! It is either empty, or initialized via its index storage information.

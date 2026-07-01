@@ -525,23 +525,23 @@ idx_t PhysicalInsert::OnConflictHandling(DuckTableEntry &table, ExecutionContext
 	if (conflict_info.column_ids.empty()) {
 		auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
 		// We care about every index that applies to the table if no ON CONFLICT (...) target is given
-		for (auto &index : global_indexes.Indexes()) {
-			if (!index.IsUnique()) {
+		for (auto &index : global_indexes.PinIndexes()) {
+			if (!index->IsUnique()) {
 				continue;
 			}
 			D_ASSERT(index.IsBound());
-			if (conflict_info.ConflictTargetMatches(index)) {
-				matching_indexes.insert(index);
+			if (conflict_info.ConflictTargetMatches(*index)) {
+				matching_indexes.insert(*index);
 			}
 		}
 		auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
-		for (auto &index : local_indexes.Indexes()) {
-			if (!index.IsUnique()) {
+		for (auto &index : local_indexes.PinIndexes()) {
+			if (!index->IsUnique()) {
 				continue;
 			}
 			D_ASSERT(index.IsBound());
-			if (conflict_info.ConflictTargetMatches(index)) {
-				auto &bound_index = index.Cast<BoundIndex>();
+			if (conflict_info.ConflictTargetMatches(*index)) {
+				auto &bound_index = index->Cast<BoundIndex>();
 				matching_indexes.insert(bound_index);
 			}
 		}

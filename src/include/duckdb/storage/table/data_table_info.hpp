@@ -49,7 +49,7 @@ public:
 	}
 	bool AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id);
 	optional_idx CheckpointRowGroupCount(const CheckpointOptions &options) const;
-	void VerifyIndexBuffers();
+	void VerifyIndexBuffers() const;
 
 	Identifier GetSchemaName();
 	Identifier GetTableName();

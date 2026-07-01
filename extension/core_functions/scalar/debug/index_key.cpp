@@ -108,8 +108,8 @@ static BoundIndex &FindBoundIndex(TableIndexList &index_list, const Identifier &
 
 	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	vector<Identifier> available;
-	for (auto &idx : index_list.Indexes()) {
-		available.push_back(idx.GetIndexName());
+	for (const auto &idx : index_list.PinIndexes()) {
+		available.push_back(idx->GetIndexName());
 	}
 
 	if (available.empty()) {
