@@ -270,6 +270,9 @@ OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatis
 		if (!column_stats) {
 			return {new_row_offset, 0, leading_null_group_offset};
 		}
+		if (!partition_stats.partition_row_group->MinMaxIsExact(*column_stats, storage_index)) {
+			return {row_offset, 0, 0};
+		}
 		if (null_order == OrderByNullType::NULLS_FIRST && IsNullOnly(*column_stats)) {
 			if (new_row_offset < partition_stats.count) {
 				return {new_row_offset, 0, leading_null_group_offset};
