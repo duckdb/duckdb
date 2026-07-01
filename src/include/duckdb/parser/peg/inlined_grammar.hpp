@@ -1473,7 +1473,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"DisconnectStatement <- 'DISCONNECT'\n"
 	"SessionTarget <- LocalSessionTarget / StringSessionTarget / CatalogSessionTarget\n"
 	"LocalSessionTarget <- 'LOCAL'\n"
-	"StringSessionTarget <- StringLiteral\n"
+	"StringSessionTarget <- StringLiteral GenericCopyOptionList?\n"
 	"CatalogSessionTarget <- CatalogName\n"
 	"CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType\n"
 	"CreateType <- EnumSelectType / EnumStringLiteralList / CreateTypeFromType\n"

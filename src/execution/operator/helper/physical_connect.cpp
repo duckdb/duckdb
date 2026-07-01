@@ -40,6 +40,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		AttachInfo attach_info;
 		attach_info.name = Identifier("__connect_" + to_string(client.GetConnectionId()));
 		attach_info.path = info->name.GetIdentifierName();
+		attach_info.options = info->options;
 
 		auto &config = DBConfig::GetConfig(client);
 		AttachOptions options(attach_info.options, config.options.access_mode);

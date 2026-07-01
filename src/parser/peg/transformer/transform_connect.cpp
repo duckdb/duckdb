@@ -1,3 +1,4 @@
+#include "duckdb/parser/peg/ast/generic_copy_option.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/connect_statement.hpp"
 #include "duckdb/parser/statement/disconnect_statement.hpp"
@@ -10,11 +11,33 @@ unique_ptr<ConnectInfo> PEGTransformerFactory::TransformLocalSessionTarget(PEGTr
 	return result;
 }
 
-unique_ptr<ConnectInfo> PEGTransformerFactory::TransformStringSessionTarget(PEGTransformer &transformer,
-                                                                            const string &string_literal) {
+unique_ptr<ConnectInfo>
+PEGTransformerFactory::TransformStringSessionTarget(PEGTransformer &transformer, const string &string_literal,
+                                                    const optional<vector<GenericCopyOption>> &generic_copy_option_list) {
 	auto result = make_uniq<ConnectInfo>();
 	result->name = Identifier(string_literal);
 	result->name_is_string_literal = true;
+	if (!generic_copy_option_list) {
+		return result;
+	}
+	// NOTE: mirrors the option split in TransformAttachStatement; candidate for a shared helper.
+	for (const auto &option : *generic_copy_option_list) {
+		if (option.expression) {
+			result->parsed_options[option.name.GetIdentifierName()] = option.expression->Copy();
+			continue;
+		}
+		if (option.children.empty()) {
+			result->options[option.name.GetIdentifierName()] = Value(true);
+		} else if (option.children.size() == 1) {
+			if (option.children[0].IsNull()) {
+				throw BinderException("NULL is not supported as a valid option for CONNECT option \"%s\"",
+				                      option.name);
+			}
+			result->options[option.name.GetIdentifierName()] = option.children[0];
+		} else {
+			throw ParserException("Option %s can only have one argument", option.name);
+		}
+	}
 	return result;
 }
 

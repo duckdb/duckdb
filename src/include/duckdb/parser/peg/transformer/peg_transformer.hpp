@@ -1011,8 +1011,9 @@ public:
 	static unique_ptr<ConnectInfo> TransformLocalSessionTarget(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformStringSessionTargetInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
-	static unique_ptr<ConnectInfo> TransformStringSessionTarget(PEGTransformer &transformer,
-	                                                            const string &string_literal);
+	static unique_ptr<ConnectInfo>
+	TransformStringSessionTarget(PEGTransformer &transformer, const string &string_literal,
+	                             const optional<vector<GenericCopyOption>> &generic_copy_option_list);
 	static unique_ptr<TransformResultValue> TransformCatalogSessionTargetInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
 	static unique_ptr<ConnectInfo> TransformCatalogSessionTarget(PEGTransformer &transformer,

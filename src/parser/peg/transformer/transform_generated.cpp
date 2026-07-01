@@ -1404,7 +1404,14 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformStringSessionTargetInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto string_literal = transformer.Transform<string>(list_pr.GetChild(0));
-	auto result = TransformStringSessionTarget(transformer, string_literal);
+	optional<vector<GenericCopyOption>> generic_copy_option_list {};
+	auto &generic_copy_option_list_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (generic_copy_option_list_opt.HasResult()) {
+		auto generic_copy_option_list_value =
+		    transformer.Transform<vector<GenericCopyOption>>(generic_copy_option_list_opt.GetResult());
+		generic_copy_option_list = generic_copy_option_list_value;
+	}
+	auto result = TransformStringSessionTarget(transformer, string_literal, generic_copy_option_list);
 	return make_uniq<TypedTransformResult<unique_ptr<ConnectInfo>>>(std::move(result));
 }
 
