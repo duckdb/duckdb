@@ -11,9 +11,9 @@ unique_ptr<ConnectInfo> PEGTransformerFactory::TransformLocalSessionTarget(PEGTr
 	return result;
 }
 
-unique_ptr<ConnectInfo>
-PEGTransformerFactory::TransformStringSessionTarget(PEGTransformer &transformer, const string &string_literal,
-                                                    const optional<vector<GenericCopyOption>> &generic_copy_option_list) {
+unique_ptr<ConnectInfo> PEGTransformerFactory::TransformStringSessionTarget(
+    PEGTransformer &transformer, const string &string_literal,
+    const optional<vector<GenericCopyOption>> &generic_copy_option_list) {
 	auto result = make_uniq<ConnectInfo>();
 	result->name = Identifier(string_literal);
 	result->name_is_string_literal = true;
@@ -30,8 +30,7 @@ PEGTransformerFactory::TransformStringSessionTarget(PEGTransformer &transformer,
 			result->options[option.name.GetIdentifierName()] = Value(true);
 		} else if (option.children.size() == 1) {
 			if (option.children[0].IsNull()) {
-				throw BinderException("NULL is not supported as a valid option for CONNECT option \"%s\"",
-				                      option.name);
+				throw BinderException("NULL is not supported as a valid option for CONNECT option \"%s\"", option.name);
 			}
 			result->options[option.name.GetIdentifierName()] = option.children[0];
 		} else {
