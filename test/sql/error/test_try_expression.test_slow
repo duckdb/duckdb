@@ -156,3 +156,34 @@ from values (0, null), (1, 1), (1, 1) t(a, b);
 NULL
 1
 1
+
+# --- lambda parameters referenced inside TRY ---
+# Previously failed to bind: "Referenced column x was not found"
+
+query I
+select list_transform([1, 2, 3], lambda x: TRY(x + 1));
+----
+[2, 3, 4]
+
+query I
+select list_transform([1, 2], lambda x: TRY(x));
+----
+[1, 2]
+
+# multiple lambda parameters inside TRY
+query I
+select list_reduce([1, 2, 3, 4], lambda acc, x: TRY(acc + x));
+----
+10
+
+# TRY catches a per-row error referencing the lambda parameter
+query I
+select list_transform([4, 0, 2], lambda x: TRY(10 // x));
+----
+[2, NULL, 5]
+
+# the originally reported query: decimal overflow caught per-element via TRY
+query I
+select list_transform([100.00, 101.21], lambda x: TRY(x = 1234567890123456789012345678901234567.8));
+----
+[NULL, NULL]

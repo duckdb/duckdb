@@ -63,10 +63,13 @@ public:
 
 public:
 	ColumnDataCollection &ApplyTransform(ColumnDataCollection &input);
+	bool MatchesTypes(const vector<LogicalType> &other_types) const;
 
 private:
 	//! The buffer to store the transformed chunks of a rowgroup
 	ColumnDataCollection buffer;
+	//! The types used to bind the expressions and initialize the buffer
+	vector<LogicalType> types;
 	//! The expression(s) to apply to the input chunk
 	vector<unique_ptr<Expression>> expressions;
 	//! The expression executor used to transform the input chunk

@@ -472,27 +472,47 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 	}
 
 	bool success = false;
-	if (write(ofd, "\x1b]11;?\007", 7) == 7) {
-		// Read the response: until \a or until we fill up our buffer
+	// We send the OSC 11 query to request the background color, followed by a DA1 ("Primary Device Attributes")
+	// Terminals answer queries in order, and virtually every terminal responds to DA1 - but not every
+	// terminal responds to OSC 11. When we receive the DA1 response without a preceding OSC 11 response, we know
+	// the terminal does not support OSC 11 - instead of blocking on a response that will never come.
+	if (write(ofd, "\x1b]11;?\007\x1b[c", 10) == 10) {
+		// Read the response: until the DA1 response ("\x1b[?<params>c")
 		string buf;
 		char read_buf[1];
+		bool found_da1 = false;
+		idx_t da1_start = 0;
 		while (true) {
-			// check if we have data to read
+			// wait up until 5s
+			if (!HasMoreData(ifd, 5000000)) {
+				// we didn't get data for 5s...
+				fprintf(stderr, "Timeout trying to read terminal background color (> 5s elapsed).\n");
+				fprintf(
+				    stderr,
+				    "Disable terminal background color detection by using duckdb -dark-mode or duckdb -light-mode.\n");
+				fprintf(stderr, "This likely means duckdb does not correctly support your CLI.\n");
+				fprintf(stderr, "Please file an issue.\n");
+				break;
+			}
 			if (read(ifd, read_buf, 1) != 1) {
 				break;
 			}
 			char c = read_buf[0];
-			if (c == '\a') {
-				break;
-			}
-			if (!buf.empty() && buf.back() == '\x1b' && c == '\\') {
-				buf.pop_back();
-				break;
-			}
 			buf += c;
+			if (!found_da1) {
+				if (buf.size() >= 3 && buf.compare(buf.size() - 3, 3, "\x1b[?") == 0) {
+					// found the start of the DA1 response
+					found_da1 = true;
+					da1_start = buf.size() - 3;
+				}
+			} else if (c == 'c') {
+				// the DA1 response is complete - stop reading
+				break;
+			}
 		}
-
-		success = ParseTerminalColor(color, buf.c_str(), buf.size());
+		// the OSC 11 response (if any) is everything before the DA1 response
+		idx_t response_size = found_da1 ? da1_start : buf.size();
+		success = ParseTerminalColor(color, buf.c_str(), response_size);
 	}
 	DisableRawModeInternal(ifd);
 	if (ifd != STDIN_FILENO) {

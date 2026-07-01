@@ -13,10 +13,10 @@ void ValidChecker::Invalidate(string error) {
 }
 
 bool ValidChecker::IsInvalidated() {
-	if (Settings::Get<DisableDatabaseInvalidationSetting>(db)) {
+	if (!is_invalidated) {
 		return false;
 	}
-	return is_invalidated;
+	return !Settings::Get<DisableDatabaseInvalidationSetting>(db);
 }
 
 string ValidChecker::InvalidatedMessage() {

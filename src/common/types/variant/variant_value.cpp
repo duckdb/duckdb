@@ -7,6 +7,7 @@
 #include "duckdb/common/types/datetime.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/variant.hpp"
@@ -785,6 +786,12 @@ yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc
 			return yyjson_mut_real(doc, primitive_value.GetValue<float>());
 		case LogicalTypeId::DOUBLE:
 			return yyjson_mut_real(doc, primitive_value.GetValue<double>());
+		case LogicalTypeId::BLOB: {
+			//! Follow the JSON serialization guide by converting BINARY to Base64:
+			//! For example: `"dmFyaWFudAo="`
+			auto value_str = Blob::ToBase64(primitive_value.GetValueUnsafe<string_t>());
+			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
+		}
 		case LogicalTypeId::DATE:
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::VARCHAR: {

@@ -9,7 +9,6 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/blob.hpp"
 
 static constexpr uint8_t VERSION_MASK = 0xF;
 static constexpr uint8_t SORTED_STRINGS_MASK = 0x1;
@@ -127,7 +126,7 @@ VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {
 		break;
 	}
 	default:
-		throw IOException("VariantBasicType (%d) not handled", static_cast<uint8_t>(result.basic_type));
+		throw InternalException("VariantBasicType (%d) not handled", static_cast<uint8_t>(result.basic_type));
 	}
 	return result;
 }
@@ -270,20 +269,18 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 		return VariantValue(std::move(value));
 	}
 	case VariantPrimitiveType::BINARY: {
-		//! Follow the JSON serialization guide by converting BINARY to Base64:
-		//! For example: `"dmFyaWFudAo="`
+		//! Keep the raw bytes as a BLOB so the type is preserved when reconstructing a VARIANT. The conversion to
+		//! Base64 happens now in VariantValue::ToJSON.
 		if (data_offset + sizeof(uint32_t) > data_size) {
 			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		auto size = Load<uint32_t>(data + data_offset);
 		data_offset += sizeof(uint32_t);
 
-		auto string_data = reinterpret_cast<const char *>(data + data_offset);
 		if (data_offset + size > data_size) {
 			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
-		auto base64_string = Blob::ToBase64(string_t(string_data, size));
-		return VariantValue(Value(base64_string));
+		return VariantValue(Value::BLOB(data + data_offset, size));
 	}
 	case VariantPrimitiveType::STRING: {
 		if (data_offset + sizeof(uint32_t) > data_size) {

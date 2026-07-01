@@ -97,3 +97,21 @@ FROM framed
 where a = 1
 ----
 1	c	c	c
+
+query III
+WITH t(a, q) AS (
+  VALUES
+    (1, NULL),
+    (2, 0)
+)
+SELECT
+  a,
+  q,
+  FIRST_VALUE(q ORDER BY 1 IGNORE NULLS) OVER (
+    PARTITION BY q, a
+  ) AS actual
+FROM t
+ORDER BY a;
+----
+1	NULL	NULL
+2	0	0

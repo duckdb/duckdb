@@ -355,9 +355,13 @@ public:
 
 ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, vector<LogicalType> types,
                                                      vector<unique_ptr<Expression>> expressions_p)
-    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), expressions(std::move(expressions_p)),
-      executor(context, expressions) {
-	chunk.Initialize(buffer.GetAllocator(), types);
+    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), types(std::move(types)),
+      expressions(std::move(expressions_p)), executor(context, expressions) {
+	chunk.Initialize(buffer.GetAllocator(), this->types);
+}
+
+bool ParquetWriteTransformData::MatchesTypes(const vector<LogicalType> &other_types) const {
+	return types == other_types;
 }
 
 //! TODO: this doesnt work.. the ParquetWriteTransformData is shared with all threads, the method is stateful, but has
@@ -488,22 +492,28 @@ void ParquetWriter::AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_pt
 }
 
 void ParquetWriter::InitializePreprocessing(unique_ptr<ParquetWriteTransformData> &transform_data) {
-	if (transform_data) {
-		return;
-	}
-
 	vector<LogicalType> transformed_types;
-	vector<unique_ptr<Expression>> transform_expressions;
 	for (idx_t col_idx = 0; col_idx < column_writers.size(); col_idx++) {
 		auto &column_writer = *column_writers[col_idx];
 		auto &original_type = sql_types[col_idx];
-		auto expr = make_uniq<BoundReferenceExpression>(original_type, col_idx);
 		if (!column_writer.HasTransform()) {
 			transformed_types.push_back(original_type);
-			transform_expressions.push_back(std::move(expr));
 			continue;
 		}
 		transformed_types.push_back(column_writer.TransformedType());
+	}
+	if (transform_data && transform_data->MatchesTypes(transformed_types)) {
+		return;
+	}
+
+	vector<unique_ptr<Expression>> transform_expressions;
+	for (idx_t col_idx = 0; col_idx < column_writers.size(); col_idx++) {
+		auto &column_writer = *column_writers[col_idx];
+		auto expr = make_uniq<BoundReferenceExpression>(sql_types[col_idx], col_idx);
+		if (!column_writer.HasTransform()) {
+			transform_expressions.push_back(std::move(expr));
+			continue;
+		}
 		transform_expressions.push_back(column_writer.TransformExpression(std::move(expr)));
 	}
 	transform_data = make_uniq<ParquetWriteTransformData>(context, transformed_types, std::move(transform_expressions));

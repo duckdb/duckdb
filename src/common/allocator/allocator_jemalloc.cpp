@@ -79,6 +79,11 @@ bool Allocator::SupportsFlush() {
 }
 
 void Allocator::ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) {
+	// jemalloc only manages allocation done through the Allocator interface.
+	// Any allocations done directly through "malloc" or "operator new" still
+	// go to the system allocator. So we also trim the system heap here.
+	MallocTrim(thread_count * threshold);
+
 	if (!allocator_background_threads) {
 		// We flush after exceeding the threshold
 		if (GetJemallocCTL<uint64_t>("thread.peak.read") <= threshold) {
@@ -115,6 +120,9 @@ void Allocator::FlushAll() {
 
 	// Reset the peak after resetting
 	SetJemallocCTL("thread.peak.reset");
+
+	// Also return the system heap (see ThreadFlush) to the OS
+	MallocTrim(0);
 }
 
 void Allocator::SetBackgroundThreads(bool enable) {

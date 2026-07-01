@@ -28,7 +28,8 @@
     {
       "reason": "No stats",
       "paths": [
-        "test/sql/types/geo/geometry_shred_types.test_slow"
+        "test/sql/types/geo/geometry_shred_types.test_slow",
+        "test/sql/types/geo/geometry_shred_more.test"
       ]
     },
     {

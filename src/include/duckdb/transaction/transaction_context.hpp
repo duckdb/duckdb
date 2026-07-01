@@ -44,6 +44,7 @@ public:
 	void Commit();
 	void Rollback(optional_ptr<ErrorData>);
 	void ClearTransaction();
+	void SetAutocheckpointError(ErrorData error);
 
 	void SetAutoCommit(bool value);
 	bool IsAutoCommit() const {
@@ -76,6 +77,7 @@ private:
 	bool auto_rollback = false;
 
 	unique_ptr<MetaTransaction> current_transaction;
+	ErrorData autocheckpoint_error;
 
 	TransactionContext(const TransactionContext &) = delete;
 };

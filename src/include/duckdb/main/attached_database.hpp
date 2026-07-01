@@ -10,6 +10,7 @@
 
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
 class Catalog;
@@ -109,6 +110,10 @@ public:
 	DatabaseInstance &GetDatabase() {
 		return db;
 	}
+	ValidChecker &GetValidChecker() {
+		return validity;
+	}
+	void Invalidate(const string &reason);
 
 	optional_ptr<StorageExtension> GetStorageExtension() {
 		return storage_extension;
@@ -149,6 +154,7 @@ public:
 
 private:
 	DatabaseInstance &db;
+	ValidChecker validity;
 	unique_ptr<StoredDatabasePath> stored_database_path;
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;

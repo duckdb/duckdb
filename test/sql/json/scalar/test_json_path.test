@@ -198,6 +198,24 @@ select json_extract(j, p) from tbl
 ----
 Invalid Input Error
 
+# a non-constant path that is not inlined (> 12 bytes) must not be read past its end
+# while looking ahead in ReadKey (trailing '*' or '.')
+statement error
+with tbl as (
+    select '{"aaaaaaaaaaaa":1}' j, '$.aaaaaaaaaaaa.*' p
+)
+select json_extract(j, p) from tbl
+----
+Invalid Input Error
+
+statement error
+with tbl as (
+    select '{"aaaaaaaaaaaa":1}' j, '$.aaaaaaaaaaaa..' p
+)
+select json_extract(j, p) from tbl
+----
+Invalid Input Error
+
 # wildcards do not work inside of a multi-extract
 statement error
 select json_extract('[{"duck":42},{"goose":43}]', ['$[*].duck', '$[*].goose'])

@@ -238,8 +238,11 @@ void MiniZStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t 
 	while (remaining > 0) {
 		auto output_remaining = UnsafeNumericCast<idx_t>((sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_start);
 
+		// miniz's avail_in is a platform-dependent unsigned int, cap ingestion bytes to avoid overflow.
+		auto avail_in = MinValue<int64_t>(remaining, NumericLimits<unsigned int>::Maximum());
+
 		mz_stream_ptr->next_in = reinterpret_cast<const unsigned char *>(uncompressed_data);
-		mz_stream_ptr->avail_in = NumericCast<unsigned int>(remaining);
+		mz_stream_ptr->avail_in = NumericCast<unsigned int>(avail_in);
 		mz_stream_ptr->next_out = sd.out_buff_start;
 		mz_stream_ptr->avail_out = NumericCast<unsigned int>(output_remaining);
 
@@ -255,9 +258,9 @@ void MiniZStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t 
 			                         UnsafeNumericCast<idx_t>(sd.out_buff_start - sd.out_buff.get()));
 			sd.out_buff_start = sd.out_buff.get();
 		}
-		auto written = UnsafeNumericCast<idx_t>(remaining - mz_stream_ptr->avail_in);
+		auto written = NumericCast<idx_t>(avail_in - mz_stream_ptr->avail_in);
 		uncompressed_data += written;
-		remaining = mz_stream_ptr->avail_in;
+		remaining -= NumericCast<int64_t>(written);
 	}
 }
 

@@ -281,7 +281,7 @@
         "test/sql/join/full_outer/full_outer_join_union.test",
         "test/sql/join/full_outer/test_full_outer_join_issue_4252.test",
         "test/sql/join/iejoin/iejoin_issue_7278.test",
-        "test/sql/join/iejoin/iejoin_projection_maps.test",
+        "test/sql/join/iejoin/iejoin_projection_maps.test_slow",
         "test/sql/join/iejoin/predicate_expressions.test",
         "test/sql/join/iejoin/test_iejoin.test",
         "test/sql/join/inner/join_cache.test",
