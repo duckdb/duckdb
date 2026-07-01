@@ -181,6 +181,7 @@ DEFAULT_EXTRA_RULES = {
         "OnClause",
         "UsingClause",
         "ColumnAliases",
+        "PivotGroupByList",
         "SampleClause",
         "SampleEntry",
         "SampleEntryFunction",

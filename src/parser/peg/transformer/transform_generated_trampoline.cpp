@@ -2548,6 +2548,9 @@ static const TransformFrameOps USING_CLAUSE_OPS = {"UsingClause",
 static const TransformFrameOps COLUMN_ALIASES_OPS = {"ColumnAliases",
                                                      &PEGTransformerFactory::InitializeColumnAliasesTrampoline,
                                                      &PEGTransformerFactory::FinalizeColumnAliasesTrampoline};
+static const TransformFrameOps PIVOT_GROUP_BY_LIST_OPS = {"PivotGroupByList",
+                                                          &PEGTransformerFactory::InitializePivotGroupByListTrampoline,
+                                                          &PEGTransformerFactory::FinalizePivotGroupByListTrampoline};
 static const TransformFrameOps SAMPLE_CLAUSE_OPS = {"SampleClause",
                                                     &PEGTransformerFactory::InitializeSampleClauseTrampoline,
                                                     &PEGTransformerFactory::FinalizeSampleClauseTrampoline};
@@ -3501,6 +3504,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"OnClause", &ON_CLAUSE_OPS},
 	    {"UsingClause", &USING_CLAUSE_OPS},
 	    {"ColumnAliases", &COLUMN_ALIASES_OPS},
+	    {"PivotGroupByList", &PIVOT_GROUP_BY_LIST_OPS},
 	    {"SampleClause", &SAMPLE_CLAUSE_OPS},
 	    {"SampleEntry", &SAMPLE_ENTRY_OPS},
 	    {"SampleEntryFunction", &SAMPLE_ENTRY_FUNCTION_OPS},
@@ -21402,6 +21406,33 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColumnAliasesTra
 		col_id_or_string.push_back(frame.TakeResult<Identifier>(i));
 	}
 	auto result = PEGTransformerFactory::TransformColumnAliases(transformer, col_id_or_string);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
+void PEGTransformerFactory::InitializePivotGroupByListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	auto dynamic_child_count = list_items.size();
+	frame.ReserveChildSlots(1 + dynamic_child_count - 1);
+	for (idx_t i = list_items.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		stack.PushFrame(list_items[child_idx].get(), COL_ID_OR_STRING_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0 + child_idx));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotGroupByListTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	auto dynamic_child_count = dynamic_list_items.size();
+	vector<Identifier> col_id_or_string;
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+		col_id_or_string.push_back(frame.TakeResult<Identifier>(i));
+	}
+	auto result = PEGTransformerFactory::TransformPivotGroupByList(transformer, col_id_or_string);
 	return make_uniq<TypedTransformResult<vector<string>>>(result);
 }
 

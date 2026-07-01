@@ -4255,6 +4255,10 @@ public:
 	                                              TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeColumnAliasesTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializePivotGroupByListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizePivotGroupByListTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeSampleClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                             TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
