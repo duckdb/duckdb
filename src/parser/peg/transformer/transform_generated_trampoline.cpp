@@ -13,6 +13,9 @@ static const TransformFrameOps ANALYZE_TARGET_OPS = {"AnalyzeTarget",
 static const TransformFrameOps ANALYZE_VERBOSE_OPS = {"AnalyzeVerbose",
                                                       &PEGTransformerFactory::InitializeAnalyzeVerboseTrampoline,
                                                       &PEGTransformerFactory::FinalizeAnalyzeVerboseTrampoline};
+static const TransformFrameOps CALL_STATEMENT_OPS = {"CallStatement",
+                                                     &PEGTransformerFactory::InitializeCallStatementTrampoline,
+                                                     &PEGTransformerFactory::FinalizeCallStatementTrampoline};
 static const TransformFrameOps CHECKPOINT_STATEMENT_OPS = {
     "CheckpointStatement", &PEGTransformerFactory::InitializeCheckpointStatementTrampoline,
     &PEGTransformerFactory::FinalizeCheckpointStatementTrampoline};
@@ -1522,6 +1525,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"AnalyzeStatement", &ANALYZE_STATEMENT_OPS},
 	    {"AnalyzeTarget", &ANALYZE_TARGET_OPS},
 	    {"AnalyzeVerbose", &ANALYZE_VERBOSE_OPS},
+	    {"CallStatement", &CALL_STATEMENT_OPS},
 	    {"CheckpointStatement", &CHECKPOINT_STATEMENT_OPS},
 	    {"CheckpointForce", &CHECKPOINT_FORCE_OPS},
 	    {"CommentStatement", &COMMENT_STATEMENT_OPS},
@@ -2118,6 +2122,26 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeAnalyzeVerboseTr
                                                                                          TransformStackFrame &frame) {
 	auto result = PEGTransformerFactory::TransformAnalyzeVerbose(transformer);
 	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeCallStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(2);
+	stack.PushFrame(list_pr.GetChild(2), TABLE_FUNCTION_ARGUMENTS_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 1));
+	stack.PushFrame(list_pr.GetChild(1), QUALIFIED_TABLE_FUNCTION_OPS,
+	                TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCallStatementTrampoline(PEGTransformer &transformer,
+                                                                                        TransformStack &stack,
+                                                                                        TransformStackFrame &frame) {
+	auto qualified_table_function = frame.TakeResult<QualifiedName>(0);
+	auto table_function_arguments = frame.TakeResult<vector<FunctionArgument>>(1);
+	auto result = PEGTransformerFactory::TransformCallStatement(transformer, qualified_table_function,
+	                                                            std::move(table_function_arguments));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeCheckpointStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
