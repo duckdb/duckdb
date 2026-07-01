@@ -66,6 +66,7 @@ DEFAULT_GRAMMAR_FILES = [
     "explain.gram",
     "export.gram",
     "expression.gram",
+    "insert.gram",
     "load.gram",
     "prepare.gram",
     "set.gram",
@@ -99,12 +100,19 @@ DEFAULT_EXTRA_RULES = {
         "Persistent",
         "TempPersistent",
         "TemporaryPersistent",
+        "ColumnIdList",
     ],
     "create_secret.gram": ["SecretName"],
     "create_trigger.gram": ["TriggerName"],
     "alter.gram": ["IdentifierDot", "NestedColumnName", "QualifiedSequenceName"],
     "delete.gram": ["TruncateStatement"],
-    "insert.gram": ["ColumnList", "InsertColumnList"],
+    "update.gram": [
+        "UpdateSetClause",
+        "UpdateSetTuple",
+        "UpdateSetElementList",
+        "UpdateSetElement",
+        "UpdateSetColumnTarget",
+    ],
     "select.gram": [
         "SelectStatement",
         "SelectStatementInternal",
@@ -136,6 +144,13 @@ DEFAULT_EXTRA_RULES = {
         "SelectFromClause",
         "FromSelectClause",
         "SelectClause",
+        "WithClause",
+        "WithStatement",
+        "CTEBody",
+        "CTESelectBody",
+        "UsingKey",
+        "Materialized",
+        "WhereClause",
         "DistinctClause",
         "DistinctAll",
         "DistinctOn",
@@ -637,23 +652,35 @@ class UseGramPreviewEmitter:
         return lines
 
     def emit_forward_rule(self, rule_name, ast):
-        if not isinstance(ast, ReferenceNode):
-            raise NotImplementedError("forward rules must be a direct rule reference")
-        if ast.name not in self.rule_types:
-            raise NotImplementedError(f"forward child '{ast.name}' is missing from grammar_types.yml")
+        sequence_ast = ast if isinstance(ast, SequenceNode) else SequenceNode([ast])
+        plan = plan_trampoline_sequence_rule_with_terminals(
+            sequence_ast,
+            self.matcher_overrides,
+            self.syntax_only_rules,
+            allow_dynamic_stack_followers=True,
+            allow_top_level_repeat=True,
+        )
+        semantic_args = [arg for arg in plan.finalize_args if isinstance(arg, StackChild)]
+        if len(semantic_args) != 1 or len(semantic_args) != len(plan.finalize_args):
+            raise NotImplementedError("forward rules must have exactly one stack child")
+        child_arg = semantic_args[0]
+        if child_arg.rule_name not in self.rule_types:
+            raise NotImplementedError(f"forward child '{child_arg.rule_name}' is missing from grammar_types.yml")
         cpp_type = self.cpp_type(rule_name)
-        child_cpp_type = self.cpp_type(ast.name)
+        child_cpp_type = self.cpp_type(child_arg.rule_name)
         if child_cpp_type != cpp_type:
-            raise NotImplementedError(f"forward child '{ast.name}' has type '{child_cpp_type}', expected '{cpp_type}'")
+            raise NotImplementedError(
+                f"forward child '{child_arg.rule_name}' has type '{child_cpp_type}', expected '{cpp_type}'"
+            )
 
-        lines = self.emit_sequence_initialize(rule_name, SequenceNode([ast]))
+        lines = self.emit_sequence_initialize(rule_name, sequence_ast)
         lines.append("")
         lines.append(
             f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"TransformStack &stack, TransformStackFrame &frame) {{"
         )
-        var_name = self.identifier_var_name(ast.name)
-        lines.append(f"\tauto {var_name} = frame.TakeResult<{child_cpp_type}>(0);")
+        var_name = child_arg.var_name
+        lines.append(f"\tauto {var_name} = frame.TakeResult<{child_cpp_type}>({child_arg.slot_idx});")
         lines.append(f"\treturn {typed_result_expr(cpp_type, var_name, self.by_value(rule_name))};")
         lines.append("}")
         return lines

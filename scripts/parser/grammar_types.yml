@@ -1568,7 +1568,9 @@ overrides:
     type: "TrimArguments"
     by_value: true
   # select.gram
-  WithStatement: "pair<Identifier, unique_ptr<CommonTableExpressionInfo>>"
+  WithStatement:
+    type: "pair<Identifier, unique_ptr<CommonTableExpressionInfo>>"
+    by_value: true
   JoinType:
     type: "JoinType"
     default_initializer: "INNER"
@@ -1582,7 +1584,9 @@ overrides:
     type: "OrderByNullType"
     default_initializer: "ORDER_DEFAULT"
   # update.gram
-  UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
+  UpdateSetElement:
+    type: "pair<string, unique_ptr<ParsedExpression>>"
+    by_value: true
 
 # ---------------------------------------------------------------------------
 # matcher.cpp rule overrides

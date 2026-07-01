@@ -220,7 +220,7 @@ def to_snake_case(name):
 
 
 def manual_body_exists(gram_stem, rule_name):
-    pattern = re.compile(rf'\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*\(')
+    pattern = re.compile(rf'\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*\([^;]*\)\s*\{{', re.S)
     preferred_path = transformer_dir / f"transform_{gram_stem}.cpp"
     paths = [preferred_path] if preferred_path.exists() else []
     paths.extend(path for path in transformer_dir.glob("transform_*.cpp") if path != preferred_path)
