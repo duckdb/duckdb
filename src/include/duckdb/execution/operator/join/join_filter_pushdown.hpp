@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/projection_index.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -32,6 +33,8 @@ enum class JoinFilterPushdownMode : uint8_t {
 };
 
 struct JoinFilterPushdownColumn {
+	//! Index into JoinFilterPushdownInfo::join_condition for this pushed column
+	idx_t join_filter_idx = DConstants::INVALID_INDEX;
 	//! The probe column index to which this filter should be applied
 	ColumnBinding probe_column_index;
 	//! The type of the value in storage (LogicalGet)
@@ -104,14 +107,16 @@ public:
 	                                      bool allow_prefix_range_filters = true) const;
 
 private:
-	bool PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
-	                  idx_t filter_idx, ProjectionIndex filter_col_idx) const;
+	bool PushInFilter(const JoinFilterPushdownFilter &info, const JoinFilterPushdownColumn &column, JoinHashTable &ht,
+	                  const PhysicalOperator &op, idx_t filter_idx, ProjectionIndex filter_col_idx) const;
 
 	void PushBloomFilter(ClientContext &context, const PhysicalOperator &op, JoinHashTable &ht,
-	                     const JoinFilterPushdownFilter &info, idx_t filter_idx, ProjectionIndex filter_col_idx) const;
+	                     const JoinFilterPushdownFilter &info, const JoinFilterPushdownColumn &column,
+	                     ProjectionIndex filter_col_idx) const;
 	bool TryRegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context, JoinHashTable &ht,
-	                                  const PhysicalOperator &op, idx_t filter_idx, ProjectionIndex filter_col_idx,
-	                                  const Value &min_val, const Value &max_val, idx_t max_bits) const;
+	                                  const PhysicalOperator &op, const JoinFilterPushdownColumn &column,
+	                                  ProjectionIndex filter_col_idx, const Value &min_val, const Value &max_val,
+	                                  idx_t max_bits) const;
 
 	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
 	bool CanUseBloomFilter(const ClientContext &context, const PhysicalComparisonJoin &op, const ExpressionType &cmp,

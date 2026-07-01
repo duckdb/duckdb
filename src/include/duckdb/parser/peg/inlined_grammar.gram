@@ -66,7 +66,7 @@ NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
 Type <- TypeVariations ArrayBounds*
-TypeVariations <- TimeType / IntervalType / BitType / RowType / VariantType / MapType / GeometryType / UnionType / NumericType / SetofType / SimpleType
+TypeVariations <- TimeType / IntervalType / BitType / RowType / VariantType / MapType / TupleType / GeometryType / UnionType / NumericType / SetofType / SimpleType
 SimpleType <- CharacterSimpleType / QualifiedSimpleType
 CharacterSimpleType <- CharacterType TypeModifiers?
 QualifiedSimpleType <- QualifiedTypeName TypeModifiers?
@@ -169,6 +169,7 @@ SetofType <- 'SETOF' Type
 UnionType <- 'UNION' ColIdTypeList
 ColIdTypeList <- Parens(List(ColIdType))
 MapType <- 'MAP' Parens(List(Type))
+TupleType <- 'TUPLE' Parens(List(Type))
 ColIdType <- ColId Type
 ArrayBounds <- SquareBracketsArray / ArrayKeyword
 ArrayKeyword <- 'ARRAY'
@@ -637,6 +638,7 @@ ColumnNameKeyword <- 'BETWEEN' /
 'TREAT' /
 'TRIM' /
 'TRY_CAST' /
+'TUPLE' /
 'VALUES' /
 'VARCHAR' /
 'XMLATTRIBUTES' /
@@ -678,6 +680,7 @@ FuncNameKeyword <- 'ASOF' /
 'SIMILAR' /
 'STRUCT' /
 'TABLESAMPLE' /
+'TUPLE' /
 'VERBOSE'
 TypeNameKeyword <- 'ASOF' /
 'AT' /
@@ -761,7 +764,7 @@ IgnoreOrRespectNulls <- IgnoreNulls / RespectNulls
 IgnoreNulls <- 'IGNORE' 'NULLS'
 RespectNulls <- 'RESPECT' 'NULLS'
 
-ParenthesisExpression <- Parens(List(Expression))
+ParenthesisExpression <- Parens(List(Expression)?)
 LiteralExpression <- StringLiteral / NumberLiteral / ConstantLiteral
 ConstantLiteral <- NullLiteral / TrueLiteral / FalseLiteral
 NullLiteral <- 'NULL'
@@ -838,7 +841,7 @@ ListExpression <- ArrayBoundedListExpression / ArrayParensSelect
 ArrayBoundedListExpression <- 'ARRAY'? BoundedListExpression
 ArrayParensSelect <- 'ARRAY' Parens(SelectStatementInternal)
 BoundedListExpression <- '[' List(Expression)? ']'
-StructExpression <- '{' List(StructField) '}'
+StructExpression <- '{' List(StructField)? '}'
 StructField <- ColIdOrString ':' Expression
 MapExpression <- 'MAP' MapStructExpression
 MapStructExpression <- '{' List(MapStructField)? '}'
@@ -941,13 +944,16 @@ BetweenInLikeOpExpression <- BetweenClause / InClause / LikeClause
 LikeClause <- LikeVariations OtherOperatorExpression EscapeClause?
 EscapeClause <- 'ESCAPE' ComparisonExpression
 
-LikeVariations <- SimilarToToken / ILikeToken / LikeToken / GlobToken / NotILikeOp / NotLikeOp / NotSimilarToOp
+LikeVariations <- SimilarToToken / RegexInsensitiveMatchToken / RegexMatchToken / ILikeToken / LikeToken / GlobToken / NotILikeOp / NotLikeOp / NotRegexInsensitiveMatchOp / NotSimilarToOp
 LikeToken      <- 'LIKE' / '~~'
 ILikeToken     <- 'ILIKE' / '~~*'
 GlobToken      <- 'GLOB' / '~~~'
-SimilarToToken <- ('SIMILAR' 'TO') / '~'
+SimilarToToken <- 'SIMILAR' 'TO'
+RegexMatchToken <- '~'
+RegexInsensitiveMatchToken <- '~*'
 NotILikeOp     <- '!~~*'
 NotLikeOp      <- '!~~'
+NotRegexInsensitiveMatchOp <- '!~*'
 NotSimilarToOp <- '!~'
 
 InClause <- 'IN' InExpression
@@ -972,7 +978,7 @@ ListOperator <- '&&' / '@>' / '<@'
 StringOperator <- '^@' / '||'
 QualifiedOperator <- 'OPERATOR' Parens(QualifiedOperatorContents)
 QualifiedOperatorContents <- ColIdDot* AnyOp
-AnyOp <- '!~~*' / '>>=' / '<<=' / '->>' / '!~~' / '~~*' / '~~~' / '!~' / '^@' / '||' / '&&' / '@>' / '<@' / '<=' / '>=' / '<>' / '!=' / '==' / '<<' / '>>' / '//' / '**' / '->' / '~~' / '+' / '-' / '*' / '/' / '%' / '^' / '<' / '>' / '=' / '&' / '|' / '~' / '!'
+AnyOp <- '!~~*' / '>>=' / '<<=' / '->>' / '!~~' / '!~*' / '~~*' / '~~~' / '~*' / '!~' / '^@' / '||' / '&&' / '@>' / '<@' / '<=' / '>=' / '<>' / '!=' / '==' / '<<' / '>>' / '//' / '**' / '->' / '~~' / '+' / '-' / '*' / '/' / '%' / '^' / '<' / '>' / '=' / '&' / '|' / '~' / '!'
 # LEVEL 9
 BitwiseExpression <- AdditiveExpression BitwiseExpressionTail*
 BitwiseExpressionTail <- BitOperator AdditiveExpression
@@ -1036,7 +1042,7 @@ LambdaExpression <- 'LAMBDA' List(ColIdOrString) ':' Expression
 NullIfExpression <- 'NULLIF' Parens(NullIfArguments)
 NullIfArguments <- Expression ',' Expression
 PositionExpression <- 'POSITION' Parens(PositionArguments)
-PositionArguments <- SingleExpression 'IN' SingleExpression
+PositionArguments <- OtherOperatorExpression 'IN' Expression
 RowExpression <- 'ROW' Parens(List(Expression)?)
 SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)
 SubstringArguments <- SubstringParameters / SubstringExpressionList
@@ -1295,7 +1301,7 @@ DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
 DropTable <- TableOrView IfExists? List(BaseTableName)
 DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
 DropFunction <- FunctionTypeMacro IfExists? List(FunctionIdentifier)
-DropSchema <- 'SCHEMA' IfExists? List(QualifiedSchemaName)
+DropSchema <- 'SCHEMA' IfExists? List(QualifiedName)
 DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
 QualifiedIndexName <- CatalogReservedSchemaIndex / SchemaReservedIndex / QualifiedIndexNameString
 QualifiedIndexNameString <- IndexName
@@ -1317,9 +1323,6 @@ CascadeDropBehavior <- 'CASCADE'
 RestrictDropBehavior <- 'RESTRICT'
 
 IfExists <- 'IF' 'EXISTS'
-QualifiedSchemaName <- CatalogReservedSchema / QualifiedSchemaNameString
-QualifiedSchemaNameString <- SchemaName
-CatalogReservedSchema <- CatalogQualification ReservedSchemaName
 
 DropSecretStorage <- 'FROM' Identifier
 

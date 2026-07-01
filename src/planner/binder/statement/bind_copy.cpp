@@ -504,7 +504,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	result.types = {LogicalType::BIGINT};
 	result.names = {"Count"};
 
-	if (stmt.info->table.empty()) {
+	if (stmt.info->Table().empty()) {
 		throw ParserException("COPY FROM requires a table name to be specified");
 	}
 	if (!function.copy_from_bind) {
@@ -514,9 +514,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	// generate an insert statement for the to-be-inserted table
 	InsertStatement insert;
 	auto &insert_node = *insert.node;
-	insert_node.table = stmt.info->table;
-	insert_node.schema = stmt.info->schema;
-	insert_node.catalog = stmt.info->catalog;
+	insert_node.qualified_name = stmt.info->GetQualifiedName();
 	insert_node.columns = stmt.info->select_list;
 
 	// bind the insert statement to the base table
@@ -526,9 +524,8 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	auto &bound_insert = insert_statement.plan->Cast<LogicalInsert>();
 
 	// lookup the table to copy into
-	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
-	auto &table =
-	    Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog, stmt.info->schema, stmt.info->table);
+	BindSchemaOrCatalog(stmt.info->GetQualifiedNameMutable());
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->GetQualifiedName());
 	physical_index_vector_t<idx_t> column_index_map;
 	vector<LogicalIndex> named_column_map;
 	vector<LogicalType> expected_types;
@@ -588,8 +585,8 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 	if (val.IsNull()) {
 		throw BinderException("NULL is not supported as a valid option for COPY option \"" + name + "\"");
 	}
-	if (val.type().id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(val.type())) {
-		// unpack unnamed structs into a list of options
+	if (val.type().id() == LogicalTypeId::TUPLE) {
+		// unpack unnamed structs (tuples) into a list of options
 		return StructValue::GetChildren(val);
 	}
 	result.push_back(std::move(val));
@@ -655,9 +652,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
 		auto ref = make_uniq<BaseTableRef>();
-		ref->catalog_name = stmt.info->catalog;
-		ref->schema_name = stmt.info->schema;
-		ref->table_name = stmt.info->table;
+		ref->SetQualifiedName(stmt.info->GetQualifiedName());
 
 		auto statement = make_uniq<SelectNode>();
 		statement->from_table = std::move(ref);
@@ -677,16 +672,20 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 	    stmt.info->is_format_auto_detected ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	CatalogEntryRetriever entry_retriever {context};
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry =
-	    catalog.GetEntry(entry_retriever, Identifier::DefaultSchema(),
-	                     EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, Identifier(stmt.info->format)), on_entry_do);
+	auto entry = catalog.GetEntry(
+	    entry_retriever,
+	    EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY,
+	                    QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier(stmt.info->format))),
+	    on_entry_do);
 
 	if (!entry) {
 		IsFormatExtensionKnown(stmt.info->format);
 		// If we did not find an entry, we default to a CSV
-		entry = catalog.GetEntry(entry_retriever, Identifier::DefaultSchema(),
-		                         EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY, "csv"),
-		                         OnEntryNotFound::THROW_EXCEPTION);
+		entry = catalog.GetEntry(
+		    entry_retriever,
+		    EntryLookupInfo(CatalogType::COPY_FUNCTION_ENTRY,
+		                    QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier("csv"))),
+		    OnEntryNotFound::THROW_EXCEPTION);
 	}
 	auto &copy_function = entry->Cast<CopyFunctionCatalogEntry>();
 	auto &function = copy_function.function;

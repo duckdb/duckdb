@@ -91,6 +91,11 @@ static T GetAverageDivident(uint64_t count, optional_ptr<FunctionData> bind_data
 }
 
 struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedAverageState::Combine(source, target, input, count);
+	}
+
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (state.count == 0) {
@@ -103,6 +108,11 @@ struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 };
 
 struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperation, AddToHugeint> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedAverageState::Combine(source, target, input, count);
+	}
+
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (state.count == 0) {
@@ -115,6 +125,11 @@ struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperat
 };
 
 struct DiscreteAverageOperation : public BaseSumOperation<AverageSetOperation, AddToHugeint> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedAverageState::Combine(source, target, input, count);
+	}
+
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (state.count == 0) {
@@ -129,6 +144,11 @@ struct DiscreteAverageOperation : public BaseSumOperation<AverageSetOperation, A
 };
 
 struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, HugeintAdd> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedAverageState::Combine(source, target, input, count);
+	}
+
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (state.count == 0) {
@@ -141,6 +161,11 @@ struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, Hu
 };
 
 struct NumericAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedAverageState::Combine(source, target, input, count);
+	}
+
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (state.count == 0) {
@@ -163,6 +188,11 @@ struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, Kaha
 };
 
 struct IntervalAverageOperation : public BaseSumOperation<AverageSetOperation, IntervalAdd> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedAverageState::Combine(source, target, input, count);
+	}
+
 	template <class RESULT_TYPE, class STATE>
 	static void Finalize(STATE &state, RESULT_TYPE &target, AggregateFinalizeData &finalize_data) {
 		if (state.count == 0) {
@@ -196,16 +226,21 @@ struct IntervalAverageOperation : public BaseSumOperation<AverageSetOperation, I
 };
 
 struct TimeTZAverageOperation : public BaseSumOperation<AverageSetOperation, AddToHugeint> {
+	template <class STATE, class OP>
+	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
+		RepeatedAverageState::Combine(source, target, input, count);
+	}
+
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &aggr_unary) {
-		const auto micros = Time::NormalizeTimeTZ(input).micros;
+		const auto micros = Time::NormalizeTimeTZ(input).value;
 		AverageSetOperation::template AddValues<STATE>(state, 1);
 		AddToHugeint::template AddNumber<STATE, int64_t>(state, micros);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &aggr_unary, idx_t count) {
-		const auto micros = Time::NormalizeTimeTZ(input).micros;
+		const auto micros = Time::NormalizeTimeTZ(input).value;
 		AverageSetOperation::template AddValues<STATE>(state, count);
 		AddToHugeint::template AddConstant<STATE, int64_t>(state, micros, count);
 	}

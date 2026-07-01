@@ -1113,3 +1113,47 @@ TEST_CASE("Union value construction (invalid value type)", "[capi]") {
 	duckdb_destroy_logical_type(&int_type);
 	duckdb_destroy_logical_type(&varchar_type);
 }
+
+TEST_CASE("C API unnamed struct cannot bypass tuple storage version gate", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto path = TestCreatePath("capi_unnamed_struct_v15.db");
+	std::remove(path.c_str());
+	std::remove((path + ".wal").c_str());
+
+	auto attach = "ATTACH '" + path + "' AS v15 (STORAGE_VERSION 'v1.5.0')";
+	auto attach_result = tester.Query(attach);
+	REQUIRE_NO_FAIL(*attach_result);
+
+	auto child_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	duckdb_logical_type child_types[] = {child_type};
+	const char *child_names[] = {""};
+
+	auto struct_type = duckdb_create_struct_type(child_types, child_names, 1);
+	REQUIRE(struct_type);
+	REQUIRE(duckdb_get_type_id(struct_type) == DUCKDB_TYPE_STRUCT);
+
+	auto child_value = duckdb_create_int32(42);
+	duckdb_value child_values[] = {child_value};
+
+	auto struct_value = duckdb_create_struct_value(struct_type, child_values);
+	REQUIRE(struct_value);
+	REQUIRE(duckdb_get_type_id(duckdb_get_value_type(struct_value)) == DUCKDB_TYPE_STRUCT);
+
+	duckdb_prepared_statement stmt;
+	REQUIRE(duckdb_prepare(tester.connection, "CREATE TABLE v15.t AS SELECT ? AS x", &stmt) == DuckDBSuccess);
+	REQUIRE(duckdb_bind_value(stmt, 1, struct_value) == DuckDBSuccess);
+
+	duckdb_result result;
+	REQUIRE(duckdb_execute_prepared(stmt, &result) == DuckDBError);
+	REQUIRE(StringUtil::Contains(string(duckdb_result_error(&result)),
+	                             "TUPLE columns are not supported in storage versions prior to v2.0.0"));
+
+	duckdb_destroy_result(&result);
+	duckdb_destroy_prepare(&stmt);
+	duckdb_destroy_value(&struct_value);
+	duckdb_destroy_value(&child_value);
+	duckdb_destroy_logical_type(&struct_type);
+	duckdb_destroy_logical_type(&child_type);
+}

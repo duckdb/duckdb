@@ -176,7 +176,7 @@ jobs:
             exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
             opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
             extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
-            extra_toolchains: unixodbc
+            extra_toolchains: unixodbc;parser_tools
           - name: Rust-based Extensions
             artifact_prefix: rust-based-extensions
             exclude_archs: ${{ needs.load-extension-configs.outputs.rust_based_extensions_exclude_archs }}
@@ -274,7 +274,9 @@ jobs:
 
           rm -rf /tmp/repository_signed_validation
           make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/repository_generation
-          ./scripts/verify-extension-signing.sh /tmp/repository_signed_validation "$public_key_file"
+          make verify-extension-signing \
+            SIGNED_EXTENSIONS_DIR=/tmp/repository_signed_validation \
+            EXTENSION_SIGNING_PUBLIC_KEY_FILE="$public_key_file"
 
       - name: Deploy extensions
         shell: bash

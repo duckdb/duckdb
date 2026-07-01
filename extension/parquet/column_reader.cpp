@@ -1,6 +1,7 @@
 #include "column_reader.hpp"
 
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
 
 #include <algorithm>
 #include <memory>
@@ -206,6 +207,19 @@ idx_t ColumnReader::GroupRowsAvailable() {
 	return group_rows_available;
 }
 
+bool ColumnReader::AllValuesAreNull() const {
+	// for repeated columns the null_count/num_values statistics do not reliably indicate that every value is NULL
+	// (num_values counts leaf slots, not rows), so we only trust this for non-repeated columns
+	if (MaxRepeat() != 0 || !chunk || !chunk->__isset.meta_data) {
+		return false;
+	}
+	auto &chunk_meta = chunk->meta_data;
+	if (!chunk_meta.__isset.statistics || !chunk_meta.statistics.__isset.null_count) {
+		return false;
+	}
+	return chunk_meta.statistics.null_count == chunk_meta.num_values;
+}
+
 void ColumnReader::PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values) {
 	throw NotImplementedException("PlainSkip not implemented");
 }
@@ -351,7 +365,7 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	}
 	// some basic sanity check
 	if (page_hdr.compressed_page_size < 0 || page_hdr.uncompressed_page_size < 0) {
-		throw InvalidInputException("Failed to read file \"%s\": Page sizes can't be < 0", Reader().GetFileName());
+		throw InvalidInputException("Failed to read file \"%s\": Page sizes must be >= 0", Reader().GetFileName());
 	}
 
 	if (PageIsFilteredOut(page_hdr, filter)) {
@@ -420,12 +434,28 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		return;
 	}
 
-	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
-	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
-	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
-	if (uncompressed_bytes > page_hdr.uncompressed_page_size) {
+	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed.
+	// the page sizes are already validated >= 0 by the caller, but the level lengths are not, so guard
+	// them here. with all four i32 header fields non-negative, the sum below cannot overflow once widened
+	// to uint64_t, and the uint64_t casts in the comparisons below are safe.
+	if (page_hdr.data_page_header_v2.repetition_levels_byte_length < 0 ||
+	    page_hdr.data_page_header_v2.definition_levels_byte_length < 0) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": header inconsistency, repetition_levels_byte_length and "
+		    "definition_levels_byte_length must be >= 0",
+		    Reader().GetFileName());
+	}
+	uint64_t uncompressed_bytes = static_cast<uint64_t>(page_hdr.data_page_header_v2.repetition_levels_byte_length) +
+	                              page_hdr.data_page_header_v2.definition_levels_byte_length;
+	if (uncompressed_bytes > static_cast<uint64_t>(page_hdr.uncompressed_page_size)) {
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, uncompressed_page_size needs to be larger than "
+		    "repetition_levels_byte_length + definition_levels_byte_length",
+		    Reader().GetFileName());
+	}
+	if (static_cast<uint64_t>(page_hdr.compressed_page_size) < uncompressed_bytes) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is smaller than "
 		    "repetition_levels_byte_length + definition_levels_byte_length",
 		    Reader().GetFileName());
 	}
@@ -433,6 +463,13 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	ReadData(block->ptr, uncompressed_bytes, page_hdr.type);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
+
+	if (compressed_bytes == 0 && static_cast<uint64_t>(page_hdr.uncompressed_page_size) > uncompressed_bytes) {
+		throw InvalidInputException(
+		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is too small for the "
+		    "declared value region",
+		    Reader().GetFileName());
+	}
 
 	if (compressed_bytes > 0) {
 		ResizeableBuffer compressed_buffer;
@@ -708,6 +745,20 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 	}
 	// read the defines/repeats
 	const auto all_valid = PrepareRead(read_now, define_out, repeat_out, result_offset);
+	if (!IsRoot() && AllValuesAreNull()) {
+		// every value is NULL: the parent still needs the define/repeat levels we just read, but there are no
+		// values to decode - set the result to NULL and skip the encoding read
+		if (result_offset == 0) {
+			// we own the entire vector - emit a constant NULL
+			ConstantVector::SetNull(result, count_t(read_now));
+		} else {
+			for (idx_t i = 0; i < read_now; i++) {
+				FlatVector::SetNull(result, result_offset + i, true);
+			}
+		}
+		page_rows_available -= read_now;
+		return;
+	}
 	// read the data according to the encoder
 	const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
 	switch (encoding) {
@@ -767,6 +818,12 @@ idx_t ColumnReader::ReadInternal(ColumnReaderInput &input, Vector &result) {
 }
 
 idx_t ColumnReader::Read(ColumnReaderInput &input, Vector &result) {
+	if (IsRoot() && AllValuesAreNull()) {
+		// a top-level column that is entirely NULL - emit a constant NULL vector without reading anything.
+		// (nested columns are handled in ReadData: they still need to emit their define/repeat levels)
+		ConstantVector::SetNull(result, count_t(input.num_values));
+		return input.num_values;
+	}
 	BeginRead(input.define_out, input.repeat_out);
 	return ReadInternal(input, result);
 }
@@ -774,7 +831,7 @@ idx_t ColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 void ColumnReader::Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
                           idx_t approved_tuple_count) {
 	auto &num_values = input.num_values;
-	if (SupportsDirectSelect() && approved_tuple_count < num_values) {
+	if (SupportsDirectSelect() && approved_tuple_count < num_values && !(IsRoot() && AllValuesAreNull())) {
 		DirectSelect(input, result, sel, approved_tuple_count);
 		return;
 	}
@@ -811,7 +868,7 @@ void ColumnReader::Filter(ColumnReaderInput &input, Vector &result, const TableF
                           TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count,
                           bool is_first_filter) {
 	auto &num_values = input.num_values;
-	if (SupportsDirectFilter() && is_first_filter) {
+	if (SupportsDirectFilter() && is_first_filter && !(IsRoot() && AllValuesAreNull())) {
 		DirectFilter(input, result, filter, filter_state, sel, approved_tuple_count);
 		return;
 	}

@@ -376,6 +376,13 @@
         "default_value": "false"
     },
     {
+        "name": "debug_transformer_trampoline_style",
+        "description": "Use the experimental trampoline-style parser transformer",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "debug_verification_mode",
         "description": "DEBUG SETTING: toggle the verification mode.",
         "type": "VARCHAR",
@@ -1213,6 +1220,13 @@
         "type": "BIGINT",
         "default_scope": "global",
         "default_value": "-1"
+    },
+    {
+        "name": "regex_match_operator_semantics",
+        "description": "Configures whether regex match operators use partial or full string matching",
+        "type": "ENUM<RegexMatchOperatorSemantics>",
+        "default_scope": "local",
+        "default_value": "partial"
     },
     {
         "name": "scalar_subquery_error_on_multiple_rows",

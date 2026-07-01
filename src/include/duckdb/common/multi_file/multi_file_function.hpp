@@ -15,6 +15,8 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include <numeric>
 
 namespace duckdb {
@@ -300,7 +302,7 @@ public:
 			throw InternalException("parallel_lock is not held in TryOpenNextFile, this should not happen");
 		}
 
-		const auto file_lookahead_limit = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		const auto file_lookahead_limit = TaskScheduler::GetScheduler(context).NumberOfThreads();
 
 		idx_t file_index = global_state.file_index;
 		idx_t i = 0;
@@ -612,7 +614,7 @@ public:
 		result->filters = input.filters.get();
 		result->op = input.op;
 		result->global_state = bind_data.interface->InitializeGlobalState(context, bind_data, *result);
-		result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		result->max_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 
 		// Ensure all readers are initialized and FileListScan is sync with readers list
 		for (auto &reader_data : result->readers) {
@@ -1017,7 +1019,7 @@ public:
 	static unique_ptr<NodeStatistics> MultiFileCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<MultiFileBindData>();
 		if (IsEmptyResult(data)) {
-			return make_uniq<NodeStatistics>(0);
+			return make_uniq<NodeStatistics>(idx_t(0));
 		}
 		auto file_list_cardinality_estimate = data.file_list->GetCardinality(context);
 		if (file_list_cardinality_estimate) {
@@ -1127,13 +1129,15 @@ public:
 		}
 	}
 
-	static void PushdownType(ClientContext &context, optional_ptr<FunctionData> bind_data_p,
-	                         const unordered_map<idx_t, LogicalType> &new_column_types) {
-		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
-		for (auto &type : new_column_types) {
-			bind_data.types[type.first] = type.second;
-			bind_data.columns[type.first].type = type.second;
+	static bool PushdownProjectionExpression(ClientContext &context, TableFunctionProjectionExpressionInput &input) {
+		if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
+			return false;
 		}
+		auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
+		const auto &cast = input.expr.Cast<BoundCastExpression>();
+		bind_data.types[input.proj_index] = cast.GetReturnType();
+		bind_data.columns[input.proj_index].type = cast.GetReturnType();
+		return true;
 	}
 
 private:

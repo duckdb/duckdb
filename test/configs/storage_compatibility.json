@@ -7,7 +7,10 @@
       "value": "v1.0.0"
     }
   ],
-  "skip_error_messages": ["Aggregate state columns are not supported in storage versions prior to v2.0.0"],
+  "skip_error_messages": [
+    "Aggregate state columns are not supported in storage versions prior to v2.0.0",
+    "TUPLE columns are not supported in storage versions prior to v2.0.0"
+  ],
   "skip_compiled": "true",
   "skip_tests": [
     {
@@ -106,6 +109,7 @@
         "test/sql/types/geo/geometry_shred_fetch.test",
         "test/sql/types/geo/geometry_shred_list.test",
         "test/sql/types/geo/geometry_shred_checkpoint.test",
+        "test/sql/types/geo/geometry_shred_more.test",
         "test/sql/types/geo/geometry_wkb.test",
         "test/sql/types/geo/geometry_crs.test",
         "test/sql/types/geo/geometry_crs_projjson.test",
@@ -194,7 +198,7 @@
     {
       "reason": "Too many columns (20k) exceeds CSV field size limit in compatibility test script.",
       "paths": [
-        "test/sql/join/test_hash_join_many_columns.test"
+        "test/sql/join/test_hash_join_many_columns.test_slow"
       ]
     },
     {

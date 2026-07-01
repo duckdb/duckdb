@@ -2,6 +2,9 @@
 # description: Test the performance of Sampling Pushdown optimization
 # group: [optimizer]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require tpch
 
 statement ok

@@ -2,6 +2,9 @@
 # description: Test if we can do compressed materialization for all-NULL Parquet columns in a join
 # group: [parquet]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper', 'expand_all': 'true'};
+
 require parquet
 
 statement ok

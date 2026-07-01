@@ -16,6 +16,8 @@ SelectionData::SelectionData(idx_t count) {
 #endif
 }
 
+SelectionData::~SelectionData() = default;
+
 // LCOV_EXCL_START
 string SelectionVector::ToString(idx_t count) const {
 	string result = "Selection Vector (" + to_string(count) + ") [";

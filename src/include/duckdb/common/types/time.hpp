@@ -8,14 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/datetime.hpp"
 #include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
-
-struct dtime_t;    // NOLINT
-struct dtime_tz_t; // NOLINT
 
 //! The Time class is a static class that holds helper functions for the Time
 //! type.

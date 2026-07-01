@@ -854,7 +854,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
 			}
 			auto &buffer_manager = block_manager.buffer_manager;
-			buffer_manager.Prefetch(prefetch_state.blocks);
+			buffer_manager.Prefetch(state.context, prefetch_state.blocks);
 		}
 
 		bool has_filters = filter_info.HasFilters();
@@ -1592,8 +1592,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		}
 	}
 
-	if (!reused_columns.empty()) {
-		D_ASSERT(partial_reuse);
+	if (partial_reuse) {
 		// carry forward the extras for reused columns onto the new row group, so RowGroup::Checkpoint
 		// can look them up via this->per_column_metadata_blocks
 		auto extras = per_column_metadata_blocks.GetBlocksForColumns(reused_columns);

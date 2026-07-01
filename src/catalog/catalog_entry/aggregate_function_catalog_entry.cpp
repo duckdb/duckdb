@@ -9,8 +9,8 @@ AggregateFunctionCatalogEntry::AggregateFunctionCatalogEntry(Catalog &catalog, S
                                                              CreateAggregateFunctionInfo &info)
     : FunctionEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, catalog, schema, info), functions(info.functions) {
 	for (auto &function : functions.functions) {
-		function.catalog_name = catalog.GetAttached().GetName();
-		function.schema_name = schema.name;
+		function.SetCatalogName(catalog.GetAttached().GetName());
+		function.SetSchemaName(schema.name);
 	}
 }
 

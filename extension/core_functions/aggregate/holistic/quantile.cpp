@@ -145,7 +145,7 @@ unique_ptr<FunctionData> QuantileBindData::Deserialize(Deserializer &deserialize
 //===--------------------------------------------------------------------===//
 template <>
 interval_t QuantileCast::Operation(const dtime_t &src, Vector &result) {
-	return {0, 0, src.micros};
+	return {0, 0, src.value};
 }
 
 template <>

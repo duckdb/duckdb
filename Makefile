@@ -421,10 +421,16 @@ clean:
 
 EXTENSION_REPOSITORY_PATH ?= build/release/repository
 EXTENSION_BUCKET ?= duckdb-core-extensions
+SIGNED_EXTENSIONS_DIR ?= $(EXTENSION_REPOSITORY_PATH)
+EXTENSION_SIGNING_PUBLIC_KEY_FILE ?=
 
 .PHONY: upload-extensions
 upload-extensions:
 	CI_CPU_COUNT="$(CI_CPU_COUNT)" ./scripts/extension-upload-repository.sh "$(EXTENSION_REPOSITORY_PATH)" "$(EXTENSION_BUCKET)"
+
+.PHONY: verify-extension-signing
+verify-extension-signing:
+	CI_CPU_COUNT="$(CI_CPU_COUNT)" ./scripts/verify-extension-signing.sh "$(SIGNED_EXTENSIONS_DIR)" "$(EXTENSION_SIGNING_PUBLIC_KEY_FILE)"
 
 define cmake_build
 	mkdir -p ./$(1) && \
@@ -471,6 +477,9 @@ wasm_threads: ${EXTENSION_CONFIG_STEP}
 
 cldebug: ${EXTENSION_CONFIG_STEP}
 	$(call cmake_build,build/cldebug,Debug,-DENABLE_SANITIZER=0 -DENABLE_UBSAN=0)
+
+codecov: ${EXTENSION_CONFIG_STEP}
+	$(call cmake_build,build/codecov,Release,-DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCOVERAGE=1)
 
 clreldebug:
 	mkdir -p ./build/clreldebug && \
@@ -842,6 +851,7 @@ generate-files:
 	$(PYTHON) scripts/generate_util.py
 	$(PYTHON) scripts/generate_storage_info.py
 	$(PYTHON) scripts/generate_enum_util.py
+	$(PYTHON) scripts/generate_html_template.py
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 

@@ -16,50 +16,50 @@
 namespace duckdb {
 
 string GRAPHVIZTreeRenderer::ToString(const LogicalOperator &op) {
-	duckdb::stringstream ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string GRAPHVIZTreeRenderer::ToString(const PhysicalOperator &op) {
-	duckdb::stringstream ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string GRAPHVIZTreeRenderer::ToString(const ProfilingNode &op) {
-	duckdb::stringstream ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
 string GRAPHVIZTreeRenderer::ToString(const Pipeline &op) {
-	duckdb::stringstream ss;
+	StringTreeRenderer ss;
 	Render(op, ss);
 	return ss.str();
 }
 
-void GRAPHVIZTreeRenderer::Render(const LogicalOperator &op, std::ostream &ss) {
+void GRAPHVIZTreeRenderer::Render(const LogicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void GRAPHVIZTreeRenderer::Render(const PhysicalOperator &op, std::ostream &ss) {
+void GRAPHVIZTreeRenderer::Render(const PhysicalOperator &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void GRAPHVIZTreeRenderer::Render(const ProfilingNode &op, std::ostream &ss) {
+void GRAPHVIZTreeRenderer::Render(const ProfilingNode &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void GRAPHVIZTreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
+void GRAPHVIZTreeRenderer::Render(const Pipeline &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
 }
 
-void GRAPHVIZTreeRenderer::ToStreamInternal(RenderTree &root, std::ostream &ss) {
+void GRAPHVIZTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) {
 	const string digraph_format = R"(
 digraph G {
     node [shape=box, style=rounded, fontname="Courier New", fontsize=10];

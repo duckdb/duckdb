@@ -150,7 +150,11 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::MAP:
 		return MapCastSwitch(input, source, target);
 	case LogicalTypeId::STRUCT:
-		return StructCastSwitch(input, source, target);
+		// an unnamed STRUCT (e.g. from variant shredding with empty keys) is cast positionally, like a TUPLE
+		return StructType::IsUnnamed(source) ? TupleCastSwitch(input, source, target)
+		                                     : StructCastSwitch(input, source, target);
+	case LogicalTypeId::TUPLE:
+		return TupleCastSwitch(input, source, target);
 	case LogicalTypeId::LIST:
 		return ListCastSwitch(input, source, target);
 	case LogicalTypeId::UNION:

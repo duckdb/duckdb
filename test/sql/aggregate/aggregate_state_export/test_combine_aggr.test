@@ -48,6 +48,101 @@ select finalize(combine_aggr(state))::integer from states where g = 0;
 ----
 45
 
+# Multiplicity repeats each input state during combine_aggr
+query IIIIII
+WITH states AS (
+    SELECT
+        sum(v) EXPORT_STATE AS sum_s,
+        count(v) EXPORT_STATE AS count_s,
+        count(*) EXPORT_STATE AS count_star_s,
+        avg(v) EXPORT_STATE AS avg_s,
+        min(v) EXPORT_STATE AS min_s,
+        max(v) EXPORT_STATE AS max_s
+    FROM (VALUES (1), (3), (5)) t(v)
+)
+SELECT
+    finalize(combine_aggr(sum_s, 3)),
+    finalize(combine_aggr(count_s, 3)),
+    finalize(combine_aggr(count_star_s, 3)),
+    finalize(combine_aggr(avg_s, 3))::INTEGER,
+    finalize(combine_aggr(min_s, 3)),
+    finalize(combine_aggr(max_s, 3))
+FROM states;
+----
+27	9	9	3	1	5
+
+# Multiplicity arguments use normal implicit casts
+query III
+WITH states AS (
+    SELECT sum(v) EXPORT_STATE AS s
+    FROM (VALUES (2::BIGINT)) t(v)
+)
+SELECT
+    finalize(combine_aggr(s, 3::INTEGER)),
+    finalize(combine_aggr(s, 3::UINTEGER)),
+    finalize(combine_aggr(s, 3::SMALLINT))
+FROM states;
+----
+6	6	6
+
+# Multiplicities can vary per input state
+query II rowsort
+WITH states AS (
+    SELECT g, sum(v) EXPORT_STATE AS s, count(*)::INTEGER AS n
+    FROM (VALUES (0, 1), (0, 2), (1, 10), (2, 5), (2, 7), (2, 8), (3, 20)) t(g, v)
+    GROUP BY g
+)
+SELECT g % 2 AS bucket, finalize(combine_aggr(s, n))
+FROM states
+GROUP BY bucket
+ORDER BY bucket;
+----
+0	66
+1	30
+
+# Zero and NULL multiplicities are no-ops
+query II
+WITH states AS (
+    SELECT sum(v) EXPORT_STATE AS sum_s, count(v) EXPORT_STATE AS count_s
+    FROM (VALUES (1), (3), (5)) t(v)
+)
+SELECT
+    (finalize(combine_aggr(sum_s, 0)) IS NULL)::INTEGER,
+    finalize(combine_aggr(count_s, NULL::BIGINT))
+FROM states;
+----
+1	0
+
+# Large multiplicities should not require one aggregate combine per repetition
+query II
+WITH states AS (
+    SELECT sum(v) EXPORT_STATE AS sum_s, count(*) EXPORT_STATE AS count_s
+    FROM (VALUES (7::BIGINT)) t(v)
+)
+SELECT finalize(combine_aggr(sum_s, 1000000)), finalize(combine_aggr(count_s, 1000000))
+FROM states;
+----
+7000000	1000000
+
+# Kahan aggregates have no multiply fast path and use generic repeated combine
+query II
+WITH states AS (
+    SELECT kahan_sum(v) EXPORT_STATE AS kahan_s, favg(v) EXPORT_STATE AS favg_s
+    FROM (VALUES (1::DOUBLE), (2::DOUBLE), (3::DOUBLE)) t(v)
+)
+SELECT finalize(combine_aggr(kahan_s, 3))::INTEGER, finalize(combine_aggr(favg_s, 3))::INTEGER
+FROM states;
+----
+18	2
+
+statement error
+WITH states AS (
+    SELECT sum(v) EXPORT_STATE AS s FROM (VALUES (1), (2)) t(v)
+)
+SELECT finalize(combine_aggr(s, -1)) FROM states;
+----
+<REGEX>:.*combine_aggr multiplicity must be non-negative.*
+
 # Persistence
 load {TEST_DIR}/test_combine_aggr_persistence.db readwrite v2.0.0
 

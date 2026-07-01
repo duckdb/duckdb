@@ -6,6 +6,8 @@
     {
       "reason": "Contains explicit use of the memory catalog.",
       "paths": [
+        "test/sql/catalog/nested_schema/create_nested_schema.test",
+        "test/sql/catalog/nested_schema/drop_nested_schema.test",
         "test/sql/show_select/test_describe_all.test",
         "test/sql/catalog/function/attached_macro.test",
         "test/sql/catalog/test_temporary.test",
@@ -57,6 +59,8 @@
         "test/sql/types/geo/geometry_crs.test",
         "test/sql/types/geo/geometry_stats.test",
         "test/sql/types/geo/geometry_vertex_extract.test",
+        "test/sql/types/geo/geometry_shred_more.test",
+        "test/sql/types/geo/geometry_from_wkb_stats.test",
         "test/sql/sample/can_sample_from_ingested_files.test"
       ]
     },
@@ -93,6 +97,12 @@
       "reason": "Test sets temp_directory='' and memory_limit='2MB' to trigger OOM, but with a persistent DB file the buffer manager can spill to the DB file regardless of temp_directory.",
       "paths": [
         "test/sql/settings/reset/reset_memory_limit.test"
+      ]
+    },
+    {
+      "reason": "Tuples cannot be persisted on older storage",
+      "paths": [
+        "test/sql/types/struct/test_tuple.test"
       ]
     },
     {

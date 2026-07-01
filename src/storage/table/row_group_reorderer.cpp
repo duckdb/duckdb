@@ -267,6 +267,9 @@ OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatis
 		}
 
 		auto column_stats = partition_stats.partition_row_group->GetColumnStatistics(storage_index);
+		if (!column_stats) {
+			return {new_row_offset, 0, leading_null_group_offset};
+		}
 		if (null_order == OrderByNullType::NULLS_FIRST && IsNullOnly(*column_stats)) {
 			if (new_row_offset < partition_stats.count) {
 				return {new_row_offset, 0, leading_null_group_offset};
@@ -335,6 +338,10 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSe
 	multimap<Value, RowGroupSegmentNodeEntry> row_group_map;
 	for (auto &row_group : row_groups.SegmentNodes()) {
 		auto stats = row_group.GetNode().GetStatistics(options.column_idx);
+		if (!stats) {
+			ambiguous_groups.push_back(row_group);
+			continue;
+		}
 		if (IsNullOnly(*stats)) {
 			null_only_groups.push_back(row_group);
 			continue;

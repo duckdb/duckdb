@@ -904,21 +904,18 @@ public:
 		if (data.size() != 2) {
 			return;
 		}
-		if (duckdb::StringUtil::Equals(data[0], "logical_plan") || duckdb::StringUtil::Equals(data[0], "logical_opt") ||
-		    duckdb::StringUtil::Equals(data[0], "physical_plan")) {
-			out.Print("\n┌─────────────────────────────┐\n");
-			out.Print("│┌───────────────────────────┐│\n");
-			if (duckdb::StringUtil::Equals(data[0], "logical_plan")) {
-				out.Print("││ Unoptimized Logical Plan  ││\n");
-			} else if (duckdb::StringUtil::Equals(data[0], "logical_opt")) {
-				out.Print("││  Optimized Logical Plan   ││\n");
-			} else if (duckdb::StringUtil::Equals(data[0], "physical_plan")) {
-				out.Print("││       Physical Plan       ││\n");
-			}
-			out.Print("│└───────────────────────────┘│\n");
-			out.Print("└─────────────────────────────┘\n");
-		}
 		out.Print(data[1]);
+		// after EXPLAIN ANALYZE (interactive), point users at the full (expanded) tree when the pretty tree folded
+		// low-impact operators, and always at the ".web" command which opens the profile in a browser.
+		// (skip it for EXPLAIN ANALYZE (FORMAT WEB), whose result value is empty and which already opened the profile)
+		if (out.SupportsHighlight() && state.stdin_is_interactive && state.stdout_is_console &&
+		    !data[1].GetString().empty() && data[0].GetString() == "analyzed_plan") {
+			string hint = state.last_explain_hid_content
+			                  ? "\ntype .last to show the full tree, .web to open it in a browser\n"
+			                  : "\ntype .web to open the query profile in a browser\n";
+			ShellHighlight highlight(state);
+			highlight.PrintText(hint, PrintOutput::STDOUT, HighlightElementType::FOOTER);
+		}
 	}
 
 	bool RequireMaterializedResult() const override {
@@ -927,6 +924,9 @@ public:
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
 		if (global_mode == PagerMode::PAGER_ON) {
 			return true;
+		}
+		// load the (materialized) result so we can measure the rendered tree height
+		while (result.TryConvertChunk()) {
 		}
 		idx_t row_count = 0;
 		for (auto &chunk : result.chunks) {
@@ -944,7 +944,8 @@ public:
 				}
 			}
 		}
-		return row_count >= state.pager_min_rows;
+		// page the tree when it does not fit on the screen (too tall, or too wide for the terminal)
+		return state.ShouldUsePagerForSize(row_count, state.last_explain_width);
 	}
 };
 

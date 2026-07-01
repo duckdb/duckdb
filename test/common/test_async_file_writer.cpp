@@ -164,6 +164,20 @@ private:
 	bool release_writes = false;
 };
 
+class NonPositionalWriteFileSystem : public TrackingWriteFileSystem {
+public:
+	explicit NonPositionalWriteFileSystem(bool local_file_p = true) : TrackingWriteFileSystem(local_file_p) {
+	}
+
+	void Write(FileHandle &, void *, int64_t, idx_t) override {
+		throw NotImplementedException("Injected missing positional write support");
+	}
+
+	bool SupportsPositionalWrites(FileHandle &) override {
+		return false;
+	}
+};
+
 class SequentialExplicitOffsetWriteFileSystem : public BlockingWriteFileSystem {
 public:
 	SequentialExplicitOffsetWriteFileSystem() : BlockingWriteFileSystem(false, false) {
@@ -699,6 +713,29 @@ TEST_CASE("AsyncFileWriter writes at truncated offset", "[async_file_writer]") {
 	fs.RemoveFile(path);
 }
 
+TEST_CASE("AsyncFileWriter non-positional writes at truncated offset", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db);
+	NonPositionalWriteFileSystem fs;
+	auto path = TestCreatePath("async_file_writer_non_positional_truncate_write.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(const_data_ptr_cast("abcdef"), 6);
+	writer.Truncate(3);
+	writer.WriteData(const_data_ptr_cast("XYZ"), 3);
+	writer.Close();
+
+	REQUIRE(ReadFile(path) == "abcXYZ");
+	REQUIRE(!fs.write_offsets.empty());
+	for (auto offset : fs.write_offsets) {
+		REQUIRE(offset == NumericLimits<idx_t>::Maximum());
+	}
+	fs.RemoveFile(path);
+}
+
 TEST_CASE("AsyncFileWriter flush preserves an open batch", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db);
@@ -774,6 +811,44 @@ TEST_CASE("AsyncFileWriter drains positional writes on multiple async threads", 
 	fs.RemoveFile(path);
 }
 
+TEST_CASE("AsyncFileWriter drains non-positional writes on one async thread", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	BlockingWriteFileSystem fs(false, false);
+	auto path = TestCreatePath("async_file_writer_parallel_non_positional.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string first(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'a');
+	string second(AsyncWriteConfig::DRAIN_TASK_BYTE_BUDGET + 1, 'b');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	{
+		auto batch_guard = writer.StartBatch();
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+		writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+		batch_guard.Finish();
+	}
+
+	REQUIRE(fs.WaitForBlockedWrites(1));
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	auto blocked_writes = fs.BlockedWrites();
+	auto max_active_writes = fs.MaxActiveWrites();
+
+	fs.ReleaseWrites();
+	writer.Close();
+
+	REQUIRE(blocked_writes == 1);
+	REQUIRE(max_active_writes == 1);
+	REQUIRE(ReadFile(path) == first + second);
+	REQUIRE(fs.write_sizes.size() == 2);
+	for (auto offset : fs.write_offsets) {
+		REQUIRE(offset == NumericLimits<idx_t>::Maximum());
+	}
+	fs.RemoveFile(path);
+}
+
 TEST_CASE("AsyncFileWriter waits for remote coalesce threshold before first drain", "[async_file_writer]") {
 	DuckDB db(nullptr);
 	auto con = CreateConnectionWithAsyncThreads(db, 2);
@@ -799,6 +874,35 @@ TEST_CASE("AsyncFileWriter waits for remote coalesce threshold before first drai
 	REQUIRE(ReadFile(path) == first + second);
 	REQUIRE(fs.write_sizes.size() == 1);
 	REQUIRE(fs.write_sizes[0] == AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD);
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter coalesces remote non-positional writes", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	BlockingWriteFileSystem fs(false, false);
+	auto path = TestCreatePath("async_file_writer_remote_non_positional_coalesce.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string first(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD / 2, 'a');
+	string second(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD / 2, 'b');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	REQUIRE(fs.BlockedWrites() == 0);
+
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(second));
+	REQUIRE(fs.WaitForBlockedWrites(1));
+	fs.ReleaseWrites();
+	writer.Close();
+
+	REQUIRE(ReadFile(path) == first + second);
+	REQUIRE(fs.write_sizes.size() == 1);
+	REQUIRE(fs.write_sizes[0] == AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD);
+	REQUIRE(fs.write_offsets[0] == NumericLimits<idx_t>::Maximum());
 	fs.RemoveFile(path);
 }
 
@@ -858,6 +962,54 @@ TEST_CASE("AsyncFileWriter does not eagerly schedule tiny remote tails after one
 	fs.ReleaseWrites();
 	writer.Close();
 	REQUIRE(ReadFile(path) == large + tail);
+	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter close force-drains remote non-positional tail after submitted write",
+          "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 2);
+	BlockingWriteFileSystem fs(false, false);
+	auto path = TestCreatePath("async_file_writer_remote_non_positional_close_tail.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+
+	string large(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD + 17, 'x');
+	string tail(1024, 't');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(large));
+	REQUIRE(fs.WaitForBlockedWrites(1));
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(tail));
+
+	std::atomic<bool> close_started(false);
+	std::exception_ptr close_error;
+	std::thread close_thread([&]() {
+		close_started.store(true);
+		try {
+			writer.Close();
+		} catch (...) {
+			close_error = std::current_exception();
+		}
+	});
+
+	while (!close_started.load()) {
+		std::this_thread::yield();
+	}
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	auto blocked_writes = fs.BlockedWrites();
+	fs.ReleaseWrites();
+	close_thread.join();
+	if (close_error) {
+		std::rethrow_exception(close_error);
+	}
+
+	REQUIRE(blocked_writes == 1);
+	REQUIRE(ReadFile(path) == large + tail);
+	for (auto offset : fs.write_offsets) {
+		REQUIRE(offset == NumericLimits<idx_t>::Maximum());
+	}
 	fs.RemoveFile(path);
 }
 
@@ -937,6 +1089,38 @@ TEST_CASE("AsyncFileWriter does not treat sequential explicit-offset writes as p
 	REQUIRE(max_active_writes == 1);
 	REQUIRE(ReadFile(path) == first + second);
 	fs.RemoveFile(path);
+}
+
+TEST_CASE("AsyncFileWriter rethrows non-positional async write errors on close", "[async_file_writer]") {
+	DuckDB db(nullptr);
+	auto con = CreateConnectionWithAsyncThreads(db, 1);
+	BlockingWriteFileSystem fs(false, false);
+	auto path = TestCreatePath("async_file_writer_non_positional_error.tmp");
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
+	fs.fail_writes = true;
+
+	string first(AsyncWriteConfig::REMOTE_COALESCE_THRESHOLD + 17, 'x');
+
+	AsyncFileWriter writer(*con->context, fs, path);
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>(first));
+	REQUIRE(fs.WaitForBlockedWrites(1));
+	writer.WriteData(make_uniq<StringAsyncWriteBuffer>("tail"));
+
+	fs.ReleaseWrites();
+	try {
+		writer.Close();
+		FAIL("Expected async write failure");
+	} catch (const Exception &ex) {
+		string error = ex.what();
+		REQUIRE(error.find("Async write failed for range [offset=0, size=") != string::npos);
+		REQUIRE(error.find("Injected async write failure") != string::npos);
+	}
+
+	if (fs.FileExists(path)) {
+		fs.RemoveFile(path);
+	}
 }
 
 TEST_CASE("AsyncFileWriter close drains an open batch", "[async_file_writer]") {

@@ -441,6 +441,10 @@ bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData
 		child_list_t<LogicalType> child_types;
 		for (auto &entry : column.field_stats) {
 			auto &child_column = GetColumnStats(entry.second);
+			if (entry.first.empty()) {
+				//! Do not include empty field names in the shredded type!
+				continue;
+			}
 			LogicalType child_type;
 			if (GetShreddedTypeInternal(child_column, child_type, total_value_count, force_partial)) {
 				child_types.emplace_back(entry.first, child_type);
@@ -796,7 +800,18 @@ void VariantColumnData::ShredVariantData(const Vector &input, Vector &output, id
 	for (idx_t i = 0; i < count; i++) {
 		auto input_val = input.GetValue(i);
 		auto roundtripped_val = roundtrip_result.GetValue(i);
-		if (!ValueOperations::NotDistinctFrom(input_val, roundtripped_val)) {
+
+		Vector input_vec(input_val, count_t(1));
+		Vector roundtripped_vec(roundtripped_val, count_t(1));
+
+		Vector normalized_input(LogicalType::VARIANT(), 1);
+		Vector normalized_roundtrip(LogicalType::VARIANT(), 1);
+		VariantNormalizer::Normalize(input_vec, normalized_input);
+		VariantNormalizer::Normalize(roundtripped_vec, normalized_roundtrip);
+
+		auto normalized_input_value = normalized_input.GetValue(0);
+		auto normalized_roundtrip_value = normalized_roundtrip.GetValue(0);
+		if (!ValueOperations::NotDistinctFrom(normalized_input_value, normalized_roundtrip_value)) {
 			throw InternalException("Shredding roundtrip verification failed for row: %d, expected: %s, actual: %s", i,
 			                        input_val.ToString(), roundtripped_val.ToString());
 		}

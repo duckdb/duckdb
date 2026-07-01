@@ -29,6 +29,7 @@
 
 namespace duckdb {
 
+class BaseTreeRenderer;
 class ClientContext;
 class ExpressionExecutor;
 class ProfilingNode;
@@ -137,6 +138,9 @@ public:
 
 	DUCKDB_API string QueryTreeToString() const;
 	DUCKDB_API void QueryTreeToStream(std::ostream &str) const;
+	//! Render the framed query tree (total time + operator tree) into the given sink. Folding/expansion of the tree is
+	//! controlled by the renderer (configured via the profiling renderer settings), not here.
+	DUCKDB_API void RenderQueryTree(BaseTreeRenderer &ss) const;
 	DUCKDB_API void Print();
 
 	//! Render the profiler output as a string, formatted based on the given ProfilerPrintFormat (or the configured
@@ -145,9 +149,9 @@ public:
 	//! Render the profiler output for the given profiler format name (e.g. "json", "query_tree"), handling the
 	//! profiling-disabled and no-output cases.
 	DUCKDB_API string ToString(const string &profiler_format_name) const;
-	//! Render the profiling node tree using the given renderer. Returns an empty string when there is no tree to
-	//! render. Called by TreeRenderer::RenderProfiler for the formats that render the node tree directly.
-	DUCKDB_API string RenderProfilingNodeTree(TreeRenderer &renderer) const;
+	//! Render the profiling node tree using the given renderer into the sink (renders nothing when there is no tree).
+	//! Called by TreeRenderer::RenderProfiler for the formats that render the node tree directly.
+	DUCKDB_API void RenderProfilingNodeTree(TreeRenderer &renderer, BaseTreeRenderer &ss) const;
 
 	// Sanitize a Value::MAP
 	static Value JSONSanitize(const Value &input);
@@ -166,9 +170,13 @@ public:
 
 private:
 	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const idx_t depth = 0);
-	void Render(const ProfilingNode &node, std::ostream &str) const;
-	//! Render the profiler output via the given renderer (nullptr renders nothing), handling the disabled case.
+	void Render(const ProfilingNode &node, BaseTreeRenderer &str) const;
+	//! Render the profiler output to a string via the given renderer (nullptr renders nothing), handling the disabled
+	//! case. Used for the programmatic / string paths.
 	string RenderProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
+	//! Print the profiler output directly via the renderer's print sink (nullptr prints nothing), handling the
+	//! disabled case. Only used on the terminal-print paths.
+	void PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
 
 private:
 	ClientContext &context;
@@ -202,6 +210,17 @@ public:
 	const TreeMap &GetTreeMap() const {
 		return tree_map;
 	}
+	//! Top-level query metrics (total/CPU time, bytes read/written, ...), for renderers that surface a query summary.
+	const QueryMetrics &GetQueryMetrics() const {
+		return query_metrics;
+	}
+	//! The query text with any EXPLAIN [ANALYZE] wrapper stripped. Used by renderers that show the query;
+	//! pretty-printing and highlighting are left to the renderer (e.g. HTMLTreeRenderer) so this stays catalog-free.
+	DUCKDB_API string GetQuerySQL() const;
+	//! Render the current profiling tree in the given format (text/json/html/...) to a string. Unlike ToString this
+	//! only requires a tree to exist (HasRoot()), not that profiling is currently enabled - so it can re-render the
+	//! last profile after the query has finished (e.g. the shell's ".web" command).
+	DUCKDB_API string RenderProfile(const string &format) const;
 
 private:
 	void FinalizeMetricsInternal();

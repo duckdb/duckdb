@@ -219,6 +219,10 @@ static void ApplyLocalFileSystemDelay(optional_ptr<DatabaseInstance> db) {
 #endif
 }
 
+static void ApplyLocalFileSystemDelay(optional_ptr<FileOpener> opener) {
+	ApplyLocalFileSystemDelay(FileOpener::TryGetDatabase(opener));
+}
+
 struct UnixFileHandle : public FileHandle {
 public:
 	UnixFileHandle(FileSystem &file_system, string path, int fd, FileOpenFlags flags, optional_ptr<DatabaseInstance> db)
@@ -295,7 +299,7 @@ static FileMetadata StatsInternal(int fd, const string &path) {
 		                  strerror(errno));
 	}
 	return StatsFromStruct(s);
-} // LCOV_EXCL_STOP
+}
 
 #if __APPLE__ && !TARGET_OS_IPHONE
 
@@ -520,8 +524,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 
 	// Open the file
-	auto db = FileOpener::TryGetDatabase(opener);
-	ApplyLocalFileSystemDelay(db);
+	ApplyLocalFileSystemDelay(opener);
 	int fd = open(path.c_str(), open_flags, filesec);
 
 	if (fd == -1) {
@@ -550,7 +553,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 
 	TryAcquireFileLock(*this, fd, path, flags);
 
-	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags, db);
+	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags, FileOpener::TryGetDatabase(opener));
 	if (opener) {
 		file_handle->TryAddLogger(*opener);
 		DUCKDB_LOG_FILE_SYSTEM_OPEN((*file_handle));
@@ -723,6 +726,8 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 }
 
 bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
+	ApplyLocalFileSystemDelay(opener);
+
 	if (!directory.empty()) {
 		auto normalized_dir = ExpandPath(directory, opener);
 		if (access(normalized_dir.c_str(), 0) == 0) {
@@ -739,6 +744,8 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	struct stat st;
+
+	ApplyLocalFileSystemDelay(opener);
 
 	auto normalized_dir = ExpandPath(directory, opener);
 	if (stat(normalized_dir.c_str(), &st) != 0) {
@@ -1101,7 +1108,7 @@ static timestamp_t FiletimeToTimeStamp(FILETIME file_time) {
 	// Adapted from: https://stackoverflow.com/questions/6161776/convert-windows-filetime-to-second-in-unix-linux
 	const auto WINDOWS_TICK = 10000000;
 	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
-	return Timestamp::FromTimeT(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
+	return Timestamp::FromEpochSeconds(fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
 }
 
 static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
@@ -1111,13 +1118,13 @@ static FileMetadata StatsInternal(HANDLE hFile, const string &path) {
 	if (handle_type == FILE_TYPE_CHAR) {
 		file_metadata.file_type = FileType::FILE_TYPE_CHARDEV;
 		file_metadata.file_size = 0;
-		file_metadata.last_modification_time = Timestamp::FromTimeT(0);
+		file_metadata.last_modification_time = Timestamp::FromEpochSeconds(0);
 		return file_metadata;
 	}
 	if (handle_type == FILE_TYPE_PIPE) {
 		file_metadata.file_type = FileType::FILE_TYPE_FIFO;
 		file_metadata.file_size = 0;
-		file_metadata.last_modification_time = Timestamp::FromTimeT(0);
+		file_metadata.last_modification_time = Timestamp::FromEpochSeconds(0);
 		return file_metadata;
 	}
 

@@ -1,0 +1,17 @@
+# name: test/sql/peg_parser/parser/position.test
+# description: Test POSITION syntax in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT POSITION('a' || 'b' IN 'xab')$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT POSITION('a' IN 'x' || 'ab')$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT POSITION(lower('A') IN 'xab')$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT POSITION(lower('A') || 'b' IN 'xab')$TEST_PEG_PARSER$);

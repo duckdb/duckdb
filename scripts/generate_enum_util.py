@@ -24,6 +24,7 @@ blacklist = [
     "DrainMode",
     "BatchDrainMode",
     "PendingTaskCountMode",
+    "PartitionKeyTrackerState",
 ]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")
@@ -62,6 +63,8 @@ overrides = {
         "DEBUG_ABORT_BEFORE_WAL_FINISH": "BEFORE_WAL_FINISH",
         "DEBUG_ABORT_BEFORE_MOVING_RECOVERY": "BEFORE_MOVING_RECOVERY",
         "DEBUG_ABORT_BEFORE_DELETING_CHECKPOINT_WAL": "BEFORE_DELETING_CHECKPOINT_WAL",
+        "DEBUG_ABORT_BEFORE_HEADER_NON_FATAL": "BEFORE_HEADER_NON_FATAL",
+        "DEBUG_ABORT_IN_MEMORY_CHECKPOINT": "IN_MEMORY_CHECKPOINT",
     },
     "SampleMethod": {"SYSTEM_SAMPLE": "System", "BERNOULLI_SAMPLE": "Bernoulli", "RESERVOIR_SAMPLE": "Reservoir"},
     "TableReferenceType": {"EMPTY_FROM": "EMPTY"},

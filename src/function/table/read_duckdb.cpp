@@ -264,8 +264,8 @@ TableCatalogEntry &DuckDBReader::GetTableEntry() {
 	auto &attached = GetAttachedDatabase();
 	if (!db_wrapper->table_entry) {
 		auto &catalog = attached.GetCatalog();
-		db_wrapper->table_entry =
-		    catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name, OnEntryNotFound::THROW_EXCEPTION);
+		db_wrapper->table_entry = catalog.GetEntry<TableCatalogEntry>(
+		    context, QualifiedName(catalog.GetName(), schema_name, table_name), OnEntryNotFound::THROW_EXCEPTION);
 	}
 	return *db_wrapper->table_entry;
 }
