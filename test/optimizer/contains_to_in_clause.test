@@ -71,3 +71,20 @@ query II
 EXPLAIN SELECT * FROM t WHERE list_contains(NULL::INTEGER[], a)
 ----
 physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+# NULL-only list: list_contains([NULL], a) should return false, not NULL
+query I
+SELECT list_contains([NULL], a) FROM (VALUES (1)) t(a);
+----
+false
+
+query II
+EXPLAIN SELECT * FROM t WHERE list_contains([NULL], a)
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+# Mixed list with NULLs: NULLs are stripped, non-NULL elements remain
+query II
+EXPLAIN SELECT * FROM t WHERE list_contains([1, NULL, 2], a)
+----
+physical_plan	<!REGEX>:.*EMPTY_RESULT.*

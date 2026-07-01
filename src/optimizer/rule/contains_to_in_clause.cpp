@@ -27,17 +27,29 @@ unique_ptr<Expression> ContainsToInClauseRule::Apply(LogicalOperator &op, vector
 	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), *list_arg, list_val)) {
 		return nullptr;
 	}
+
 	// Null list: result is always NULL regardless of the probe value.
 	if (list_val.IsNull()) {
 		changes_made = true;
 		return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
+
 	// For other types (i.e., string/map/struct) leave them alone.
 	if (list_val.type().id() != LogicalTypeId::LIST) {
 		return nullptr;
 	}
-	// Empty list: never contains a non-NULL value.
-	if (ListValue::GetChildren(list_val).empty()) {
+
+	// Collect non-NULL elements from the list.
+	const auto &child_type = ListType::GetChildType(list_val.type());
+	vector<Value> non_null_elements;
+	for (const auto &elem : ListValue::GetChildren(list_val)) {
+		if (!elem.IsNull()) {
+			non_null_elements.emplace_back(elem.DefaultCastAs(child_type));
+		}
+	}
+
+	// No non-NULL elements: never contains any value.
+	if (non_null_elements.empty()) {
 		changes_made = true;
 		return ExpressionRewriter::ConstantOrNull(probe_arg->Copy(), Value::BOOLEAN(false));
 	}
@@ -49,9 +61,7 @@ unique_ptr<Expression> ContainsToInClauseRule::Apply(LogicalOperator &op, vector
 
 	auto in_expr = make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN);
 	in_expr->GetChildrenMutable().push_back(probe_arg->Copy());
-	const auto &child_type = ListType::GetChildType(list_val.type());
-	for (const auto &elem : ListValue::GetChildren(list_val)) {
-		Value v = elem.DefaultCastAs(child_type);
+	for (auto &v : non_null_elements) {
 		in_expr->GetChildrenMutable().push_back(make_uniq<BoundConstantExpression>(std::move(v)));
 	}
 	changes_made = true;
