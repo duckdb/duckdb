@@ -40,7 +40,8 @@ public:
 	StatementIterator(const StatementIterator &) = delete;
 	StatementIterator &operator=(const StatementIterator &) = delete;
 	DUCKDB_API StatementIterator(StatementIterator &&) noexcept;
-	DUCKDB_API StatementIterator &operator=(StatementIterator &&) noexcept;
+	// Not move-assignable: holds a ClientContext reference, which cannot be rebound.
+	StatementIterator &operator=(StatementIterator &&) = delete;
 
 	//! Returns true while more input remains (a buffered engine statement, or another parse-facing
 	//! statement to pull). Parses ahead as needed but does NOT preprocess — safe as a lookahead.
@@ -68,7 +69,7 @@ private:
 	//! single-statement ctor forwards to ParseIterator's single-statement ctor.
 	ParseIterator source;
 	//! The bound context, inherited from `source`. Used for preprocessing / transaction state / locking.
-	reference<ClientContext> context;
+	ClientContext &context;
 	//! Engine-facing statements produced by preprocessing one parse-facing peel. Drained
 	//! one-at-a-time across GetStatement calls before pulling + preprocessing the next peel.
 	vector<unique_ptr<SQLStatement>> buffer;
