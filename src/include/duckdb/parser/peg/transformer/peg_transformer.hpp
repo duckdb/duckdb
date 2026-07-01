@@ -1319,10 +1319,146 @@ public:
 	                                         TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeCopyDataTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCreateIndexStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCreateIndexStmtTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeWithListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeWithListTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeRelOptionOrOidsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeRelOptionOrOidsTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeRelOptionListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeRelOptionListTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeOidsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                     TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeOidsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                               TransformStackFrame &frame);
+	static void InitializeWithOrWithoutOidsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                  TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeWithOrWithoutOidsTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeWithOidsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeWithOidsTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeWithoutOidsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeWithoutOidsTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeIndexElementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeIndexElementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeUniqueIndexTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeUniqueIndexTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeIndexTypeTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeIndexTypeTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeRelOptionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeRelOptionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeRelOptionNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeRelOptionNameTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDottedIdentifierStringTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                       TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeDottedIdentifierStringTrampoline(PEGTransformer &transformer,
+	                                                                                 TransformStack &stack,
+	                                                                                 TransformStackFrame &frame);
+	static void InitializeRelOptionArgumentOptTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                     TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeRelOptionArgumentOptTrampoline(PEGTransformer &transformer,
+	                                                                               TransformStack &stack,
+	                                                                               TransformStackFrame &frame);
+	static void InitializeDefArgTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                       TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeDefArgTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                                 TransformStackFrame &frame);
+	static void InitializeDefArgNullTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDefArgNullTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDefArgKeywordTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                              TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeDefArgKeywordTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeDefArgStringLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                    TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeDefArgStringLiteralTrampoline(PEGTransformer &transformer,
+	                                                                              TransformStack &stack,
+	                                                                              TransformStackFrame &frame);
+	static void InitializeNoneLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeNoneLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeCreateSchemaStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeCreateSchemaStmtTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCreateSequenceStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                   TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeCreateSequenceStmtTrampoline(PEGTransformer &transformer,
+	                                                                             TransformStack &stack,
+	                                                                             TransformStackFrame &frame);
+	static void InitializeSequenceOptionTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                               TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSequenceOptionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSeqSetCycleTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSeqSetCycleTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSeqCycleTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSeqCycleTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSeqNoCycleTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSeqNoCycleTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSeqSetIncrementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSeqSetIncrementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSeqSetMinMaxTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSeqSetMinMaxTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSeqNoMinMaxTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSeqNoMinMaxTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSeqStartWithTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSeqStartWithTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSeqOwnedByTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSeqOwnedByTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeSeqMinOrMaxTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeSeqMinOrMaxTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeMinValueTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeMinValueTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeMaxValueTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeMaxValueTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeCreateTypeStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -1340,6 +1476,14 @@ public:
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeEnumSelectTypeTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCreateViewStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                               TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCreateViewStmtTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCreateRecursiveTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCreateRecursiveTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeDeallocateStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                    TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeDeallocateStatementTrampoline(PEGTransformer &transformer,
@@ -3306,101 +3450,6 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeStoredGeneratedColumnTrampoline(PEGTransformer &transformer,
 	                                                                                TransformStack &stack,
 	                                                                                TransformStackFrame &frame);
-	static void InitializeRelOptionOrOidsTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeRelOptionOrOidsTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeRelOptionListTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                              TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeRelOptionListTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeRelOptionTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                          TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeRelOptionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeRelOptionNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                              TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeRelOptionNameTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeDottedIdentifierStringTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                       TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue> FinalizeDottedIdentifierStringTrampoline(PEGTransformer &transformer,
-	                                                                                 TransformStack &stack,
-	                                                                                 TransformStackFrame &frame);
-	static void InitializeRelOptionArgumentOptTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                     TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue> FinalizeRelOptionArgumentOptTrampoline(PEGTransformer &transformer,
-	                                                                               TransformStack &stack,
-	                                                                               TransformStackFrame &frame);
-	static void InitializeDefArgTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                       TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue> FinalizeDefArgTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                                 TransformStackFrame &frame);
-	static void InitializeDefArgNullTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                           TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeDefArgNullTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeDefArgKeywordTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                              TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeDefArgKeywordTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeDefArgStringLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                    TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue> FinalizeDefArgStringLiteralTrampoline(PEGTransformer &transformer,
-	                                                                              TransformStack &stack,
-	                                                                              TransformStackFrame &frame);
-	static void InitializeNoneLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                            TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeNoneLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeSequenceOptionTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                               TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeSequenceOptionTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeSeqSetCycleTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                            TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeSeqSetCycleTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeSeqCycleTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                         TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeSeqCycleTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeSeqNoCycleTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                           TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeSeqNoCycleTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeSeqSetIncrementTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeSeqSetIncrementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeSeqSetMinMaxTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                             TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeSeqSetMinMaxTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeSeqNoMinMaxTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                            TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeSeqNoMinMaxTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeSeqStartWithTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                             TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeSeqStartWithTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeSeqOwnedByTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                           TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeSeqOwnedByTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeSeqMinOrMaxTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                            TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeSeqMinOrMaxTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeMinValueTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                         TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeMinValueTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeMaxValueTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                         TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeMaxValueTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeSecretNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                           TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>

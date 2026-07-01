@@ -1,4 +1,5 @@
 import argparse
+import re
 import sys
 from dataclasses import dataclass
 from enum import Enum
@@ -57,8 +58,11 @@ DEFAULT_GRAMMAR_FILES = [
     "common.gram",
     "connect.gram",
     "copy.gram",
+    "create_index.gram",
     "create_schema.gram",
+    "create_sequence.gram",
     "create_type.gram",
+    "create_view.gram",
     "deallocate.gram",
     "delete.gram",
     "describe.gram",
@@ -133,33 +137,6 @@ DEFAULT_EXTRA_RULES = {
         "GeneratedColumnType",
         "VirtualGeneratedColumn",
         "StoredGeneratedColumn",
-    ],
-    "create_index.gram": [
-        "RelOptionOrOids",
-        "RelOptionList",
-        "RelOption",
-        "RelOptionName",
-        "DottedIdentifierString",
-        "RelOptionArgumentOpt",
-        "DefArg",
-        "DefArgNull",
-        "DefArgKeyword",
-        "DefArgStringLiteral",
-        "NoneLiteral",
-    ],
-    "create_sequence.gram": [
-        "SequenceOption",
-        "SeqSetCycle",
-        "SeqCycle",
-        "SeqNoCycle",
-        "SeqSetIncrement",
-        "SeqSetMinMax",
-        "SeqNoMinMax",
-        "SeqStartWith",
-        "SeqOwnedBy",
-        "SeqMinOrMax",
-        "MinValue",
-        "MaxValue",
     ],
     "create_secret.gram": ["SecretName"],
     "create_trigger.gram": ["TriggerName"],
@@ -302,6 +279,11 @@ def init_name(rule_name):
 
 def finalize_name(rule_name):
     return f"Finalize{rule_name}Trampoline"
+
+
+def manual_body_exists(rule_name):
+    pattern = re.compile(rf"\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*\([^;]*\)\s*\{{", re.S)
+    return any(pattern.search(path.read_text()) for path in transformer_dir.glob("transform_*.cpp"))
 
 
 def load_grammar_rules(gram_files):
@@ -747,7 +729,7 @@ class UseGramPreviewEmitter:
             f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"TransformStack &stack, TransformStackFrame &frame) {{"
         )
-        if cpp_type == "string" and literal_values is not None:
+        if cpp_type == "string" and literal_values is not None and not manual_body_exists(rule_name):
             if len(literal_values) == 1:
                 lines.append(f'\tstring result = "{literal_values[0]}";')
             else:

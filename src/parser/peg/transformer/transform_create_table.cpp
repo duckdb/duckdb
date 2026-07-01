@@ -295,7 +295,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColIdTrampoline(
 	} else if (choice_result.type == ParseResultType::STRING) {
 		result = Identifier(choice_result.Cast<StringLiteralParseResult>().result);
 	} else {
-		throw InternalException("Unsupported ColId parse result type for trampoline transformer");
+		result = Identifier(TransformIdentifierOrKeyword(transformer, choice_result));
 	}
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
