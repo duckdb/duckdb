@@ -1,4 +1,4 @@
-# name: test/sql/parser/new_parser_failure_0002.test
+# name: test/sql/parser/fetch_first.test
 # description: SQL-standard FETCH FIRST n ROWS ONLY clause is not recognised by the PEG parser
 # group: [parser]
 
