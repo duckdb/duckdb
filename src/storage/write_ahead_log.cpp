@@ -647,15 +647,7 @@ idx_t WriteAheadLog::WriteFlushMarker(bool requires_block_sync, bool push_to_os)
 }
 
 void WriteAheadLog::SyncUpTo(idx_t target_offset, bool wait_for_batch, bool leader_pushes_batch) {
-	// PROTOTYPE BENCHMARK HACK - DO NOT COMMIT
-	// when DUCKDB_BENCH_SKIP_WAL_SYNC is set we skip the fsync to measure the no-fsync commit throughput ceiling
-	static const bool skip_wal_sync = getenv("DUCKDB_BENCH_SKIP_WAL_SYNC") != nullptr;
-
 	std::unique_lock<mutex> lock(sync_mutex);
-	if (skip_wal_sync) {
-		synced_offset = MaxValue(synced_offset, target_offset);
-		return;
-	}
 	while (synced_offset < target_offset) {
 		if (sync_in_progress) {
 			// another thread is currently performing an fsync - wait for it to finish
