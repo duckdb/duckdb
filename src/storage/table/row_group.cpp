@@ -1913,14 +1913,17 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 
 	PartitionStatistics result;
 	result.row_start = row_group.GetRowStart();
-	result.count = row_group_ref.count;
-	if (row_group_ref.HasUnloadedDeletes() || row_group_ref.GetVersionInfoIfLoaded()) {
-		// we have version info - approx count
+	if (row_group_ref.HasUnloadedDeletes()) {
+		result.count = row_group_ref.count;
 		result.count_type = CountType::COUNT_APPROXIMATE;
 		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), false);
 	} else {
+		result.count = row_group_ref.GetCommittedRowCount();
 		result.count_type = CountType::COUNT_EXACT;
-		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), true);
+		// Min/max stats remain inexact when version info / local changes exist.
+		const bool min_max_exact = !row_group_ref.GetVersionInfoIfLoaded();
+		result.partition_row_group =
+		    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), min_max_exact);
 	}
 
 	return result;

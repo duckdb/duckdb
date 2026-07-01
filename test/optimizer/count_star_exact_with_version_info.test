@@ -1,0 +1,19 @@
+# name: test/optimizer/count_star_exact_with_version_info.test
+# description: COUNT(*) uses exact partition stats after append-only version info
+# group: [optimizer]
+
+statement ok
+CREATE TABLE big AS
+SELECT i AS id, (i % 100) AS g, random() AS v
+FROM range(0, 100_000) t(i);
+
+query II
+EXPLAIN SELECT count(*) FROM big
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# 1000 from CTAS (g = i % 100) + 10 from INSERT range(100_000, 101_000)
+query I
+SELECT count(*) FROM big WHERE g = 7
+----
+1010
