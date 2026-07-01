@@ -279,8 +279,17 @@ void DuckTransactionManager::RetireAfterCheckpoint(shared_ptr<void> retired_obje
 	if (!retired_object) {
 		return;
 	}
+	// Capture the start-timestamp horizon: current_start_timestamp is the next start time / commit id to be handed
+	// out, so every transaction that currently exists (active or already committed) has a start_time / commit_id
+	// strictly below it. Once lowest_active_start reaches this epoch, none of those transactions is active anymore
+	// and their undo has been cleaned, so nothing can reference the retired object's UpdateSegments.
+	transaction_t epoch;
+	{
+		lock_guard<mutex> t_lock(transaction_lock);
+		epoch = current_start_timestamp;
+	}
 	lock_guard<mutex> l(retired_lock);
-	retired_after_checkpoint.push_back(std::move(retired_object));
+	retired_after_checkpoint.emplace_back(epoch, std::move(retired_object));
 }
 
 void DuckTransactionManager::CleanupTransactions() {
@@ -300,18 +309,25 @@ void DuckTransactionManager::CleanupTransactions() {
 			top_cleanup_info->Cleanup();
 		}
 	}
-	// The cleanup queue is now drained. If the database is quiescent (no active transactions) all undo buffers have
-	// been cleaned up, so no UpdateInfo can reference a row group that a checkpoint retired - it is safe to free them.
-	// Active transactions have a start_time below TRANSACTION_ID_START; lowest_active_start reaching
-	// TRANSACTION_ID_START (its idle value) therefore means there are no active transactions.
-	if (lowest_active_start.load() >= TRANSACTION_ID_START) {
-		vector<shared_ptr<void>> to_free;
-		{
-			lock_guard<mutex> l(retired_lock);
-			to_free.swap(retired_after_checkpoint);
+	// The cleanup queue is now drained. Free every retired object whose epoch the horizon has reached: once
+	// lowest_active_start >= epoch, no transaction that existed when the object was retired is still active, so its
+	// committed undo has been cleaned above and no UpdateInfo can reference the object's UpdateSegments anymore. When
+	// the database is quiescent lowest_active_start is TRANSACTION_ID_START (its idle max), which frees everything.
+	auto horizon = lowest_active_start.load();
+	vector<shared_ptr<void>> to_free;
+	{
+		lock_guard<mutex> l(retired_lock);
+		for (idx_t i = 0; i < retired_after_checkpoint.size();) {
+			if (retired_after_checkpoint[i].first <= horizon) {
+				to_free.push_back(std::move(retired_after_checkpoint[i].second));
+				retired_after_checkpoint[i] = std::move(retired_after_checkpoint.back());
+				retired_after_checkpoint.pop_back();
+			} else {
+				i++;
+			}
 		}
-		// drop the references outside the lock
 	}
+	// drop the references outside the lock
 }
 
 void DuckTransactionManager::RegisterPendingCommit(idx_t publish_seq) {

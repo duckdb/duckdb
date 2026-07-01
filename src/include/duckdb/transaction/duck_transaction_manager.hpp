@@ -180,10 +180,11 @@ private:
 	//! starting transaction can never observe a commit id that is not yet published.
 	idx_t next_publish_sequence = 1;
 
-	//! Row groups retired by a checkpoint, kept alive until the database is quiescent so that undo buffers can no
-	//! longer reference their UpdateSegments (see RetireAfterCheckpoint).
+	//! Objects (row groups / update segments) retired by a checkpoint, each tagged with the start-timestamp horizon
+	//! at retirement: once lowest_active_start reaches that epoch, no transaction that existed at retirement is still
+	//! active, so no undo buffer can reference the object's UpdateSegments and it is freed (see RetireAfterCheckpoint).
 	mutex retired_lock;
-	vector<shared_ptr<void>> retired_after_checkpoint;
+	vector<pair<transaction_t, shared_ptr<void>>> retired_after_checkpoint;
 
 	//! Only one cleanup can be active at any time.
 	mutex cleanup_lock;
