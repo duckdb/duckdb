@@ -1381,6 +1381,17 @@
         "default_value": "0"
     },
     {
+        "name": "wal_buffer_size",
+        "description": "The size of the write-ahead log write buffer that batches WAL data before it is pushed to the OS (e.g. 64KB). Takes effect on the next WAL created (after a checkpoint or on reopen).",
+        "type": "VARCHAR",
+        "scope": "global",
+        "internal_setting": "wal_buffer_size",
+        "custom_implementation": [
+            "set",
+            "get"
+        ]
+    },
+    {
         "name": "warnings_as_errors",
         "description": "Escalate all warnings to errors.",
         "type": "BOOLEAN",

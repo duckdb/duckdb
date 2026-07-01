@@ -1,0 +1,88 @@
+# name: test/sql/storage/wal/wal_buffer_size.test
+# description: wal_buffer_size controls the WAL write buffer size and does not affect durability
+# group: [wal]
+
+# default is 4096 bytes (== FILE_BUFFER_SIZE)
+query I
+SELECT current_setting('wal_buffer_size')
+----
+4.0 KiB
+
+# round-trips as a human-readable byte size
+statement ok
+SET wal_buffer_size='1MiB'
+
+query I
+SELECT current_setting('wal_buffer_size')
+----
+1.0 MiB
+
+statement ok
+SET wal_buffer_size='256KiB'
+
+query I
+SELECT current_setting('wal_buffer_size')
+----
+256.0 KiB
+
+# RESET restores the default
+statement ok
+RESET wal_buffer_size
+
+query I
+SELECT current_setting('wal_buffer_size')
+----
+4.0 KiB
+
+# sub-page sizes are rejected
+statement error
+SET wal_buffer_size='2KiB'
+----
+<REGEX>:.*at least 4096 bytes.*
+
+# the "infinite" sentinel (-1 / none) is rejected
+statement error
+SET wal_buffer_size='-1'
+----
+<REGEX>:.*at least 4096 bytes.*
+
+# a non-size string is rejected
+statement error
+SET wal_buffer_size='not_a_size'
+----
+
+# end-to-end: a larger WAL buffer must not affect durability - data survives WAL replay
+statement ok
+SET wal_buffer_size='256KiB'
+
+statement ok
+ATTACH '{TEST_DIR}/wal_buffer_size.db' AS wbs
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+CREATE TABLE wbs.t(i INTEGER)
+
+statement ok
+INSERT INTO wbs.t SELECT * FROM range(100000)
+
+query II
+SELECT COUNT(*), SUM(i) FROM wbs.t
+----
+100000	4999950000
+
+# reopen: rows must come back purely from WAL replay
+statement ok
+DETACH wbs
+
+statement ok
+ATTACH '{TEST_DIR}/wal_buffer_size.db' AS wbs
+
+query II
+SELECT COUNT(*), SUM(i) FROM wbs.t
+----
+100000	4999950000
+
+statement ok
+DETACH wbs

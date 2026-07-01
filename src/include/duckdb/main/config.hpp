@@ -79,6 +79,8 @@ struct DBConfigOptions {
 	AccessMode access_mode = AccessMode::AUTOMATIC;
 	//! Checkpoint when WAL reaches this size (default: 16MiB)
 	idx_t checkpoint_wal_size = 1 << 24;
+	//! Size of the write-ahead log write buffer in bytes (default: 4096 == FILE_BUFFER_SIZE; the two must agree)
+	idx_t wal_buffer_size = 4096;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory

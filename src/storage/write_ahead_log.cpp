@@ -21,6 +21,7 @@
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
@@ -60,10 +61,12 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 	}
 	lock_guard<mutex> lock(wal_lock);
 	if (!writer) {
+		auto buffer_size = DBConfig::GetConfig(GetDatabase().GetDatabase()).options.wal_buffer_size;
 		writer =
 		    make_uniq<BufferedFileWriter>(FileSystem::Get(GetDatabase()), wal_path,
 		                                  FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
-		                                      FileFlags::FILE_FLAGS_APPEND | FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS);
+		                                      FileFlags::FILE_FLAGS_APPEND | FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS,
+		                                  QueryContext(), buffer_size);
 		if (init_state == WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE) {
 			writer->Truncate(storage_manager.GetWALSize());
 		} else {

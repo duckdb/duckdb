@@ -12,9 +12,10 @@ namespace duckdb {
 constexpr FileOpenFlags BufferedFileWriter::DEFAULT_OPEN_FLAGS;
 
 BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, FileOpenFlags open_flags,
-                                       QueryContext context_p)
-    : fs(fs), path(path_p), data(make_unsafe_uniq_array_uninitialized<data_t>(FILE_BUFFER_SIZE)), offset(0),
-      total_written(0), context(context_p) {
+                                       QueryContext context_p, idx_t buffer_size_p)
+    : fs(fs), path(path_p), buffer_size(buffer_size_p),
+      data(make_unsafe_uniq_array_uninitialized<data_t>(buffer_size_p)), offset(0), total_written(0),
+      context(context_p) {
 	handle = fs.OpenFile(path, open_flags | FileLockType::WRITE_LOCK);
 }
 
@@ -27,15 +28,15 @@ idx_t BufferedFileWriter::GetTotalWritten() const {
 }
 
 void BufferedFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
-	if (write_size >= (2ULL * FILE_BUFFER_SIZE - offset)) {
+	if (write_size >= (2ULL * buffer_size - offset)) {
 		idx_t to_copy = 0;
 		// Check before performing direct IO if there is some data in the current internal buffer.
 		// If so, then fill the buffer (to avoid to small write operation), flush it and then write
 		// all the remain data directly.
-		// This is to avoid to split a large buffer into N*FILE_BUFFER_SIZE buffers
+		// This is to avoid to split a large buffer into N*buffer_size buffers
 		if (offset != 0) {
 			// Some data are still present in the buffer let write them before
-			to_copy = FILE_BUFFER_SIZE - offset;
+			to_copy = buffer_size - offset;
 			memcpy(data.get() + offset, buffer, to_copy);
 			offset += to_copy;
 			Flush(); // Flush buffer before writing every things else
@@ -48,12 +49,12 @@ void BufferedFileWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 		// first copy anything we can from the buffer
 		const_data_ptr_t end_ptr = buffer + write_size;
 		while (buffer < end_ptr) {
-			idx_t to_write = MinValue<idx_t>(UnsafeNumericCast<idx_t>((end_ptr - buffer)), FILE_BUFFER_SIZE - offset);
+			idx_t to_write = MinValue<idx_t>(UnsafeNumericCast<idx_t>((end_ptr - buffer)), buffer_size - offset);
 			D_ASSERT(to_write > 0);
 			memcpy(data.get() + offset, buffer, to_write);
 			offset += to_write;
 			buffer += to_write;
-			if (offset == FILE_BUFFER_SIZE) {
+			if (offset == buffer_size) {
 				Flush();
 			}
 		}

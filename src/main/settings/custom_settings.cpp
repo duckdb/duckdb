@@ -18,6 +18,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -323,6 +324,24 @@ void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &confi
 Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.checkpoint_wal_size));
+}
+
+//===----------------------------------------------------------------------===//
+// WAL Buffer Size
+//===----------------------------------------------------------------------===//
+void WalBufferSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	idx_t new_size = DBConfig::ParseMemoryLimit(input.ToString());
+	// reject sub-page sizes (pathological WriteData thresholds, no benefit) and the "infinite" sentinel
+	if (new_size < FILE_BUFFER_SIZE || new_size == NumericLimits<idx_t>::Maximum()) {
+		throw InvalidInputException("wal_buffer_size must be a byte size of at least %llu bytes (e.g. '64KB')",
+		                            static_cast<uint64_t>(FILE_BUFFER_SIZE));
+	}
+	config.options.wal_buffer_size = new_size;
+}
+
+Value WalBufferSizeSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::BytesToHumanReadableString(config.options.wal_buffer_size));
 }
 
 //===----------------------------------------------------------------------===//

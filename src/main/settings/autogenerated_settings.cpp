@@ -297,4 +297,11 @@ void ValidateExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &p
 	EnumUtil::FromString<CacheValidationMode>(StringValue::Get(parameter));
 }
 
+//===----------------------------------------------------------------------===//
+// Wal Buffer Size
+//===----------------------------------------------------------------------===//
+void WalBufferSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.wal_buffer_size = DBConfigOptions().wal_buffer_size;
+}
+
 } // namespace duckdb
