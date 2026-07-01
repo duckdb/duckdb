@@ -202,10 +202,11 @@ unique_ptr<Expression> CastCollect::VisitReplace(BoundCastExpression &expr, uniq
 		if (top_level_casts.count(&expr)) {
 			col_to_cast.emplace(binding->column_index, &expr);
 		}
-	} else if (it->second == nullptr || it->second->GetReturnType() != expr.GetReturnType()) {
+	} else if (it->second == nullptr || it->second->GetReturnType() != expr.GetReturnType() ||
+	           it->second->Cast<BoundCastExpression>().IsTryCast() != expr.IsTryCast()) {
 		// Different target type, or already a conflict.
-		// TODO(myrrc): CAST and TRY_CAST to the same type don't conflict
-		// but what if reader can push down TRY_CAST but not CAST?
+		// If reader can push CAST but not TRY_CAST or vice versa, we can't
+		// pretend thery are the same
 		it->second = nullptr;
 	}
 

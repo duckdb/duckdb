@@ -3,10 +3,10 @@
 
 require vector_size 2048
 
-unzip data/storage/alp_corrupt_vector_size.db.gz __TEST_DIR__/alp_corrupt_vector_size.db
+unzip data/storage/alp_corrupt_vector_size.db.gz {TEST_DIR}/alp_corrupt_vector_size.db
 
 statement ok
-ATTACH '__TEST_DIR__/alp_corrupt_vector_size.db' AS db2
+ATTACH '{TEST_DIR}/alp_corrupt_vector_size.db' AS db2
 
 statement ok
 USE db2;

@@ -24,6 +24,7 @@
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/main/pending_query_result.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
@@ -207,12 +208,19 @@ public:
 	//! Register function in the temporary schema
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
 
-	//! Parse statements from a query
-	DUCKDB_API vector<unique_ptr<SQLStatement>> ParseStatements(const string &query);
+	//! Iterate a query's statements as a StatementIterator (iterator-style API). The caller drives
+	//! Peek() + GetStatement() to walk through ready-to-execute statements one by one
+	DUCKDB_API StatementIterator IterateStatements(const string &query);
+
+	//! Preprocess a peel of parse-facing statements into engine-facing ones (PRAGMA reparse,
+	//! MULTI_STATEMENT unpack, transaction wrapping), replacing `buffer` in place. Acquires the
+	//! context lock internally when `lock` is null (callers that do not already hold it, e.g. the
+	//! shell). Drives StatementIterator's preprocessing.
+	DUCKDB_API void PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffer,
+	                                     optional_ptr<ClientContextLock> lock = nullptr);
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
-	DUCKDB_API void PreprocessStatements(vector<unique_ptr<SQLStatement>> &statements);
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
@@ -260,8 +268,6 @@ public:
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
 private:
-	//! Parse statements and resolve pragmas from a query
-	vector<unique_ptr<SQLStatement>> ParseStatements(ClientContextLock &lock, const string &query);
 	//! Issues a query to the database and returns a Pending Query Result
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                    const PendingQueryParameters &parameters, bool verify = true);
