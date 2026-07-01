@@ -844,6 +844,10 @@ public:
 				if (read_ahead.IsDone()) {
 					return MultiFileAcquireResult::EXHAUSTED;
 				}
+				// stop spinning if the query was interrupted
+				if (context.IsInterrupted()) {
+					throw InterruptException();
+				}
 				// queue empty but scan not done, another thread is producing, wait for it to enqueue
 				TaskScheduler::YieldThread();
 			}
