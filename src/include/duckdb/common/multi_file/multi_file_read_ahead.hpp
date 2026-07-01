@@ -55,6 +55,9 @@ public:
 	void FinishJob();
 
 private:
+	//! Be sure to drain any running work on early exit
+	void Drain() noexcept;
+
 	idx_t read_ahead_depth;
 
 	mutable mutex lock;

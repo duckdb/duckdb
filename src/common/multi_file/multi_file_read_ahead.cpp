@@ -36,7 +36,9 @@ MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_
 	}
 }
 
-MultiFileReadAhead::~MultiFileReadAhead() = default;
+MultiFileReadAhead::~MultiFileReadAhead() {
+	Drain();
+}
 
 idx_t MultiFileReadAhead::ActiveJobs() const {
 	return active_jobs.load();
@@ -116,6 +118,16 @@ void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
 void MultiFileReadAhead::FinishJob() {
 	D_ASSERT(active_jobs.load() > 0);
 	active_jobs--;
+}
+
+void MultiFileReadAhead::Drain() noexcept {
+	if (!executor) {
+		return;
+	}
+	try {
+		executor->WorkOnTasks();
+	} catch (...) { // LCOV_EXCL_START
+	} // LCOV_EXCL_STOP
 }
 
 MultiFileGlobalState::~MultiFileGlobalState() = default;
