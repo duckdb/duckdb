@@ -1,0 +1,23 @@
+# name: test/sql/storage/compression/dictionary/dict_corrupted_offset.test
+# description: Scanning a dictionary-compressed string segment with a corrupt offset must error, not read out of bounds
+# group: [dictionary]
+
+require vector_size 2048
+
+unzip data/storage/dict_corrupted_offset.db.gz __TEST_DIR__/dict_corrupted_offset.db
+
+statement ok
+ATTACH '__TEST_DIR__/dict_corrupted_offset.db' AS db2
+
+statement ok
+USE db2;
+
+query I
+SELECT compression FROM pragma_storage_info('t') WHERE compression='Dictionary' LIMIT 1;
+----
+Dictionary
+
+statement error
+SELECT * FROM t LIMIT 1;
+----
+IO Error: Failed to scan dictionary string - offset out of range. Database file appears to be corrupted.
