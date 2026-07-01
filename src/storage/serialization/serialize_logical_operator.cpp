@@ -163,6 +163,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = LogicalProjection::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_REFRESH_FEATURE:
+		result = LogicalRefreshFeature::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		result = LogicalRecursiveCTE::Deserialize(deserializer);
 		break;

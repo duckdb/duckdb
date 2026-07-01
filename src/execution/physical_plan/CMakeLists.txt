@@ -33,6 +33,7 @@ add_library_unity(
   plan_pragma.cpp
   plan_prepare.cpp
   plan_projection.cpp
+  plan_refresh_feature.cpp
   plan_set_operation.cpp
   plan_set.cpp
   plan_reset.cpp

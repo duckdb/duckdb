@@ -100,6 +100,7 @@ enum class PhysicalOperatorType : uint8_t {
 	CREATE_TYPE,
 	CREATE_TRIGGER,
 	CREATE_FEATURE,
+	REFRESH_FEATURE,
 	ATTACH,
 	DETACH,
 

@@ -114,6 +114,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CREATE_TRIGGER";
 	case LogicalOperatorType::LOGICAL_CREATE_FEATURE:
 		return "CREATE_FEATURE";
+	case LogicalOperatorType::LOGICAL_REFRESH_FEATURE:
+		return "REFRESH_FEATURE";
 	case LogicalOperatorType::LOGICAL_DROP:
 		return "DROP";
 	case LogicalOperatorType::LOGICAL_PRAGMA:

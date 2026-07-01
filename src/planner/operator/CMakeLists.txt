@@ -35,6 +35,7 @@ add_library_unity(
   logical_prepare.cpp
   logical_projection.cpp
   logical_recursive_cte.cpp
+  logical_refresh_feature.cpp
   logical_materialized_cte.cpp
   logical_sample.cpp
   logical_set.cpp
@@ -46,7 +47,8 @@ add_library_unity(
   logical_unnest.cpp
   logical_update.cpp
   logical_vacuum.cpp
-  logical_window.cpp)
+  logical_window.cpp
+  logical_refresh_feature.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_planner_operator>
     PARENT_SCOPE)
