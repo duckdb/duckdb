@@ -189,10 +189,10 @@ protected:
 	string path;
 	//! The WAL path
 	string wal_path;
-	//! The WriteAheadLog of the storage manager. Held as shared_ptr so the checkpoint can swap it (wal.reset() +
-	//! re-instantiate) while the old object is dropped; committers hold the WAL lock SHARED across their fsync, so a
-	//! swap (which needs the lock EXCLUSIVE) cannot race an in-flight commit.
-	shared_ptr<WriteAheadLog> wal;
+	//! The WriteAheadLog of the storage manager. The checkpoint can swap it (wal.reset() + re-instantiate); committers
+	//! hold the WAL lock SHARED across their fsync, so a swap (which needs the lock EXCLUSIVE) cannot race an in-flight
+	//! commit - hence no shared ownership is required.
+	unique_ptr<WriteAheadLog> wal;
 	//! Read-write lock controlling access to the WAL. Group-commit data writes take it SHARED (they can run
 	//! concurrently and only need the WAL structure to be stable); checkpoints and catalog-changing commits take it
 	//! EXCLUSIVE. The exclusive acquisition waits for all shared holders, which replaces the explicit
