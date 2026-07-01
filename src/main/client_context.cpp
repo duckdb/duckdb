@@ -900,10 +900,8 @@ StatementSignature ClientContext::BindStatement(unique_ptr<SQLStatement> stateme
 			    for (auto &entry : named_param_map) {
 				    LogicalType type(LogicalTypeId::UNKNOWN);
 				    auto it = planner.value_map.find(entry.first);
-				    if (it != planner.value_map.end()) {
-					    type = it->second->return_type.id() != LogicalTypeId::INVALID ? it->second->return_type
-					                                                                  : it->second->GetValue().type();
-				    }
+				    type = it->second->return_type.id() != LogicalTypeId::INVALID ? it->second->return_type
+				                                                                  : it->second->GetValue().type();
 				    signature.parameters.push_back({entry.first, entry.second, std::move(type)});
 			    }
 		    } catch (const std::exception &ex) {
