@@ -897,11 +897,15 @@ StatementSignature ClientContext::BindStatement(unique_ptr<SQLStatement> stateme
 			    signature.types = planner.types;
 			    signature.properties = std::move(planner.properties);
 			    // Parameter types from the bound parameter map (as in PreparedStatementData::TryGetType).
+			    // An un-anchored parameter (e.g. SELECT $1) gets no value_map entry, so its
+			    // type stays UNKNOWN; do not assume every parameter is present.
 			    for (auto &entry : named_param_map) {
 				    LogicalType type(LogicalTypeId::UNKNOWN);
 				    auto it = planner.value_map.find(entry.first);
-				    type = it->second->return_type.id() != LogicalTypeId::INVALID ? it->second->return_type
-				                                                                  : it->second->GetValue().type();
+				    if (it != planner.value_map.end()) {
+					    type = it->second->return_type.id() != LogicalTypeId::INVALID ? it->second->return_type
+					                                                                  : it->second->GetValue().type();
+				    }
 				    signature.parameters.push_back({entry.first, entry.second, std::move(type)});
 			    }
 		    } catch (const std::exception &ex) {
