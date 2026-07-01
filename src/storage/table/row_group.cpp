@@ -1913,19 +1913,13 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 
 	PartitionStatistics result;
 	result.row_start = row_group.GetRowStart();
-	if (row_group_ref.HasUnloadedDeletes()) {
-		result.count = row_group_ref.count;
-		result.count_type = CountType::COUNT_APPROXIMATE;
-		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), false);
-	} else {
-		result.count = row_group_ref.GetCommittedRowCount();
-		result.count_type = CountType::COUNT_EXACT;
-		auto vinfo = row_group_ref.GetVersionInfoIfLoaded();
-		// No version info means no deletes were ever recorded (either in memory on disk), so base stats still cover
-		// every committed row in the segment.
-		const bool min_max_exact = !vinfo || !vinfo->HasDeletes();
-		result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), min_max_exact);
-	}
+	result.count = row_group_ref.count;
+
+	// Stats are exact only when there are no deletes.
+	auto vinfo = row_group_ref.GetVersionInfoIfLoaded();
+	const bool is_exact = !row_group_ref.HasUnloadedDeletes() && (!vinfo || !vinfo->HasDeletes());
+	result.count_type = is_exact ? CountType::COUNT_EXACT : CountType::COUNT_APPROXIMATE;
+	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), is_exact);
 
 	return result;
 }
