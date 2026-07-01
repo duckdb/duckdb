@@ -76,7 +76,6 @@ class ClientContext : public enable_shared_from_this<ClientContext> {
 	friend class SimpleBufferedData;  // ExecuteTaskInternal
 	friend class BatchedBufferedData; // ExecuteTaskInternal
 	friend class StreamQueryResult;   // LockContext
-	friend class StatementIterator;      // LockContext
 	friend class ConnectionManager;
 
 public:
@@ -212,6 +211,13 @@ public:
 	//! Iterate a query's statements as a StatementIterator (iterator-style API). The caller drives
 	//! Peek() + GetStatement() to walk through ready-to-execute statements one by one
 	DUCKDB_API StatementIterator IterateStatements(const string &query);
+
+	//! Preprocess a peel of parse-facing statements into engine-facing ones (PRAGMA reparse,
+	//! MULTI_STATEMENT unpack, transaction wrapping), replacing `buffer` in place. Acquires the
+	//! context lock internally when `lock` is null (callers that do not already hold it, e.g. the
+	//! shell). Drives StatementIterator's preprocessing.
+	DUCKDB_API void PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffer,
+	                                     optional_ptr<ClientContextLock> lock = nullptr);
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);

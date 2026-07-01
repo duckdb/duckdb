@@ -1,9 +1,7 @@
 #include "duckdb/main/statement_iterator.hpp"
 
-#include "duckdb/common/enums/current_transaction_state.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/sql_statement.hpp"
-#include "duckdb/planner/statement_preprocessor.hpp"
 
 namespace duckdb {
 
@@ -39,23 +37,9 @@ unique_ptr<SQLStatement> StatementIterator::GetStatementInternal(optional_ptr<Cl
 	buffer.clear();
 	buffer_cursor = 0;
 	buffer.push_back(std::move(stmt));
-	auto &client_context = context.get();
 	// Preprocess the peel into one-or-more engine-facing statements. This runs in Get (not Peek) so it
 	// sees the transaction state left by the previously executed statement.
-	auto preprocess = [](ClientContextLock &active_lock, ClientContext &client_context,
-	                     vector<unique_ptr<SQLStatement>> &buffer) {
-		StatementPreprocessor preprocessor(client_context);
-		const CurrentTransactionState transaction_state =
-		    client_context.transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
-		preprocessor.Preprocess(active_lock, buffer, transaction_state);
-	};
-	if (lock) {
-		preprocess(*lock, client_context, buffer);
-	} else {
-		// No caller-held lock (e.g. the shell): acquire one ourselves for the preprocess pass.
-		auto own_lock = client_context.LockContext();
-		preprocess(*own_lock, client_context, buffer);
-	}
+	context.get().PreprocessStatements(buffer, lock);
 	if (buffer.empty()) {
 		// Preprocessing swallowed the peel — caller skips with `continue`; the next Get pulls on.
 		return nullptr;

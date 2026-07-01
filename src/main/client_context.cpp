@@ -50,6 +50,7 @@
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/common/enums/current_transaction_state.hpp"
 #include "duckdb/planner/statement_preprocessor.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
@@ -793,6 +794,21 @@ StatementIterator ClientContext::IterateStatements(const string &query) {
 	// Callers that want raw parse-facing statements and drive their own preprocessing construct a
 	// ParseIterator directly (e.g. Query / ParseStatementsInternal below, which hold the lock).
 	return StatementIterator(ParseIterator(*this, query));
+}
+
+void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffer,
+                                         optional_ptr<ClientContextLock> lock) {
+	// Acquire our own lock if the caller doesn't hold one (e.g. the shell); own_lock keeps it alive
+	// for the duration of the preprocess pass.
+	unique_ptr<ClientContextLock> own_lock;
+	if (!lock) {
+		own_lock = LockContext();
+		lock = own_lock.get();
+	}
+	StatementPreprocessor preprocessor(*this);
+	const CurrentTransactionState transaction_state =
+	    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
+	preprocessor.Preprocess(*lock, buffer, transaction_state);
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
