@@ -63,6 +63,7 @@ DEFAULT_GRAMMAR_FILES = [
     "create_schema.gram",
     "create_secret.gram",
     "create_sequence.gram",
+    "create_table.gram",
     "create_trigger.gram",
     "create_type.gram",
     "create_view.gram",
@@ -87,63 +88,6 @@ DEFAULT_GRAMMAR_FILES = [
     "vacuum.gram",
 ]
 DEFAULT_EXTRA_RULES = {
-    "create_table.gram": [
-        "CreateStatement",
-        "CreateStatementVariation",
-        "OrReplace",
-        "CatalogQualification",
-        "SchemaQualification",
-        "ReservedSchemaQualification",
-        "DottedIdentifier",
-        "DotColLabel",
-        "ColId",
-        "ColLabel",
-        "ColLabelOrString",
-        "ColIdOrString",
-        "IfNotExists",
-        "QualifiedName",
-        "SchemaReservedIdentifierOrStringLiteral",
-        "CatalogReservedSchemaIdentifier",
-        "TableQualification",
-        "ReservedTableQualification",
-        "IdentifierOrStringLiteral",
-        "ReservedIdentifierOrStringLiteral",
-        "Temporary",
-        "Persistent",
-        "TempPersistent",
-        "TemporaryPersistent",
-        "TypeFuncName",
-        "ColumnIdList",
-        "ColumnConstraint",
-        "NotNullConstraint",
-        "NullConstraint",
-        "NotNullColumnConstraint",
-        "UniqueConstraint",
-        "PrimaryKeyConstraint",
-        "DefaultValue",
-        "CheckConstraint",
-        "ForeignKeyConstraint",
-        "ColumnCollation",
-        "ColumnCompression",
-        "KeyActions",
-        "UpdateAction",
-        "DeleteAction",
-        "KeyAction",
-        "NoKeyAction",
-        "RestrictKeyAction",
-        "CascadeKeyAction",
-        "SetNullKeyAction",
-        "SetDefaultKeyAction",
-        "TopLevelConstraint",
-        "TopLevelConstraintList",
-        "TopPrimaryKeyConstraint",
-        "TopUniqueConstraint",
-        "TopForeignKeyConstraint",
-        "GeneratedColumn",
-        "GeneratedColumnType",
-        "VirtualGeneratedColumn",
-        "StoredGeneratedColumn",
-    ],
     "select.gram": [
         "SelectStatement",
         "SelectStatementInternal",
@@ -259,6 +203,12 @@ DEFAULT_EXTRA_RULES = {
     ],
 }
 INTERNAL_GRAMMAR_RULES = {"List", "Parens"}
+SPECIAL_DISPATCH_RULES = {
+    "Statement": {
+        "cpp_type": "unique_ptr<SQLStatement>",
+        "transform": "PEGTransformerFactory::TransformStatementTrampoline(transformer, frame.parse_result)",
+    },
+}
 TRAMPOLINE_START_BLOCK = (
     "\t//===--------------------------------------------------------------------===//\n"
     "\t// START GENERATED TRAMPOLINE RULES\n"
@@ -433,6 +383,9 @@ class UseGramPreviewEmitter:
             )
         ]
 
+    def emitted_ops_rules(self):
+        return list(SPECIAL_DISPATCH_RULES.keys()) + self.emitted_rules()
+
     def initialize_hook(self, rule_name):
         config = self.rule_config_entry(rule_name)
         if config is not None and config.init:
@@ -447,6 +400,15 @@ class UseGramPreviewEmitter:
 
     def emit_header_declarations(self):
         lines = []
+        for rule_name in SPECIAL_DISPATCH_RULES:
+            lines.append(
+                f"\tstatic void {init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
+                f"TransformStackFrame &frame);\n"
+            )
+            lines.append(
+                f"\tstatic unique_ptr<TransformResultValue> {finalize_name(rule_name)}(PEGTransformer &transformer, "
+                f"TransformStack &stack, TransformStackFrame &frame);\n"
+            )
         for rule_name in self.emitted_rules():
             if self.is_manual_rule(rule_name):
                 continue
@@ -554,7 +516,7 @@ class UseGramPreviewEmitter:
         lines.append('\n#include "duckdb/parser/peg/transformer/peg_transformer.hpp"\n\n')
         lines.append("namespace duckdb {\n\n")
         lines.append("")
-        for rule_name in self.emitted_rules():
+        for rule_name in self.emitted_ops_rules():
             lines.append(
                 f"static const TransformFrameOps {ops_name(rule_name)} = "
                 f'{{"{rule_name}", &PEGTransformerFactory::{self.initialize_hook(rule_name)}, '
@@ -562,6 +524,8 @@ class UseGramPreviewEmitter:
             )
         lines.append("")
         lines.extend(self.emit_ops_lookup())
+        lines.append("")
+        lines.extend(self.emit_special_dispatch_rules())
         lines.append("")
         for rule_name, rule in self.rules.items():
             capability = self.rule_capabilities[rule_name]
@@ -590,11 +554,32 @@ class UseGramPreviewEmitter:
             "const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::GeneratedTrampolineOps() {"
         )
         lines.append("\tstatic const case_insensitive_map_t<const TransformFrameOps *> result = {")
-        for rule_name in self.emitted_rules():
+        for rule_name in self.emitted_ops_rules():
             lines.append(f'\t    {{"{rule_name}", &{ops_name(rule_name)}}},')
         lines.append("\t};")
         lines.append("\treturn result;")
         lines.append("}")
+        return lines
+
+    def emit_special_dispatch_rules(self):
+        lines = []
+        for rule_name, dispatch in SPECIAL_DISPATCH_RULES.items():
+            cpp_type = dispatch["cpp_type"]
+            lines.append(
+                f"void PEGTransformerFactory::{init_name(rule_name)}(PEGTransformer &transformer, TransformStack &stack, "
+                f"TransformStackFrame &frame) {{"
+            )
+            lines.append("\tframe.ReserveChildSlots(0);")
+            lines.append("}")
+            lines.append("")
+            lines.append(
+                f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
+                f"TransformStack &stack, TransformStackFrame &frame) {{"
+            )
+            lines.append(f"\tauto result = {dispatch['transform']};")
+            lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', True)};")
+            lines.append("}")
+            lines.append("")
         return lines
 
     def emit_rule(self, rule_name, ast):
@@ -765,12 +750,21 @@ class UseGramPreviewEmitter:
             return lines
         cpp_type = self.cpp_type(rule_name)
         by_value = self.by_value(rule_name)
+        child_cpp_types = set()
+        for alternative in ast.alternatives:
+            if isinstance(alternative, ReferenceNode) and alternative.name in self.rule_types:
+                child_cpp_types.add(self.cpp_type(alternative.name))
         lines.append("")
         lines.append(
             f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"TransformStack &stack, TransformStackFrame &frame) {{"
         )
-        if cpp_type == "Identifier":
+        if len(child_cpp_types) == 1 and cpp_type not in child_cpp_types and manual_body_exists(rule_name):
+            child_cpp_type = next(iter(child_cpp_types))
+            lines.append(f"\tauto child = frame.TakeResult<{child_cpp_type}>(0);")
+            child_arg = "std::move(child)" if child_cpp_type.startswith("unique_ptr<") else "child"
+            lines.append(f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer, {child_arg});")
+        elif cpp_type == "Identifier":
             lines.append("\tIdentifier result;")
             lines.append("\tif (frame.child_results[0]) {")
             lines.append("\t\tresult = frame.TakeResult<Identifier>(0);")
