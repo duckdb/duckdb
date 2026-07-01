@@ -97,9 +97,6 @@ void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
 	if (job.io_tasks_pending) {
 		auto &pending = *job.io_tasks_pending;
 		while (pending.load() > 0) {
-			if (executor->HasError()) {
-				executor->ThrowError();
-			}
 			shared_ptr<Task> task;
 			if (executor->GetTask(task)) {
 				// pull a queued I/O task off the executor and run it on this thread
