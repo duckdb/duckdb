@@ -59,8 +59,11 @@ DEFAULT_GRAMMAR_FILES = [
     "connect.gram",
     "copy.gram",
     "create_index.gram",
+    "create_macro.gram",
     "create_schema.gram",
+    "create_secret.gram",
     "create_sequence.gram",
+    "create_trigger.gram",
     "create_type.gram",
     "create_view.gram",
     "deallocate.gram",
@@ -74,6 +77,8 @@ DEFAULT_GRAMMAR_FILES = [
     "expression.gram",
     "insert.gram",
     "load.gram",
+    "merge_into.gram",
+    "pragma.gram",
     "prepare.gram",
     "set.gram",
     "transaction.gram",
@@ -107,6 +112,7 @@ DEFAULT_EXTRA_RULES = {
         "Persistent",
         "TempPersistent",
         "TemporaryPersistent",
+        "TypeFuncName",
         "ColumnIdList",
         "ColumnConstraint",
         "NotNullConstraint",
@@ -138,8 +144,6 @@ DEFAULT_EXTRA_RULES = {
         "VirtualGeneratedColumn",
         "StoredGeneratedColumn",
     ],
-    "create_secret.gram": ["SecretName"],
-    "create_trigger.gram": ["TriggerName"],
     "select.gram": [
         "SelectStatement",
         "SelectStatementInternal",
@@ -228,6 +232,9 @@ DEFAULT_EXTRA_RULES = {
         "TableAlias",
         "TableAliasAs",
         "TableAliasWithoutAs",
+        "JoinQualifier",
+        "OnClause",
+        "UsingClause",
         "ColumnAliases",
         "SampleClause",
         "SampleEntry",
@@ -763,7 +770,25 @@ class UseGramPreviewEmitter:
             f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"TransformStack &stack, TransformStackFrame &frame) {{"
         )
-        lines.append(f"\tauto result = frame.TakeResult<{cpp_type}>(0);")
+        if cpp_type == "Identifier":
+            lines.append("\tIdentifier result;")
+            lines.append("\tif (frame.child_results[0]) {")
+            lines.append("\t\tresult = frame.TakeResult<Identifier>(0);")
+            lines.append("\t} else {")
+            lines.append("\t\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
+            lines.append("\t\tauto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();")
+            lines.append("\t\tif (choice_result.type == ParseResultType::IDENTIFIER) {")
+            lines.append("\t\t\tresult = choice_result.Cast<IdentifierParseResult>().identifier;")
+            lines.append("\t\t} else if (choice_result.type == ParseResultType::KEYWORD) {")
+            lines.append("\t\t\tresult = Identifier(choice_result.Cast<KeywordParseResult>().keyword);")
+            lines.append("\t\t} else if (choice_result.type == ParseResultType::STRING) {")
+            lines.append("\t\t\tresult = Identifier(choice_result.Cast<StringLiteralParseResult>().result);")
+            lines.append("\t\t} else {")
+            lines.append("\t\t\tresult = Identifier(TransformIdentifierOrKeyword(transformer, choice_result));")
+            lines.append("\t\t}")
+            lines.append("\t}")
+        else:
+            lines.append(f"\tauto result = frame.TakeResult<{cpp_type}>(0);")
         lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', by_value)};")
         lines.append("}")
         return lines
@@ -780,6 +805,10 @@ class UseGramPreviewEmitter:
         lines.append("\tframe.ReserveChildSlots(1);")
         lines.append("\tauto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();")
         lines.append("\tauto ops_entry = ops_map.find(choice_result.name);")
+        if self.cpp_type(rule_name) == "Identifier":
+            lines.append("\tif (ops_entry == ops_map.end() && choice_result.name.empty()) {")
+            lines.append("\t\treturn;")
+            lines.append("\t}")
         lines.append("\tif (ops_entry == ops_map.end()) {")
         lines.append("\t\tthrow InternalException(\"No trampoline ops registered for rule '%s'\", choice_result.name);")
         lines.append("\t}")
