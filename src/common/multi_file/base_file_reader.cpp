@@ -24,6 +24,10 @@ double BaseFileReader::GetProgressInFile(ClientContext &context) {
 	return 0;
 }
 
+InsertionOrderPreservingMap<Value> BaseFileReader::GetMetadata() const {
+	return {};
+}
+
 unique_ptr<BaseStatistics> BaseUnionData::GetStatistics(ClientContext &context, const Identifier &name) {
 	return nullptr;
 }
