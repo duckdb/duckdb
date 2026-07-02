@@ -8,6 +8,6 @@ if (NOT MINGW)
   duckdb_extension_load(iceberg
      #FIXME: restore autoloading tests ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb-iceberg
-            GIT_TAG 757264559e745be697e9306e144e8889eb1dc024
+            GIT_TAG 5edc45f0ccdb308f066a9274449c3cb0c49ed0ea
             )
 endif()
