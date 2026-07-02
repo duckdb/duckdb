@@ -31,8 +31,8 @@ static unique_ptr<TableRef> CurrentFeatureBindReplace(ClientContext &context, Ta
 	}
 
 	if (feature_entry->current_version < 1) {
-		throw CatalogException("Feature \"%s\" has not been refreshed yet — run REFRESH FEATURE %s first",
-		                       feature_name, feature_name);
+		throw CatalogException("Feature \"%s\" has not been refreshed yet — run REFRESH FEATURE %s first", feature_name,
+		                       feature_name);
 	}
 
 	auto result = make_uniq<BaseTableRef>();

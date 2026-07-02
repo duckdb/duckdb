@@ -1,4 +1,4 @@
-# name: benchmark/feature/refresh_serve_interleaved_retain5.benchmark
+# name: benchmark/feature/refresh_serve_interleaved_retain3.benchmark
 # description: Time five interleaved INCREMENTAL refresh and SERVE operations with RETAIN 5
 # group: [feature]
 
