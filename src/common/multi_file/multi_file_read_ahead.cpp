@@ -135,6 +135,8 @@ void MultiFileReadAhead::FinishJob() {
 
 void MultiFileReadAhead::Drain() noexcept {
 	try {
+		// cancel I/O that has not started yet
+		executor->PushError(ErrorData(ExceptionType::INTERRUPT, "read-ahead scan was torn down"));
 		executor->WorkOnTasks();
 	} catch (...) { // LCOV_EXCL_START
 	} // LCOV_EXCL_STOP
