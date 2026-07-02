@@ -1,4 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"

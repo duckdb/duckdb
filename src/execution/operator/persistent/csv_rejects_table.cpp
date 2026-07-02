@@ -1,4 +1,5 @@
 #include "duckdb/main/appender.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/function/table/read_csv.hpp"

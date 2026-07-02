@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/extension_manager.hpp"
