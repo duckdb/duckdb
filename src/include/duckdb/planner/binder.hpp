@@ -51,6 +51,7 @@ class ViewCatalogEntry;
 class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
+class LogicalGet;
 class LogicalVacuum;
 
 class ColumnList;
@@ -240,6 +241,12 @@ public:
 	                                                     AlterBindMode bind_mode = AlterBindMode::BIND_ON_ALTER);
 	static unique_ptr<BoundCreateTableInfo> BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
 	                                                                  SchemaCatalogEntry &schema);
+
+	//! If `op` is a pass-through of a single table function - a chain of projections over exactly one
+	//! LOGICAL_GET and nothing else that produces rows - returns that get; otherwise nullptr. Used to
+	//! propagate a table function's call_return_type to the statement return type for the `CALL func()`
+	//! and `SELECT * FROM func()` (CONNECT chokepoint) forms.
+	static optional_ptr<LogicalGet> GetPassthroughTableFunctionGet(LogicalOperator &op);
 
 	static vector<unique_ptr<BoundConstraint>> BindConstraints(ClientContext &context,
 	                                                           const vector<unique_ptr<Constraint>> &constraints,

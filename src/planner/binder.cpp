@@ -233,6 +233,22 @@ StatementProperties &Binder::GetStatementProperties() {
 	return global_binder_state->prop;
 }
 
+optional_ptr<LogicalGet> Binder::GetPassthroughTableFunctionGet(LogicalOperator &op) {
+	// Descend through single-child projections (the identity projection above a `SELECT * FROM func()`);
+	// return the get iff we reach exactly one LOGICAL_GET. Any other operator (aggregate, filter, join,
+	// order, limit, ...) or a branch means the statement is not a bare table-function passthrough.
+	auto *current = &op;
+	while (true) {
+		if (current->type == LogicalOperatorType::LOGICAL_GET) {
+			return current->Cast<LogicalGet>();
+		}
+		if (current->type != LogicalOperatorType::LOGICAL_PROJECTION || current->children.size() != 1) {
+			return nullptr;
+		}
+		current = current->children[0].get();
+	}
+}
+
 optional_ptr<BoundParameterMap> Binder::GetParameters() {
 	return global_binder_state->parameters;
 }
