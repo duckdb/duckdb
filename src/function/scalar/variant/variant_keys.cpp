@@ -93,27 +93,9 @@ static void VariantKeysFunction(DataChunk &input, ExpressionState &state, Vector
 	                                                               WriteKeysResult);
 }
 
-static void AddFunctionsWithParameterType(ScalarFunctionSet &fun_set, const LogicalType &input_type) {
-	ScalarFunction variant_keys("variant_keys", {}, LogicalType::LIST(LogicalType::VARCHAR), VariantKeysFunction,
-	                            VariantBindUtils::VariantPathBind, nullptr);
-
-	variant_keys.GetSignature().AddParameter(input_type);
-	fun_set.AddFunction(variant_keys);
-
-	variant_keys.GetSignature().AddParameter(LogicalType::VARCHAR);
-	fun_set.AddFunction(variant_keys);
-
-	variant_keys.GetSignature().GetParameter(1).SetType(LogicalType::LIST(LogicalType::VARCHAR));
-	variant_keys.SetReturnType(LogicalType::LIST(LogicalType::LIST(LogicalType::VARCHAR)));
-	fun_set.AddFunction(variant_keys);
-}
-
 ScalarFunctionSet VariantKeysFun::GetFunctions() {
-	ScalarFunctionSet fun_set;
-
-	AddFunctionsWithParameterType(fun_set, LogicalType::VARIANT());
-
-	return fun_set;
+	return VariantPathFunction::CreateFunctionSet("variant_keys", VariantKeysFunction,
+	                                              LogicalType::LIST(LogicalType::VARCHAR));
 }
 
 } // namespace duckdb
