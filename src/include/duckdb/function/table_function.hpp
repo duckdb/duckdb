@@ -15,7 +15,6 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/common/column_index.hpp"
-#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
