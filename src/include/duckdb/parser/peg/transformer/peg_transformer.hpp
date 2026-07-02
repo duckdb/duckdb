@@ -1801,6 +1801,11 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeTopLevelConstraintListTrampoline(PEGTransformer &transformer,
 	                                                                                 TransformStack &stack,
 	                                                                                 TransformStackFrame &frame);
+	static void InitializeTopCheckConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                   TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeTopCheckConstraintTrampoline(PEGTransformer &transformer,
+	                                                                             TransformStack &stack,
+	                                                                             TransformStackFrame &frame);
 	static void InitializeTopPrimaryKeyConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                        TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeTopPrimaryKeyConstraintTrampoline(PEGTransformer &transformer,
@@ -2981,6 +2986,16 @@ public:
 	                                              TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeOtherOperatorTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeAnyAllParsedOperatorTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                     TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeAnyAllParsedOperatorTrampoline(PEGTransformer &transformer,
+	                                                                               TransformStack &stack,
+	                                                                               TransformStackFrame &frame);
+	static void InitializeNamedOtherOperatorTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                   TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeNamedOtherOperatorTrampoline(PEGTransformer &transformer,
+	                                                                             TransformStack &stack,
+	                                                                             TransformStackFrame &frame);
 	static void InitializeOperatorLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -5682,8 +5697,10 @@ public:
 	                                                          unique_ptr<Constraint> top_level_constraint_list);
 	static unique_ptr<TransformResultValue> TransformTopLevelConstraintListInternal(PEGTransformer &transformer,
 	                                                                                ParseResult &parse_result);
-	static unique_ptr<Constraint> TransformTopLevelConstraintList(PEGTransformer &transformer,
-	                                                              ParseResult &choice_result);
+	static unique_ptr<TransformResultValue> TransformTopCheckConstraintInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<Constraint> TransformTopCheckConstraint(PEGTransformer &transformer,
+	                                                          ColumnConstraintEntry check_constraint);
 	static unique_ptr<TransformResultValue> TransformTopPrimaryKeyConstraintInternal(PEGTransformer &transformer,
 	                                                                                 ParseResult &parse_result);
 	static unique_ptr<Constraint> TransformTopPrimaryKeyConstraint(PEGTransformer &transformer,
@@ -6726,7 +6743,13 @@ public:
 	                                                    unique_ptr<ParsedExpression> bitwise_expression);
 	static unique_ptr<TransformResultValue> TransformOtherOperatorInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
-	static ParsedOperator TransformOtherOperator(PEGTransformer &transformer, ParseResult &choice_result);
+	static unique_ptr<TransformResultValue> TransformAnyAllParsedOperatorInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static ParsedOperator TransformAnyAllParsedOperator(PEGTransformer &transformer,
+	                                                    const pair<string, bool> &any_all_operator);
+	static unique_ptr<TransformResultValue> TransformNamedOtherOperatorInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static ParsedOperator TransformNamedOtherOperator(PEGTransformer &transformer, const string &child);
 	static unique_ptr<TransformResultValue> TransformAnyAllOperatorInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static pair<string, bool> TransformAnyAllOperator(PEGTransformer &transformer, const string &any_op,

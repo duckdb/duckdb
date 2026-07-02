@@ -1183,21 +1183,18 @@ OtherOperatorTail PEGTransformerFactory::TransformOtherOperatorTail(PEGTransform
 	return result;
 }
 
-ParsedOperator PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer, ParseResult &choice_result) {
+ParsedOperator PEGTransformerFactory::TransformAnyAllParsedOperator(PEGTransformer &transformer,
+                                                                    const pair<string, bool> &any_all_operator) {
 	ParsedOperator result;
-	// OperatorLiteral matches any operator token and produces an OperatorParseResult directly
-	if (choice_result.type == ParseResultType::OPERATOR) {
-		result.name = choice_result.Cast<OperatorParseResult>().operator_token;
-		return result;
-	}
-	if (StringUtil::CIEquals(choice_result.name, "AnyAllOperator")) {
-		auto any_all = transformer.Transform<pair<string, bool>>(choice_result);
-		result.name = any_all.first;
-		result.is_any_all = true;
-		result.is_any = any_all.second;
-		return result;
-	}
-	result.name = transformer.Transform<string>(choice_result);
+	result.name = any_all_operator.first;
+	result.is_any_all = true;
+	result.is_any = any_all_operator.second;
+	return result;
+}
+
+ParsedOperator PEGTransformerFactory::TransformNamedOtherOperator(PEGTransformer &transformer, const string &child) {
+	ParsedOperator result;
+	result.name = child;
 	return result;
 }
 

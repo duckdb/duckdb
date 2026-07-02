@@ -289,6 +289,7 @@ Constraint:
   rules:
     - TopLevelConstraint
     - TopLevelConstraintList
+    - TopCheckConstraint
     - TopPrimaryKeyConstraint
     - TopUniqueConstraint
     - TopForeignKeyConstraint
@@ -1546,6 +1547,12 @@ overrides:
     type: "BetweenInLikeOperator"
     by_value: true
   OtherOperator:
+    type: "ParsedOperator"
+    by_value: true
+  AnyAllParsedOperator:
+    type: "ParsedOperator"
+    by_value: true
+  NamedOtherOperator:
     type: "ParsedOperator"
     by_value: true
   OtherOperatorTail:

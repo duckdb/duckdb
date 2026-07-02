@@ -845,6 +845,9 @@ static const TransformFrameOps TOP_LEVEL_CONSTRAINT_OPS = {
 static const TransformFrameOps TOP_LEVEL_CONSTRAINT_LIST_OPS = {
     "TopLevelConstraintList", &PEGTransformerFactory::InitializeTopLevelConstraintListTrampoline,
     &PEGTransformerFactory::FinalizeTopLevelConstraintListTrampoline};
+static const TransformFrameOps TOP_CHECK_CONSTRAINT_OPS = {
+    "TopCheckConstraint", &PEGTransformerFactory::InitializeTopCheckConstraintTrampoline,
+    &PEGTransformerFactory::FinalizeTopCheckConstraintTrampoline};
 static const TransformFrameOps TOP_PRIMARY_KEY_CONSTRAINT_OPS = {
     "TopPrimaryKeyConstraint", &PEGTransformerFactory::InitializeTopPrimaryKeyConstraintTrampoline,
     &PEGTransformerFactory::FinalizeTopPrimaryKeyConstraintTrampoline};
@@ -1664,6 +1667,12 @@ static const TransformFrameOps OTHER_OPERATOR_TAIL_OPS = {"OtherOperatorTail",
 static const TransformFrameOps OTHER_OPERATOR_OPS = {"OtherOperator",
                                                      &PEGTransformerFactory::InitializeOtherOperatorTrampoline,
                                                      &PEGTransformerFactory::FinalizeOtherOperatorTrampoline};
+static const TransformFrameOps ANY_ALL_PARSED_OPERATOR_OPS = {
+    "AnyAllParsedOperator", &PEGTransformerFactory::InitializeAnyAllParsedOperatorTrampoline,
+    &PEGTransformerFactory::FinalizeAnyAllParsedOperatorTrampoline};
+static const TransformFrameOps NAMED_OTHER_OPERATOR_OPS = {
+    "NamedOtherOperator", &PEGTransformerFactory::InitializeNamedOtherOperatorTrampoline,
+    &PEGTransformerFactory::FinalizeNamedOtherOperatorTrampoline};
 static const TransformFrameOps OPERATOR_LITERAL_OPS = {"OperatorLiteral",
                                                        &PEGTransformerFactory::InitializeOperatorLiteralTrampoline,
                                                        &PEGTransformerFactory::FinalizeOperatorLiteralTrampoline};
@@ -3037,6 +3046,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"SetDefaultKeyAction", &SET_DEFAULT_KEY_ACTION_OPS},
 	    {"TopLevelConstraint", &TOP_LEVEL_CONSTRAINT_OPS},
 	    {"TopLevelConstraintList", &TOP_LEVEL_CONSTRAINT_LIST_OPS},
+	    {"TopCheckConstraint", &TOP_CHECK_CONSTRAINT_OPS},
 	    {"TopPrimaryKeyConstraint", &TOP_PRIMARY_KEY_CONSTRAINT_OPS},
 	    {"TopUniqueConstraint", &TOP_UNIQUE_CONSTRAINT_OPS},
 	    {"TopForeignKeyConstraint", &TOP_FOREIGN_KEY_CONSTRAINT_OPS},
@@ -3322,6 +3332,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"OtherOperatorExpression", &OTHER_OPERATOR_EXPRESSION_OPS},
 	    {"OtherOperatorTail", &OTHER_OPERATOR_TAIL_OPS},
 	    {"OtherOperator", &OTHER_OPERATOR_OPS},
+	    {"AnyAllParsedOperator", &ANY_ALL_PARSED_OPERATOR_OPS},
+	    {"NamedOtherOperator", &NAMED_OTHER_OPERATOR_OPS},
 	    {"OperatorLiteral", &OPERATOR_LITERAL_OPS},
 	    {"AnyAllOperator", &ANY_ALL_OPERATOR_OPS},
 	    {"AnyOrAll", &ANY_OR_ALL_OPS},
@@ -9463,6 +9475,21 @@ PEGTransformerFactory::FinalizeTopLevelConstraintListTrampoline(PEGTransformer &
 	return make_uniq<TypedTransformResult<unique_ptr<Constraint>>>(std::move(result));
 }
 
+void PEGTransformerFactory::InitializeTopCheckConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), CHECK_CONSTRAINT_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTopCheckConstraintTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	auto check_constraint = frame.TakeResult<ColumnConstraintEntry>(0);
+	auto result = PEGTransformerFactory::TransformTopCheckConstraint(transformer, std::move(check_constraint));
+	return make_uniq<TypedTransformResult<unique_ptr<Constraint>>>(std::move(result));
+}
+
 void PEGTransformerFactory::InitializeTopPrimaryKeyConstraintTrampoline(PEGTransformer &transformer,
                                                                         TransformStack &stack,
                                                                         TransformStackFrame &frame) {
@@ -14909,22 +14936,13 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeGlobTokenTrampol
 
 void PEGTransformerFactory::InitializeSimilarToTokenTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                TransformStackFrame &frame) {
-	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto &choice_result = choice_pr.GetResult();
-	frame.ReserveChildSlots(1);
-	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
-	auto ops_entry = ops_map.find(choice_result.name);
-	if (ops_entry == ops_map.end()) {
-		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
-	}
-	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+	frame.ReserveChildSlots(0);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSimilarToTokenTrampoline(PEGTransformer &transformer,
                                                                                          TransformStack &stack,
                                                                                          TransformStackFrame &frame) {
-	auto result = frame.TakeResult<string>(0);
+	auto result = PEGTransformerFactory::TransformSimilarToToken(transformer);
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -15163,6 +15181,43 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOtherOperatorTra
                                                                                         TransformStack &stack,
                                                                                         TransformStackFrame &frame) {
 	auto result = frame.TakeResult<ParsedOperator>(0);
+	return make_uniq<TypedTransformResult<ParsedOperator>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeAnyAllParsedOperatorTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                     TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), ANY_ALL_OPERATOR_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeAnyAllParsedOperatorTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                              TransformStackFrame &frame) {
+	auto any_all_operator = frame.TakeResult<pair<string, bool>>(0);
+	auto result = PEGTransformerFactory::TransformAnyAllParsedOperator(transformer, any_all_operator);
+	return make_uniq<TypedTransformResult<ParsedOperator>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeNamedOtherOperatorTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeNamedOtherOperatorTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	auto child = frame.TakeResult<string>(0);
+	auto result = PEGTransformerFactory::TransformNamedOtherOperator(transformer, child);
 	return make_uniq<TypedTransformResult<ParsedOperator>>(std::move(result));
 }
 

@@ -455,13 +455,9 @@ PEGTransformerFactory::TransformTopLevelConstraint(PEGTransformer &transformer, 
 	return top_level_constraint_list;
 }
 
-unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraintList(PEGTransformer &transformer,
-                                                                              ParseResult &choice_result) {
-	if (choice_result.name == "CheckConstraint") {
-		auto cc_entry = transformer.Transform<ColumnConstraintEntry>(choice_result);
-		return std::move(cc_entry.constraint);
-	}
-	return transformer.Transform<unique_ptr<Constraint>>(choice_result);
+unique_ptr<Constraint> PEGTransformerFactory::TransformTopCheckConstraint(PEGTransformer &transformer,
+                                                                          ColumnConstraintEntry check_constraint) {
+	return std::move(check_constraint.constraint);
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopPrimaryKeyConstraint(PEGTransformer &transformer,

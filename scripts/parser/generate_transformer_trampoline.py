@@ -89,6 +89,15 @@ def manual_body_exists(rule_name):
     return any(pattern.search(path.read_text()) for path in transformer_dir.glob("transform_*.cpp"))
 
 
+def no_arg_manual_body_exists(rule_name):
+    pattern = re.compile(
+        rf"\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*"
+        rf"\(\s*PEGTransformer\s*&\s*transformer\s*\)\s*\{{",
+        re.S,
+    )
+    return any(pattern.search(path.read_text()) for path in transformer_dir.glob("transform_*.cpp"))
+
+
 def discover_grammar_files():
     return sorted(path.name for path in statements_dir.glob("*.gram"))
 
@@ -430,7 +439,7 @@ class UseGramPreviewEmitter:
             return self.emit_matcher_override_rule(rule_name)
         if self.is_forward_rule(rule_name):
             return self.emit_forward_rule(rule_name, ast)
-        if literal_string_values(ast) is not None:
+        if literal_string_values(ast) is not None or self.is_no_arg_syntax_only_rule(rule_name, ast):
             return self.emit_syntax_only_rule(rule_name, ast)
         if isinstance(ast, ChoiceNode):
             if self.is_manual_finalize_rule(rule_name):
@@ -469,8 +478,15 @@ class UseGramPreviewEmitter:
         lines.append("}")
         return lines
 
+    def is_no_arg_syntax_only_rule(self, rule_name, ast):
+        return (
+            rule_name in self.rule_types
+            and no_arg_manual_body_exists(rule_name)
+            and is_syntax_only_rule_body(ast, self.syntax_only_rules)
+        )
+
     def emit_initialize_rule(self, rule_name, ast):
-        if literal_string_values(ast) is not None:
+        if self.is_no_arg_syntax_only_rule(rule_name, ast) or literal_string_values(ast) is not None:
             return self.emit_syntax_only_initialize(rule_name)
         if isinstance(ast, ChoiceNode):
             return self.emit_choice_initialize(rule_name, ast)
