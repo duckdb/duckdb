@@ -1,0 +1,48 @@
+# name: test/sql/parser/test_columns_unpacked_outer_operators.test
+# description: Test *COLUMNS() when operators wrap the result of a function containing *COLUMNS()
+# group: [parser]
+
+statement ok
+CREATE TABLE t (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO t VALUES (1, NULL, 3), (NULL, NULL, NULL);
+
+# COALESCE(*COLUMNS(*)) IS NOT NULL — operator wraps function result, not *COLUMNS() directly
+query I
+SELECT COALESCE(*COLUMNS(*)) IS NOT NULL FROM t;
+----
+true
+false
+
+# COALESCE(*COLUMNS(*)) IS NULL
+query I
+SELECT COALESCE(*COLUMNS(*)) IS NULL FROM t;
+----
+false
+true
+
+# Nested in CASE WHEN
+query I
+SELECT CASE WHEN COALESCE(*COLUMNS(*)) IS NOT NULL THEN 'has value' ELSE 'all null' END FROM t;
+----
+has value
+all null
+
+# Used in WHERE clause
+query III
+SELECT * FROM t WHERE COALESCE(*COLUMNS(*)) IS NOT NULL;
+----
+1	NULL	3
+
+# Direct *COLUMNS(*) IS NOT NULL is still correctly rejected (arity is undefined after expansion)
+statement error
+SELECT *COLUMNS(*) IS NOT NULL FROM t;
+----
+Binder Error: *COLUMNS() can not be used together with the 'OPERATOR_IS_NOT_NULL' operator
+
+# Direct *COLUMNS(*) IS NULL is still correctly rejected
+statement error
+SELECT *COLUMNS(*) IS NULL FROM t;
+----
+Binder Error: *COLUMNS() can not be used together with the 'OPERATOR_IS_NULL' operator
