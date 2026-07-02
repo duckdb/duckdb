@@ -616,22 +616,7 @@ static unique_ptr<BaseStatistics> ReadStatisticsInternal(const FileMetaData &fil
                                                          const ParquetColumnSchema &root_schema,
                                                          const ParquetOptions &parquet_options,
                                                          const idx_t &file_col_idx) {
-	unique_ptr<BaseStatistics> column_stats;
-	auto &column_schema = root_schema.children[file_col_idx];
-
-	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data.row_groups.size(); row_group_idx++) {
-		auto &row_group = file_meta_data.row_groups[row_group_idx];
-		auto chunk_stats = column_schema.Stats(file_meta_data, parquet_options, row_group_idx, row_group.columns);
-		if (!chunk_stats) {
-			return nullptr;
-		}
-		if (!column_stats) {
-			column_stats = std::move(chunk_stats);
-		} else {
-			column_stats->Merge(*chunk_stats);
-		}
-	}
-	return column_stats;
+	return ReadColumnStatistics(file_meta_data, root_schema.children[file_col_idx], parquet_options);
 }
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const Identifier &name) {
