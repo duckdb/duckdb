@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
@@ -16,6 +17,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
+struct MultiFileReader;
 struct MultiFileReaderInterface;
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader

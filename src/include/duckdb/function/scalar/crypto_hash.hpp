@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/encryption_state.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/scalar_function.hpp"
