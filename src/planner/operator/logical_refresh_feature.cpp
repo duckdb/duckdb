@@ -15,11 +15,15 @@ LogicalRefreshFeature::LogicalRefreshFeature(string feature_name_p)
 void LogicalRefreshFeature::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "feature_name", feature_name);
+	serializer.WriteProperty(201, "result_names", result_names);
+	serializer.WriteProperty(202, "result_types", result_types);
 }
 
 unique_ptr<LogicalOperator> LogicalRefreshFeature::Deserialize(Deserializer &deserializer) {
 	auto result = make_uniq<LogicalRefreshFeature>();
 	result->feature_name = deserializer.ReadProperty<string>(200, "feature_name");
+	result->result_names = deserializer.ReadProperty<vector<string>>(201, "result_names");
+	result->result_types = deserializer.ReadProperty<vector<LogicalType>>(202, "result_types");
 	return std::move(result);
 }
 
