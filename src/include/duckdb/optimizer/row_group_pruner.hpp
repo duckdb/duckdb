@@ -12,6 +12,8 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
+#include "duckdb/storage/table/row_group_order_options.hpp"
+
 namespace duckdb {
 class ClientContext;
 class LogicalGet;
