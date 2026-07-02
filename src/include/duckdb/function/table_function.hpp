@@ -13,7 +13,6 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/enums/metric_type.hpp"
@@ -49,6 +48,8 @@ enum class OrderByColumnType : uint8_t;
 enum class OrderType : uint8_t;
 enum class OrderByStatistics : uint8_t;
 struct RowGroupOrderOptions;
+class LogicalOperator;
+class Binder;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
