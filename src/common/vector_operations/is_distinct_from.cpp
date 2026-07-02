@@ -132,20 +132,4 @@ idx_t VectorOperations::DistinctLessThanEquals(const Vector &left, const Vector 
 	                                VectorOperations::DistinctComparatorFill, [](int8_t v) { return v <= 0; });
 }
 
-// true := A != B with nulls being equal, inputs selected
-idx_t VectorOperations::NestedNotEquals(const Vector &left, const Vector &right,
-                                        optional_ptr<const SelectionVector> sel, idx_t count,
-                                        optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
-                                        optional_ptr<ValidityMask> null_mask) {
-	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel,
-	                                VectorOperations::DistinctComparatorFill, [](int8_t v) { return v != 0; });
-}
-// true := A == B with nulls being equal, inputs selected
-idx_t VectorOperations::NestedEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
-                                     idx_t count, optional_ptr<SelectionVector> true_sel,
-                                     optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
-	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel,
-	                                VectorOperations::DistinctComparatorFill, [](int8_t v) { return v == 0; });
-}
-
 } // namespace duckdb
