@@ -14,9 +14,6 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
-#include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/main/database_manager.hpp"
 #include <mutex>
 
 namespace duckdb {

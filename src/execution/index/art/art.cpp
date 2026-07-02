@@ -1,4 +1,5 @@
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/unordered_map.hpp"
