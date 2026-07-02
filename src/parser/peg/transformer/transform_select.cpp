@@ -176,19 +176,11 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &opt_window_clause = list_pr.Child<OptionalParseResult>(4);
 	if (opt_window_clause.HasResult()) {
-		auto window_functions =
-		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_window_clause.GetResult());
-		for (auto &window_func : window_functions) {
-			D_ASSERT(!window_func->GetAlias().empty());
-			auto window_name = window_func->GetAlias();
-			window_func->ClearAlias();
-			auto it = transformer.window_clauses.find(window_name);
-			if (it != transformer.window_clauses.end()) {
-				throw ParserException("window \"%s\" is already defined", window_name.GetIdentifierName());
-			}
-			auto window_function = unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(window_func));
-			transformer.window_clauses[window_name] = std::move(window_function);
-		}
+		// Transforming the window definitions registers each named window into
+		// transformer.window_clauses (see TransformWindowDefinition). Registering
+		// happens per-definition so that a later window in the same WINDOW clause
+		// can inherit from an earlier one, e.g. `WINDOW base AS (...), w AS (base ...)`.
+		transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_window_clause.GetResult());
 	}
 	auto select_node = transformer.Transform<unique_ptr<SelectNode>>(list_pr.Child<ListParseResult>(0));
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, select_node->where_clause);
@@ -939,7 +931,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWindowDefinition(PE
 	transformer.in_window_definition = true;
 	auto window_function = transformer.Transform<unique_ptr<WindowExpression>>(list_pr.Child<ListParseResult>(2));
 	transformer.in_window_definition = false;
-	window_function->SetAlias(list_pr.Child<IdentifierParseResult>(0).identifier);
+	auto window_name = list_pr.Child<IdentifierParseResult>(0).identifier;
+	// Register the named window as soon as it is transformed (rather than after the whole
+	// WINDOW clause) so that a later definition in the same clause can inherit from an
+	// earlier one, e.g. `WINDOW base AS (...), w AS (base ...)`. See issue #23443.
+	if (transformer.window_clauses.find(window_name) != transformer.window_clauses.end()) {
+		throw ParserException("window \"%s\" is already defined", window_name.GetIdentifierName());
+	}
+	transformer.window_clauses[window_name] =
+	    unique_ptr_cast<ParsedExpression, WindowExpression>(window_function->Copy());
 	return std::move(window_function);
 }
 
