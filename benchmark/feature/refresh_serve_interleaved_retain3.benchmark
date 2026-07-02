@@ -27,7 +27,3 @@ REFRESH FEATURE user_activity_incr;
 SERVE FEATURE user_activity_incr FOR serve_requests;
 REFRESH FEATURE user_activity_incr;
 SERVE FEATURE user_activity_incr FOR serve_requests;
-REFRESH FEATURE user_activity_incr;
-SERVE FEATURE user_activity_incr FOR serve_requests;
-REFRESH FEATURE user_activity_incr;
-SERVE FEATURE user_activity_incr FOR serve_requests;
