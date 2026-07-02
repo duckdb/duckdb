@@ -96,9 +96,9 @@ static unique_ptr<QueryNode> BuildCopyUnaffectedNode(const string &catalog, cons
 	node->select_list.push_back(make_uniq<StarExpression>());
 	node->select_list.push_back(RecomputedMarker(false));
 	node->from_table = BuildVersionTableRef(catalog, schema, cur_table);
-	node->where_clause = make_uniq<ComparisonExpression>(
-	    ExpressionType::COMPARE_LESSTHAN, FeatureTimestampRef(),
-	    BuildBoundaryExpression(catalog, schema, cur_table, watermark_interval));
+	node->where_clause =
+	    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, FeatureTimestampRef(),
+	                                    BuildBoundaryExpression(catalog, schema, cur_table, watermark_interval));
 	return std::move(node);
 }
 
@@ -108,10 +108,9 @@ static unique_ptr<QueryNode> BuildCopyUnaffectedNode(const string &catalog, cons
 static unique_ptr<ParsedExpression> BuildTailAnchorFilter(const string &timestamp_column, const string &catalog,
                                                           const string &schema, const string &cur_table,
                                                           const interval_t &watermark_interval) {
-	auto at_or_after =
-	    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-	                                    make_uniq<ColumnRefExpression>(timestamp_column),
-	                                    BuildBoundaryExpression(catalog, schema, cur_table, watermark_interval));
+	auto at_or_after = make_uniq<ComparisonExpression>(
+	    ExpressionType::COMPARE_GREATERTHANOREQUALTO, make_uniq<ColumnRefExpression>(timestamp_column),
+	    BuildBoundaryExpression(catalog, schema, cur_table, watermark_interval));
 	auto boundary_is_null = make_uniq<OperatorExpression>(
 	    ExpressionType::OPERATOR_IS_NULL, BuildBoundaryExpression(catalog, schema, cur_table, watermark_interval));
 	return make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(at_or_after),
