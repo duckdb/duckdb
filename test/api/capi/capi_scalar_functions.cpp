@@ -558,6 +558,13 @@ TEST_CASE("Test Scalar Function with Bind Info", "[capi]") {
 	result = tester.Query("SELECT get_connection_id(200::UTINYINT + 200::UTINYINT)");
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->ErrorMessage(), "Overflow in addition of"));
+
+	// Correlated subquery as argument: BoundSubqueryExpression::Copy() throws SerializationException.
+	// Before the fix, this exception escaped the C API boundary and called std::terminate() because
+	// Go's CGo frames (and plain C callers) have no C++ unwind tables. The fix catches at the C
+	// boundary and surfaces it as a normal query error.
+	result = tester.Query("SELECT get_connection_id((SELECT 42::UBIGINT)) FROM (VALUES(1)) t(x)");
+	REQUIRE_FAIL(result);
 }
 
 TEST_CASE("Test volatile scalar function with bind in WHERE clause", "[capi]") {
