@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"

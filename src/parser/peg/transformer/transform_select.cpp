@@ -1,5 +1,6 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parser/peg/ast/distinct_clause.hpp"
 #include "duckdb/parser/peg/ast/join_prefix.hpp"
 #include "duckdb/parser/peg/ast/join_qualifier.hpp"
