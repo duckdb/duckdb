@@ -107,7 +107,7 @@ void CreateFeatureInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(206, "query", query);
 	serializer.WritePropertyWithDefault<vector<string>>(207, "result_names", result_names);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(208, "result_types", result_types);
-	serializer.WritePropertyWithDefault<int64_t>(209, "current_version", current_version, 1);
+	serializer.WritePropertyWithDefault<int64_t>(209, "current_version", current_version, 0);
 	serializer.WritePropertyWithDefault<bool>(210, "has_schedule", has_schedule, false);
 	serializer.WritePropertyWithDefault<interval_t>(211, "schedule_interval", schedule_interval, interval_t());
 	serializer.WritePropertyWithDefault<bool>(212, "schedule_enabled", schedule_enabled, true);
@@ -126,7 +126,7 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(206, "query", result->query);
 	deserializer.ReadPropertyWithDefault<vector<string>>(207, "result_names", result->result_names);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(208, "result_types", result->result_types);
-	deserializer.ReadPropertyWithExplicitDefault<int64_t>(209, "current_version", result->current_version, 1);
+	deserializer.ReadPropertyWithExplicitDefault<int64_t>(209, "current_version", result->current_version, 0);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(210, "has_schedule", result->has_schedule, false);
 	deserializer.ReadPropertyWithExplicitDefault<interval_t>(211, "schedule_interval", result->schedule_interval, interval_t());
 	deserializer.ReadPropertyWithExplicitDefault<bool>(212, "schedule_enabled", result->schedule_enabled, true);

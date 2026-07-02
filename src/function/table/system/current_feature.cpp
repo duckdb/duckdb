@@ -30,6 +30,11 @@ static unique_ptr<TableRef> CurrentFeatureBindReplace(ClientContext &context, Ta
 		throw CatalogException("Feature \"%s\" does not exist", feature_name);
 	}
 
+	if (feature_entry->current_version < 1) {
+		throw CatalogException("Feature \"%s\" has not been refreshed yet — run REFRESH FEATURE %s first",
+		                       feature_name, feature_name);
+	}
+
 	auto result = make_uniq<BaseTableRef>();
 	result->catalog_name = feature_entry->ParentCatalog().GetName();
 	result->schema_name = feature_entry->ParentSchema().name;

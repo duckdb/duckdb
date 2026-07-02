@@ -28,6 +28,20 @@ static optional_ptr<FeatureCatalogEntry> LookupFeature(ClientContext &context, c
 	return nullptr;
 }
 
+//! Resolve a feature for serving, raising a clear error if it exists but has never been refreshed
+//! (current_version == 0, so no version table has been materialized yet).
+static FeatureCatalogEntry &ResolveServableFeature(ClientContext &context, const string &feature_name) {
+	auto feature_entry = LookupFeature(context, feature_name);
+	if (!feature_entry) {
+		throw CatalogException("Feature \"%s\" does not exist", feature_name);
+	}
+	if (feature_entry->current_version < 1) {
+		throw CatalogException("Feature \"%s\" has not been refreshed yet — run REFRESH FEATURE %s first", feature_name,
+		                       feature_name);
+	}
+	return *feature_entry;
+}
+
 static unique_ptr<BaseTableRef> BaseTable(const string &table_name, const string &alias) {
 	auto result = make_uniq<BaseTableRef>();
 	result->table_name = table_name;
@@ -173,11 +187,7 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 
 	if (features.size() == 1) {
 		auto &request = features[0];
-		auto feature_entry = LookupFeature(context, request.feature_name);
-		if (!feature_entry) {
-			throw CatalogException("Feature \"%s\" does not exist", request.feature_name);
-		}
-		auto &feat = *feature_entry;
+		auto &feat = ResolveServableFeature(context, request.feature_name);
 
 		auto select = make_uniq<SelectNode>();
 		select->select_list.push_back(make_uniq<StarExpression>("spine"));
@@ -198,11 +208,7 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 
 	for (idx_t i = 0; i < features.size(); i++) {
 		auto &request = features[i];
-		auto feature_entry = LookupFeature(context, request.feature_name);
-		if (!feature_entry) {
-			throw CatalogException("Feature \"%s\" does not exist", request.feature_name);
-		}
-		auto &feat = *feature_entry;
+		auto &feat = ResolveServableFeature(context, request.feature_name);
 		auto alias = "f" + duckdb::to_string(i);
 
 		auto timestamp = ColumnRef(alias, "feature_timestamp");
