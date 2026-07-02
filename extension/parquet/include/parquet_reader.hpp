@@ -23,6 +23,7 @@
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
@@ -50,6 +51,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/async_result.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "parquet_column_schema.hpp"
 #include "thrift/protocol/TProtocol.h"
 
@@ -432,9 +434,12 @@ private:
 	                                                ParquetColumnSchema &element);
 	unique_ptr<AdditionalAuthenticatedData> GenerateAAD(uint8_t module_type, uint16_t row_group_ordinal,
 	                                                    uint16_t column_ordinal, uint16_t page_ordinal) const;
+	optional_ptr<const BaseStatistics> GetVariantStats(const ParquetColumnSchema &schema) const;
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;
+	mutable annotated_mutex variant_stats_lock;
+	mutable unordered_map<idx_t, unique_ptr<BaseStatistics>> variant_stats_cache;
 };
 
 } // namespace duckdb

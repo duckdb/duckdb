@@ -657,9 +657,33 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const ParquetUnionData 
 	                              file_col_idx);
 }
 
-static bool IsFullyShredded(BaseStatistics &variant_stats, const ColumnIndex &column_index) {
+static bool IsFullyShredded(const BaseStatistics &variant_stats, const ColumnIndex &column_index) {
 	D_ASSERT(column_index.IsPushdownExtract());
 	return VariantStats::IsShredded(variant_stats, column_index);
+}
+
+optional_ptr<const BaseStatistics> ParquetReader::GetVariantStats(const ParquetColumnSchema &schema) const {
+	D_ASSERT(schema.schema_type == ParquetColumnSchemaType::VARIANT);
+	D_ASSERT(schema.schema_index.IsValid());
+	const auto cache_key = schema.schema_index.GetIndex();
+
+	{
+		const annotated_lock_guard<annotated_mutex> guard(variant_stats_lock);
+		auto entry = variant_stats_cache.find(cache_key);
+		if (entry != variant_stats_cache.end()) {
+			D_ASSERT(entry->second);
+			return *entry->second;
+		}
+	}
+
+	auto variant_stats = ReadColumnStatistics(*GetFileMetadata(), schema, parquet_options);
+	if (!variant_stats) {
+		return nullptr;
+	}
+
+	const annotated_lock_guard<annotated_mutex> guard(variant_stats_lock);
+	auto res = variant_stats_cache.emplace(cache_key, std::move(variant_stats));
+	return *res.first->second;
 }
 
 static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &schema, const ColumnIndex &column_id) {
@@ -790,7 +814,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		//! And the extract is pushed down into the scan
 		auto &typed_value_schema = schema.children[2];
 		D_ASSERT(typed_value_schema.name == "typed_value");
-		auto variant_stats = ReadColumnStatistics(*GetFileMetadata(), schema, parquet_options);
+		auto variant_stats = GetVariantStats(schema);
 
 		if (variant_stats && IsFullyShredded(*variant_stats, column_id)) {
 			//! This field is present in 'typed_value' across all rowgroups
@@ -1547,6 +1571,10 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.filter_count = 0;
 	state.group_index = group_to_read;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
+	{
+		const annotated_lock_guard<annotated_mutex> guard(variant_stats_lock);
+		variant_stats_cache.clear();
+	}
 	if (!state.file_handle || state.file_handle->GetPath() != file_handle->GetPath()) {
 		auto flags = FileFlags::FILE_FLAGS_READ;
 		if (ShouldAndCanPrefetch(context, *file_handle)) {
