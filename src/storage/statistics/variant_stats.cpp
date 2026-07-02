@@ -166,7 +166,7 @@ optional_ptr<const BaseStatistics> VariantShreddedStats::FindChildStats(const Ba
 		auto &object_fields = StructType::GetChildTypes(typed_value_type);
 		for (idx_t i = 0; i < object_fields.size(); i++) {
 			auto &object_field = object_fields[i];
-			if (object_field.first == component.key) {
+			if (object_field.first.GetIdentifierName() == component.key) {
 				return StructStats::GetChildStats(typed_value_stats, i);
 			}
 		}

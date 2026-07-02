@@ -1,0 +1,40 @@
+# name: test/parquet/variant/pushdown/variant_case_sensitivity.test
+# group: [pushdown]
+
+require parquet
+
+statement ok
+CREATE VIEW vw AS SELECT
+	{'Foo': i::INTEGER}::VARIANT AS v
+FROM range(10) t(i);
+
+statement ok
+COPY (
+	SELECT * from vw
+) TO '{TEST_DIR}/variant_case_sensitivity.parquet';
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/variant_case_sensitivity.parquet' WHERE v.foo = 3;
+----
+0
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/variant_case_sensitivity.parquet' WHERE v.Foo = 3;
+----
+1
+
+query I
+SELECT count(*) FROM (VALUES
+	({'Foo': 3::UINTEGER}::VARIANT)
+) t(v)
+WHERE v.foo = 3;
+----
+0
+
+query I
+SELECT count(*) FROM (VALUES
+	({'Foo': 3::UINTEGER}::VARIANT)
+) t(v)
+WHERE v.Foo = 3;
+----
+1
