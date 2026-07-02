@@ -354,9 +354,7 @@ void DataTable::AddIndex(unique_ptr<Index> index) {
 }
 
 void DataTable::AttachIndexToLiveTable(unique_ptr<Index> index) {
-	// A group commit that modified this table holds its publish gate SHARED from before its catalog validation
-	// through publish (which inserts committed rows into the index list). Take the gate EXCLUSIVE so this attach
-	// does not interleave such a publish - held only for the list change below.
+	// exclude concurrent group-commit publishes while we change the live index list
 	auto publish_gate = info->GetPublishGateExclusive();
 	AddIndex(std::move(index));
 }

@@ -307,10 +307,8 @@ public:
 	              IndexStorageInfo index_info);
 	//! AddIndex moves an index to this table's index list.
 	void AddIndex(unique_ptr<Index> index);
-	//! Attach a freshly built index to a live table (CREATE INDEX). Takes this table's publish gate EXCLUSIVELY so the
-	//! index-list change does not interleave a concurrent group commit's publish, then adds the index. Must NOT be
-	//! called while already holding the gate (it is not re-entrant) - in particular, after a catalog operation that
-	//! re-acquires the gate internally.
+	//! Attach a freshly built index to a live table (CREATE INDEX): takes the publish gate to exclude concurrent
+	//! group-commit publishes, then adds the index. Not re-entrant (never call while already holding the gate).
 	void AttachIndexToLiveTable(unique_ptr<Index> index);
 
 	//! Returns a list of the partition stats

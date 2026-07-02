@@ -377,11 +377,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// shared WAL lock alone would let concurrent committers interleave their entries and corrupt the WAL. Released
 	// before the fsync so batching is preserved. Exclusive committers do not need it (the WAL lock serializes them).
 	unique_lock<mutex> append_guard;
-	// Per-table publish gates: a commit holds each modified table's gate SHARED from before its catalog validation
-	// (in WriteToWAL) through publish, so a concurrent DDL on that table (which takes the gate EXCLUSIVE via
-	// DataTableInfo::GetPublishGateExclusive) cannot make the validation stale or race the publish's index updates.
-	// Acquired in address order (see GetModifiedTableInfos) for deadlock-freedom; released after publish.
-	// modified_table_infos keeps the DataTableInfos alive while their gate handles are held.
+	// Each modified table's publish gate, held SHARED from before validation (in WriteToWAL) through publish so a DDL
+	// on that table cannot interleave; address-ordered (see GetModifiedTableInfos) for deadlock-freedom.
 	vector<shared_ptr<DataTableInfo>> modified_table_infos;
 	vector<unique_ptr<StorageLockKey>> table_gates;
 	unique_ptr<StorageCommitState> commit_state;
@@ -403,9 +400,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		}
 	}
 	bool should_write_to_wal = transaction.ShouldWriteToWAL(db);
-	// Catalog-changing commits cannot defer publishing their changes (see below) - they publish while holding the
-	// transaction lock. A DDL's catalog-version attachment is kept from interleaving a data commit's validation and
-	// publish by the per-table publish gate (see GetPublishGateExclusive / table_gates), not by this commit path.
+	// Catalog-changing commits publish synchronously under the transaction lock (see below); DDL-vs-commit ordering
+	// is handled by the per-table publish gate (table_gates), not here.
 	bool has_catalog_changes = undo_properties.has_catalog_changes;
 	if (should_write_to_wal) {
 		auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
@@ -489,9 +485,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// the publish sequence orders deferred publishes in WAL order; it is independent of the commit timestamp
 	idx_t publish_seq = 0;
 	if (defer_publish) {
-		// assign the publish sequence and register for in-order publishing. A concurrent catalog change on a table we
-		// modified cannot interleave: it takes that table's publish gate EXCLUSIVELY (GetPublishGateExclusive) while
-		// we hold it SHARED through publish (see table_gates above).
+		// assign the publish sequence and register for in-order publishing (the per-table gate above keeps a
+		// concurrent DDL from interleaving)
 		publish_seq = next_publish_sequence++;
 		RegisterPendingCommit(publish_seq);
 	}
@@ -504,11 +499,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			info.active_transactions = ActiveTransactionState::NO_OTHER_TRANSACTIONS;
 		}
 		if (defer_publish) {
-			// write the WAL flush marker - the commit is published after the group fsync below. Conflicts were
-			// already validated in WriteToWAL (before any entries were written). We hold each modified table's publish
-			// gate SHARED from before that validation until we publish, so no catalog version can be attached to a
-			// table we modified in between (see GetPublishGateExclusive), keeping the validation authoritative.
-			// flush_marker_offset is the WAL offset we must SyncUpTo() to make this commit durable.
+			// write the WAL flush marker - published after the group fsync below. Conflicts were already validated in
+			// WriteToWAL; the per-table gate (held through publish) keeps that validation authoritative.
+			// flush_marker_offset is the WAL offset SyncUpTo() must reach to make this commit durable.
 			error = transaction.CommitToWAL(db, info, std::move(commit_state), flush_marker_offset);
 			if (error.HasError()) {
 				FinishPendingCommit(publish_seq);

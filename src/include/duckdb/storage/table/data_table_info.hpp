@@ -47,10 +47,8 @@ public:
 	unique_ptr<StorageLockKey> GetSharedLock() {
 		return checkpoint_lock.GetSharedLock();
 	}
-	//! Publish gate: a group commit that modifies this table holds it SHARED across publish (which applies its
-	//! changes into this table's indexes); a DDL that mutates this table's catalog entry / index list takes it
-	//! EXCLUSIVE. This scopes the DDL-vs-commit exclusion to the individual table, so a DDL on one table does not
-	//! block commits to other tables. Kept separate from checkpoint_lock so DDL does not serialize against checkpoints.
+	//! Publish gate: group commits touching this table hold it SHARED through publish; DDL on this table takes it
+	//! EXCLUSIVE. Per-table, so DDL on one table doesn't block others; separate from checkpoint_lock.
 	unique_ptr<StorageLockKey> GetPublishGateShared() {
 		return publish_gate.GetSharedLock();
 	}

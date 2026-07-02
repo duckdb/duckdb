@@ -173,11 +173,9 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		catalog.Alter(context, *alter_table_info);
 	}
 
-	// Attach the index to the live table. This takes the table's publish gate so the index-list change does not
-	// interleave a concurrent group commit's publish (see DataTable::AttachIndexToLiveTable). It must run AFTER the
-	// catalog operations above, which re-acquire the gate internally (it is not re-entrant).
-	// NOTE: this does NOT fix the pre-existing race where rows committed during the index build are missing from
-	// the new index - that race reproduces on upstream main and needs a separate fix in the index build protocol.
+	// Attach the index to the live table (see DataTable::AttachIndexToLiveTable for the gate). Must run AFTER the
+	// catalog operations above, which re-acquire the gate internally (not re-entrant).
+	// NOTE: does not fix the pre-existing race where rows committed during the build are missing from the new index.
 	storage.AttachIndexToLiveTable(std::move(bound_index));
 
 	return SinkFinalizeType::READY;
