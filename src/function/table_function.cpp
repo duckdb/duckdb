@@ -1,4 +1,5 @@
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/function/partition_stats.hpp"
 
 namespace duckdb {
 

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/function/partition_stats.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"

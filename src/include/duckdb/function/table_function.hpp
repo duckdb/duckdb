@@ -18,12 +18,13 @@
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/parallel/async_result.hpp"
-#include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
+enum class TablePartitionInfo : uint8_t;
+struct PartitionStatistics;
 
 //! Controls how a table function manages parallelism.
 enum class TableFunctionParallelism : uint8_t {
