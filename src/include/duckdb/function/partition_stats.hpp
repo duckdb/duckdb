@@ -29,7 +29,9 @@ enum class CountType { COUNT_EXACT, COUNT_APPROXIMATE };
 struct PartitionRowGroup {
 	virtual ~PartitionRowGroup() = default;
 	virtual unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) = 0;
-	virtual bool MinMaxIsExact(const BaseStatistics &stats, const StorageIndex &storage_index) = 0;
+	virtual bool MinMaxIsExact(const StorageIndex &storage_index) = 0;
+	//! Whether this row group has data that has not been durably checkpointed/flushed yet.
+	virtual bool HasPendingWrites() = 0;
 };
 
 struct PartitionStatistics {
@@ -41,8 +43,6 @@ struct PartitionStatistics {
 	idx_t count;
 	//! Whether or not the count is exact or approximate
 	CountType count_type;
-	//! Whether the partition's min/max column statistics are exact.
-	bool min_max_exact = false;
 	//! Optional accessor for row group statistics
 	shared_ptr<PartitionRowGroup> partition_row_group;
 };

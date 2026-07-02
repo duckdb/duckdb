@@ -1549,7 +1549,7 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 		return column_stats->PushdownExtract(storage_index.GetChildIndex(0));
 	}
 
-	bool MinMaxIsExact(const BaseStatistics &, const StorageIndex &storage_index) override {
+	bool MinMaxIsExact(const StorageIndex &storage_index) override {
 		const idx_t primary_index = storage_index.GetPrimaryIndex();
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
 		D_ASSERT(root_schema->children.size() > primary_index);
@@ -1571,6 +1571,11 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 		}
 		return false;
 	}
+
+	bool HasPendingWrites() override {
+		// Parquet row groups are read directly from a file, so there is no notion of pending/uncheckpointed writes.
+		return false;
+	}
 };
 
 void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result,
@@ -1583,7 +1588,6 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 		partition_stats.row_start = offset;
 		partition_stats.count = row_group.num_rows;
 		partition_stats.count_type = CountType::COUNT_EXACT;
-		partition_stats.min_max_exact = true;
 		if (root_schema && parquet_options) {
 			partition_stats.partition_row_group =
 			    make_shared_ptr<ParquetPartitionRowGroup>(metadata, root_schema, parquet_options, i);

@@ -86,7 +86,7 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 	if (!column_stats) {
 		return false;
 	}
-	if (!stats.partition_row_group->MinMaxIsExact(*column_stats, storage_index)) {
+	if (!stats.partition_row_group->MinMaxIsExact(storage_index) || stats.partition_row_group->HasPendingWrites()) {
 		return false;
 	}
 	if (column_stats->GetStatsType() == StatisticsType::NUMERIC_STATS) {
@@ -253,7 +253,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				if (!column_stats) {
 					return;
 				}
-				if (!prg->MinMaxIsExact(*column_stats, storage_index)) {
+				if (!prg->MinMaxIsExact(storage_index) || prg->HasPendingWrites()) {
 					filter_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
 					break;
 				}

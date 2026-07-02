@@ -1900,11 +1900,12 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 		return row_group->GetStatistics(storage_index);
 	}
 
-	bool MinMaxIsExact(const BaseStatistics &stats, const StorageIndex &) override {
-		if (!is_exact || row_group->HasChanges()) {
-			return false;
-		}
-		return true;
+	bool MinMaxIsExact(const StorageIndex &) override {
+		return is_exact;
+	}
+
+	bool HasPendingWrites() override {
+		return row_group->HasChanges();
 	}
 };
 
@@ -1916,7 +1917,6 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 	if (row_group_ref.HasUnloadedDeletes()) {
 		result.count = row_group_ref.count;
 		result.count_type = CountType::COUNT_APPROXIMATE;
-		result.min_max_exact = false;
 		result.partition_row_group =
 		    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), /*is_exact_p=*/false);
 		return result;
@@ -1929,9 +1929,8 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 		result.count = row_group_ref.count;
 	}
 	result.count_type = CountType::COUNT_EXACT;
-	result.min_max_exact = result.count == row_group_ref.count && (!vinfo || !vinfo->HasDeletes());
-	result.partition_row_group =
-	    make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), result.min_max_exact);
+	bool is_exact = result.count == row_group_ref.count && (!vinfo || !vinfo->HasDeletes());
+	result.partition_row_group = make_shared_ptr<DuckDBPartitionRowGroup>(row_group.ReferenceNode(), is_exact);
 
 	return result;
 }
