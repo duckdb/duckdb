@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
@@ -125,20 +126,20 @@ static inline idx_t BitmapToSelectionVector(const validity_t *bm, idx_t count, S
 		auto base1 = UnsafeNumericCast<sel_t>(idx1 * 64);
 		if (selective) {
 			while (word0 && word1) {
-				const auto pos0 = UnsafeNumericCast<sel_t>(63 - __builtin_clzll(word0));
-				const auto pos1 = UnsafeNumericCast<sel_t>(__builtin_ctzll(word1));
+				const auto pos0 = UnsafeNumericCast<sel_t>(63 - CountZeros<uint64_t>::Leading(word0));
+				const auto pos1 = UnsafeNumericCast<sel_t>(CountZeros<uint64_t>::Trailing(word1));
 				*(--dst0) = base0 + pos0;
 				*(dst1++) = base1 + pos1;
 				word0 &= ~(validity_t(1) << pos0);
 				word1 &= word1 - 1;
 			}
 			while (word0) {
-				const auto pos0 = UnsafeNumericCast<sel_t>(63 - __builtin_clzll(word0));
+				const auto pos0 = UnsafeNumericCast<sel_t>(63 - CountZeros<uint64_t>::Leading(word0));
 				*(--dst0) = base0 + pos0;
 				word0 &= ~(validity_t(1) << pos0);
 			}
 			while (word1) {
-				const auto pos1 = UnsafeNumericCast<sel_t>(__builtin_ctzll(word1));
+				const auto pos1 = UnsafeNumericCast<sel_t>(CountZeros<uint64_t>::Trailing(word1));
 				*(dst1++) = base1 + pos1;
 				word1 &= word1 - 1;
 			}
