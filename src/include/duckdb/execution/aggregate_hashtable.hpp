@@ -242,6 +242,8 @@ private:
 	//! Does the actual group matching / creation
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
 	                                 SelectionVector &new_groups);
+	//! Resolves existing groups without creating new hash table entries
+	void FindGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses);
 
 	//! Verify the pointer table of the HT
 	void Verify();
