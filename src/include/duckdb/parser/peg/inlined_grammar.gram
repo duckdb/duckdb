@@ -381,7 +381,6 @@ UnreservedKeyword <- 'ABORT' /
 'GLOBAL' /
 'GRANT' /
 'GRANTED' /
-'GRANULARITY' /
 'GROUPS' /
 'HANDLER' /
 'HEADER' /
@@ -830,28 +829,28 @@ ForEachClause <- ForEachRow / ForEachStatement
 ForEachRow <- 'FOR' 'EACH' 'ROW'
 ForEachStatement <- 'FOR' 'EACH' 'STATEMENT'
 
-CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureGranularityClause? FeatureWindowClause? FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
+CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureWindowClause? FeatureWatermarkClause? FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
 
-FeatureGranularityClause <- 'GRANULARITY' FeatureGranularity
-FeatureWindowClause <- 'WINDOW' NumberLiteral
+FeatureWindowClause <- 'WINDOW' FeatureInterval
+FeatureWatermarkClause <- 'WATERMARK' FeatureInterval
 FeatureRefreshClause <- 'REFRESH' FeatureRefreshMode
-FeatureScheduleClause <- FeatureScheduleIntervalClause / FeatureScheduleShorthandClause
-FeatureScheduleIntervalClause <- 'EVERY' 'INTERVAL' StringLiteral
-FeatureScheduleShorthandClause <- 'EVERY' NumberLiteral FeatureScheduleUnit
+FeatureScheduleClause <- 'EVERY' FeatureInterval
 FeatureRetainClause <- 'RETAIN' NumberLiteral
 
-FeatureScheduleUnit <- FeatureScheduleUnitDays / FeatureScheduleUnitDay / FeatureScheduleUnitHours / FeatureScheduleUnitHour / FeatureScheduleUnitMinutes / FeatureScheduleUnitMinute
-FeatureScheduleUnitDay <- 'DAY'
-FeatureScheduleUnitDays <- 'DAYS'
-FeatureScheduleUnitHour <- 'HOUR'
-FeatureScheduleUnitHours <- 'HOURS'
-FeatureScheduleUnitMinute <- 'MINUTE'
-FeatureScheduleUnitMinutes <- 'MINUTES'
+FeatureInterval <- FeatureIntervalString / FeatureIntervalKeywordShorthand / FeatureIntervalShorthand
+FeatureIntervalString <- 'INTERVAL' StringLiteral
+FeatureIntervalKeywordShorthand <- 'INTERVAL' NumberLiteral FeatureIntervalUnit
+FeatureIntervalShorthand <- NumberLiteral FeatureIntervalUnit
 
-FeatureGranularity <- FeatureGranularityDay / FeatureGranularityHour / FeatureGranularityMinute
-FeatureGranularityDay <- 'DAY'
-FeatureGranularityHour <- 'HOUR'
-FeatureGranularityMinute <- 'MINUTE'
+FeatureIntervalUnit <- FeatureIntervalUnitDays / FeatureIntervalUnitDay / FeatureIntervalUnitHours / FeatureIntervalUnitHour / FeatureIntervalUnitMinutes / FeatureIntervalUnitMinute / FeatureIntervalUnitSeconds / FeatureIntervalUnitSecond
+FeatureIntervalUnitDay <- 'DAY'
+FeatureIntervalUnitDays <- 'DAYS'
+FeatureIntervalUnitHour <- 'HOUR'
+FeatureIntervalUnitHours <- 'HOURS'
+FeatureIntervalUnitMinute <- 'MINUTE'
+FeatureIntervalUnitMinutes <- 'MINUTES'
+FeatureIntervalUnitSecond <- 'SECOND'
+FeatureIntervalUnitSeconds <- 'SECONDS'
 
 FeatureRefreshMode <- FeatureRefreshFull / FeatureRefreshIncremental
 FeatureRefreshFull <- 'FULL'
@@ -861,9 +860,15 @@ RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral
 
 FeatureAtVersionStatement <- 'FEATURE' IdentifierOrStringLiteral 'AT' 'VERSION' NumberLiteral
 
-ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(IdentifierOrStringLiteral) 'FOR' IdentifierOrStringLiteral ServeFeatureEntity? ServeFeatureAsOf?
+ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(ServeFeatureItem) 'FOR' IdentifierOrStringLiteral ServeFeatureEntity? ServeFeatureAsOf?
 
 ServeFeatureKw <- 'FEATURES' / 'FEATURE'
+ServeFeatureItem <- IdentifierOrStringLiteral ServeFeatureItemEntity?
+ServeFeatureItemEntity <- 'ENTITY' (ServeFeatureEntityList / IdentifierOrStringLiteral)
+ServeFeatureEntityList <- Parens(List(ServeFeatureEntityMapping))
+ServeFeatureEntityMapping <- ServeFeatureEntityMappingPair / ServeFeatureEntityMappingShorthand
+ServeFeatureEntityMappingPair <- IdentifierOrStringLiteral '=' IdentifierOrStringLiteral
+ServeFeatureEntityMappingShorthand <- IdentifierOrStringLiteral
 ServeFeatureEntity <- 'ENTITY' IdentifierOrStringLiteral
 ServeFeatureAsOf <- 'ASOF' IdentifierOrStringLiteral
 

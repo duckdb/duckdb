@@ -380,7 +380,6 @@ void PEGTransformerFactory::RegisterCreateTrigger() {
 void PEGTransformerFactory::RegisterCreateFeature() {
 	REGISTER_TRANSFORM(TransformCreateFeatureStmt);
 	REGISTER_TRANSFORM(TransformFeatureScheduleClause);
-	REGISTER_TRANSFORM(TransformFeatureGranularity);
 	REGISTER_TRANSFORM(TransformFeatureRefreshMode);
 	REGISTER_TRANSFORM(TransformRefreshFeatureStatement);
 	REGISTER_TRANSFORM(TransformFeatureAtVersionStatement);
@@ -963,9 +962,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<TriggerForEach>("ForEachRow", TriggerForEach::ROW);
 	RegisterEnum<TriggerForEach>("ForEachStatement", TriggerForEach::STATEMENT);
 
-	RegisterEnum<FeatureGranularity>("FeatureGranularityDay", FeatureGranularity::DAY);
-	RegisterEnum<FeatureGranularity>("FeatureGranularityHour", FeatureGranularity::HOUR);
-	RegisterEnum<FeatureGranularity>("FeatureGranularityMinute", FeatureGranularity::MINUTE);
 	RegisterEnum<FeatureRefreshMode>("FeatureRefreshFull", FeatureRefreshMode::FULL);
 	RegisterEnum<FeatureRefreshMode>("FeatureRefreshIncremental", FeatureRefreshMode::INCREMENTAL);
 

@@ -772,8 +772,6 @@ def generate_class_code(class_entry: SerializableClass):
             property_type=entry.type, property_name=entry.name
         )
     if class_entry.finalize_deserialization is not None:
-        class_deserialize += class_entry.finalize_deserialization
-    if class_entry.finalize_deserialization is not None:
         for line in class_entry.finalize_deserialization:
             class_deserialize += "\t" + line + "\n"
     class_deserialize += generate_return(class_entry)

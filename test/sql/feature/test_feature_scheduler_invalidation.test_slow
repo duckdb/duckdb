@@ -18,13 +18,11 @@ statement ok
 START TRANSACTION;
 
 statement ok
-CREATE FEATURE tx_create_sched ON events
-    ENTITY user_id
-    TIMESTAMP event_time
-    GRANULARITY HOUR
-    WINDOW 24
+CREATE FEATURE tx_create_sched 
+    TIMESTAMP event_time 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
-    EVERY INTERVAL '1 second'
+    EVERY INTERVAL 1 SECOND
     RETAIN 20
     AS (SELECT user_id, SUM(value) AS total_value FROM events GROUP BY user_id);
 
@@ -40,13 +38,11 @@ true
 
 # A committed DISABLE SCHEDULE should stop an already tracked feature.
 statement ok
-CREATE FEATURE disable_sched ON events
-    ENTITY user_id
-    TIMESTAMP event_time
-    GRANULARITY HOUR
-    WINDOW 24
+CREATE FEATURE disable_sched 
+    TIMESTAMP event_time 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
-    EVERY INTERVAL '1 second'
+    EVERY INTERVAL 1 SECOND
     RETAIN 20
     AS (SELECT user_id, COUNT(*) AS event_count FROM events GROUP BY user_id);
 
@@ -78,13 +74,11 @@ true
 
 # Rolling back DISABLE SCHEDULE must not stop the scheduler.
 statement ok
-CREATE FEATURE rollback_disable_sched ON events
-    ENTITY user_id
-    TIMESTAMP event_time
-    GRANULARITY HOUR
-    WINDOW 24
+CREATE FEATURE rollback_disable_sched 
+    TIMESTAMP event_time 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
-    EVERY INTERVAL '1 second'
+    EVERY INTERVAL 1 SECOND
     RETAIN 20
     AS (SELECT user_id, COUNT(*) AS event_count FROM events GROUP BY user_id);
 
@@ -114,13 +108,11 @@ true
 
 # DROP FEATURE should invalidate the old heap entry; recreating the same name should schedule the new entry.
 statement ok
-CREATE FEATURE drop_recreate_sched ON events
-    ENTITY user_id
-    TIMESTAMP event_time
-    GRANULARITY HOUR
-    WINDOW 24
+CREATE FEATURE drop_recreate_sched 
+    TIMESTAMP event_time 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
-    EVERY INTERVAL '1 second'
+    EVERY INTERVAL 1 SECOND
     RETAIN 20
     AS (SELECT user_id, COUNT(*) AS event_count FROM events GROUP BY user_id);
 
@@ -137,13 +129,11 @@ SELECT COUNT(*) FROM duckdb_features() WHERE feature_name = 'drop_recreate_sched
 0
 
 statement ok
-CREATE FEATURE drop_recreate_sched ON events
-    ENTITY user_id
-    TIMESTAMP event_time
-    GRANULARITY HOUR
-    WINDOW 24
+CREATE FEATURE drop_recreate_sched 
+    TIMESTAMP event_time 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
-    EVERY INTERVAL '1 second'
+    EVERY INTERVAL 1 SECOND
     RETAIN 20
     AS (SELECT user_id, MAX(value) AS max_value FROM events GROUP BY user_id);
 

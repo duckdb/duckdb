@@ -9,8 +9,8 @@ ServeFeatureStatement::ServeFeatureStatement() : SQLStatement(StatementType::SER
 }
 
 ServeFeatureStatement::ServeFeatureStatement(const ServeFeatureStatement &other)
-    : SQLStatement(other), feature_names(other.feature_names), spine_table(other.spine_table),
-      entity_column(other.entity_column), as_of_column(other.as_of_column) {
+    : SQLStatement(other), features(other.features), spine_table(other.spine_table),
+      spine_entity_override(other.spine_entity_override), spine_asof_column(other.spine_asof_column) {
 }
 
 unique_ptr<SQLStatement> ServeFeatureStatement::Copy() const {
@@ -18,21 +18,37 @@ unique_ptr<SQLStatement> ServeFeatureStatement::Copy() const {
 }
 
 string ServeFeatureStatement::ToString() const {
-	vector<string> quoted_features;
-	quoted_features.reserve(feature_names.size());
-	for (auto &feature_name : feature_names) {
-		quoted_features.push_back(SQLIdentifier::ToString(feature_name));
-	}
-
 	string result = "SERVE ";
-	result += feature_names.size() == 1 ? "FEATURE " : "FEATURES ";
-	result += StringUtil::Join(quoted_features, ", ");
-	result += " FOR " + SQLIdentifier::ToString(spine_table);
-	if (!entity_column.empty()) {
-		result += " ENTITY " + SQLIdentifier::ToString(entity_column);
+	result += features.size() == 1 ? "FEATURE " : "FEATURES ";
+	vector<string> feature_items;
+	feature_items.reserve(features.size());
+	for (auto &feature : features) {
+		string item = SQLIdentifier::ToString(feature.feature_name);
+		if (!feature.entity_mappings.empty()) {
+			if (feature.entity_mappings.size() == 1 && feature.entity_mappings[0].feature_column.empty()) {
+				item += " ENTITY " + SQLIdentifier::ToString(feature.entity_mappings[0].spine_column);
+			} else {
+				vector<string> mapping_strings;
+				mapping_strings.reserve(feature.entity_mappings.size());
+				for (auto &mapping : feature.entity_mappings) {
+					string mapping_string = SQLIdentifier::ToString(mapping.feature_column);
+					if (mapping.spine_column != mapping.feature_column) {
+						mapping_string += " = " + SQLIdentifier::ToString(mapping.spine_column);
+					}
+					mapping_strings.push_back(mapping_string);
+				}
+				item += " ENTITY (" + StringUtil::Join(mapping_strings, ", ") + ")";
+			}
+		}
+		feature_items.push_back(std::move(item));
 	}
-	if (!as_of_column.empty()) {
-		result += " ASOF " + SQLIdentifier::ToString(as_of_column);
+	result += StringUtil::Join(feature_items, ", ");
+	result += " FOR " + SQLIdentifier::ToString(spine_table);
+	if (!spine_entity_override.empty()) {
+		result += " ENTITY " + SQLIdentifier::ToString(spine_entity_override);
+	}
+	if (!spine_asof_column.empty()) {
+		result += " ASOF " + SQLIdentifier::ToString(spine_asof_column);
 	}
 	result += ";";
 	return result;

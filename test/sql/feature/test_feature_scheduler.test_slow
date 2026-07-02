@@ -18,13 +18,11 @@ INSERT INTO hits VALUES
 # Feature WITH a 1-second schedule
 # ============================================================
 statement ok
-CREATE FEATURE auto_sched ON hits
-    ENTITY UserID
-    TIMESTAMP EventTime
-    GRANULARITY HOUR
-    WINDOW 24
+CREATE FEATURE auto_sched 
+    TIMESTAMP EventTime 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
-    EVERY INTERVAL '1 second'
+    EVERY INTERVAL 1 SECOND
     RETAIN 20
     AS (SELECT UserID, COUNT(*) AS event_count FROM hits GROUP BY UserID);
 
@@ -32,11 +30,9 @@ CREATE FEATURE auto_sched ON hits
 # Feature WITHOUT a schedule (should never be auto-refreshed)
 # ============================================================
 statement ok
-CREATE FEATURE no_sched ON hits
-    ENTITY UserID
-    TIMESTAMP EventTime
-    GRANULARITY HOUR
-    WINDOW 24
+CREATE FEATURE no_sched 
+    TIMESTAMP EventTime 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
     RETAIN 20
     AS (SELECT UserID, COUNT(*) AS event_count FROM hits GROUP BY UserID);

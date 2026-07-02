@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/feature_refresh_scheduler.hpp"
@@ -32,17 +33,11 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 	names.emplace_back("source_table");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("entity_column");
+	names.emplace_back("entity_columns");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("timestamp_column");
 	return_types.emplace_back(LogicalType::VARCHAR);
-
-	names.emplace_back("granularity");
-	return_types.emplace_back(LogicalType::VARCHAR);
-
-	names.emplace_back("window_size");
-	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("refresh_mode");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -68,32 +63,25 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 	names.emplace_back("next_refresh_at");
 	return_types.emplace_back(LogicalType::TIMESTAMP);
 
+	names.emplace_back("window_interval");
+	return_types.emplace_back(LogicalType::INTERVAL);
+
+	names.emplace_back("watermark_interval");
+	return_types.emplace_back(LogicalType::INTERVAL);
+
 	return nullptr;
 }
 
 static unique_ptr<GlobalTableFunctionState> DuckDBFeaturesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBFeaturesData>();
 
-	// scan all the schemas for features and collect them
+	// Scan all schemas for feature catalog entries.
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema.get().Scan(context, CatalogType::FEATURE_ENTRY,
 		                  [&](CatalogEntry &entry) { result->entries.push_back(entry.Cast<FeatureCatalogEntry>()); });
 	}
 	return std::move(result);
-}
-
-static string GranularityToString(FeatureGranularity granularity) {
-	switch (granularity) {
-	case FeatureGranularity::DAY:
-		return "DAY";
-	case FeatureGranularity::HOUR:
-		return "HOUR";
-	case FeatureGranularity::MINUTE:
-		return "MINUTE";
-	default:
-		return "UNKNOWN";
-	}
 }
 
 static string RefreshModeToString(FeatureRefreshMode mode) {
@@ -127,36 +115,36 @@ static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &d
 		output.data[2].Append(Value(feat.name));
 		// source_table
 		output.data[3].Append(Value(feat.source_table));
-		// entity_column
-		output.data[4].Append(Value(feat.entity_column));
+		// entity_columns
+		output.data[4].Append(Value(StringUtil::Join(feat.entity_columns, ",")));
 		// timestamp_column
 		output.data[5].Append(Value(feat.timestamp_column));
-		// granularity
-		output.data[6].Append(Value(GranularityToString(feat.granularity)));
-		// window_size
-		output.data[7].Append(Value::BIGINT(feat.window_size));
 		// refresh_mode
-		output.data[8].Append(Value(RefreshModeToString(feat.refresh_mode)));
+		output.data[6].Append(Value(RefreshModeToString(feat.refresh_mode)));
 		// retain_versions
-		output.data[9].Append(Value::BIGINT(feat.retain_versions));
+		output.data[7].Append(Value::BIGINT(feat.retain_versions));
 		// current_version
-		output.data[10].Append(Value::BIGINT(feat.current_version));
+		output.data[8].Append(Value::BIGINT(feat.current_version));
 		// sql
-		output.data[11].Append(Value(feat.ToSQL()));
+		output.data[9].Append(Value(feat.ToSQL()));
 		// last_refresh_timestamp
-		output.data[12].Append(Value::TIMESTAMP(feat.last_refresh_timestamp));
+		output.data[10].Append(Value::TIMESTAMP(feat.last_refresh_timestamp));
 		// schedule_interval (NULL when no schedule is attached)
-		output.data[13].Append(feat.has_schedule ? Value::INTERVAL(feat.schedule_interval)
+		output.data[11].Append(feat.has_schedule ? Value::INTERVAL(feat.schedule_interval)
 		                                         : Value(LogicalType::INTERVAL));
 		// schedule_enabled (false when no schedule is attached)
-		output.data[14].Append(Value::BOOLEAN(feat.has_schedule && feat.schedule_enabled));
+		output.data[12].Append(Value::BOOLEAN(feat.has_schedule && feat.schedule_enabled));
 		// next_refresh_at (NULL when the scheduler is not tracking this feature)
 		if (scheduler &&
 		    scheduler->GetNextRefreshAt(feat.catalog.GetName(), feat.schema.name, feat.name, next_refresh_at)) {
-			output.data[15].Append(Value::TIMESTAMP(next_refresh_at));
+			output.data[13].Append(Value::TIMESTAMP(next_refresh_at));
 		} else {
-			output.data[15].Append(Value(LogicalType::TIMESTAMP));
+			output.data[13].Append(Value(LogicalType::TIMESTAMP));
 		}
+		// window_interval
+		output.data[14].Append(Value::INTERVAL(feat.window_interval));
+		// watermark_interval
+		output.data[15].Append(Value::INTERVAL(feat.watermark_interval));
 
 		count++;
 	}

@@ -1,3 +1,5 @@
+# Template for feature benchmark definitions; concrete .benchmark files provide
+# FILE_PATH, DESCRIPTION, BENCH_NAME, and RUN_QUERY.
 # name: ${FILE_PATH}
 # description: ${DESCRIPTION}
 # group: [feature]

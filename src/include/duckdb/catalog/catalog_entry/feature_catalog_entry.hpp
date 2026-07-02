@@ -25,14 +25,14 @@ public:
 
 	//! The source table name
 	string source_table;
-	//! The entity column
-	string entity_column;
+	//! The entity columns; empty for global features
+	vector<string> entity_columns;
 	//! The timestamp column
 	string timestamp_column;
-	//! The granularity (DAY/HOUR/MINUTE)
-	FeatureGranularity granularity;
-	//! The window size
-	int64_t window_size;
+	//! The lookback window interval
+	interval_t window_interval;
+	//! The incremental refresh watermark interval
+	interval_t watermark_interval;
 	//! The refresh mode (FULL/INCREMENTAL)
 	FeatureRefreshMode refresh_mode;
 	//! The number of versions to retain

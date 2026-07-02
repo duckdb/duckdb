@@ -193,7 +193,6 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("global");
 	unreserved_keyword_map.insert("grant");
 	unreserved_keyword_map.insert("granted");
-	unreserved_keyword_map.insert("granularity");
 	unreserved_keyword_map.insert("groups");
 	unreserved_keyword_map.insert("handler");
 	unreserved_keyword_map.insert("header");

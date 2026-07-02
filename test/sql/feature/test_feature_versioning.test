@@ -28,17 +28,14 @@ INSERT INTO events VALUES
 # FULL refresh with RETAIN 3: version increments each refresh
 # ============================================================
 statement ok
-CREATE FEATURE versioned_full ON events
-    ENTITY customer
-    TIMESTAMP event_time
-    GRANULARITY DAY
-    WINDOW 7
+CREATE FEATURE versioned_full 
+    TIMESTAMP event_time 
+    WINDOW 7 DAYS
     REFRESH FULL
     RETAIN 3
-    AS (SELECT customer, SUM(value) AS total_value);
+    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
-# Initial materialization creates version table __v1 with 5 rows.
-# x@01-02=10, x@01-03=30, y@01-02=30, y@01-03=45, z@01-02=5
+# Initial materialization creates version table __v1 with one row per source event timestamp.
 query I
 SELECT COUNT(*) FROM versioned_full;
 ----
@@ -49,16 +46,16 @@ SELECT COUNT(*) FROM versioned_full__v1;
 ----
 5
 
-# Verify initial bucket values per entity (view resolves to current version v1)
+# Verify initial event-time values per entity (view resolves to current version v1)
 query II rowsort
-SELECT customer, total_value FROM versioned_full WHERE feature_timestamp = '2024-01-02'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_full WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP);
 ----
 x	10
 y	30
 z	5
 
 query II rowsort
-SELECT customer, total_value FROM versioned_full WHERE feature_timestamp = '2024-01-03'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_full WHERE feature_timestamp IN ('2024-01-02 08:00:00'::TIMESTAMP, '2024-01-02 16:00:00'::TIMESTAMP);
 ----
 x	30
 y	45
@@ -80,9 +77,22 @@ SELECT COUNT(*) FROM versioned_full__v2;
 ----
 5
 
+# A FULL refresh with no source changes creates the same version table contents.
+query I
+WITH lhs AS (SELECT * FROM versioned_full__v1 EXCEPT SELECT * FROM versioned_full__v2),
+     rhs AS (SELECT * FROM versioned_full__v2 EXCEPT SELECT * FROM versioned_full__v1)
+SELECT (SELECT COUNT(*) FROM lhs) + (SELECT COUNT(*) FROM rhs);
+----
+0
+
+query I
+SELECT current_version FROM duckdb_features() WHERE feature_name = 'versioned_full';
+----
+2
+
 # View shows current (v2) data
 query II rowsort
-SELECT customer, total_value FROM versioned_full WHERE feature_timestamp = '2024-01-02'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_full WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP);
 ----
 x	10
 y	30
@@ -124,14 +134,14 @@ SELECT COUNT(*) FROM versioned_full__v2;
 
 # Latest version has correct data
 query II rowsort
-SELECT customer, total_value FROM versioned_full__v4 WHERE feature_timestamp = '2024-01-02'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_full__v4 WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP);
 ----
 x	10
 y	30
 z	5
 
 query II rowsort
-SELECT customer, total_value FROM versioned_full__v4 WHERE feature_timestamp = '2024-01-03'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_full__v4 WHERE feature_timestamp IN ('2024-01-02 08:00:00'::TIMESTAMP, '2024-01-02 16:00:00'::TIMESTAMP);
 ----
 x	30
 y	45
@@ -143,14 +153,12 @@ DROP FEATURE versioned_full;
 # RETAIN 1: only latest version kept (default behavior)
 # ============================================================
 statement ok
-CREATE FEATURE versioned_retain1 ON events
-    ENTITY customer
-    TIMESTAMP event_time
-    GRANULARITY DAY
-    WINDOW 7
+CREATE FEATURE versioned_retain1 
+    TIMESTAMP event_time 
+    WINDOW 7 DAYS
     REFRESH FULL
     RETAIN 1
-    AS (SELECT customer, SUM(value) AS total_value);
+    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
 # Version 1 table exists initially — 5 rows
 query I
@@ -182,7 +190,7 @@ SELECT COUNT(*) FROM versioned_retain1__v1;
 
 # Data is correct in version 2
 query II rowsort
-SELECT customer, total_value FROM versioned_retain1 WHERE feature_timestamp = '2024-01-03'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_retain1 WHERE feature_timestamp IN ('2024-01-02 08:00:00'::TIMESTAMP, '2024-01-02 16:00:00'::TIMESTAMP);
 ----
 x	30
 y	45
@@ -194,14 +202,12 @@ DROP FEATURE versioned_retain1;
 # INCREMENTAL refresh: version increments, old versions GC'd
 # ============================================================
 statement ok
-CREATE FEATURE versioned_incr ON events
-    ENTITY customer
-    TIMESTAMP event_time
-    GRANULARITY DAY
-    WINDOW 7
+CREATE FEATURE versioned_incr 
+    TIMESTAMP event_time 
+    WINDOW 7 DAYS
     REFRESH INCREMENTAL
     RETAIN 2
-    AS (SELECT customer, SUM(value) AS total_value);
+    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
 # Initial: version 1 — 5 rows
 query I
@@ -214,7 +220,7 @@ SELECT COUNT(*) FROM versioned_incr;
 ----
 5
 
-# Add new data beyond watermark
+# Add new data beyond the current max timestamp
 statement ok
 INSERT INTO events VALUES
     ('x', 40, '2024-01-03 09:00:00'),
@@ -222,12 +228,12 @@ INSERT INTO events VALUES
     ('z', 20, '2024-01-03 11:00:00');
 
 # Incremental refresh -> version 2
-# Recompute runs from the last floor bucket onward (watermark - 1 day); the 01-02
-# rows are copied forward and 01-03/01-04 are recomputed.
+# With the default zero watermark, recompute runs from max(feature_timestamp) onward;
+# the stable prefix is copied forward.
 query I
 REFRESH FEATURE versioned_incr;
 ----
-5
+4
 
 # Both v1 and v2 exist (RETAIN 2)
 query I
@@ -240,18 +246,18 @@ SELECT COUNT(*) FROM versioned_incr__v2;
 ----
 8
 
-# Version 2 has the new bucket (01-04) plus copied-forward old rows.
+# Version 2 has the new Jan 3 event-time rows plus copied-forward old rows.
 # The view resolves to the current version (v2).
 query II rowsort
-SELECT customer, total_value FROM versioned_incr WHERE feature_timestamp = '2024-01-04'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_incr WHERE feature_timestamp IN ('2024-01-03 09:00:00'::TIMESTAMP, '2024-01-03 10:00:00'::TIMESTAMP, '2024-01-03 11:00:00'::TIMESTAMP);
 ----
 x	70
 y	95
 z	25
 
-# Old buckets correctly copied into version 2
+# Old earliest timestamps correctly copied into version 2
 query II rowsort
-SELECT customer, total_value FROM versioned_incr WHERE feature_timestamp = '2024-01-02'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_incr WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP);
 ----
 x	10
 y	30
@@ -266,7 +272,7 @@ INSERT INTO events VALUES
 query I
 REFRESH FEATURE versioned_incr;
 ----
-5
+3
 
 # Version 1 is gone (GC'd, only retain 2)
 statement error
@@ -286,9 +292,9 @@ SELECT COUNT(*) FROM versioned_incr__v3;
 ----
 10
 
-# Version 3 has 01-06 buckets for x and z
+# Version 3 has Jan 5 event-time rows for x and z
 query II rowsort
-SELECT customer, total_value FROM versioned_incr__v3 WHERE feature_timestamp = '2024-01-06'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_incr__v3 WHERE feature_timestamp IN ('2024-01-05 12:00:00'::TIMESTAMP, '2024-01-05 14:00:00'::TIMESTAMP);
 ----
 x	170
 z	75
@@ -313,16 +319,14 @@ INSERT INTO stable_src VALUES
     ('c', 30, '2024-01-02 10:00:00');
 
 statement ok
-CREATE FEATURE stable_feat ON stable_src
-    ENTITY eid
-    TIMESTAMP ts
-    GRANULARITY DAY
-    WINDOW 7
+CREATE FEATURE stable_feat 
+    TIMESTAMP ts 
+    WINDOW 7 DAYS
     REFRESH INCREMENTAL
     RETAIN 3
-    AS (SELECT eid, SUM(val) AS total);
+    AS (SELECT eid, SUM(val) AS total FROM stable_src GROUP BY eid);
 
-# Version 1 after creation — 3 rows: a@01-02, b@01-02, c@01-03
+# Version 1 after creation — 3 rows, one per source event timestamp
 query I
 SELECT COUNT(*) FROM stable_feat__v1;
 ----
@@ -333,8 +337,7 @@ SELECT COUNT(*) FROM stable_feat;
 ----
 3
 
-# No new data, but refresh still recomputes from the last floor bucket (watermark
-# 01-03 - 1 day = 01-02) and bumps the version. Only c@01-03 is recomputed.
+# No new data, but refresh still recomputes the event-time tail and bumps the version.
 query I
 REFRESH FEATURE stable_feat;
 ----
@@ -354,7 +357,7 @@ a	10
 b	20
 c	30
 
-# Add data, refresh -> version 3 (a@01-04 appears)
+# Add data, refresh -> version 3 (a@01-03 08:00 appears)
 statement ok
 INSERT INTO stable_src VALUES ('a', 20, '2024-01-03 08:00:00');
 
@@ -368,9 +371,9 @@ SELECT COUNT(*) FROM stable_feat__v3;
 ----
 4
 
-# New bucket correct: a@01-04 = 10+20=30
+# New timestamp correct: a@01-03 08:00 = 10+20=30
 query II
-SELECT eid, total FROM stable_feat__v3 WHERE feature_timestamp = '2024-01-04'::TIMESTAMP;
+SELECT eid, total FROM stable_feat__v3 WHERE feature_timestamp = '2024-01-03 08:00:00'::TIMESTAMP;
 ----
 a	30
 

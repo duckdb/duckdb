@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "duckdb/common/feature_serve.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
@@ -18,10 +19,10 @@ public:
 public:
 	ServeFeatureStatement();
 
-	vector<string> feature_names;
+	vector<ServeFeatureRequest> features;
 	string spine_table;
-	string entity_column;
-	string as_of_column;
+	string spine_entity_override;
+	string spine_asof_column;
 
 protected:
 	ServeFeatureStatement(const ServeFeatureStatement &other);

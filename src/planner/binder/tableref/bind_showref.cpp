@@ -200,8 +200,9 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 		sql = PragmaShowTablesExpanded();
 	} else if (StringUtil::StartsWith(ref.table_name, "__describe_feature:")) {
 		auto feature_name = ref.table_name.substr(strlen("__describe_feature:"));
-		sql = StringUtil::Format("SELECT feature_name, source_table, entity_column, timestamp_column, "
-		                         "granularity, window_size, refresh_mode, retain_versions, current_version, sql "
+		sql = StringUtil::Format("SELECT feature_name, source_table, entity_columns, timestamp_column, "
+		                         "refresh_mode, retain_versions, current_version, "
+		                         "window_interval, watermark_interval, sql "
 		                         "FROM duckdb_features() WHERE feature_name = %s",
 		                         SQLString(feature_name));
 	} else {

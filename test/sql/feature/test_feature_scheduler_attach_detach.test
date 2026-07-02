@@ -19,15 +19,13 @@ INSERT INTO events VALUES
     ('y', 30, '2024-01-01 12:00:00');
 
 statement ok
-CREATE FEATURE sched_attach_feature ON events
-    ENTITY customer
-    TIMESTAMP event_time
-    GRANULARITY HOUR
-    WINDOW 24
+CREATE FEATURE sched_attach_feature 
+    TIMESTAMP event_time 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
-    EVERY INTERVAL '1 hour'
+    EVERY INTERVAL 1 HOUR
     RETAIN 3
-    AS (SELECT customer, SUM(value) AS total_value);
+    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
 query II
 SELECT database_name, schedule_enabled FROM duckdb_features() WHERE feature_name = 'sched_attach_feature';

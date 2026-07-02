@@ -14,8 +14,18 @@ namespace duckdb {
 class ClientContext;
 class SelectStatement;
 
-unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, const vector<string> &feature_list,
-                                                    const string &spine_table, const string &entity_override,
-                                                    const string &as_of_override);
+struct FeatureServeEntityMapping {
+	string feature_column;
+	string spine_column;
+};
+
+struct ServeFeatureRequest {
+	string feature_name;
+	vector<FeatureServeEntityMapping> entity_mappings;
+};
+
+unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, const vector<ServeFeatureRequest> &features,
+                                                    const string &spine_table, const string &spine_entity_override,
+                                                    const string &spine_asof_column);
 
 } // namespace duckdb

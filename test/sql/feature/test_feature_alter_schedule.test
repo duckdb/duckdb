@@ -16,11 +16,9 @@ INSERT INTO hits VALUES
 # Create a feature WITHOUT a schedule
 # ============================================================
 statement ok
-CREATE FEATURE f ON hits
-    ENTITY UserID
-    TIMESTAMP EventTime
-    GRANULARITY HOUR
-    WINDOW 24
+CREATE FEATURE f 
+    TIMESTAMP EventTime 
+    WINDOW 24 HOURS
     REFRESH INCREMENTAL
     RETAIN 5
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
@@ -47,7 +45,7 @@ ALTER FEATURE f DISABLE SCHEDULE;
 # SET SCHEDULE attaches an interval and enables it
 # ============================================================
 statement ok
-ALTER FEATURE f SET SCHEDULE EVERY INTERVAL '30 minutes';
+ALTER FEATURE f SET SCHEDULE EVERY INTERVAL 30 MINUTES;
 
 query II
 SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'f';
@@ -80,7 +78,7 @@ SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_
 # SET SCHEDULE replaces the interval
 # ============================================================
 statement ok
-ALTER FEATURE f SET SCHEDULE EVERY INTERVAL '2 hours';
+ALTER FEATURE f SET SCHEDULE EVERY INTERVAL 2 HOURS;
 
 query II
 SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_name = 'f';
@@ -102,7 +100,7 @@ SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_
 # Non-positive interval is rejected
 # ============================================================
 statement error
-ALTER FEATURE f SET SCHEDULE EVERY INTERVAL '0 seconds';
+ALTER FEATURE f SET SCHEDULE EVERY INTERVAL 0 SECONDS;
 ----
 <REGEX>:.*interval must be positive.*
 
@@ -120,11 +118,11 @@ ALTER FEATURE f SET SCHEDULE EVERY 1.5 HOURS;
 # IF EXISTS on a missing feature is a no-op
 # ============================================================
 statement ok
-ALTER FEATURE IF EXISTS missing SET SCHEDULE EVERY INTERVAL '1 hour';
+ALTER FEATURE IF EXISTS missing SET SCHEDULE EVERY INTERVAL 1 HOUR;
 
 # A missing feature without IF EXISTS errors
 statement error
-ALTER FEATURE missing SET SCHEDULE EVERY INTERVAL '1 hour';
+ALTER FEATURE missing SET SCHEDULE EVERY INTERVAL 1 HOUR;
 ----
 <REGEX>:.*missing.*does not exist.*
 
@@ -145,7 +143,7 @@ SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_
 # And survive a checkpoint + restart
 # ============================================================
 statement ok
-ALTER FEATURE f SET SCHEDULE EVERY INTERVAL '45 minutes';
+ALTER FEATURE f SET SCHEDULE EVERY INTERVAL 45 MINUTES;
 
 statement ok
 CHECKPOINT;

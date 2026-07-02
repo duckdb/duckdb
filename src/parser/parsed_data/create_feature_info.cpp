@@ -5,10 +5,14 @@
 
 namespace duckdb {
 
+static bool IntervalEquals(const interval_t &left, const interval_t &right) {
+	return left.months == right.months && left.days == right.days && left.micros == right.micros;
+}
+
 CreateFeatureInfo::CreateFeatureInfo()
-    : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), granularity(FeatureGranularity::DAY), window_size(7),
-      refresh_mode(FeatureRefreshMode::FULL), retain_versions(1), current_version(1), has_schedule(false),
-      schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
+    : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), window_interval(interval_t {0, 1, 0}),
+      watermark_interval(interval_t {0, 0, 0}), refresh_mode(FeatureRefreshMode::FULL), retain_versions(1),
+      current_version(1), has_schedule(false), schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
@@ -16,10 +20,10 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	CopyProperties(*result);
 	result->feature_name = feature_name;
 	result->source_table = source_table;
-	result->entity_column = entity_column;
+	result->entity_columns = entity_columns;
 	result->timestamp_column = timestamp_column;
-	result->granularity = granularity;
-	result->window_size = window_size;
+	result->window_interval = window_interval;
+	result->watermark_interval = watermark_interval;
 	result->refresh_mode = refresh_mode;
 	result->retain_versions = retain_versions;
 	result->current_version = current_version;
@@ -43,22 +47,11 @@ string CreateFeatureInfo::ToString() const {
 		result += "IF NOT EXISTS ";
 	}
 	result += feature_name;
-	result += " ON " + source_table;
-	result += " ENTITY " + entity_column;
 	result += " TIMESTAMP " + timestamp_column;
-	result += " GRANULARITY ";
-	switch (granularity) {
-	case FeatureGranularity::DAY:
-		result += "DAY";
-		break;
-	case FeatureGranularity::HOUR:
-		result += "HOUR";
-		break;
-	case FeatureGranularity::MINUTE:
-		result += "MINUTE";
-		break;
+	result += " WINDOW INTERVAL '" + Interval::ToString(window_interval) + "'";
+	if (!IntervalEquals(watermark_interval, interval_t {0, 0, 0})) {
+		result += " WATERMARK INTERVAL '" + Interval::ToString(watermark_interval) + "'";
 	}
-	result += " WINDOW " + duckdb::to_string(window_size);
 	result += " REFRESH ";
 	switch (refresh_mode) {
 	case FeatureRefreshMode::FULL:
@@ -74,6 +67,12 @@ string CreateFeatureInfo::ToString() const {
 	result += " RETAIN " + duckdb::to_string(retain_versions);
 	result += " AS (" + query->ToString() + ")";
 	return result;
+}
+
+void CreateFeatureInfo::FinalizeDeserialization() {
+	if (IntervalEquals(window_interval, interval_t {0, 0, 0})) {
+		window_interval = interval_t {0, 1, 0};
+	}
 }
 
 } // namespace duckdb
