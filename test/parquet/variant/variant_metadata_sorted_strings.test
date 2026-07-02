@@ -1,0 +1,24 @@
+# name: test/parquet/variant/variant_metadata_sorted_strings.test
+# group: [variant]
+
+require parquet
+
+require json
+
+# sorted_strings in the Variant metadata header may only be set when the
+# dictionary keys are unique and sorted by their UTF-8 bytes:
+# https://github.com/apache/parquet-format/blob/master/VariantEncoding.md#metadata-encoding
+# The writer serializes the dictionary in its existing order, so the flag must
+# reflect that order rather than be set unconditionally.
+
+# Sorted dictionary -> flag set (header byte 0x11).
+query I
+select (variant_to_parquet_variant('{"a": 1, "b": 2}'::JSON::VARIANT)::STRUCT(metadata BLOB, value BLOB)).metadata;
+----
+\x11\x02\x00\x01\x02ab
+
+# Unsorted dictionary -> flag cleared (header byte 0x01).
+query I
+select (variant_to_parquet_variant('{"b": 1, "a": 2}'::JSON::VARIANT)::STRUCT(metadata BLOB, value BLOB)).metadata;
+----
+\x01\x02\x00\x01\x02ba

@@ -65,14 +65,14 @@ static idx_t CalculateByteLength(idx_t value) {
 	return sizeof(idx_t) - irrelevant_bytes;
 }
 
-static uint8_t EncodeMetadataHeader(idx_t byte_length) {
+static uint8_t EncodeMetadataHeader(idx_t byte_length, bool sorted_strings) {
 	D_ASSERT(byte_length <= 4);
 
 	uint8_t header_byte = 0;
 	//! Set 'version' to 1
 	header_byte |= static_cast<uint8_t>(1);
-	//! Set 'sorted_strings' to 1
-	header_byte |= static_cast<uint8_t>(1) << 4;
+	//! Set 'sorted_strings' only when the dictionary is sorted + unique
+	header_byte |= static_cast<uint8_t>(sorted_strings ? 1 : 0) << 4;
 	//! Set 'offset_size_minus_one' to byte_length-1
 	header_byte |= (static_cast<uint8_t>(byte_length) - 1) << 6;
 
@@ -94,9 +94,14 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 			dictionary_count = variant.GetKeysCount(row);
 		}
 		idx_t dictionary_size = 0;
+		//! 'sorted_strings' is only valid if the keys are strictly ascending (sorted + unique)
+		bool sorted_strings = true;
 		for (idx_t i = 0; i < dictionary_count; i++) {
 			auto &key = variant.GetKey(row, i);
 			dictionary_size += key.GetSize();
+			if (i && !(variant.GetKey(row, i - 1) < key)) {
+				sorted_strings = false;
+			}
 		}
 		if (dictionary_size >= NumericLimits<uint32_t>::Maximum()) {
 			throw InvalidInputException("The total length of the dictionary exceeds a 4 byte value (uint32_t), failed "
@@ -110,7 +115,7 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 		auto &metadata_blob = metadata_data[row];
 		auto metadata_blob_data = metadata_blob.GetDataWriteable();
 
-		metadata_blob_data[0] = static_cast<char>(EncodeMetadataHeader(byte_length));
+		metadata_blob_data[0] = static_cast<char>(EncodeMetadataHeader(byte_length, sorted_strings));
 		memcpy(metadata_blob_data + 1, const_data_ptr_cast(&dictionary_count), byte_length);
 
 		auto offset_ptr = metadata_blob_data + 1 + byte_length;
