@@ -316,13 +316,24 @@ void Command::Execute(ExecuteContext &context) const {
 	}
 	if (context.running_loops.empty()) {
 		context.sql_query = base_sql_query;
+	} else {
+		// perform the string replacement
+		context.sql_query = runner.LoopReplacement(base_sql_query, context.running_loops);
+	}
+	// Per-statement outcome events (--emit-test-events): count + emit pass/fail for the countable
+	// command kinds (statement/query); infrastructure commands run untracked. A failing statement
+	// throws (Catch FAIL) — record the fail, then rethrow so the failure still propagates.
+	if (!IsCountableStatement()) {
 		ExecuteInternal(context);
 		return;
 	}
-	// perform the string replacement
-	context.sql_query = runner.LoopReplacement(base_sql_query, context.running_loops);
-	// execute the iterated statement
-	ExecuteInternal(context);
+	try {
+		ExecuteInternal(context);
+	} catch (...) {
+		runner.CountStatement(false);
+		throw;
+	}
+	runner.CountStatement(true);
 }
 
 Statement::Statement(SQLLogicTestRunner &runner) : Command(runner) {

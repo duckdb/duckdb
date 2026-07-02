@@ -3,6 +3,7 @@
 
 #include "catch.hpp"
 #include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/json_document.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -94,6 +95,10 @@ void SQLLogicTestRunner::AddSkipReason(const string &reason) {
 
 void SQLLogicTestRunner::SkipTest(const string &reason) {
 	AddSkipReason(reason);
+	// A whole-test skip is a terminal disposition, not a mid-stream event: record it and let the
+	// Catch wrapper emit the single end {status:"skip-requirement"} terminal.
+	test_skipped_requirement = true;
+	test_skip_reason = reason;
 	SKIP_TEST(reason);
 }
 
@@ -107,6 +112,57 @@ string SQLLogicTestRunner::GetSkipReasonSummary() {
 		oss << entry.first << ": " << entry.second << "\n";
 	}
 	return oss.str();
+}
+
+void SQLLogicTestRunner::CountStatement(bool passed) {
+	if (!EmitTestEventsEnabled()) {
+		return; // feature off: no counting on the normal path
+	}
+	if (passed) {
+		test_stat_passes++;
+	} else {
+		test_stat_fails++;
+	}
+}
+
+void SQLLogicTestRunner::CountSkipMode() {
+	if (!EmitTestEventsEnabled()) {
+		return;
+	}
+	test_stat_skip_mode++;
+}
+
+void SQLLogicTestRunner::EmitBegin(const string &test_name) {
+	if (!EmitTestEventsEnabled()) {
+		return;
+	}
+	JSONWriter writer;
+	auto obj = writer.CreateObject();
+	obj.AddString("event", "begin");
+	obj.AddString("name", test_name);
+	writer.SetRoot(obj);
+	SQLLogicTestLogger::EmitTestEvent(writer.ToString());
+}
+
+void SQLLogicTestRunner::EmitEnd(const string &test_name, const string &status, const string &data) {
+	if (!EmitTestEventsEnabled()) {
+		return;
+	}
+	// One terminal per test: status in {ok, error, skip-requirement}, the statement tallies, and
+	// optional free-form data (skip reason / error text — multi-line safe via JSON escaping).
+	JSONWriter writer;
+	auto obj = writer.CreateObject();
+	obj.AddString("event", "end");
+	obj.AddString("name", test_name);
+	obj.AddString("status", status);
+	obj.Add("passes", writer.CreateUnsignedInteger(test_stat_passes.load()));
+	obj.Add("fails", writer.CreateUnsignedInteger(test_stat_fails.load()));
+	obj.Add("skip-mode", writer.CreateUnsignedInteger(test_stat_skip_mode.load()));
+	if (!data.empty()) {
+		obj.AddString("data", data);
+	}
+	writer.SetRoot(obj);
+	SQLLogicTestLogger::EmitTestEvent(writer.ToString());
 }
 
 void SQLLogicTestRunner::ExecuteCommand(duckdb::unique_ptr<Command> command) {
@@ -706,13 +762,13 @@ void SQLLogicTestRunner::ExecuteStream(std::istream &input, const string &source
 }
 
 void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &script) {
+	file_name = script;
 	auto &test_config = TestConfiguration::Get();
 	if (test_config.ShouldSkipTest(script)) {
 		SkipTest("config skip_tests");
 		return;
 	}
 
-	file_name = script;
 	idx_t skip_level = 0;
 	bool test_expr_executed = false;
 	bool file_tags_expr_seen = false;
@@ -813,6 +869,10 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 			continue;
 		}
 		if (skip_level > 0 && token.type != SQLLogicTokenType::SQLLOGIC_MODE) {
+			if (token.type == SQLLogicTokenType::SQLLOGIC_STATEMENT ||
+			    token.type == SQLLogicTokenType::SQLLOGIC_QUERY) {
+				CountSkipMode();
+			}
 			continue;
 		}
 		if (token.type == SQLLogicTokenType::SQLLOGIC_STATEMENT) {
