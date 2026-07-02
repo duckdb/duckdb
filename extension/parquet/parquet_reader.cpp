@@ -680,7 +680,7 @@ static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &sc
 		auto &child_column = typed_value.get().GetChildByIndex(child_column_index.GetIndex());
 		if (child_column.type.id() != LogicalTypeId::STRUCT) {
 			throw InternalException("Extracted field for '%s' from 'typed_value', is not a struct (received: %s)",
-			                        child_column.type.ToString());
+			                        field_name, child_column.type.ToString());
 		}
 		auto typed_value_index = child_column.GetChildIndexByName("typed_value");
 		if (!typed_value_index.IsValid()) {
@@ -802,7 +802,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 			children[child_index] =
 			    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
 		}
-		//! Create the VariantColumnReader with the column index, so we can perform the extract at Read
+		// Create the VariantColumnReader with the column index, so we can perform the extract at Read
 		auto column_reader = make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
 
 		auto scan_type = column_id.GetScanType();
