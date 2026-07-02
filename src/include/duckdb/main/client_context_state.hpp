@@ -17,7 +17,6 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/client_context.hpp"
 #include <mutex>
 
 namespace duckdb {
