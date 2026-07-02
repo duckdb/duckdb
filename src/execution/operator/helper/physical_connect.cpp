@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/helper/physical_connect.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -34,11 +35,12 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 
 	auto &db_manager = DatabaseManager::Get(client);
 	if (info->name_is_string_literal) {
-		// `CONNECT '<uri>'`: attach the connection string under a hidden, ephemeral alias and bind to
-		// it in one shot. The alias is scoped to this connection (single-binding guarantees at most one
-		// active at a time) and is detached again by DISCONNECT (see PhysicalDisconnect).
+		// `CONNECT '<uri>'`: attach the connection string under an internal, hidden, ephemeral alias and
+		// bind to it in one shot. The name is a random UUID (like __pivot_enum_<uuid>): unique, ASCII
+		// (backend-safe), and unguessable, so it is not referenceable in SQL. It is owned by this
+		// connection and detached again by DISCONNECT (see PhysicalDisconnect).
 		AttachInfo attach_info;
-		attach_info.name = Identifier("__connect_" + to_string(client.GetConnectionId()));
+		attach_info.name = Identifier("__connect_" + UUID::ToString(UUID::GenerateRandomUUID()));
 		attach_info.path = info->name.GetIdentifierName();
 		attach_info.options = info->options;
 
