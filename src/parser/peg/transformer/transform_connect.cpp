@@ -20,23 +20,7 @@ unique_ptr<ConnectInfo> PEGTransformerFactory::TransformStringSessionTarget(
 	if (!generic_copy_option_list) {
 		return result;
 	}
-	// NOTE: mirrors the option split in TransformAttachStatement; candidate for a shared helper.
-	for (const auto &option : *generic_copy_option_list) {
-		if (option.expression) {
-			result->parsed_options[option.name.GetIdentifierName()] = option.expression->Copy();
-			continue;
-		}
-		if (option.children.empty()) {
-			result->options[option.name.GetIdentifierName()] = Value(true);
-		} else if (option.children.size() == 1) {
-			if (option.children[0].IsNull()) {
-				throw BinderException("NULL is not supported as a valid option for CONNECT option \"%s\"", option.name);
-			}
-			result->options[option.name.GetIdentifierName()] = option.children[0];
-		} else {
-			throw ParserException("Option %s can only have one argument", option.name);
-		}
-	}
+	SplitGenericOptions(*generic_copy_option_list, result->parsed_options, result->options, "CONNECT");
 	return result;
 }
 
