@@ -190,6 +190,7 @@ public:
 
 private:
 	unique_ptr<TransformResultValue> ExecuteInternal(ParseResult &parse_result, const TransformFrameOps &ops);
+	void SetResultLocation(ParseResult &parse_result, TransformResultValue &result);
 	void DeliverResult(TransformStackFrame &frame, unique_ptr<TransformResultValue> result);
 
 private:

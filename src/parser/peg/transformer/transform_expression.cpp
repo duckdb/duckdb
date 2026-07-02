@@ -150,6 +150,9 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColumnReferenceT
                                                                                           TransformStackFrame &frame) {
 	auto child = frame.TakeResult<unique_ptr<ColumnRefExpression>>(0);
 	auto result = TransformColumnReference(transformer, std::move(child));
+	if (result && frame.parse_result.offset.IsValid()) {
+		transformer.SetQueryLocation(*result, frame.parse_result.offset);
+	}
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
@@ -1478,24 +1481,23 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 void PEGTransformerFactory::InitializePrefixExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                  TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	frame.ReserveChildSlots(1);
+	auto &prefix_opt = list_pr.Child<OptionalParseResult>(0);
+	idx_t prefix_count = 0;
+	if (prefix_opt.HasResult()) {
+		auto &prefix_repeat = prefix_opt.GetResult().Cast<RepeatParseResult>();
+		auto prefix_children = prefix_repeat.GetChildren();
+		prefix_count = prefix_children.size();
+		frame.ReserveChildSlots(1 + prefix_count);
+		for (idx_t i = prefix_children.size(); i > 0; i--) {
+			auto child_idx = i - 1;
+			stack.PushFrame(prefix_children[child_idx].get(), GetExpressionTrampolineOps("PrefixOperator"),
+			                TransformFrameResultTarget(frame.frame_index, 1 + child_idx));
+		}
+	} else {
+		frame.ReserveChildSlots(1);
+	}
 	stack.PushFrame(list_pr.GetChild(1), GetExpressionTrampolineOps("BaseExpression"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
-}
-
-static string PrefixOperatorString(ParseResult &parse_result) {
-	if (parse_result.name == "MinusPrefixOperator") {
-		return "-";
-	}
-	if (parse_result.name == "PlusPrefixOperator") {
-		return "+";
-	}
-	if (parse_result.name == "TildePrefixOperator") {
-		return "~";
-	}
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	return PrefixOperatorString(choice_pr.GetResult());
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePrefixExpressionTrampoline(PEGTransformer &transformer,
@@ -1512,8 +1514,9 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePrefixExpression
 
 	auto &prefix_repeat = prefix_opt.GetResult().Cast<RepeatParseResult>();
 	vector<string> prefixes;
-	for (auto &child_ref : prefix_repeat.GetChildren()) {
-		prefixes.push_back(PrefixOperatorString(child_ref));
+	auto prefix_children = prefix_repeat.GetChildren();
+	for (idx_t i = 0; i < prefix_children.size(); i++) {
+		prefixes.push_back(frame.TakeResult<string>(1 + i));
 	}
 
 	if (prefixes.size() == 1 && prefixes[0] == "-" && IsNumberLiteral(base_expr_pr)) {

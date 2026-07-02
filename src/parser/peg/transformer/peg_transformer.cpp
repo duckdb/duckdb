@@ -96,6 +96,7 @@ unique_ptr<TransformResultValue> TransformStack::ExecuteInternal(ParseResult &pa
 				break;
 			}
 			frame_stack.pop_back();
+			SetResultLocation(frame.parse_result, *result);
 			if (!frame.result_target) {
 				return result;
 			}
@@ -107,6 +108,22 @@ unique_ptr<TransformResultValue> TransformStack::ExecuteInternal(ParseResult &pa
 		}
 	}
 	throw InternalException("Trampoline transformer stack completed without a root result");
+}
+
+void TransformStack::SetResultLocation(ParseResult &parse_result, TransformResultValue &result) {
+	if (!parse_result.offset.IsValid()) {
+		return;
+	}
+	auto *expression_result = dynamic_cast<TypedTransformResult<unique_ptr<ParsedExpression>> *>(&result);
+	if (expression_result && expression_result->value && !expression_result->value->GetQueryLocation().IsValid()) {
+		transformer.SetQueryLocation(*expression_result->value, parse_result.offset);
+		return;
+	}
+	auto *table_ref_result = dynamic_cast<TypedTransformResult<unique_ptr<TableRef>> *>(&result);
+	if (table_ref_result && table_ref_result->value && !table_ref_result->value->query_location.IsValid()) {
+		transformer.SetQueryLocation(*table_ref_result->value, parse_result.offset.GetIndex());
+		return;
+	}
 }
 
 void TransformStack::DeliverResult(TransformStackFrame &frame, unique_ptr<TransformResultValue> result) {

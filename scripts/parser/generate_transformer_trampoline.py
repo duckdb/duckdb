@@ -98,6 +98,15 @@ def no_arg_manual_body_exists(rule_name):
     return any(pattern.search(path.read_text()) for path in transformer_dir.glob("transform_*.cpp"))
 
 
+def parse_result_manual_body_exists(rule_name):
+    pattern = re.compile(
+        rf"\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*"
+        rf"\(\s*PEGTransformer\s*&\s*transformer\s*,\s*ParseResult\s*&\s*\w+\s*\)\s*\{{",
+        re.S,
+    )
+    return any(pattern.search(path.read_text()) for path in transformer_dir.glob("transform_*.cpp"))
+
+
 def discover_grammar_files():
     return sorted(path.name for path in statements_dir.glob("*.gram"))
 
@@ -439,7 +448,11 @@ class UseGramPreviewEmitter:
             return self.emit_matcher_override_rule(rule_name)
         if self.is_forward_rule(rule_name):
             return self.emit_forward_rule(rule_name, ast)
-        if literal_string_values(ast) is not None or self.is_no_arg_syntax_only_rule(rule_name, ast):
+        if (
+            literal_string_values(ast) is not None
+            or self.is_no_arg_syntax_only_rule(rule_name, ast)
+            or self.is_parse_result_syntax_only_rule(rule_name, ast)
+        ):
             return self.emit_syntax_only_rule(rule_name, ast)
         if isinstance(ast, ChoiceNode):
             if self.is_manual_finalize_rule(rule_name):
@@ -485,8 +498,25 @@ class UseGramPreviewEmitter:
             and is_syntax_only_rule_body(ast, self.syntax_only_rules)
         )
 
+    def is_parse_result_syntax_only_rule(self, rule_name, ast):
+        return rule_name in self.rule_types and parse_result_manual_body_exists(rule_name) and not isinstance(ast, ChoiceNode)
+
+    def is_parse_result_manual_choice_rule(self, rule_name, ast):
+        return rule_name in self.rule_types and parse_result_manual_body_exists(rule_name) and isinstance(ast, ChoiceNode)
+
+    def choice_syntax_only_alternative_names(self, ast):
+        return [
+            alternative.name
+            for alternative in ast.alternatives
+            if isinstance(alternative, ReferenceNode) and alternative.name in self.syntax_only_rules
+        ]
+
     def emit_initialize_rule(self, rule_name, ast):
-        if self.is_no_arg_syntax_only_rule(rule_name, ast) or literal_string_values(ast) is not None:
+        if (
+            self.is_no_arg_syntax_only_rule(rule_name, ast)
+            or self.is_parse_result_syntax_only_rule(rule_name, ast)
+            or literal_string_values(ast) is not None
+        ):
             return self.emit_syntax_only_initialize(rule_name)
         if isinstance(ast, ChoiceNode):
             return self.emit_choice_initialize(rule_name, ast)
@@ -520,6 +550,24 @@ class UseGramPreviewEmitter:
         if dynamic_child and slot_idx > dynamic_child.slot_start:
             return f"{slot_idx} + dynamic_child_count - 1"
         return str(slot_idx)
+
+    def emit_stack_child_push(self, lines, plan, stack_child, indent="\t"):
+        if isinstance(stack_child, OptionalStackChild):
+            slot_expr = self.adjusted_slot_expr(plan, stack_child.slot_idx)
+            lines.append(f"{indent}auto &{stack_child.var_name}_opt = {stack_child.parse_expr}.Cast<OptionalParseResult>();")
+            lines.append(f"{indent}if ({stack_child.var_name}_opt.HasResult()) {{")
+            child_expr = stack_child.result_expr_template.format(opt=f"{stack_child.var_name}_opt")
+            lines.append(
+                f"{indent}\tstack.PushFrame({child_expr}, {ops_name(stack_child.rule_name)}, "
+                f"TransformFrameResultTarget(frame.frame_index, {slot_expr}));"
+            )
+            lines.append(f"{indent}}}")
+        else:
+            slot_expr = self.adjusted_slot_expr(plan, stack_child.slot_idx)
+            lines.append(
+                f"{indent}stack.PushFrame({stack_child.parse_expr}, {ops_name(stack_child.rule_name)}, "
+                f"TransformFrameResultTarget(frame.frame_index, {slot_expr}));"
+            )
 
     def emit_dynamic_child_count(self, plan):
         dynamic_child = self.dynamic_child(plan)
@@ -601,7 +649,16 @@ class UseGramPreviewEmitter:
             f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"TransformStack &stack, TransformStackFrame &frame) {{"
         )
-        if cpp_type == "string" and literal_values is not None and not manual_body_exists(rule_name):
+        if self.is_parse_result_syntax_only_rule(rule_name, ast):
+            if isinstance(ast, ChoiceNode):
+                lines.append("\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
+                lines.append("\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);")
+                lines.append(
+                    f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer, choice_pr.GetResult());"
+                )
+            else:
+                lines.append(f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer, frame.parse_result);")
+        elif cpp_type == "string" and literal_values is not None and not manual_body_exists(rule_name):
             if len(literal_values) == 1:
                 lines.append(f'\tstring result = "{literal_values[0]}";')
             else:
@@ -630,18 +687,54 @@ class UseGramPreviewEmitter:
             return lines
         cpp_type = self.cpp_type(rule_name)
         by_value = self.by_value(rule_name)
+        syntax_only_alternatives = self.choice_syntax_only_alternative_names(ast)
         child_cpp_types = set()
         for alternative in ast.alternatives:
             if isinstance(alternative, ReferenceNode) and alternative.name in self.rule_types:
                 child_cpp_types.add(self.cpp_type(alternative.name))
+        has_string_child_manual_transform = (
+            len(child_cpp_types) == 1
+            and self.cpp_type(rule_name) not in child_cpp_types
+            and "string" in child_cpp_types
+            and manual_body_exists(rule_name)
+        )
         lines.append("")
         lines.append(
             f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"TransformStack &stack, TransformStackFrame &frame) {{"
         )
-        if len(child_cpp_types) == 1 and cpp_type not in child_cpp_types and manual_body_exists(rule_name):
+        if self.is_parse_result_manual_choice_rule(rule_name, ast):
+            lines.append("\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
+            lines.append("\tauto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();")
+            lines.append(f"\t{cpp_type} result {{}};")
+            lines.append("\tif (frame.child_results[0]) {")
+            lines.append(f"\t\tresult = frame.TakeResult<{cpp_type}>(0);")
+            lines.append("\t} else {")
+            lines.append(f"\t\tresult = PEGTransformerFactory::Transform{rule_name}(transformer, choice_result);")
+            lines.append("\t}")
+        elif len(child_cpp_types) == 1 and cpp_type not in child_cpp_types and manual_body_exists(rule_name):
             child_cpp_type = next(iter(child_cpp_types))
-            lines.append(f"\tauto child = frame.TakeResult<{child_cpp_type}>(0);")
+            if child_cpp_type == "string":
+                lines.append("\tstring child;")
+                lines.append("\tif (frame.child_results[0]) {")
+                lines.append("\t\tchild = frame.TakeResult<string>(0);")
+                lines.append("\t} else {")
+                lines.append("\t\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
+                lines.append("\t\tauto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();")
+                lines.append("\t\tif (choice_result.type == ParseResultType::IDENTIFIER) {")
+                lines.append("\t\t\tchild = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();")
+                lines.append("\t\t} else if (choice_result.type == ParseResultType::KEYWORD) {")
+                lines.append("\t\t\tchild = choice_result.Cast<KeywordParseResult>().keyword;")
+                lines.append("\t\t} else if (choice_result.type == ParseResultType::STRING) {")
+                lines.append("\t\t\tchild = choice_result.Cast<StringLiteralParseResult>().result;")
+                lines.append("\t\t} else if (choice_result.type == ParseResultType::OPERATOR) {")
+                lines.append("\t\t\tchild = choice_result.Cast<OperatorParseResult>().operator_token;")
+                lines.append("\t\t} else {")
+                lines.append("\t\t\tchild = TransformIdentifierOrKeyword(transformer, choice_result);")
+                lines.append("\t\t}")
+                lines.append("\t}")
+            else:
+                lines.append(f"\tauto child = frame.TakeResult<{child_cpp_type}>(0);")
             child_arg = "std::move(child)" if child_cpp_type.startswith("unique_ptr<") else "child"
             lines.append(f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer, {child_arg});")
         elif cpp_type == "Identifier":
@@ -661,6 +754,11 @@ class UseGramPreviewEmitter:
             lines.append("\t\t\tresult = Identifier(TransformIdentifierOrKeyword(transformer, choice_result));")
             lines.append("\t\t}")
             lines.append("\t}")
+        elif syntax_only_alternatives:
+            lines.append(f"\t{cpp_type} result {{}};")
+            lines.append("\tif (frame.child_results[0]) {")
+            lines.append(f"\t\tresult = frame.TakeResult<{cpp_type}>(0);")
+            lines.append("\t}")
         else:
             lines.append(f"\tauto result = frame.TakeResult<{cpp_type}>(0);")
         lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', by_value)};")
@@ -679,13 +777,66 @@ class UseGramPreviewEmitter:
         lines.append("\tframe.ReserveChildSlots(1);")
         lines.append("\tauto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();")
         lines.append("\tauto ops_entry = ops_map.find(choice_result.name);")
+        syntax_only_alternatives = self.choice_syntax_only_alternative_names(ast)
+        child_cpp_types = set()
+        for alternative in ast.alternatives:
+            if isinstance(alternative, ReferenceNode) and alternative.name in self.rule_types:
+                child_cpp_types.add(self.cpp_type(alternative.name))
+        has_string_child_manual_transform = (
+            len(child_cpp_types) == 1
+            and self.cpp_type(rule_name) not in child_cpp_types
+            and "string" in child_cpp_types
+            and manual_body_exists(rule_name)
+        )
         if self.cpp_type(rule_name) == "Identifier":
-            lines.append("\tif (ops_entry == ops_map.end() && choice_result.name.empty()) {")
+            direct_string_names = [
+                alternative.name
+                for alternative in ast.alternatives
+                if isinstance(alternative, ReferenceNode)
+                and alternative.name in self.rule_types
+                and self.cpp_type(alternative.name) == "string"
+            ]
+            direct_conditions = [
+                "choice_result.name.empty()",
+                "choice_result.type == ParseResultType::IDENTIFIER",
+                "choice_result.type == ParseResultType::KEYWORD",
+                "choice_result.type == ParseResultType::STRING",
+            ]
+            lines.append("\tif (" + " || ".join(direct_conditions) + ") {")
             lines.append("\t\treturn;")
             lines.append("\t}")
-        lines.append("\tif (ops_entry == ops_map.end()) {")
-        lines.append("\t\tthrow InternalException(\"No trampoline ops registered for rule '%s'\", choice_result.name);")
-        lines.append("\t}")
+            if direct_string_names:
+                direct_string_conditions = [f'choice_result.name == "{name}"' for name in direct_string_names]
+                lines.append(
+                    "\tif (ops_entry == ops_map.end() && (" + " || ".join(direct_string_conditions) + ")) {"
+                )
+                lines.append("\t\treturn;")
+                lines.append("\t}")
+        if syntax_only_alternatives:
+            syntax_only_conditions = [f'choice_result.name == "{name}"' for name in syntax_only_alternatives]
+            lines.append("\tif (ops_entry == ops_map.end() && (" + " || ".join(syntax_only_conditions) + ")) {")
+            lines.append("\t\treturn;")
+            lines.append("\t}")
+        if has_string_child_manual_transform:
+            direct_conditions = [
+                "choice_result.type == ParseResultType::IDENTIFIER",
+                "choice_result.type == ParseResultType::KEYWORD",
+                "choice_result.type == ParseResultType::STRING",
+                "choice_result.type == ParseResultType::OPERATOR",
+                "choice_result.type == ParseResultType::CHOICE",
+                "choice_result.type == ParseResultType::LIST",
+            ]
+            lines.append("\tif (ops_entry == ops_map.end() && (" + " || ".join(direct_conditions) + ")) {")
+            lines.append("\t\treturn;")
+            lines.append("\t}")
+        if self.is_parse_result_manual_choice_rule(rule_name, ast):
+            lines.append("\tif (ops_entry == ops_map.end()) {")
+            lines.append("\t\treturn;")
+            lines.append("\t}")
+        else:
+            lines.append("\tif (ops_entry == ops_map.end()) {")
+            lines.append("\t\tthrow InternalException(\"No trampoline ops registered for rule '%s'\", choice_result.name);")
+            lines.append("\t}")
         lines.append(
             "\tstack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));"
         )
@@ -889,6 +1040,11 @@ class UseGramPreviewEmitter:
         fixed_child_slots = max([arg.slot_idx + 1 for arg in frame_children], default=0)
         trailing_optional = plan.trailing_optional_stack_child
         dynamic_child = self.dynamic_child(plan)
+        frame_children_before_dynamic = frame_children
+        frame_children_after_dynamic = []
+        if dynamic_child:
+            frame_children_before_dynamic = [arg for arg in frame_children if arg.slot_idx < dynamic_child.slot_start]
+            frame_children_after_dynamic = [arg for arg in frame_children if arg.slot_idx > dynamic_child.slot_start]
         logical_child_slots = fixed_child_slots
         if dynamic_child:
             logical_child_slots = max(logical_child_slots, dynamic_child.slot_start + 1)
@@ -906,6 +1062,8 @@ class UseGramPreviewEmitter:
                     lines.append(
                         f"\tframe.ReserveChildSlots({logical_child_slots} + dynamic_child_count - 1 + ({trailing_optional.var_name}_opt.HasResult() ? 1 : 0));"
                     )
+                    for stack_child in reversed(frame_children_after_dynamic):
+                        self.emit_stack_child_push(lines, plan, stack_child)
                     lines.append(f"\tif ({trailing_optional.var_name}_opt.HasResult()) {{")
                     child_expr = trailing_optional.result_expr_template.format(opt=f"{trailing_optional.var_name}_opt")
                     lines.append(
@@ -915,6 +1073,8 @@ class UseGramPreviewEmitter:
                     lines.append("\t}")
                 else:
                     lines.append(f"\tframe.ReserveChildSlots({logical_child_slots} + dynamic_child_count - 1);")
+                    for stack_child in reversed(frame_children_after_dynamic):
+                        self.emit_stack_child_push(lines, plan, stack_child)
                 lines.append("\tfor (idx_t i = list_items.size(); i > 0; i--) {")
                 lines.append("\t\tauto child_idx = i - 1;")
                 lines.append(
@@ -931,6 +1091,8 @@ class UseGramPreviewEmitter:
                 lines.append(f"\t\tauto list_items = ExtractParseResultsFromList({child_expr});")
                 lines.append("\t\tdynamic_child_count = list_items.size();")
                 lines.append(f"\t\tframe.ReserveChildSlots({logical_child_slots} + dynamic_child_count - 1);")
+                for stack_child in reversed(frame_children_after_dynamic):
+                    self.emit_stack_child_push(lines, plan, stack_child, "\t\t")
                 lines.append("\t\tfor (idx_t i = list_items.size(); i > 0; i--) {")
                 lines.append("\t\t\tauto child_idx = i - 1;")
                 lines.append(
@@ -940,6 +1102,8 @@ class UseGramPreviewEmitter:
                 lines.append("\t\t}")
                 lines.append("\t} else {")
                 lines.append(f"\t\tframe.ReserveChildSlots({logical_child_slots} - 1);")
+                for stack_child in reversed(frame_children_after_dynamic):
+                    self.emit_stack_child_push(lines, plan, stack_child, "\t\t")
                 lines.append("\t}")
             elif plan.required_repeat_child:
                 repeat_child = plan.required_repeat_child
@@ -953,6 +1117,8 @@ class UseGramPreviewEmitter:
                     lines.append(
                         f"\tframe.ReserveChildSlots({logical_child_slots} + dynamic_child_count - 1 + ({trailing_optional.var_name}_opt.HasResult() ? 1 : 0));"
                     )
+                    for stack_child in reversed(frame_children_after_dynamic):
+                        self.emit_stack_child_push(lines, plan, stack_child)
                     lines.append(f"\tif ({trailing_optional.var_name}_opt.HasResult()) {{")
                     child_expr = trailing_optional.result_expr_template.format(opt=f"{trailing_optional.var_name}_opt")
                     lines.append(
@@ -962,6 +1128,8 @@ class UseGramPreviewEmitter:
                     lines.append("\t}")
                 else:
                     lines.append(f"\tframe.ReserveChildSlots({logical_child_slots} + dynamic_child_count - 1);")
+                    for stack_child in reversed(frame_children_after_dynamic):
+                        self.emit_stack_child_push(lines, plan, stack_child)
                 lines.append("\tfor (idx_t i = repeat_children.size(); i > 0; i--) {")
                 lines.append("\t\tauto child_idx = i - 1;")
                 lines.append(
@@ -978,6 +1146,8 @@ class UseGramPreviewEmitter:
                 lines.append("\t\tauto repeat_children = repeat_pr.GetChildren();")
                 lines.append("\t\tdynamic_child_count = repeat_children.size();")
                 lines.append(f"\t\tframe.ReserveChildSlots({logical_child_slots} + dynamic_child_count - 1);")
+                for stack_child in reversed(frame_children_after_dynamic):
+                    self.emit_stack_child_push(lines, plan, stack_child, "\t\t")
                 lines.append("\t\tfor (idx_t i = repeat_children.size(); i > 0; i--) {")
                 lines.append("\t\t\tauto child_idx = i - 1;")
                 lines.append(
@@ -987,28 +1157,13 @@ class UseGramPreviewEmitter:
                 lines.append("\t\t}")
                 lines.append("\t} else {")
                 lines.append(f"\t\tframe.ReserveChildSlots({logical_child_slots} - 1);")
+                for stack_child in reversed(frame_children_after_dynamic):
+                    self.emit_stack_child_push(lines, plan, stack_child, "\t\t")
                 lines.append("\t}")
         else:
             lines.append(f"\tframe.ReserveChildSlots({fixed_child_slots});")
-        for stack_child in reversed(frame_children):
-            if isinstance(stack_child, OptionalStackChild):
-                slot_expr = self.adjusted_slot_expr(plan, stack_child.slot_idx)
-                lines.append(
-                    f"\tauto &{stack_child.var_name}_opt = {stack_child.parse_expr}.Cast<OptionalParseResult>();"
-                )
-                lines.append(f"\tif ({stack_child.var_name}_opt.HasResult()) {{")
-                child_expr = stack_child.result_expr_template.format(opt=f"{stack_child.var_name}_opt")
-                lines.append(
-                    f"\t\tstack.PushFrame({child_expr}, {ops_name(stack_child.rule_name)}, "
-                    f"TransformFrameResultTarget(frame.frame_index, {slot_expr}));"
-                )
-                lines.append("\t}")
-            else:
-                slot_expr = self.adjusted_slot_expr(plan, stack_child.slot_idx)
-                lines.append(
-                    f"\tstack.PushFrame({stack_child.parse_expr}, {ops_name(stack_child.rule_name)}, "
-                    f"TransformFrameResultTarget(frame.frame_index, {slot_expr}));"
-                )
+        for stack_child in reversed(frame_children_before_dynamic):
+            self.emit_stack_child_push(lines, plan, stack_child)
         lines.append("}")
         return lines
 

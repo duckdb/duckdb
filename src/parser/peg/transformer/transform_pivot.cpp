@@ -163,23 +163,8 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformPivotStatement(PEGTr
 void PEGTransformerFactory::InitializePivotStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto &pivot_columns = list_pr.Child<OptionalParseResult>(2);
-	auto &pivot_aggregates = list_pr.Child<OptionalParseResult>(3);
-	auto &pivot_group = list_pr.Child<OptionalParseResult>(4);
 	frame.manual_state = transformer.ParamCount();
-	frame.ReserveChildSlots(4);
-	if (pivot_group.HasResult()) {
-		stack.PushFrame(pivot_group.GetResult(), GetPivotTrampolineOps("PivotGroupByList"),
-		                TransformFrameResultTarget(frame.frame_index, 3));
-	}
-	if (pivot_aggregates.HasResult()) {
-		stack.PushFrame(pivot_aggregates.GetResult(), GetPivotTrampolineOps("PivotUsing"),
-		                TransformFrameResultTarget(frame.frame_index, 2));
-	}
-	if (pivot_columns.HasResult()) {
-		stack.PushFrame(pivot_columns.GetResult(), GetPivotTrampolineOps("PivotOn"),
-		                TransformFrameResultTarget(frame.frame_index, 1));
-	}
+	frame.ReserveChildSlots(5);
 	stack.PushFrame(list_pr.GetChild(1), GetPivotTrampolineOps("TableRef"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
@@ -188,8 +173,34 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotStatementTr
                                                                                          TransformStack &stack,
                                                                                          TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	if (!frame.child_results[4]) {
+		bool has_parameters = transformer.ParamCount() > frame.manual_state;
+		frame.SetChildResult(4, make_uniq<TypedTransformResult<bool>>(has_parameters));
+		auto &pivot_columns = list_pr.Child<OptionalParseResult>(2);
+		auto &pivot_aggregates = list_pr.Child<OptionalParseResult>(3);
+		auto &pivot_group = list_pr.Child<OptionalParseResult>(4);
+		bool pushed_child = false;
+		if (pivot_group.HasResult()) {
+			stack.PushFrame(pivot_group.GetResult(), GetPivotTrampolineOps("PivotGroupByList"),
+			                TransformFrameResultTarget(frame.frame_index, 3));
+			pushed_child = true;
+		}
+		if (pivot_aggregates.HasResult()) {
+			stack.PushFrame(pivot_aggregates.GetResult(), GetPivotTrampolineOps("PivotUsing"),
+			                TransformFrameResultTarget(frame.frame_index, 2));
+			pushed_child = true;
+		}
+		if (pivot_columns.HasResult()) {
+			stack.PushFrame(pivot_columns.GetResult(), GetPivotTrampolineOps("PivotOn"),
+			                TransformFrameResultTarget(frame.frame_index, 1));
+			pushed_child = true;
+		}
+		if (pushed_child) {
+			return nullptr;
+		}
+	}
 	auto source = frame.TakeResult<unique_ptr<TableRef>>(0);
-	auto has_parameters = transformer.ParamCount() > frame.manual_state;
+	auto has_parameters = frame.TakeResult<bool>(4);
 	auto &pivot_columns = list_pr.Child<OptionalParseResult>(2);
 	auto &pivot_group = list_pr.Child<OptionalParseResult>(4);
 	auto select_node = make_uniq<SelectNode>();
@@ -360,15 +371,8 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformUnpivotStatement(PEG
 void PEGTransformerFactory::InitializeUnpivotStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                  TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto &unpivot_names_opt = list_pr.Child<OptionalParseResult>(4);
 	frame.manual_state = transformer.ParamCount();
-	frame.ReserveChildSlots(3);
-	if (unpivot_names_opt.HasResult()) {
-		stack.PushFrame(unpivot_names_opt.GetResult(), GetPivotTrampolineOps("IntoNameValues"),
-		                TransformFrameResultTarget(frame.frame_index, 2));
-	}
-	stack.PushFrame(list_pr.GetChild(3), GetPivotTrampolineOps("TargetList"),
-	                TransformFrameResultTarget(frame.frame_index, 1));
+	frame.ReserveChildSlots(4);
 	stack.PushFrame(list_pr.GetChild(1), GetPivotTrampolineOps("TableRef"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
@@ -377,8 +381,20 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeUnpivotStatement
                                                                                            TransformStack &stack,
                                                                                            TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	if (!frame.child_results[3]) {
+		bool has_parameters = transformer.ParamCount() > frame.manual_state;
+		frame.SetChildResult(3, make_uniq<TypedTransformResult<bool>>(has_parameters));
+		auto &unpivot_names_opt = list_pr.Child<OptionalParseResult>(4);
+		if (unpivot_names_opt.HasResult()) {
+			stack.PushFrame(unpivot_names_opt.GetResult(), GetPivotTrampolineOps("IntoNameValues"),
+			                TransformFrameResultTarget(frame.frame_index, 2));
+		}
+		stack.PushFrame(list_pr.GetChild(3), GetPivotTrampolineOps("TargetList"),
+		                TransformFrameResultTarget(frame.frame_index, 1));
+		return nullptr;
+	}
 	auto source = frame.TakeResult<unique_ptr<TableRef>>(0);
-	auto has_parameters = transformer.ParamCount() > frame.manual_state;
+	auto has_parameters = frame.TakeResult<bool>(3);
 	auto target_list = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1);
 	auto &unpivot_names_opt = list_pr.Child<OptionalParseResult>(4);
 	vector<PivotColumn> columns;
