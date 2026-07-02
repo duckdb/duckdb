@@ -64,6 +64,8 @@ public:
 	unique_ptr<RowGroupOrderOptions> row_group_order_options;
 	//! Partition indices to scan, empty means scan all
 	vector<idx_t> scan_partition_indices;
+	//! Optional upper bound on rows needed from this scan.
+	optional_idx limit;
 
 	string GetName() const override;
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
