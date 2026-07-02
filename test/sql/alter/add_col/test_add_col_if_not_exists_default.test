@@ -1,0 +1,69 @@
+# name: test/sql/alter/add_col/test_add_col_if_not_exists_default.test
+# description: Test that ADD COLUMN IF NOT EXISTS with a non-constant DEFAULT does not overwrite existing values
+# group: [add_col]
+
+# Create a table and add a column with a non-constant default
+statement ok
+CREATE TABLE test(id INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1), (2), (3);
+
+statement ok
+ALTER TABLE test ADD COLUMN c INTEGER DEFAULT 1 + 1;
+
+# Verify the default was applied
+query II
+SELECT id, c FROM test ORDER BY id;
+----
+1	2
+2	2
+3	2
+
+# Update the column to a known value
+statement ok
+UPDATE test SET c = 42;
+
+# Verify update worked
+query II
+SELECT id, c FROM test ORDER BY id;
+----
+1	42
+2	42
+3	42
+
+# Now run ADD COLUMN IF NOT EXISTS on the same column with a different default
+# This should be a no-op — it must NOT overwrite the existing values
+statement ok
+ALTER TABLE test ADD COLUMN IF NOT EXISTS c INTEGER DEFAULT 1 + 1;
+
+# The values must still be 42, not overwritten by the default
+query II
+SELECT id, c FROM test ORDER BY id;
+----
+1	42
+2	42
+3	42
+
+# Also test with a volatile default (function call)
+statement ok
+CREATE TABLE test2(id INTEGER);
+
+statement ok
+INSERT INTO test2 VALUES (1), (2);
+
+statement ok
+ALTER TABLE test2 ADD COLUMN ts TIMESTAMP DEFAULT current_timestamp;
+
+statement ok
+UPDATE test2 SET ts = TIMESTAMP '2000-01-01 00:00:00';
+
+# This must be a no-op
+statement ok
+ALTER TABLE test2 ADD COLUMN IF NOT EXISTS ts TIMESTAMP DEFAULT current_timestamp;
+
+# Values must still be 2000-01-01, not overwritten
+query I
+SELECT DISTINCT ts FROM test2;
+----
+2000-01-01 00:00:00
