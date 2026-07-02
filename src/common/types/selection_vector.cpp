@@ -3,8 +3,42 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/types/bitmap_selection_vector.hpp"
+
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 namespace duckdb {
+
+idx_t SelectionVector::IntersectBitmap(const SelectionVector &other) {
+	D_ASSERT(IsBitmap() && other.IsBitmap());
+	D_ASSERT(RowSpan() == other.RowSpan());
+	auto a = reinterpret_cast<validity_t *>(selection_data->bitmap_data.get());
+	auto b = reinterpret_cast<const validity_t *>(other.selection_data->bitmap_data.get());
+	const idx_t nwords = (selection_data->row_span + 63) / 64;
+	idx_t total = 0;
+	for (idx_t w = 0; w < nwords; w++) {
+		a[w] &= b[w];
+#if defined(_MSC_VER)
+		total += idx_t(__popcnt64(a[w]));
+#else
+		total += idx_t(__builtin_popcountll(a[w]));
+#endif
+	}
+	return total;
+}
+
+void SelectionVector::Flatten() const {
+	if (sel_vector || !selection_data || !selection_data->is_bitmap) {
+		return; // already materialized, or not bitmap-backed
+	}
+	// Keep the bitmap alive: BitmapToSelectionVector re-Initializes *this with a fresh index buffer,
+	// replacing selection_data; `keep` holds the bitmap data referenced by `bm` during conversion.
+	auto keep = selection_data;
+	auto bm = reinterpret_cast<const validity_t *>(keep->bitmap_data.get());
+	BitmapToSelectionVector(bm, keep->row_span, const_cast<SelectionVector &>(*this));
+}
 
 SelectionData::SelectionData(idx_t count) {
 	owned_data = Allocator::DefaultAllocator().Allocate(MaxValue<idx_t>(count, 1) * sizeof(sel_t));
@@ -30,7 +64,7 @@ string SelectionVector::ToString(idx_t count) const {
 }
 
 void SelectionVector::Sort(idx_t count) {
-	std::sort(sel_vector, sel_vector + count);
+	std::sort(data(), data() + count);
 }
 
 void SelectionVector::Print(idx_t count) const {

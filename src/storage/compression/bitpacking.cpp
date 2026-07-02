@@ -826,8 +826,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(scan_state.decompression_buffer),
 		                                     decompression_group_start_pointer, scan_state.current_width,
 		                                     skip_sign_extend);
-		memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
-		       to_scan * sizeof(T));
+		memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group, to_scan * sizeof(T));
 
 		if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
 			ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(current_result_ptr),

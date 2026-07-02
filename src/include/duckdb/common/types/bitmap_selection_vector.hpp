@@ -15,8 +15,8 @@
 
 namespace duckdb {
 
-// Per-byte selection extraction lookup. Low 4 bits contain popcount(byte),
-// high 12 bits contain the offset into BITMAP_SELVEC_POSITIONS.
+// Per-byte selection extraction lookup.
+// Low 4 bits contain popcount(byte), high 12 bits contain the offset into BITMAP_SELVEC_POSITIONS.
 static constexpr uint16_t BITMAP_SELVEC_OFFSETS[256] = {
     0x0000, 0x0001, 0x0081, 0x0072, 0x0011, 0x0002, 0x00f2, 0x00e3, 0x0021, 0x02a2, 0x0082, 0x0073, 0x0012, 0x0003,
     0x0163, 0x0154, 0x0031, 0x0842, 0x0312, 0x0303, 0x0102, 0x0483, 0x00f3, 0x00e4, 0x0022, 0x02a3, 0x0083, 0x0074,
@@ -39,6 +39,8 @@ static constexpr uint16_t BITMAP_SELVEC_OFFSETS[256] = {
     0x0016, 0x0007, 0x13c7, 0x13b8,
 };
 
+// array with all possible list subsets of 0,1,2,3,4,5,6,7 - BITMAP_SELVEC_OFFSETS contains 256 offsets into it
+// clang-format off
 static constexpr sel_t BITMAP_SELVEC_POSITIONS_STORAGE[8 + 324] = {
     0, 0, 0, 0, 0, 0, 0, 0, // padding to allow 8-byte suffix reading; below: all lists from 0..7
     0, 2, 3, 4, 5, 6, 7, /**/ 0, 1, 3, 4, 5, 6, 7, /**/ 0, 1, 2, 4, 5, 6, 7,
@@ -55,6 +57,7 @@ static constexpr sel_t BITMAP_SELVEC_POSITIONS_STORAGE[8 + 324] = {
     0, 3, 5, 7, /**/ 0, 3, 6, 7, /**/ 0, 4, 5, 7, /**/ 0, 4, 6, 7, /**/ 0, 5, 6, 7,
     0, 1, 7, /**/ 0, 2, 7, /**/ 0, 2, 7, /**/ 0, 3, 7, /**/ 0, 4, 7, /**/ 0, 5, 7, /**/ 0, 6, 7,
     0, 7, /**/ 0, 1, 2, 3, 4, 5, 6, 7, 0}; /* last 0 pad to be able to read [1-7] */
+// clang-format on
 
 static constexpr const sel_t *BITMAP_SELVEC_POSITIONS = BITMAP_SELVEC_POSITIONS_STORAGE + 8;
 

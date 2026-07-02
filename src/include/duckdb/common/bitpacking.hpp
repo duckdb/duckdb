@@ -42,16 +42,16 @@ public:
 		const auto groups = static_cast<std::size_t>(count / BITPACKING_ALGORITHM_GROUP_SIZE);
 		if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
 			duckdb_bitpacking::fastpack(reinterpret_cast<const uint8_t *>(src), reinterpret_cast<uint8_t *>(dst),
-			                             static_cast<uint32_t>(width), groups);
+			                            static_cast<uint32_t>(width), groups);
 		} else if (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
 			duckdb_bitpacking::fastpack(reinterpret_cast<const uint16_t *>(src), reinterpret_cast<uint16_t *>(dst),
-			                             static_cast<uint32_t>(width), groups);
+			                            static_cast<uint32_t>(width), groups);
 		} else if (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
 			duckdb_bitpacking::fastpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint32_t *>(dst),
-			                             static_cast<uint32_t>(width), groups);
+			                            static_cast<uint32_t>(width), groups);
 		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
 			duckdb_bitpacking::fastpack(reinterpret_cast<const uint64_t *>(src), reinterpret_cast<uint32_t *>(dst),
-			                             static_cast<uint32_t>(width), groups);
+			                            static_cast<uint32_t>(width), groups);
 		} else if (std::is_same<T, hugeint_t>::value || std::is_same<T, uhugeint_t>::value) {
 			for (std::size_t group = 0; group < groups; group++) {
 				HugeIntPacker::Pack(reinterpret_cast<const uhugeint_t *>(src) + group * BITPACKING_ALGORITHM_GROUP_SIZE,
@@ -78,16 +78,16 @@ public:
 		const auto groups = static_cast<std::size_t>(rounded_count / BITPACKING_ALGORITHM_GROUP_SIZE);
 		if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
 			duckdb_bitpacking::fastunpack(reinterpret_cast<const uint8_t *>(src), reinterpret_cast<uint8_t *>(dst),
-			                               static_cast<uint32_t>(width), groups);
+			                              static_cast<uint32_t>(width), groups);
 		} else if (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
 			duckdb_bitpacking::fastunpack(reinterpret_cast<const uint16_t *>(src), reinterpret_cast<uint16_t *>(dst),
-			                               static_cast<uint32_t>(width), groups);
+			                              static_cast<uint32_t>(width), groups);
 		} else if (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
 			duckdb_bitpacking::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint32_t *>(dst),
-			                               static_cast<uint32_t>(width), groups);
+			                              static_cast<uint32_t>(width), groups);
 		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
 			duckdb_bitpacking::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
-			                               static_cast<uint32_t>(width), groups);
+			                              static_cast<uint32_t>(width), groups);
 		} else if (std::is_same<T, hugeint_t>::value || std::is_same<T, uhugeint_t>::value) {
 			for (std::size_t group = 0; group < groups; group++) {
 				HugeIntPacker::Unpack(reinterpret_cast<const uint32_t *>(src) + group * width,
@@ -237,7 +237,6 @@ private:
 		}
 		return width;
 	}
-
 };
 
 } // namespace duckdb

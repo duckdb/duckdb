@@ -412,8 +412,8 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 		return 0;
 	}
 	D_ASSERT(state.executor);
-	SelectionVector result_sel(approved_tuple_count);
 	if (scan_count > STANDARD_VECTOR_SIZE) {
+		SelectionVector result_sel(approved_tuple_count);
 		// scan count is > vector size - split up the vector into multiple chunks
 		idx_t offset = 0;
 		idx_t result_offset = 0;
@@ -454,19 +454,30 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 			offset += chunk_count;
 		}
 		approved_tuple_count = result_offset;
-	} else {
-		// standard case: we can handle everything at once - run the expression once
-		DataChunk chunk;
-		chunk.data.emplace_back(Vector::Ref(vector));
-		chunk.SetChildCardinality(scan_count);
-		SelectionVector identity_sel;
-		optional_ptr<SelectionVector> current_sel = &sel;
-		if (!sel.IsSet()) {
-			identity_sel = SelectionVector::Incremental(approved_tuple_count);
-			current_sel = &identity_sel;
-		}
-		approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, current_sel, approved_tuple_count);
+		sel.Initialize(result_sel);
+		return approved_tuple_count;
 	}
+
+	// standard case: run the expression once over the whole vector.
+	DataChunk chunk;
+	chunk.data.emplace_back(Vector::Ref(vector));
+	chunk.SetChildCardinality(scan_count);
+	if (!sel.IsSet() || sel.IsBitmap()) {
+		// Identity or bitmap running selection: evaluate over the full (flat) vector via the generic executor
+		// (its comparison Select produces a bitmap), then AND that into the running bitmap. This keeps the
+		// per-column selection a bitmap - no cross-column gather - and converts to indices only once, later.
+		SelectionVector new_sel;
+		idx_t matched = state.executor->SelectExpression(chunk, new_sel, nullptr, scan_count);
+		if (new_sel.IsBitmap()) {
+			approved_tuple_count = sel.IsBitmap() ? new_sel.IntersectBitmap(sel) : matched;
+			sel = std::move(new_sel);
+			return approved_tuple_count;
+		}
+		// executor did not produce a bitmap (non-eligible expression): fall through to narrowing
+	}
+	SelectionVector result_sel(approved_tuple_count);
+	optional_ptr<SelectionVector> current_sel = sel.IsSet() ? &sel : nullptr;
+	approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, current_sel, approved_tuple_count);
 	sel.Initialize(result_sel);
 	return approved_tuple_count;
 }

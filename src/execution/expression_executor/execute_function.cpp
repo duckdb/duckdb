@@ -1,55 +1,93 @@
 #include "duckdb/common/enums/debug_verification_mode.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector_operations/comparison_bitmap.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 
 namespace {
-
-bool IsAutoVecType(const LogicalType &type) {
-	switch (type.InternalType()) {
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::UINT64:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
-		return true;
-	default:
-		return false;
-	}
-}
 
 bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
 	auto name = expr.Function().GetName();
 	if (name != "+" && name != "-" && name != "*") {
 		return false;
 	}
-	if (!IsAutoVecType(expr.GetReturnType())) {
+	if (!BitmapCmpTypeSupported(expr.GetReturnType().InternalType())) {
 		return false;
 	}
 	for (auto &child : expr.GetChildren()) {
-		if (!IsAutoVecType(child->GetReturnType())) {
+		if (!BitmapCmpTypeSupported(child->GetReturnType().InternalType())) {
 			return false;
 		}
 	}
 	return true;
 }
 
-bool SameSelectionVector(const SelectionVector &left, const SelectionVector &right) {
-	return left.data() == right.data() && left.Capacity() == right.Capacity();
+//! Fast path for `flat_ref <cmp> const`: evaluate the comparison straight from the input chunk column into
+//! a result bitmap, skipping the intermediate-vector materialization (reset, child Execute, verify) that the
+//! generic select path needs for arbitrary child expressions. Returns false for anything it does not handle.
+bool TrySelectComparisonFromChunk(const BoundFunctionExpression &expr, DataChunk &chunk, idx_t count,
+                                  SelectionVector &true_sel, idx_t &result) {
+	if (!BoundComparisonExpression::IsComparison(expr)) {
+		return false;
+	}
+	auto op = expr.GetExpressionType();
+	auto &left = BoundComparisonExpression::Left(expr);
+	auto &right = BoundComparisonExpression::Right(expr);
+	optional_ptr<const BoundReferenceExpression> ref;
+	const Value *constant;
+	if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
+	    right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		ref = &left.Cast<BoundReferenceExpression>();
+		constant = &right.Cast<BoundConstantExpression>().GetValue();
+	} else if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+	           right.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		ref = &right.Cast<BoundReferenceExpression>();
+		constant = &left.Cast<BoundConstantExpression>().GetValue();
+		op = FlipComparisonExpression(op);
+	} else {
+		return false;
+	}
+	auto &col = chunk.data[ref->Index()];
+	const auto pt = col.GetType().InternalType();
+	// A bound comparison has both sides at the same type, so the constant needs no cast.
+	if (col.GetVectorType() != VectorType::FLAT_VECTOR || !BitmapCmpTypeSupported(pt) || constant->IsNull() ||
+	    constant->type().InternalType() != pt) {
+		return false;
+	}
+	auto &validity = FlatVector::Validity(col);
+	const validity_t *validity_data = validity.CanHaveNull() ? validity.GetData() : nullptr;
+	auto bitmap = reinterpret_cast<validity_t *>(true_sel.PrepareBitmap(count));
+	// Read the scalar straight from the bound Value - no per-vector constant Vector needed.
+	DispatchFlatCmpToBitmap(pt, op, col, count, validity_data, bitmap,
+	                        [&](auto tag) { return constant->GetValueUnsafe<decltype(tag)>(); });
+	result = BitmapPopcount(bitmap, count);
+	return true;
 }
 
 } // namespace
 
 ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root)
     : ExpressionState(expr, root) {
+	// If all children are plain references/constants, each child's Execute replaces its intermediate vector,
+	// so resetting the intermediate chunk before evaluation is pure waste (skip it).
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		children_only_reference = true;
+		for (auto &child : expr.Cast<BoundFunctionExpression>().GetChildren()) {
+			auto child_class = child->GetExpressionClass();
+			if (child_class != ExpressionClass::BOUND_REF && child_class != ExpressionClass::BOUND_CONSTANT) {
+				children_only_reference = false;
+				break;
+			}
+		}
+	}
+
 	// Check if the expression is eligible for dictionary optimization
 	if (!expr.IsConsistent() || expr.IsVolatile() || expr.CanThrow()) {
 		return; // Needs to be consistent, non-volatile, and non-throwing
@@ -87,6 +125,11 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 }
 
 ExecuteFunctionState::~ExecuteFunctionState() {
+}
+
+bool ExecuteFunctionState::DictionaryExecutionPossible(DataChunk &args) const {
+	return !dictionary_input_indices.empty() &&
+	       args.data[dictionary_input_indices[0]].GetVectorType() == VectorType::DICTIONARY_VECTOR;
 }
 
 bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args,
@@ -131,7 +174,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		if (dictionary_id.empty()) {
 			return false;
 		}
-		if (!SameSelectionVector(input_sel, DictionaryVector::SelVector(input))) {
+		if (!SelectionVector::SameSelection(input_sel, DictionaryVector::SelVector(input))) {
 			return false;
 		}
 		input_dictionary_id += "\n";
@@ -271,8 +314,10 @@ static void ExecuteConstantSelectFunction(const BoundFunctionExpression &expr, D
 
 void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, Vector &result) {
-	state->intermediate_chunk.Reset();
 	auto &arguments = state->intermediate_chunk;
+	if (!state->Cast<ExecuteFunctionState>().children_only_reference) {
+		arguments.Reset();
+	}
 	// if the input is constant and there function is non-volatile we only need to run it on one value
 	bool all_constant = true;
 	if (expr.Function().GetStability() == FunctionStability::VOLATILE) {
@@ -303,6 +348,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
 	auto dictionary_executed = expr.Function().HasFunctionCallback() && !all_constant &&
+	                           execute_function_state.DictionaryExecutionPossible(arguments) &&
 	                           execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
 	if (!dictionary_executed) {
 		if (expr.Function().HasFunctionCallback()) {
@@ -334,8 +380,21 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	if (!expr.Function().HasSelectCallback()) {
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
-	state->intermediate_chunk.Reset();
+#ifndef DUCKDB_SMALLER_BINARY
+	// Fast path: a `flat_ref <cmp> const` comparison over the identity selection produces a bitmap straight
+	// from the input chunk, skipping the per-node intermediate-vector machinery below. Any select caller
+	// (scan filters, PhysicalFilter, joins) benefits; non-matching shapes fall through.
+	if (chunk && true_sel && !false_sel && (!sel || !sel->IsSet())) {
+		idx_t result;
+		if (TrySelectComparisonFromChunk(expr, *chunk, count, *true_sel, result)) {
+			return result;
+		}
+	}
+#endif
 	auto &arguments = state->intermediate_chunk;
+	if (!state->Cast<ExecuteFunctionState>().children_only_reference) {
+		arguments.Reset();
+	}
 	bool all_constant = true;
 	if (expr.Function().GetStability() == FunctionStability::VOLATILE) {
 		all_constant = false;
@@ -375,11 +434,11 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 		return SelectBooleanResult(result, sel, count, true_sel, false_sel);
 	}
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
-	if (expr.Function().HasFunctionCallback()) {
+	// Only take the dictionary fast path when an input is actually a dictionary; otherwise we would allocate
+	// a throwaway boolean result and probe per vector for nothing (the common flat-column filter case).
+	if (expr.Function().HasFunctionCallback() && execute_function_state.DictionaryExecutionPossible(arguments)) {
 		Vector result(LogicalType::BOOLEAN);
-		auto dictionary_executed =
-		    execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
-		if (dictionary_executed) {
+		if (execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result)) {
 			return SelectBooleanResult(result, sel, count, true_sel, false_sel);
 		}
 	}

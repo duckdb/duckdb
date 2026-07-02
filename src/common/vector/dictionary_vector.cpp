@@ -60,6 +60,9 @@ void DictionaryBuffer::VerifyInternal(const LogicalType &type, const SelectionVe
 }
 
 void DictionaryBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
+	// UnifiedVectorFormat consumers read the sel via get_index_unsafe (no lazy flatten), so a bitmap-backed
+	// selection must be materialized to an index array first.
+	sel_vector.Flatten();
 	format.owned_sel.Initialize(sel_vector);
 	format.sel = &format.owned_sel;
 
