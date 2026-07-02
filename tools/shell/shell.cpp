@@ -44,6 +44,7 @@
 #endif
 
 #include <stdlib.h>
+#include "duckdb/main/statement_iterator.hpp"
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
