@@ -1,0 +1,41 @@
+# name: test/sql/optimizer/test_not_comparison_simplification.test
+# description: Test NOT(comparison) simplification and pruning
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t AS SELECT * FROM (VALUES (1),(2),(3)) v(a);
+
+# Contradiction with NOT should be pruned to empty result
+query I
+SELECT * FROM t WHERE a > 1 AND NOT (a > 1)
+----
+
+# Other comparison types
+query I
+SELECT * FROM t WHERE a >= 2 AND NOT (a >= 2)
+----
+
+query I
+SELECT * FROM t WHERE a < 2 AND NOT (a < 2)
+----
+
+query I
+SELECT * FROM t WHERE a <= 2 AND NOT (a <= 2)
+----
+
+query I
+SELECT * FROM t WHERE a = 2 AND NOT (a = 2)
+----
+
+# NOT(comparison) without contradiction should still return correct results
+query I
+SELECT * FROM t WHERE NOT (a > 2) ORDER BY a
+----
+1
+2
+
+query I
+SELECT * FROM t WHERE NOT (a = 1) ORDER BY a
+----
+2
+3
