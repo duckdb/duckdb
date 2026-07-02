@@ -237,16 +237,15 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 	}
 }
 
-bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const shared_ptr<Index> &index,
-                       const ForeignKeyType fk_type) {
-	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !index->IsUnique() : !index->IsForeign()) {
+bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const Index &index, const ForeignKeyType fk_type) {
+	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !index.IsUnique() : !index.IsForeign()) {
 		return false;
 	}
-	if (fk_keys.size() != index->GetColumnIds().size()) {
+	if (fk_keys.size() != index.GetColumnIds().size()) {
 		return false;
 	}
 
-	auto &column_ids = index->GetColumnIds();
+	auto &column_ids = index.GetColumnIds();
 	for (auto &fk_key : fk_keys) {
 		bool found = false;
 		for (auto &index_key : column_ids) {
@@ -267,7 +266,7 @@ optional_ptr<IndexEntry> TableIndexList::FindForeignKeyIndex(const vector<Physic
 	lock_guard<mutex> lock(index_entries_lock);
 	for (auto &entry : index_entries) {
 		const auto index = entry->PinIndex();
-		if (IsForeignKeyIndex(fk_keys, index, fk_type)) {
+		if (IsForeignKeyIndex(fk_keys, *index, fk_type)) {
 			return entry;
 		}
 	}

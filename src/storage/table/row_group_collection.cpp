@@ -1074,7 +1074,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	// Collect all Indexed columns on the table.
 	unordered_set<column_t> indexed_column_id_set;
 
-	for (auto &index : indexes.PinIndexes()) {
+	for (const auto &index : indexes.PinIndexes()) {
 		auto &set = index->GetColumnIdSet();
 		indexed_column_id_set.insert(set.begin(), set.end());
 	}

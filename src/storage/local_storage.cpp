@@ -127,7 +127,7 @@ idx_t LocalTableStorage::EstimatedSize() {
 
 	// get the index size
 	idx_t index_sizes = 0;
-	for (auto &index : append_indexes.PinIndexes()) {
+	for (const auto &index : append_indexes.PinIndexes()) {
 		if (!index->IsBound()) {
 			continue;
 		}

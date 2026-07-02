@@ -3,15 +3,15 @@
 
 namespace duckdb {
 
-bool ConflictInfo::ConflictTargetMatches(const shared_ptr<Index> &index) const {
-	if (only_check_unique && !index->IsUnique()) {
+bool ConflictInfo::ConflictTargetMatches(const Index &index) const {
+	if (only_check_unique && !index.IsUnique()) {
 		// We only support ON CONFLICT for PRIMARY KEY/UNIQUE constraints.
 		return false;
 	}
 	if (column_ids.empty()) {
 		return true;
 	}
-	return column_ids == index->GetColumnIdSet();
+	return column_ids == index.GetColumnIdSet();
 }
 
 } // namespace duckdb

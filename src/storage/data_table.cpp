@@ -373,7 +373,7 @@ void DataTable::VacuumIndexes() {
 void DataTable::RebuildIndexes() {
 	auto &types = row_groups->GetTypes();
 
-	for (auto &index : info->indexes.PinIndexes()) {
+	for (const auto &index : info->indexes.PinIndexes()) {
 		if (!index->IsBound()) {
 			throw InternalException("RebuildIndexes expects all indexes to be bound during checkpoint");
 		}
@@ -848,14 +848,14 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
 
 	// The conflict manager is only provided for statements containing ON CONFLICT.
 	auto &conflict_info = manager->GetConflictInfo();
-	auto pinned_indexes = indexes.PinIndexes();
+	const auto pinned_indexes = indexes.PinIndexes();
 
 	// Find all indexes matching the conflict target.
-	for (auto &index : pinned_indexes) {
+	for (const auto &index : pinned_indexes) {
 		if (!index->IsUnique() || index->GetIndexType() != ART::TYPE_NAME) {
 			continue;
 		}
-		if (!conflict_info.ConflictTargetMatches(index)) {
+		if (!conflict_info.ConflictTargetMatches(*index)) {
 			continue;
 		}
 		D_ASSERT(index->IsBound());
@@ -863,9 +863,9 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
 			D_ASSERT(!delete_index || delete_index->IsBound());
-			manager->AddIndex(shared_ptr<BoundIndex>(index, &art), delete_index);
+			manager->AddIndex(PinIndexCast<BoundIndex>(index), delete_index);
 		} else {
-			manager->AddIndex(shared_ptr<BoundIndex>(index, &art), nullptr);
+			manager->AddIndex(PinIndexCast<BoundIndex>(index), nullptr);
 		}
 	}
 
