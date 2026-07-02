@@ -81,20 +81,14 @@ static inline void UnpackValue(const uint32_t *__restrict in, OUT *__restrict ou
 #if defined(__clang__)
 #define DUCKDB_BITPACKING_VECTORIZE _Pragma("clang loop vectorize(enable)")
 // if a template instantiation fails to vectorize, make assert would trip on the warning
-#pragma clang diagnostic ignored "-Wpass-failed" 
+#pragma clang diagnostic ignored "-Wpass-failed"
 #else
 #define DUCKDB_BITPACKING_VECTORIZE
 #endif
 
-#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-#define DUCKDB_BITPACKING_BIG_ENDIAN 1
-#else
-#define DUCKDB_BITPACKING_BIG_ENDIAN 0
-#endif
-
-// Shuffle path: __builtin_shufflevector/convertvector on 128-bit vectors, which clang and GCC 12+ lower to a
-// hardware byte-permute (tbl/pshufb). Little-endian only; every width has a generic fallback.
-#if (defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 12)) && !DUCKDB_BITPACKING_BIG_ENDIAN
+// Shuffle path: needs a hardware 128-bit byte-permute + per-lane variable shift - NEON (tbl+ushl) or x86 AVX2
+// (vpshufb+vpsrlvd); pre-AVX2 x86 would emulate the shift, so fall back to narrow/generic. Both targets are LE.
+#if (defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 12)) && (defined(__aarch64__) || defined(__AVX2__))
 #define DUCKDB_BITPACKING_SHUFFLE 1
 #else
 #define DUCKDB_BITPACKING_SHUFFLE 0
@@ -255,7 +249,7 @@ static inline void UnpackBuffer(const uint32_t *__restrict in, OUT *__restrict o
 		return;
 	}
 #endif
-	if constexpr (UseNarrowUnpack<WIDTH, OUT>() && !DUCKDB_BITPACKING_BIG_ENDIAN) {
+	if constexpr (UseNarrowUnpack<WIDTH, OUT>()) {
 		NarrowUnpack<WIDTH, OUT>(in, out, groups);
 	} else {
 		for (std::size_t group = 0; group < groups; group++) {
