@@ -38,6 +38,13 @@ CREATE FEATURE user_activity_incr TIMESTAMP EventTime
     RETAIN 5
     AS (SELECT UserID, COUNT(*) AS event_count FROM hits GROUP BY UserID);
 
+-- CREATE FEATURE only registers metadata; the first REFRESH materializes version 1. Refresh both
+-- features here so the SERVE / REFRESH benchmarks (and the sanity assert in feature.benchmark.in)
+-- have a materialized current version to read from.
+REFRESH FEATURE user_activity_full;
+
+REFRESH FEATURE user_activity_incr;
+
 -- Serving spine: a sample of entities with a serving timestamp after all events.
 -- SERVE benchmarks consume this table with SERVE FEATURE ... FOR serve_requests.
 -- Column names match the feature key and timestamp, so SERVE needs no overrides.

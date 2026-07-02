@@ -29,7 +29,11 @@ CREATE FEATURE f TIMESTAMP event_time
     RETAIN 2
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
-# After create: only v1 backing table
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE f;
+
+# After the bootstrap refresh: only the v1 backing table
 query I
 SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
 ----

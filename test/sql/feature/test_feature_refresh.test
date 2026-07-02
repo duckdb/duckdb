@@ -33,6 +33,10 @@ CREATE FEATURE total_spend
     RETAIN 1
     AS (SELECT user_id, SUM(amount) AS total_amount, COUNT(*) AS tx_count FROM transactions GROUP BY user_id);
 
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE total_spend;
+
 # Initial state: one feature row per source event timestamp
 query I
 SELECT COUNT(*) FROM total_spend;
@@ -146,6 +150,10 @@ CREATE FEATURE event_sum
     REFRESH INCREMENTAL
     RETAIN 1
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
+
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE event_sum;
 
 # Initial: 5 rows
 # x has two event-time rows, y has two, z has one.
@@ -288,6 +296,10 @@ CREATE FEATURE late_test
     RETAIN 1
     AS (SELECT entity, SUM(val) AS total FROM late_events GROUP BY entity);
 
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE late_test;
+
 # Initial materialization: one row per source timestamp.
 query I
 SELECT COUNT(*) FROM late_test;
@@ -366,6 +378,10 @@ CREATE FEATURE wm_zero
     RETAIN 1
     AS (SELECT entity, SUM(val) AS total FROM watermark_events GROUP BY entity);
 
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE wm_zero;
+
 statement ok
 CREATE FEATURE wm_two_days 
     TIMESTAMP ts
@@ -374,6 +390,10 @@ CREATE FEATURE wm_two_days
     REFRESH INCREMENTAL
     RETAIN 1
     AS (SELECT entity, SUM(val) AS total FROM watermark_events GROUP BY entity);
+
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE wm_two_days;
 
 statement ok
 INSERT INTO watermark_events VALUES ('a', 5, '2024-01-02 08:00:00');
@@ -449,6 +469,10 @@ CREATE FEATURE empty_initial
     RETAIN 1
     AS (SELECT entity, SUM(val) AS total FROM empty_initial_events GROUP BY entity);
 
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE empty_initial;
+
 # Initial materialization created an empty v1 table.
 query I
 SELECT COUNT(*) FROM empty_initial;
@@ -522,6 +546,10 @@ CREATE FEATURE refresh_error_feature
     REFRESH FULL
     RETAIN 1
     AS (SELECT entity, SUM(val) AS total FROM refresh_error_src GROUP BY entity);
+
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE refresh_error_feature;
 
 statement ok
 DROP TABLE refresh_error_src CASCADE;

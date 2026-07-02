@@ -24,6 +24,10 @@ INSERT INTO transactions VALUES
 statement ok
 CREATE FEATURE daily_txn TIMESTAMP event_time  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) AS total_amount, COUNT(amount) AS txn_count FROM transactions GROUP BY card_no);
 
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE daily_txn;
+
 # ============================================================
 # SERVE FEATURE: basic retrieval (same column names, no explicit ENTITY/ASOF)
 # ============================================================
@@ -116,6 +120,10 @@ C002	2024-03-03 10:00:00	2024-03-03 08:00:00	400.00	3
 statement ok
 CREATE FEATURE global_txn_count TIMESTAMP event_time WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT COUNT(*) AS global_count FROM transactions);
 
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE global_txn_count;
+
 # Global features only use the ASOF timestamp predicate. The spine can still carry
 # arbitrary columns, and they are preserved in the output.
 query IIII sort
@@ -147,6 +155,10 @@ INSERT INTO merchant_transactions VALUES
 
 statement ok
 CREATE FEATURE merchant_txn TIMESTAMP event_time WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, merchant_id, SUM(amount) AS merchant_total FROM merchant_transactions GROUP BY card_no, merchant_id);
+
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE merchant_txn;
 
 statement ok
 CREATE TABLE merchant_requests (card_no VARCHAR, merchant_id VARCHAR, event_time TIMESTAMP);
@@ -255,6 +267,10 @@ does not exist
 
 statement ok
 CREATE FEATURE daily_txn_avg TIMESTAMP event_time  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, AVG(amount) AS avg_amount FROM transactions GROUP BY card_no);
+
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE daily_txn_avg;
 
 query IIIIIII sort
 SERVE FEATURES daily_txn, daily_txn_avg FOR requests;

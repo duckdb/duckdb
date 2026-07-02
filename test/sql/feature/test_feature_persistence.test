@@ -30,7 +30,11 @@ CREATE FEATURE persisted TIMESTAMP event_time
     RETAIN 3
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
-# Refresh twice so current_version advances to 3
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE persisted;
+
+# Refresh twice more so current_version advances to 3 (bootstrap made v1, these make v2 and v3)
 query I
 REFRESH FEATURE persisted;
 ----

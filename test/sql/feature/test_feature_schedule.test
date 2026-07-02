@@ -134,6 +134,12 @@ CREATE FEATURE bad_shorthand_decimal
 # ============================================================
 # A scheduled feature still refreshes normally (no scheduler yet)
 # ============================================================
+# Bootstrap v1 first (CREATE registers metadata only); this full materialization yields
+# one feature row per source event timestamp (a@01-01, a@01-02, b@01-01 = 3 rows).
+statement ok
+REFRESH FEATURE user_activity;
+
+# The next incremental refresh recomputes only the event-time tail (a@01-02).
 query I
 REFRESH FEATURE user_activity;
 ----

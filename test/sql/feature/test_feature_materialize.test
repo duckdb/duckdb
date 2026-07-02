@@ -32,6 +32,10 @@ INSERT INTO transactions VALUES
 statement ok
 CREATE FEATURE total_spend TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, SUM(amount) AS total FROM transactions GROUP BY user_id);
 
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE total_spend;
+
 # PIT-correct results — no future data leakage. Each source timestamp anchors one feature timestamp.
 query ITR rowsort
 SELECT * FROM total_spend;
@@ -74,6 +78,10 @@ SELECT feature_timestamp, total FROM total_spend WHERE user_id = 4;
 statement ok
 CREATE FEATURE avg_spend TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
 
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE avg_spend;
+
 query ITR rowsort
 SELECT * FROM avg_spend;
 ----
@@ -99,6 +107,10 @@ SELECT COUNT(*) FROM avg_spend;
 # ============================================================
 statement ok
 CREATE FEATURE multi_agg TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, SUM(amount) AS total, COUNT(*) AS cnt, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
+
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE multi_agg;
 
 # user 1 @ 01-02 14:00: total=300, cnt=2, avg=150 (aggregates Jan 1 + Jan 2 events)
 query ITRIR
@@ -129,6 +141,10 @@ SELECT * FROM multi_agg WHERE user_id = 4 AND feature_timestamp = '2024-01-02 07
 # ============================================================
 statement ok
 CREATE FEATURE event_count TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, COUNT(*) AS cnt FROM transactions GROUP BY user_id);
+
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE event_count;
 
 query ITI rowsort
 SELECT user_id, feature_timestamp, cnt FROM event_count;
@@ -166,6 +182,10 @@ INSERT INTO narrow_window_src VALUES
 statement ok
 CREATE FEATURE narrow_feat TIMESTAMP ts  WINDOW 2 DAYS REFRESH FULL RETAIN 1 AS (SELECT eid, SUM(val) AS total FROM narrow_window_src GROUP BY eid);
 
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE narrow_feat;
+
 query TIR rowsort
 SELECT eid, feature_timestamp, total FROM narrow_feat;
 ----
@@ -193,6 +213,10 @@ INSERT INTO hour_window_src VALUES
 statement ok
 CREATE FEATURE half_day_feat TIMESTAMP ts  WINDOW 12 HOURS REFRESH FULL RETAIN 1 AS (SELECT eid, SUM(val) AS total FROM hour_window_src GROUP BY eid);
 
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE half_day_feat;
+
 query TIR rowsort
 SELECT eid, feature_timestamp, total FROM half_day_feat;
 ----
@@ -205,6 +229,10 @@ a	2024-01-02 06:00:00	30
 # ============================================================
 statement ok
 CREATE FEATURE max_spend TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT user_id, MAX(amount) AS peak FROM transactions GROUP BY user_id);
+
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE max_spend;
 
 # user 1: peak at each event timestamp
 query TR rowsort

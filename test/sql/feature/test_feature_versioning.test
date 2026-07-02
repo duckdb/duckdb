@@ -35,6 +35,10 @@ CREATE FEATURE versioned_full
     RETAIN 3
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE versioned_full;
+
 # Initial materialization creates version table __v1 with one row per source event timestamp.
 query I
 SELECT COUNT(*) FROM versioned_full;
@@ -160,6 +164,10 @@ CREATE FEATURE versioned_retain1
     RETAIN 1
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE versioned_retain1;
+
 # Version 1 table exists initially — 5 rows
 query I
 SELECT COUNT(*) FROM versioned_retain1__v1;
@@ -208,6 +216,10 @@ CREATE FEATURE versioned_incr
     REFRESH INCREMENTAL
     RETAIN 2
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
+
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE versioned_incr;
 
 # Initial: version 1 — 5 rows
 query I
@@ -325,6 +337,10 @@ CREATE FEATURE stable_feat
     REFRESH INCREMENTAL
     RETAIN 3
     AS (SELECT eid, SUM(val) AS total FROM stable_src GROUP BY eid);
+
+# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+statement ok
+REFRESH FEATURE stable_feat;
 
 # Version 1 after creation — 3 rows, one per source event timestamp
 query I
