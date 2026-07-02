@@ -7,7 +7,10 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
 
 namespace duckdb {
 
@@ -224,6 +227,140 @@ ParallelCollectionScanState::GetNextRowGroup(RowGroupSegmentTree &row_groups, Se
 		return reorderer->GetNextRowGroup(row_group);
 	}
 	return row_groups.GetNextSegment(row_group);
+}
+
+//===----------------------------------------------------------------------===//
+// ScanSizePredictor
+//===----------------------------------------------------------------------===//
+void ScanSizePredictor::Initialize(const vector<StorageIndex> &column_ids, RowGroup &row_group) {
+	fixed_bytes_per_row = 0;
+	dynamic_bytes_per_row = 0;
+	auto row_count = row_group.count.load();
+
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto stats = row_group.GetStatistics(column_ids[i]);
+		if (!stats) {
+			dynamic_bytes_per_row += DEFAULT_BYTES_PER_ROW;
+			continue;
+		}
+		auto physical_type = stats->GetType().InternalType();
+
+		if (TypeIsConstantSize(physical_type)) {
+			fixed_bytes_per_row += GetTypeIdSize(physical_type);
+		} else {
+			double estimate = DEFAULT_BYTES_PER_ROW;
+			if (row_count > 0 && physical_type == PhysicalType::VARCHAR) {
+				auto total_len = StringStats::TotalStringLength(*stats);
+				auto min_len = StringStats::MinStringLength(*stats);
+				if (total_len.IsValid()) {
+					double avg_from_total = static_cast<double>(total_len.GetIndex()) / static_cast<double>(row_count);
+					// Validate: TotalStringLength can be dictionary-level (sum of unique values)
+					// after checkpoint with dictionary compression. If the average is below
+					// min_string_length, it's unreliable — fall back to min/max midpoint.
+					double min_bound = min_len.IsValid() ? static_cast<double>(min_len.GetIndex()) : 0.0;
+					if (avg_from_total >= min_bound) {
+						estimate = avg_from_total;
+					} else if (StringStats::HasMaxStringLength(*stats)) {
+						double max_len = static_cast<double>(StringStats::MaxStringLength(*stats));
+						estimate = (min_bound + max_len) * 0.5;
+					} else {
+						estimate = min_bound;
+					}
+				} else if (StringStats::HasMaxStringLength(*stats)) {
+					estimate = static_cast<double>(StringStats::MaxStringLength(*stats)) * 0.5;
+				}
+			}
+			dynamic_bytes_per_row += estimate;
+		}
+	}
+	initialized = true;
+}
+
+idx_t ScanSizePredictor::PredictBatchSize(idx_t target_bytes, idx_t max_rows) const {
+	double total_bpr = static_cast<double>(fixed_bytes_per_row) + dynamic_bytes_per_row;
+	if (total_bpr <= 0) {
+		return max_rows;
+	}
+	auto predicted = static_cast<idx_t>(static_cast<double>(target_bytes) / total_bpr);
+	return MaxValue<idx_t>(1, MinValue<idx_t>(predicted, max_rows));
+}
+
+//! Sample the first N rows of each VARCHAR column to estimate total bytes.
+//! Contiguous head sampling preserves sequential access for cache friendliness,
+//! while avoiding full iteration when batch size exceeds the sample window.
+static constexpr idx_t SAMPLE_BLOCK_SIZE = 64;
+
+static idx_t ComputeActualChunkBytes(const DataChunk &result) {
+	idx_t total = 0;
+	auto count = result.size();
+	for (idx_t col_idx = 0; col_idx < result.ColumnCount(); col_idx++) {
+		auto &vec = result.data[col_idx];
+		auto physical_type = vec.GetType().InternalType();
+		if (TypeIsConstantSize(physical_type)) {
+			total += GetTypeIdSize(physical_type) * count;
+		} else if (physical_type == PhysicalType::VARCHAR) {
+			UnifiedVectorFormat unified;
+			vec.ToUnifiedFormat(unified);
+			auto data = UnifiedVectorFormat::GetData<string_t>(unified);
+			idx_t sample_count = MinValue<idx_t>(count, SAMPLE_BLOCK_SIZE);
+			idx_t sampled_bytes = 0;
+			for (idx_t i = 0; i < sample_count; i++) {
+				auto idx = unified.sel->get_index(i);
+				if (unified.validity.RowIsValid(idx)) {
+					sampled_bytes += data[idx].GetSize();
+				}
+			}
+			total += sampled_bytes * count / sample_count;
+		} else {
+			total += static_cast<idx_t>(ScanSizePredictor::DEFAULT_BYTES_PER_ROW) * count;
+		}
+	}
+	return total;
+}
+
+void ScanSizePredictor::Update(const DataChunk &result) {
+	if (result.size() == 0) {
+		return;
+	}
+	auto actual_bytes = ComputeActualChunkBytes(result);
+	double actual_bpr = static_cast<double>(actual_bytes) / static_cast<double>(result.size());
+
+	// Accumulate accuracy counters
+	double total_bpr = static_cast<double>(fixed_bytes_per_row) + dynamic_bytes_per_row;
+	idx_t predicted_bytes = static_cast<idx_t>(total_bpr * static_cast<double>(result.size()));
+	total_batches++;
+	total_predicted_bytes += predicted_bytes;
+	total_actual_bytes += actual_bytes;
+	double ratio =
+	    (predicted_bytes > 0) ? static_cast<double>(actual_bytes) / static_cast<double>(predicted_bytes) : 1.0;
+	if (total_batches == 1) {
+		first_batch_ratio = ratio;
+	}
+	if (ratio > max_overshoot_ratio) {
+		max_overshoot_ratio = ratio;
+	}
+	sum_overshoot_ratio += ratio;
+
+	// EMA update: isolate the dynamic (variable-size) component and smooth it.
+	// Old-value weight=0.3 means new data weight=0.7, giving fast convergence (~99.9% in 6 batches).
+	double alpha = 0.3;
+	double dynamic_actual = actual_bpr - static_cast<double>(fixed_bytes_per_row);
+	if (dynamic_actual < 0) {
+		dynamic_actual = 0;
+	}
+	dynamic_bytes_per_row = alpha * dynamic_bytes_per_row + (1.0 - alpha) * dynamic_actual;
+}
+
+void ScanSizePredictor::Reset() {
+	fixed_bytes_per_row = 0;
+	dynamic_bytes_per_row = 0;
+	initialized = false;
+	total_batches = 0;
+	total_predicted_bytes = 0;
+	total_actual_bytes = 0;
+	max_overshoot_ratio = 0.0;
+	sum_overshoot_ratio = 0.0;
+	first_batch_ratio = 0.0;
 }
 
 CollectionScanState::CollectionScanState(TableScanState &parent_p)

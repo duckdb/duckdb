@@ -395,6 +395,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<
 	state.vector_index = vector_offset;
 	auto row_start = node.GetRowStart();
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
+	state.sub_vector_state.Reset();
 	auto row_number = vector_offset * STANDARD_VECTOR_SIZE;
 	if (state.max_row_group_row == 0) {
 		// exceeded row groups to scan
@@ -406,6 +407,11 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, SegmentNode<
 		auto &column_data = GetColumn(column);
 		column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
 		state.column_scans[i].scan_options = &state.GetOptions();
+	}
+	if (SubVectorScanState::IsActive(state.GetOptions().scan_target_size_bytes)) {
+		// Re-initialize predictor at each row group boundary — string length
+		// distributions can vary significantly across row groups.
+		state.size_predictor.Initialize(column_ids, *this);
 	}
 	return true;
 }
@@ -423,6 +429,7 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 	state.row_group = node;
 	state.vector_index = 0;
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
+	state.sub_vector_state.Reset();
 	if (state.max_row_group_row == 0) {
 		return false;
 	}
@@ -432,6 +439,11 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 		auto &column_data = GetColumn(column);
 		column_data.InitializeScan(state.column_scans[i]);
 		state.column_scans[i].scan_options = &state.GetOptions();
+	}
+	if (SubVectorScanState::IsActive(state.GetOptions().scan_target_size_bytes)) {
+		// Re-initialize predictor at each row group boundary — string length
+		// distributions can vary significantly across row groups.
+		state.size_predictor.Initialize(column_ids, *this);
 	}
 	return true;
 }
@@ -648,6 +660,7 @@ void RowGroup::CommitDrop() {
 
 void RowGroup::NextVector(CollectionScanState &state) {
 	state.vector_index++;
+	state.sub_vector_state.Reset();
 	const auto &column_ids = state.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		const auto &column = column_ids[i];
@@ -792,11 +805,39 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 	const auto &column_ids = state.GetColumnIds();
 	auto &filter_info = state.GetFilterInfo();
 	auto &transaction = options.transaction;
+	auto &svs = state.sub_vector_state;
+	auto target_bytes = state.GetOptions().scan_target_size_bytes;
+	bool sub_batch_mode = SubVectorScanState::IsActive(target_bytes);
+
 	while (true) {
 		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row_group_row) {
 			// exceeded the amount of rows to scan
 			return;
 		}
+
+		// Sub-batch resume: if we're mid-vector from a previous call, continue from svs.offset
+		D_ASSERT(!svs.InProgress() || sub_batch_mode);
+		if (svs.InProgress()) {
+			if (!state.size_predictor.initialized) {
+				state.size_predictor.Initialize(column_ids, *this);
+			}
+			auto remaining = svs.vector_max_count - svs.offset;
+			auto scan_count = state.size_predictor.PredictBatchSize(target_bytes, remaining);
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				auto &col_data = GetColumn(column_ids[i]);
+				state.column_scans[i].update_scan_type = options.update_type;
+				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], scan_count);
+			}
+			result.SetChildCardinality(scan_count);
+			state.size_predictor.Update(result);
+			svs.offset += scan_count;
+			if (svs.offset >= svs.vector_max_count) {
+				state.vector_index++;
+				svs.Reset();
+			}
+			return;
+		}
+
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
 		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
 		bool has_sample_selection = false;
@@ -860,12 +901,46 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		bool has_filters = filter_info.HasFilters();
 		if (count == max_count && !has_filters) {
 			// scan all vectors completely: full scan without deletions or table filters
+
+			// Sub-batch: limit scan_count if active and eligible (no sampling selection, no updates)
+			bool sub_batch_active = false;
+			if (sub_batch_mode && !has_sample_selection) {
+				bool any_has_updates = false;
+				for (idx_t i = 0; i < column_ids.size(); i++) {
+					if (GetColumn(column_ids[i]).GetUpdateStatistics()) {
+						any_has_updates = true;
+						break;
+					}
+				}
+				sub_batch_active = !any_has_updates;
+			}
+
+			if (sub_batch_active) {
+				if (!state.size_predictor.initialized) {
+					state.size_predictor.Initialize(column_ids, *this);
+				}
+				auto scan_count = state.size_predictor.PredictBatchSize(target_bytes, max_count);
+				for (idx_t i = 0; i < column_ids.size(); i++) {
+					auto &col_data = GetColumn(column_ids[i]);
+					state.column_scans[i].update_scan_type = options.update_type;
+					col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], scan_count);
+				}
+				result.SetChildCardinality(scan_count);
+				state.size_predictor.Update(result);
+				svs.vector_max_count = max_count;
+				svs.offset = scan_count;
+				if (svs.offset >= svs.vector_max_count) {
+					state.vector_index++;
+					svs.Reset();
+				}
+				return;
+			}
+
+			// Full-vector scan path
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column = column_ids[i];
 				auto &col_data = GetColumn(column);
 				state.column_scans[i].update_scan_type = options.update_type;
-				// pass max_count explicitly so we never read past the row count we captured at scan
-				// init time (concurrent inserts can grow the column past max_count)
 				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], max_count);
 				if (has_sample_selection) {
 					result.data[i].Slice(sample_sel, sample_count);

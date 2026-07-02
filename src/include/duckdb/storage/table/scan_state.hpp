@@ -225,6 +225,68 @@ private:
 	idx_t always_true_filters = 0;
 };
 
+//! Adaptive batch size predictor for sub-vector scanning.
+//!
+//! Goal: given a byte budget (scan_target_size_bytes), predict how many rows to scan per batch.
+//!
+//! Two-phase approach:
+//!   1. Initialize() — cold start from row group column statistics (TotalStringLength, min/max).
+//!      Fixed-size columns contribute exact widths; variable-size columns use stat-based estimates.
+//!   2. Update() — after each batch, refine the variable-size estimate via EMA (old-value weight=0.3,
+//!      new-data weight=0.7) using actual scanned bytes (head-block sampling of string_t::GetSize()).
+//!
+//! The predictor is reset and re-initialized at each row group boundary, since string length
+//! distributions can vary across row groups.
+struct ScanSizePredictor {
+	//! Default per-row estimate when column statistics are unavailable
+	static constexpr double DEFAULT_BYTES_PER_ROW = 256.0;
+
+	//! Sum of fixed-size column widths (INT, DOUBLE, etc.) — exact, no EMA needed
+	idx_t fixed_bytes_per_row = 0;
+	//! EMA-tracked estimate for variable-size columns (VARCHAR, BLOB, LIST)
+	double dynamic_bytes_per_row = 0;
+	bool initialized = false;
+
+	//! Accuracy counters — accumulated across batches within a scan, used for diagnostics
+	idx_t total_batches = 0;
+	idx_t total_predicted_bytes = 0;
+	idx_t total_actual_bytes = 0;
+	double max_overshoot_ratio = 0.0; //! worst-case actual/predicted ratio across all batches
+	double sum_overshoot_ratio = 0.0; //! sum of per-batch ratios (divide by total_batches for avg)
+	double first_batch_ratio = 0.0;   //! actual/predicted on the very first batch (measures Initialize accuracy)
+
+	//! Compute initial per-row byte estimates from row group statistics
+	void Initialize(const vector<StorageIndex> &column_ids, RowGroup &row_group);
+	//! Predict batch size: target_bytes / bytes_per_row, clamped to [1, max_rows]
+	idx_t PredictBatchSize(idx_t target_bytes, idx_t max_rows) const;
+	//! Refine dynamic_bytes_per_row via EMA from actual scan result
+	void Update(const DataChunk &result);
+	void Reset();
+};
+
+//! Tracks progress within a single vector during sub-batch scanning.
+//! A standard 2048-row vector is split into multiple smaller batches,
+//! each sized by ScanSizePredictor to stay within the byte budget.
+struct SubVectorScanState {
+	//! Current row offset within the vector (0..vector_max_count)
+	idx_t offset = 0;
+	//! Total scannable rows in the current vector
+	idx_t vector_max_count = 0;
+
+	void Reset() {
+		offset = 0;
+		vector_max_count = 0;
+	}
+
+	bool InProgress() const {
+		return offset > 0 && offset < vector_max_count;
+	}
+
+	static bool IsActive(idx_t scan_target_size_bytes) {
+		return scan_target_size_bytes > 0;
+	}
+};
+
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
@@ -258,6 +320,11 @@ public:
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;
 
+	//! Sub-vector scan state for controlling per-batch row count
+	SubVectorScanState sub_vector_state;
+	//! Predictor for adaptive sub-vector batch sizing
+	ScanSizePredictor size_predictor;
+
 public:
 	void Initialize(const QueryContext &context_p, const vector<LogicalType> &types);
 	const vector<StorageIndex> &GetColumnIds();
@@ -290,6 +357,8 @@ struct ScanSamplingInfo {
 struct TableScanOptions {
 	//! Fetch rows one-at-a-time instead of using the regular scans.
 	bool force_fetch_row = false;
+	//! Target maximum size in bytes for each scan result chunk. 0 = disabled.
+	idx_t scan_target_size_bytes = 0;
 };
 
 class CheckpointLock {
