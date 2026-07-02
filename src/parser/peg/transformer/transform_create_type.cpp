@@ -51,7 +51,8 @@ PEGTransformerFactory::TransformEnumStringLiteralList(PEGTransformer &transforme
 	return result;
 }
 
-void PEGTransformerFactory::InitializeEnumStringLiteralListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+void PEGTransformerFactory::InitializeEnumStringLiteralListTrampoline(PEGTransformer &transformer,
+                                                                      TransformStack &stack,
                                                                       TransformStackFrame &frame) {
 	frame.ReserveChildSlots(0);
 }

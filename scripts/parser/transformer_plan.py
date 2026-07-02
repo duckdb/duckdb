@@ -540,11 +540,15 @@ def plan_trampoline_sequence_rule_with_terminals(
                 if not allow_dynamic_stack_followers:
                     if trailing_optional_stack_child is not None:
                         raise NotImplementedError("only one trailing optional stack child is currently supported")
-                    arg = TrailingOptionalStackChild(parse_expr, rule_name, to_snake_case(rule_name), result_expr_template)
+                    arg = TrailingOptionalStackChild(
+                        parse_expr, rule_name, to_snake_case(rule_name), result_expr_template
+                    )
                     trailing_optional_stack_child = arg
                     finalize_args.append(arg)
                     continue
-                arg = OptionalStackChild(parse_expr, rule_name, next_slot, to_snake_case(rule_name), result_expr_template)
+                arg = OptionalStackChild(
+                    parse_expr, rule_name, next_slot, to_snake_case(rule_name), result_expr_template
+                )
                 optional_stack_children.append(arg)
                 next_slot += 1
             else:
@@ -587,7 +591,9 @@ def plan_trampoline_sequence_rule_with_terminals(
                     raise NotImplementedError("terminal override repeat is currently unsupported")
                 if repeat_child is not None:
                     raise NotImplementedError("only one repeat child is currently supported")
-                repeat_child = RepeatStackChild(parse_expr, repeat_node.name, next_slot, to_snake_case(repeat_node.name))
+                repeat_child = RepeatStackChild(
+                    parse_expr, repeat_node.name, next_slot, to_snake_case(repeat_node.name)
+                )
                 next_slot += 1
                 finalize_args.append(repeat_child)
                 continue

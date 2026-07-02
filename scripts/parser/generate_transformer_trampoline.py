@@ -499,10 +499,16 @@ class UseGramPreviewEmitter:
         )
 
     def is_parse_result_syntax_only_rule(self, rule_name, ast):
-        return rule_name in self.rule_types and parse_result_manual_body_exists(rule_name) and not isinstance(ast, ChoiceNode)
+        return (
+            rule_name in self.rule_types
+            and parse_result_manual_body_exists(rule_name)
+            and not isinstance(ast, ChoiceNode)
+        )
 
     def is_parse_result_manual_choice_rule(self, rule_name, ast):
-        return rule_name in self.rule_types and parse_result_manual_body_exists(rule_name) and isinstance(ast, ChoiceNode)
+        return (
+            rule_name in self.rule_types and parse_result_manual_body_exists(rule_name) and isinstance(ast, ChoiceNode)
+        )
 
     def choice_syntax_only_alternative_names(self, ast):
         return [
@@ -554,7 +560,9 @@ class UseGramPreviewEmitter:
     def emit_stack_child_push(self, lines, plan, stack_child, indent="\t"):
         if isinstance(stack_child, OptionalStackChild):
             slot_expr = self.adjusted_slot_expr(plan, stack_child.slot_idx)
-            lines.append(f"{indent}auto &{stack_child.var_name}_opt = {stack_child.parse_expr}.Cast<OptionalParseResult>();")
+            lines.append(
+                f"{indent}auto &{stack_child.var_name}_opt = {stack_child.parse_expr}.Cast<OptionalParseResult>();"
+            )
             lines.append(f"{indent}if ({stack_child.var_name}_opt.HasResult()) {{")
             child_expr = stack_child.result_expr_template.format(opt=f"{stack_child.var_name}_opt")
             lines.append(
@@ -657,7 +665,9 @@ class UseGramPreviewEmitter:
                     f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer, choice_pr.GetResult());"
                 )
             else:
-                lines.append(f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer, frame.parse_result);")
+                lines.append(
+                    f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer, frame.parse_result);"
+                )
         elif cpp_type == "string" and literal_values is not None and not manual_body_exists(rule_name):
             if len(literal_values) == 1:
                 lines.append(f'\tstring result = "{literal_values[0]}";')
@@ -722,7 +732,9 @@ class UseGramPreviewEmitter:
                 lines.append("\t\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
                 lines.append("\t\tauto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();")
                 lines.append("\t\tif (choice_result.type == ParseResultType::IDENTIFIER) {")
-                lines.append("\t\t\tchild = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();")
+                lines.append(
+                    "\t\t\tchild = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();"
+                )
                 lines.append("\t\t} else if (choice_result.type == ParseResultType::KEYWORD) {")
                 lines.append("\t\t\tchild = choice_result.Cast<KeywordParseResult>().keyword;")
                 lines.append("\t\t} else if (choice_result.type == ParseResultType::STRING) {")
@@ -807,9 +819,7 @@ class UseGramPreviewEmitter:
             lines.append("\t}")
             if direct_string_names:
                 direct_string_conditions = [f'choice_result.name == "{name}"' for name in direct_string_names]
-                lines.append(
-                    "\tif (ops_entry == ops_map.end() && (" + " || ".join(direct_string_conditions) + ")) {"
-                )
+                lines.append("\tif (ops_entry == ops_map.end() && (" + " || ".join(direct_string_conditions) + ")) {")
                 lines.append("\t\treturn;")
                 lines.append("\t}")
         if syntax_only_alternatives:
@@ -835,7 +845,9 @@ class UseGramPreviewEmitter:
             lines.append("\t}")
         else:
             lines.append("\tif (ops_entry == ops_map.end()) {")
-            lines.append("\t\tthrow InternalException(\"No trampoline ops registered for rule '%s'\", choice_result.name);")
+            lines.append(
+                "\t\tthrow InternalException(\"No trampoline ops registered for rule '%s'\", choice_result.name);"
+            )
             lines.append("\t}")
         lines.append(
             "\tstack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));"
