@@ -79,6 +79,10 @@ struct DBConfigOptions {
 	AccessMode access_mode = AccessMode::AUTOMATIC;
 	//! Checkpoint when WAL reaches this size (default: 16MiB)
 	idx_t checkpoint_wal_size = 1 << 24;
+	//! Default WAL write-buffer size; a static_assert in custom_settings.cpp keeps it equal to FILE_BUFFER_SIZE.
+	static constexpr idx_t DEFAULT_WAL_BUFFER_SIZE = 4096;
+	//! Size of the write-ahead log write buffer in bytes
+	idx_t wal_buffer_size = DEFAULT_WAL_BUFFER_SIZE;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory

@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+class StorageLockKey;
+
 struct CheckpointOptions {
 	CheckpointOptions()
 	    : wal_action(CheckpointWALAction::DONT_DELETE_WAL), action(CheckpointAction::CHECKPOINT_IF_REQUIRED),
@@ -24,9 +26,9 @@ struct CheckpointOptions {
 	CheckpointAction action;
 	CheckpointType type;
 	transaction_t transaction_id;
-	//! The WAL lock - in case we are holding it during the entire checkpoint.
+	//! The (exclusive) WAL lock - in case we are holding it during the entire checkpoint.
 	//! This is only required if we are doing a checkpoint instead of writing to the WAL
-	optional_ptr<unique_lock<mutex>> wal_lock;
+	optional_ptr<StorageLockKey> wal_lock;
 };
 
 } // namespace duckdb

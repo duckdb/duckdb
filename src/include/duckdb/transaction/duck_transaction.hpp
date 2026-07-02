@@ -28,7 +28,7 @@ struct DataTableInfo;
 struct UndoBufferProperties;
 
 struct CommitInfo {
-	transaction_t commit_id;
+	transaction_t commit_id = 0;
 	ActiveTransactionState active_transactions = ActiveTransactionState::UNSET;
 	optional_ptr<CommitDropState> drop_state;
 };
@@ -70,6 +70,20 @@ public:
 	//! commit failed, or an empty string if the commit was successful
 	ErrorData Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	                 unique_ptr<StorageCommitState> commit_state) noexcept;
+	//! First phase of a deferred (group) commit: write the WAL flush marker (conflicts were already validated in
+	//! WriteToWAL, before any entries were written). Caller must hold the transaction lock and the WAL lock. After
+	//! this succeeds, the commit can no longer be aborted - it must be made durable (WriteAheadLog::SyncUpTo) and
+	//! then published (PublishCommit). On success, `flush_marker_offset` is set to the WAL offset that SyncUpTo()
+	//! must reach to make this commit durable (the offset of the flush marker just written).
+	ErrorData CommitToWAL(unique_ptr<StorageCommitState> commit_state, idx_t &flush_marker_offset) noexcept;
+	//! Second phase of a deferred (group) commit: make the committed changes visible to other transactions.
+	//! Caller must hold the transaction lock. A failure here is fatal - the commit is already durable in the WAL.
+	ErrorData PublishCommit(AttachedDatabase &db, CommitInfo &commit_info) noexcept;
+	//! DataTableInfos of tables this transaction modified (deduplicated, address-ordered) - used to take each
+	//! table's publish gate SHARED while committing.
+	vector<shared_ptr<DataTableInfo>> GetModifiedTableInfos() {
+		return undo_buffer.GetModifiedTableInfos();
+	}
 	//! Returns whether or not a commit of this transaction should trigger an automatic checkpoint
 	bool AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties);
 

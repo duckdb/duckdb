@@ -219,7 +219,7 @@ void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, 
 	GetVectorInfo(vector_idx).CommitDelete(commit_id, info);
 }
 
-vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
+vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer, idx_t row_count) {
 	lock_guard<mutex> lock(version_lock);
 	auto &manager = *writer.GetMetadataManager();
 	auto options = writer.GetCheckpointOptions();
@@ -230,6 +230,8 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 		// return the current set of pointers
 		return storage_pointers;
 	}
+	// the index of the last vector and the number of rows it holds (which may be a partial vector)
+	idx_t last_vector_idx = row_count == 0 ? 0 : (row_count - 1) / STANDARD_VECTOR_SIZE;
 	// first count how many ChunkInfo's we need to deserialize
 	vector<pair<idx_t, reference<ChunkInfo>>> to_serialize;
 	for (idx_t vector_idx = 0; vector_idx < vector_info.size(); vector_idx++) {
@@ -253,7 +255,12 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 			auto &vector_idx = entry.first;
 			auto &chunk_info = entry.second.get();
 			metadata_writer.Write<idx_t>(vector_idx);
-			chunk_info.Write(metadata_writer, options.transaction_id);
+			// the number of rows held by this vector - the last vector may be partial
+			idx_t vector_count = STANDARD_VECTOR_SIZE;
+			if (vector_idx == last_vector_idx) {
+				vector_count = row_count - vector_idx * STANDARD_VECTOR_SIZE;
+			}
+			chunk_info.Write(metadata_writer, options.transaction_id, vector_count);
 		}
 		metadata_writer.Flush();
 	}

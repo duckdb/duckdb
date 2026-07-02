@@ -48,7 +48,7 @@ bool ChunkInfo::Cleanup(transaction_t lowest_transaction) const {
 	return false;
 }
 
-void ChunkInfo::Write(WriteStream &writer, transaction_t checkpoint_id) const {
+void ChunkInfo::Write(WriteStream &writer, transaction_t checkpoint_id, idx_t count) const {
 	writer.Write<ChunkInfoType>(type);
 }
 
@@ -137,7 +137,7 @@ bool ChunkConstantInfo::Cleanup(transaction_t lowest_transaction) const {
 	return true;
 }
 
-void ChunkConstantInfo::Write(WriteStream &writer, transaction_t checkpoint_id) const {
+void ChunkConstantInfo::Write(WriteStream &writer, transaction_t checkpoint_id, idx_t count) const {
 	D_ASSERT(HasDeletes(checkpoint_id));
 	ChunkInfo::Write(writer, checkpoint_id);
 	writer.Write<idx_t>(start);
@@ -496,30 +496,43 @@ transaction_t ChunkVectorInfo::ConstantInsertId() const {
 	return constant_insert_id;
 }
 
-void ChunkVectorInfo::Write(WriteStream &writer, transaction_t checkpoint_id) const {
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
+void ChunkVectorInfo::Write(WriteStream &writer, transaction_t checkpoint_id, idx_t max_count) const {
+	D_ASSERT(max_count <= STANDARD_VECTOR_SIZE);
 	transaction_t start_time = checkpoint_id == MAX_TRANSACTION_ID ? TRANSACTION_ID_START - 1 : checkpoint_id + 1;
-	transaction_t transaction_id = DConstants::INVALID_INDEX;
-	idx_t count = GetSelVector(TransactionData(transaction_id, start_time), sel, STANDARD_VECTOR_SIZE);
-	if (count == STANDARD_VECTOR_SIZE) {
-		// nothing is deleted: skip writing anything
+	// A set (valid) bit marks a row deleted as-of the snapshot (see ChunkVectorInfo::Read). Only committed deletes
+	// among the max_count rows this (possibly partial last) vector holds are marked: a row is NOT deleted merely
+	// because its insert is not yet visible - under group commit a concurrent checkpoint can observe a row whose
+	// insert publishes after the snapshot, and persisting it as deleted would conflict with the WAL replay that
+	// re-inserts it. All other positions (not-deleted rows and the unused trailing slots) stay not-deleted, so a
+	// partial last vector can still receive WAL-replayed appends.
+	ValidityMask mask(STANDARD_VECTOR_SIZE);
+	mask.Initialize(STANDARD_VECTOR_SIZE);
+	mask.SetAllInvalid(STANDARD_VECTOR_SIZE);
+	idx_t deleted_count = 0;
+	if (AnyDeleted()) {
+		auto deleted_segment = allocator.GetHandle(GetDeletedPointer());
+		auto deleted = deleted_segment.GetPtr<transaction_t>();
+		for (idx_t i = 0; i < max_count; i++) {
+			if (StandardDeleteOperator::IsDeleted(start_time, DConstants::INVALID_INDEX, deleted[i])) {
+				mask.SetValid(i);
+				deleted_count++;
+			}
+		}
+	}
+	if (deleted_count == 0) {
+		// nothing deleted as-of the snapshot: skip writing anything
 		writer.Write<ChunkInfoType>(ChunkInfoType::EMPTY_INFO);
 		return;
 	}
-	if (count == 0) {
-		// everything is deleted: write a constant vector
+	if (deleted_count == max_count && max_count == STANDARD_VECTOR_SIZE) {
+		// entire full vector deleted: an un-appendable ChunkConstantInfo is only safe for a full vector - a partial
+		// last vector may still receive WAL-replayed appends and needs a ChunkVectorInfo.
 		writer.Write<ChunkInfoType>(ChunkInfoType::CONSTANT_INFO);
 		writer.Write<idx_t>(start);
 		return;
 	}
-	// write a boolean vector
 	ChunkInfo::Write(writer, checkpoint_id);
 	writer.Write<idx_t>(start);
-	ValidityMask mask(STANDARD_VECTOR_SIZE);
-	mask.Initialize(STANDARD_VECTOR_SIZE);
-	for (idx_t i = 0; i < count; i++) {
-		mask.SetInvalid(sel.get_index(i));
-	}
 	mask.Write(writer, STANDARD_VECTOR_SIZE);
 }
 

@@ -17,6 +17,7 @@
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -215,32 +216,53 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 		auto wal = storage_manager.GetWAL();
 		commit_state = storage_manager.GenStorageCommitState(*wal);
 
+		if (!db.IsSystem() && !db.IsTemporary() && Settings::Get<DebugForceCommitFailureSetting>(db.GetDatabase())) {
+			// Fail before applying anything, so the transaction's own Rollback reverts the local changes.
+			throw InvalidInputException("Forced commit failure (debug_force_commit_failure)");
+		}
 		auto &profiler = *context.client_data->profiler;
 		auto commit_timer = profiler.StartTimer<MetricStorageCommitLocalStorageLatency>();
 		storage->Commit(commit_state.get());
 		commit_timer.EndTimer();
 
-		auto wal_timer = profiler.StartTimer<MetricStorageWriteToWALLatency>();
-		undo_buffer.WriteToWAL(*wal, commit_state.get());
-		if (commit_state->HasRowGroupData()) {
-			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
-			// optimistically written blocks
-			// hence we need to ensure those optimistically written blocks are persisted
-			storage_manager.GetBlockManager().FileSync();
+		// Validate that the commit cannot fail BEFORE writing any WAL entries
+		error_data = undo_buffer.ValidateCommitConflicts();
+		if (!error_data.HasError()) {
+			auto wal_timer = profiler.StartTimer<MetricStorageWriteToWALLatency>();
+			undo_buffer.WriteToWAL(*wal, commit_state.get());
+			if (commit_state->HasRowGroupData()) {
+				// if we have optimistically written any data AND we are writing to the WAL, we have written
+				// references to optimistically written blocks
+				// hence we need to ensure those optimistically written blocks are persisted
+				// group commit: defer the database file sync to the WAL sync leader, which performs it (batched
+				// across transactions, outside of the WAL lock) before any WAL fsync that makes this commit's
+				// flush marker durable - preserving the blocks-before-references ordering
+				commit_state->DeferBlockSync();
+			}
+			wal_timer.EndTimer();
 		}
-		wal_timer.EndTimer();
 
 	} catch (std::exception &ex) {
 		// Call RevertCommit() outside this try-catch as it itself may throw
 		error_data = ErrorData(ex);
 	}
 
-	if (commit_state && error_data.HasError()) {
+	if (error_data.HasError()) {
 		try {
-			commit_state->RevertCommit();
-			commit_state.reset();
-		} catch (std::exception &) {
-			// Ignore this error. If we fail to RevertCommit(), just return the original exception
+			if (!db.IsSystem() && !db.IsTemporary() &&
+			    Settings::Get<DebugForceCommitRevertFailureSetting>(db.GetDatabase())) {
+				throw IOException("Forced RevertCommit failure (debug_force_commit_revert_failure)");
+			}
+			if (commit_state) {
+				commit_state->RevertCommit();
+				commit_state.reset();
+			}
+		} catch (std::exception &ex) {
+			// A failed revert leaves the database in an undefined state - invalidate it (mirrors Commit()).
+			ValidChecker::Invalidate(
+			    db.GetDatabase(), "Failed to revert transaction commit, database is in an undefined state. "
+			                      "Original commit error: " +
+			                          error_data.RawMessage() + ". RevertCommit error: " + ErrorData(ex).RawMessage());
 		}
 	}
 
@@ -309,6 +331,51 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 		                             error_data.RawMessage());
 	}
 	return error_data;
+}
+
+ErrorData DuckTransaction::CommitToWAL(unique_ptr<StorageCommitState> commit_state,
+                                       idx_t &flush_marker_offset) noexcept {
+	flush_marker_offset = 0;
+	D_ASSERT(commit_state);
+	D_ASSERT(ChangesMade());
+	D_ASSERT(!IsReadOnly());
+	try {
+		// Conflicts were already validated in WriteToWAL, BEFORE any WAL entries were written (the deferred path is
+		// data-only, so that check is complete). This commit can no longer fail, and its entries are already in the
+		// WAL - so we just write the flush marker. Once the marker is written the commit must complete; it can be
+		// replayed after a crash. The marker is written without fsync (the caller batches the fsync across
+		// transactions); we capture the WAL offset the caller must SyncUpTo() to make this commit durable.
+		flush_marker_offset = commit_state->FlushCommitMarker();
+		return ErrorData();
+	} catch (std::exception &ex) {
+		try {
+			commit_state->RevertCommit();
+		} catch (...) { // NOLINT
+		}
+		return ErrorData(ex);
+	}
+}
+
+ErrorData DuckTransaction::PublishCommit(AttachedDatabase &db, CommitInfo &commit_info) noexcept {
+	this->commit_id = commit_info.commit_id;
+	// only reached for deferred commits: they always have changes (a commit_state was written) and are data-only
+	// (catalog-changing transactions commit through Commit())
+	D_ASSERT(ChangesMade());
+	D_ASSERT(catalog_version < TRANSACTION_ID_START);
+	UndoBuffer::IteratorState iterator_state;
+	optional_ptr<BlockManager> block_manager;
+	if (db.HasStorageManager()) {
+		block_manager = db.GetStorageManager().GetBlockManager();
+	}
+	CommitDropState drop_state(block_manager);
+	commit_info.drop_state = &drop_state;
+	try {
+		undo_buffer.Commit(iterator_state, commit_info);
+		drop_state.FinalizeCommit();
+		return ErrorData();
+	} catch (std::exception &ex) {
+		return ErrorData(ex);
+	}
 }
 
 ErrorData DuckTransaction::Rollback() {

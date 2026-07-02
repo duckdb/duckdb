@@ -27,6 +27,7 @@ class ClientContext;
 
 struct DataTableInfo;
 class DataTable;
+class DuckTableEntry;
 struct DeleteInfo;
 struct UpdateInfo;
 
@@ -95,6 +96,11 @@ public:
 	void Flush();
 	void Verify();
 	static IndexRemovalType GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode);
+	//! Throws a TransactionException if the given table - modified by the transaction with the given id - has been
+	//! altered/dropped by a different transaction in the meantime: the commit must fail in that case.
+	//! Used both when committing data entries (CommitEntry) and when validating a deferred (group) commit before
+	//! its WAL flush marker is written (UndoBuffer::ValidateCommitConflicts).
+	static void VerifyTableModification(DuckTableEntry &table, transaction_t transaction_id);
 
 private:
 	void CommitEntryDrop(CatalogEntry &entry, data_ptr_t extra_data, CommitInfo &info);

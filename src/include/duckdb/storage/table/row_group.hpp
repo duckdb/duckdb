@@ -89,7 +89,6 @@ struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
 	RowGroupWriteAction write_action = RowGroupWriteAction::FULLY_CHECKPOINT_ROW_GROUP;
-	optional_idx write_count;
 };
 
 class RowGroup : public SegmentBase<RowGroup> {
@@ -236,8 +235,10 @@ public:
 
 	static FilterPropagateResult CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row);
 	idx_t GetColumnCount() const;
+	//! Whether any loaded column has an in-memory UpdateSegment (i.e. this row group has been updated)
+	bool HasUpdates() const;
 
-	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
+	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer, idx_t row_count);
 
 	//! Direct accessors, fall outside of general use but can be useful to some extensions
 	ColumnData &GetRawColumnData(const StorageIndex &c) const;

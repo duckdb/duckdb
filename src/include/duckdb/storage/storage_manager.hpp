@@ -14,6 +14,7 @@
 #include "duckdb/storage/database_size.hpp"
 #include "duckdb/storage/checkpoint/checkpoint_options.hpp"
 #include "duckdb/storage/storage_options.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 
 namespace duckdb {
 class ActiveCheckpointWrapper;
@@ -37,6 +38,19 @@ public:
 	virtual void RevertCommit() = 0;
 	// Make the commit persistent
 	virtual void FlushCommit() = 0;
+	//! Write only the WAL flush marker that completes the commit in the WAL, WITHOUT making it durable - the
+	//! caller must fsync via WriteAheadLog::SyncUpTo before acknowledging the commit (group commit). Returns the
+	//! WAL offset that SyncUpTo() must reach to make this commit durable (the offset of the flush marker).
+	//! The default implementation falls back to the fully durable FlushCommit.
+	virtual idx_t FlushCommitMarker() {
+		FlushCommit();
+		return 0;
+	}
+	//! Mark that the database file sync for optimistically written row group data is deferred to the WAL sync
+	//! leader (group commit), instead of being performed by the committing transaction itself. Must be called
+	//! before the flush marker is written. The default implementation ignores this.
+	virtual void DeferBlockSync() {
+	}
 
 	virtual void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                             unique_ptr<PersistentCollectionData> row_group_data) = 0;
@@ -86,9 +100,10 @@ public:
 	bool WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
 	                        ActiveCheckpointWrapper &active_checkpoint);
 	//! Finishes a checkpoint
-	void WALFinishCheckpoint(unique_lock<mutex> &wal_lock);
-	// Get the WAL lock
-	unique_lock<mutex> GetWALLock();
+	void WALFinishCheckpoint(StorageLockKey &wal_lock);
+	unique_ptr<StorageLockKey> GetWALLockShared();
+	unique_ptr<StorageLockKey> GetWALLockExclusive();
+	unique_lock<mutex> GetWALAppendLock();
 
 	//! Returns the database file path
 	string GetDBPath() const {
@@ -170,8 +185,14 @@ protected:
 	string wal_path;
 	//! The WriteAheadLog of the storage manager
 	unique_ptr<WriteAheadLog> wal;
-	//! Mutex used to control writes to the WAL
-	mutex wal_lock;
+	//! Read-write lock controlling access to the WAL. Group-commit data writes take it SHARED (they can run
+	//! concurrently and only need the WAL structure to be stable); checkpoints and catalog-changing commits take it
+	//! EXCLUSIVE. The exclusive acquisition waits for all shared holders, which replaces the explicit
+	//! pending-commit drain that previously guarded WAL swaps / catalog version attachment.
+	StorageLock wal_lock;
+	//! Serializes a single committer's WAL entry+marker writes against other (shared) committers, so each
+	//! transaction's WAL entries are contiguous (the shared WAL lock alone allows them to interleave).
+	mutex wal_append_lock;
 	//! Whether or not the database is opened in read-only mode
 	bool read_only;
 	//! When loading a database, we do not yet set the wal-field. Therefore, GetWriteAheadLog must

@@ -47,6 +47,12 @@ public:
 	unique_ptr<StorageLockKey> GetSharedLock() {
 		return checkpoint_lock.GetSharedLock();
 	}
+	unique_ptr<StorageLockKey> GetPublishGateShared() {
+		return publish_gate.GetSharedLock();
+	}
+	unique_ptr<StorageLockKey> GetPublishGateExclusive() {
+		return publish_gate.GetExclusiveLock();
+	}
 	bool AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id);
 	optional_idx CheckpointRowGroupCount(const CheckpointOptions &options) const;
 	void VerifyIndexBuffers();
@@ -72,6 +78,10 @@ private:
 	vector<IndexStorageInfo> index_storage_infos;
 	//! Lock held while checkpointing
 	StorageLock checkpoint_lock;
+	//! Gate excluding DDL on this table from concurrent group-commit publishes.
+	//! Group commits touching this table hold it SHARED through publish; DDL on this table takes it
+	//! EXCLUSIVE. Per-table, so DDL on one table doesn't block others; separate from checkpoint_lock.
+	StorageLock publish_gate;
 	//! The last seen checkpoint while doing a concurrent operation, if any
 	optional_idx last_seen_checkpoint;
 	//! The amount of row groups the checkpoint is processing

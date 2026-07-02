@@ -249,11 +249,13 @@ bool StorageManager::HasWAL() const {
 
 bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
                                         ActiveCheckpointWrapper &active_checkpoint) {
-	unique_lock<mutex> guard;
+	unique_ptr<StorageLockKey> guard;
 	// Lock ordering: WAL lock -> transaction lock (in GetCheckpointTransaction)
 	if (!options.wal_lock) {
-		// not holding the WAL lock yet - grab it
-		guard = GetWALLock();
+		// not holding the WAL lock yet - grab it exclusively. The exclusive acquisition waits for all in-flight
+		// (shared) group-commit writers to finish publishing, so any commit that wrote its flush marker to this WAL
+		// is already durable and visible by the time we proceed.
+		guard = GetWALLockExclusive();
 	}
 	if (active_checkpoint.HasCheckpointContext()) {
 		// While holding the WAL lock, if we have a context then start a checkpoint transaction.
@@ -301,7 +303,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	return true;
 }
 
-void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
+void StorageManager::WALFinishCheckpoint(StorageLockKey &) {
 	D_ASSERT(wal.get());
 
 	// "wal" points to the checkpoint WAL
@@ -332,8 +334,16 @@ void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Finish Checkpoint");
 }
 
-unique_lock<mutex> StorageManager::GetWALLock() {
-	return unique_lock<mutex>(wal_lock);
+unique_ptr<StorageLockKey> StorageManager::GetWALLockShared() {
+	return wal_lock.GetSharedLock();
+}
+
+unique_ptr<StorageLockKey> StorageManager::GetWALLockExclusive() {
+	return wal_lock.GetExclusiveLock();
+}
+
+unique_lock<mutex> StorageManager::GetWALAppendLock() {
+	return unique_lock<mutex>(wal_append_lock);
 }
 
 string StorageManager::GetWALPath(const string &suffix) {
@@ -616,6 +626,10 @@ public:
 	void RevertCommit() override;
 	// Make the commit persistent
 	void FlushCommit() override;
+	// Write the WAL flush marker only - the fsync happens later via WriteAheadLog::SyncUpTo (group commit)
+	idx_t FlushCommitMarker() override;
+	// Defer the database file sync for optimistic row group data to the WAL sync leader (group commit)
+	void DeferBlockSync() override;
 
 	void AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
@@ -627,6 +641,9 @@ private:
 	idx_t initial_written = 0;
 	WriteAheadLog &wal;
 	WALCommitState state;
+	//! Whether the database file sync for optimistic row group data is deferred to the WAL sync leader.
+	//! If not (the default), the committing transaction performs the sync itself before writing to the WAL.
+	bool defer_block_sync = false;
 	reference_map_t<DataTable, unordered_map<idx_t, OptimisticallyWrittenRowGroupData>> optimistically_written_data;
 };
 
@@ -671,8 +688,33 @@ void SingleFileStorageCommitState::FlushCommit() {
 		return;
 	}
 	// Move the blocks in this COMMIT into the WAL and mark them as "in use".
-	wal.Flush();
+	if (defer_block_sync) {
+		// deferred block sync: the marker must record the requirement before the (inline) durable sync
+		auto target_offset = wal.WriteFlushMarker(HasRowGroupData());
+		wal.SyncUpTo(target_offset, false);
+	} else {
+		wal.Flush();
+	}
 	state = WALCommitState::FLUSHED;
+}
+
+idx_t SingleFileStorageCommitState::FlushCommitMarker() {
+	if (state != WALCommitState::IN_PROGRESS) {
+		return 0;
+	}
+	// Move the blocks in this COMMIT into the WAL and mark them as "in use".
+	// Only the flush marker is appended to the in-memory WAL buffer (push_to_os=false): both the push to the
+	// operating system AND the fsync that makes the commit durable happen later, batched, in the group commit sync
+	// leader's WriteAheadLog::SyncUpTo (outside the transaction and WAL locks), so that concurrently committing
+	// transactions share a single write() and a single fsync.
+	// Return the WAL offset of this marker - the caller passes it to SyncUpTo as the durability target.
+	auto target_offset = wal.WriteFlushMarker(defer_block_sync && HasRowGroupData(), /*push_to_os=*/false);
+	state = WALCommitState::FLUSHED;
+	return target_offset;
+}
+
+void SingleFileStorageCommitState::DeferBlockSync() {
+	defer_block_sync = true;
 }
 
 void SingleFileStorageCommitState::AddRowGroupData(DataTable &table, idx_t start_index, idx_t count,

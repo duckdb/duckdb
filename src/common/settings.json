@@ -853,6 +853,13 @@
         "struct": "GeometryMinimumShreddingSize"
     },
     {
+        "name": "group_commit_delay",
+        "description": "Maximum time in microseconds that a group commit leader waits for concurrently committing transactions to join its WAL fsync (-1 = automatic, scaled to the observed fsync duration, 0 = no wait).",
+        "type": "BIGINT",
+        "scope": "global",
+        "default_value": "-1"
+    },
+    {
         "name": "home_directory",
         "description": "Sets the home directory used by the system",
         "type": "VARCHAR",
@@ -1379,6 +1386,16 @@
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "0"
+    },
+    {
+        "name": "wal_buffer_size",
+        "description": "The size of the write-ahead log write buffer that batches WAL data before it is pushed to the OS (e.g. 64KB). Takes effect on the next WAL created (after a checkpoint or on reopen).",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": [
+            "set",
+            "get"
+        ]
     },
     {
         "name": "warnings_as_errors",

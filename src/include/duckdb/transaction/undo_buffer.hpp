@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/transaction/undo_buffer_allocator.hpp"
 #include "duckdb/common/enums/active_transaction_state.hpp"
 
@@ -21,6 +22,7 @@ class StorageCommitState;
 class WriteAheadLog;
 struct UndoBufferPointer;
 struct CommitInfo;
+struct DataTableInfo;
 
 struct UndoBufferProperties {
 	idx_t estimated_size = 0;
@@ -57,6 +59,13 @@ public:
 	void Cleanup(transaction_t lowest_active_transaction);
 	//! Commit the changes made in the UndoBuffer: should be called on commit
 	void WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state);
+	//! Check whether committing the entries can fail (e.g. because another transaction has altered a modified
+	//! table). Used by deferred (group) commits: after the WAL flush marker is written the commit can no longer
+	//! be aborted, so any conflicts must be detected before that point.
+	ErrorData ValidateCommitConflicts();
+	//! Collect the DataTableInfos of tables modified by data changes (INSERT/DELETE/UPDATE) in this buffer,
+	//! deduplicated and ordered by address, so a commit can take each table's publish gate in a deadlock-free order.
+	vector<shared_ptr<DataTableInfo>> GetModifiedTableInfos();
 	//! Iterate the undo buffer and commit each entry. Deferred drop side effects accumulate in
 	//! info.drop_state so they can be applied after the commit chain succeeds.
 	void Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info);

@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
@@ -308,6 +309,18 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntr
 	return CreateEntryInternal(transaction, new_name, std::move(renamed_node), read_lock);
 }
 
+// exclude concurrent group-commit publishes while we change a table
+static unique_ptr<StorageLockKey> LockTablePublishGate(optional_ptr<CatalogEntry> entry) {
+	if (!entry || entry->type != CatalogType::TABLE_ENTRY) {
+		return nullptr;
+	}
+	auto &table_entry = entry->Cast<TableCatalogEntry>();
+	if (!table_entry.IsDuckTable()) {
+		return nullptr;
+	}
+	return table_entry.Cast<DuckTableEntry>().GetStorage().GetDataTableInfo()->GetPublishGateExclusive();
+}
+
 bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &name, AlterInfo &alter_info) {
 	// If the entry does not exist, we error
 	auto entry = GetEntry(transaction, name);
@@ -349,6 +362,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 		}
 	}
 
+	auto publish_gate = LockTablePublishGate(value.get());
 	// lock the catalog for writing
 	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 	// lock this catalog set to disallow reading
@@ -393,6 +407,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 
 	read_lock.unlock();
 	write_lock.unlock();
+	publish_gate.reset();
 
 	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
 	catalog.GetDependencyManager()->AlterObject(transaction, *entry, *new_entry, alter_info);
@@ -449,6 +464,7 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const Identifier &nam
 	if (!DropDependencies(transaction, name, cascade, allow_drop_internal)) {
 		return false;
 	}
+	auto publish_gate = LockTablePublishGate(GetEntry(transaction, name));
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> read_lock(catalog_lock);
 	return DropEntryInternal(transaction, name, allow_drop_internal);

@@ -51,6 +51,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	static unordered_map<string, OptionValueSet> value_map = {
 	    {"threads", {Value::BIGINT(42), Value::BIGINT(42)}},
 	    {"checkpoint_threshold", {"4.0 GiB"}},
+	    {"wal_buffer_size", {"4.0 GiB"}},
 	    {"debug_checkpoint_abort", {{"none", "before_truncate", "before_header", "after_free_list_write"}}},
 	    {"default_collation", {"nocase"}},
 	    {"default_order", {"DESC"}},
