@@ -31,6 +31,7 @@
 #include "duckdb/common/query_parameters.hpp"
 
 namespace duckdb {
+class Logger;
 
 class Appender;
 class AttachedDatabase;

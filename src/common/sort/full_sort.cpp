@@ -1,4 +1,6 @@
 #include "duckdb/common/sorting/full_sort.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
