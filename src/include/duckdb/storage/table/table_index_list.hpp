@@ -35,7 +35,7 @@ struct IndexEntry {
 		return owned_index;
 	}
 
-	//! Replace the current snapshot with another, which happens either during bind or checkpointing
+	//! Replace the current snapshot with another
 	void ReplaceIndex(unique_ptr<Index> index) {
 		lock_guard<mutex> lock(index_pointer_lock);
 		owned_index = std::move(index);

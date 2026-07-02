@@ -433,8 +433,11 @@ void DataTableInfo::VerifyIndexBuffers() const {
 	for (auto &entry : indexes.IndexEntries()) {
 		const auto index = entry.PinIndex();
 		if (index->IsBound()) {
-			index->Cast<BoundIndex>().VerifyBuffers();
+			auto &bound_index = index->Cast<BoundIndex>();
+			bound_index.VerifyBuffers();
 		}
+
+		lock_guard<mutex> lock(entry.lock);
 		if (entry.deleted_rows_in_use) {
 			entry.deleted_rows_in_use->VerifyBuffers();
 		}
