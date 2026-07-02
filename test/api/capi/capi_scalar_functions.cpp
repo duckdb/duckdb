@@ -563,8 +563,7 @@ TEST_CASE("Test Scalar Function with Bind Info", "[capi]") {
 	// Before the fix, this exception escaped the C API boundary and called std::terminate() because
 	// Go's CGo frames (and plain C callers) have no C++ unwind tables. The fix catches at the C
 	// boundary and surfaces it as a normal query error.
-	result = tester.Query(
-	    "SELECT get_connection_id((SELECT 42::UBIGINT)) FROM (VALUES(1)) t(x)");
+	result = tester.Query("SELECT get_connection_id((SELECT 42::UBIGINT)) FROM (VALUES(1)) t(x)");
 	REQUIRE_FAIL(result);
 }
 
