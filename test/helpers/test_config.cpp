@@ -113,7 +113,10 @@ void TestConfiguration::Initialize() {
 
 	working_dir = FileSystem::GetWorkingDirectory();
 	test_uuid = UUID::ToString(UUID::GenerateRandomUUID());
-	UpdateEnvironment();
+	// NOTE: UpdateEnvironment() is intentionally NOT called here. It runs once in main()
+	// after PrepareTempDir(), so TEMP_DIR/TEMP_DIR_BASE reflect the final --temp-dir-*
+	// context. test_env is consumed only at test-run time, so deferring is safe.
+	// (ChangeWorkingDirectory still refreshes it on an actual cwd change.)
 }
 
 void TestConfiguration::UpdateEnvironment() {
@@ -131,8 +134,12 @@ void TestConfiguration::UpdateEnvironment() {
 	if (!fs->IsPathAbsolute(temp_dir_absolute)) {
 		temp_dir_absolute = fs->JoinPath(working_dir, temp_dir_absolute);
 	}
-	test_env["TEMP_DIR"] = temp_dir;                      // default: duckdb_unittest_tempdir/$PID
-	test_env["TEMP_DIR_ABSOLUTE"] = temp_dir_absolute;    // default: {WORKING_DIR}/duckdb_unittest_tempdir/$PID
+	// TEMP_DIR here is the run-id root ($BASE/[RUN_ID]); the per-test path overrides it per
+	// runner with the full $BASE/[RUN_ID]/[TEST_ID] once a test name is known.
+	test_env["TEMP_DIR"] = temp_dir;                      // run-root ($BASE/$RUN_ID); per-test gets +=$TEST_ID
+	test_env["TEMP_DIR_ABSOLUTE"] = temp_dir_absolute;    // absolute form of TEMP_DIR
+	test_env["TEMP_DIR_BASE"] = GetTempDirBase();         // $BASE; default duckdb_unittest_tempdir
+	test_env["RUN_ID"] = GetTempDirRunId();               // RUN_ID (--run-id, or generated); always set
 	test_env["CATALOG_DIR"] = temp_dir + "/" + test_uuid; // _not_ guaranteed to exist
 }
 

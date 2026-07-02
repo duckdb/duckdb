@@ -12,6 +12,15 @@
 
 #include <thread>
 
+// PROTOTYPE: shadow Catch's SKIP_TEST to also emit the parseable skip marker.
+// Skip sites here live in TestResultHelper, which holds a `runner` reference.
+#undef SKIP_TEST
+#define SKIP_TEST(reason)                                                                                              \
+	do {                                                                                                               \
+		duckdb::SQLLogicTestLogger::PrintSkip(runner.file_name, (reason));                                             \
+		Catch::getResultCapture().skipTestDuringRun(reason);                                                           \
+	} while (0)
+
 namespace duckdb {
 
 void TestResultHelper::SortQueryResult(SortStyle sort_style, vector<string> &result, idx_t ncols) {

@@ -12,7 +12,6 @@
 using namespace duckdb;
 
 int main(int argc_in, char *argv[]) {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
 
 	auto &test_config = TestConfiguration::Get();
@@ -27,17 +26,34 @@ int main(int argc_in, char *argv[]) {
 		string argument(argv[i]);
 		if (argument == "--test-dir") {
 			test_directory = string(argv[++i]);
-		} else if (argument == "--test-temp-dir") {
-			SetDeleteTestPath(false);
-			auto test_dir = string(argv[++i]);
-			if (fs->DirectoryExists(test_dir)) {
-				fprintf(stderr, "--test-temp-dir cannot point to a directory that already exists (%s)\n",
-				        test_dir.c_str());
+		} else if (argument == "--temp-dir-base") {
+			SetTempDirBase(string(argv[++i]));
+		} else if (argument == "--run-id") {
+			SetRunId(string(argv[++i]));
+		} else if (argument == "--temp-dir-run-id") {
+			if (!SetTempDirRunIdInPath(string(argv[++i]))) {
+				fprintf(stderr, "--temp-dir-run-id expects one of: on, off\n");
 				return 1;
 			}
-			SetTestDirectory(test_dir);
+		} else if (argument == "--temp-dir-test-id") {
+			if (!SetTempDirTestId(string(argv[++i]))) {
+				fprintf(stderr, "--temp-dir-test-id expects one of: on, off\n");
+				return 1;
+			}
+		} else if (argument == "--temp-dir-create") {
+			if (!SetTempDirCreate(string(argv[++i]))) {
+				fprintf(stderr, "--temp-dir-create expects one of: never, on-absent, always\n");
+				return 1;
+			}
+		} else if (argument == "--temp-dir-destroy") {
+			if (!SetTempDirDestroy(string(argv[++i]))) {
+				fprintf(stderr, "--temp-dir-destroy expects one of: never, on-success, always\n");
+				return 1;
+			}
 		} else if (argument == "--require") {
 			AddRequire(string(argv[++i]));
+		} else if (argument == "--emit-on-skip") {
+			SetEmitOnSkip(true);
 		} else if (argument == "--keep-home") {
 			keep_home = true;
 		} else if (argument == "--stdin") {
@@ -56,19 +72,24 @@ int main(int argc_in, char *argv[]) {
 	}
 	test_config.ChangeWorkingDirectory(test_directory);
 
-	// delete the testing directory if it exists
-	auto dir = TestCreatePath("");
-	try {
-		TestDeleteDirectory(dir);
-		// create the empty testing directory
-		TestCreateDirectory(dir);
-	} catch (std::exception &ex) {
-		fprintf(stderr, "Failed to create testing directory \"%s\": %s\n", dir.c_str(), ex.what());
+	// Resolve + provision $BASE/[RUN_ID] per the create disposition (the TEST_ID level is
+	// materialized later, on the per-test path, once a test name is known).
+	string prep_error;
+	if (!PrepareTempDir(prep_error)) {
+		fprintf(stderr, "Failed to prepare temp directory: %s\n", prep_error.c_str());
 		return 1;
 	}
+	// Capture env now that all --temp-dir-* context (base/run-id/create) is final; must run
+	// after PrepareTempDir so TEMP_DIR reflects the materialized run root.
+	test_config.UpdateEnvironment();
 
-	// Override the home dir so the .duckdb dir is isolated per test process.
-	if (!keep_home) {
+	// The run-id root ($BASE/[RUN_ID]); no test is active yet, so no TEST_ID level here.
+	auto dir = TestCreatePath("");
+
+	// Override the home dir so the .duckdb dir is isolated per invocation.
+	// A remote base cannot be a home dir; skip the override there.
+	bool remote_base = FileSystem::IsRemoteFile(GetTempDirBase());
+	if (!keep_home && !remote_base) {
 #ifdef DUCKDB_WINDOWS
 		if (_putenv_s("USERPROFILE", dir.c_str()) != 0) {
 			fprintf(stderr, "Failed to set USERPROFILE environment variable\n");
@@ -113,9 +134,8 @@ int main(int argc_in, char *argv[]) {
 		std::cerr << skip_reason_summary;
 	}
 
-	if (DeleteTestPath()) {
-		TestDeleteDirectory(dir);
-	}
+	// Execute the run-id-level destroy disposition ($BASE/[RUN_ID]); pass/fail-aware, recursive.
+	DestroyTempDir(result == 0);
 
 	return result;
 }
