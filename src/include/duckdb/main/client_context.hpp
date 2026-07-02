@@ -31,7 +31,7 @@
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/common/query_context.hpp"
-#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/common/query_parameters.hpp"
 
 namespace duckdb {
 
