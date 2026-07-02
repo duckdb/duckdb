@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/arrow/arrow_type_extension.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -26,12 +25,12 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/setting_info.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/main/user_settings.hpp"
 #include "duckdb/common/types/type_manager.hpp"
@@ -40,6 +39,9 @@
 #include "duckdb/common/enums/debug_order_verification.hpp"
 
 namespace duckdb {
+class ArrowTypeExtension;
+struct ArrowExtensionMetadata;
+struct ArrowTypeExtensionSet;
 
 class BlockAllocator;
 class BufferManager;
