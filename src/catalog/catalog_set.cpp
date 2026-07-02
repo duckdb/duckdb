@@ -309,6 +309,19 @@ bool CatalogSet::RenameEntryInternal(CatalogTransaction transaction, CatalogEntr
 	return CreateEntryInternal(transaction, new_name, std::move(renamed_node), read_lock);
 }
 
+// Take a table entry's publish gate EXCLUSIVE to exclude concurrent group commits during a table DDL; null for
+// non-tables (they do not race data commits).
+static unique_ptr<StorageLockKey> LockTablePublishGate(optional_ptr<CatalogEntry> entry) {
+	if (!entry || entry->type != CatalogType::TABLE_ENTRY) {
+		return nullptr;
+	}
+	auto &table_entry = entry->Cast<TableCatalogEntry>();
+	if (!table_entry.IsDuckTable()) {
+		return nullptr;
+	}
+	return table_entry.Cast<DuckTableEntry>().GetStorage().GetDataTableInfo()->GetPublishGateExclusive();
+}
+
 bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &name, AlterInfo &alter_info) {
 	// If the entry does not exist, we error
 	auto entry = GetEntry(transaction, name);
@@ -352,14 +365,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 
 	// Gate group commits on this table while we attach the new catalog version (they validate against the catalog
 	// before publishing; see GetPublishGateExclusive). Only table DDL races data commits, so scope to the table.
-	optional_ptr<DataTableInfo> gate_table_info;
-	if (value->type == CatalogType::TABLE_ENTRY) {
-		auto &table_entry = value->Cast<TableCatalogEntry>();
-		if (table_entry.IsDuckTable()) {
-			gate_table_info = table_entry.Cast<DuckTableEntry>().GetStorage().GetDataTableInfo().get();
-		}
-	}
-	auto publish_gate = gate_table_info ? gate_table_info->GetPublishGateExclusive() : nullptr;
+	auto publish_gate = LockTablePublishGate(value.get());
 	// lock the catalog for writing
 	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 	// lock this catalog set to disallow reading
@@ -464,15 +470,7 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const Identifier &nam
 		return false;
 	}
 	// gate group commits on this table while attaching the tombstone (see AlterEntry); scoped to the table
-	optional_ptr<DataTableInfo> gate_table_info;
-	auto drop_entry = GetEntry(transaction, name);
-	if (drop_entry && drop_entry->type == CatalogType::TABLE_ENTRY) {
-		auto &table_entry = drop_entry->Cast<TableCatalogEntry>();
-		if (table_entry.IsDuckTable()) {
-			gate_table_info = table_entry.Cast<DuckTableEntry>().GetStorage().GetDataTableInfo().get();
-		}
-	}
-	auto publish_gate = gate_table_info ? gate_table_info->GetPublishGateExclusive() : nullptr;
+	auto publish_gate = LockTablePublishGate(GetEntry(transaction, name));
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> read_lock(catalog_lock);
 	return DropEntryInternal(transaction, name, allow_drop_internal);
