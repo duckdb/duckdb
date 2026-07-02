@@ -254,8 +254,9 @@ ScalarFunctionSet BitLengthFun::GetFunctions() {
 }
 
 ScalarFunctionSet OctetLengthFun::GetFunctions() {
-	// length for BLOB type
 	ScalarFunctionSet octet_length("octet_length");
+	octet_length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                                        ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>));
 	octet_length.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::BIGINT,
 	                                        ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>));
 	octet_length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
