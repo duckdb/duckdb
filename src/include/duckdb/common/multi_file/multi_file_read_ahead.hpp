@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/vector.hpp"
@@ -32,18 +33,18 @@ public:
 	//! Returns 0 when read-ahead is disabled.
 	static idx_t ResolveDepth(ClientContext &context, idx_t max_threads);
 
-	//! Maximum number of jobs we try keep scheduled.
-	idx_t ReadAheadDepth() const {
-		return read_ahead_depth;
-	}
-	//! Jobs currently claimed but not yet finished decoding (i.e., queued or being decoded).
-	idx_t ActiveJobs() const;
-
 	//! Set/Check if scan is done, i.e., no more jobs to do
 	void SetDone();
 	bool IsDone() const;
 
-	//! Schedule the job's I/O and put it in the queue
+	//! Reserve an in-flight job slot for producing a job
+	bool TryReserveSlot();
+	//! Give a reserved slot back without pushing a job
+	void AbortProduce();
+	//! Whether any thread holds a reserved slot it has not pushed a job for yet
+	bool HasActiveProducers() const;
+
+	//! Schedule the job's I/O and admit the job to the queue in batch-index order
 	void PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks);
 
 	//! Pop the oldest queued job
@@ -54,16 +55,12 @@ public:
 	//! Pop a recycled scan state, returns null when none is available
 	unique_ptr<LocalTableFunctionState> TryPopState();
 
-	bool TryBecomeProducer();
-	void EndProducer();
-
 	//! Block until the claimed job's scheduled I/O has completed
 	void WaitForJob(MultiFileScanJob &job);
 
-	//! Mark one dequeued job as fully decoded, freeing its slot.
-	void FinishJob();
-
 private:
+	//! Release a look-ahead slot
+	void ReleaseSlot();
 	//! Be sure to drain any running work on early exit
 	void Drain() noexcept;
 
@@ -71,13 +68,18 @@ private:
 
 	mutable mutex lock;
 	deque<unique_ptr<MultiFileScanJob>> ready_queue;
-	//! Scan states of finished jobs, reused by the producer for new jobs, we keep a pool to reuse the per-thread effect
+	//! Jobs pushed out of order, held back until all earlier batch indexes are admitted to the queue
+	map<idx_t, unique_ptr<MultiFileScanJob>> pending_jobs;
+	//! The batch index the queue admits next
+	idx_t next_batch_index = 0;
+	//! Scan states of finished jobs, reused by producers for new jobs, we keep a pool to reuse the per-thread effect
 	//! Of non-read ahead
 	vector<unique_ptr<LocalTableFunctionState>> state_pool;
+	//! Jobs scheduled ahead of decoding
 	atomic<idx_t> active_jobs {0};
 	atomic<bool> done {false};
-	//! Set while a thread is producing, so only one thread fills the queue at a time, so we can keep batch_index in order
-	atomic<bool> producing {false};
+	//! Threads that reserved a slot but have not pushed their job yet
+	atomic<idx_t> active_producers {0};
 	//! Async I/O executor (async pool).
 	unique_ptr<TaskExecutor> executor;
 };

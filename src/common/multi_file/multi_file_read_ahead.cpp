@@ -39,17 +39,13 @@ idx_t MultiFileReadAhead::ResolveDepth(ClientContext &context, idx_t max_threads
 	auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
 	if (configured_depth < 0) {
 		// TODO: We probably want to make this depend on a memory budget
-		return max_threads + MaxValue<idx_t>(max_threads / 4, 4);
+		return MaxValue<idx_t>(max_threads / 4, 4);
 	}
 	return NumericCast<idx_t>(configured_depth);
 }
 
 MultiFileReadAhead::~MultiFileReadAhead() {
 	Drain();
-}
-
-idx_t MultiFileReadAhead::ActiveJobs() const {
-	return active_jobs.load();
 }
 
 void MultiFileReadAhead::SetDone() {
@@ -60,18 +56,42 @@ bool MultiFileReadAhead::IsDone() const {
 	return done.load();
 }
 
+bool MultiFileReadAhead::TryReserveSlot() {
+	if (active_jobs.fetch_add(1) >= read_ahead_depth) {
+		active_jobs--;
+		return false;
+	}
+	active_producers++;
+	return true;
+}
+
+void MultiFileReadAhead::AbortProduce() {
+	ReleaseSlot();
+	active_producers--;
+}
+
+bool MultiFileReadAhead::HasActiveProducers() const {
+	return active_producers.load() > 0;
+}
+
 void MultiFileReadAhead::PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks) {
 	auto pending = make_shared_ptr<atomic<idx_t>>(io_tasks.size());
 	job->io_tasks_pending = pending;
-	// schedule the reads detached on the async pool
+	// schedule the reads detached on the async pool right away
 	for (auto &task : io_tasks) {
 		executor->ScheduleTask(make_uniq<ReadAheadIOTask>(*executor, std::move(task), pending));
 	}
-	// bump active_jobs together with the enqueue so a throw above (before any state is published) cannot desync the
-	// count
-	lock_guard<mutex> guard(lock);
-	active_jobs++;
-	ready_queue.push_back(std::move(job));
+	{
+		lock_guard<mutex> guard(lock);
+		// producers push concurrently, so admit jobs to the queue in batch-index order
+		pending_jobs.emplace(job->batch_index, std::move(job));
+		while (!pending_jobs.empty() && pending_jobs.begin()->first == next_batch_index) {
+			ready_queue.push_back(std::move(pending_jobs.begin()->second));
+			pending_jobs.erase(pending_jobs.begin());
+			next_batch_index++;
+		}
+	}
+	active_producers--;
 }
 
 unique_ptr<MultiFileScanJob> MultiFileReadAhead::ClaimJob() {
@@ -81,6 +101,7 @@ unique_ptr<MultiFileScanJob> MultiFileReadAhead::ClaimJob() {
 	}
 	auto job = std::move(ready_queue.front());
 	ready_queue.pop_front();
+	ReleaseSlot();
 	return job;
 }
 
@@ -98,15 +119,6 @@ unique_ptr<LocalTableFunctionState> MultiFileReadAhead::TryPopState() {
 	auto state = std::move(state_pool.back());
 	state_pool.pop_back();
 	return state;
-}
-
-bool MultiFileReadAhead::TryBecomeProducer() {
-	bool expected = false;
-	return producing.compare_exchange_strong(expected, true);
-}
-
-void MultiFileReadAhead::EndProducer() {
-	producing = false;
 }
 
 void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
@@ -128,7 +140,7 @@ void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
 	}
 }
 
-void MultiFileReadAhead::FinishJob() {
+void MultiFileReadAhead::ReleaseSlot() {
 	D_ASSERT(active_jobs.load() > 0);
 	active_jobs--;
 }

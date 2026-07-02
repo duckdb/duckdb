@@ -527,7 +527,6 @@ public:
 
 		if (gstate.read_ahead) {
 			// read-ahead path: jobs (each with their own scan state) are produced and pulled from the queue
-			result->read_ahead = gstate.read_ahead.get();
 			return std::move(result);
 		}
 
@@ -752,41 +751,39 @@ public:
 		return MultiFileDecodeResult::JOB_FINISHED;
 	}
 
-	static void FillReadAheadQueue(ClientContext &context, const MultiFileBindData &bind_data,
-	                               MultiFileGlobalState &gstate) {
+	//! Try to produce one job into the read-ahead queue.
+	static bool TryProduceJob(ClientContext &context, const MultiFileBindData &bind_data,
+	                          MultiFileGlobalState &gstate) {
 		auto &read_ahead = *gstate.read_ahead;
-		if (!read_ahead.TryBecomeProducer()) {
-			// Some other thread is already producing
-			return;
+		if (read_ahead.IsDone() || !read_ahead.TryReserveSlot()) {
+			return false;
 		}
 		try {
-			while (!read_ahead.IsDone() && read_ahead.ActiveJobs() < read_ahead.ReadAheadDepth()) {
-				// We still have work to do and our budget is not full
-				auto job = make_uniq<MultiFileScanJob>();
-				// prefer a finished job's scan state, so learned reader state carries over across jobs
-				job->reader_scan_state = read_ahead.TryPopState();
-				if (!job->reader_scan_state) {
-					job->reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
-				}
-				if (!ClaimNextJob(context, bind_data, gstate, *job)) {
-					// If there are no more jobs we are done
-					read_ahead.SetDone();
-					break;
-				}
-				auto scheduled = job->reader->ScheduleIO(context, *gstate.global_state, *job->reader_scan_state);
-				vector<unique_ptr<AsyncTask>> io_tasks;
-				if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
-					// if we got blocked, we have tasks for the pool
-					io_tasks = scheduled.ExtractAsyncTasks();
-				}
-				read_ahead.PushJob(std::move(job), std::move(io_tasks));
+			auto job = make_uniq<MultiFileScanJob>();
+			// prefer a finished job's scan state, so learned reader state carries over across jobs
+			job->reader_scan_state = read_ahead.TryPopState();
+			if (!job->reader_scan_state) {
+				job->reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
 			}
+			if (!ClaimNextJob(context, bind_data, gstate, *job)) {
+				// If there are no more jobs we are done
+				read_ahead.SetDone();
+				read_ahead.AbortProduce();
+				return false;
+			}
+			auto scheduled = job->reader->ScheduleIO(context, *gstate.global_state, *job->reader_scan_state);
+			vector<unique_ptr<AsyncTask>> io_tasks;
+			if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
+				// if we got blocked, we have tasks for the pool
+				io_tasks = scheduled.ExtractAsyncTasks();
+			}
+			read_ahead.PushJob(std::move(job), std::move(io_tasks));
 		} catch (...) {
-			// if something went wrong we should clean up the producer
-			read_ahead.EndProducer();
+			// give the slot back so other threads do not wait for a job that will never come
+			read_ahead.AbortProduce();
 			throw;
 		}
-		read_ahead.EndProducer();
+		return true;
 	}
 
 	static MultiFileAcquireResult AcquireNextPerThread(ClientContext &context, TableFunctionInput &input,
@@ -821,9 +818,15 @@ public:
 	                                                   MultiFileGlobalState &gstate, MultiFileBindData &bind_data) {
 		auto &read_ahead = *gstate.read_ahead;
 		while (true) {
-			// top up the queue, then pop the oldest job
-			FillReadAheadQueue(context, bind_data, gstate);
+			while (TryProduceJob(context, bind_data, gstate)) {
+			}
 			auto job = read_ahead.ClaimJob();
+			if (!job && read_ahead.IsDone() && !read_ahead.HasActiveProducers()) {
+				job = read_ahead.ClaimJob();
+				if (!job) {
+					return MultiFileAcquireResult::EXHAUSTED;
+				}
+			}
 			if (job) {
 				// block until the job's prefetched I/O has completed
 				read_ahead.WaitForJob(*job);
@@ -831,22 +834,17 @@ public:
 				lstate.job_state = MultiFileJobState::DECODE;
 				return MultiFileAcquireResult::ACQUIRED;
 			}
-			if (read_ahead.IsDone()) {
-				return MultiFileAcquireResult::EXHAUSTED;
-			}
 			// stop spinning if the query was interrupted
 			if (context.IsInterrupted()) {
 				throw InterruptException();
 			}
-			// queue empty but scan not done, another thread is producing, wait for it to enqueue
 			TaskScheduler::YieldThread();
 		}
 	}
 
 	static MultiFileFinishResult FinishReadAhead(MultiFileLocalState &lstate, MultiFileGlobalState &gstate) {
-		// hand the scan state back for reuse, then free this job's in-flight slot
+		// hand the scan state back for reuse
 		gstate.read_ahead->PushState(std::move(lstate.job.reader_scan_state));
-		gstate.read_ahead->FinishJob();
 		lstate.job_state = MultiFileJobState::NONE;
 		return MultiFileFinishResult::CONTINUE;
 	}

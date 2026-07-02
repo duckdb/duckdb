@@ -6,7 +6,7 @@ require parquet
 
 require vector_size 2048
 
-# at threads=1 the automatic read-ahead depth resolves to 5, so the first 5 row groups are scheduled with
+# at threads=1 the automatic read-ahead depth resolves to 4, so the first 4 row groups are scheduled with
 # fresh scan states before anything decodes; every later row group is scheduled with a recycled state that
 # has seen a fully-selective filter, and must switch from whole_group to prefetch_filters
 statement ok
@@ -45,7 +45,7 @@ ORDER BY row_group_id
 1	true	whole_group	[[a, b, c, g]]
 2	true	whole_group	[[a, b, c, g]]
 3	true	whole_group	[[a, b, c, g]]
-4	true	whole_group	[[a, b, c, g]]
+4	true	prefetch_filters	[[c], [a, b, *c*, g]]
 5	true	prefetch_filters	[[c], [a, b, *c*, g]]
 6	true	prefetch_filters	[[c], [a, b, *c*, g]]
 7	true	prefetch_filters	[[c], [a, b, *c*, g]]
