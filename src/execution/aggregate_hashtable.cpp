@@ -1,4 +1,5 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
