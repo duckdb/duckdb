@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
