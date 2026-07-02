@@ -1603,6 +1603,10 @@ public:
 		read_head->Fetch(*file_handle);
 	}
 
+	idx_t GetIOSize() const override {
+		return read_head->size;
+	}
+
 private:
 	shared_ptr<ReadHead> read_head;
 	shared_ptr<CachingFileHandle> file_handle;

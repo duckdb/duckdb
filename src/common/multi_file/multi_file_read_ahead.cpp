@@ -5,6 +5,7 @@
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -30,7 +31,7 @@ private:
 };
 
 MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p)
-    : read_ahead_depth(read_ahead_depth_p) {
+    : read_ahead_depth(read_ahead_depth_p),io_byte_budget(BufferManager::GetBufferManager(context).GetMaxMemory() / 4) {
 	D_ASSERT(read_ahead_depth_p > 0);
 	executor = make_uniq<TaskExecutor>(context, TaskSchedulerType::ASYNC);
 }
@@ -38,7 +39,6 @@ MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_
 idx_t MultiFileReadAhead::ResolveDepth(ClientContext &context, idx_t max_threads) {
 	auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
 	if (configured_depth < 0) {
-		// TODO: We probably want to make this depend on a memory budget
 		return MaxValue<idx_t>(max_threads / 4, 4);
 	}
 	return NumericCast<idx_t>(configured_depth);
@@ -57,6 +57,9 @@ bool MultiFileReadAhead::IsDone() const {
 }
 
 bool MultiFileReadAhead::TryReserveSlot() {
+	if (pending_io_bytes.load() >= io_byte_budget) {
+		return false;
+	}
 	if (active_jobs.fetch_add(1) >= read_ahead_depth) {
 		active_jobs--;
 		return false;
@@ -77,6 +80,10 @@ bool MultiFileReadAhead::HasActiveProducers() const {
 void MultiFileReadAhead::PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks) {
 	auto pending = make_shared_ptr<atomic<idx_t>>(io_tasks.size());
 	job->io_tasks_pending = pending;
+	for (auto &task : io_tasks) {
+		job->io_bytes += task->GetIOSize();
+	}
+	pending_io_bytes += job->io_bytes;
 	// schedule the reads detached on the async pool right away
 	for (auto &task : io_tasks) {
 		executor->ScheduleTask(make_uniq<ReadAheadIOTask>(*executor, std::move(task), pending));
@@ -102,6 +109,7 @@ unique_ptr<MultiFileScanJob> MultiFileReadAhead::ClaimJob() {
 	auto job = std::move(ready_queue.front());
 	ready_queue.pop_front();
 	ReleaseSlot();
+	pending_io_bytes -= job->io_bytes;
 	return job;
 }
 

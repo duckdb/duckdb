@@ -65,6 +65,8 @@ private:
 	void Drain() noexcept;
 
 	idx_t read_ahead_depth;
+	//! Maximum bytes of I/O scheduled ahead of decoding, additional jobs wait until claims free up bytes
+	const idx_t io_byte_budget;
 
 	mutable mutex lock;
 	deque<unique_ptr<MultiFileScanJob>> ready_queue;
@@ -77,6 +79,8 @@ private:
 	vector<unique_ptr<LocalTableFunctionState>> state_pool;
 	//! Jobs scheduled ahead of decoding
 	atomic<idx_t> active_jobs {0};
+	//! Bytes of scheduled I/O belonging to jobs ahead of decoding
+	atomic<idx_t> pending_io_bytes {0};
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet
 	atomic<idx_t> active_producers {0};
