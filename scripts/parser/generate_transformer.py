@@ -220,7 +220,7 @@ def to_snake_case(name):
 
 
 def manual_body_exists(gram_stem, rule_name):
-    pattern = re.compile(rf'\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*\(')
+    pattern = re.compile(rf'\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*\([^;]*\)\s*\{{', re.S)
     preferred_path = transformer_dir / f"transform_{gram_stem}.cpp"
     paths = [preferred_path] if preferred_path.exists() else []
     paths.extend(path for path in transformer_dir.glob("transform_*.cpp") if path != preferred_path)
@@ -1189,6 +1189,8 @@ def _matcher_override_expr(rule_name, override):
     if matcher == "reserved_identifier":
         if suggestion:
             return f"allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::{suggestion}))"
+    if matcher == "identifier_string":
+        return "allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE))"
     if matcher == "number_literal":
         return "allocator.Allocate(make_uniq<NumberLiteralMatcher>())"
     if matcher == "string_literal":
@@ -1244,22 +1246,23 @@ def write_hpp(all_declarations):
     print(f"Updated {hpp_path}")
 
 
-def _extract_func_signature(text, func_name):
-    """Extract 'ReturnType PEGTransformerFactory::func_name(params)' from C++ source text."""
-    m = re.search(rf'\bPEGTransformerFactory::{re.escape(func_name)}\s*\(', text)
-    if not m:
-        return None
-    line_start = text.rfind('\n', 0, m.start()) + 1
-    paren_start = text.index('(', m.start())
-    depth = 0
-    for i, char in enumerate(text[paren_start:]):
-        if char == '(':
-            depth += 1
-        elif char == ')':
-            depth -= 1
-            if depth == 0:
-                return text[line_start : paren_start + i + 1]
-    return None
+def _extract_func_signatures(text, func_name):
+    """Extract all 'ReturnType PEGTransformerFactory::func_name(params)' overload signatures from C++ source text."""
+    signatures = []
+    matches = re.finditer(rf'\bPEGTransformerFactory::{re.escape(func_name)}\s*\(', text)
+    for m in matches:
+        line_start = text.rfind('\n', 0, m.start()) + 1
+        paren_start = text.index('(', m.start())
+        depth = 0
+        for i, char in enumerate(text[paren_start:]):
+            if char == '(':
+                depth += 1
+            elif char == ')':
+                depth -= 1
+                if depth == 0:
+                    signatures.append(text[line_start : paren_start + i + 1])
+                    break
+    return signatures
 
 
 def _norm_ws(s):
@@ -1291,12 +1294,14 @@ def _check_implementations(gram_stem, body_stubs):
         expected_norm = expected[expected.find(prefix) :] if prefix in expected else expected
         found_mismatch = False
         for path in paths:
-            actual = _extract_func_signature(path.read_text(), f'Transform{rule_name}')
-            if actual is None:
+            actual_signatures = _extract_func_signatures(path.read_text(), f'Transform{rule_name}')
+            if not actual_signatures:
                 continue
-            actual = _norm_ws(actual)
-            actual_norm = actual[actual.find(prefix) :] if prefix in actual else actual
-            if expected_norm == actual_norm:
+            actual_norms = []
+            for actual in actual_signatures:
+                actual = _norm_ws(actual)
+                actual_norms.append(actual[actual.find(prefix) :] if prefix in actual else actual)
+            if expected_norm in actual_norms:
                 implemented.add(rule_name)
                 found_mismatch = False
                 break
@@ -1397,6 +1402,27 @@ def print_manual_steps(all_results):
             step += 1
 
 
+def validate_no_missing_grammar_types(all_results):
+    missing = [
+        (r.gram_stem, rule_name)
+        for r in all_results
+        for rule_name, reason in r.skipped
+        if reason == "no return type in grammar_types.yml"
+    ]
+    if not missing:
+        return
+
+    print("Error: missing transformer metadata in grammar_types.yml:", file=sys.stderr)
+    current_stem = None
+    for gram_stem, rule_name in missing:
+        if gram_stem != current_stem:
+            print(f"  {gram_stem}.gram:", file=sys.stderr)
+            current_stem = gram_stem
+        print(f"    {rule_name}", file=sys.stderr)
+    print("Add type metadata for these rules or explicitly list syntax-only rules in excluded_rules.", file=sys.stderr)
+    sys.exit(1)
+
+
 def process_gram_file(gram_filename, rule_types, excluded_rules, provided_rule_names, identifier_override_rules):
     """Parse a .gram file and classify all its rules into a GramFileResult."""
     gram_stem = gram_filename.removesuffix('.gram')
@@ -1436,6 +1462,7 @@ def main():
         process_gram_file(f, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules)
         for f in gram_files_to_gen
     ]
+    validate_no_missing_grammar_types(results)
 
     if args.write:
         all_declarations = [d for r in results for d in r.declarations]

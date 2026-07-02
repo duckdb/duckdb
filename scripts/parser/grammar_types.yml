@@ -289,6 +289,7 @@ Constraint:
   rules:
     - TopLevelConstraint
     - TopLevelConstraintList
+    - TopCheckConstraint
     - TopPrimaryKeyConstraint
     - TopUniqueConstraint
     - TopForeignKeyConstraint
@@ -845,6 +846,8 @@ PivotColumn:
     - PivotColumnExpression
     - PivotValueList
     - PivotValueTarget
+    - PivotEnumTarget
+    - PivotListTarget
     - UnpivotValueList
 
 UnpivotNameValues:
@@ -1523,7 +1526,9 @@ overrides:
   ColIdType: "pair<Identifier, LogicalType>"
   ColIdTypeList: "child_list_t<LogicalType>"
   # create_index.gram
-  RelOption: "pair<Identifier, unique_ptr<ParsedExpression>>"
+  RelOption:
+    type: "pair<Identifier, unique_ptr<ParsedExpression>>"
+    by_value: true
   # create_table.gram
   ColumnDefinition:
     type: "ConstraintColumnDefinition"
@@ -1551,6 +1556,12 @@ overrides:
   OtherOperator:
     type: "ParsedOperator"
     by_value: true
+  AnyAllParsedOperator:
+    type: "ParsedOperator"
+    by_value: true
+  NamedOtherOperator:
+    type: "ParsedOperator"
+    by_value: true
   OtherOperatorTail:
     type: "OtherOperatorTail"
     by_value: true
@@ -1573,7 +1584,9 @@ overrides:
     type: "TrimArguments"
     by_value: true
   # select.gram
-  WithStatement: "pair<Identifier, unique_ptr<CommonTableExpressionInfo>>"
+  WithStatement:
+    type: "pair<Identifier, unique_ptr<CommonTableExpressionInfo>>"
+    by_value: true
   JoinType:
     type: "JoinType"
     default_initializer: "INNER"
@@ -1587,7 +1600,9 @@ overrides:
     type: "OrderByNullType"
     default_initializer: "ORDER_DEFAULT"
   # update.gram
-  UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
+  UpdateSetElement:
+    type: "pair<string, unique_ptr<ParsedExpression>>"
+    by_value: true
 
 # ---------------------------------------------------------------------------
 # matcher.cpp rule overrides
@@ -1672,6 +1687,9 @@ matcher_rule_overrides:
   ReservedFunctionName:
     matcher: reserved_identifier
     suggestion: SUGGEST_SCALAR_FUNCTION_NAME
+  ReservedKeyword:
+    allow_type_overlap: true
+    matcher: identifier_string
   TableFunctionName:
     matcher: identifier
     suggestion: SUGGEST_TABLE_FUNCTION_NAME
@@ -1710,7 +1728,11 @@ excluded_rules:
   - UnpivotStatement
   - CommentValue
   - Program
+  - TopLevelStatement
   - Statement
+  - "%whitespace"
+  - List
+  - Parens
   - Database
   - AbortOrRollback
   - CommitOrEnd
@@ -1750,6 +1772,5 @@ excluded_rules:
   - WindowDefinition
   - ExcludeOrExcept
   # expression.gram rules kept manual during incremental transformer generation migration
-  - Expression
   - OverClause
   - PrefixExpression

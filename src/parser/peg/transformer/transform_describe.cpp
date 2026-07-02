@@ -3,6 +3,15 @@
 
 namespace duckdb {
 
+static const TransformFrameOps &GetDescribeTrampolineOps(const string &rule_name) {
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(rule_name);
+	if (ops_entry == ops_map.end()) {
+		throw NotImplementedException("No trampoline transformer for rule '%s'", rule_name);
+	}
+	return *ops_entry->second;
+}
+
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformDescribeStatement(PEGTransformer &transformer,
                                                                               unique_ptr<QueryNode> child) {
 	auto select_statement = make_uniq<SelectStatement>();
@@ -138,6 +147,10 @@ DescribeTarget PEGTransformerFactory::TransformDescribeStringLiteral(PEGTransfor
 
 ShowType PEGTransformerFactory::TransformSummarizeRule(PEGTransformer &transformer) {
 	return ShowType::SUMMARY;
+}
+
+ShowType PEGTransformerFactory::TransformSummarize(PEGTransformer &transformer, const ShowType &summarize_rule) {
+	return summarize_rule;
 }
 
 ShowType PEGTransformerFactory::TransformShowRule(PEGTransformer &transformer) {

@@ -196,6 +196,26 @@ string PEGTransformerFactory::TransformColLabelOrString(PEGTransformer &transfor
 	return transformer.Transform<string>(choice_pr.GetResult());
 }
 
+void PEGTransformerFactory::InitializeColLabelOrStringTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColLabelOrStringTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	Identifier result;
+	if (choice_result.type == ParseResultType::STRING) {
+		result = Identifier(choice_result.Cast<StringLiteralParseResult>().result);
+	} else {
+		result = Identifier(TransformIdentifierOrKeyword(transformer, choice_result));
+	}
+	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
 Identifier PEGTransformerFactory::TransformColIdOrString(PEGTransformer &transformer, ParseResult &choice_result) {
 	if (choice_result.type == ParseResultType::STRING) {
 		return Identifier(choice_result.Cast<StringLiteralParseResult>().result);
@@ -216,6 +236,10 @@ vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &
 		parts.insert(parts.end(), dot_col_label->begin(), dot_col_label->end());
 	}
 	return parts;
+}
+
+string PEGTransformerFactory::TransformDotColLabel(PEGTransformer &transformer, const string &col_label) {
+	return col_label;
 }
 
 ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
@@ -341,13 +365,9 @@ PEGTransformerFactory::TransformTopLevelConstraint(PEGTransformer &transformer, 
 	return top_level_constraint_list;
 }
 
-unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraintList(PEGTransformer &transformer,
-                                                                              ParseResult &choice_result) {
-	if (choice_result.name == "CheckConstraint") {
-		auto cc_entry = transformer.Transform<ColumnConstraintEntry>(choice_result);
-		return std::move(cc_entry.constraint);
-	}
-	return transformer.Transform<unique_ptr<Constraint>>(choice_result);
+unique_ptr<Constraint> PEGTransformerFactory::TransformTopCheckConstraint(PEGTransformer &transformer,
+                                                                          ColumnConstraintEntry check_constraint) {
+	return std::move(check_constraint.constraint);
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopPrimaryKeyConstraint(PEGTransformer &transformer,

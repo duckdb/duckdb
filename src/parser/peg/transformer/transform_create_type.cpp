@@ -49,4 +49,28 @@ PEGTransformerFactory::TransformEnumStringLiteralList(PEGTransformer &transforme
 	return result;
 }
 
+void PEGTransformerFactory::InitializeEnumStringLiteralListTrampoline(PEGTransformer &transformer,
+                                                                      TransformStack &stack,
+                                                                      TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeEnumStringLiteralListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	optional<vector<string>> string_literal {};
+	auto &string_literal_opt = ExtractResultFromParens(list_pr.GetChild(1)).Cast<OptionalParseResult>();
+	if (string_literal_opt.HasResult()) {
+		vector<string> string_literal_value;
+		auto string_literal_items = ExtractParseResultsFromList(string_literal_opt.GetResult());
+		for (auto &string_literal_item : string_literal_items) {
+			string_literal_value.push_back(TransformStringLiteral(transformer, string_literal_item.get()));
+		}
+		string_literal = string_literal_value;
+	}
+	auto result = TransformEnumStringLiteralList(transformer, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<CreateTypeInfo>>>(std::move(result));
+}
+
 } // namespace duckdb

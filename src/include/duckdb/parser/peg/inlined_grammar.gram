@@ -966,7 +966,10 @@ BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 OtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
 OtherOperatorTail <- OtherOperator BitwiseExpression
 OtherOperator <-
-    QualifiedOperator / AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral
+    AnyAllParsedOperator / NamedOtherOperator
+AnyAllParsedOperator <- AnyAllOperator
+NamedOtherOperator <-
+    QualifiedOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral
 OperatorLiteral <- Identifier
 AnyAllOperator <- AnyOp AnyOrAll
 AnyOrAll <- SubqueryAny / SubqueryAll
@@ -1220,8 +1223,9 @@ SetNullKeyAction <- 'SET' 'NULL'
 SetDefaultKeyAction <- 'SET' 'DEFAULT'
 
 TopLevelConstraint <- ConstraintNameClause? TopLevelConstraintList
-TopLevelConstraintList <- TopPrimaryKeyConstraint / CheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
+TopLevelConstraintList <- TopPrimaryKeyConstraint / TopCheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
 ConstraintNameClause <- 'CONSTRAINT' Identifier
+TopCheckConstraint <- CheckConstraint
 TopPrimaryKeyConstraint <- 'PRIMARY' 'KEY' ColumnIdList
 TopUniqueConstraint <- 'UNIQUE' ColumnIdList
 TopForeignKeyConstraint <- 'FOREIGN' 'KEY' ColumnIdList ForeignKeyConstraint
@@ -1268,7 +1272,7 @@ RelOption <- RelOptionName RelOptionArgumentOpt?
 RelOptionName <- DottedIdentifierString / StringLiteral
 DottedIdentifierString <- DottedIdentifier
 RelOptionArgumentOpt <- '=' DefArg
-DefArg <- DefArgNull / DefArgKeyword / DefArgStringLiteral / NumberLiteral / NoneLiteral / Expression
+DefArg <- DefArgNull / DefArgStringLiteral / NumberLiteral / NoneLiteral / Expression / DefArgKeyword
 DefArgNull <- NullLiteral
 DefArgKeyword <- ReservedKeyword
 DefArgStringLiteral <- StringLiteral
@@ -1442,7 +1446,9 @@ TableUnpivotClauseBody <- UnpivotHeader 'FOR' UnpivotValueList+
 
 PivotHeader <- BaseExpression
 PivotValueList <- PivotHeader 'IN' PivotValueTarget
-PivotValueTarget <- Identifier / PivotTargetList
+PivotValueTarget <- PivotEnumTarget / PivotListTarget
+PivotEnumTarget <- Identifier
+PivotListTarget <- PivotTargetList
 UnpivotValueList <- UnpivotHeader 'IN' UnpivotTargetList
 PivotTargetList <- Parens(TargetList)
 UnpivotTargetList <- Parens(TargetList)

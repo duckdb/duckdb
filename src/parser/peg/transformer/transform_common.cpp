@@ -11,6 +11,15 @@
 
 namespace duckdb {
 
+static const TransformFrameOps &GetCommonTrampolineOps(const string &rule_name) {
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(rule_name);
+	if (ops_entry == ops_map.end()) {
+		throw NotImplementedException("No trampoline transformer for rule '%s'", rule_name);
+	}
+	return *ops_entry->second;
+}
+
 string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result) {
 	if (parse_result.type == ParseResultType::IDENTIFIER) {
 		return parse_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
@@ -20,7 +29,7 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 	}
 	if (parse_result.type == ParseResultType::CHOICE) {
 		auto &choice_pr = parse_result.Cast<ChoiceParseResult>();
-		return transformer.Transform<string>(choice_pr.GetResult());
+		return TransformIdentifierOrKeyword(transformer, choice_pr.GetResult());
 	}
 	if (parse_result.type == ParseResultType::LIST) {
 		auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -31,22 +40,34 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 			}
 			if (child.get().type == ParseResultType::CHOICE) {
 				auto &choice_result = child.get().Cast<ChoiceParseResult>().GetResult();
-				if (choice_result.type == ParseResultType::IDENTIFIER) {
-					return choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
-				}
-				if (choice_result.type == ParseResultType::KEYWORD) {
-					return choice_result.Cast<KeywordParseResult>().keyword;
-				}
-				return transformer.Transform<string>(choice_result);
+				return TransformIdentifierOrKeyword(transformer, choice_result);
+			}
+			if (child.get().type == ParseResultType::LIST) {
+				return TransformIdentifierOrKeyword(transformer, child.get());
 			}
 			if (child.get().type == ParseResultType::IDENTIFIER) {
 				return child.get().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+			}
+			if (child.get().type == ParseResultType::KEYWORD) {
+				return child.get().Cast<KeywordParseResult>().keyword;
 			}
 			throw InternalException("Unexpected IdentifierOrKeyword type encountered %s.",
 			                        ParseResultToString(child.get().type));
 		}
 	}
 	throw ParserException("Unexpected ParseResult type in identifier transformation.");
+}
+
+void PEGTransformerFactory::InitializeColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                         TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColLabelTrampoline(PEGTransformer &transformer,
+                                                                                   TransformStack &stack,
+                                                                                   TransformStackFrame &frame) {
+	auto result = TransformIdentifierOrKeyword(transformer, frame.parse_result);
+	return make_uniq<TypedTransformResult<string>>(result);
 }
 
 LogicalType PEGTransformerFactory::TransformType(PEGTransformer &transformer,
