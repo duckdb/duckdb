@@ -353,6 +353,14 @@ void DataTable::AddIndex(unique_ptr<Index> index) {
 	info->indexes.AddIndex(std::move(index));
 }
 
+void DataTable::AttachIndexToLiveTable(unique_ptr<Index> index) {
+	// A group commit that modified this table holds its publish gate SHARED from before its catalog validation
+	// through publish (which inserts committed rows into the index list). Take the gate EXCLUSIVE so this attach
+	// does not interleave such a publish - held only for the list change below.
+	auto publish_gate = info->GetPublishGateExclusive();
+	AddIndex(std::move(index));
+}
+
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
 	auto index = info->indexes.FindForeignKeyIndex(keys, type);
 	return index != nullptr;

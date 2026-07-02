@@ -173,16 +173,12 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		catalog.Alter(context, *alter_table_info);
 	}
 
-	// Block deferred (group) commits on this table from being in-flight while we attach the new index: a commit that
-	// is durable in the WAL but not yet published must not interleave with the index list changing (see
-	// DataTableInfo::GetPublishGateExclusive). Scoped to this table's DataTableInfo. This must be acquired AFTER the
-	// catalog operations above, which can re-acquire the gate internally (it is not re-entrant).
+	// Attach the index to the live table. This takes the table's publish gate so the index-list change does not
+	// interleave a concurrent group commit's publish (see DataTable::AttachIndexToLiveTable). It must run AFTER the
+	// catalog operations above, which re-acquire the gate internally (it is not re-entrant).
 	// NOTE: this does NOT fix the pre-existing race where rows committed during the index build are missing from
 	// the new index - that race reproduces on upstream main and needs a separate fix in the index build protocol.
-	auto publish_gate = storage.GetDataTableInfo()->GetPublishGateExclusive();
-
-	// Add the index to the storage.
-	storage.AddIndex(std::move(bound_index));
+	storage.AttachIndexToLiveTable(std::move(bound_index));
 
 	return SinkFinalizeType::READY;
 }
