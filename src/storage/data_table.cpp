@@ -431,13 +431,12 @@ void DataTable::VerifyIndexBuffers() const {
 
 void DataTableInfo::VerifyIndexBuffers() const {
 	for (auto &entry : indexes.IndexEntries()) {
+		lock_guard<mutex> lock(entry.lock);
 		const auto index = entry.PinIndex();
 		if (index->IsBound()) {
 			auto &bound_index = index->Cast<BoundIndex>();
 			bound_index.VerifyBuffers();
 		}
-
-		lock_guard<mutex> lock(entry.lock);
 		if (entry.deleted_rows_in_use) {
 			entry.deleted_rows_in_use->VerifyBuffers();
 		}
@@ -824,6 +823,7 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
 	// Verify the constraint without a conflict manager.
 	if (!manager) {
 		for (auto &entry : indexes.IndexEntries()) {
+			lock_guard<mutex> guard(entry.lock);
 			const auto index = entry.PinIndex();
 			if (!index->IsUnique() || index->GetIndexType() != ART::TYPE_NAME) {
 				continue;
@@ -831,7 +831,6 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
 			D_ASSERT(index->IsBound());
 			auto &art = index->Cast<ART>();
 
-			lock_guard<mutex> guard(entry.lock);
 			IndexAppendInfo index_append_info;
 			if (storage) {
 				auto delete_index = storage->delete_indexes.Find(art.GetIndexName());

@@ -961,7 +961,7 @@ struct IndexRemovalTargets {
 void GetIndexRemovalTargetsActiveCheckpoint(IndexEntry &entry, IndexRemovalType removal_type,
                                             IndexRemovalTargets &targets) {
 	const auto index = entry.PinIndex();
-	const auto &main_index = entry.PinIndex()->Cast<BoundIndex>();
+	const auto &main_index = index->Cast<BoundIndex>();
 
 	// create "removed_data_during_checkpoint" if it does not exist
 	if (!entry.removed_data_during_checkpoint) {
@@ -1119,10 +1119,9 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	}
 
 	for (auto &entry : indexes.IndexEntries()) {
+		lock_guard<mutex> guard(entry.lock);
 		auto index = entry.PinIndex();
 		if (index->IsBound()) {
-			lock_guard<mutex> guard(entry.lock);
-
 			// check which indexes we should append to or remove from
 			// note that this method might also involve appending to indexes
 			// the reason for that is that we have "delta" indexes that we must fill with data we are removing

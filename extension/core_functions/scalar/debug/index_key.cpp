@@ -132,7 +132,7 @@ struct IndexKeyBindData : public FunctionData {
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<IndexKeyBindData>();
-		return &art == &other.art && key_types == other.key_types;
+		return art.get() == other.art.get() && key_types == other.key_types;
 	}
 
 	shared_ptr<ART> art;
