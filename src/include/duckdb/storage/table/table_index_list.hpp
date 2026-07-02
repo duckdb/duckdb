@@ -90,7 +90,7 @@ public:
 	//! Returns true, if the index name does not exist.
 	bool NameIsUnique(const string &name) const;
 	//! Returns an optional pointer to the index matching the name.
-	optional_ptr<BoundIndex> Find(const Identifier &name);
+	shared_ptr<BoundIndex> Find(const Identifier &name) const;
 	//! Binds unbound indexes possibly present after loading an extension.
 	void Bind(ClientContext &context, DataTableInfo &table_info, const char *index_type = nullptr);
 	//! Returns true, if there are no index entries.

@@ -960,6 +960,7 @@ struct IndexRemovalTargets {
 
 void GetIndexRemovalTargetsActiveCheckpoint(IndexEntry &entry, IndexRemovalType removal_type,
                                             IndexRemovalTargets &targets) {
+	const auto index = entry.PinIndex();
 	const auto &main_index = entry.PinIndex()->Cast<BoundIndex>();
 
 	// create "removed_data_during_checkpoint" if it does not exist

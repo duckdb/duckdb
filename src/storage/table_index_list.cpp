@@ -133,15 +133,18 @@ bool TableIndexList::NameIsUnique(const string &name) const {
 	return true;
 }
 
-optional_ptr<BoundIndex> TableIndexList::Find(const Identifier &name) {
+shared_ptr<BoundIndex> TableIndexList::Find(const Identifier &name) const {
+	lock_guard<mutex> lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
 		const auto index = entry->PinIndex();
-		if (index->GetIndexName() == name) {
-			if (!index->IsBound()) {
-				throw InternalException("cannot return an unbound index in TableIndexList::Find");
-			}
-			return index->Cast<BoundIndex>();
+		if (index->GetIndexName() != name) {
+			continue;
 		}
+		if (!index->IsBound()) {
+			throw InternalException("TableIndexList::Find cannot return an unbound index");
+		}
+		auto &bound_index = index->Cast<BoundIndex>();
+		return shared_ptr(index, &bound_index);
 	}
 	return nullptr;
 }
@@ -213,7 +216,8 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		IndexBinder idx_binder(*binder, context);
 
 		// Apply any outstanding buffered replays and replace the unbound index with a bound index.
-		auto &unbound_index = index_entry->PinIndex()->Cast<UnboundIndex>();
+		const auto index = index_entry->PinIndex();
+		auto &unbound_index = index->Cast<UnboundIndex>();
 		auto bound_idx = idx_binder.BindIndex(unbound_index);
 		if (unbound_index.HasBufferedReplays()) {
 			// For replaying buffered index operations, we only want the physical column types (skip over

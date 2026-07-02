@@ -853,7 +853,7 @@ void DataTable::VerifyUniqueIndexes(const TableIndexList &indexes, optional_ptr<
 		if (!index->IsUnique() || index->GetIndexType() != ART::TYPE_NAME) {
 			continue;
 		}
-		if (!conflict_info.ConflictTargetMatches(*index)) {
+		if (!conflict_info.ConflictTargetMatches(index)) {
 			continue;
 		}
 		D_ASSERT(index->IsBound());
