@@ -329,6 +329,11 @@ Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // WAL Buffer Size
 //===----------------------------------------------------------------------===//
+// The WAL's default write buffer must match every other BufferedFileWriter. config.hpp cannot include the writer
+// header (it would form an include cycle), so the default lives there as a literal and is tied to FILE_BUFFER_SIZE here.
+static_assert(DBConfigOptions::DEFAULT_WAL_BUFFER_SIZE == FILE_BUFFER_SIZE,
+              "wal_buffer_size default must equal FILE_BUFFER_SIZE");
+
 void WalBufferSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	idx_t new_size = DBConfig::ParseMemoryLimit(input.ToString());
 	// reject sub-page sizes (pathological WriteData thresholds, no benefit) and the "infinite" sentinel
