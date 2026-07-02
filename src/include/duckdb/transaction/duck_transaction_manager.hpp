@@ -20,7 +20,6 @@ namespace duckdb {
 class DuckTransactionManager;
 class DuckTransaction;
 struct UndoBufferProperties;
-struct DataTableInfo;
 
 //! CleanupInfo collects transactions awaiting cleanup.
 //! This ensures we can clean up after releasing the transaction lock.
@@ -92,16 +91,6 @@ public:
 	void PushCatalogEntry(Transaction &transaction_p, CatalogEntry &entry, data_ptr_t extra_data = nullptr,
 	                      idx_t extra_data_size = 0);
 	void PushAttach(Transaction &transaction_p, AttachedDatabase &db);
-
-	//! Acquire the given table's publish gate EXCLUSIVELY, returning the lock handle. Used by DDL (ALTER/DROP/CREATE
-	//! INDEX) to mutate a table's catalog entry / index list: a group commit that modifies that table holds the gate
-	//! SHARED from before its catalog validation until it publishes (applying its changes into the table's indexes),
-	//! so taking the gate exclusively here drains all in-flight commits on that table and blocks new ones until the
-	//! returned handle is released. Scoped to the table, so DDL on one table does not block commits to others. Returns
-	//! nullptr when there is nothing to gate (no table, system catalog, or in-memory database - none have group
-	//! commits). Writer priority (see StorageLock) prevents a steady stream of commits from starving the DDL. The
-	//! caller must NOT already hold this table's publish gate (the lock is not reentrant).
-	unique_ptr<StorageLockKey> BlockPendingCommits(optional_ptr<DataTableInfo> table_info);
 
 protected:
 	struct CheckpointDecision {

@@ -82,7 +82,7 @@ public:
 	//! Caller must hold the transaction lock. A failure here is fatal - the commit is already durable in the WAL.
 	ErrorData PublishCommit(AttachedDatabase &db, CommitInfo &commit_info) noexcept;
 	//! DataTableInfos of tables this transaction modified (deduplicated, address-ordered) - used to take each
-	//! table's publish gate SHARED while committing (see DuckTransactionManager::BlockPendingCommits).
+	//! table's publish gate SHARED while committing (see DataTableInfo::GetPublishGateExclusive).
 	vector<shared_ptr<DataTableInfo>> GetModifiedTableInfos() {
 		return undo_buffer.GetModifiedTableInfos();
 	}
