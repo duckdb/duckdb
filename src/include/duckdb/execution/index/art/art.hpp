@@ -10,13 +10,13 @@
 
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/common/array.hpp"
 
 namespace duckdb {
 
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1 };
 enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2, NONE = 3 };
+enum class ARTSerializationFormat : uint8_t { V1_0_0 = 0, CURRENT = 1 };
 
 class ConflictManager;
 class ARTKey;
@@ -47,11 +47,14 @@ public:
 	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 3;
 
 public:
+	using AllocatorArray = array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>;
+
+public:
 	ART(const Identifier &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
 	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
-	    AttachedDatabase &db,
-	    const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
+	    AttachedDatabase &db, const shared_ptr<AllocatorArray> &allocators_ptr = nullptr,
 	    const IndexStorageInfo &info = IndexStorageInfo());
+	ART(const ART &src, shared_ptr<AllocatorArray> allocators_ptr);
 
 	//! Create a index instance of this type.
 	static unique_ptr<BoundIndex> Create(CreateIndexInput &input) {
@@ -65,7 +68,7 @@ public:
 	//! Root of the tree.
 	Node tree = Node();
 	//! Fixed-size allocators holding the ART nodes.
-	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
+	shared_ptr<AllocatorArray> allocators;
 	//! True, if the ART owns its data.
 	bool owns_data;
 	//! Storage version that the ART was created in, used for backwards compatible key generation
@@ -132,10 +135,8 @@ public:
 	//! Vacuums the ART storage.
 	void Vacuum(IndexLock &state) override;
 
-	//! Serializes ART memory to disk and returns the ART storage information.
-	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
 	//! Serializes ART memory to the WAL and returns the ART storage information.
-	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
+	IndexStorageInfo SerializeToWAL(StorageVersion target_version) override;
 
 	//! Returns the in-memory usage of the ART.
 	idx_t GetInMemorySize(IndexLock &index_lock) override;
@@ -164,9 +165,19 @@ public:
 		return prefix_count;
 	}
 
+protected:
+	//! Produce a shadow ART and its associated metadata, used for checkpointing a bound index.
+	BoundCheckpointedIndex CreateCheckpoint(IndexLock &l, TableIndexWriter &writer) override;
+
 private:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
+
+	//! Create an index which is logically equivalent but backed by potentially different buffers.
+	unique_ptr<BoundIndex> CreateShadow(shared_ptr<AllocatorArray> new_allocators);
+
+	//! Returns how many allocators are used based on the target serialization format.
+	static uint8_t GetAllocatorCount(ARTSerializationFormat format);
 
 	bool FullScan(idx_t max_count, set<row_t> &row_ids);
 	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
@@ -191,9 +202,12 @@ private:
 
 	void InitAllocators(const IndexStorageInfo &info);
 	void TransformToDeprecated();
-	IndexStorageInfo PrepareSerialize(const case_insensitive_map_t<Value> &options, const bool v1_0_0_storage);
+	//! Gathers metadata used at serialization, optionally transforms the in-memory ART to a deprecated representation
+	//! based on the target serialization format.
+	IndexStorageInfo PrepareSerialize(ARTSerializationFormat target_format);
+	//! Get the serialization format of the ART based on the active storage version.
+	static ARTSerializationFormat GetSerializationFormat(StorageVersion storage_version);
 	void Deserialize(const BlockPointer &pointer);
-	void WritePartialBlocks(QueryContext context, const bool v1_0_0_storage);
 	void SetPrefixCount(const IndexStorageInfo &info);
 
 	string ToStringInternal(bool display_ascii);

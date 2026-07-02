@@ -1,0 +1,242 @@
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index 3f2b26d..cb7f7bf 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -1,4 +1,3 @@
+-#include "duckdb/common/vector/array_vector.hpp"
+ #include "hnsw/hnsw_index.hpp"
+ 
+ #include "duckdb/common/allocator.hpp"
+@@ -15,6 +14,7 @@
+ #include "duckdb/common/types/validity_mask.hpp"
+ #include "duckdb/common/types/value.hpp"
+ #include "duckdb/common/types/vector.hpp"
++#include "duckdb/common/vector/array_vector.hpp"
+ #include "duckdb/common/vector_size.hpp"
+ #include "duckdb/execution/index/fixed_size_allocator.hpp"
+ #include "duckdb/execution/index/index_type.hpp"
+@@ -31,6 +31,7 @@
+ #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+ #include "duckdb/planner/expression_iterator.hpp"
+ #include "duckdb/planner/operator/logical_get.hpp"
++#include "duckdb/storage/checkpoint/table_index_writer.hpp"
+ #include "duckdb/storage/partial_block_manager.hpp"
+ #include "duckdb/storage/storage_info.hpp"
+ #include "duckdb/storage/table/scan_state.hpp"
+@@ -149,11 +150,13 @@ public:
+ //------------------------------------------------------------------------------
+ 
+ // Constructor
+-HNSWIndex::HNSWIndex(const Identifier &name, IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+-                     TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
+-                     AttachedDatabase &db, const case_insensitive_map_t<Value> &options, const IndexStorageInfo &info,
++HNSWIndex::HNSWIndex(const Identifier &name, IndexConstraintType index_constraint_type,
++                     const vector<column_t> &column_ids, TableIOManager &table_io_manager,
++                     const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db,
++                     const case_insensitive_map_t<Value> &options, const IndexStorageInfo &info,
+                      idx_t estimated_cardinality)
+-    : BoundIndex(Identifier(name), TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db) {
++    : BoundIndex(Identifier(name), TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions,
++                 db) {
+ 
+ 	if (index_constraint_type != IndexConstraintType::NONE) {
+ 		throw NotImplementedException("HNSW indexes do not support unique or primary key constraints");
+@@ -161,7 +164,7 @@ HNSWIndex::HNSWIndex(const Identifier &name, IndexConstraintType index_constrain
+ 
+ 	// Create a allocator for the linked blocks
+ 	auto &block_manager = table_io_manager.GetIndexBlockManager();
+-	linked_block_allocator = make_uniq<FixedSizeAllocator>(sizeof(LinkedBlock), block_manager);
++	linked_block_allocator = make_unsafe_uniq<FixedSizeAllocator>(sizeof(LinkedBlock), block_manager);
+ 
+ 	// We only support one ARRAY column
+ 	D_ASSERT(logical_types.size() == 1);
+@@ -243,6 +246,20 @@ HNSWIndex::HNSWIndex(const Identifier &name, IndexConstraintType index_constrain
+ 	function_matcher = MakeFunctionMatcher();
+ }
+ 
++HNSWIndex::HNSWIndex(const HNSWIndex &src, USearchIndexType index_p, IndexPointer root_block_ptr_p,
++                     unsafe_unique_ptr<FixedSizeAllocator> linked_block_allocator_p)
++    : BoundIndex(Identifier(src.name), TYPE_NAME, src.index_constraint_type, src.column_ids, src.table_io_manager,
++                 src.unbound_expressions, src.db),
++      index(std::move(index_p)), root_block_ptr(root_block_ptr_p),
++      linked_block_allocator(std::move(linked_block_allocator_p)), index_size(index.size()) {
++	function_matcher = MakeFunctionMatcher();
++}
++
++unique_ptr<BoundIndex> HNSWIndex::CreateShadow(USearchIndexType index, IndexPointer root_block_ptr,
++                                               unsafe_unique_ptr<FixedSizeAllocator> linked_block_allocator) {
++	return make_uniq<HNSWIndex>(*this, std::move(index), root_block_ptr, std::move(linked_block_allocator));
++}
++
+ idx_t HNSWIndex::GetVectorSize() const {
+ 	return index.dimensions();
+ }
+@@ -540,7 +557,7 @@ void HNSWIndex::PersistToDisk() {
+ 	}
+ 
+ 	// Write
+-	if (root_block_ptr.Get() == 0) {
++	if (linked_block_allocator->Empty()) {
+ 		root_block_ptr = linked_block_allocator->New();
+ 	}
+ 
+@@ -554,35 +571,46 @@ void HNSWIndex::PersistToDisk() {
+ 	is_dirty = false;
+ }
+ 
+-IndexStorageInfo HNSWIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
++IndexStorageInfo HNSWIndex::SerializeToWAL(StorageVersion storage_version) {
+ 
+ 	PersistToDisk();
+ 
+ 	IndexStorageInfo info;
+ 	info.name = name;
+ 	info.root = root_block_ptr.Get();
+-
+-	// Use the partial block manager to serialize allocator data.
+-	auto &block_manager = table_io_manager.GetIndexBlockManager();
+-	PartialBlockManager partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT);
+-	linked_block_allocator->SerializeBuffers(partial_block_manager);
+-	partial_block_manager.FlushPartialBlocks();
++	info.buffers.push_back(linked_block_allocator->InitSerializationToWAL());
+ 	info.allocator_infos.push_back(linked_block_allocator->GetInfo());
+ 
+ 	return info;
+ }
+ 
+-IndexStorageInfo HNSWIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+-
++BoundCheckpointedIndex HNSWIndex::CreateCheckpoint(IndexLock &l, TableIndexWriter &writer) {
+ 	PersistToDisk();
+ 
+ 	IndexStorageInfo info;
+ 	info.name = name;
+ 	info.root = root_block_ptr.Get();
+-	info.buffers.push_back(linked_block_allocator->InitSerializationToWAL());
+-	info.allocator_infos.push_back(linked_block_allocator->GetInfo());
+ 
+-	return info;
++	// Create a new index based on the stream format, so we only copy over non-NULL slots.
++	auto shadow_index = USearchIndexType::make(index.metric(), index.config());
++	if (!linked_block_allocator->Empty()) {
++		LinkedBlockReader reader(*linked_block_allocator, root_block_ptr);
++		const auto load_result = shadow_index.load_from_stream([&](void *data, const size_t size) {
++			return size == reader.ReadData(static_cast<data_ptr_t>(data), size);
++		});
++		if (!load_result) {
++			throw InternalException("Failed to load checkpointed HNSW index: %s", load_result.error.what());
++		}
++	}
++
++	auto &partial_block_manager = writer.GetPartialBlockManager();
++	auto new_linked_block_allocator = linked_block_allocator->Persist(partial_block_manager);
++	new_linked_block_allocator->RemoveEmptyBuffers();
++
++	info.allocator_infos.push_back(new_linked_block_allocator->GetInfo());
++
++	auto shadow = CreateShadow(std::move(shadow_index), root_block_ptr, std::move(new_linked_block_allocator));
++	return {std::move(info), std::move(shadow)};
+ }
+ 
+ idx_t HNSWIndex::GetInMemorySize(IndexLock &state) {
+@@ -612,7 +640,8 @@ void HNSWIndex::VerifyAllocations(IndexLock &state) {
+ //------------------------------------------------------------------------------
+ // Can rewrite index expression?
+ //------------------------------------------------------------------------------
+-static void TryBindIndexExpressionInternal(Expression &expr, TableIndex table_idx, const vector<column_t> &index_columns,
++static void TryBindIndexExpressionInternal(Expression &expr, TableIndex table_idx,
++                                           const vector<column_t> &index_columns,
+                                            const vector<ColumnIndex> &table_columns, bool &success, bool &found) {
+ 
+ 	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+@@ -656,8 +685,7 @@ bool HNSWIndex::TryBindIndexExpression(LogicalGet &get, unique_ptr<Expression> &
+ 	return false;
+ }
+ 
+-bool HNSWIndex::TryMatchDistanceFunction(Expression &expr,
+-                                         vector<reference<Expression>> &bindings) const {
++bool HNSWIndex::TryMatchDistanceFunction(Expression &expr, vector<reference<Expression>> &bindings) const {
+ 	return function_matcher->Match(expr, bindings);
+ }
+ 
+@@ -698,7 +726,6 @@ void HNSWIndex::VerifyBuffers(IndexLock &lock) {
+ 	linked_block_allocator->VerifyBuffers();
+ }
+ 
+-
+ //------------------------------------------------------------------------------
+ // Register Index Type
+ //------------------------------------------------------------------------------
+diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
+index 422423b..bcd4cc1 100644
+--- a/src/include/hnsw/hnsw_index.hpp
++++ b/src/include/hnsw/hnsw_index.hpp
+@@ -7,14 +7,13 @@
+ #include "duckdb/common/unique_ptr.hpp"
+ #include "duckdb/common/vector.hpp"
+ #include "duckdb/execution/index/bound_index.hpp"
+-#include "duckdb/execution/index/index_pointer.hpp"
+ #include "duckdb/execution/index/fixed_size_allocator.hpp"
++#include "duckdb/execution/index/index_pointer.hpp"
+ #include "duckdb/optimizer/matcher/expression_matcher.hpp"
+ #include "duckdb/planner/expression.hpp"
+ #include "duckdb/storage/index_storage_info.hpp"
+ #include "duckdb/storage/storage_lock.hpp"
+ #include "duckdb/storage/table/scan_state.hpp"
+-
+ #include "usearch/index_dense.hpp"
+ 
+ namespace duckdb {
+@@ -38,6 +37,8 @@ public:
+ 	          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
+ 	          AttachedDatabase &db, const case_insensitive_map_t<Value> &options,
+ 	          const IndexStorageInfo &info = IndexStorageInfo(), idx_t estimated_cardinality = 0);
++	HNSWIndex(const HNSWIndex &src, USearchIndexType index, IndexPointer root_block_ptr,
++	          unsafe_unique_ptr<FixedSizeAllocator> linked_block_allocator);
+ 
+ 	static PhysicalOperator &CreatePlan(PlanIndexInput &input);
+ 
+@@ -48,7 +49,7 @@ public:
+ 	IndexPointer root_block_ptr;
+ 
+ 	//! The allocator used to persist linked blocks
+-	unique_ptr<FixedSizeAllocator> linked_block_allocator;
++	unsafe_unique_ptr<FixedSizeAllocator> linked_block_allocator;
+ 
+ 	unique_ptr<IndexScanState> InitializeMultiScan(ClientContext &context);
+ 	idx_t ExecuteMultiScan(IndexScanState &state, float *query_vector, idx_t limit);
+@@ -85,10 +86,8 @@ public:
+ 	//! Insert a chunk of entries into the index
+ 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+ 
+-	//! Serializes HNSW memory to disk and returns the index storage information.
+-	IndexStorageInfo SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) override;
+ 	//! Serializes HNSW memory to the WAL and returns the index storage information.
+-	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options) override;
++	IndexStorageInfo SerializeToWAL(StorageVersion storage_version) override;
+ 
+ 	idx_t GetInMemorySize(IndexLock &state) override;
+ 
+@@ -118,12 +117,21 @@ public:
+ 		index_size = index.size();
+ 	}
+ 
++protected:
++	//! Produce a shadow HNSW index and its associated metadata, used for checkpointing a bound index.
++	BoundCheckpointedIndex CreateCheckpoint(IndexLock &l, TableIndexWriter &writer) override;
++
++private:
++	//! Create an index which is logically equivalent but backed by potentially different buffers.
++	unique_ptr<BoundIndex> CreateShadow(USearchIndexType index, IndexPointer root_block_ptr,
++	                                    unsafe_unique_ptr<FixedSizeAllocator> linked_block_allocator);
++	unique_ptr<ExpressionMatcher> MakeFunctionMatcher() const;
++
+ private:
+ 	bool is_dirty = false;
+ 	StorageLock rwlock;
+ 	atomic<idx_t> index_size = {0};
+ 	unique_ptr<ExpressionMatcher> function_matcher;
+-	unique_ptr<ExpressionMatcher> MakeFunctionMatcher() const;
+ };
+ 
+ } // namespace duckdb

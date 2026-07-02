@@ -1,12 +1,12 @@
 #include "duckdb/execution/index/bound_index.hpp"
 
-#include "duckdb/common/array.hpp"
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 
 namespace duckdb {
@@ -170,11 +170,19 @@ unique_ptr<BoundIndex> BoundIndex::CreateDeltaIndex(DeltaIndexType delta_index_t
 	throw InternalException("BoundIndex::CreateDeltaIndex is not supported for this index type");
 }
 
-IndexStorageInfo BoundIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
-	throw NotImplementedException("The implementation of this index disk serialization does not exist.");
+void BoundIndex::Checkpoint(TableIndexWriter &writer) {
+	IndexLock state;
+	InitializeLock(state);
+
+	auto [storage_info, shadow_index] = CreateCheckpoint(state, writer);
+	if (!shadow_index) {
+		throw InternalException("Checkpoint did not produce a shadow index");
+	}
+
+	writer.AddBoundIndex(std::move(storage_info), std::move(shadow_index));
 }
 
-IndexStorageInfo BoundIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+IndexStorageInfo BoundIndex::SerializeToWAL(const StorageVersion storage_version) {
 	throw NotImplementedException("The implementation of this index WAL serialization does not exist.");
 }
 
