@@ -333,7 +333,7 @@ void FeatureRefreshScheduler::Run() {
 				if (use_result->HasError()) {
 					throw Exception(ExceptionType::IO, use_result->GetError());
 				}
-				auto result = con.Query("SELECT * FROM refresh_feature(" + SQLString(feat.feature_name) + ")");
+				auto result = con.Query("REFRESH FEATURE " + SQLIdentifier(feat.feature_name));
 				if (result->HasError()) {
 					throw Exception(ExceptionType::IO, result->GetError());
 				}
