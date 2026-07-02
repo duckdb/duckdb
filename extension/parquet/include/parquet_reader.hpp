@@ -303,7 +303,8 @@ public:
 
 public:
 	ParquetReader(ClientContext &context, OpenFileInfo file, ParquetOptions parquet_options,
-	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
+	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr,
+	              unordered_set<idx_t> length_pushdown_columns = {});
 	~ParquetReader() override;
 
 	mutable CachingFileSystem fs;
@@ -314,6 +315,8 @@ public:
 	shared_ptr<EncryptionUtil> encryption_util;
 	//! How many rows have been read from this file
 	atomic<idx_t> rows_read;
+	//! Storage indices of columns where strlen/octet_length are pushed down
+	unordered_set<idx_t> length_pushdown_columns;
 
 public:
 	string GetReaderType() const override {

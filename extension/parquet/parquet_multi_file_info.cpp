@@ -8,6 +8,8 @@
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "parquet_crypto.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/common/assert.hpp"
@@ -57,6 +59,9 @@ struct ParquetReadBindData : public TableFunctionData {
 	idx_t initial_file_data_size = 0;
 	idx_t explicit_cardinality = 0; // can be set to inject exterior cardinality knowledge (e.g. from a data lake)
 	unique_ptr<ParquetFileReaderOptions> options;
+	// storage column indices where projection_expression_pushdown pushed
+	// strlen/octet_length
+	unordered_set<idx_t> length_pushdown_columns;
 
 	ParquetOptions &GetParquetOptions() {
 		return options->options;
@@ -73,6 +78,7 @@ struct ParquetReadBindData : public TableFunctionData {
 		result->initial_file_data_size = initial_file_data_size;
 		result->explicit_cardinality = explicit_cardinality;
 		result->options = make_uniq<ParquetFileReaderOptions>(options->options);
+		result->length_pushdown_columns = length_pushdown_columns;
 		return std::move(result);
 	}
 
@@ -342,6 +348,54 @@ static void ParquetScanGetMetrics(TableFunctionGetMetricsInput &input) {
 	input.operator_metrics.total_row_groups_to_scan = scan_state.row_groups_read + scan_state.row_groups_skipped;
 }
 
+static bool ParquetProjectionExpressionPushdown(ClientContext &context,
+                                                const TableFunctionProjectionExpressionInput &input) {
+	if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	const auto &fn = input.expr.Cast<BoundFunctionExpression>();
+	if (const Identifier &name = fn.Function().GetName(); name != "strlen" && name != "octet_length") {
+		return false;
+	}
+
+	auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
+	const idx_t idx = input.proj_index;
+
+	// We run this optimizer after FILTER_PUSHDOWN. If there was a filter
+	// pushed into get.table_filters, we don't see it here and can't
+	// proceed with pushdown
+	const auto &col_ids = input.get.GetColumnIds();
+	for (idx_t proj_idx = 0; proj_idx < col_ids.size(); proj_idx++) {
+		if (col_ids[proj_idx].GetPrimaryIndex() != idx) {
+			continue;
+		}
+		if (input.get.table_filters.HasFilter(ProjectionIndex(proj_idx))) {
+			return false;
+		}
+		break;
+	}
+	bind_data.types[idx] = LogicalType::BIGINT;
+	bind_data.columns[idx].type = LogicalType::BIGINT;
+
+	auto &parquet_bind_data = bind_data.bind_data->Cast<ParquetReadBindData>();
+	parquet_bind_data.length_pushdown_columns.insert(idx);
+
+	if (!bind_data.initial_reader) {
+		return true;
+	}
+
+	// initial_reader was created before this optimizer pass, update its types.
+	auto &reader = bind_data.initial_reader->Cast<ParquetReader>();
+	reader.length_pushdown_columns.insert(idx);
+	if (idx < reader.columns.size()) {
+		reader.columns[idx].type = LogicalType::BIGINT;
+	}
+	if (idx < reader.root_schema->children.size()) {
+		reader.root_schema->children[idx].type = LogicalType::BIGINT;
+	}
+	return true;
+}
+
 ParquetMetadataCacheEntry::ParquetMetadataCacheEntry(shared_ptr<ParquetFileMetadataCache> metadata_p,
                                                      ParquetCacheValidity validity_p, bool has_deletes_p)
     : metadata(std::move(metadata_p)), validity(validity_p), has_deletes(has_deletes_p) {
@@ -439,6 +493,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["prefetch_strategy"] = LogicalType::VARCHAR;
 	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
 	table_function.get_metrics = ParquetScanGetMetrics;
+	table_function.projection_expression_pushdown = ParquetProjectionExpressionPushdown;
 	table_function.supports_pushdown_extract = ParquetScanSupportPushdownExtract;
 	table_function.serialize = ParquetScanSerialize;
 	table_function.deserialize = ParquetScanDeserialize;
@@ -712,7 +767,8 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
                                                               const OpenFileInfo &file, idx_t file_idx,
                                                               const MultiFileBindData &multi_bind_data) {
 	auto &bind_data = multi_bind_data.bind_data->Cast<ParquetReadBindData>();
-	return make_shared_ptr<ParquetReader>(context, file, bind_data.GetParquetOptions());
+	return make_shared_ptr<ParquetReader>(context, file, bind_data.GetParquetOptions(), nullptr,
+	                                      bind_data.length_pushdown_columns);
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
