@@ -28,7 +28,7 @@ SourceResultType PhysicalCreateFeature::GetDataInternal(ExecutionContext &contex
 		auto old_entry = set.GetEntry(transaction, info->feature_name);
 		if (old_entry) {
 			chunk.SetCardinality(1);
-			chunk.SetValue(0, 0, Value(info->feature_name));
+			chunk.data[0].SetValue(0, Value(info->feature_name));
 			return SourceResultType::FINISHED;
 		}
 	}
@@ -64,7 +64,7 @@ SourceResultType PhysicalCreateFeature::GetDataInternal(ExecutionContext &contex
 	duck_catalog.GetDependencyManager()->AddOwnership(transaction, *feature_entry, *view_entry);
 
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value(info->feature_name));
+	chunk.data[0].SetValue(0, Value(info->feature_name));
 	return SourceResultType::FINISHED;
 }
 
