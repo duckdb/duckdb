@@ -47,7 +47,6 @@ static unique_ptr<SelectStatement> BuildPITQueryAST(const FeatureCatalogEntry &f
 	parameters.entity_columns = feat.entity_columns;
 	parameters.window_interval = feat.window_interval;
 	parameters.anchor_filter = std::move(anchor_filter);
-	parameters.order_result = true;
 	return BuildFeaturePITQuery(feat.query->node->Cast<SelectNode>(), parameters);
 }
 

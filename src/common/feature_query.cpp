@@ -8,7 +8,6 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
@@ -131,17 +130,6 @@ unique_ptr<SelectStatement> BuildFeaturePITQuery(const SelectNode &select_node,
 	join->right = FeatureBaseTable(parameters.source_table);
 	join->condition = std::move(join_condition);
 	result_select->from_table = std::move(join);
-
-	if (parameters.order_result) {
-		auto order = make_uniq<OrderModifier>();
-		for (auto &entity_column : parameters.entity_columns) {
-			order->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT,
-			                           FeatureColumnRef("anchor", entity_column));
-		}
-		order->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT,
-		                           FeatureColumnRef("anchor", "feature_timestamp"));
-		result_select->modifiers.push_back(std::move(order));
-	}
 
 	auto result = make_uniq<SelectStatement>();
 	result->node = std::move(result_select);

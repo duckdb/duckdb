@@ -22,7 +22,6 @@ struct FeaturePITQueryParameters {
 	vector<string> entity_columns;
 	interval_t window_interval;
 	unique_ptr<ParsedExpression> anchor_filter;
-	bool order_result = false;
 };
 
 bool FeatureColumnListContains(const vector<string> &columns, const string &column_name);
