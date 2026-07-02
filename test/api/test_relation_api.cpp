@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
 #include "iostream"
@@ -1153,4 +1154,15 @@ TEST_CASE("Test materialized relations", "[relation_api]") {
 		auto result = con.Query("SELECT * FROM vw");
 		REQUIRE(CHECK_COLUMN(result, 0, {"test"}));
 	}
+}
+
+TEST_CASE("Test create table with empty name", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	duckdb::unique_ptr<QueryResult> result = con.Query("CREATE TABLE '' AS SELECT 42;");
+	REQUIRE_FAIL(result);
+
+	auto values = con.Values("(42)");
+	REQUIRE_THROWS_AS(values->Create(""), ParserException);
 }

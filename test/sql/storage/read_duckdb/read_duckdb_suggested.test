@@ -1,0 +1,26 @@
+# name: test/sql/storage/read_duckdb/read_duckdb_suggested.test
+# description: Test suggestions
+# group: [read_duckdb]
+
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_suggested.db' AS suggested
+
+foreach table_name aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm nnn ooo ppp qqq rrr sss ttt uuu vvv
+
+statement ok
+CREATE TABLE suggested.${table_name} AS SELECT 42 i
+
+endloop
+
+statement ok
+DETACH suggested
+
+statement error
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_suggested.db', table_name='ffg')
+----
+fff
+
+statement error
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_suggested.db', table_name='vvx')
+----
+vvv

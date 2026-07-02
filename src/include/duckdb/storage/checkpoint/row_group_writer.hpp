@@ -23,7 +23,7 @@ class SegmentStatistics;
 // Writes data for an entire row group.
 class RowGroupWriter {
 public:
-	RowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager);
+	RowGroupWriter(TableDataWriter &writer, TableCatalogEntry &table, PartialBlockManager &partial_block_manager);
 	virtual ~RowGroupWriter() {
 	}
 
@@ -31,7 +31,7 @@ public:
 		return compression_types;
 	}
 
-	virtual CheckpointType GetCheckpointType() const = 0;
+	virtual CheckpointOptions GetCheckpointOptions() const = 0;
 	virtual WriteStream &GetPayloadWriter() = 0;
 	virtual MetaBlockPointer GetMetaBlockPointer() = 0;
 	virtual optional_ptr<MetadataManager> GetMetadataManager() = 0;
@@ -41,14 +41,26 @@ public:
 	}
 
 	DatabaseInstance &GetDatabase();
+	AttachedDatabase &GetAttachedDatabase();
+	TableDataWriter &GetTableWriter() {
+		return writer;
+	}
 	PartialBlockManager &GetPartialBlockManager() {
 		return partial_block_manager;
 	}
+	void SetHasUnloadedColumn(idx_t column_idx) {
+		has_unloaded_columns.insert(column_idx);
+	}
+	unordered_set<idx_t> GetUnloadedColumns() const {
+		return has_unloaded_columns;
+	}
 
 protected:
+	TableDataWriter &writer;
 	TableCatalogEntry &table;
 	PartialBlockManager &partial_block_manager;
 	vector<CompressionType> compression_types;
+	unordered_set<idx_t> has_unloaded_columns;
 };
 
 // Writes data for an entire row group.
@@ -58,7 +70,7 @@ public:
 	                         TableDataWriter &writer, MetadataWriter &table_data_writer);
 
 public:
-	CheckpointType GetCheckpointType() const override;
+	CheckpointOptions GetCheckpointOptions() const override;
 	WriteStream &GetPayloadWriter() override;
 	MetaBlockPointer GetMetaBlockPointer() override;
 	optional_ptr<MetadataManager> GetMetadataManager() override;
@@ -66,8 +78,6 @@ public:
 	void FinishWritingColumns() override;
 
 private:
-	//! Underlying writer object
-	TableDataWriter &writer;
 	//! MetadataWriter is a cursor on a given BlockManager. This returns the
 	//! cursor against which we should write payload data for the specified RowGroup.
 	MetadataWriter &table_data_writer;

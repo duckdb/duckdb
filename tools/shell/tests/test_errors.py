@@ -14,29 +14,31 @@ def test_incorrect_column(shell):
     test = (
         ShellTest(shell)
         .statement(".highlight_errors on")
+        .statement(".highlight_color error red bold")
         .statement(lineitem_ddl)
         .statement('select * from lineitem where l_extendedpric=5;')
     )
     result = test.run()
-    result.check_stderr('"\x1b[33ml_extendedprice')
-    result.check_stderr('"\x1b[33ml_extendedpric\x1b[0m')
+    result.check_stderr('\x1b[31ml_extendedprice')
 
 @pytest.mark.skipif(os.name == 'nt', reason="Windows highlighting does not use shell escapes")
 def test_missing_table(shell):
     test = (
         ShellTest(shell)
         .statement(".highlight_errors on")
+        .statement(".highlight_color error red bold")
         .statement(lineitem_ddl)
         .statement('select * from lineite where l_extendedprice=5;')
     )
     result = test.run()
-    result.check_stderr('"\x1b[33mlineitem\x1b[0m')
+    result.check_stderr('\x1b[31mlineitem')
 
 @pytest.mark.skipif(os.name == 'nt', reason="Windows highlighting does not use shell escapes")
 def test_long_error(shell):
     test = (
         ShellTest(shell)
         .statement(".highlight_errors on")
+        .statement(".highlight_color error red bold")
         .statement(lineitem_ddl)
         .statement('''SELECT
       l_returnflag,
@@ -61,34 +63,36 @@ def test_long_error(shell):
       l_linestatus;''')
     )
     result = test.run()
-    result.check_stderr('\x1b[33m+(DATE, TIMESTAMP)\x1b[0m')
-    result.check_stderr('\x1b[32mCAST\x1b[0m')
+    result.check_stderr('\x1b[31m')
 
 @pytest.mark.skipif(os.name == 'nt', reason="Windows highlighting does not use shell escapes")
 def test_single_quotes_in_error(shell):
     test = (
         ShellTest(shell)
         .statement(".highlight_errors on")
+        .statement(".highlight_color error red bold")
         .statement("select \"I'm an error\"")
     )
     result = test.run()
-    result.check_stderr('"\x1b[33mI\'m an error\x1b[0m')
+    result.check_stderr('\x1b[31m')
 
 @pytest.mark.skipif(os.name == 'nt', reason="Windows highlighting does not use shell escapes")
 def test_double_quotes_in_error(shell):
     test = (
         ShellTest(shell)
         .statement(".highlight_errors on")
+        .statement(".highlight_color error red bold")
         .statement("select error('''I\"m an error''')")
     )
     result = test.run()
-    result.check_stderr('\x1b[33mI"m an error\x1b[0m')
+    result.check_stderr('\x1b[31m')
 
 @pytest.mark.skipif(os.name == 'nt', reason="Windows highlighting does not use shell escapes")
 def test_unterminated_quote(shell):
     test = (
         ShellTest(shell)
         .statement(".highlight_errors on")
+        .statement(".highlight_color error red bold")
         .statement("select error('I''m an error')")
     )
     result = test.run()

@@ -10,7 +10,6 @@ LogicalCreateIndex::LogicalCreateIndex(unique_ptr<CreateIndexInfo> info_p, vecto
                                        TableCatalogEntry &table_p, unique_ptr<AlterTableInfo> alter_table_info)
     : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_INDEX), info(std::move(info_p)), table(table_p),
       alter_table_info(std::move(alter_table_info)) {
-
 	for (auto &expr : expressions_p) {
 		unbound_expressions.push_back(expr->Copy());
 	}
@@ -27,7 +26,6 @@ LogicalCreateIndex::LogicalCreateIndex(ClientContext &context, unique_ptr<Create
     : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_INDEX),
       info(unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(info_p))), table(BindTable(context, *info)),
       alter_table_info(unique_ptr_cast<ParseInfo, AlterTableInfo>(std::move(alter_table_info))) {
-
 	for (auto &expr : expressions_p) {
 		unbound_expressions.push_back(expr->Copy());
 	}

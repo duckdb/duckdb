@@ -198,18 +198,22 @@ SELECT * FROM exam WINDOW w AS (ORDER BY mark) QUALIFY row_number() OVER w = 1
 statement error
 SELECT * FROM exam QUALIFY row_number() OVER w = 1 WINDOW w AS (ORDER BY mark)
 ----
+Parser Error: syntax error at or near "WINDOW"
 
 # QUALIFY clause requires at least one window function to be specified in at least one of the SELECT column list or the filter predicate of the QUALIFY clause
 statement error
 SELECT b, avg(a) AS avga FROM test GROUP BY b QUALIFY avga > 10
 ----
+Binder Error: at least one window function must appear in the SELECT
 
 # invalid window function
 statement error
 SELECT b FROM test QUALIFY avga() > 10
 ----
+Catalog Error: Scalar Function with name avga does not exist
 
 # column not found in from clause and can't find in alias map
 statement error
 SELECT b, SUM(a) FROM test GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) > sum;
 ----
+Binder Error: Referenced column sum not found in FROM clause

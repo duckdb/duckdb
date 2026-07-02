@@ -1,7 +1,4 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 
 namespace duckdb {
@@ -44,13 +41,6 @@ string CreateTypeInfo::ToString() const {
 		// CREATE TYPE mood AS ENUM (SELECT 'happy')
 		D_ASSERT(query);
 		result += " AS ENUM (" + query->ToString() + ")";
-	} else if (type.id() == LogicalTypeId::USER) {
-		result += " AS ";
-		auto extra_info = type.AuxInfo();
-		D_ASSERT(extra_info);
-		D_ASSERT(extra_info->type == ExtraTypeInfoType::USER_TYPE_INFO);
-		auto &user_info = extra_info->Cast<UserTypeInfo>();
-		result += QualifierToString(user_info.catalog, user_info.schema, user_info.user_type_name);
 	} else {
 		result += " AS ";
 		result += type.ToString();

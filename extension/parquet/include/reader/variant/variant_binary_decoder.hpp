@@ -2,7 +2,8 @@
 
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "reader/variant/variant_value.hpp"
+#include "duckdb/common/types/variant_value.hpp"
+#include "yyjson.hpp"
 
 using namespace duckdb_yyjson;
 
@@ -33,12 +34,12 @@ public:
 public:
 	VariantMetadataHeader header;
 
+	//! Total byte length of the metadata region.
+	idx_t total_size = 0;
+
 	//! The json object keys have to be null-terminated
 	//! But we don't receive them null-terminated
 	vector<string> strings;
-
-	//! Total byte length of the metadata region.
-	idx_t total_size;
 };
 
 //! ------------ Value ------------
@@ -139,8 +140,8 @@ public:
 	                           idx_t data_size);
 
 public:
-	static VariantValue PrimitiveTypeDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,
-	                                        const_data_ptr_t data, idx_t data_offset, idx_t data_size);
+	static VariantValue PrimitiveTypeDecode(const VariantValueMetadata &value_metadata, const_data_ptr_t data,
+	                                        idx_t data_offset, idx_t data_size);
 	static VariantValue ShortStringDecode(const VariantValueMetadata &value_metadata, const_data_ptr_t data,
 	                                      idx_t data_offset, idx_t data_size);
 	static VariantValue ObjectDecode(const VariantMetadata &metadata, const VariantValueMetadata &value_metadata,

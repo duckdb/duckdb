@@ -35,6 +35,14 @@ enum class ColumnDataScanProperties : uint8_t {
 	DISALLOW_ZERO_COPY
 };
 
+enum class ColumnDataCollectionLifetime {
+	//! Regular lifetime management
+	REGULAR,
+	//! Accessing will throw an error after the DB closes
+	//! Optional for ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR only
+	THROW_ERROR_AFTER_DATABASE_CLOSES,
+};
+
 struct ChunkManagementState {
 	unordered_map<idx_t, BufferHandle> handles;
 	ColumnDataScanProperties properties = ColumnDataScanProperties::INVALID;
@@ -46,6 +54,9 @@ struct ColumnDataAppendState {
 };
 
 struct ColumnDataScanState {
+	//! Database instance if scanning ColumnDataCollectionLifetime::DATABASE_INSTANCE
+	shared_ptr<DatabaseInstance> db;
+
 	ChunkManagementState current_chunk_state;
 	idx_t segment_index;
 	idx_t chunk_index;

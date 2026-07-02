@@ -1,6 +1,7 @@
 {
     "group": "helpers",
     "deprecated": false,
+    "description": "Generic and `duckdb_string_t` helper functions.",
     "entries": [
         {
             "name": "duckdb_malloc",
@@ -89,6 +90,28 @@
                 "param_comments": {
                     "string": "The string to get the pointer to."
                 }
+            }
+        },
+        {
+            "name": "duckdb_valid_utf8_check",
+            "return_type": "duckdb_error_data",
+            "params": [
+                {
+                    "type": "const char *",
+                    "name": "str"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "len"
+                }
+            ],
+            "comment": {
+                "description": "Checks if a string is valid UTF-8.\n\n",
+                "param_comments": {
+                    "str": "The string to check",
+                    "len": "The length of the string (in bytes)"
+                },
+                "return_value": "nullptr if the string is valid UTF-8. Otherwise, a duckdb_error_data containing error information. Must be destroyed with `duckdb_destroy_error_data`."
             }
         }
     ]

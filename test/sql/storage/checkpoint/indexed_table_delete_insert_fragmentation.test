@@ -1,0 +1,93 @@
+# name: test/sql/storage/checkpoint/indexed_table_delete_insert_fragmentation.test
+# description: Test that delete+insert cycles on indexed tables do not create new row groups excessively.
+# group: [checkpoint]
+
+# We want to manage our own database files
+require noforcestorage
+# No restarts between statements
+require skip_reload
+# If we enable alternative verification then checkpointing on shutdown is disabled, which we don't want
+require no_alternative_verify
+
+# run twice with different multipliers for novelty sizes (8 * novelty_size will be updates, 2 * novelty_size will be
+# inserts)
+foreach novelty_multiplier 10 1024
+
+# Setup: create a snapshot with exactly 2 row groups (row group size = 2048, amount of rows = 4096)
+statement ok
+ATTACH '__TEST_DIR__/test_rowgroup_append_mode_on_fragmented_tables.db' as snap (READ_WRITE, STORAGE_VERSION 'v1.5.0', ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE OR REPLACE TABLE snap.snapshot(pk BIGINT PRIMARY KEY, val1 VARCHAR, val2 VARCHAR);
+
+statement ok
+INSERT INTO snap.snapshot SELECT pk, uuid()::VARCHAR as val1, uuid()::VARCHAR as val2 FROM generate_series(1, 4096) t(pk);
+
+statement ok
+CHECKPOINT snap;
+
+statement ok
+DETACH snap;
+
+# Now update (DELETE + INSERT) 8 * novelty_multiplier rows and INSERT 2 * novelty_multiplier rows, ten times, as
+# follows:
+# 1. create a new in-memory table valled "novelty_deletes" with 8 * novelty_multiplier rows with bigint PKs only, set to
+#    a random seletion from the range [1, 2m + iteration * 2 * novelty_multiplier].
+# 2. create a new in-memory table called "novelty_inserts" with 8 * novelty_multiplier rows (same structure as
+#    "snapshot") with PKs set to the same PKs as in "novelty_deletes" and random values, and 2 * novelty_multiplier rows
+#    with monotonicallly increasing PKs starting at 2000001 + iteration * 2 * novelty_multiplier.
+# 3. ATTACH to <filename>.duckdb - this should really be as if we are attaching to a new file for the first time - in
+#    read / write mode, with RECOVERY_MODE set to NO_WAL_WRITES.
+# 4. run DELETE FROM snapshot WHERE pk IN (SELECT pk FROM novelty_deletes) - this should be an in-memory operation and
+#    NOT be checkpointed at all, we do not want any vacuuming or compacting to occur.
+# 5. run INSERT INTO snapshot SELECT * FROM novelty_inserts - this should also be in-memory only!
+# 6. run a CHECKPOINT on the snapshot
+# 7. completely detach from <filename>.duckdb
+loop i 0 10
+
+# 1. create novelty_deletes
+statement ok
+CREATE OR REPLACE TABLE novelty_deletes AS SELECT pk FROM generate_series(1, 4096 + ${i} * 2 * ${novelty_multiplier}) t(pk) ORDER BY random() LIMIT 8 * ${novelty_multiplier};
+
+# 2. create novelty_inserts
+statement ok
+CREATE OR REPLACE TABLE novelty_inserts AS SELECT pk, uuid()::VARCHAR as val1, uuid()::VARCHAR as val2 FROM novelty_deletes;
+
+statement ok
+INSERT INTO novelty_inserts SELECT pk, uuid()::VARCHAR, uuid()::VARCHAR FROM generate_series(4096 + ${i} * 2 * ${novelty_multiplier} + 1, 4096 + ${i} * 2 * ${novelty_multiplier} + 2 * ${novelty_multiplier}) t(pk)
+
+# 3. attach snapshot
+statement ok
+ATTACH '__TEST_DIR__/test_rowgroup_append_mode_on_fragmented_tables.db' as snap (READ_WRITE, RECOVERY_MODE NO_WAL_WRITES, STORAGE_VERSION 'v1.5.0', ROW_GROUP_SIZE 2048);
+
+# 4. process novelty_deletes
+statement ok
+DELETE FROM snap.snapshot WHERE pk IN (SELECT pk FROM novelty_deletes);
+
+# 5. process novelty_inserts
+statement ok
+INSERT INTO snap.snapshot SELECT * FROM novelty_inserts;
+
+# 6. checkpoint the snapshot
+statement ok
+CHECKPOINT snap;
+
+# 7. detach from snap
+statement ok
+DETACH snap;
+
+endloop # loop i 0 10
+
+# Now we verify that the amount of row groups created is what we expect
+statement ok
+ATTACH '__TEST_DIR__/test_rowgroup_append_mode_on_fragmented_tables.db' as snap;
+
+query I
+SELECT COUNT(DISTINCT row_group_id) <= CEIL((4096 + 100 * ${novelty_multiplier}) / 2048) FROM pragma_storage_info('snap.snapshot');
+----
+1
+
+statement ok
+DETACH snap;
+
+endloop # foreach val 1000 100000

@@ -4,7 +4,6 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/expression_util.hpp"
 
@@ -88,6 +87,8 @@ bool ParsedExpression::Equals(const BaseExpression &other) const {
 		return SubqueryExpression::Equal(Cast<SubqueryExpression>(), other.Cast<SubqueryExpression>());
 	case ExpressionClass::WINDOW:
 		return WindowExpression::Equal(Cast<WindowExpression>(), other.Cast<WindowExpression>());
+	case ExpressionClass::TYPE:
+		return TypeExpression::Equal(Cast<TypeExpression>(), other.Cast<TypeExpression>());
 	default:
 		throw SerializationException("Unsupported type for expression comparison!");
 	}

@@ -1,0 +1,24 @@
+# name: benchmark/micro/compression/roaring/roaring_bool_bitset_read.benchmark
+# description: Scanning 1GB of ints compressed with Run Containers (inverted)
+# group: [roaring]
+
+name Roaring Scan Run Container Inverted
+group roaring
+storage persistent v1.5.0
+
+load
+DROP TABLE IF EXISTS tbl;
+PRAGMA force_compression='Roaring';
+CREATE TABLE tbl AS SELECT case when i%3=0 then true else false end as a FROM range(0, 250_000_000) tbl(i);
+checkpoint;
+
+assert I
+select DISTINCT compression from pragma_storage_info('tbl') where segment_type in ('BOOLEAN')
+----
+Roaring
+
+run
+select count(*) from tbl WHERE a IS true;
+
+result I
+83333334

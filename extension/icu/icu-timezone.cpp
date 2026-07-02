@@ -164,7 +164,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		if (!input.context) {
 			throw InternalException("Missing context for TIMESTAMP to TIMESTAMPTZ cast.");
 		}
-		if (DBConfig::GetSetting<DisableTimestamptzCastsSetting>(*input.context)) {
+		if (Settings::Get<DisableTimestamptzCastsSetting>(*input.context)) {
 			throw BinderException("Casting from TIMESTAMP to TIMESTAMP WITH TIME ZONE without an explicit time zone "
 			                      "has been disabled  - use \"AT TIME ZONE ...\"");
 		}
@@ -237,37 +237,70 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		return naive;
 	}
 
+	struct CastTimestampUsToUs {
+		template <class SRC, class DST>
+		static inline DST Operation(SRC input) {
+			// no-op
+			return input;
+		}
+	};
+
+	template <class OP, class TO = timestamp_t>
 	static bool CastToNaive(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
-		UnaryExecutor::Execute<timestamp_t, timestamp_t>(
-		    source, result, count, [&](timestamp_t input) { return Operation(calendar.get(), input); });
+		UnaryExecutor::Execute<timestamp_t, TO>(source, result, count, [&](timestamp_t input) {
+			return OP::template Operation<timestamp_t, TO>(Operation(calendar.get(), input));
+		});
 		return true;
 	}
 
 	static BoundCastInfo BindCastToNaive(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 		if (!input.context) {
-			throw InternalException("Missing context for TIMESTAMPTZ to TIMESTAMP cast.");
+			throw InternalException("Missing context for TIMESTAMPTZ to %s cast.", LogicalTypeIdToString(target.id()));
 		}
-		if (DBConfig::GetSetting<DisableTimestamptzCastsSetting>(*input.context)) {
-			throw BinderException("Casting from TIMESTAMP WITH TIME ZONE to TIMESTAMP without an explicit time zone "
-			                      "has been disabled  - use \"AT TIME ZONE ...\"");
+		if (Settings::Get<DisableTimestamptzCastsSetting>(*input.context)) {
+			throw BinderException("Casting from TIMESTAMP WITH TIME ZONE to %s without an explicit time zone "
+			                      "has been disabled  - use \"AT TIME ZONE ...\"",
+			                      LogicalTypeIdToString(target.id()));
 		}
 
 		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
+		switch (target.id()) {
+		case LogicalTypeId::TIMESTAMP:
+			return BoundCastInfo(CastToNaive<CastTimestampUsToUs>, std::move(cast_data));
+		case LogicalTypeId::TIMESTAMP_MS:
+			return BoundCastInfo(CastToNaive<CastTimestampUsToMs>, std::move(cast_data));
+		case LogicalTypeId::TIMESTAMP_NS:
+			return BoundCastInfo(CastToNaive<CastTimestampUsToNs>, std::move(cast_data));
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return BoundCastInfo(CastToNaive<CastTimestampUsToSec>, std::move(cast_data));
+		case LogicalTypeId::DATE:
+			return BoundCastInfo(CastToNaive<Cast, date_t>, std::move(cast_data));
+		default:
+			throw InternalException("Type %s not handled in BindCastToNaive", LogicalTypeIdToString(source.id()));
+		}
+	}
 
-		return BoundCastInfo(CastToNaive, std::move(cast_data));
+	static void AddCast(CastFunctionSet &casts, const LogicalType &source, const LogicalType &target) {
+		const auto implicit_cost = CastRules::ImplicitCast(source, target);
+		casts.RegisterCastFunction(source, target, BindCastToNaive, implicit_cost);
 	}
 
 	static void AddCasts(ExtensionLoader &loader) {
-		loader.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP, BindCastToNaive);
+		auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+		auto &casts = config.GetCastFunctions();
+
+		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP);
+		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_MS);
+		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_NS);
+		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_S);
 	}
 };
 
 struct ICULocalTimestampFunc : public ICUDateFunc {
-
 	struct BindDataNow : public BindData {
 		explicit BindDataNow(ClientContext &context) : BindData(context) {
 			now = MetaTransaction::Get(context).start_timestamp;
@@ -452,7 +485,7 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME_TZ}, LogicalType::TIME_TZ,
 		                               Execute<ICUToTimeTZ, dtime_tz_t>, Bind));
 		for (auto &func : set.functions) {
-			BaseScalarFunction::SetReturnsError(func);
+			func.SetFallible();
 		}
 		loader.RegisterFunction(set);
 	}

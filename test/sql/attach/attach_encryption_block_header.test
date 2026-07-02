@@ -70,7 +70,7 @@ SELECT SUM(i) FROM encrypted.tbl
 query I
 SELECT tags FROM duckdb_databases() WHERE database_name LIKE '%encrypted%' ORDER BY database_name;
 ----
-{storage_version=v1.4.0+}
+{storage_version=v1.5.0+}
 {storage_version=v1.0.0+}
 
 statement ok

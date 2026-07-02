@@ -1,0 +1,171 @@
+# name: test/issues/general/test_19067.test
+# description: Issue 19067 - Cascading Views using CTEs High Memory & CPU
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE VIEW view_1 AS
+SELECT
+    i AS id,
+    i * 10 AS value,
+    'item_' || i AS name,
+    (i % 3) + 1 AS category
+FROM generate_series(1, 100) AS t(i);
+
+statement ok
+CREATE OR REPLACE VIEW view_2 AS
+WITH prev1 AS (SELECT * FROM view_1)
+SELECT
+    *,
+    value * 2 AS double_value
+FROM prev1;
+
+statement ok
+CREATE OR REPLACE VIEW view_3 AS
+WITH prev2 AS (SELECT * FROM view_2)
+SELECT
+    *,
+    LENGTH(name) AS name_length
+FROM prev2;
+
+statement ok
+CREATE OR REPLACE VIEW view_4 AS
+WITH prev3 AS (SELECT * FROM view_3)
+SELECT
+    *,
+    CASE
+        WHEN category = 1 THEN 'Type A'
+        WHEN category = 2 THEN 'Type B'
+        ELSE 'Type C'
+    END AS category_desc
+FROM prev3;
+
+statement ok
+CREATE OR REPLACE VIEW view_5 AS
+WITH prev AS (SELECT * FROM view_4)
+SELECT
+    *,
+    value + id AS sum_value_id
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_6 AS
+WITH prev AS (SELECT * FROM view_5)
+SELECT
+    *,
+    UPPER(name) AS name_upper
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_7 AS
+WITH prev AS (SELECT * FROM view_6)
+SELECT
+    *,
+    ROW_NUMBER() OVER (ORDER BY id) AS row_num
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_8 AS
+WITH prev AS (SELECT * FROM view_7)
+SELECT
+    *,
+    CASE WHEN value > 500 THEN 'HIGH' ELSE 'LOW' END AS value_flag
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_9 AS
+WITH prev AS (SELECT * FROM view_8)
+SELECT
+    *,
+    id % 10 AS id_mod_10
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_10 AS
+WITH prev AS (SELECT * FROM view_9)
+SELECT
+    *,
+    value / 10 AS value_divided
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_11 AS
+WITH prev AS (SELECT * FROM view_10)
+SELECT
+    *,
+    SUBSTRING(name, 1, 4) AS name_prefix
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_12 AS
+WITH prev AS (SELECT * FROM view_11)
+SELECT
+    *,
+    AVG(value) OVER () AS avg_value
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_13 AS
+WITH prev AS (SELECT * FROM view_12)
+SELECT
+    *,
+    value - avg_value AS diff_from_avg
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_14 AS
+WITH prev AS (SELECT * FROM view_13)
+SELECT
+    *,
+    RANK() OVER (ORDER BY value) AS value_rank
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_15 AS
+WITH prev AS (SELECT * FROM view_14)
+SELECT
+    *,
+    id % 2 = 0 AS is_even
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_16 AS
+WITH prev AS (SELECT * FROM view_15)
+SELECT
+    *,
+    name || '_' || category_desc AS full_name
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_17 AS
+WITH prev AS (SELECT * FROM view_16)
+SELECT
+    *,
+    id * id AS id_squared
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_18 AS
+WITH prev AS (SELECT * FROM view_17)
+SELECT
+    *,
+    COUNT(*) OVER (PARTITION BY category) AS category_count
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_19 AS
+WITH prev AS (SELECT * FROM view_18)
+SELECT
+    *,
+    ROUND((value * 100.0 / sum_value_id), 2) AS value_percentage
+FROM prev;
+
+statement ok
+CREATE OR REPLACE VIEW view_20 AS
+WITH prev AS (SELECT * FROM view_19)
+SELECT
+    *,
+    CASE WHEN value_rank <= 10 THEN 'TOP_10' ELSE 'OTHER' END AS final_category
+FROM prev;

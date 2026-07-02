@@ -1,0 +1,88 @@
+# name: test/sql/attach/show_schemas.test
+# description: Test SHOW SCHEMAS and USE
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SHOW SCHEMAS
+----
+memory	main	true
+
+# add extra db
+statement ok
+ATTACH DATABASE ':memory:' AS new_database;
+
+query III
+SHOW SCHEMAS
+----
+memory	main	true
+new_database	main	false
+
+# check correctness after USE
+statement ok
+USE new_database;
+
+query III
+SHOW SCHEMAS
+----
+memory	main	false
+new_database	main	true
+
+# check multiple dbs with multiple schemas
+statement ok
+CREATE SCHEMA new_s1;
+CREATE SCHEMA new_s2;
+CREATE SCHEMA memory.mem_s1;
+
+query III
+SHOW SCHEMAS
+----
+memory	main	false
+memory	mem_s1	false
+new_database	main	true
+new_database	new_s1	false
+new_database	new_s2	false
+
+# USE non-default schema
+statement ok
+USE new_database.new_s2;
+
+query III
+SHOW SCHEMAS
+----
+memory	main	false
+memory	mem_s1	false
+new_database	main	false
+new_database	new_s1	false
+new_database	new_s2	true
+
+# drop active schema
+statement ok
+DROP SCHEMA new_database.new_s2;
+
+query III
+SHOW SCHEMAS
+----
+memory	main	false
+memory	mem_s1	false
+new_database	main	true
+new_database	new_s1	false
+
+# detach default db
+statement ok
+DETACH memory;
+
+query III
+SHOW SCHEMAS
+----
+new_database	main	true
+new_database	new_s1	false
+
+# DESCRIBE is alias for SHOW
+query III
+DESCRIBE SCHEMAS
+----
+new_database	main	true
+new_database	new_s1	false

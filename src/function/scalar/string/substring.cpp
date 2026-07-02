@@ -16,7 +16,6 @@ static const int64_t SUPPORTED_UPPER_BOUND = NumericLimits<uint32_t>::Maximum();
 static const int64_t SUPPORTED_LOWER_BOUND = -SUPPORTED_UPPER_BOUND - 1;
 
 static inline void AssertInSupportedRange(idx_t input_size, int64_t offset, int64_t length) {
-
 	if (input_size > (uint64_t)SUPPORTED_UPPER_BOUND) {
 		throw OutOfRangeException("Substring input size is too large (> %d)", SUPPORTED_UPPER_BOUND);
 	}
@@ -309,7 +308,7 @@ unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, Funct
 	// can only propagate stats if the children have stats
 	// we only care about the stats of the first child (i.e. the string)
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.function = SubstringFunctionASCII;
+		expr.function.SetFunctionCallback(SubstringFunctionASCII);
 	}
 	return nullptr;
 }

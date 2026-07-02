@@ -1,0 +1,14 @@
+# name: test/optimizer/pushdown/filter_pushdown_on_expressions_with_error.test
+# description: Test Filter push down on expressions that can throw errors
+# group: [pushdown]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+CREATE TABLE t AS SELECT random() AS column_0 FROM range(10000000);
+
+query II
+explain select * from t where sqrt(column_0) < 0.001;
+----
+logical_opt	<!REGEX>:.*FILTER.*

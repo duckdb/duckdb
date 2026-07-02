@@ -1,0 +1,49 @@
+# name: test/sql/binder/column_ref_as_alias.test
+# description: Test alias.name resolution in HAVING clause
+# group: [binder]
+
+statement ok
+create table ss_items as select 1 item_id, 10 ss_item_rev;
+
+statement ok
+create table cs_items as select 1 item_id, 100 cs_item_rev;
+
+query I
+select ss_items.item_id
+from ss_items,cs_items
+where ss_items.item_id = cs_items.item_id
+order by item_id;
+----
+1
+
+statement error
+select ss_items.item_id, cs_items.item_id
+from ss_items,cs_items
+where ss_items.item_id = cs_items.item_id
+order by item_id;
+----
+ss_items.item_id
+
+statement error
+select ss_items.item_id
+from ss_items,cs_items
+where ss_items.item_id = cs_items.item_id
+group by item_id;
+----
+ss_items.item_id
+
+# check that error location is reported
+statement error
+select item_id
+from ss_items,cs_items
+where ss_items.item_id = cs_items.item_id;
+----
+^
+
+statement error
+select ss_items.item_id, cs_items.item_id
+from ss_items,cs_items
+where ss_items.item_id = cs_items.item_id
+order by item_id
+----
+^

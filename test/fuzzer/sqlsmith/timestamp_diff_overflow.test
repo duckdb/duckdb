@@ -25,3 +25,4 @@ select
 from
   ts as ref_0
 ----
+Conversion Error: Timestamp difference is out of bounds

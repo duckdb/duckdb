@@ -140,18 +140,18 @@ struct RLECompressState : public CompressionState {
 	RLECompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info)
 	    : CompressionState(info), checkpoint_data(checkpoint_data_p),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_RLE)) {
-		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+		CreateEmptySegment();
 
 		state.dataptr = (void *)this;
 		max_rle_count = MaxRLECount();
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
+	void CreateEmptySegment() {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 
-		auto column_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
-		                                                            info.GetBlockManager());
+		auto column_segment =
+		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(column_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -176,16 +176,20 @@ struct RLECompressState : public CompressionState {
 		entry_count++;
 
 		// update meta data
-		if (WRITE_STATISTICS && !is_null) {
-			current_segment->stats.statistics.UpdateNumericStats<T>(value);
+		if (WRITE_STATISTICS) {
+			if (!is_null) {
+				current_segment->stats.statistics.SetHasNoNullFast();
+				current_segment->stats.statistics.UpdateNumericStats<T>(value);
+			} else {
+				current_segment->stats.statistics.SetHasNullFast();
+			}
 		}
 		current_segment->count += count;
 
 		if (entry_count == max_rle_count) {
 			// we have finished writing this segment: flush it and create a new segment
-			auto row_start = current_segment->start + current_segment->count;
 			FlushSegment();
-			CreateEmptySegment(row_start);
+			CreateEmptySegment();
 			entry_count = 0;
 		}
 	}
@@ -219,7 +223,7 @@ struct RLECompressState : public CompressionState {
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;
-	CompressionFunction &function;
+	const CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 
@@ -259,21 +263,23 @@ struct RLEScanState : public SegmentScanState {
 	      rle_count_offset(UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()))),
 	      data_pointer(reinterpret_cast<T *>(handle.Ptr() + segment.GetBlockOffset() + RLEConstants::RLE_HEADER_SIZE)),
 	      index_pointer(reinterpret_cast<rle_count_t *>(handle.Ptr() + segment.GetBlockOffset() + rle_count_offset)),
-	      max_entry_pos(static_cast<idx_t>(reinterpret_cast<const_data_ptr_t>(
-	                                           handle.Ptr() + segment.GetBlockManager().GetBlockSize()) -
+	      max_entry_pos(static_cast<idx_t>(reinterpret_cast<const_data_ptr_t>(handle.Ptr() + segment.GetBlockSize()) -
 	                                       reinterpret_cast<const_data_ptr_t>(index_pointer)) /
 	                    static_cast<idx_t>(sizeof(rle_count_t))) {
 		if (rle_count_offset < RLEConstants::RLE_HEADER_SIZE) {
 			//! This would make the index_pointer point into a region reserved for the header data
-			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
+			throw IOException("Corrupted RLE segment: rle_count_offset is smaller than the header size. The "
+			                  "index_pointer would point into the region reserved for the header data");
 		}
-		if (segment.GetBlockOffset() + rle_count_offset > segment.GetBlockManager().GetBlockSize()) {
+		if (segment.GetBlockOffset() + rle_count_offset > segment.GetBlockSize()) {
 			//! This would make the index_pointer start outside of the segment
-			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
+			throw IOException("Corrupted RLE segment: rle_count_offset exceeds the block size. The index_pointer would "
+			                  "start outside of the segment");
 		}
-		if ((rle_count_offset - RLEConstants::RLE_HEADER_SIZE) / sizeof(T) > max_entry_pos) {
+		if (rle_count_offset > AlignValue(RLEConstants::RLE_HEADER_SIZE + max_entry_pos * sizeof(T))) {
 			//! This would make the indexing of the index_pointer[entry_pos] reach outside of the segment
-			throw IOException("Corrupted RLE segment: rle_count_offset is corrupted");
+			throw IOException("Corrupted RLE segment: rle_count_offset has more values than fit in the segment. "
+			                  "index_pointer[entry_pos] would reach outside of the segment");
 		}
 	}
 
@@ -323,7 +329,7 @@ struct RLEScanState : public SegmentScanState {
 };
 
 template <class T>
-unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> RLEInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq<RLEScanState<T>>(segment);
 	return std::move(result);
 }

@@ -17,6 +17,7 @@ ALTER TABLE test RENAME COLUMN i TO k
 statement error
 SELECT i FROM test
 ----
+Binder Error: Referenced column "i" not found in FROM clause
 
 statement ok
 SELECT k FROM test
@@ -32,4 +33,4 @@ SELECT i FROM test
 statement error
 SELECT k FROM test
 ----
-
+Binder Error: Referenced column "k" not found in FROM clause

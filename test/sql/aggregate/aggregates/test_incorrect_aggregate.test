@@ -5,68 +5,84 @@
 statement error
 SELECT COUNT(1, 2, 3)
 ----
+Binder Error: No function matches the given name and argument types 'count
 
 statement error
 SELECT COUNT(COUNT(1))
 ----
+Binder Error: aggregate function calls cannot be nested
 
 statement error
 SELECT STDDEV_SAMP()
 ----
+Binder Error: No function matches the given name and argument types 'stddev_samp
 
 statement error
 SELECT STDDEV_SAMP(1, 2, 3)
 ----
+Binder Error: No function matches the given name and argument types 'stddev_samp
 
 statement error
 SELECT STDDEV_SAMP(STDDEV_SAMP(1))
 ----
+Binder Error: aggregate function calls cannot be nested
 
 statement error
 SELECT SUM()
 ----
+Binder Error: No function matches the given name and argument types 'sum
 
 statement error
 SELECT SUM(1, 2, 3)
 ----
+Binder Error: No function matches the given name and argument types 'sum
 
 statement error
 SELECT SUM(SUM(1))
 ----
+Binder Error: aggregate function calls cannot be nested
 
 statement error
 SELECT FIRST()
 ----
+Binder Error: No function matches the given name and argument types 'first
 
 statement error
 SELECT FIRST(1, 2, 3)
 ----
+Binder Error: No function matches the given name and argument types 'first
 
 statement error
 SELECT FIRST(FIRST(1))
 ----
+Binder Error: aggregate function calls cannot be nested
 
 statement error
 SELECT MAX()
 ----
+Binder Error: No function matches the given name and argument types 'max
 
 statement error
 SELECT MAX(1, 2, 3)
 ----
+Binder Error: No function matches the given name and argument types 'max
 
 statement error
 SELECT MAX(MAX(1))
 ----
+Binder Error: aggregate function calls cannot be nested
 
 statement error
 SELECT MIN()
 ----
+Binder Error: No function matches the given name and argument types 'min
 
 statement error
 SELECT MIN(1, 2, 3)
 ----
+Binder Error: No function matches the given name and argument types 'min
 
 statement error
 SELECT MIN(MIN(1))
 ----
-
+Binder Error: aggregate function calls cannot be nested

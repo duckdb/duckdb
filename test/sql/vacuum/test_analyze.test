@@ -38,7 +38,7 @@ CREATE VIEW testview AS SELECT * FROM test;
 statement error
 ANALYZE testview;
 ----
-can only vacuum or analyze base tables
+Can only vacuum or analyze base tables
 
 statement ok
 INSERT INTO test SELECT range % 5000, range % 5000 FROM range(10000);

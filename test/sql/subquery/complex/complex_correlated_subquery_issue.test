@@ -45,3 +45,35 @@ CREATE TABLE t1(c0 DATETIME, c1 DOUBLE);
 
 statement ok
 SELECT * FROM t0, t1 CROSS JOIN (SELECT t0.c0 AS col_0 WHERE t1.c1) as subQuery0;
+
+
+## issue 20332
+statement ok
+drop table t0;
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+statement ok
+CREATE TABLE t2(c2 DOUBLE);
+
+statement ok
+INSERT INTO t1(c0) VALUES (1);
+
+statement ok
+INSERT INTO t2(c2) VALUES (7.5);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0);
+
+statement ok
+SELECT * FROM t0, t2, t1, (SELECT DISTINCT t1.c0 AS col_0, t2.c2 AS col_1 FROM t1) as subQuery0 CROSS JOIN (SELECT t0.c0 AS col_0);

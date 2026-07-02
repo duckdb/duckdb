@@ -1,18 +1,9 @@
 #include "duckdb/storage/compression/roaring/roaring.hpp"
 
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/likely.hpp"
-#include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/common/fast_mem.hpp"
-#include "duckdb/common/bitpacking.hpp"
 
 namespace duckdb {
 

@@ -87,7 +87,6 @@ QUALIFY "c3".len() = 1;
 ----
 [Masters]
 
-
 query II
 SELECT c1, sum(c2) as c3 FROM VALUES ('a', 1), ('b', 2), ('b', 3), ('c', 4), ('d', null) AS t(c1, c2) group by c1 having c3.add(1) > 2 order by c1;
 ----

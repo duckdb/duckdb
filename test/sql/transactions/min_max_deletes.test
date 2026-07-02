@@ -1,0 +1,64 @@
+# name: test/sql/transactions/min_max_deletes.test
+# description: Test MIN/MAX with transaction local deletes
+# group: [transactions]
+
+statement ok
+CREATE TABLE tbl (id INT);
+
+statement ok
+INSERT INTO tbl FROM range(10000);
+
+query I
+SELECT COUNT(*) FROM tbl
+----
+10000
+
+# deletes
+statement ok con1
+BEGIN;
+
+query I con1
+DELETE FROM tbl WHERE id%2=0
+----
+5000
+
+query II con1
+SELECT min(id), max(id) FROM tbl
+----
+1	9999
+
+statement ok con1
+COMMIT;
+
+query II con1
+SELECT min(id), max(id) FROM tbl
+----
+1	9999
+
+# transaction local appends
+statement ok con1
+BEGIN;
+
+query I con1
+INSERT INTO tbl FROM range(10000, 15000)
+----
+5000
+
+query II con1
+SELECT min(id), max(id) FROM tbl
+----
+1	14999
+
+query II
+SELECT min(id), max(id) FROM tbl
+----
+1	9999
+
+statement ok con1
+COMMIT;
+
+query II
+SELECT min(id), max(id) FROM tbl
+----
+1	14999
+

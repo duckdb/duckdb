@@ -8,12 +8,12 @@ PRAGMA enable_verification
 statement error
 SELECT to_base(-10, 2)
 ----
-number must be greater than or equal to 0
+Invalid Input Error: 'to_base' number must be greater than or equal to 0
 
 statement error
 SELECT to_base(-10, 2, 64)
-number must be greater than or equal to 0
 ----
+Invalid Input Error: 'to_base' number must be greater than or equal to 0
 
 statement error
 SELECT to_base(10, 1)

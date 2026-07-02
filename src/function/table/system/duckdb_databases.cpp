@@ -44,6 +44,9 @@ static unique_ptr<FunctionData> DuckDBDatabasesBind(ClientContext &context, Tabl
 
 	names.emplace_back("cipher");
 	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("options");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
 	return nullptr;
 }
 
@@ -67,9 +70,11 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
-
 		auto &attached = *entry;
 		auto &catalog = attached.GetCatalog();
+		if (attached.GetVisibility() == AttachVisibility::HIDDEN) {
+			continue;
+		}
 		// return values:
 
 		idx_t col = 0;
@@ -106,6 +111,12 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 		output.SetValue(col++, count, Value::BOOLEAN(catalog.IsEncrypted()));
 		// cipher, VARCHAR
 		output.SetValue(col++, count, cipher_str.empty() ? Value() : Value(cipher_str));
+		// options, MAP
+		InsertionOrderPreservingMap<string> options_map;
+		for (const auto &option : attached.GetAttachOptions()) {
+			options_map.insert(option.first, option.second.ToString());
+		}
+		output.SetValue(col++, count, Value::MAP(options_map));
 
 		count++;
 	}

@@ -37,7 +37,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(PhysicalPlan &physica
 		bindings.push_back(&aggr);
 
 		D_ASSERT(!aggr.IsDistinct());
-		D_ASSERT(aggr.function.combine);
+		D_ASSERT(aggr.function.HasStateCombineCallback());
 		for (auto &child : aggr.children) {
 			payload_types.push_back(child->return_type);
 		}
@@ -188,8 +188,8 @@ unique_ptr<GlobalSourceState> PhysicalPerfectHashAggregate::GetGlobalSourceState
 	return make_uniq<PerfectHashAggregateState>();
 }
 
-SourceResultType PhysicalPerfectHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                       OperatorSourceInput &input) const {
+SourceResultType PhysicalPerfectHashAggregate::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                               OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<PerfectHashAggregateState>();
 	auto &gstate = sink_state->Cast<PerfectHashAggregateGlobalState>();
 

@@ -34,7 +34,7 @@ ScalarFunction ListContainsFun::GetFunction() {
 ScalarFunction ListPositionFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::TEMPLATE("T")},
 	                          LogicalType::INTEGER, ListSearchFunction<int32_t, true>);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 

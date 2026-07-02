@@ -1,0 +1,79 @@
+# name: test/sql/catalog/dependencies/test_drop_column_sequence_dependency.test
+# group: [dependencies]
+
+# test: dropping a column that references a sequence removes the dependency
+
+statement ok
+CREATE SEQUENCE seq2 START 1;
+
+statement ok
+CREATE TABLE tbl3 (a INTEGER DEFAULT nextval('seq2'), b VARCHAR);
+
+statement ok
+ALTER TABLE tbl3 DROP COLUMN a;
+
+statement ok
+DROP SEQUENCE seq2;
+
+statement ok
+DROP TABLE tbl3;
+
+# test: dropping one of two columns that reference the same sequence keeps the dependency
+
+statement ok
+CREATE SEQUENCE seq3 START 1;
+
+statement ok
+CREATE TABLE tbl4 (a INTEGER DEFAULT nextval('seq3'), b INTEGER DEFAULT nextval('seq3'), c VARCHAR);
+
+# drop only column a - column b still depends on seq3
+statement ok
+ALTER TABLE tbl4 DROP COLUMN a;
+
+# dropping the sequence should fail because column b still depends on it
+statement error
+DROP SEQUENCE seq3;
+----
+there are entries that depend on it
+
+# drop column b as well - now the dependency is fully removed
+statement ok
+ALTER TABLE tbl4 DROP COLUMN b;
+
+statement ok
+DROP SEQUENCE seq3;
+
+statement ok
+DROP TABLE tbl4;
+
+# test: rolling back a DROP COLUMN that removes a sequence dependency should restore the dependency
+
+statement ok
+CREATE SEQUENCE seq5 START 1;
+
+statement ok
+CREATE TABLE tbl6 (a INTEGER DEFAULT nextval('seq5'), b VARCHAR);
+
+statement ok
+BEGIN;
+
+statement ok
+ALTER TABLE tbl6 DROP COLUMN a;
+
+statement ok
+DROP SEQUENCE seq5;
+
+statement ok
+ROLLBACK;
+
+# after rollback the dependency should be restored - drop should fail
+statement error
+DROP SEQUENCE seq5;
+----
+there are entries that depend on it
+
+statement ok
+DROP TABLE tbl6;
+
+statement ok
+DROP SEQUENCE seq5;

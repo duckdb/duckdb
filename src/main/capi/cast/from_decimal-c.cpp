@@ -13,23 +13,22 @@ bool CastDecimalCInternal(duckdb_result *source, duckdb_string &result, idx_t co
 	auto scale = duckdb::DecimalType::GetScale(source_type);
 	duckdb::Vector result_vec(duckdb::LogicalType::VARCHAR, false, false);
 	duckdb::string_t result_string;
-	void *source_address = UnsafeFetchPtr<hugeint_t>(source, col, row);
+	auto source_value = UnsafeFetch<hugeint_t>(source, col, row);
 	switch (source_type.InternalType()) {
 	case duckdb::PhysicalType::INT16:
-		result_string = duckdb::StringCastFromDecimal::Operation<int16_t>(UnsafeFetchFromPtr<int16_t>(source_address),
-		                                                                  width, scale, result_vec);
+		result_string = duckdb::StringCastFromDecimal::Operation<int16_t>(static_cast<int16_t>(source_value), width,
+		                                                                  scale, result_vec);
 		break;
 	case duckdb::PhysicalType::INT32:
-		result_string = duckdb::StringCastFromDecimal::Operation<int32_t>(UnsafeFetchFromPtr<int32_t>(source_address),
-		                                                                  width, scale, result_vec);
+		result_string = duckdb::StringCastFromDecimal::Operation<int32_t>(static_cast<int32_t>(source_value), width,
+		                                                                  scale, result_vec);
 		break;
 	case duckdb::PhysicalType::INT64:
-		result_string = duckdb::StringCastFromDecimal::Operation<int64_t>(UnsafeFetchFromPtr<int64_t>(source_address),
-		                                                                  width, scale, result_vec);
+		result_string = duckdb::StringCastFromDecimal::Operation<int64_t>(static_cast<int64_t>(source_value), width,
+		                                                                  scale, result_vec);
 		break;
 	case duckdb::PhysicalType::INT128:
-		result_string = duckdb::StringCastFromDecimal::Operation<hugeint_t>(
-		    UnsafeFetchFromPtr<hugeint_t>(source_address), width, scale, result_vec);
+		result_string = duckdb::StringCastFromDecimal::Operation<hugeint_t>(source_value, width, scale, result_vec);
 		break;
 	default:
 		throw duckdb::InternalException("Unimplemented internal type for decimal");
@@ -48,10 +47,11 @@ duckdb_hugeint FetchInternals(void *source_address) {
 
 template <>
 duckdb_hugeint FetchInternals<int16_t>(void *source_address) {
+	const int16_t source_value = static_cast<int16_t>(UnsafeFetchFromPtr<int64_t>(source_address));
 	duckdb_hugeint result;
 	int16_t intermediate_result;
 
-	if (!TryCast::Operation<int16_t, int16_t>(UnsafeFetchFromPtr<int16_t>(source_address), intermediate_result)) {
+	if (!TryCast::Operation<int16_t, int16_t>(source_value, intermediate_result)) {
 		intermediate_result = FetchDefaultValue::Operation<int16_t>();
 	}
 	hugeint_t hugeint_result = Hugeint::Cast<int16_t>(intermediate_result);
@@ -61,10 +61,11 @@ duckdb_hugeint FetchInternals<int16_t>(void *source_address) {
 }
 template <>
 duckdb_hugeint FetchInternals<int32_t>(void *source_address) {
+	const int32_t source_value = static_cast<int32_t>(UnsafeFetchFromPtr<int64_t>(source_address));
 	duckdb_hugeint result;
 	int32_t intermediate_result;
 
-	if (!TryCast::Operation<int32_t, int32_t>(UnsafeFetchFromPtr<int32_t>(source_address), intermediate_result)) {
+	if (!TryCast::Operation<int32_t, int32_t>(source_value, intermediate_result)) {
 		intermediate_result = FetchDefaultValue::Operation<int32_t>();
 	}
 	hugeint_t hugeint_result = Hugeint::Cast<int32_t>(intermediate_result);
@@ -74,10 +75,11 @@ duckdb_hugeint FetchInternals<int32_t>(void *source_address) {
 }
 template <>
 duckdb_hugeint FetchInternals<int64_t>(void *source_address) {
+	const int64_t source_value = UnsafeFetchFromPtr<int64_t>(source_address);
 	duckdb_hugeint result;
 	int64_t intermediate_result;
 
-	if (!TryCast::Operation<int64_t, int64_t>(UnsafeFetchFromPtr<int64_t>(source_address), intermediate_result)) {
+	if (!TryCast::Operation<int64_t, int64_t>(source_value, intermediate_result)) {
 		intermediate_result = FetchDefaultValue::Operation<int64_t>();
 	}
 	hugeint_t hugeint_result = Hugeint::Cast<int64_t>(intermediate_result);
@@ -87,10 +89,11 @@ duckdb_hugeint FetchInternals<int64_t>(void *source_address) {
 }
 template <>
 duckdb_hugeint FetchInternals<hugeint_t>(void *source_address) {
+	const hugeint_t source_value = UnsafeFetchFromPtr<hugeint_t>(source_address);
 	duckdb_hugeint result;
 	hugeint_t intermediate_result;
 
-	if (!TryCast::Operation<hugeint_t, hugeint_t>(UnsafeFetchFromPtr<hugeint_t>(source_address), intermediate_result)) {
+	if (!TryCast::Operation<hugeint_t, hugeint_t>(source_value, intermediate_result)) {
 		intermediate_result = FetchDefaultValue::Operation<hugeint_t>();
 	}
 	result.lower = intermediate_result.lower;

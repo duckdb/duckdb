@@ -1,10 +1,10 @@
-def open_utf8(fpath, flags):
+def open_utf8(fpath, flags, **kwargs):
     import sys
 
     if sys.version_info[0] < 3:
-        return open(fpath, flags)
+        return open(fpath, flags, **kwargs)
     else:
-        return open(fpath, flags, encoding="utf8")
+        return open(fpath, flags, encoding="utf8", **kwargs)
 
 
 def normalize_path(path):

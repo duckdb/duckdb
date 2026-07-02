@@ -167,22 +167,44 @@ TEST_CASE("Test BIGNUM value", "[capi]") {
 		duckdb_free(output.data);
 		duckdb_destroy_value(&value);
 	}
+	{ // 256 == big endian {0x01, 0x00}: the most-significant byte comes first
+		uint8_t data[] {0x01, 0x00};
+		duckdb_bignum input {data, 2, false};
+		auto value = duckdb_create_bignum(input);
+		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_BIGNUM);
+		auto str = duckdb_get_varchar(value);
+		REQUIRE(string(str) == "256");
+		duckdb_free(str);
+		auto output = duckdb_get_bignum(value);
+		REQUIRE(output.is_negative == input.is_negative);
+		REQUIRE(output.size == input.size);
+		REQUIRE_FALSE(memcmp(output.data, input.data, input.size));
+		duckdb_free(output.data);
+		duckdb_destroy_value(&value);
+	}
 	{ // max bignum == max double == 2^1023 * (1 + (1 − 2^−52)) == 2^1024 - 2^971 ==
 	  // 179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368
 		uint8_t data[] {
-		    // little endian
-		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		    // big endian
+		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		};
 		duckdb_bignum input {data, 128, false};
 		auto value = duckdb_create_bignum(input);
 		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_BIGNUM);
+		auto str = duckdb_get_varchar(value);
+		REQUIRE(
+		    string(str) ==
+		    "1797693134862315708145274237317043567980705675258449965989174768031572607800285387605895586327668781715"
+		    "4045895351438246423432132688946418276846754670353751698604991057655128207624549009038932894407586850845"
+		    "5133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368");
+		duckdb_free(str);
 		auto output = duckdb_get_bignum(value);
 		REQUIRE(output.is_negative == input.is_negative);
 		REQUIRE(output.size == input.size);
@@ -193,19 +215,26 @@ TEST_CASE("Test BIGNUM value", "[capi]") {
 	{ // min bignum == min double == -(2^1023 * (1 + (1 − 2^−52))) == -(2^1024 - 2^971) ==
 		// -179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368
 		uint8_t data[] {
-		    // little endian (absolute value)
-		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		    // big endian (absolute value)
+		    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		};
 		duckdb_bignum input {data, 128, true};
 		auto value = duckdb_create_bignum(input);
 		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_BIGNUM);
+		auto str = duckdb_get_varchar(value);
+		REQUIRE(
+		    string(str) ==
+		    "-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171"
+		    "5404589535143824642343213268894641827684675467035375169860499105765512820762454900903893289440758685084"
+		    "55133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368");
+		duckdb_free(str);
 		auto output = duckdb_get_bignum(value);
 		REQUIRE(output.is_negative == input.is_negative);
 		REQUIRE(output.size == input.size);
@@ -344,6 +373,18 @@ TEST_CASE("Test DECIMAL value", "[capi]") {
 		REQUIRE(output.value.upper == input.value.upper);
 		duckdb_destroy_value(&value);
 	}
+	{
+		// invalid width/scale combinations return nullptr instead of throwing or returning a malformed value
+		duckdb::vector<std::pair<uint8_t, uint8_t>> invalid = {
+		    {0, 0},  // width below the minimum
+		    {39, 0}, // width above the maximum (MAX_WIDTH_DECIMAL == 38)
+		    {4, 5},  // scale greater than width
+		    {255, 255}};
+		for (auto &entry : invalid) {
+			duckdb_decimal input {entry.first, entry.second, {0, 0}};
+			REQUIRE(duckdb_create_decimal(input) == nullptr);
+		}
+	}
 }
 
 TEST_CASE("Test BIT value", "[capi]") {
@@ -426,6 +467,192 @@ TEST_CASE("Test UUID value", "[capi]") {
 		REQUIRE(uhugeint_output.upper == uhugeint_input.upper);
 		duckdb_destroy_value(&uuid_value);
 	}
+}
+
+TEST_CASE("Test UTF-8 string creation with and without embedded nulls", "[capi]") {
+	// Create a valid and an invalid null-terminated string without embedded null-bytes.
+	string valid_utf8 = "é";
+	idx_t len = strlen(valid_utf8.c_str());
+	auto invalid_utf8 = static_cast<char *>(malloc(len));
+	memcpy(invalid_utf8, valid_utf8.c_str() + 1, len);
+
+	duckdb_error_data error_data = nullptr;
+	duckdb_value value = nullptr;
+
+	// Valid null-terminated string.
+	value = duckdb_create_varchar(valid_utf8.c_str());
+	REQUIRE(value);
+	auto res = duckdb_get_varchar(value);
+	REQUIRE(StringUtil::Equals(res, valid_utf8));
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Invalid null-terminated string via duckdb_create_varchar returns nullptr.
+	invalid_utf8[len - 1] = '\0';
+	value = duckdb_create_varchar(invalid_utf8);
+	REQUIRE(!value);
+
+	// Invalid string via duckdb_create_varchar_length also returns nullptr.
+	value = duckdb_create_varchar_length(invalid_utf8, len - 1);
+	free(invalid_utf8);
+	REQUIRE(!value);
+
+	// Validate with duckdb_valid_utf8_check for error details.
+	auto invalid_utf8_2 = valid_utf8.c_str() + 1;
+	error_data = duckdb_valid_utf8_check(invalid_utf8_2, len - 1);
+	REQUIRE(error_data != nullptr);
+	REQUIRE(duckdb_error_data_has_error(error_data));
+	auto err_type = duckdb_error_data_error_type(error_data);
+	REQUIRE(err_type == DUCKDB_ERROR_INVALID_INPUT);
+	auto err_msg = duckdb_error_data_message(error_data);
+	REQUIRE(StringUtil::Contains(err_msg, "invalid Unicode detected, str must be valid UTF-8"));
+	duckdb_destroy_error_data(&error_data);
+
+	// Create a valid and an invalid string with embedded null-bytes.
+	constexpr idx_t VALID_NULL_UTF8_LEN = 6;
+	string valid_null_utf8("é\0b\0c\0", VALID_NULL_UTF8_LEN);
+	auto invalid_null_utf8 = static_cast<char *>(malloc(VALID_NULL_UTF8_LEN));
+	memcpy(invalid_null_utf8, valid_null_utf8.c_str() + 1, VALID_NULL_UTF8_LEN);
+
+	// Valid string with embedded nulls.
+	value = duckdb_create_varchar_length(valid_null_utf8.c_str(), VALID_NULL_UTF8_LEN);
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(StringUtil::Equals(res, valid_null_utf8));
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Invalid string with embedded nulls returns nullptr.
+	value = duckdb_create_varchar_length(invalid_null_utf8, VALID_NULL_UTF8_LEN - 1);
+	free(invalid_null_utf8);
+	REQUIRE(!value);
+}
+
+TEST_CASE("Test duckdb_create_varchar edge cases", "[capi]") {
+	duckdb_value value = nullptr;
+
+	// Empty string is valid.
+	value = duckdb_create_varchar("");
+	REQUIRE(value);
+	auto res = duckdb_get_varchar(value);
+	REQUIRE(strlen(res) == 0);
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Empty string via _length is valid.
+	value = duckdb_create_varchar_length("", 0);
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(strlen(res) == 0);
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Valid ASCII.
+	value = duckdb_create_varchar("hello");
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res) == "hello");
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Valid multibyte (3-byte: Euro sign).
+	value = duckdb_create_varchar("\xe2\x82\xac");
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res) == "\xe2\x82\xac");
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Valid 4-byte (emoji).
+	value = duckdb_create_varchar("\xf0\x9f\x98\x80");
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res) == "\xf0\x9f\x98\x80");
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Valid 2-byte 'é' (0xC3 0xA9), then lone continuation byte (0xA9 without lead byte) is invalid.
+	value = duckdb_create_varchar("\xc3\xa9");
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res) == "\xc3\xa9");
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	char lone_cont[] = {(char)0xA9, '\0'};
+	value = duckdb_create_varchar(lone_cont);
+	REQUIRE(!value);
+
+	// Valid '/' (0x2F), then overlong encoding of '/' (0xC0 0xAF) is invalid.
+	value = duckdb_create_varchar("/");
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res) == "/");
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	char overlong[] = {(char)0xC0, (char)0xAF, '\0'};
+	value = duckdb_create_varchar(overlong);
+	REQUIRE(!value);
+
+	// Valid U+D7FF (0xED 0x9F 0xBF, last before surrogates), then surrogate half U+D800 is invalid.
+	value = duckdb_create_varchar("\xed\x9f\xbf");
+	REQUIRE(value);
+	duckdb_destroy_value(&value);
+
+	char surrogate[] = {(char)0xED, (char)0xA0, (char)0x80, '\0'};
+	value = duckdb_create_varchar(surrogate);
+	REQUIRE(!value);
+
+	// Valid 'A' (0x41), then 0xFF byte is invalid (never valid in UTF-8).
+	value = duckdb_create_varchar("A");
+	REQUIRE(value);
+	duckdb_destroy_value(&value);
+
+	char ff_byte[] = {(char)0xFF, '\0'};
+	value = duckdb_create_varchar(ff_byte);
+	REQUIRE(!value);
+}
+
+TEST_CASE("Test duckdb_create_varchar null truncation vs length version", "[capi]") {
+	// duckdb_create_varchar uses strlen, so it truncates at the first embedded null byte.
+	// duckdb_create_varchar_length preserves the full content including embedded nulls.
+	duckdb_value value = nullptr;
+
+	// "hello\0world" — non-len version sees only "hello".
+	value = duckdb_create_varchar("hello\0world");
+	REQUIRE(value);
+	auto res = duckdb_get_varchar(value);
+	REQUIRE(string(res) == "hello");
+	REQUIRE(strlen(res) == 5);
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Same bytes via _length version preserves the full 11 bytes.
+	string full("hello\0world", 11);
+	value = duckdb_create_varchar_length(full.c_str(), full.length());
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res, 11) == full);
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Leading null byte — non-len version sees empty string.
+	value = duckdb_create_varchar("\0trailing");
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(strlen(res) == 0);
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Same bytes via _length version preserves all 9 bytes.
+	string leading_null("\0trailing", 9);
+	value = duckdb_create_varchar_length(leading_null.c_str(), leading_null.length());
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res, 9) == leading_null);
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
 }
 
 TEST_CASE("Test SQL string conversion", "[capi]") {

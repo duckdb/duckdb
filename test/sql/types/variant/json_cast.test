@@ -11,14 +11,24 @@ select '"test"'::JSON::VARIANT;
 test
 
 query I
-select ['"test"' for _ in range(10)]::JSON::VARIANT;
+select ['"test"'::JSON for _ in range(10)]::JSON::VARIANT;
 ----
-["test", "test", "test", "test", "test", "test", "test", "test", "test", "test"]
+[test, test, test, test, test, test, test, test, test, test]
 
 query I
 select '{"hello": [1,2,true, false, null], "test": [1, {"test": false}, ["blob", "this is a long string", 123]]}'::JSON::VARIANT;
 ----
 {'hello': [1, 2, true, false, NULL], 'test': [1, {'test': false}, [blob, this is a long string, 123]]}
+
+query II
+WITH src(j) AS (
+    VALUES ('{"n":123456789012345678901234567890}'::JSON)
+)
+SELECT
+    (j::VARIANT).n as value, variant_typeof(value) as variant_type
+FROM src;
+----
+1.2345678901234568e+29	DOUBLE
 
 # ---------- VARIANT -> JSON ----------
 

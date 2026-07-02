@@ -105,7 +105,7 @@ statement ok
 INSERT INTO events0 VALUES (10, 4);
 
 # RIGHT Window version
-query II nosort right_inequality
+query II nosort
 SELECT p.ts, e.value
 FROM 
 	range(0,10) p(ts)
@@ -129,20 +129,40 @@ ORDER BY p.ts ASC NULLS LAST
 NULL	4
 
 # RIGHT ON inequality only
-query II nosort right_inequality
+query II nosort
 SELECT p.ts, e.value
 FROM range(0,10) p(ts) ASOF RIGHT JOIN events0 e
 ON p.ts >= e.begin
 ORDER BY p.ts ASC NULLS LAST
 ----
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+NULL	4
 
 # RIGHT USING inequality only
-query II nosort right_inequality
+query II nosort
 SELECT p.begin, e.value
 FROM range(0,10) p(begin) ASOF RIGHT JOIN events0 e
 USING (begin)
 ORDER BY p.begin ASC NULLS LAST
 ----
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+NULL	4
 
 #
 # With equality
@@ -325,3 +345,10 @@ USING (key, begin)
 ORDER BY 1 ASC NULLS FIRST, 2
 ----
 
+# INNER with empty RHS
+query II
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN (from events0 where value < 0) e
+ON p.ts >= e.begin
+ORDER BY p.ts ASC
+----

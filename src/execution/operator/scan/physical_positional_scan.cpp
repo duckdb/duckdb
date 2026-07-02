@@ -14,7 +14,6 @@ PhysicalPositionalScan::PhysicalPositionalScan(PhysicalPlan &physical_plan, vect
                                                PhysicalOperator &left, PhysicalOperator &right)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::POSITIONAL_SCAN, std::move(types),
                        MaxValue(left.estimated_cardinality, right.estimated_cardinality)) {
-
 	// Manage the children ourselves
 	if (left.type == PhysicalOperatorType::TABLE_SCAN) {
 		child_tables.emplace_back(left);
@@ -158,8 +157,8 @@ unique_ptr<GlobalSourceState> PhysicalPositionalScan::GetGlobalSourceState(Clien
 	return make_uniq<PositionalScanGlobalSourceState>(context, *this);
 }
 
-SourceResultType PhysicalPositionalScan::GetData(ExecutionContext &context, DataChunk &output,
-                                                 OperatorSourceInput &input) const {
+SourceResultType PhysicalPositionalScan::GetDataInternal(ExecutionContext &context, DataChunk &output,
+                                                         OperatorSourceInput &input) const {
 	auto &lstate = input.local_state.Cast<PositionalScanLocalSourceState>();
 
 	// Find the longest source block

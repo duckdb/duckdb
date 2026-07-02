@@ -46,7 +46,6 @@ void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional
 
 void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
                                   const RelationStats &stats) {
-
 	// if parent is null, then this is a root relation
 	// if parent is not null, it should have multiple children
 	D_ASSERT(!parent || parent->children.size() >= 2);
@@ -54,11 +53,13 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	auto relation_id = relations.size();
 
 	auto table_indexes = op.GetTableIndex();
+	bool is_mark = op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+	               op.Cast<LogicalComparisonJoin>().join_type == JoinType::MARK;
 	bool get_all_child_bindings = op.type == LogicalOperatorType::LOGICAL_UNNEST;
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
 		get_all_child_bindings = !op.children.empty();
 	}
-	if (table_indexes.empty()) {
+	if (table_indexes.empty() || is_mark) {
 		// relation represents a non-reorderable relation, most likely a join relation
 		// Get the tables referenced in the non-reorderable relation and add them to the relation mapping
 		// This should all table references, even if there are nested non-reorderable joins.
@@ -561,7 +562,6 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			auto &join = f_op.Cast<LogicalComparisonJoin>();
 			D_ASSERT(join.expressions.empty());
 			if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
-
 				auto conjunction_expression = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 				// create a conjunction expression for the semi join.
 				// It's possible multiple LHS relations have a condition in

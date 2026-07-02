@@ -13,16 +13,16 @@ statement ok
 create or replace table t1 (ts timestamp, i int);
 
 statement ok
-insert into t1 select '2024-05-01 00:00:00'::timestamp, i from generate_series(1, 2000) g(i);
+insert into t1 select '2024-05-01 00:00:00'::timestamp ts, i from generate_series(1, 2000) g(i);
 
 statement ok
-insert into t1 select '2024-05-02 00:00:00'::timestamp, i from generate_series(1, 1000) g(i);
+insert into t1 select '2024-05-02 00:00:00'::timestamp ts, i from generate_series(1, 1000) g(i);
 
 statement ok
-insert into t1 select '2024-05-02 00:22:00'::timestamp, i from generate_series(1, 1000) g(i);
+insert into t1 select '2024-05-02 00:22:00'::timestamp ts, i from generate_series(1, 1000) g(i);
 
 statement ok
-insert into t1 select '2024-05-03 00:00:00'::timestamp, i from generate_series(1, 2000) g(i);
+insert into t1 select '2024-05-03 00:00:00'::timestamp ts, i from generate_series(1, 2000) g(i);
 
 query II
 explain select * from t1 where ts::date == '2024-05-02';
@@ -39,14 +39,14 @@ statement ok
 pragma disable_optimizer;
 
 query II nosort no_opt_result
-select * from t1 where ts::date == '2024-05-02';
+select * from t1 where ts::date == '2024-05-02' order by ts, i;
 ----
 
 statement ok
 pragma enable_optimizer;
 
 query II nosort no_opt_result
-select * from t1 where ts::date == '2024-05-02';
+select * from t1 where ts::date == '2024-05-02' order by ts, i;
 ----
 
 # pattern is still recognized in conjunction

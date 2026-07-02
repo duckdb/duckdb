@@ -1,4 +1,7 @@
 /*#define YYDEBUG 1*/
+#ifdef _MSC_VER
+#define strcasecmp _stricmp
+#endif
 /*-------------------------------------------------------------------------
  *
  * gram.y

@@ -1,0 +1,151 @@
+# name: test/sql/aggregate/distinct/test_distinct_on_columns.test
+# description: Test DISTINCT ON with COLUMNS(...) expansion
+# group: [distinct]
+
+statement ok
+PRAGMA enable_verification
+
+# Test 1: Basic COLUMNS expansion in DISTINCT ON
+query III
+FROM (VALUES (1,1,2),(1,1,3)) AS t(key1,key2,v)
+SELECT DISTINCT ON (COLUMNS('key')) *
+----
+1	1	2
+
+# Test 2: COLUMNS with regex pattern
+statement ok
+CREATE TABLE grouped_table AS SELECT 1 id, 42 index1, 84 index2 UNION ALL SELECT 2, 42, 84 UNION ALL SELECT 3, 13, 14
+
+query III
+SELECT DISTINCT ON (COLUMNS('index[0-9]')) * FROM grouped_table ORDER BY index1, index2, id
+----
+3	13	14
+1	42	84
+
+# Test 3: Mixed explicit columns and COLUMNS()
+query III
+FROM (VALUES (1,1,2),(1,1,3),(2,1,4)) AS t(key1,key2,v)
+SELECT DISTINCT ON (COLUMNS('key'), v) key1, key2, v ORDER BY key1, v
+----
+1	1	2
+1	1	3
+2	1	4
+
+# Test 4: COLUMNS with aliases
+query III
+FROM (VALUES (1,1,2),(1,1,3)) AS t(k1,k2,v)
+SELECT DISTINCT ON (COLUMNS('k')) * ORDER BY k1, k2
+----
+1	1	2
+
+# Test 5: COLUMNS with table qualification
+statement ok
+CREATE TABLE a AS SELECT * FROM (VALUES (1,1),(2,2)) AS ta(ak, av)
+
+statement ok
+CREATE TABLE b AS SELECT * FROM (VALUES (1,9),(2,8)) AS tb(bk, bv)
+
+query IIII
+SELECT DISTINCT ON (a.ak, b.bk) * FROM a JOIN b ON a.ak = b.bk ORDER BY a.ak, b.bk
+----
+1	1	1	9
+2	2	2	8
+
+# Test 6: Overlapping COLUMNS patterns (should deduplicate)
+query III
+FROM (VALUES (1,1,2),(1,1,3)) AS t(key1,key2,v)
+SELECT DISTINCT ON (COLUMNS('key'), key1) * ORDER BY key1, key2
+----
+1	1	2
+
+# Test 7: COLUMNS with EXCLUDE
+query III
+FROM (VALUES (1,1,2),(1,1,3)) AS t(key1,key2,v)
+SELECT DISTINCT ON (COLUMNS(* EXCLUDE (v))) * ORDER BY key1, key2
+----
+1	1	2
+
+# Test 8: COLUMNS with partial match (matches index1 and index2 columns)
+query III
+SELECT DISTINCT ON (COLUMNS('[0-9]')) * FROM grouped_table ORDER BY index1, index2, id
+----
+3	13	14
+1	42	84
+
+# Test 9: Empty COLUMNS pattern (should error)
+statement error
+SELECT DISTINCT ON (COLUMNS('nonexistent')) * FROM grouped_table
+----
+
+# Test 10: COLUMNS in DISTINCT ON with ORDER BY
+query III
+FROM (VALUES (1,1,2),(1,1,3),(2,2,4)) AS t(key1,key2,v)
+SELECT DISTINCT ON (COLUMNS('key')) * ORDER BY key1, key2, v
+----
+1	1	2
+2	2	4
+
+# Test 11: Multiple COLUMNS patterns
+query III
+FROM (VALUES (1,1,2),(1,1,3)) AS t(key1,key2,v)
+SELECT DISTINCT ON (COLUMNS('key1'), COLUMNS('key2')) * ORDER BY key1, key2
+----
+1	1	2
+
+# Test 12: COLUMNS with REPLACE (in the DISTINCT ON clause)
+query III
+FROM (VALUES (1,1,2),(1,1,3)) AS t(key1,key2,v)
+SELECT DISTINCT ON (COLUMNS(* EXCLUDE (v) REPLACE (key1+1 AS key1))) * ORDER BY key1, key2
+----
+1	1	2
+
+# Test 13: Verify existing functionality still works (no COLUMNS)
+query III
+SELECT DISTINCT ON (key1, key2) * FROM (VALUES(1,1,2),(1,1,3)) AS t(key1,key2,v) ORDER BY key1, key2
+----
+1	1	2
+
+# Test 14: Verify SELECT DISTINCT with COLUMNS still works
+query II
+SELECT DISTINCT COLUMNS('key') FROM (VALUES(1,1,2),(1,1,3)) AS t(key1,key2,v)
+----
+1	1
+
+# Test 15: COLUMNS with list of column names
+query III
+FROM (VALUES (1,1,2),(1,1,3)) AS t(key1,key2,v)
+SELECT DISTINCT ON (COLUMNS(['key1', 'key2'])) * ORDER BY key1, key2
+----
+1	1	2
+
+# Test 16: Complex expression with COLUMNS in DISTINCT ON
+statement ok
+CREATE TABLE complex_table AS SELECT 1 a, 2 b, 3 c UNION ALL SELECT 1, 2, 4 UNION ALL SELECT 1, 3, 5
+
+query III
+SELECT DISTINCT ON (COLUMNS('a'), COLUMNS('b')) * FROM complex_table ORDER BY a, b, c
+----
+1	2	3
+1	3	5
+
+# Test 17: DISTINCT ON with COLUMNS and subquery
+query III
+SELECT DISTINCT ON (COLUMNS('key')) * FROM (
+    SELECT * FROM (VALUES (1,1,2),(1,1,3)) AS t(key1,key2,v)
+) subq ORDER BY key1, key2
+----
+1	1	2
+
+# Clean up
+statement ok
+DROP TABLE IF EXISTS grouped_table
+
+statement ok
+DROP TABLE IF EXISTS a
+
+statement ok
+DROP TABLE IF EXISTS b
+
+statement ok
+DROP TABLE IF EXISTS complex_table
+

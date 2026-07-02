@@ -113,24 +113,29 @@ NULL	NULL	NULL
 statement error
 select LTRIM()
 ----
+<REGEX>:.*Binder Error: No function matches.*ltrim().*
 
 statement error
 select LTRIM('hello', 'world', 'aaa')
 ----
+<REGEX>:.*Binder Error: No function matches.*ltrim().*
 
 statement error
 select RTRIM()
 ----
+<REGEX>:.*Binder Error: No function matches.*rtrim().*
 
 statement error
 select RTRIM('hello', 'world', 'aaa')
 ----
+<REGEX>:.*Binder Error: No function matches.*rtrim().*
 
 statement error
 select TRIM()
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 select TRIM('hello', 'world', 'aaa')
 ----
-
+<REGEX>:.*Binder Error: No function matches.*trim().*

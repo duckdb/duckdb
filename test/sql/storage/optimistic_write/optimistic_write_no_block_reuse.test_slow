@@ -1,0 +1,65 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_no_block_reuse.test_slow
+# description: Test that the WAL keeps references to optimistically written blocks alive
+# group: [optimistic_write]
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint = '1TB';
+
+statement ok
+SET debug_skip_checkpoint_on_commit=true
+
+# Force row groups to be flushed to disk immediately during INSERT.
+# This makes the WAL store block pointers (via WriteRowGroupData) instead of inline data (WriteInsert).
+# Without this, the INSERT data stays in transient in-memory segments, the WAL stores inline chunks,
+# and WAL replay never reads from the optimistically written blocks.
+statement ok
+SET write_buffer_row_group_count = 1;
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_drop_blocks.db' AS db;
+
+# Step 1: Create table with an index and VARCHAR columns.
+# The index is critical: during WAL replay, ReplayRowGroupData scans all
+# row group data through the blocks to populate the index. Without an index,
+# the row group data is loaded lazily (block pointers stored but not read),
+# so corruption from any overwritten blocks would go undetected.
+statement ok con1
+CREATE TABLE db.t (a BIGINT PRIMARY KEY, b VARCHAR, c VARCHAR, d VARCHAR);
+
+statement ok con1
+INSERT INTO db.t SELECT i, 'row_' || i || repeat('x', 20),
+	'data_' || i || repeat('y', 30), 'col_' || i || repeat('z', 25)
+	FROM generate_series(0, 249999) t(i);
+
+# Step 2: DROP TABLE t frees its blocks via MarkBlockAsModified.
+# However, we test here that the WAL still holds another "in use" reference to these blocks,
+# which ensures we do not overwrite them later.
+statement ok con2
+DROP TABLE db.t;
+
+# Here, we need to use new blocks because the WAL still holds a reference to the dropped blocks.
+statement ok con2
+CREATE TABLE db.t2 (a DOUBLE, b DOUBLE, c DOUBLE, d DOUBLE);
+
+statement ok con2
+INSERT INTO db.t2 SELECT i * 3.14159, i * 2.71828, i * 1.41421, i * 1.73205
+	FROM generate_series(0, 999999) t(i);
+
+statement ok
+DETACH db;
+
+# Reopen the file → WAL replay.
+# The WAL contains: CREATE TABLE t (with PRIMARY KEY) → INSERT t → DROP t → CREATE t2 → INSERT t2.
+# During replay, ReplayRowGroupData for table t must scan all chunks to populate the
+# primary key index. This forces reads from the optimistically written physical blocks that
+# belong to the dropped table.
+statement ok
+ATTACH '__TEST_DIR__/concurrent_drop_blocks.db' AS db;
+
+query I
+SELECT COUNT(*) FROM db.t2;
+----
+1000000

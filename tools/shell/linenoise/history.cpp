@@ -1,9 +1,8 @@
 #include "history.hpp"
 #include "linenoise.hpp"
 #include "terminal.hpp"
-#include "duckdb_shell_wrapper.h"
-#include "sqlite3.h"
 #include "utf8proc_wrapper.hpp"
+#include "shell_state.hpp"
 #include <sys/stat.h>
 
 namespace duckdb {
@@ -177,15 +176,21 @@ int History::SetMaxLength(idx_t len) {
 }
 
 int History::Save(const char *filename) {
+#if !defined(_WIN32) && !defined(WIN32)
 	mode_t old_umask = umask(S_IXUSR | S_IRWXG | S_IRWXO);
+#endif
 	FILE *fp;
 
 	fp = fopen(filename, "w");
+#if !defined(_WIN32) && !defined(WIN32)
 	umask(old_umask);
+#endif
 	if (fp == nullptr) {
 		return -1;
 	}
+#if !defined(_WIN32) && !defined(WIN32)
 	chmod(filename, S_IRUSR | S_IWUSR);
+#endif
 	for (idx_t j = 0; j < history_len; j++) {
 		fprintf(fp, "%s\n", history[j]);
 	}
@@ -349,7 +354,7 @@ int History::Load(const char *filename) {
 		}
 		// else we are parsing a SQL statement
 		result += buf;
-		if (sqlite3_complete(result.c_str())) {
+		if (duckdb_shell::ShellState::SQLIsComplete(result.c_str())) {
 			// this line contains a full SQL statement - add it to the history
 			History::Add(result.c_str(), result.size());
 			result = std::string();

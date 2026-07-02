@@ -59,7 +59,7 @@ public:
 	data_ptr_t dictionary_indices_ptr;
 	data_ptr_t string_lengths_ptr;
 
-	buffer_ptr<Vector> dictionary;
+	buffer_ptr<VectorChildBuffer> dictionary;
 	void *decoder = nullptr;
 	bool all_values_inlined = false;
 

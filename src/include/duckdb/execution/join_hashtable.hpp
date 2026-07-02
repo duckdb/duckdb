@@ -18,6 +18,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
 
 namespace duckdb {
 
@@ -214,6 +215,10 @@ public:
 	TupleDataCollection &GetDataCollection() {
 		return *data_collection;
 	}
+	//! Perform a full scan of a build column, filling the provided addresses vector and result vector.
+	//! Returns the number of tuples found (can be smaller than the vector capacity).
+	idx_t ScanKeyColumn(Vector &addresses, Vector &result, idx_t column_index) const;
+
 	bool NullValuesAreEqual(idx_t col_idx) const {
 		return null_values_are_equal[col_idx];
 	}
@@ -277,6 +282,8 @@ public:
 	uint64_t bitmask = DConstants::INVALID_INDEX;
 	//! Whether or not we error on multiple rows found per match in a SINGLE join
 	bool single_join_error_on_multiple_rows = true;
+	//! Whether or not to perform deduplication based on join_keys when building ht
+	bool insert_duplicate_keys = true;
 	//! Number of probe matches
 	atomic<idx_t> total_probe_matches {0};
 
@@ -332,6 +339,10 @@ private:
 	vector<bool> null_values_are_equal;
 	//! An empty tuple that's a "dead end", can be used to stop chains early
 	unsafe_unique_array<data_t> dead_end;
+
+	//! Whether or not to use a bloom filter will be determined by the operator
+	BloomFilter bloom_filter;
+	bool should_build_bloom_filter = false;
 
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;
@@ -397,19 +408,27 @@ public:
 	static constexpr double DEFAULT_LOAD_FACTOR = 2.0;
 	//! For a LOAD_FACTOR of 1.5, the HT is between 33% and 67% full
 	static constexpr double EXTERNAL_LOAD_FACTOR = 1.5;
+	//! Minimum capacity of the pointer table
+	static constexpr idx_t MINIMUM_CAPACITY = 16384;
 
 	double load_factor = DEFAULT_LOAD_FACTOR;
 
 	//! Capacity of the pointer table given the ht count
 	idx_t PointerTableCapacity(idx_t count) const {
-		static constexpr idx_t MINIMUM_CAPACITY = 16384;
-
 		const auto capacity = NextPowerOfTwo(LossyNumericCast<idx_t>(static_cast<double>(count) * load_factor));
 		return MaxValue<idx_t>(capacity, MINIMUM_CAPACITY);
 	}
 	//! Size of the pointer table (in bytes)
 	idx_t PointerTableSize(idx_t count) const {
 		return PointerTableCapacity(count) * sizeof(data_ptr_t);
+	}
+
+	void SetBuildBloomFilter(const bool should_build) {
+		this->should_build_bloom_filter = should_build;
+	}
+
+	BloomFilter &GetBloomFilter() {
+		return bloom_filter;
 	}
 
 	//! Get total size of HT if all partitions would be built

@@ -74,3 +74,9 @@ statement error
 SELECT repeat([1], 99999999999999999);
 ----
 maximum allowed vector size
+
+# overflow: 3 * 6148914691236517206 wraps to 2 in uint64, previously caused a segfault
+statement error
+SELECT repeat([1, 2, 3], 6148914691236517206);
+----
+Out of Range Error

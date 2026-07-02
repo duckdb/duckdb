@@ -1,0 +1,89 @@
+# name: test/sql/parallelism/interquery/concurrent_checkpoint_multiple_updater.test_slow
+# description: Concurrent checkpoint with single updater
+# group: [interquery]
+
+load __TEST_DIR__/concurrent_checkpoint.db
+
+statement ok
+CREATE TABLE accounts(threadid INTEGER, id INTEGER, money INTEGER)
+
+statement ok
+INSERT INTO accounts SELECT threadid, i AS id, 10 AS money FROM range(1,11) t(threadid), range(10) t(i)
+
+concurrentloop threadid 0 10
+
+loop x 0 1000
+
+# the total balance should remain constant regardless of updates and checkpoints
+onlyif threadid=0
+query I
+SELECT SUM(money) FROM accounts
+----
+1000
+
+onlyif threadid=0
+statement ok
+FORCE CHECKPOINT
+
+endloop
+
+loop x 0 200
+
+# generate a random transfer (random from / to / amount)
+onlyif threadid>0
+statement ok
+SET VARIABLE from_account = (RANDOM() * 9)::UBIGINT;
+
+onlyif threadid>0
+statement ok
+SET VARIABLE to_account = (SELECT * FROM range(10) t(i) WHERE i <> getvariable('from_account') ORDER BY RANDOM() LIMIT 1)
+
+onlyif threadid>0
+statement ok
+SET VARIABLE amount = (RANDOM() * 10)::UBIGINT
+
+onlyif threadid>0
+statement ok
+BEGIN TRANSACTION
+
+# store how much money the accounts had before
+onlyif threadid>0
+statement ok
+SET VARIABLE prev_money = (SELECT {'from_money': MIN(money) FILTER (WHERE id=getvariable('from_account')), 'to_money': MIN(money) FILTER (WHERE id=getvariable('to_account'))} FROM accounts WHERE threadid=${threadid})
+
+onlyif threadid>0
+query I
+UPDATE accounts SET money = money - getvariable('amount') WHERE id=getvariable('from_account') AND threadid=${threadid}
+----
+1
+
+onlyif threadid>0
+query I
+UPDATE accounts SET money = money + getvariable('amount') WHERE id=getvariable('to_account') AND threadid=${threadid}
+----
+1
+
+# verify the update went through correctly
+onlyif threadid>0
+query I
+SELECT CASE
+	WHEN t.s.from_money = (getvariable('prev_money')).from_money - getvariable('amount') AND t.s.to_money = (getvariable('prev_money')).to_money + getvariable('amount')
+	THEN NULL
+	ELSE {'prev': getvariable('prev_money'), 'current': t.s, 'amount': getvariable('amount'), 'from_account': getvariable('from_account'), 'to_account': getvariable('to_account')}
+	END
+FROM (SELECT {'from_money': MIN(money) FILTER (WHERE id=getvariable('from_account')), 'to_money': MIN(money) FILTER (WHERE id=getvariable('to_account'))} s FROM accounts WHERE threadid=${threadid}) t
+----
+NULL
+
+onlyif threadid>0
+statement ok
+COMMIT
+
+endloop
+
+endloop
+
+query I
+SELECT SUM(money) FROM accounts
+----
+1000

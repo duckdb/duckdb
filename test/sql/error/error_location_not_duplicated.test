@@ -1,0 +1,14 @@
+# name: test/sql/error/error_location_not_duplicated.test
+# description: Verify that the LINE X: position indicator is not duplicated
+# group: [error]
+
+statement error
+SELECT 1 AS foo frommmm b;
+----
+<REGEX>:(.*syntax error at or near "frommmm".*)
+
+statement error
+SELECT 1 AS foo frommmm b;
+----
+<!REGEX>:(?s).*LINE 1:.*LINE 1:.*
+

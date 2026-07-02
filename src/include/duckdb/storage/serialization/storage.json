@@ -110,7 +110,9 @@
       {
         "id": 100,
         "name": "row_start",
-        "type": "uint64_t"
+        "type": "uint64_t",
+        "status": "deleted",
+        "version": "7"
       },
       {
         "id": 101,

@@ -1,0 +1,55 @@
+# name: test/sql/storage/compression/roaring/roaring_bool_inverted_array_simple.test
+# description: Test bitpacking with trues
+# group: [roaring]
+
+load __TEST_DIR__/test_roaring.db readwrite v1.5.0
+
+statement ok
+PRAGMA force_compression='roaring'
+
+# simple compression with few values
+statement ok
+CREATE TABLE test (a BOOL);
+
+statement ok
+INSERT INTO test SELECT case when i%25=0 then false else true end FROM range(0,10000) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOLEAN' and compression != 'Roaring';
+----
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' and compression != 'Constant';
+----
+
+statement ok
+delete from test
+
+# 5 true values per Vector, uses inverted uncompressed arrays
+statement ok
+with intermediates as (
+	select i % 2048 as i
+	from range(0, 10_000) t(i)
+)
+insert into test select case when
+	i = 0 or
+	i = 6 or
+	i = 1000 or
+	i = 1500 or
+	i = 2000
+	then false
+else true end from intermediates;
+
+statement ok
+checkpoint;
+
+query I
+select count(*) from test WHERE a IS true;
+----
+9976
+
+statement ok
+DROP TABLE test;

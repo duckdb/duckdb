@@ -69,6 +69,9 @@ public:
     assert(end.n_ == -1);
     return (ii_ != n_);
   }
+  bool operator==(const TEnumIterator& end) {
+    return !(*this != end);
+  }
 
   std::pair<int, const char*> operator*() const { return std::make_pair(enums_[ii_], names_[ii_]); }
 

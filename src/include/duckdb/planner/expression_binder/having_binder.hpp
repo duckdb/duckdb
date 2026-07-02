@@ -26,7 +26,8 @@ protected:
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
 
 	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error) override;
-	bool QualifyColumnAlias(const ColumnRefExpression &colref) override;
+
+	bool DoesColumnAliasExist(const ColumnRefExpression &colref) override;
 
 private:
 	ColumnAliasBinder column_alias_binder;

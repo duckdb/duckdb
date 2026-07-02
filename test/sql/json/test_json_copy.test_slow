@@ -172,6 +172,22 @@ select * from '{TEMP_DIR}/out.json'
 ----
 42	43
 
+# test issue #20739
+statement ok
+copy (
+    select * from values (1) t1(key)
+) to '{TEMP_DIR}/jsonl_files' (
+    format json,
+    file_size_bytes 100,
+    file_extension 'jsonl'
+);
+
+# the copy statement should have generated files with the 'jsonl' extension
+query I
+select key from '{TEMP_DIR}/jsonl_files/data_0.jsonl';
+----
+1
+
 statement ok
 create table conclusions (conclusion varchar)
 

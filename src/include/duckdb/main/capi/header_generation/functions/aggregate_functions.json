@@ -1,6 +1,7 @@
 {
     "group": "aggregate_functions",
     "deprecated": false,
+    "description": "Functions to create, execute, and register custom aggregate functions. Aggregate functions aggregate the values of a column into an output value.",
     "entries": [
         {
             "name": "duckdb_create_aggregate_function",

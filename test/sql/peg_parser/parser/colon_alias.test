@@ -1,0 +1,17 @@
+# name: test/sql/peg_parser/parser/colon_alias.test
+# description: Test colon alias in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT * FROM b : a$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT * FROM foo: tablefunction()$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$with cte1 as MATERIALIZED (Select i as j from a) select x from cte1 t1(x);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$from my_wonderful_values : (values(42))$TEST_PEG_PARSER$);

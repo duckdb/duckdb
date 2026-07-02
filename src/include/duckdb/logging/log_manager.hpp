@@ -85,12 +85,13 @@ protected:
 
 	void SetConfigInternal(LogConfig config);
 
+protected:
 	mutex lock;
 	LogConfig config;
 
 	shared_ptr<Logger> global_logger;
-
 	shared_ptr<LogStorage> log_storage;
+	DatabaseInstance &db_instance;
 
 	idx_t next_registered_logging_context_index = 0;
 

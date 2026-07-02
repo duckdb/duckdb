@@ -1,5 +1,4 @@
 #include "duckdb/storage/metadata/metadata_writer.hpp"
-#include "duckdb/storage/block_manager.hpp"
 
 namespace duckdb {
 

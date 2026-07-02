@@ -3,7 +3,7 @@
 using duckdb::Connection;
 using duckdb::DuckDB;
 using duckdb::EnumUtil;
-using duckdb::MetricsType;
+using duckdb::MetricType;
 using duckdb::optional_ptr;
 using duckdb::ProfilingNode;
 
@@ -31,7 +31,7 @@ duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const c
 	}
 	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
 	auto &profiling_info = node.GetProfilingInfo();
-	auto key_enum = EnumUtil::FromString<MetricsType>(duckdb::StringUtil::Upper(key));
+	auto key_enum = EnumUtil::FromString<MetricType>(duckdb::StringUtil::Upper(key));
 	if (!profiling_info.Enabled(profiling_info.settings, key_enum)) {
 		return nullptr;
 	}
@@ -55,7 +55,7 @@ duckdb_value duckdb_profiling_info_get_metrics(duckdb_profiling_info info) {
 			continue;
 		}
 
-		if (key == EnumUtil::ToString(MetricsType::OPERATOR_TYPE)) {
+		if (key == EnumUtil::ToString(MetricType::OPERATOR_TYPE)) {
 			auto type = duckdb::PhysicalOperatorType(metric.second.GetValue<uint8_t>());
 			metrics_map[key] = EnumUtil::ToString(type);
 		} else {

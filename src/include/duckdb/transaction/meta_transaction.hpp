@@ -9,18 +9,18 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
 class ClientContext;
+struct DatabaseModificationType;
 class Transaction;
 
 enum class TransactionState { UNCOMMITTED, COMMITTED, ROLLED_BACK };
@@ -62,13 +62,15 @@ public:
 
 	ErrorData Commit();
 	void Rollback();
+	// Finalize the transaction after a COMMIT of ROLLBACK.
+	void Finalize();
 
 	idx_t GetActiveQuery();
 	void SetActiveQuery(transaction_t query_number);
 
 	void SetReadOnly();
 	bool IsReadOnly() const;
-	void ModifyDatabase(AttachedDatabase &db);
+	void ModifyDatabase(AttachedDatabase &db, DatabaseModificationType modification);
 	optional_ptr<AttachedDatabase> ModifiedDatabase() {
 		return modified_database;
 	}
@@ -76,25 +78,26 @@ public:
 		return all_transactions;
 	}
 	optional_ptr<AttachedDatabase> GetReferencedDatabase(const string &name);
+	shared_ptr<AttachedDatabase> GetReferencedDatabaseOwning(const string &name);
 	AttachedDatabase &UseDatabase(shared_ptr<AttachedDatabase> &database);
 	void DetachDatabase(AttachedDatabase &database);
 
 private:
-	//! Lock to prevent all_transactions and transactions from getting out of sync
+	//! Lock to prevent all_transactions and transactions from getting out of sync.
 	mutex lock;
-	//! The set of active transactions for each database
+	//! The set of active transactions for each database.
 	reference_map_t<AttachedDatabase, TransactionReference> transactions;
-	//! The set of transactions in order of when they were started
+	//! The set of referenced databases in invocation order.
 	vector<reference<AttachedDatabase>> all_transactions;
-	//! The database we are modifying - we can only modify one database per transaction
+	//! The database we are modifying. We can only modify one database per meta transaction.
 	optional_ptr<AttachedDatabase> modified_database;
-	//! Whether or not the meta transaction is marked as read only
+	//! Whether the meta transaction is marked as read only.
 	bool is_read_only;
-	//! Lock for referenced_databases
+	//! Lock for referenced_databases.
 	mutex referenced_database_lock;
-	//! The set of used / referenced databases
+	//! The set of used (referenced) databases.
 	reference_map_t<AttachedDatabase, shared_ptr<AttachedDatabase>> referenced_databases;
-	//! Map of name -> used database for databases that are in-use by this transaction
+	//! Map of name -> database for databases that are in-use by this transaction.
 	case_insensitive_map_t<reference<AttachedDatabase>> used_databases;
 };
 

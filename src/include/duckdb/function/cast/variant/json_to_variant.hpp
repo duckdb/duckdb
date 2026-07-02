@@ -12,6 +12,7 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 namespace variant {
@@ -132,6 +133,14 @@ static bool ConvertJSONObject(yyjson_val *obj, ToVariantGlobalResultData &result
 	return true;
 }
 
+namespace {
+
+static inline string_t GetString(yyjson_val *val) {
+	return string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
+}
+
+} // namespace
+
 template <bool WRITE_DATA>
 static bool ConvertJSONPrimitive(yyjson_val *val, ToVariantGlobalResultData &result, idx_t result_index, bool is_root) {
 	auto json_tag = unsafe_yyjson_get_tag(val);
@@ -143,8 +152,7 @@ static bool ConvertJSONPrimitive(yyjson_val *val, ToVariantGlobalResultData &res
 
 	switch (json_tag) {
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
-	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
-	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE: {
+	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE: {
 		WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset_data[result_index],
 		                                 nullptr, 0, VariantLogicalType::VARCHAR);
 		uint32_t length = NumericCast<uint32_t>(unsafe_yyjson_get_len(val));
@@ -188,11 +196,20 @@ static bool ConvertJSONPrimitive(yyjson_val *val, ToVariantGlobalResultData &res
 		blob_offset_data[result_index] += sizeof(int64_t);
 		break;
 	}
+	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL: {
 		WriteVariantMetadata<WRITE_DATA>(result, result_index, values_offset_data, blob_offset_data[result_index],
 		                                 nullptr, 0, VariantLogicalType::DOUBLE);
+		double value;
 		if (WRITE_DATA) {
-			auto value = unsafe_yyjson_get_real(val);
+			if (json_tag == (YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE)) {
+				auto success = TryCast::Operation<string_t, double>(GetString(val), value, true);
+				if (!success) {
+					return false;
+				}
+			} else {
+				value = unsafe_yyjson_get_real(val);
+			}
 			memcpy(blob_data + blob_offset_data[result_index], const_data_ptr_cast(&value), sizeof(double));
 		}
 		blob_offset_data[result_index] += sizeof(double);

@@ -1,0 +1,24 @@
+{
+  "version": "unstable_new_file_system_api",
+  "description": "API to manage file system operations",
+  "entries": [
+    "duckdb_client_context_get_file_system",
+    "duckdb_destroy_file_system",
+    "duckdb_file_system_open",
+    "duckdb_file_system_error_data",
+
+    "duckdb_create_file_open_options",
+    "duckdb_file_open_options_set_flag",
+    "duckdb_destroy_file_open_options",
+
+    "duckdb_destroy_file_handle",
+    "duckdb_file_handle_error_data",
+    "duckdb_file_handle_close",
+    "duckdb_file_handle_read",
+    "duckdb_file_handle_write",
+    "duckdb_file_handle_seek",
+    "duckdb_file_handle_tell",
+    "duckdb_file_handle_sync",
+    "duckdb_file_handle_size"
+  ]
+}

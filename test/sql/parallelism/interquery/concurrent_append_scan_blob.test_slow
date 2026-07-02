@@ -1,0 +1,39 @@
+# name: test/sql/parallelism/interquery/concurrent_append_scan_blob.test_slow
+# description: Test concurrent append and scan BLOB field
+# group: [interquery]
+
+statement ok
+CREATE TABLE t1 (id INTEGER, s TEXT);
+
+concurrentloop threadid 0 2
+
+loop i 0 1000
+
+onlyif threadid=0
+statement ok
+BEGIN;
+DELETE FROM t1;
+
+loop j 0 10
+
+onlyif threadid=0
+statement ok
+INSERT INTO t1 VALUES (${j}, (select string_agg(chr(48 + (random() * 9)::INT), '') from range(20000)));
+
+endloop
+
+onlyif threadid=0
+statement ok
+COMMIT
+
+endloop
+
+loop i 0 100000
+
+onlyif threadid=1
+statement ok
+SELECT s FROM t1;
+
+endloop
+
+endloop

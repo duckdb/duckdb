@@ -1,8 +1,12 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
+
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 
 namespace duckdb {
+
+constexpr const char *TableFunctionCatalogEntry::Name;
 
 TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
                                                      CreateTableFunctionInfo &info)

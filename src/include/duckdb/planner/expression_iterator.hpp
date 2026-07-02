@@ -14,8 +14,6 @@
 #include <functional>
 
 namespace duckdb {
-class BoundQueryNode;
-class BoundTableRef;
 
 class ExpressionIterator {
 public:
@@ -45,20 +43,6 @@ public:
 	static void VisitExpression(const Expression &expr, const std::function<void(const T &child)> &callback) {
 		VisitExpressionClass(expr, T::TYPE, [&](const Expression &child) { callback(child.Cast<T>()); });
 	}
-};
-
-class BoundNodeVisitor {
-public:
-	virtual ~BoundNodeVisitor() = default;
-
-	virtual void VisitBoundQueryNode(BoundQueryNode &op);
-	virtual void VisitBoundTableRef(BoundTableRef &ref);
-	virtual void VisitExpression(unique_ptr<Expression> &expression);
-
-protected:
-	// The VisitExpressionChildren method is called at the end of every call to VisitExpression to recursively visit all
-	// expressions in an expression tree. It can be overloaded to prevent automatically visiting the entire tree.
-	virtual void VisitExpressionChildren(Expression &expression);
 };
 
 } // namespace duckdb

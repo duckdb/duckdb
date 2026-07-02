@@ -1,0 +1,32 @@
+# name: test/sql/types/type/test_make_get_type.test
+# group: [type]
+
+query I
+SELECT get_type(NULL);
+----
+"NULL"
+
+query I
+SELECT get_type(1);
+----
+INTEGER
+
+query I
+SELECT get_type('hello');
+----
+VARCHAR
+
+query I
+SELECT make_type('STRUCT', a := make_type('INTEGER'), b := make_type('VARCHAR'));
+----
+STRUCT(a INTEGER, b VARCHAR)
+
+statement error
+SELECT make_type('STRUCT', make_type('INTEGER'), b := make_type('VARCHAR'));
+----
+Binder Error: STRUCT type arguments must either all have names or all be anonymous
+
+query I
+SELECT make_type('LIST', make_type('STRUCT', a := make_type('STRUCT', x := make_type('INTEGER')), b := make_type('VARCHAR')));
+----
+STRUCT(a STRUCT(x INTEGER), b VARCHAR)[]

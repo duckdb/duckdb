@@ -55,7 +55,7 @@ unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(vector<unique_ptr<Expr
 	auto type = value.type();
 	auto func = ConstantOrNullFun::GetFunction();
 	func.arguments[0] = type;
-	func.return_type = type;
+	func.SetReturnType(type);
 	children.insert(children.begin(), make_uniq<BoundConstantExpression>(value));
 	return make_uniq<BoundFunctionExpression>(type, func, std::move(children), ConstantOrNull::Bind(std::move(value)));
 }

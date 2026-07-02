@@ -45,6 +45,15 @@
         "aliases": ["array_zip"]
     },
     {
+        "name": "list_intersect",
+        "parameters": "list1,list2",
+        "description": "Returns a list containing the distinct elements that are present in both `list1` and `list2`.",
+        "example": "list_intersect([1, 2, 3], [2, 3, 4])",
+        "categories": ["list"],
+        "type": "scalar_function",
+        "aliases": ["array_intersect"]
+    },
+    {
         "name": "list_extract",
         "parameters": "list,index",
         "description": "Extract the `index`th (1-based) value from the list.",

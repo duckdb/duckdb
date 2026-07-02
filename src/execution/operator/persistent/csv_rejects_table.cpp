@@ -34,8 +34,8 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 		throw BinderException("The names of the rejects scan and rejects error tables can't be the same. Use different "
 		                      "names for these tables.");
 	}
-	auto key =
-	    "CSV_REJECTS_TABLE_CACHE_ENTRY_" + StringUtil::Upper(rejects_scan) + "_" + StringUtil::Upper(rejects_error);
+	auto key = StringUtil::Format("CSV_REJECTS_TABLE_CACHE_ENTRY_%s_%s", StringUtil::Upper(rejects_scan),
+	                              StringUtil::Upper(rejects_error));
 	auto &cache = ObjectCache::GetObjectCache(context);
 	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
 	auto rejects_scan_exist = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, rejects_scan,

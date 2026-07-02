@@ -11,7 +11,6 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
-#include "duckdb/parser/qualified_name.hpp"
 
 namespace duckdb {
 class CatalogEntryRetriever;

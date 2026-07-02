@@ -134,7 +134,7 @@ true
 query I
 SELECT list_intersect(LIST_VALUE(list_has_all(LIST_VALUE(list_has_any([1], [1])), [1])), [1])
 ----
-[true]
+[1]
 
 query I
 SELECT list_intersect(list_intersect([1, 2, 3, 4], [4, 5, 6, 7]), list_intersect([4, 5, 6, 7], [1, 2, 3, 4]));

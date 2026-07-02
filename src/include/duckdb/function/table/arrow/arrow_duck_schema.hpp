@@ -85,14 +85,14 @@ public:
 	void ThrowIfInvalid() const;
 
 	static unique_ptr<ArrowType> GetTypeFromFormat(string &format);
-	static unique_ptr<ArrowType> GetTypeFromFormat(DBConfig &config, ArrowSchema &schema, string &format);
+	static unique_ptr<ArrowType> GetTypeFromFormat(ClientContext &context, ArrowSchema &schema, string &format);
 
-	static unique_ptr<ArrowType> GetTypeFromSchema(DBConfig &config, ArrowSchema &schema);
+	static unique_ptr<ArrowType> GetTypeFromSchema(ClientContext &context, ArrowSchema &schema);
 
-	static unique_ptr<ArrowType> CreateListType(DBConfig &config, ArrowSchema &child, ArrowVariableSizeType size_type,
-	                                            bool view);
+	static unique_ptr<ArrowType> CreateListType(ClientContext &context, ArrowSchema &child,
+	                                            ArrowVariableSizeType size_type, bool view);
 
-	static unique_ptr<ArrowType> GetArrowLogicalType(DBConfig &config, ArrowSchema &schema);
+	static unique_ptr<ArrowType> GetArrowLogicalType(ClientContext &context, ArrowSchema &schema);
 
 	bool HasExtension() const;
 

@@ -4,10 +4,15 @@
 #include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
+constexpr idx_t Storage::MAX_ROW_GROUP_SIZE;
+constexpr idx_t Storage::MAX_BLOCK_ALLOC_SIZE;
+constexpr idx_t Storage::MIN_BLOCK_ALLOC_SIZE;
+constexpr idx_t Storage::DEFAULT_BLOCK_HEADER_SIZE;
+constexpr uint64_t MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 
 const uint64_t VERSION_NUMBER = 64;
 const uint64_t VERSION_NUMBER_LOWER = 64;
-const uint64_t VERSION_NUMBER_UPPER = 67;
+const uint64_t VERSION_NUMBER_UPPER = 68;
 
 static_assert(VERSION_NUMBER_LOWER <= VERSION_NUMBER, "Check on VERSION_NUMBER lower bound");
 static_assert(VERSION_NUMBER <= VERSION_NUMBER_UPPER, "Check on VERSION_NUMBER upper bound");
@@ -88,13 +93,18 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.4.3", 67},
 	{"v1.4.4", 67},
 	{"v1.4.5", 67},
+	{"v1.5.0", 68},
+	{"v1.5.1", 68},
+	{"v1.5.2", 68},
+	{"v1.5.3", 68},
+	{"v1.5.4", 68},
 	{nullptr, 0}
 };
 // END OF STORAGE VERSION INFO
 static_assert(DEFAULT_STORAGE_VERSION_INFO == VERSION_NUMBER, "Check on VERSION_INFO");
 
 // START OF SERIALIZATION VERSION INFO
-const uint64_t LATEST_SERIALIZATION_VERSION_INFO = 6;
+const uint64_t LATEST_SERIALIZATION_VERSION_INFO = 7;
 const uint64_t DEFAULT_SERIALIZATION_VERSION_INFO = 1;
 static const SerializationVersionInfo serialization_version_info[] = {
 	{"v0.10.0", 1},
@@ -118,7 +128,12 @@ static const SerializationVersionInfo serialization_version_info[] = {
 	{"v1.4.3", 6},
 	{"v1.4.4", 6},
 	{"v1.4.5", 6},
-	{"latest", 6},
+	{"v1.5.0", 7},
+	{"v1.5.1", 7},
+	{"v1.5.2", 7},
+	{"v1.5.3", 7},
+	{"v1.5.4", 7},
+	{"latest", 7},
 	{nullptr, 0}
 };
 // END OF SERIALIZATION VERSION INFO

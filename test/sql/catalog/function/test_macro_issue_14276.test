@@ -1,0 +1,11 @@
+# name: test/sql/catalog/function/test_macro_issue_14276.test
+# description: Test Issue 14276 - Table function binder does not search other active binders
+# group: [function]
+
+statement ok
+CREATE OR REPLACE MACRO extract_many(x, y) AS (SELECT struct_pack(*COLUMNS(z -> z in y)) FROM (SELECT unnest(x)));
+
+query II
+SELECT ['foo', 'baz'] AS k, extract_many(x, k) FROM (SELECT {'foo': 1, 'bar': 2, 'baz': 3} AS x);
+----
+[foo, baz]	{'foo': 1, 'baz': 3}

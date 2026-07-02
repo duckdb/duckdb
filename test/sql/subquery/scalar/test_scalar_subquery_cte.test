@@ -126,6 +126,16 @@ SELECT a, (WITH cte AS (SELECT SUM(b) FROM test tsub WHERE test.a=tsub.a) SELECT
 12	21.000000
 13	22.000000
 
+query III
+SELECT n, x, (WITH cte AS (SELECT n AS v) SELECT (SELECT v FROM cte WHERE x = 10 LIMIT 1)) AS z
+FROM (VALUES (1,10),(1,20),(2,10),(2,20)) t(n,x)
+ORDER BY n, x
+----
+1	10	1
+1	20	NULL
+2	10	2
+2	20	NULL
+
 query II
 SELECT a, (WITH cte AS (SELECT CASE WHEN test.a=11 THEN 22 ELSE NULL END) SELECT * FROM cte) FROM test ORDER BY a
 ----

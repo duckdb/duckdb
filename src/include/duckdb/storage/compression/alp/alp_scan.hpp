@@ -11,15 +11,9 @@
 #include "duckdb/storage/compression/alp/algorithm/alp.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/function/compression/compression.hpp"
-#include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
@@ -130,8 +124,7 @@ public:
 		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-
-		const auto block_size = segment.GetBlockManager().GetBlockSize();
+		const auto block_size = segment.GetBlockSize();
 
 		if (data_byte_offset >= block_size) {
 			throw IOException(
@@ -147,6 +140,21 @@ public:
 		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::EXPONENT_SIZE;
 
+		const bool uncompressed_mode = vector_state.v_exponent == AlpConstants::UNCOMPRESSED_MODE_SENTINEL;
+		if (uncompressed_mode) {
+			if (!SKIP) {
+				// Read uncompressed values
+				const idx_t value_buffer_copy_size = sizeof(T) * vector_size;
+				if (vector_ptr + value_buffer_copy_size > segment_data + block_size) {
+					const auto bytes_remaining_in_block = (segment_data + block_size) - vector_ptr;
+					throw IOException("Corrupted ALP segment: stored vector_size is invalid, to-copy bytes (%d) "
+					                  "would exceed bytes remaining in the block (%d)",
+					                  value_buffer_copy_size, bytes_remaining_in_block);
+				}
+				memcpy(value_buffer, vector_ptr, value_buffer_copy_size);
+			}
+			return;
+		}
 		vector_state.v_factor = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::FACTOR_SIZE;
 
@@ -158,8 +166,6 @@ public:
 
 		vector_state.bit_width = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::BIT_WIDTH_SIZE;
-
-		D_ASSERT(vector_state.v_exponent <= AlpTypedConstants<T>::MAX_EXPONENT);
 
 		if (vector_state.exceptions_count > vector_size) {
 			throw IOException("Corrupted ALP segment: exceptions_count (%d) exceeds vector_size (%d)",
@@ -242,7 +248,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> AlpInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> AlpInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq_base<SegmentScanState, AlpScanState<T>>(segment);
 	return result;
 }

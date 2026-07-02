@@ -12,9 +12,10 @@ CREATE TABLE tbl2(i INTEGER)
 statement error
 ALTER TABLE non_table RENAME TO tbl
 ----
+Catalog Error: Table with name non_table does not exist
 
 # rename to an already existing table
 statement error
 ALTER TABLE tbl2 RENAME TO tbl
 ----
-
+Catalog Error: Could not rename "tbl2" to "tbl"

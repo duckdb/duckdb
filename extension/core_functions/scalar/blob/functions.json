@@ -1,10 +1,14 @@
 [
     {
         "name": "decode",
-        "parameters": "blob",
-        "description": "Converts `blob` to `VARCHAR`. Fails if `blob` is not valid UTF-8.",
-        "example": "decode('\\xC3\\xBC'::BLOB)",
-        "type": "scalar_function",
+        "parameters": "blob,varchar",
+        "description": "Converts `blob` to `VARCHAR`. Invalid UTF-8 is handled based on the error behavior argument. Can be 'strict' (default, fail), 'replace' to replace invalid characters with '?', or 'ignore' to skip invalid characters.",
+        "examples": [
+            "decode('\\xC3\\xBC'::BLOB)",
+            "decode('\\xA0'::BLOB, 'replace')",
+            "decode('\\xA0'::BLOB, 'ignore')"
+        ],
+        "type": "scalar_function_set",
         "categories": ["blob"]
     },
     {
@@ -21,7 +25,7 @@
         "description": "Converts a base64 encoded `string` to a character string (`BLOB`).",
         "example": "from_base64('QQ==')",
         "type": "scalar_function",
-        "categories": ["string", "blob"]
+        "categories": ["string","blob"]
     },
     {
         "name": "to_base64",
@@ -29,7 +33,7 @@
         "description": "Converts a `blob` to a base64 encoded string.",
         "example": "to_base64('A'::BLOB)",
         "type": "scalar_function",
-        "categories": ["string", "blob"],
+        "categories": ["string","blob"],
         "aliases": ["base64"]
     }
 ]

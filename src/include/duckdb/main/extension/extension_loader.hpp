@@ -73,6 +73,9 @@ public:
 	//! Register a new collation
 	DUCKDB_API void RegisterCollation(CreateCollationInfo &info);
 
+	//! Register a new coordinate system
+	DUCKDB_API void RegisterCoordinateSystem(CreateCoordinateSystemInfo &info);
+
 	//! Returns a reference to the function in the catalog - throws an exception if it does not exist
 	DUCKDB_API ScalarFunctionCatalogEntry &GetFunction(const string &name);
 	DUCKDB_API TableFunctionCatalogEntry &GetTableFunction(const string &name);

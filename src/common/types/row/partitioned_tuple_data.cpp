@@ -2,20 +2,20 @@
 
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, BufferManager &buffer_manager_p,
-                                           shared_ptr<TupleDataLayout> &layout_ptr_p)
-    : type(type_p), buffer_manager(buffer_manager_p), layout_ptr(layout_ptr_p), layout(*layout_ptr), count(0),
-      data_size(0) {
+                                           shared_ptr<TupleDataLayout> &layout_ptr_p, MemoryTag tag_p)
+    : type(type_p), buffer_manager(buffer_manager_p),
+      stl_allocator(make_shared_ptr<ArenaAllocator>(buffer_manager.GetBufferAllocator())), layout_ptr(layout_ptr_p),
+      layout(*layout_ptr), tag(tag_p), count(0), data_size(0) {
 }
 
-PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)
-    : type(other.type), buffer_manager(other.buffer_manager), layout_ptr(other.layout_ptr), layout(*layout_ptr),
-      count(0), data_size(0) {
+PartitionedTupleData::PartitionedTupleData(PartitionedTupleData &other)
+    : PartitionedTupleData(other.type, other.buffer_manager, other.layout_ptr, other.tag) {
 }
 
 PartitionedTupleData::~PartitionedTupleData() {
@@ -67,9 +67,9 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 		auto &partition = *partitions[partition_index.GetIndex()];
 		auto &partition_pin_state = state.partition_pin_states[partition_index.GetIndex()];
 
-		const auto size_before = partition.SizeInBytes();
+		const auto size_before = partition.data_size;
 		partition.AppendUnified(partition_pin_state, state.chunk_state, input, append_sel, actual_append_count);
-		data_size += partition.SizeInBytes() - size_before;
+		data_size += partition.data_size - size_before;
 	} else {
 		// Compute the heap sizes for the whole chunk
 		if (!layout.AllConstant()) {
@@ -103,9 +103,9 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 
 		state.chunk_state.heap_sizes.Reference(input.heap_sizes);
 
-		const auto size_before = partition.SizeInBytes();
+		const auto size_before = partition.data_size;
 		partition.Build(partition_pin_state, state.chunk_state, 0, append_count);
-		data_size += partition.SizeInBytes() - size_before;
+		data_size += partition.data_size - size_before;
 
 		partition.CopyRows(state.chunk_state, input, *FlatVector::IncrementalSelectionVector(), append_count);
 	} else {
@@ -224,9 +224,9 @@ void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &sta
 		const auto partition_offset = partition_entry.offset - partition_length;
 
 		// Build out the buffer space for this partition
-		const auto size_before = partition.SizeInBytes();
+		const auto size_before = partition.data_size;
 		partition.Build(partition_pin_state, state.chunk_state, partition_offset, partition_length);
-		data_size += partition.SizeInBytes() - size_before;
+		data_size += partition.data_size - size_before;
 	}
 }
 
@@ -318,7 +318,7 @@ unsafe_vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartiti
 
 unique_ptr<TupleDataCollection> PartitionedTupleData::GetUnpartitioned() {
 	auto data_collection = std::move(partitions[0]);
-	partitions[0] = make_uniq<TupleDataCollection>(buffer_manager, layout_ptr);
+	partitions[0] = make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, tag);
 
 	for (idx_t i = 1; i < partitions.size(); i++) {
 		data_collection->Combine(*partitions[i]);
@@ -337,7 +337,7 @@ idx_t PartitionedTupleData::Count() const {
 }
 
 idx_t PartitionedTupleData::SizeInBytes() const {
-	return data_size;
+	return data_size + stl_allocator->AllocationSize();
 }
 
 idx_t PartitionedTupleData::PartitionCount() const {
@@ -361,7 +361,7 @@ void PartitionedTupleData::Verify() const {
 	for (auto &partition : partitions) {
 		partition->Verify();
 		total_count += partition->Count();
-		total_size += partition->SizeInBytes();
+		total_size += partition->data_size;
 	}
 	D_ASSERT(total_count == this->count);
 	D_ASSERT(total_size == this->data_size);

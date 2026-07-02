@@ -79,7 +79,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		prepared = prepared_planner.PrepareSQLStatement(entry->second->unbound_statement->Copy());
 		rebound_plan = std::move(prepared_planner.plan);
 		D_ASSERT(prepared->properties.bound_all_parameters);
-		this->bound_tables = prepared_planner.binder->bound_tables;
+		global_binder_state->bound_tables = prepared_planner.binder->global_binder_state->bound_tables;
 	}
 	// copy the properties of the prepared statement into the planner
 	auto &properties = GetStatementProperties();

@@ -4,7 +4,7 @@
 
 name Dictionary Compression Write
 group dictionary
-storage persistent
+storage persistent v1.4.0
 require_reinit
 
 load

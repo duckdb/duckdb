@@ -23,7 +23,6 @@ struct ParquetColumnSchema;
 class ResizeableBuffer;
 
 struct ParquetStatisticsUtils {
-
 	static unique_ptr<BaseStatistics> TransformColumnStatistics(const ParquetColumnSchema &reader,
 	                                                            const vector<ColumnChunk> &columns, bool can_have_nan);
 

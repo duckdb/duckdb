@@ -1,7 +1,6 @@
 #include "duckdb/parser/constraint.hpp"
 
 #include "duckdb/common/printer.hpp"
-#include "duckdb/parser/constraints/list.hpp"
 
 namespace duckdb {
 

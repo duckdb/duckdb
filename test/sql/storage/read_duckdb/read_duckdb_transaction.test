@@ -1,0 +1,28 @@
+# name: test/sql/storage/read_duckdb/read_duckdb_transaction.test
+# description: Test using read_duckdb in a transaction
+# group: [read_duckdb]
+
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_transaction.db' AS rd
+
+statement ok
+CREATE TABLE rd.my_tbl AS SELECT 42 i
+
+statement ok
+DETACH rd
+
+statement ok
+BEGIN
+
+query I
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_transaction.db')
+----
+42
+
+query I
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_transaction.db')
+----
+42
+
+statement ok
+COMMIT

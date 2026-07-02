@@ -1,3 +1,4 @@
-UseStatement <- 'USE'i UseTarget
+UseStatement <- 'USE' UseTarget
 
-UseTarget <- (CatalogName '.' ReservedSchemaName) / SchemaName / CatalogName
+UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
+UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName ('.' Identifier)*

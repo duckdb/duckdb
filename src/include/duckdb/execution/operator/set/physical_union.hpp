@@ -17,8 +17,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::UNION;
 
 public:
-	PhysicalUnion(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperator &top,
-	              PhysicalOperator &bottom, idx_t estimated_cardinality, bool allow_out_of_order);
+	PhysicalUnion(PhysicalPlan &physical_plan, vector<LogicalType> types,
+	              const ArenaLinkedList<reference<PhysicalOperator>> &children_p, idx_t estimated_cardinality,
+	              bool allow_out_of_order);
 
 	bool allow_out_of_order;
 

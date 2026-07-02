@@ -9,6 +9,7 @@ CREATE TABLE numbers(i varchar PRIMARY KEY, j INTEGER)
 statement error
 INSERT INTO numbers VALUES ('1', 4), ('1', 5)
 ----
+<REGEX>:.*Constraint Error.*constraint violation.*
 
 # insert unique values
 statement ok
@@ -24,6 +25,7 @@ SELECT * FROM numbers
 statement error
 INSERT INTO numbers VALUES ('6', 6), ('1', 4);
 ----
+<REGEX>:.*Constraint Error: Duplicate key.*
 
 # now insert just the first value
 statement ok
@@ -40,9 +42,10 @@ SELECT * FROM numbers
 statement error
 INSERT INTO numbers VALUES (NULL, 4);
 ----
+<REGEX>:.*Constraint Error.*constraint failed.*
 
 # update NULL is also not allowed
 statement error
 UPDATE numbers SET i=NULL;
 ----
-
+<REGEX>:.*Constraint Error.*constraint failed.*

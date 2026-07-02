@@ -1,0 +1,39 @@
+# name: test/sql/storage/compression/roaring/roaring_bool_smaller_than_vector.test
+# group: [roaring]
+
+load __TEST_DIR__/test_roaring2.db readwrite v1.5.0
+
+statement ok
+PRAGMA force_compression='roaring';
+
+statement ok
+set checkpoint_threshold = '10mb';
+
+# simple compression with few values
+statement ok
+CREATE TABLE test (a BOOL);
+
+statement ok
+INSERT INTO test SELECT case when i%25=0 then true else false end FROM range(0,1025) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+select count(*) from test WHERE a IS true;
+----
+41
+
+statement ok
+INSERT INTO test SELECT case when i%25=0 then true else false end FROM range(0,1025) tbl(i);
+
+statement ok
+checkpoint;
+
+query I
+select count(*) from test WHERE a IS true;
+----
+82
+
+statement ok
+DROP TABLE test;

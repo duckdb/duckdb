@@ -146,7 +146,6 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	for (const auto &comment : dialect_candidates.comment_candidates) {
 		for (const auto quote_escape_candidate : dialect_candidates.quote_escape_candidates) {
 			for (const auto &delimiter : dialect_candidates.delim_candidates) {
-
 				D_ASSERT(buffer_manager);
 				CSVStateMachineOptions state_machine_options(
 				    delimiter, quote_escape_candidate.quote, quote_escape_candidate.escape, comment, new_line_id,

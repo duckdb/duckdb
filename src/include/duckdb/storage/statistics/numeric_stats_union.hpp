@@ -9,8 +9,6 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/hugeint.hpp"
 
 namespace duckdb {
 

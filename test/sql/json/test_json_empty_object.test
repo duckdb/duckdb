@@ -30,8 +30,9 @@ MAP(VARCHAR, JSON)
 
 # can't force it to have an empty struct
 statement error
-select * from read_json('__TEST_DIR__/my.json', columns={a: 'STRUCT()')
+select * from read_json('__TEST_DIR__/my.json', columns={a: 'STRUCT()'})
 ----
+Invalid Input Error: Value "STRUCT()" can not be converted to a DuckDB Type.
 
 # test issue 6443
 statement ok

@@ -101,8 +101,9 @@ template <class T>
 void Bit::NumericToBit(T numeric, bitstring_t &output_str) {
 	D_ASSERT(output_str.GetSize() >= sizeof(T) + 1);
 
+	auto le_numeric = BSwapIfBE(numeric);
 	auto output = output_str.GetDataWriteable();
-	auto data = const_data_ptr_cast(&numeric);
+	auto data = const_data_ptr_cast(&le_numeric);
 
 	*output = 0; // set padding to 0
 	++output;
@@ -141,6 +142,7 @@ void Bit::BitToNumeric(bitstring_t bit, T &output_num) {
 	for (idx_t idx = padded_byte_idx + 1; idx < sizeof(T); ++idx) {
 		output[sizeof(T) - 1 - idx] = data[1 + idx - padded_byte_idx];
 	}
+	output_num = BSwapIfBE(output_num);
 }
 
 } // namespace duckdb

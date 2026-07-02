@@ -37,16 +37,17 @@ using namespace std;
 #include "fsst.h" // the official FSST API -- also usable by C mortals
 
 /* unsigned integers */
+namespace libfsst {
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
+}  // namespace libfsst
 
-inline uint64_t fsst_unaligned_load(u8 const* V) {
-	uint64_t Ret;
-	memcpy(&Ret, V, sizeof(uint64_t)); // compiler will generate efficient code (unaligned load, where possible)
-	return Ret;
-}
+#if UINTPTR_MAX == 0xffffffffU
+// We're on a 32-bit platform
+#define NONOPT_FSST
+#endif
 
 #define FSST_ENDIAN_MARKER ((u64) 1)
 #define FSST_VERSION_20190218 20190218
@@ -63,6 +64,29 @@ inline uint64_t fsst_unaligned_load(u8 const* V) {
 #define FSST_CODE_MAX       (1UL<<FSST_CODE_BITS) /* all bits set: indicating a symbol that has not been assigned a code yet */
 #define FSST_CODE_MASK      (FSST_CODE_MAX-1UL)   /* all bits set: indicating a symbol that has not been assigned a code yet */
 
+namespace libfsst {
+constexpr inline uint64_t swap64_if_be(uint64_t v) noexcept {
+#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	#if defined(__clang__) || defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
+		return __builtin_bswap64(v);
+	#elif
+		return (v&0xff00000000000000ull) >> 56) | (v&0x00ff000000000000ull) >> 40 |  \
+				(v&0x0000ff0000000000ull) >> 24 | (v&0x000000ff00000000ull) >> 8 |   \
+				(v&0x00000000ff000000ull) << 8 | (v&0x0000000000ff0000ull) << 24 |   \
+				(v&0x000000000000ff00ull) << 40 | (v&0x00000000000000ffull) << 56
+
+	#endif
+#else
+    return v; // little-endian (or unknown), so no swap needed
+#endif
+}
+
+inline uint64_t fsst_unaligned_load(u8 const* V) {
+    uint64_t Ret;
+    memcpy(&Ret, V, sizeof(uint64_t)); // compiler will generate efficient code (unaligned load, where possible)
+    return swap64_if_be(Ret);
+}
+
 struct Symbol {
    static const unsigned maxLength = 8;
 
@@ -74,9 +98,9 @@ struct Symbol {
 
    Symbol() : icl(0) { val.num = 0; }
 
-   explicit Symbol(u8 c, u16 code) : icl((1<<28)|(code<<16)|56) { val.num = c; } // single-char symbol
+   explicit Symbol(u8 c, u16 code) : icl((1<<28)|(code<<16)|56) { store_num(c); } // single-char symbol
    explicit Symbol(const char* begin, const char* end) : Symbol(begin, (u32) (end-begin)) {}
-   explicit Symbol(u8* begin, u8* end) : Symbol((const char*)begin, (u32) (end-begin)) {}
+   explicit Symbol(const u8* begin, const u8* end) : Symbol((const char*)begin, (u32) (end-begin)) {}
    explicit Symbol(const char* input, u32 len) {
       val.num = 0;
       if (len>=8) {
@@ -89,18 +113,21 @@ struct Symbol {
    }
    void set_code_len(u32 code, u32 len) { icl = (len<<28)|(code<<16)|((8-len)*8); }
 
+   u64 load_num() const { return swap64_if_be(val.num); }
+   void store_num(u64 v) { val.num = swap64_if_be(v); }
+
    u32 length() const { return (u32) (icl >> 28); }
    u16 code() const { return (icl >> 16) & FSST_CODE_MASK; }
    u32 ignoredBits() const { return (u32) icl; }
 
-   u8 first() const { assert( length() >= 1); return 0xFF & val.num; }
-   u16 first2() const { assert( length() >= 2); return 0xFFFF & val.num; }
+   u8 first() const { assert( length() >= 1); return 0xFF & load_num(); }
+   u16 first2() const { assert( length() >= 2); return 0xFFFF & load_num(); }
 
 #define FSST_HASH_LOG2SIZE 10 
 #define FSST_HASH_PRIME 2971215073LL
 #define FSST_SHIFT 15
 #define FSST_HASH(w) (((w)*FSST_HASH_PRIME)^(((w)*FSST_HASH_PRIME)>>FSST_SHIFT))
-   size_t hash() const { size_t v = 0xFFFFFF & val.num; return FSST_HASH(v); } // hash on the next 3 bytes
+   size_t hash() const { size_t v = 0xFFFFFF & load_num(); return FSST_HASH(v); } // hash on the next 3 bytes
 };
 
 // Symbol that can be put in a queue, ordered on gain
@@ -117,7 +144,7 @@ struct QSymbol{
 // two phases of compression, before and after optimize():
 //
 // (1) to encode values we probe (and maintain) three datastructures:
-// - u16 byteCodes[65536] array at the position of the next byte  (s.length==1)
+// - u16 byteCodes[256] array at the position of the next byte  (s.length==1)
 // - u16 shortCodes[65536] array at the position of the next twobyte pattern (s.length==2)
 // - Symbol hashtable[1024] (keyed by the next three bytes, ie for s.length>2), 
 // this search will yield a u16 code, it points into Symbol symbols[]. You always find a hit, because the first 256 codes are 
@@ -215,7 +242,7 @@ struct SymbolTable {
       bool taken = (hashTab[idx].icl < FSST_ICL_FREE);
       if (taken) return false; // collision in hash table
       hashTab[idx].icl = s.icl;
-      hashTab[idx].val.num = s.val.num & (0xFFFFFFFFFFFFFFFF >> (u8) s.icl);
+      hashTab[idx].store_num(s.load_num() & (0xFFFFFFFFFFFFFFFF >> (u8) s.icl));
       return true;
    }
    bool add(Symbol s) {
@@ -236,8 +263,8 @@ struct SymbolTable {
    /// Find longest expansion, return code (= position in symbol table)
    u16 findLongestSymbol(Symbol s) const {
       size_t idx = s.hash() & (hashTabSize-1);
-      if (hashTab[idx].icl <= s.icl && hashTab[idx].val.num == (s.val.num & (0xFFFFFFFFFFFFFFFF >> ((u8) hashTab[idx].icl)))) {
-         return (hashTab[idx].icl>>16) & FSST_CODE_MASK; // matched a long symbol 
+      if (hashTab[idx].icl <= s.icl && hashTab[idx].load_num() == (s.load_num() & (0xFFFFFFFFFFFFFFFF >> ((u8) hashTab[idx].icl)))) {
+         return (hashTab[idx].icl>>16) & FSST_CODE_MASK; // matched a long symbol
       }
       if (s.length() >= 2) {
          u16 code =  shortCodes[s.first2()] & FSST_CODE_MASK;
@@ -245,7 +272,7 @@ struct SymbolTable {
       }
       return byteCodes[s.first()] & FSST_CODE_MASK;
    }
-   u16 findLongestSymbol(u8* cur, u8* end) const {
+   u16 findLongestSymbol(const u8* cur, const u8* end) const {
       return findLongestSymbol(Symbol(cur,end)); // represent the string as a temporary symbol
    }
 
@@ -380,7 +407,7 @@ struct Counters {
    }
    u32 count1GetNext(u32 &pos1) { // note: we will advance pos1 to the next nonzero counter in register range
       // read 16-bits single symbol counter, split into two 8-bits numbers (count1Low, count1High), while skipping over zeros
-	   u64 high = fsst_unaligned_load(&count1High[pos1]);
+      u64 high = fsst_unaligned_load(&count1High[pos1]); // note: this reads 8 subsequent counters [pos1..pos1+7]
 
       u32 zero = high?(__builtin_ctzll(high)>>3):7UL; // number of zero bytes
       high = (high >> (zero << 3)) & 255; // advance to nonzero counter
@@ -393,7 +420,7 @@ struct Counters {
    }
    u32 count2GetNext(u32 pos1, u32 &pos2) { // note: we will advance pos2 to the next nonzero counter in register range
       // read 12-bits pairwise symbol counter, split into low 8-bits and high 4-bits number while skipping over zeros
-	  u64 high = fsst_unaligned_load(&count2High[pos1][pos2>>1]);
+      u64 high = fsst_unaligned_load(&count2High[pos1][pos2>>1]); // note: this reads 16 subsequent counters [pos2..pos2+15]
       high >>= ((pos2&1) << 2); // odd pos2: ignore the lowest 4 bits & we see only 15 counters
 
       u32 zero = high?(__builtin_ctzll(high)>>2):(15UL-(pos2&1UL)); // number of zero 4-bits counters
@@ -434,5 +461,6 @@ struct SIMDjob {
 };
 
 // C++ fsst-compress function with some more control of how the compression happens (algorithm flavor, simd unroll degree)
-size_t compressImpl(Encoder *encoder, size_t n, size_t lenIn[], u8 *strIn[], size_t size, u8 * output, size_t *lenOut, u8 *strOut[], bool noSuffixOpt, bool avoidBranch, int simd);
-size_t compressAuto(Encoder *encoder, size_t n, size_t lenIn[], u8 *strIn[], size_t size, u8 * output, size_t *lenOut, u8 *strOut[], int simd);
+size_t compressImpl(Encoder *encoder, size_t n, const size_t lenIn[], const u8 *strIn[], size_t size, u8 * output, size_t *lenOut, u8 *strOut[], bool noSuffixOpt, bool avoidBranch, int simd);
+size_t compressAuto(Encoder *encoder, size_t n, const size_t lenIn[], const u8 *strIn[], size_t size, u8 * output, size_t *lenOut, u8 *strOut[], int simd);
+}  // namespace libfsst

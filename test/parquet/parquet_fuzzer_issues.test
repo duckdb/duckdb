@@ -6,12 +6,18 @@ require parquet
 
 # internal issue 6129
 statement error
-from 'data/parquet-testing/internal_6129.parquet'
+from 'data/parquet-testing/broken/internal_6129.parquet'
 ----
 invalid number of miniblocks per block
 
 # internal issue 6165
 statement error
-from 'data/parquet-testing/internal_6165.parquet';
+from 'data/parquet-testing/broken/internal_6165.parquet';
 ----
 row group does not have enough columns
+
+# duckdb fuzzer issue 4384
+statement error
+from 'data/parquet-testing/broken/duckdb_fuzzer_4384.parquet';
+----
+schema element has no children

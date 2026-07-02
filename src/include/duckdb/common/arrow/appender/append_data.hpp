@@ -93,6 +93,13 @@ public:
 	}
 	void AppendValidity(UnifiedVectorFormat &format, idx_t from, idx_t to);
 
+	//! Append a (child) vector, routing it through the Arrow extension's duckdb_to_arrow
+	//! conversion first when one is set. Container appenders must call this instead of
+	//! append_vector so nested extension types (e.g. arrow.bool8 BOOLEAN) get the same
+	//! conversion the top-level appender applies, keeping the data layout in sync with
+	//! the schema declared by SetArrowFormat.
+	void AppendChild(Vector &input, idx_t from, idx_t to, idx_t input_size);
+
 public:
 	idx_t row_count = 0;
 	idx_t null_count = 0;

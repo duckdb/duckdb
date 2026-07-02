@@ -1,0 +1,12 @@
+# name: test/sql/peg_parser/parser/copy_expression.test
+# description: Test copy expression syntax in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$COPY (SELECT * FROM foo) TO ('foo') WITH (HEADER)$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$COPY (SELECT * FROM range(5) t(i)) TO (getvariable('copy_target')) WITH (HEADER)$TEST_PEG_PARSER$);
+

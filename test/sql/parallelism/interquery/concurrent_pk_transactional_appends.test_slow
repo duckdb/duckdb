@@ -1,0 +1,48 @@
+# name: test/sql/parallelism/interquery/concurrent_pk_transactional_appends.test_slow
+# description: Test concurrent transactional appends to a table with primary keys
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers (i INTEGER PRIMARY KEY);
+
+statement ok
+SET immediate_transaction_mode=true;
+
+concurrentloop threadid 0 20
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SET VARIABLE initial_count = (SELECT COUNT(*) FROM integers WHERE i >= 0)
+
+loop i 0 50
+
+statement ok
+INSERT INTO integers VALUES (${threadid} * 1000 + ${i})
+
+query I
+SELECT CASE
+	WHEN COUNT(*) = (getvariable('initial_count') + ${i} + 1)
+	THEN NULL
+	ELSE {'initial': getvariable('initial_count'), 'count': COUNT(*), 'count_distinct': COUNT(DISTINCT i)}
+	END FROM integers WHERE i >= 0
+----
+NULL
+
+endloop
+
+onlyif threadid<10
+statement ok
+COMMIT
+
+onlyif threadid>=10
+statement ok
+ROLLBACK
+
+endloop
+
+query II
+SELECT COUNT(*), COUNT(DISTINCT i) FROM integers
+----
+500	500

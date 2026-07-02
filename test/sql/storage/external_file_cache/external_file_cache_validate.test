@@ -1,0 +1,77 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_validate.test
+# description: Test the validate_external_file_cache setting
+# group: [external_file_cache]
+
+require parquet
+
+statement ok
+set enable_external_file_cache=true;
+
+statement ok
+set prefetch_all_parquet_files=true;
+
+# Create a single test file that will be used for all tests
+statement ok
+copy (select 1 as col1, 2 as col2 from range(100)) to '__TEST_DIR__/test_validate_cache.parquet';
+
+# Test 1: Check default value, which should be VALIDATE_ALL.
+query I
+select current_setting('validate_external_file_cache');
+----
+VALIDATE_ALL
+
+# Test 2: check validation option VALIDATE_REMOTE, which doesn't affect local tests.
+statement ok
+set validate_external_file_cache='VALIDATE_REMOTE';
+
+query I
+select current_setting('validate_external_file_cache');
+----
+VALIDATE_REMOTE
+
+query I
+select sum(col1) from '__TEST_DIR__/test_validate_cache.parquet';
+----
+100
+
+# Test 3: With NO_VALIDATION, queries should still work.
+statement ok
+set validate_external_file_cache='NO_VALIDATION';
+
+query I
+select current_setting('validate_external_file_cache');
+----
+NO_VALIDATION
+
+query I
+select sum(col1) from '__TEST_DIR__/test_validate_cache.parquet';
+----
+100
+
+# Test 4: With NO_VALIDATION, overwriting the file should still return cached data
+statement ok
+set validate_external_file_cache='NO_VALIDATION';
+
+# Overwrite the file and query it, which should use the old file
+statement ok
+copy (select 100 as col1, 200 as col2 from range(10)) to '__TEST_DIR__/test_validate_cache.parquet';
+
+query I
+select sum(col1) from '__TEST_DIR__/test_validate_cache.parquet';
+----
+100
+
+# Test 5: With VALIDATE_ALL, overwriting the file should return new data
+statement ok
+set validate_external_file_cache='VALIDATE_ALL';
+
+query I
+select sum(col1) from '__TEST_DIR__/test_validate_cache.parquet';
+----
+1000
+
+# Test 6: Invalid enum value should fail
+statement error
+set validate_external_file_cache='INVALID_VALUE';
+----
+<REGEX>:.*unrecognized value.*

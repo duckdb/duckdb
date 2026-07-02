@@ -1,6 +1,7 @@
 {
     "group": "validity_mask_functions",
     "deprecated": false,
+    "description": "Functions to interact with the validity mask of a vector. The validity mask is a bitmask determining whether a row in a vector is `NULL`, or not.",
     "entries": [
         {
             "name": "duckdb_validity_row_is_valid",

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/batched_chunk_collection.hpp
+// duckdb/common/types/batched_data_collection.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,8 +10,10 @@
 
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/main/query_parameters.hpp"
 
 namespace duckdb {
+
 class BufferManager;
 class ClientContext;
 
@@ -32,9 +34,16 @@ struct BatchedChunkScanState {
 //! Scans over a BatchedDataCollection are ordered by batch index
 class BatchedDataCollection {
 public:
-	DUCKDB_API BatchedDataCollection(ClientContext &context, vector<LogicalType> types, bool buffer_managed = false);
-	DUCKDB_API BatchedDataCollection(ClientContext &context, vector<LogicalType> types, batch_map_t batches,
-	                                 bool buffer_managed = false);
+	DUCKDB_API
+	BatchedDataCollection(ClientContext &context, vector<LogicalType> types,
+	                      ColumnDataAllocatorType allocator_type = ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR,
+	                      ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
+	DUCKDB_API
+	BatchedDataCollection(ClientContext &context, vector<LogicalType> types, QueryResultMemoryType memory_type);
+	DUCKDB_API
+	BatchedDataCollection(ClientContext &context, vector<LogicalType> types, batch_map_t batches,
+	                      ColumnDataAllocatorType allocator_type = ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR,
+	                      ColumnDataCollectionLifetime lifetime = ColumnDataCollectionLifetime::REGULAR);
 
 	//! Appends a datachunk with the given batch index to the batched collection
 	DUCKDB_API void Append(DataChunk &input, idx_t batch_index);
@@ -79,6 +88,8 @@ public:
 	DUCKDB_API void Print() const;
 
 private:
+	unique_ptr<ColumnDataCollection> CreateCollection() const;
+
 	struct CachedCollection {
 		idx_t batch_index = DConstants::INVALID_INDEX;
 		ColumnDataCollection *collection = nullptr;
@@ -87,7 +98,8 @@ private:
 
 	ClientContext &context;
 	vector<LogicalType> types;
-	bool buffer_managed;
+	ColumnDataAllocatorType allocator_type;
+	ColumnDataCollectionLifetime lifetime;
 	//! The data of the batched chunk collection - a set of batch_index -> ColumnDataCollection pointers
 	map<idx_t, unique_ptr<ColumnDataCollection>> data;
 	//! The last batch collection that was inserted into

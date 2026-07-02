@@ -376,6 +376,18 @@ SELECT CAST('{[{]}}' AS STRUCT(a VARCHAR[]));
 ----
 can't be cast to the destination type STRUCT(a VARCHAR[])
 
+# only an opening brace/paren followed by whitespace must not read past the buffer
+# (use a long, non-inlined string so the over-read lands on the heap)
+statement error
+SELECT CAST('{               ' AS STRUCT(a INTEGER));
+----
+can't be cast to the destination type STRUCT(a INTEGER)
+
+statement error
+SELECT CAST('(               ' AS STRUCT(a INTEGER));
+----
+can't be cast to the destination type STRUCT(a INTEGER)
+
 
 
 #               Test WHERE clause

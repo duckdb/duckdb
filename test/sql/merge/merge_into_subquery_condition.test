@@ -1,0 +1,23 @@
+# name: test/sql/merge/merge_into_subquery_condition.test
+# description: Test MERGE INTO with a subquery in the condition
+# group: [merge]
+
+statement ok
+CREATE TABLE target(id INT PRIMARY KEY, val INT);
+
+statement ok
+INSERT INTO target VALUES (1, 10), (2, 20);
+
+query I
+MERGE INTO target AS t
+USING (VALUES (1, 99)) AS s(id, val)
+ON t.id = s.id AND t.val > (SELECT 5)
+WHEN MATCHED THEN UPDATE SET val = s.val;
+----
+1
+
+query II
+FROM target ORDER BY id
+----
+1	99
+2	20

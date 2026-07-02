@@ -32,6 +32,12 @@ ScalarFunctionSet JSONFunctions::GetTypeFunction() {
 	ScalarFunctionSet set("json_type");
 	GetTypeFunctionsInternal(set, LogicalType::VARCHAR);
 	GetTypeFunctionsInternal(set, LogicalType::JSON());
+	for (auto &func : set.functions) {
+		if (func.arguments.size() == 1 && func.arguments[0].IsJSONType()) {
+			continue;
+		}
+		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	}
 	return set;
 }
 

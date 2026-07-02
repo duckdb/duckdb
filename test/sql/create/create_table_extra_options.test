@@ -1,0 +1,192 @@
+# name: test/sql/create/create_table_extra_options.test
+# description: Test CREATE OR REPLACE TABLE
+# group: [create]
+
+statement ok
+pragma enable_verification
+
+statement error
+CREATE TABLE integers(i INTEGER) PARTITIONED BY (i);
+----
+<REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE TABLE integers(i INTEGER) SORTED BY (i);
+----
+<REGEX>:.*SORTED BY is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE TABLE integers(i INTEGER) PARTITIONED BY (i) SORTED BY (i);
+----
+<REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+	'location' = 's3://amzn-s3-demo-bucket/iceberg-folder',
+	'table_type'='ICEBERG',
+    'format'='parquet'
+);
+----
+<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+
+# with statement key is not quoted
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+	location = 's3://amzn-s3-demo-bucket/iceberg-folder',
+	table_type = 'ICEBERG',
+    format = 'parquet'
+);
+----
+<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+PARTITIONED BY (id)
+SORTED BY (date)
+WITH (
+  location='s3://amzn-s3-demo-bucket/iceberg-folder',
+  table_type='ICEBERG',
+  format='parquet'
+);
+----
+<REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+SORTED BY (date)
+WITH (
+  location='s3://amzn-s3-demo-bucket/iceberg-folder',
+  table_type='ICEBERG',
+  format='parquet'
+);
+----
+<REGEX>:.*SORTED BY is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  location='s3://amzn-s3-demo-bucket/iceberg-folder',
+  table_type='ICEBERG',
+  format='parquet'
+);
+----
+<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+
+
+# different orders
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+SORTED BY (date)
+PARTITIONED BY (id)
+WITH (
+  location='s3://amzn-s3-demo-bucket/iceberg-folder',
+  table_type='ICEBERG',
+  format='parquet'
+);
+----
+<REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
+
+# WITH must come after sorted and partition options
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  location='s3://amzn-s3-demo-bucket/iceberg-folder',
+  table_type='ICEBERG',
+  format='parquet'
+)
+SORTED BY (date)
+PARTITIONED BY (id);
+----
+<REGEX>:.*Parser Error.*
+
+statement ok
+SET VARIABLE location_var='boop'
+
+# Paritioned by variable
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+Partitioned by (getvariable('location_var'));
+----
+<REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
+
+# Table options using a environment variable
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  location=getvariable('location_var'),
+  table_type='ICEBERG',
+  format='parquet'
+)
+----
+<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+
+# check when option keys are quoted
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  'location'=getvariable('location_var'),
+  'table_type'='ICEBERG',
+  'format'='parquet'
+)
+----
+<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+
+# single value options are also supported (default to True)
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  'location',
+  'table_type',
+  'format'
+)
+----
+<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+
+# single value options are also supported (not quoted)
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  location,
+  table_type,
+  format
+)
+----
+<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*

@@ -27,7 +27,7 @@ ErrorData::ErrorData(ExceptionType type, const string &message)
 
 ErrorData::ErrorData(const string &message)
     : initialized(true), type(ExceptionType::INVALID), raw_message(string()), final_message(string()) {
-
+	// parse the constructed JSON
 	if (message.empty() || message[0] != '{') {
 		// Not a JSON-formatted message.
 		// Use the message as a raw Exception message and leave the type as uninitialized.
@@ -70,7 +70,7 @@ string ErrorData::ConstructFinalMessage() const {
 		         "unexpected conditions or errors in the program's logic.\nFor more information, see "
 		         "https://duckdb.org/docs/stable/dev/internal_errors";
 
-		// Ensure that we print the stack trace for internal exceptions.
+		// Ensure that we print the stack trace for internal and fatal exceptions.
 		auto entry = extra_info.find("stack_trace_pointers");
 		if (entry != extra_info.end()) {
 			auto stack_trace = StackTrace::ResolveStacktraceSymbols(entry->second);
@@ -84,10 +84,9 @@ void ErrorData::Throw(const string &prepended_message) const {
 	D_ASSERT(initialized);
 	if (!prepended_message.empty()) {
 		string new_message = prepended_message + raw_message;
-		throw Exception(type, new_message, extra_info);
-	} else {
-		throw Exception(type, raw_message, extra_info);
+		throw Exception(extra_info, type, new_message);
 	}
+	throw Exception(extra_info, type, raw_message);
 }
 
 const ExceptionType &ErrorData::Type() const {
@@ -102,6 +101,10 @@ void ErrorData::Merge(const ErrorData &other) {
 	if (!HasError()) {
 		*this = other;
 		return;
+	}
+	if (Exception::InvalidatesDatabase(other.Type()) || other.type == ExceptionType::INTERNAL) {
+		// inherit severe types
+		type = other.type;
 	}
 	final_message += "\n\n" + other.Message();
 }
@@ -139,6 +142,7 @@ void ErrorData::AddErrorLocation(const string &query) {
 		auto entry = extra_info.find("position");
 		if (entry != extra_info.end()) {
 			raw_message = QueryErrorContext::Format(query, raw_message, std::stoull(entry->second));
+			extra_info.erase(entry);
 		}
 	}
 	{

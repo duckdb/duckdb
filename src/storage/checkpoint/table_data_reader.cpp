@@ -2,11 +2,8 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -22,6 +19,7 @@ void TableDataReader::ReadTableData() {
 
 	// We stored the table statistics as a unit in FinalizeTable.
 	BinaryDeserializer stats_deserializer(reader);
+
 	stats_deserializer.Begin();
 	info.data->table_stats.Deserialize(stats_deserializer, columns);
 	stats_deserializer.End();

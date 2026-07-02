@@ -11,6 +11,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/export_statement.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 

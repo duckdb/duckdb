@@ -1,1 +1,1 @@
-ExecuteStatement <- 'EXECUTE'i Identifier TableFunctionArguments?
+ExecuteStatement <- 'EXECUTE' Identifier TableFunctionArguments?

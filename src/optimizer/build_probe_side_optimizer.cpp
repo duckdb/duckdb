@@ -230,7 +230,7 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 			// if the conditions have no equality, do not flip the children.
 			// There is no physical join operator (yet) that can do an inequality right_semi/anti join.
 			idx_t has_range = 0;
-			bool prefer_range_joins = DBConfig::GetSetting<PreferRangeJoinsSetting>(context);
+			bool prefer_range_joins = Settings::Get<PreferRangeJoinsSetting>(context);
 			if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
 			    (op.Cast<LogicalComparisonJoin>().HasEquality(has_range) && !prefer_range_joins)) {
 				TryFlipJoinChildren(join);

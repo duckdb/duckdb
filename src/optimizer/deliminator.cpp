@@ -214,7 +214,10 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 		auto &other_colref = other_side.Cast<BoundColumnRefExpression>();
 		replacement_bindings.emplace_back(delim_colref.binding, other_colref.binding);
 
-		if (cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		// Only add IS NOT NULL filter for regular equality/inequality comparisons
+		// Do NOT add for DISTINCT FROM variants, as they handle NULL correctly
+		if (cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM &&
+		    cond.comparison != ExpressionType::COMPARE_DISTINCT_FROM) {
 			auto is_not_null_expr =
 			    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 			is_not_null_expr->children.push_back(other_side.Copy());
@@ -334,6 +337,7 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 			auto &colref = delim_side.Cast<BoundColumnRefExpression>();
 			if (colref.binding == traced_binding) {
 				auto join_comparison = join_condition.comparison;
+				auto original_join_comparison = join_condition.comparison; // Save original for later check
 				if (delim_condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
 				    delim_condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 					// We need to compare NULL values
@@ -352,7 +356,10 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 				// join condition was a not equal and filtered out all NULLS.
 				// DELIM JOIN need to do that for not DELIM_GET side. Easiest way is to change the
 				// comparison expression type. See duckdb/duckdb#16803
-				if (delim_join.join_type != JoinType::MARK) {
+				// Only convert if the ORIGINAL join had != or = (not DISTINCT FROM variants)
+				if (delim_join.join_type != JoinType::MARK &&
+				    original_join_comparison != ExpressionType::COMPARE_DISTINCT_FROM &&
+				    original_join_comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 					if (delim_condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
 						delim_condition.comparison = ExpressionType::COMPARE_NOTEQUAL;
 					}

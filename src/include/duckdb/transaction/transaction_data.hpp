@@ -22,6 +22,10 @@ struct TransactionData {
 	optional_ptr<DuckTransaction> transaction;
 	transaction_t transaction_id;
 	transaction_t start_time;
+
+	static TransactionData Committed() {
+		return TransactionData(MAX_TRANSACTION_ID, 0);
+	}
 };
 
 } // namespace duckdb

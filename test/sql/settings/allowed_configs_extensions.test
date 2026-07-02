@@ -1,0 +1,25 @@
+# name: test/sql/settings/allowed_configs_extensions.test
+# description: Test allowed_configs validation with extension settings
+# group: [settings]
+
+require icu
+
+statement ok
+PRAGMA enable_verification
+
+# extension settings are accepted in allowed_configs when the extension is loaded
+statement ok
+SET allowed_configs=['TimeZone']
+
+statement ok
+SET lock_configuration=true
+
+# allowed extension setting can be changed when locked
+statement ok
+SET TimeZone='America/New_York'
+
+# non-allowed extension setting is still locked
+statement error
+SET Calendar='japanese'
+----
+configuration has been locked

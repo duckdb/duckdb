@@ -139,7 +139,7 @@ public:
 	}
 
 public:
-	operator idx_t() { // NOLINT: allow implicit conversion
+	operator idx_t() const { // NOLINT: allow implicit conversion
 		return column_id;
 	}
 	idx_t GetId() const {
@@ -170,7 +170,7 @@ public:
 	}
 
 public:
-	operator idx_t() { // NOLINT: allow implicit conversion
+	operator idx_t() const { // NOLINT: allow implicit conversion
 		return index;
 	}
 	idx_t GetIndex() const {

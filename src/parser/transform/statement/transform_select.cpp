@@ -26,13 +26,10 @@ unique_ptr<QueryNode> Transformer::TransformSelectNodeInternal(duckdb_libpgquery
 			throw ParserException("SELECT locking clause is not supported!");
 		}
 	}
-	unique_ptr<QueryNode> stmt = nullptr;
 	if (select.pivot) {
-		stmt = TransformPivotStatement(select);
-	} else {
-		stmt = TransformSelectInternal(select);
+		return TransformPivotStatement(select);
 	}
-	return TransformMaterializedCTE(std::move(stmt));
+	return TransformSelectInternal(select);
 }
 
 unique_ptr<SelectStatement> Transformer::TransformSelectStmt(duckdb_libpgquery::PGSelectStmt &select, bool is_select) {

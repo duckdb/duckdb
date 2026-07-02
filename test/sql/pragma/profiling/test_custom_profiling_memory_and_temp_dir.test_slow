@@ -11,6 +11,9 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
+PRAGMA custom_profiling_settings='{"SYSTEM_PEAK_BUFFER_MEMORY": "true", "SYSTEM_PEAK_TEMP_DIR_SIZE": "true"}';
+
+statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok

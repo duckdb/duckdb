@@ -121,7 +121,7 @@ idx_t FindStrInStr(const string_t &haystack_s, const string_t &needle_s) {
 ScalarFunction GetStringContains() {
 	ScalarFunction string_fun("contains", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                          ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator>);
-	string_fun.collation_handling = FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS;
+	string_fun.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
 	return string_fun;
 }
 

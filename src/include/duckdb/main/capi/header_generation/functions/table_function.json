@@ -1,6 +1,7 @@
 {
     "group": "table_function",
     "deprecated": false,
+    "description": "Functions to implement the execution callback of a table function. The execution callback (i.e., the main function) produces a data chunk output based on a data chunk input, and has access to both the bind and init data.",
     "entries": [
         {
             "name": "duckdb_function_get_extra_info",

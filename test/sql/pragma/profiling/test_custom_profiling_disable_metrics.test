@@ -50,7 +50,7 @@ SELECT extra_info, latency FROM metrics_output;
 # Re-enable the CPU TIME.
 
 statement ok
-PRAGMA custom_profiling_settings='{"CPU_TIME": "true", "EXTRA_INFO": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"}'
+PRAGMA custom_profiling_settings='{"QUERY_NAME": "true", "CPU_TIME": "true", "EXTRA_INFO": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"}'
 
 query I
 SELECT unnest(res) FROM (
@@ -63,6 +63,7 @@ SELECT unnest(res) FROM (
 "CUMULATIVE_CARDINALITY": "true"
 "CUMULATIVE_ROWS_SCANNED": "true"
 "EXTRA_INFO": "true"
+"QUERY_NAME": "true"
 
 # Re-enabled profiling.
 
@@ -106,3 +107,54 @@ FROM metrics_output;
 ----
 false
 
+# Check if the column query is present when it is requested.
+query I
+SELECT
+	CASE WHEN EXISTS(
+		SELECT
+			1
+		FROM information_schema.columns
+		WHERE table_name = 'metrics_output' AND column_name = 'query_name'
+	) THEN 'true'
+	ELSE 'false' END;
+----
+true
+
+# Check if the column `query_name` contains the query.
+query I
+SELECT
+	query_name
+FROM metrics_output;
+----
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+statement ok
+PRAGMA custom_profiling_settings='{"QUERY_NAME": "false"}'
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output_no_query_name.json';
+
+statement ok
+SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output_no_query_name.json';
+
+# Check if query is **not** present when it is **not** requested.
+query I
+SELECT
+	CASE WHEN EXISTS(
+		SELECT
+			1
+		FROM information_schema.columns
+		WHERE table_name = 'metrics_output' AND column_name = 'query_name'
+	) THEN 'true'
+	ELSE 'false' END;
+----
+false

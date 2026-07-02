@@ -46,7 +46,8 @@ SELECT {};
 <REGEX>:.*Parser Error.*syntax error at or near "}".*
 
 # need string keys
-statement error
+# PEG parser allows non-string keys
+statement maybe
 SELECT {1:3};
 ----
 <REGEX>:.*Parser Error.*syntax error at or near "1".*

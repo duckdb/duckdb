@@ -160,6 +160,7 @@ create table tag (
    t_tagclassid bigint not null
 );
 
+
 # run the queries
 
 #  Q1. Posting summary

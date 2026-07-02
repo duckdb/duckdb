@@ -25,7 +25,7 @@ try_remove_file(gen_storage_target + '.wal')
 def run_command_in_shell(cmd):
     print(cmd)
     res = subprocess.run(
-        [shell_proc, '--batch', '-init', '/dev/null', gen_storage_target],
+        [shell_proc, '--batch', '-no-init', gen_storage_target],
         capture_output=True,
         input=bytearray(cmd, 'utf8'),
     )

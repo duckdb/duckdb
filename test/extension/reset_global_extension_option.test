@@ -1,0 +1,68 @@
+# name: test/extension/reset_global_extension_option.test
+# description: RESET (without explicit scope) on a GLOBAL-default extension option must reset GLOBAL
+# group: [extension]
+
+require notmingw
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+# Both connections see the registered default
+query I con1
+SELECT current_setting('demo_global_setting');
+----
+default
+
+query I con2
+SELECT current_setting('demo_global_setting');
+----
+default
+
+# Plain SET on con1 writes GLOBAL (default_scope) — visible to con2 too
+statement ok con1
+SET demo_global_setting = 'foo';
+
+query I con1
+SELECT current_setting('demo_global_setting');
+----
+foo
+
+query I con2
+SELECT current_setting('demo_global_setting');
+----
+foo
+
+# Plain RESET on con1 must also affect GLOBAL — both connections must see the default again
+statement ok con1
+RESET demo_global_setting;
+
+query I con1
+SELECT current_setting('demo_global_setting');
+----
+default
+
+query I con2
+SELECT current_setting('demo_global_setting');
+----
+default
+
+# Explicit RESET GLOBAL still works
+statement ok con1
+SET demo_global_setting = 'bar';
+
+query I con2
+SELECT current_setting('demo_global_setting');
+----
+bar
+
+statement ok con1
+RESET GLOBAL demo_global_setting;
+
+query I con2
+SELECT current_setting('demo_global_setting');
+----
+default

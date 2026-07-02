@@ -20,7 +20,7 @@ class ColumnDataRowCollection;
 enum class ValueRenderAlignment { LEFT, MIDDLE, RIGHT };
 enum class RenderMode : uint8_t { ROWS, COLUMNS };
 
-enum class ResultRenderType { LAYOUT, COLUMN_NAME, COLUMN_TYPE, VALUE, NULL_VALUE, FOOTER };
+enum class ResultRenderType { LAYOUT, COLUMN_NAME, COLUMN_TYPE, VALUE, NULL_VALUE, FOOTER, STRING_LITERAL };
 
 class BaseResultRenderer {
 public:
@@ -32,16 +32,23 @@ public:
 	virtual void RenderType(const string &text) = 0;
 	virtual void RenderValue(const string &text, const LogicalType &type) = 0;
 	virtual void RenderNull(const string &text, const LogicalType &type) = 0;
+	virtual void RenderStringLiteral(const string &text, const LogicalType &type) {
+		RenderValue(text, type);
+	}
 	virtual void RenderFooter(const string &text) = 0;
 
 	BaseResultRenderer &operator<<(char c);
 	BaseResultRenderer &operator<<(const string &val);
 
 	void Render(ResultRenderType render_mode, const string &val);
-	void SetValueType(const LogicalType &type);
+	void SetResultTypes(vector<LogicalType> new_column_types);
+	void SetValueColumn(optional_idx index);
+	const LogicalType &GetValueType();
 
 private:
-	LogicalType value_type;
+	vector<LogicalType> column_types;
+	LogicalType invalid_type;
+	optional_idx column_idx;
 };
 
 class StringResultRenderer : public BaseResultRenderer {
@@ -70,6 +77,8 @@ struct BoxRendererConfig {
 	idx_t max_width = 0;
 	// the maximum amount of rows to render
 	idx_t max_rows = 20;
+	//! The maximum number of rows to analyze in order to determine column widths
+	idx_t max_analyze_rows = (idx_t)-1;
 	// the limit that is applied prior to rendering
 	// if we are rendering exactly "limit" rows then a question mark is rendered instead
 	idx_t limit = 0;
@@ -86,6 +95,8 @@ struct BoxRendererConfig {
 	RenderMode render_mode = RenderMode::ROWS;
 	//! How to render large numbers
 	LargeNumberRendering large_number_rendering = LargeNumberRendering::NONE;
+	//! Hidden rows hint
+	string hidden_rows_hint;
 
 #ifndef DUCKDB_ASCII_TREE_RENDERER
 	const char *LTCORNER = "\342\224\214"; // NOLINT: "┌";
@@ -128,52 +139,31 @@ struct BoxRendererConfig {
 #endif
 };
 
-class BoxRenderer {
-	static const idx_t SPLIT_COLUMN;
+struct BoxRendererState {
+	virtual ~BoxRendererState() = default;
 
+	virtual idx_t TotalRenderWidth() = 0;
+	virtual void Render(BaseResultRenderer &ss) = 0;
+};
+
+class BoxRenderer {
 public:
 	explicit BoxRenderer(BoxRendererConfig config_p = BoxRendererConfig());
 
 	string ToString(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op);
 
+	unique_ptr<BoxRendererState> Prepare(ClientContext &context, const vector<string> &names,
+	                                     const ColumnDataCollection &op);
 	void Render(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op,
 	            BaseResultRenderer &ss);
 	void Print(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op);
 
+	static string TryFormatLargeNumber(const string &numeric, char decimal_sep);
+	static string TruncateValue(const string &value, idx_t column_width, idx_t &pos, idx_t &current_render_width);
+
 private:
 	//! The configuration used for rendering
 	BoxRendererConfig config;
-
-private:
-	void RenderValue(BaseResultRenderer &ss, const string &value, idx_t column_width, ResultRenderType render_mode,
-	                 ValueRenderAlignment alignment = ValueRenderAlignment::MIDDLE);
-	string RenderType(const LogicalType &type);
-	ValueRenderAlignment TypeAlignment(const LogicalType &type);
-	string GetRenderValue(BaseResultRenderer &ss, ColumnDataRowCollection &rows, idx_t c, idx_t r,
-	                      const LogicalType &type, ResultRenderType &render_mode);
-	list<ColumnDataCollection> FetchRenderCollections(ClientContext &context, const ColumnDataCollection &result,
-	                                                  idx_t top_rows, idx_t bottom_rows);
-	list<ColumnDataCollection> PivotCollections(ClientContext &context, list<ColumnDataCollection> input,
-	                                            vector<string> &column_names, vector<LogicalType> &result_types,
-	                                            idx_t row_count);
-	vector<idx_t> ComputeRenderWidths(const vector<string> &names, const vector<LogicalType> &result_types,
-	                                  list<ColumnDataCollection> &collections, idx_t min_width, idx_t max_width,
-	                                  vector<idx_t> &column_map, idx_t &total_length);
-	void RenderHeader(const vector<string> &names, const vector<LogicalType> &result_types,
-	                  const vector<idx_t> &column_map, const vector<idx_t> &widths, const vector<idx_t> &boundaries,
-	                  idx_t total_length, bool has_results, BaseResultRenderer &renderer);
-	void RenderValues(const list<ColumnDataCollection> &collections, const vector<idx_t> &column_map,
-	                  const vector<idx_t> &widths, const vector<LogicalType> &result_types, BaseResultRenderer &ss);
-	void RenderRowCount(string &row_count_str, string &readable_rows_str, string &shown_str,
-	                    const string &column_count_str, const vector<idx_t> &boundaries, bool has_hidden_rows,
-	                    bool has_hidden_columns, idx_t total_length, idx_t row_count, idx_t column_count,
-	                    idx_t minimum_row_length, BaseResultRenderer &ss);
-
-	string FormatNumber(const string &input);
-	string ConvertRenderValue(const string &input, const LogicalType &type);
-	string ConvertRenderValue(const string &input);
-	//! Try to format a large number in a readable way (e.g. 1234567 -> 1.23 million)
-	string TryFormatLargeNumber(const string &numeric);
 };
 
 } // namespace duckdb

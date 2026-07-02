@@ -36,6 +36,7 @@ class Value {
 	friend struct UnionValue;
 	friend struct ArrayValue;
 	friend struct MapValue;
+	friend struct TypeValue;
 
 public:
 	//! Create an empty NULL value of the specified type
@@ -200,6 +201,12 @@ public:
 	DUCKDB_API static Value BIT(const string &data);
 	DUCKDB_API static Value BIGNUM(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value BIGNUM(const string &data);
+
+	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len);
+	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs);
+
+	DUCKDB_API static Value TYPE(const LogicalType &type);
+	DUCKDB_API static Value TYPE(const string_t &serialized_type);
 
 	//! Creates an aggregate state
 	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT
@@ -463,6 +470,10 @@ struct UnionValue {
 	DUCKDB_API static const Value &GetValue(const Value &value);
 	DUCKDB_API static uint8_t GetTag(const Value &value);
 	DUCKDB_API static const LogicalType &GetType(const Value &value);
+};
+
+struct TypeValue {
+	DUCKDB_API static LogicalType GetType(const Value &value);
 };
 
 //! Return the internal integral value for any type that is stored as an integral value internally

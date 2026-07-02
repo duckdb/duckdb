@@ -2,6 +2,8 @@
 # description: Test retrieving memory information after creating an ART.
 # group: [storage]
 
+require vector_size 2048
+
 load __TEST_DIR__/index_mem_limit.db
 
 statement ok

@@ -11,10 +11,10 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/enums/lambda_syntax.hpp"
 
 namespace duckdb {
 
-enum class LambdaSyntax : uint8_t { DEFAULT = 0, ENABLE_SINGLE_ARROW = 1, DISABLE_SINGLE_ARROW = 2 };
 enum class LambdaSyntaxType : uint8_t { SINGLE_ARROW_STORAGE = 0, SINGLE_ARROW = 1, LAMBDA_KEYWORD = 2 };
 
 //! DuckDB 1.3. introduced a new lambda syntax: lambda x, y: x + y.

@@ -19,3 +19,11 @@ query I
 SELECT '01:00:00+02'::TIMETZ AS ttz
 ----
 01:00:00+02
+
+statement ok
+create table timetzs (ttz TIMETZ);
+
+statement error
+insert into timetzs values ('2402:30:00+1200');
+----
+time field value out of range

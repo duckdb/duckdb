@@ -1,6 +1,7 @@
 {
     "group": "scalar_functions",
     "deprecated": false,
+    "description": "Functions to create, execute, and register custom scalar functions. Scalar functions take one or more input parameters, and return a single output parameter. Consider using a table function, if your scalar function does not take any input parameters.",
     "entries": [
         {
             "name": "duckdb_create_scalar_function",
@@ -505,6 +506,146 @@
                     "index": "The argument index."
                 },
                 "return_value": "The input argument at index. Must be destroyed with `duckdb_destroy_expression`."
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_get_state",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_function_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the state pointer of the function info.\n\n",
+                "param_comments": {
+                    "info": "The function info object."
+                },
+                "return_value": "The state pointer."
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_set_init",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_scalar_function",
+                    "name": "scalar_function"
+                },
+                {
+                    "type": "duckdb_scalar_function_init_t",
+                    "name": "init"
+                }
+            ],
+            "comment": {
+                "description": "Sets the (optional) state init function of the scalar function.\nThis is called once for each worker thread that begins executing the function\n",
+                "param_comments": {
+                    "scalar_function": "The scalar function.",
+                    "init": "The init function."
+                }
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_init_set_error",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                },
+                {
+                    "type": "const char *",
+                    "name": "error"
+                }
+            ],
+            "comment": {
+                "description": "Report that an error has occurred while calling init on a scalar function.\n\n",
+                "param_comments": {
+                    "info": "The init info object.",
+                    "error": "The error message."
+                }
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_init_set_state",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                },
+                {
+                    "type": "void *",
+                    "name": "state"
+                },
+                {
+                    "type": "duckdb_delete_callback_t",
+                    "name": "destroy"
+                }
+            ],
+            "comment": {
+                "description": "Sets the state pointer in the init info of the scalar function.\n\n",
+                "param_comments": {
+                    "info": "The init info object.",
+                    "state": "The state pointer.",
+                    "destroy": "The callback to destroy the state (if any)."
+                }
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_init_get_client_context",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                },
+                {
+                    "type": "duckdb_client_context *",
+                    "name": "out_context"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the client context of the init info of a scalar function.\n\n",
+                "param_comments": {
+                    "info": "The init info object of the scalar function.",
+                    "out_context": "The client context of the init info. Must be destroyed with `duckdb_destroy_client_context`."
+                }
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_init_get_bind_data",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Gets the scalar function's bind data set by `duckdb_scalar_function_set_bind_data`.\nNote that the bind data is read-only.\n\n",
+                "param_comments": {
+                    "info": "The init info object."
+                },
+                "return_value": "The bind data object."
+            }
+        },
+        {
+            "name": "duckdb_scalar_function_init_get_extra_info",
+            "return_type": "void *",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Retrieves the extra info of the function as set in the init info.\n\n",
+                "param_comments": {
+                    "info": "The init info object."
+                },
+                "return_value": "The extra info."
             }
         }
     ]

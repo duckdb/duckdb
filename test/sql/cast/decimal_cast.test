@@ -1,0 +1,41 @@
+# name: test/sql/cast/decimal_cast.test
+# description: Test decimal-to-decimal casting with scale reduction
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT '9.90'::DECIMAL(4,3)::DECIMAL(3,2);
+----
+9.90
+
+query I
+SELECT '1.10'::DECIMAL(4,3)::DECIMAL(3,2);
+----
+1.10
+
+query I
+SELECT '9.90000000'::DECIMAL(9,8)::DECIMAL(8,7);
+----
+9.9000000
+
+query I
+SELECT '9.90000000000000000'::DECIMAL(18,17)::DECIMAL(17,16);
+----
+9.9000000000000000
+
+query I
+SELECT '9.9000000000000000000000000000000000000'::DECIMAL(38,37)::DECIMAL(37,36);
+----
+9.900000000000000000000000000000000000
+
+statement error
+SELECT '9.995'::DECIMAL(4,3)::DECIMAL(3,2);
+----
+Conversion Error: Casting value "9.995" to type DECIMAL(3,2) failed: value is out of range!
+
+statement error
+SELECT '9.99999995'::DECIMAL(9,8)::DECIMAL(8,7);
+----
+Conversion Error: Casting value "9.99999995" to type DECIMAL(8,7) failed: value is out of range!

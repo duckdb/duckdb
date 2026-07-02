@@ -43,7 +43,6 @@ shared_ptr<BoundParameterData> BoundParameterMap::CreateOrGetData(const string &
 }
 
 unique_ptr<BoundParameterExpression> BoundParameterMap::BindParameterExpression(ParameterExpression &expr) {
-
 	auto &identifier = expr.identifier;
 	D_ASSERT(!parameter_data.count(identifier));
 

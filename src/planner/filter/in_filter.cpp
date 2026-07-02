@@ -23,6 +23,10 @@ InFilter::InFilter(vector<Value> values_p) : TableFilter(TableFilterType::IN_FIL
 }
 
 FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) const {
+	if (!stats.CanHaveNoNull()) {
+		// no non-null values are possible: always false
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
 	switch (values[0].type().InternalType()) {
 	case PhysicalType::UINT8:
 	case PhysicalType::UINT16:

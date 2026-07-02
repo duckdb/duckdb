@@ -16,10 +16,8 @@ unique_ptr<LogicalOperator> Binder::PlanFilter(unique_ptr<Expression> condition,
 }
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
-	unique_ptr<LogicalOperator> root;
-	D_ASSERT(statement.from_table);
-	root = CreatePlan(*statement.from_table);
-	D_ASSERT(root);
+	D_ASSERT(statement.from_table.plan);
+	auto root = std::move(statement.from_table.plan);
 
 	// plan the sample clause
 	if (statement.sample_options) {

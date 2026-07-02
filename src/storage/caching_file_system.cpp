@@ -1,17 +1,65 @@
 #include "duckdb/storage/caching_file_system.hpp"
 
-#include "duckdb/common/chrono.hpp"
+#include "duckdb/common/enums/cache_validation_mode.hpp"
+#include "duckdb/common/enums/destroy_buffer_upon.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache_util.hpp"
 
 namespace duckdb {
 
-CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db)
-    : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db)) {
+namespace {
+
+// Allocate an uncached read buffer to make sure it's de-allocated immediately, and its metadata is not stored in the
+// eviction queue.
+BufferHandle AllocateUncachedReadBuffer(BufferManager &buffer_manager, idx_t size) {
+	auto buffer = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, size);
+	buffer.GetBlockHandle()->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+	return buffer;
+}
+
+// Return whether validation should occur for a specific file
+bool ShouldValidate(const OpenFileInfo &info, optional_ptr<ClientContext> client_context, DatabaseInstance &db,
+                    const string &filepath) {
+	const CacheValidationMode mode = ExternalFileCacheUtil::GetCacheValidationMode(info, client_context, db);
+	switch (mode) {
+	case CacheValidationMode::VALIDATE_ALL:
+		return true;
+	case CacheValidationMode::VALIDATE_REMOTE:
+		return FileSystem::IsRemoteFile(filepath);
+	case CacheValidationMode::NO_VALIDATION:
+		return false;
+	default:
+		return true;
+	}
+}
+
+bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length) {
+	const idx_t MAX_BOUND_TO_BE_ADDED_LENGTH = 1048576;
+
+	if (added_length > MAX_BOUND_TO_BE_ADDED_LENGTH) {
+		// Absolute value of what would be needed to added is too high
+		return false;
+	}
+	if (added_length > current_length) {
+		// Relative value of what would be needed to added is too high
+		return false;
+	}
+
+	return true;
+}
+
+} // namespace
+
+CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db_p)
+    : file_system(file_system_p), db(db_p), external_file_cache(ExternalFileCache::Get(db)) {
 }
 
 CachingFileSystem::~CachingFileSystem() {
@@ -21,37 +69,48 @@ CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
 	return CachingFileSystem(FileSystem::GetFileSystem(context), *context.db);
 }
 
-unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, FileOpenFlags flags) {
-	return make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags,
-	                                    external_file_cache.GetOrCreateCachedFile(path.path));
+unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+                                                          optional_ptr<FileOpener> opener) {
+	return make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags, opener);
 }
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, const OpenFileInfo &path,
-                                                          FileOpenFlags flags) {
-	return make_uniq<CachingFileHandle>(context, *this, path, flags,
-	                                    external_file_cache.GetOrCreateCachedFile(path.path));
+                                                          FileOpenFlags flags, optional_ptr<FileOpener> opener) {
+	return make_uniq<CachingFileHandle>(context, *this, path, flags, opener);
+}
+
+shared_ptr<CachingFileHandle::CachedFile> CachingFileHandle::EnsureCachedFileCurrent() {
+	if (cached_file && cached_file->generation == external_file_cache.GetGeneration()) {
+		return cached_file;
+	}
+	const bool needs_reopen = file_handle != nullptr;
+	if (needs_reopen) {
+		file_handle.reset();
+	}
+	cached_file = external_file_cache.GetOrCreateCachedFile(path.path);
+	if (needs_reopen) {
+		GetFileHandle();
+	}
+	return cached_file;
 }
 
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
-                                     const OpenFileInfo &path_p, FileOpenFlags flags_p, CachedFile &cached_file_p)
+                                     const OpenFileInfo &path_p, FileOpenFlags flags_p,
+                                     optional_ptr<FileOpener> opener_p)
     : context(context), caching_file_system(caching_file_system_p),
-      external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p), validate(true),
-      cached_file(cached_file_p), position(0) {
-	if (path.extended_info) {
-		const auto &open_options = path.extended_info->options;
-		const auto validate_entry = open_options.find("validate_external_file_cache");
-		if (validate_entry != open_options.end()) {
-			validate = BooleanValue::Get(validate_entry->second);
-		}
-	}
-	if (!external_file_cache.IsEnabled() || validate) {
+      external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p), opener(opener_p),
+      validate(
+          ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(), caching_file_system_p.db)),
+      cached_file(nullptr), position(0) {
+	cached_file = external_file_cache.GetOrCreateCachedFile(path_p.path);
+	if (!external_file_cache.IsEnabled() || Validate()) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();
 		return;
 	}
-	// If we don't have any cached file ranges, we must also open the file
-	auto guard = cached_file.lock.GetSharedLock();
-	if (cached_file.Ranges(guard).empty()) {
+	// If we don't have any cached file ranges, we must also open the file.
+	auto guard = cached_file->lock.GetSharedLock();
+	if (cached_file->Ranges(guard).empty()) {
 		guard.reset();
 		GetFileHandle();
 	}
@@ -62,67 +121,87 @@ CachingFileHandle::~CachingFileHandle() {
 
 FileHandle &CachingFileHandle::GetFileHandle() {
 	if (!file_handle) {
-		file_handle = caching_file_system.file_system.OpenFile(path, flags);
+		file_handle = caching_file_system.file_system.OpenFile(path, flags, opener);
 		last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
-		auto guard = cached_file.lock.GetExclusiveLock();
-		if (!cached_file.IsValid(guard, validate, version_tag, last_modified)) {
-			cached_file.Ranges(guard).clear(); // Invalidate entire cache
+		auto guard = cached_file->lock.GetExclusiveLock();
+		if (!cached_file->IsValid(guard, Validate(), version_tag, last_modified)) {
+			cached_file->Ranges(guard).clear(); // Invalidate entire cache
 		}
-		cached_file.FileSize(guard) = file_handle->GetFileSize();
-		cached_file.LastModified(guard) = last_modified;
-		cached_file.VersionTag(guard) = version_tag;
-		cached_file.CanSeek(guard) = file_handle->CanSeek();
-		cached_file.OnDiskFile(guard) = file_handle->OnDiskFile();
+		cached_file->FileSize(guard) = file_handle->GetFileSize();
+		cached_file->LastModified(guard) = last_modified;
+		cached_file->VersionTag(guard) = version_tag;
+		cached_file->CanSeek(guard) = file_handle->CanSeek();
+		cached_file->OnDiskFile(guard) = file_handle->OnDiskFile();
 	}
 	return *file_handle;
 }
 
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, const idx_t location) {
 	BufferHandle result;
-	if (!external_file_cache.IsEnabled()) {
-		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+	// Only cache when file metadata is available.
+	const bool no_validation_metadata =
+	    Validate() && version_tag.empty() && (!Timestamp::IsFinite(last_modified) || last_modified == timestamp_t(0));
+	if (!external_file_cache.IsEnabled() || no_validation_metadata) {
+		result = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		buffer = result.Ptr();
 		GetFileHandle().Read(context, buffer, nr_bytes, location);
 		return result;
 	}
+	EnsureCachedFileCurrent();
 
 	// Try to read from the cache, filling overlapping_ranges in the process
 	vector<shared_ptr<CachedFileRange>> overlapping_ranges;
-	result = TryReadFromCache(buffer, nr_bytes, location, overlapping_ranges);
+	optional_idx start_location_of_next_range;
+	result = TryReadFromCache(buffer, nr_bytes, location, overlapping_ranges, start_location_of_next_range);
 	if (result.IsValid()) {
 		return result; // Success
 	}
 
+	idx_t new_nr_bytes = nr_bytes;
+	if (start_location_of_next_range.IsValid()) {
+		const idx_t nr_bytes_to_be_added = start_location_of_next_range.GetIndex() - location - nr_bytes;
+		if (ShouldExpandToFillGap(nr_bytes, nr_bytes_to_be_added)) {
+			// Grow the range from location to start_location_of_next_range, so that to fill gaps in the cached ranges
+			new_nr_bytes = nr_bytes + nr_bytes_to_be_added;
+		}
+	}
+
 	// Finally, if we weren't able to find the file range in the cache, we have to create a new file range
-	result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-	auto new_file_range = make_shared_ptr<CachedFileRange>(result.GetBlockHandle(), nr_bytes, location, version_tag);
+	result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, new_nr_bytes);
+	auto new_file_range =
+	    make_shared_ptr<CachedFileRange>(result.GetBlockHandle(), new_nr_bytes, location, version_tag);
 	buffer = result.Ptr();
 
 	// Interleave reading and copying from cached buffers
 	if (OnDiskFile()) {
 		// On-disk file: prefer interleaving reading and copying from cached buffers
-		ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, nr_bytes, location, true);
+		ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, new_nr_bytes, location, true);
 	} else {
-		// Remote file: prefer interleaving reading and copying from cached buffers only if reduces number of real reads
-		if (ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, nr_bytes, location, false) <= 1) {
-			ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, nr_bytes, location, true);
+		// Remote file: prefer interleaving reading and copying from cached buffers only if reduces number of real
+		// reads
+		if (ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, new_nr_bytes, location, false) <= 1) {
+			ReadAndCopyInterleaved(overlapping_ranges, new_file_range, buffer, new_nr_bytes, location, true);
 		} else {
-			GetFileHandle().Read(context, buffer, nr_bytes, location);
+			GetFileHandle().Read(context, buffer, new_nr_bytes, location);
 		}
 	}
 
-	return TryInsertFileRange(result, buffer, nr_bytes, location, new_file_range);
+	return TryInsertFileRange(result, buffer, new_nr_bytes, location, new_file_range);
 }
 
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 	BufferHandle result;
 
+	// Only cache when file metadata is available.
+	const bool no_validation_metadata =
+	    Validate() && version_tag.empty() && (!Timestamp::IsFinite(last_modified) || last_modified == timestamp_t(0));
+
 	// If we can't seek, we can't use the cache for these calls,
 	// because we won't be able to seek over any parts we skipped by reading from the cache
-	if (!external_file_cache.IsEnabled() || !CanSeek()) {
-		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+	if (!external_file_cache.IsEnabled() || !CanSeek() || no_validation_metadata) {
+		result = AllocateUncachedReadBuffer(external_file_cache.GetBufferManager(), nr_bytes);
 		buffer = result.Ptr();
 		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buffer, nr_bytes));
 		position += NumericCast<idx_t>(nr_bytes);
@@ -131,7 +210,12 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 
 	// Try to read from the cache first
 	vector<shared_ptr<CachedFileRange>> overlapping_ranges;
-	result = TryReadFromCache(buffer, nr_bytes, position, overlapping_ranges);
+	{
+		optional_idx start_location_of_next_range;
+		result = TryReadFromCache(buffer, nr_bytes, position, overlapping_ranges, start_location_of_next_range);
+		// start_location_of_next_range is in this case discarded
+	}
+
 	if (result.IsValid()) {
 		position += nr_bytes;
 		return result; // Success
@@ -152,74 +236,91 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 }
 
 string CachingFileHandle::GetPath() const {
-	return cached_file.path;
+	return path.path;
 }
 
 idx_t CachingFileHandle::GetFileSize() {
-	if (file_handle || validate) {
-		return GetFileHandle().GetFileSize();
+	if (!Validate()) {
+		auto current_cached_file = EnsureCachedFileCurrent();
+		auto guard = current_cached_file->lock.GetSharedLock();
+		return current_cached_file->FileSize(guard);
 	}
-	auto guard = cached_file.lock.GetSharedLock();
-	return cached_file.FileSize(guard);
+	return GetFileHandle().GetFileSize();
 }
 
 timestamp_t CachingFileHandle::GetLastModifiedTime() {
-	if (file_handle || validate) {
-		GetFileHandle();
-		return last_modified;
+	if (!Validate()) {
+		auto current_cached_file = EnsureCachedFileCurrent();
+		auto guard = current_cached_file->lock.GetSharedLock();
+		return current_cached_file->LastModified(guard);
 	}
-	auto guard = cached_file.lock.GetSharedLock();
-	return cached_file.LastModified(guard);
+	GetFileHandle();
+	return last_modified;
 }
 
 string CachingFileHandle::GetVersionTag() {
-	if (file_handle || validate) {
-		GetFileHandle();
-		return version_tag;
+	if (!Validate()) {
+		auto current_cached_file = EnsureCachedFileCurrent();
+		auto guard = current_cached_file->lock.GetSharedLock();
+		return current_cached_file->VersionTag(guard);
 	}
-	auto guard = cached_file.lock.GetSharedLock();
-	return cached_file.VersionTag(guard);
+	GetFileHandle();
+	return version_tag;
 }
 
 bool CachingFileHandle::Validate() const {
-	return validate;
+	return ShouldValidate(path, context.GetClientContext(), caching_file_system.db, path.path);
 }
 
 bool CachingFileHandle::CanSeek() {
-	if (file_handle || validate) {
-		return GetFileHandle().CanSeek();
+	if (!Validate()) {
+		auto current_cached_file = EnsureCachedFileCurrent();
+		auto guard = current_cached_file->lock.GetSharedLock();
+		return current_cached_file->CanSeek(guard);
 	}
-	auto guard = cached_file.lock.GetSharedLock();
-	return cached_file.CanSeek(guard);
+	return GetFileHandle().CanSeek();
 }
 
 bool CachingFileHandle::IsRemoteFile() const {
-	return FileSystem::IsRemoteFile(cached_file.path);
+	return FileSystem::IsRemoteFile(path.path);
 }
 
 bool CachingFileHandle::OnDiskFile() {
-	if (file_handle || validate) {
-		return GetFileHandle().OnDiskFile();
+	if (!Validate()) {
+		auto current_cached_file = EnsureCachedFileCurrent();
+		auto guard = current_cached_file->lock.GetSharedLock();
+		return current_cached_file->OnDiskFile(guard);
 	}
-	auto guard = cached_file.lock.GetSharedLock();
-	return cached_file.OnDiskFile(guard);
+	return GetFileHandle().OnDiskFile();
 }
 
 const string &CachingFileHandle::GetVersionTag(const unique_ptr<StorageLockKey> &guard) {
-	if (file_handle || validate) {
+	if (file_handle || Validate()) {
 		GetFileHandle();
 		return version_tag;
 	}
-	return cached_file.VersionTag(guard);
+	return cached_file->VersionTag(guard);
+}
+
+idx_t CachingFileHandle::SeekPosition() {
+	return position;
+}
+
+void CachingFileHandle::Seek(idx_t location) {
+	position = location;
+	if (file_handle != nullptr) {
+		file_handle->Seek(location);
+	}
 }
 
 BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
-                                                 vector<shared_ptr<CachedFileRange>> &overlapping_ranges) {
+                                                 vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
+                                                 optional_idx &start_location_of_next_range) {
 	BufferHandle result;
 
 	// Get read lock for cached ranges
-	auto guard = cached_file.lock.GetSharedLock();
-	auto &ranges = cached_file.Ranges(guard);
+	auto guard = cached_file->lock.GetSharedLock();
+	auto &ranges = cached_file->Ranges(guard);
 
 	// First, try to see if we've read from the exact same location before
 	auto it = ranges.find(location);
@@ -246,7 +347,8 @@ BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_by
 	}
 	while (it != ranges.end()) {
 		if (it->second->location >= this_end) {
-			// We're past the requested location
+			// We're past the requested location, we are going to bail out, save start_location_of_next_range
+			start_location_of_next_range = it->second->location;
 			break;
 		}
 		// Check if the cached range overlaps the requested one
@@ -289,8 +391,8 @@ BufferHandle CachingFileHandle::TryReadFromFileRange(const unique_ptr<StorageLoc
 BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &pin, data_ptr_t &buffer, idx_t nr_bytes,
                                                    idx_t location, shared_ptr<CachedFileRange> &new_file_range) {
 	// Grab the lock again (write lock this time) to insert the newly created buffer into the ranges
-	auto guard = cached_file.lock.GetExclusiveLock();
-	auto &ranges = cached_file.Ranges(guard);
+	auto guard = cached_file->lock.GetExclusiveLock();
+	auto &ranges = cached_file->Ranges(guard);
 
 	// Start at lower_bound (first range with location not less than location of newly created range)
 	const auto this_end = location + nr_bytes;
@@ -334,7 +436,7 @@ BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &pin, data_ptr_t
 	// Finally, insert newly created buffer into the map
 	new_file_range->AddCheckSum();
 	ranges[location] = std::move(new_file_range);
-	cached_file.Verify(guard);
+	cached_file->Verify(guard);
 
 	return std::move(pin);
 }
@@ -356,9 +458,9 @@ idx_t CachingFileHandle::ReadAndCopyInterleaved(const vector<shared_ptr<CachedFi
 		if (overlapping_range->location > current_location) {
 			// We need to read from the file until we're at the location of the current overlapping file range
 			const auto buffer_offset = nr_bytes - remaining_bytes;
-			const auto bytes_to_read = overlapping_range->location - current_location;
-			D_ASSERT(bytes_to_read < remaining_bytes);
-			if (actually_read) {
+			auto bytes_to_read = overlapping_range->location - current_location;
+			bytes_to_read = MinValue(bytes_to_read, remaining_bytes);
+			if (actually_read && bytes_to_read > 0) {
 				GetFileHandle().Read(context, buffer + buffer_offset, bytes_to_read, current_location);
 			}
 			current_location += bytes_to_read;
@@ -380,7 +482,9 @@ idx_t CachingFileHandle::ReadAndCopyInterleaved(const vector<shared_ptr<CachedFi
 		D_ASSERT(current_location >= overlapping_range->location);
 		const auto buffer_offset = nr_bytes - remaining_bytes;
 		const auto overlapping_range_offset = current_location - overlapping_range->location;
-		D_ASSERT(overlapping_range->nr_bytes > overlapping_range_offset);
+		if (overlapping_range_offset >= overlapping_range->nr_bytes) {
+			continue;
+		}
 		const auto bytes_to_read = MinValue(overlapping_range->nr_bytes - overlapping_range_offset, remaining_bytes);
 		if (actually_read) {
 			memcpy(buffer + buffer_offset, overlapping_file_range_pin.Ptr() + overlapping_range_offset, bytes_to_read);

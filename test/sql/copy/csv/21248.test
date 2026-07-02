@@ -1,0 +1,6 @@
+# name: test/sql/copy/csv/21248.test
+# description: Weird CSV with footer/header triggers internal error
+# group: [csv]
+
+statement ok
+SELECT * FROM read_csv(['data/csv/unionbyname_21248_*.csv'], union_by_name = true, ignore_errors = true, all_varchar = true);

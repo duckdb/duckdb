@@ -1,0 +1,82 @@
+# name: test/sql/topn/test_top_n_nulls_first_row_group_reorderer_edge_cases.test
+# description: Edge cases for NULLS FIRST row group reorderer when no ordered row groups remain
+# group: [topn]
+
+require no_alternative_verify
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET threads TO 1
+
+load __TEST_DIR__/top_n_nulls_first_row_group_reorderer_edge_cases_main.duckdb
+
+statement ok
+ATTACH '__TEST_DIR__/top_n_nulls_first_row_group_reorderer_edge_cases_data.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+CREATE TABLE db.null_only_ints AS SELECT NULL::BIGINT AS i FROM range(2048)
+
+statement ok
+CREATE TABLE db.mixed_ints AS
+SELECT i FROM repeat(NULL::BIGINT, 1023) t(i)
+UNION ALL
+SELECT i FROM repeat(1::BIGINT, 1025) t(i)
+
+statement ok
+CREATE TABLE db.null_only_strings AS SELECT NULL::VARCHAR AS s FROM range(2048)
+
+statement ok
+CREATE TABLE db.mixed_strings AS
+SELECT s FROM repeat(NULL::VARCHAR, 1023) t(s)
+UNION ALL
+SELECT s FROM repeat('a', 1025) t(s)
+
+statement ok
+CHECKPOINT
+
+restart
+
+statement ok
+ATTACH '__TEST_DIR__/top_n_nulls_first_row_group_reorderer_edge_cases_data.duckdb' AS db
+
+query II
+EXPLAIN ANALYZE SELECT i FROM db.null_only_ints ORDER BY i NULLS FIRST LIMIT 1
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+
+query I
+SELECT i FROM db.null_only_ints ORDER BY i NULLS FIRST LIMIT 1
+----
+NULL
+
+query II
+EXPLAIN ANALYZE SELECT i FROM db.mixed_ints ORDER BY i NULLS FIRST LIMIT 1
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+
+query I
+SELECT i FROM db.mixed_ints ORDER BY i NULLS FIRST LIMIT 1 OFFSET 1023
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT s FROM db.null_only_strings ORDER BY s NULLS FIRST LIMIT 1
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+
+query T
+SELECT s FROM db.null_only_strings ORDER BY s NULLS FIRST LIMIT 1
+----
+NULL
+
+query II
+EXPLAIN ANALYZE SELECT s FROM db.mixed_strings ORDER BY s NULLS FIRST LIMIT 1
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+
+query T
+SELECT s FROM db.mixed_strings ORDER BY s NULLS FIRST LIMIT 1 OFFSET 1023
+----
+a

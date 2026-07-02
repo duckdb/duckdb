@@ -100,6 +100,10 @@ public:
 		return physical_plan->Make<T>(std::forward<ARGS>(args)...);
 	}
 
+	//! Get a reference to the ArenaAllocator of the underlying physical plan.
+	//! Creates a new (empty) physical plan if none exists yet.
+	ArenaAllocator &ArenaRef();
+
 public:
 	PhysicalOperator &ResolveDefaultsProjection(LogicalInsert &op, PhysicalOperator &child);
 

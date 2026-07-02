@@ -6,14 +6,13 @@ namespace duckdb {
 
 static unique_ptr<FunctionData> ArrayGenericBinaryBind(ClientContext &context, ScalarFunction &bound_function,
                                                        vector<unique_ptr<Expression>> &arguments) {
-
 	const auto &lhs_type = arguments[0]->return_type;
 	const auto &rhs_type = arguments[1]->return_type;
 
 	if (lhs_type.IsUnknown() && rhs_type.IsUnknown()) {
 		bound_function.arguments[0] = rhs_type;
 		bound_function.arguments[1] = lhs_type;
-		bound_function.return_type = LogicalType::UNKNOWN;
+		bound_function.SetReturnType(LogicalType::UNKNOWN);
 		return nullptr;
 	}
 
@@ -212,11 +211,11 @@ static void AddArrayFoldFunction(ScalarFunctionSet &set, const LogicalType &type
 	const auto array = LogicalType::ARRAY(type, optional_idx());
 	if (type.id() == LogicalTypeId::FLOAT) {
 		ScalarFunction function({array, array}, type, ArrayGenericFold<float, OP>, ArrayGenericBinaryBind);
-		BaseScalarFunction::SetReturnsError(function);
+		function.SetFallible();
 		set.AddFunction(function);
 	} else if (type.id() == LogicalTypeId::DOUBLE) {
 		ScalarFunction function({array, array}, type, ArrayGenericFold<double, OP>, ArrayGenericBinaryBind);
-		BaseScalarFunction::SetReturnsError(function);
+		function.SetFallible();
 		set.AddFunction(function);
 	} else {
 		throw NotImplementedException("Array function not implemented for type %s", type.ToString());
@@ -273,7 +272,7 @@ ScalarFunctionSet ArrayCrossProductFun::GetFunctions() {
 	set.AddFunction(
 	    ScalarFunction({double_array, double_array}, double_array, ArrayFixedCombine<double, CrossProductOp, 3>));
 	for (auto &func : set.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 	return set;
 }

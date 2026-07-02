@@ -11,7 +11,7 @@ static void AliasFunction(DataChunk &args, ExpressionState &state, Vector &resul
 
 ScalarFunction AliasFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, AliasFunction);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 

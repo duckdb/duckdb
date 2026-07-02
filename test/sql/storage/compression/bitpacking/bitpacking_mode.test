@@ -3,23 +3,22 @@
 # group: [bitpacking]
 
 statement ok
-PRAGMA force_compression = 'bitpacking'
+SET force_compression = 'bitpacking'
 
 query I
 SELECT current_setting('force_bitpacking_mode')
 ----
-auto
+AUTO
 
 statement error
-PRAGMA force_bitpacking_mode='xxx'
+SET force_bitpacking_mode='xxx'
 ----
-Unrecognized option
-
+unrecognized value
 
 foreach mode auto constant constant_delta delta_for for
 
 statement ok
-PRAGMA force_bitpacking_mode='${mode}'
+SET force_bitpacking_mode='${mode}'
 
 query I
 SELECT current_setting('force_bitpacking_mode')='${mode}'

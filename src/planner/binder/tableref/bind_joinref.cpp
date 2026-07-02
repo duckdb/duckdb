@@ -55,7 +55,7 @@ bool Binder::TryFindBinding(const string &using_column, const string &join_side,
 			}
 			throw BinderException(error);
 		} else {
-			result = binding.get().alias;
+			result = binding.get().GetBindingAlias();
 		}
 	}
 	return true;
@@ -122,14 +122,14 @@ static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_co
 	return result;
 }
 
-unique_ptr<BoundTableRef> Binder::BindJoin(Binder &parent_binder, TableRef &ref) {
+BoundStatement Binder::BindJoin(Binder &parent_binder, TableRef &ref) {
 	unnamed_subquery_index = parent_binder.unnamed_subquery_index;
 	auto result = Bind(ref);
 	parent_binder.unnamed_subquery_index = unnamed_subquery_index;
 	return result;
 }
 
-unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
+BoundStatement Binder::Bind(JoinRef &ref) {
 	auto result = make_uniq<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->right_binder = Binder::CreateBinder(context, this);
@@ -188,7 +188,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		case_insensitive_set_t lhs_columns;
 		auto &lhs_binding_list = left_binder.bind_context.GetBindingsList();
 		for (auto &binding : lhs_binding_list) {
-			for (auto &column_name : binding->names) {
+			for (auto &column_name : binding->GetColumnNames()) {
 				lhs_columns.insert(column_name);
 			}
 		}
@@ -215,7 +215,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			auto &rhs_binding_list = right_binder.bind_context.GetBindingsList();
 			for (auto &binding_ref : lhs_binding_list) {
 				auto &binding = *binding_ref;
-				for (auto &column_name : binding.names) {
+				for (auto &column_name : binding.GetColumnNames()) {
 					if (!left_candidates.empty()) {
 						left_candidates += ", ";
 					}
@@ -224,7 +224,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			}
 			for (auto &binding_ref : rhs_binding_list) {
 				auto &binding = *binding_ref;
-				for (auto &column_name : binding.names) {
+				for (auto &column_name : binding.GetColumnNames()) {
 					if (!right_candidates.empty()) {
 						right_candidates += ", ";
 					}
@@ -351,7 +351,13 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		bind_context.RemoveContext(left_bindings);
 	}
 
-	return std::move(result);
+	BoundStatement result_stmt;
+	result_stmt.types.insert(result_stmt.types.end(), result->left.types.begin(), result->left.types.end());
+	result_stmt.types.insert(result_stmt.types.end(), result->right.types.begin(), result->right.types.end());
+	result_stmt.names.insert(result_stmt.names.end(), result->left.names.begin(), result->left.names.end());
+	result_stmt.names.insert(result_stmt.names.end(), result->right.names.begin(), result->right.names.end());
+	result_stmt.plan = CreatePlan(*result);
+	return result_stmt;
 }
 
 } // namespace duckdb

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/pair.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -24,6 +25,8 @@ struct LocalUngroupedAggregateState;
 struct JoinFilterPushdownColumn {
 	//! The probe column index to which this filter should be applied
 	ColumnBinding probe_column_index;
+	//! The type of the value in storage (LogicalGet)
+	LogicalType storage_type;
 };
 
 struct JoinFilterGlobalState {
@@ -64,6 +67,9 @@ struct JoinFilterPushdownInfo {
 	//! Min/Max aggregates
 	vector<unique_ptr<Expression>> min_max_aggregates;
 
+	//! Whether the build side has a filter -> we might be able to push down a bloom filter into the probe side
+	bool build_side_has_filter;
+
 public:
 	unique_ptr<JoinFilterGlobalState> GetGlobalState(ClientContext &context, const PhysicalOperator &op) const;
 	unique_ptr<JoinFilterLocalState> GetLocalState(JoinFilterGlobalState &gstate) const;
@@ -73,9 +79,23 @@ public:
 	unique_ptr<DataChunk> Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
 	                               JoinFilterGlobalState &gstate, const PhysicalComparisonJoin &op) const;
 
+	unique_ptr<DataChunk> FinalizeMinMax(JoinFilterGlobalState &gstate) const;
+	unique_ptr<DataChunk> FinalizeFilters(
+	    ClientContext &context, optional_ptr<JoinHashTable> ht, const PhysicalComparisonJoin &op,
+	    unique_ptr<DataChunk> final_min_max, bool is_perfect_hashtable,
+	    optional_ptr<vector<pair<reference<const JoinFilterPushdownFilter>, idx_t>>> deferred_bloom_filters) const;
+
+	void PushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
+	                     idx_t filter_col_idx) const;
+
 private:
 	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
 	                  idx_t filter_idx, idx_t filter_col_idx) const;
+
+	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
+	bool CanUseBloomFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
+	                       const PhysicalComparisonJoin &op, const ExpressionType &cmp,
+	                       bool is_perfect_hashtable) const;
 };
 
 } // namespace duckdb

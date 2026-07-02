@@ -81,7 +81,7 @@ COPY test TO '{TEMP_DIR}/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
 statement error
 COPY test FROM '{TEMP_DIR}/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
 ----
-Option "FORCE_QUOTE" is not supported for reading - only for writing
+<REGEX>:.*Option "(FORCE_QUOTE|force_quote)" is not supported for reading.*
 
 # FORCE_QUOTE must not be empty and must have the correct parameter type
 statement error

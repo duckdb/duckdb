@@ -4,6 +4,7 @@
     "entries": [
         "duckdb_append_default_to_chunk",
         "duckdb_appender_error_data",
-        "duckdb_appender_create_query"
+        "duckdb_appender_create_query",
+        "duckdb_appender_clear"
     ]
 }

@@ -5,6 +5,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/logging/log_type.hpp"
@@ -30,10 +31,7 @@
 #include <unistd.h>
 
 #ifdef __MVS__
-#define _XOPEN_SOURCE_EXTENDED 1
 #include <sys/resource.h>
-// enjoy - https://reviews.llvm.org/D92110
-#define PATH_MAX _XOPEN_PATH_MAX
 #endif
 
 #else
@@ -176,11 +174,6 @@ string FileSystem::GetWorkingDirectory() {
 	return string(buffer.get());
 }
 
-string FileSystem::NormalizeAbsolutePath(const string &path) {
-	D_ASSERT(IsPathAbsolute(path));
-	return path;
-}
-
 #else
 
 string FileSystem::GetEnvVariable(const string &env) {
@@ -196,11 +189,14 @@ string FileSystem::GetEnvVariable(const string &env) {
 }
 
 static bool StartsWithSingleBackslash(const string &path) {
-	if (path.size() < 2) {
+	if (path.empty()) {
 		return false;
 	}
 	if (path[0] != '/' && path[0] != '\\') {
 		return false;
+	}
+	if (path.size() == 1) {
+		return true;
 	}
 	if (path[1] == '/' || path[1] == '\\') {
 		return false;
@@ -228,17 +224,6 @@ bool FileSystem::IsPathAbsolute(const string &path) {
 		return true;
 	}
 	return false;
-}
-
-string FileSystem::NormalizeAbsolutePath(const string &path) {
-	D_ASSERT(IsPathAbsolute(path));
-	auto result = StringUtil::Lower(FileSystem::ConvertSeparators(path));
-	if (StartsWithSingleBackslash(result)) {
-		// Path starts with a single backslash or forward slash
-		// prepend drive letter
-		return GetWorkingDirectory().substr(0, 2) + result;
-	}
-	return result;
 }
 
 string FileSystem::PathSeparator(const string &path) {
@@ -367,12 +352,54 @@ string FileSystem::GetHomeDirectory() {
 	return GetHomeDirectory(nullptr);
 }
 
+// Helper function to handle file:/ URLs
+static idx_t GetFileUrlOffset(const string &path) {
+	if (!StringUtil::StartsWith(path, "file:/")) {
+		return 0;
+	}
+
+	// Url without host: file:/some/path
+	if (path[6] != '/') {
+#ifdef _WIN32
+		return 6;
+#else
+		return 5;
+#endif
+	}
+
+	// Url with empty host: file:///some/path
+	if (path[7] == '/') {
+#ifdef _WIN32
+		return 8;
+#else
+		return 7;
+#endif
+	}
+
+	// Url with localhost: file://localhost/some/path
+	if (path.compare(7, 10, "localhost/") == 0) {
+#ifdef _WIN32
+		return 17;
+#else
+		return 16;
+#endif
+	}
+
+	// unkown file:/ url format
+	return 0;
+}
+
 string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opener) {
 	if (path.empty()) {
 		return path;
 	}
 	if (path[0] == '~') {
 		return GetHomeDirectory(opener) + path.substr(1);
+	}
+	// handle file URIs
+	auto file_offset = GetFileUrlOffset(path);
+	if (file_offset > 0) {
+		return path.substr(file_offset);
 	}
 	return path;
 }
@@ -416,6 +443,10 @@ bool FileSystem::SupportsListFilesExtended() const {
 	return false;
 }
 
+bool FileSystem::SupportsGlobExtended() const {
+	return false;
+}
+
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	throw NotImplementedException("%s: Read (with location) is not implemented!", GetName());
 }
@@ -454,6 +485,10 @@ FileType FileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
 }
 
+FileMetadata FileSystem::Stats(FileHandle &handle) {
+	throw NotImplementedException("%s: Stats is not implemented!", GetName());
+}
+
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	throw NotImplementedException("%s: Truncate is not implemented!", GetName());
 }
@@ -471,35 +506,25 @@ void FileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<Fil
 	// we construct the list of directories to be created depth-first. This avoids calling DirectoryExists on a parent
 	// dir that is not in the allowed_directories list
 
-	auto sep = PathSeparator(path);
+	// Walk up from the full path until we find a prefix that already exists, collecting
+	// non-existing ancestors along the way. Stop descending when segments are exhausted
+	// (to avoid Path::Parent() generating ".." paths past the root/base).
+	auto parsed = Path::FromString(path);
 	vector<string> dirs_to_create;
-
-	string current_prefix = path;
-
-	StringUtil::RTrim(current_prefix, sep);
-
-	// Strip directories from the path until we hit a directory that exists
-	while (!current_prefix.empty() && !DirectoryExists(current_prefix)) {
-		auto found = current_prefix.find_last_of(sep);
-
-		// Push back the root dir
-		if (found == string::npos || found == 0) {
-			dirs_to_create.push_back(current_prefix);
-			current_prefix = "";
-			break;
-		}
-
-		// Add the directory to the directories to be created
-		dirs_to_create.push_back(current_prefix.substr(found, current_prefix.size() - found));
-
-		// Update the current prefix to remove the current dir
-		current_prefix = current_prefix.substr(0, found);
+	while (!parsed.GetPathSegments().empty() && !DirectoryExists(parsed.ToString())) {
+		dirs_to_create.push_back(parsed.ToString());
+		parsed = parsed.Parent();
+	}
+	// If all segments were non-existing, also check the base itself (e.g. "C:/" on an unknown drive)
+	if (!parsed.GetPathSegments().empty()) {
+		// broke because DirectoryExists returned true — nothing more needed
+	} else if (!DirectoryExists(parsed.ToString())) {
+		dirs_to_create.push_back(parsed.ToString());
 	}
 
-	// Create the directories one by one
-	for (vector<string>::reverse_iterator riter = dirs_to_create.rbegin(); riter != dirs_to_create.rend(); ++riter) {
-		current_prefix += *riter;
-		CreateDirectory(current_prefix);
+	// Create directories shallowest to deepest
+	for (auto riter = dirs_to_create.rbegin(); riter != dirs_to_create.rend(); ++riter) {
+		CreateDirectory(*riter);
 	}
 }
 
@@ -600,7 +625,26 @@ bool FileSystem::HasGlob(const string &str) {
 }
 
 vector<OpenFileInfo> FileSystem::Glob(const string &path, FileOpener *opener) {
+	if (SupportsGlobExtended()) {
+		auto result = GlobFilesExtended(path, FileGlobOptions::ALLOW_EMPTY, opener);
+		return result->GetAllFiles();
+	}
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
+}
+
+unique_ptr<MultiFileList> FileSystem::Glob(const string &path, const FileGlobInput &input,
+                                           optional_ptr<FileOpener> opener) {
+	if (!SupportsGlobExtended()) {
+		auto result = Glob(path, opener.get());
+		return make_uniq<SimpleMultiFileList>(std::move(result));
+	} else {
+		return GlobFilesExtended(path, input, opener);
+	}
+}
+
+unique_ptr<MultiFileList> FileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
+                                                        optional_ptr<FileOpener> opener) {
+	throw NotImplementedException("%s: GlobFilesExtended is not implemented!", GetName());
 }
 
 void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
@@ -627,6 +671,10 @@ bool FileSystem::SubSystemIsDisabled(const string &name) {
 	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
 }
 
+bool FileSystem::IsDisabledForPath(const string &path) {
+	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
+}
+
 vector<string> FileSystem::ListSubSystems() {
 	throw NotImplementedException("%s: Can't list sub systems on a non-virtual file system", GetName());
 }
@@ -635,9 +683,9 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
-vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, const FileGlobInput &input) {
-	auto result = Glob(pattern);
-	if (result.empty()) {
+unique_ptr<MultiFileList> FileSystem::GlobFileList(const string &pattern, const FileGlobInput &input) {
+	auto result = GlobFilesExtended(pattern, input);
+	if (result->IsEmpty()) {
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
 			// if we have no glob in the pattern and we have an extension, we try to glob
 			if (!HasGlob(pattern)) {
@@ -645,8 +693,8 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
 				}
 				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
-				result = GlobFiles(new_pattern, context, FileGlobOptions::ALLOW_EMPTY);
-				if (!result.empty()) {
+				result = GlobFileList(new_pattern, FileGlobOptions::ALLOW_EMPTY);
+				if (!result->IsEmpty()) {
 					// we found files by globbing the target as if it was a directory - return them
 					return result;
 				}
@@ -657,6 +705,11 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 		}
 	}
 	return result;
+}
+
+vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, const FileGlobInput &input) {
+	auto file_list = GlobFileList(pattern, input);
+	return file_list->GetAllFiles();
 }
 
 void FileSystem::Seek(FileHandle &handle, idx_t location) {
@@ -705,7 +758,7 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 
 int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesRead(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
 	}
 
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
@@ -721,7 +774,7 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 
 int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesWritten(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_WRITTEN, nr_bytes);
 	}
 
 	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
@@ -733,7 +786,7 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 
 void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesRead(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
 	}
 
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
@@ -741,7 +794,7 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesWritten(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_WRITTEN, nr_bytes);
 	}
 
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
@@ -819,6 +872,10 @@ FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
 }
 
+FileMetadata FileHandle::Stats() {
+	return file_system.Stats(*this);
+}
+
 void FileHandle::TryAddLogger(FileOpener &opener) {
 	if (flags.DisableLogging()) {
 		return;
@@ -853,6 +910,45 @@ bool FileSystem::IsRemoteFile(const string &path, string &extension) {
 		}
 	}
 	return false;
+}
+
+string FileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
+	if (IsRemoteFile(path_p)) {
+		// don't canonicalize remote paths
+		return path_p;
+	}
+	auto path_sep = PathSeparator(path_p);
+	auto elements = StringUtil::Split(path_p, path_sep);
+
+	deque<string> path_stack;
+	string result;
+	for (idx_t i = 0; i < elements.size(); i++) {
+		if (elements[i].empty() || elements[i] == ".") {
+			// we ignore empty and `.`
+			continue;
+		}
+		if (elements[i] == "..") {
+			// .. pops from stack if possible, if already at root its ignored
+			if (!path_stack.empty()) {
+				path_stack.pop_back();
+			}
+		} else {
+			path_stack.push_back(elements[i]);
+		}
+	}
+	// we lost the leading / in the split/loop so lets put it back
+	if (path_p[0] == '/') {
+		result = "/";
+	}
+	while (!path_stack.empty()) {
+		result += path_stack.front();
+		path_stack.pop_front();
+		if (!path_stack.empty()) {
+			result += path_sep;
+		}
+	}
+
+	return result;
 }
 
 } // namespace duckdb

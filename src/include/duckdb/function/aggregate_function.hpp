@@ -184,6 +184,59 @@ public:
 	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT) {
 	}
 
+	// clang-format off
+	bool HasBindCallback() const { return bind != nullptr; }
+	bind_aggregate_function_t GetBindCallback() const { return bind; }
+	void SetBindCallback(bind_aggregate_function_t callback) { bind = callback; }
+
+	bool HasStateInitCallback() const { return initialize != nullptr; }
+	aggregate_initialize_t GetStateInitCallback() const { return initialize; }
+	void SetStateInitCallback(aggregate_initialize_t callback) { initialize = callback; }
+
+	bool HasStateSizeCallback() const { return state_size != nullptr; }
+	aggregate_size_t GetStateSizeCallback() const { return state_size; }
+	void SetStateSizeCallback(aggregate_size_t callback) { state_size = callback; }
+
+	bool HasStateDestructorCallback() const { return destructor != nullptr; }
+	aggregate_destructor_t GetStateDestructorCallback() const { return destructor; }
+	void SetStateDestructorCallback(aggregate_destructor_t callback) { destructor = callback; }
+
+	bool HasStateUpdateCallback() const { return update != nullptr; }
+	aggregate_update_t GetStateUpdateCallback() const { return update; }
+	void SetStateUpdateCallback(aggregate_update_t callback) { update = callback; }
+
+	bool HasStateSimpleUpdateCallback() const { return simple_update != nullptr; }
+	aggregate_simple_update_t GetStateSimpleUpdateCallback() const { return simple_update; }
+	void SetStateSimpleUpdateCallback(aggregate_simple_update_t callback) { simple_update = callback; }
+
+	void SetStateCombineCallback(aggregate_combine_t callback) { combine = callback; }
+	aggregate_combine_t GetStateCombineCallback() const { return combine; }
+	bool HasStateCombineCallback() const { return combine != nullptr; }
+
+	void SetStateFinalizeCallback(aggregate_finalize_t callback) { finalize = callback; }
+	aggregate_finalize_t GetStateFinalizeCallback() const { return finalize; }
+	bool HasStateFinalizeCallback() const { return finalize != nullptr; }
+
+	bool HasWindowCallback() const { return window != nullptr; }
+	aggregate_window_t GetWindowCallback() const { return window; }
+	void SetWindowCallback(aggregate_window_t callback) { window = callback; }
+
+	void SetWindowInitCallback(aggregate_wininit_t callback) { window_init = callback; }
+	aggregate_wininit_t GetWindowInitCallback() const { return window_init; }
+	bool HasWindowInitCallback() const { return window_init != nullptr; }
+
+	bool HasStatisticsCallback() const { return statistics != nullptr; }
+	aggregate_statistics_t GetStatisticsCallback() const { return statistics; }
+	void SetStatisticsCallback(aggregate_statistics_t callback) { statistics = callback; }
+
+	bool HasSerializationCallbacks() const { return serialize != nullptr && deserialize != nullptr; }
+	void SetSerializeCallback(aggregate_serialize_t callback) { serialize = callback; }
+	void SetDeserializeCallback(aggregate_deserialize_t callback) { deserialize = callback; }
+	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
+	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
+	// clang-format on
+
+public:
 	//! The hashed aggregate state sizing function
 	aggregate_size_t state_size;
 	//! The hashed aggregate state initialization function
@@ -211,13 +264,29 @@ public:
 
 	aggregate_serialize_t serialize;
 	aggregate_deserialize_t deserialize;
+
 	//! Whether or not the aggregate is order dependent
 	AggregateOrderDependent order_dependent;
 	//! Whether or not the aggregate is affect by distinct modifiers
 	AggregateDistinctDependent distinct_dependent;
+
+	AggregateOrderDependent GetOrderDependent() const {
+		return order_dependent;
+	}
+	void SetOrderDependent(AggregateOrderDependent value) {
+		order_dependent = value;
+	}
+	AggregateDistinctDependent GetDistinctDependent() const {
+		return distinct_dependent;
+	}
+	void SetDistinctDependent(AggregateDistinctDependent value) {
+		distinct_dependent = value;
+	}
+
 	//! Additional function info, passed to the bind
 	shared_ptr<AggregateFunctionInfo> function_info;
 
+public:
 	bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&
 		       combine == rhs.combine && finalize == rhs.finalize && window == rhs.window;

@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/rule/arithmetic_simplification.hpp"
 #include "duckdb/optimizer/rule/case_simplification.hpp"
+#include "duckdb/optimizer/rule/constant_order_normalization.hpp"
 #include "duckdb/optimizer/rule/comparison_simplification.hpp"
 #include "duckdb/optimizer/rule/conjunction_simplification.hpp"
 #include "duckdb/optimizer/rule/constant_folding.hpp"

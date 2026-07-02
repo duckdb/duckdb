@@ -8,3 +8,4 @@ ALTER TABLE IF EXISTS t0 ADD COLUMN c1 INT;
 statement error
 ALTER TABLE t0 ADD COLUMN c1 INT;
 ----
+Catalog Error: Table with name t0 does not exist

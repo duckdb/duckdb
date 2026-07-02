@@ -26,12 +26,22 @@ enum class tokenType : uint8_t {
 	TOKEN_ERROR
 };
 
-enum class HighlightingType { KEYWORD, CONSTANT, COMMENT, ERROR, CONTINUATION, CONTINUATION_SELECTED };
+enum class HighlightingType { KEYWORD, CONSTANT, COMMENT, ERROR_TOKEN, CONTINUATION, CONTINUATION_SELECTED };
+enum class ExtraHighlightingType { NONE, UNDERLINE, BOLD };
 
 struct highlightToken {
 	tokenType type;
 	size_t start = 0;
-	bool search_match = false;
+	ExtraHighlightingType extra_highlighting = ExtraHighlightingType::NONE;
+};
+
+struct ExtraHighlighting {
+	ExtraHighlighting() : start(0), end(0), type(ExtraHighlightingType::NONE) {
+	}
+
+	idx_t start;
+	idx_t end;
+	ExtraHighlightingType type;
 };
 
 class Highlighting {
@@ -39,10 +49,10 @@ public:
 	static void Enable();
 	static void Disable();
 	static bool IsEnabled();
-	static const char *GetColorOption(const char *option);
 	static void SetHighlightingColor(HighlightingType type, const char *color);
 
-	static vector<highlightToken> Tokenize(char *buf, size_t len, bool is_dot_command, searchMatch *match);
+	static vector<highlightToken> Tokenize(char *buf, size_t len, bool is_dot_command);
+	static void AddExtraHighlighting(size_t len, vector<highlightToken> &tokens, ExtraHighlighting extra_highlighting);
 	static string HighlightText(char *buf, size_t len, size_t start_pos, size_t end_pos,
 	                            const vector<highlightToken> &tokens);
 };

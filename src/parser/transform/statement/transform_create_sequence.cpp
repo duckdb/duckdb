@@ -41,7 +41,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 			}
 			if (opt_name == "increment") {
 				if (used.find(SequenceInfo::SEQ_INC) != used.end()) {
-					throw ParserException("Increment value should be passed as most once");
+					throw ParserException("Increment should be passed at most once");
 				}
 				used.insert(SequenceInfo::SEQ_INC);
 				if (nodef) {
@@ -61,7 +61,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 				}
 			} else if (opt_name == "minvalue") {
 				if (used.find(SequenceInfo::SEQ_MIN) != used.end()) {
-					throw ParserException("Minvalue should be passed as most once");
+					throw ParserException("Minvalue should be passed at most once");
 				}
 				used.insert(SequenceInfo::SEQ_MIN);
 				if (nodef) {
@@ -74,7 +74,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 				}
 			} else if (opt_name == "maxvalue") {
 				if (used.find(SequenceInfo::SEQ_MAX) != used.end()) {
-					throw ParserException("Maxvalue should be passed as most once");
+					throw ParserException("Maxvalue should be passed at most once");
 				}
 				used.insert(SequenceInfo::SEQ_MAX);
 				if (nodef) {
@@ -87,7 +87,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 				}
 			} else if (opt_name == "start") {
 				if (used.find(SequenceInfo::SEQ_START) != used.end()) {
-					throw ParserException("Start value should be passed as most once");
+					throw ParserException("Start should be passed at most once");
 				}
 				used.insert(SequenceInfo::SEQ_START);
 				if (nodef) {
@@ -97,7 +97,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 				info->start_value = opt_value;
 			} else if (opt_name == "cycle") {
 				if (used.find(SequenceInfo::SEQ_CYCLE) != used.end()) {
-					throw ParserException("Cycle value should be passed as most once");
+					throw ParserException("Cycle should be passed at most once");
 				}
 				used.insert(SequenceInfo::SEQ_CYCLE);
 				if (nodef) {

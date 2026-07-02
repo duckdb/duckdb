@@ -29,7 +29,7 @@ public:
 	//! The binder used to bind the subquery node
 	shared_ptr<Binder> binder;
 	//! The bound subquery node
-	unique_ptr<BoundQueryNode> subquery;
+	BoundStatement subquery;
 	//! The subquery type
 	SubqueryType subquery_type;
 	//! the child expressions to compare with (in case of IN, ANY, ALL operators)

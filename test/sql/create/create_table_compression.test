@@ -20,18 +20,22 @@ DROP TABLE T
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION 'bla')
 ----
+unrecognized value
 
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION )
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION )
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 CREATE TABLE T (a INTEGER USING COMPRESSION bla)
 ----
+unrecognized value
 
 statement ok
 CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION RLE)

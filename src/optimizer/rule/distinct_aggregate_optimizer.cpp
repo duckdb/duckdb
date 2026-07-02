@@ -17,7 +17,7 @@ unique_ptr<Expression> DistinctAggregateOptimizer::Apply(ClientContext &context,
 		// no DISTINCT defined
 		return nullptr;
 	}
-	if (aggr.function.distinct_dependent == AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT) {
+	if (aggr.function.GetDistinctDependent() == AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT) {
 		// not a distinct-sensitive aggregate but we have an DISTINCT modifier - remove it
 		aggr.aggr_type = AggregateType::NON_DISTINCT;
 		changes_made = true;
@@ -47,7 +47,7 @@ unique_ptr<Expression> DistinctWindowedOptimizer::Apply(ClientContext &context, 
 		// not an aggregate
 		return nullptr;
 	}
-	if (wexpr.aggregate->distinct_dependent == AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT) {
+	if (wexpr.aggregate->GetDistinctDependent() == AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT) {
 		// not a distinct-sensitive aggregate but we have an DISTINCT modifier - remove it
 		wexpr.distinct = false;
 		changes_made = true;

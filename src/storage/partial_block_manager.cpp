@@ -22,7 +22,6 @@ void PartialBlock::AddSegmentToTail(ColumnData &data, ColumnSegment &segment, ui
 }
 
 void PartialBlock::FlushInternal(const idx_t free_space_left) {
-
 	// ensure that we do not leak any data
 	if (free_space_left > 0 || !uninitialized_regions.empty()) {
 		auto buffer_handle = block_manager.buffer_manager.Pin(block_handle);
@@ -45,7 +44,6 @@ PartialBlockManager::PartialBlockManager(QueryContext context, BlockManager &blo
                                          uint32_t max_use_count)
     : context(context.GetClientContext()), block_manager(block_manager), partial_block_type(partial_block_type),
       max_use_count(max_use_count) {
-
 	if (max_partial_block_size_p.IsValid()) {
 		max_partial_block_size = NumericCast<uint32_t>(max_partial_block_size_p.GetIndex());
 		return;
@@ -88,13 +86,21 @@ bool PartialBlockManager::HasBlockAllocation(uint32_t segment_size) {
 void PartialBlockManager::AllocateBlock(PartialBlockState &state, uint32_t segment_size) {
 	D_ASSERT(segment_size <= block_manager.GetBlockSize());
 	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
-		state.block_id = block_manager.GetFreeBlockId();
+		state.block_id = GetFreeBlockId();
 	} else {
 		state.block_id = INVALID_BLOCK;
 	}
 	state.block_size = NumericCast<uint32_t>(block_manager.GetBlockSize());
 	state.offset = 0;
 	state.block_use_count = 1;
+}
+
+block_id_t PartialBlockManager::GetFreeBlockId() {
+	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
+		return block_manager.GetFreeBlockIdForCheckpoint();
+	} else {
+		return block_manager.GetFreeBlockId();
+	}
 }
 
 bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<PartialBlock> &partial_block) {

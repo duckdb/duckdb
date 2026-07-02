@@ -175,6 +175,11 @@ bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &
 		return false;
 	}
 
+	//	Interval parsing accepts larger hour counts, but we must limit ourselves to <= 24:00:00
+	if (time_part.micros > Interval::MICROS_PER_DAY) {
+		return false;
+	}
+
 	// skip optional whitespace before offset
 	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 		pos++;

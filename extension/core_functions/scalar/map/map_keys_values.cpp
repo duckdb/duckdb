@@ -57,9 +57,9 @@ ScalarFunction MapKeysFun::GetFunction() {
 	auto val_type = LogicalType::TEMPLATE("V");
 
 	ScalarFunction function({LogicalType::MAP(key_type, val_type)}, LogicalType::LIST(key_type), MapKeysFunction);
-	function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -68,9 +68,9 @@ ScalarFunction MapValuesFun::GetFunction() {
 	auto val_type = LogicalType::TEMPLATE("V");
 
 	ScalarFunction function({LogicalType::MAP(key_type, val_type)}, LogicalType::LIST(val_type), MapValuesFunction);
-	function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 

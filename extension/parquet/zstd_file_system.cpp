@@ -28,12 +28,24 @@ ZstdStreamWrapper::~ZstdStreamWrapper() {
 	}
 	try {
 		Close();
-	} catch (...) { // NOLINT: swallow exceptions in destructor
+	} catch (std::exception &ex) {
+		if (file && file->child_handle) {
+			// FIXME: Make any log context available here.
+			ErrorData data(ex);
+			try {
+				const auto logger = file->child_handle->logger;
+				if (logger) {
+					DUCKDB_LOG_ERROR(logger, "ZstdStreamWrapper::~ZstdStreamWrapper()\t\t" + data.Message());
+				}
+			} catch (...) { // NOLINT
+			}
+		}
+	} catch (...) { // NOLINT
 	}
 }
 
 void ZstdStreamWrapper::Initialize(QueryContext context, CompressedFile &file, bool write) {
-	Close();
+	D_ASSERT(!zstd_stream_ptr && !zstd_compress_ptr);
 	this->file = &file;
 	this->writing = write;
 	if (write) {

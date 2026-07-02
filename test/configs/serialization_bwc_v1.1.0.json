@@ -1,0 +1,151 @@
+{
+  "description": "Failed tests from backwards compatibility testing.",
+  "skip_tests": [
+    {
+      "reason": "Table function deserialization failure - column type changed",
+      "paths": [
+        "test/sql/aggregate/aggregates/test_approx_quantile.test",
+        "test/sql/catalog/function/test_macro_overloads.test",
+        "test/sql/catalog/function/test_simple_macro.test",
+        "test/sql/catalog/function/test_table_macro.test",
+        "test/sql/pg_catalog/sqlalchemy.test",
+        "test/sql/table_function/read_text_and_blob.test"
+      ]
+    },
+    {
+      "reason": "CSVReaderDeserialize not implemented",
+      "paths": [
+        "test/sql/copy/csv/auto/test_auto_8231.test",
+        "test/sql/copy/csv/csv_hive.test",
+        "test/sql/copy/csv/csv_hive_filename_union.test",
+        "test/sql/copy/csv/csv_projection_pushdown.test",
+        "test/sql/copy/csv/parallel/parallel_csv_hive_partitioning.test",
+        "test/sql/copy/csv/parallel/parallel_csv_union_by_name.test",
+        "test/sql/copy/csv/recursive_csv_union_by_name.test",
+        "test/sql/copy/csv/test_csv_projection_pushdown.test",
+        "test/sql/copy/csv/test_csv_projection_pushdown_glob.test",
+        "test/sql/copy/csv/test_null_padding_projection.test",
+        "test/sql/copy/csv/test_null_padding_union.test",
+        "test/sql/copy/csv/test_read_csv.test",
+        "test/sql/copy/csv/test_union_by_name.test",
+        "test/sql/copy/csv/tsv_copy.test",
+        "test/sql/subquery/lateral/lateral_binding_views.test"
+      ]
+    },
+    {
+      "reason": "Attempting to commit read-only transaction with changes",
+      "paths": [
+        "test/sql/copy/csv/test_compression_flag.test",
+        "test/sql/copy/csv/test_copy_gzip.test",
+        "test/sql/copy/csv/zstd_fs.test",
+        "test/sql/copy/parquet/parquet_encryption_httpfs.test",
+        "test/sql/subquery/lateral/pg_lateral.test"
+      ]
+    },
+    {
+      "reason": "No files found that match the pattern",
+      "paths": [
+        "test/sql/copy/file_size_bytes.test",
+        "test/sql/copy/parquet/writer/parquet_write_memory_usage.test"
+      ]
+    },
+    {
+      "reason": "PLAN_STATEMENT error",
+      "paths": [
+        "test/sql/storage/compression/string/big_strings.test",
+        "test/sql/storage/compression/string/blob.test",
+        "test/sql/storage/compression/string/filter_pushdown.test",
+        "test/sql/storage/compression/string/index_fetch.test"
+      ]
+    },
+    {
+      "reason": "Expected vector of type LIST but found different type",
+      "paths": [
+        "test/sql/pragma/test_custom_optimizer_profiling.test",
+        "test/sql/pragma/test_custom_profiling_settings.test"
+      ]
+    },
+    {
+      "reason": "Schema does not exist",
+      "paths": [
+        "test/sql/catalog/function/information_schema_macro.test"
+      ]
+    },
+    {
+      "reason": "Invalid AES key length for GCM",
+      "paths": [
+        "test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test"
+      ]
+    },
+    {
+      "reason": "Information loss on integer cast",
+      "paths": [
+        "test/sql/copy/parquet/writer/parquet_write_compression_level.test"
+      ]
+    },
+    {
+      "reason": "Database invalidated by previous fatal error",
+      "paths": [
+        "test/sql/error/extension_function_error.test"
+      ]
+    },
+    {
+      "reason": "JSONScan Deserialize not implemented",
+      "paths": [
+        "test/sql/json/table/json_multi_file_reader.test"
+      ]
+    },
+    {
+      "reason": "Unsupported type for deserialization of LogicalOperator",
+      "paths": [
+        "test/sql/secrets/create_secret_scope_matching.test"
+      ]
+    },
+    {
+      "reason": "File system disabled by configuration",
+      "paths": [
+        "test/sql/settings/test_disabled_file_system_httpfs.test"
+      ]
+    },
+    {
+      "reason": "Serialization Error - not enough data",
+      "paths": [
+        "test/sql/storage/vacuum/vacuum_deletes_index.test"
+      ]
+    },
+    {
+      "reason": "Nested transactions not supported in serialization",
+      "paths": [
+        "test/sql/transactions/aborted_transaction_commit.test"
+      ]
+    },
+    {
+      "reason": "PRIMARY KEY or UNIQUE constraint violated",
+      "paths": [
+        "test/sql/upsert/upsert_conflict_in_different_chunk.test"
+      ]
+    },
+    {
+      "reason": "Unknown failure (empty reason)",
+      "paths": [
+        "test/sql/copy/parquet/test_parquet_remote.test",
+        "test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test",
+        "test/sql/types/enum/test_enum_to_numbers.test"
+      ]
+    },
+    {
+      "reason": "Table does not exist",
+      "paths": [
+        "test/sql/storage/compression/string/empty.test",
+        "test/sql/storage/compression/string/simple.test",
+        "test/sql/storage/compression/string/table_copy.test"
+      ]
+    },
+    {
+      "reason": "Requires ndjson extension",
+      "paths": [
+        "test/sql/json/table/read_json_objects.test"
+      ]
+    }
+  ]
+}

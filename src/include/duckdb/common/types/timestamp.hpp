@@ -173,7 +173,7 @@ public:
 	//! Is the character a valid part of a time zone name?
 	static inline bool CharacterIsTimeZone(char c) {
 		return StringUtil::CharacterIsAlpha(c) || StringUtil::CharacterIsDigit(c) || c == '_' || c == '/' || c == '+' ||
-		       c == '-';
+		       c == '-' || c == ':';
 	}
 
 	//! True, if the timestamp is finite, else false.

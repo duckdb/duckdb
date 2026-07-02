@@ -1,0 +1,52 @@
+# name: test/sql/outofcore/out_of_core_sort.test_slow
+# description: Test out of core sort
+# group: [outofcore]
+
+require tpch
+
+load __TEST_DIR__/out_of_core_sort.db
+
+statement ok
+CALL dbgen(sf=1);
+
+query I
+SELECT bit_xor(hash(*COLUMNS(*)))
+FROM lineitem;
+----
+3944753436594036139
+
+foreach mem 300MiB 600MiB
+
+foreach threads 1 2 8
+
+statement ok
+SET memory_limit='${mem}';
+
+statement ok
+SET threads=${threads};
+
+query I
+WITH cte AS (
+    FROM lineitem
+    ORDER BY ALL
+)
+SELECT bit_xor(hash(*COLUMNS(*)))
+FROM cte;
+----
+3944753436594036139
+
+endloop
+
+endloop
+
+# the sort should not be optimized away, of course!
+query II
+EXPLAIN
+WITH cte AS (
+    FROM lineitem
+    ORDER BY ALL
+)
+SELECT bit_xor(hash(*COLUMNS(*)))
+FROM cte;
+----
+physical_plan	<REGEX>:.*ORDER_BY.*

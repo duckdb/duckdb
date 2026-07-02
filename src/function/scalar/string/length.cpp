@@ -63,7 +63,7 @@ unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, Function
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.function = ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>;
+		expr.function.SetFunctionCallback(ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>);
 	}
 	return nullptr;
 }
@@ -118,9 +118,9 @@ unique_ptr<FunctionData> ArrayOrListLengthBind(ClientContext &context, ScalarFun
 
 	const auto &arg_type = arguments[0]->return_type.id();
 	if (arg_type == LogicalTypeId::ARRAY) {
-		bound_function.function = ArrayLengthFunction;
+		bound_function.SetFunctionCallback(ArrayLengthFunction);
 	} else if (arg_type == LogicalTypeId::LIST) {
-		bound_function.function = ListLengthFunction;
+		bound_function.SetFunctionCallback(ListLengthFunction);
 	} else {
 		// Unreachable
 		throw BinderException("length can only be used on arrays or lists");
@@ -193,7 +193,7 @@ unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &context, Sca
 	auto type = arguments[0]->return_type;
 	if (type.id() == LogicalTypeId::ARRAY) {
 		bound_function.arguments[0] = type;
-		bound_function.function = ArrayLengthBinaryFunction;
+		bound_function.SetFunctionCallback(ArrayLengthBinaryFunction);
 
 		// If the input is an array, the dimensions are constant, so we can calculate them at bind time
 		vector<int64_t> dimensions;
@@ -210,7 +210,7 @@ unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &context, Sca
 		return std::move(data);
 
 	} else if (type.id() == LogicalTypeId::LIST) {
-		bound_function.function = ListLengthBinaryFunction;
+		bound_function.SetFunctionCallback(ListLengthBinaryFunction);
 		bound_function.arguments[0] = type;
 		return nullptr;
 	} else {
@@ -248,7 +248,7 @@ ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 	array_length.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT},
 	                                        LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind));
 	for (auto &func : array_length.functions) {
-		BaseScalarFunction::SetReturnsError(func);
+		func.SetFallible();
 	}
 	return (array_length);
 }

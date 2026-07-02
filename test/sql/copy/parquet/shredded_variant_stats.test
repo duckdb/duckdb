@@ -1,0 +1,201 @@
+# name: test/sql/copy/parquet/shredded_variant_stats.test
+# group: [parquet]
+
+require parquet
+
+# Primitive
+
+statement ok
+COPY (SELECT * from (VALUES
+        (21::VARIANT),
+        (42::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_primitive.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/fully_shredded_primitive.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER, stats: {fully_shredded: true}}[Has Null: true, Has No Null: true]
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        (21::VARIANT),
+        (NULL::VARIANT),
+        (42::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_primitive_with_nulls.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/fully_shredded_primitive_with_nulls.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER, stats: {fully_shredded: true}}[Has Null: true, Has No Null: true]
+
+statement ok
+COPY (SELECT * from (VALUES
+        (['test']::VARIANT),
+        (21::VARIANT),
+        (42::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/not_fully_shredded_primitive.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/not_fully_shredded_primitive.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER, stats: {fully_shredded: false}}[Has Null: true, Has No Null: true]
+
+# ARRAY
+
+statement ok
+COPY (SELECT * from (VALUES
+        (['test']::VARIANT),
+        ([21]::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_list.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/fully_shredded_list.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER[], stats: {fully_shredded: true, child: fully_shredded: false}}[Has Null: true, Has No Null: true]
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        (NULL::VARIANT),
+        (['test']::VARIANT),
+        ([21]::VARIANT),
+        (NULL::VARIANT)
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_list_with_nulls.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/fully_shredded_list_with_nulls.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER[], stats: {fully_shredded: true, child: fully_shredded: false}}[Has Null: true, Has No Null: true]
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        (NULL::VARIANT),
+        (['test']::VARIANT),
+        (['hello', 'world']::VARIANT),
+        (21::VARIANT),
+        (NULL::VARIANT)
+    ) t(col)
+) to '__TEST_DIR__/not_fully_shredded_list.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/not_fully_shredded_list.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: VARCHAR[], stats: {fully_shredded: false, child: fully_shredded: true}}[Has Null: true, Has No Null: true]
+
+# ARRAY - Element
+
+statement ok
+COPY (SELECT * from (VALUES
+        (['test']::VARIANT),
+        (['hello']::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_list_element.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/fully_shredded_list_element.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: VARCHAR[], stats: {fully_shredded: true, child: fully_shredded: true}}[Has Null: true, Has No Null: true]
+
+statement ok
+COPY (SELECT * from (VALUES
+        (['test']::VARIANT),
+        (['hello', NULL, 'world']::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_list_element_with_nulls.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/fully_shredded_list_element_with_nulls.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: VARCHAR[], stats: {fully_shredded: true, child: fully_shredded: true}}[Has Null: true, Has No Null: true]
+
+statement ok
+COPY (SELECT * from (VALUES
+        (['test']::VARIANT),
+        (['hello'::VARIANT, NULL, 21]::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/not_fully_shredded_list_element.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/not_fully_shredded_list_element.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: VARCHAR[], stats: {fully_shredded: true, child: fully_shredded: false}}[Has Null: true, Has No Null: true]
+
+# OBJECT
+
+statement ok
+COPY (SELECT * from (VALUES
+        ({'a': 42, 'b': true}::VARIANT),
+        ({'a': 21, 'c': 'test'}::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_object.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/fully_shredded_object.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(a INTEGER, b BOOLEAN, c VARCHAR), stats: {fully_shredded: true, children: {a: fully_shredded: true, b: fully_shredded: true, c: fully_shredded: true}}}[Has Null: true, Has No Null: true]
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        ({'a': 42, 'b': true}::VARIANT),
+        (NULL::VARIANT),
+        ({'a': 21, 'c': 'test'}::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_object_with_nulls.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/fully_shredded_object_with_nulls.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(a INTEGER, b BOOLEAN, c VARCHAR), stats: {fully_shredded: true, children: {a: fully_shredded: true, b: fully_shredded: true, c: fully_shredded: true}}}[Has Null: true, Has No Null: true]
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        ({'a': 42, 'b': true}::VARIANT),
+        (NULL::VARIANT),
+        ({'a': 21, 'c': 'test'}::VARIANT),
+        (42::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/not_fully_shredded_object.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/not_fully_shredded_object.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(a INTEGER, b BOOLEAN, c VARCHAR), stats: {fully_shredded: false, children: {a: fully_shredded: true, b: fully_shredded: true, c: fully_shredded: true}}}[Has Null: true, Has No Null: true]
+
+# OBJECT - field
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        ({'a': 42, 'b': true}::VARIANT),
+        (NULL::VARIANT),
+        ({'a': 'test', 'c': 'test'}::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/not_fully_shredded_object_field.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/not_fully_shredded_object_field.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(a INTEGER, b BOOLEAN, c VARCHAR), stats: {fully_shredded: true, children: {a: fully_shredded: false, b: fully_shredded: true, c: fully_shredded: true}}}[Has Null: true, Has No Null: true]
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        ({'a': 42, 'b': true}::VARIANT),
+        (NULL::VARIANT),
+        ({'a': NULL, 'c': 'test'}::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_object_field_with_nulls.parquet'
+
+query I
+select stats(col) from '__TEST_DIR__/fully_shredded_object_field_with_nulls.parquet' limit 1;
+----
+shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(a INTEGER, b BOOLEAN, c VARCHAR), stats: {fully_shredded: true, children: {a: fully_shredded: true, b: fully_shredded: true, c: fully_shredded: true}}}[Has Null: true, Has No Null: true]

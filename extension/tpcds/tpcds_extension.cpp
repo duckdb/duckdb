@@ -1,11 +1,11 @@
-#include "tpcds_extension.hpp"
-
-#include "dsdgen.hpp"
-
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "dsdgen.hpp"
+#include "tpcds_extension.hpp"
 
 namespace duckdb {
 
@@ -22,9 +22,15 @@ struct DSDGenFunctionData : public TableFunctionData {
 	bool keys = false;
 };
 
-static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunctionBindInput &input,
+                                           vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<DSDGenFunctionData>();
+
+	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
+	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
+	result->catalog = current_catalog;
+	result->schema = current_schema;
+
 	for (auto &kv : input.named_parameters) {
 		if (kv.second.IsNull()) {
 			throw BinderException("Cannot use NULL as function argument");
@@ -46,7 +52,10 @@ static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, Table
 	if (input.binder) {
 		auto &catalog = Catalog::GetCatalog(context, result->catalog);
 		auto &properties = input.binder->GetStatementProperties();
-		properties.RegisterDBModify(catalog, context);
+		DatabaseModificationType modification;
+		modification |= DatabaseModificationType::CREATE_CATALOG_ENTRY;
+		modification |= DatabaseModificationType::INSERT_DATA;
+		properties.RegisterDBModify(catalog, context, modification);
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");

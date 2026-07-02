@@ -53,6 +53,22 @@
         "type": "scalar_function"
     },
     {
+        "name": "get_type",
+        "parameters": "expression",
+        "description": "Returns the type of the result of the expression",
+        "example": "get_type('abc')",
+        "struct": "GetTypeFun",
+        "type": "scalar_function"
+    },
+    {
+        "name": "make_type",
+        "parameters": "name, ...",
+        "description": "Construct a type from its name and optional parameters",
+        "example": "make_type('DECIMAL', 10, 2)",
+        "struct": "MakeTypeFun",
+        "type": "scalar_function"
+    },
+    {
         "name": "can_cast_implicitly",
         "parameters": "source_type,target_type",
         "description": "Whether or not we can implicitly cast from the source type to the other type",

@@ -28,6 +28,8 @@ struct TableScanBindData : public TableFunctionData {
 	bool is_index_scan;
 	//! Whether or not the table scan is for index creation.
 	bool is_create_index;
+	//! In what order to scan the row groups
+	unique_ptr<RowGroupOrderOptions> order_options;
 
 public:
 	bool Equals(const FunctionData &other_p) const override {
@@ -39,6 +41,7 @@ public:
 		bind_data->is_index_scan = is_index_scan;
 		bind_data->is_create_index = is_create_index;
 		bind_data->column_ids = column_ids;
+		bind_data->order_options = order_options ? make_uniq<RowGroupOrderOptions>(*order_options) : nullptr;
 		return std::move(bind_data);
 	}
 };

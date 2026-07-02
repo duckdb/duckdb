@@ -10,13 +10,11 @@
 
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
-enum class ShowType : uint8_t { SUMMARY, DESCRIBE, SHOW_FROM };
+enum class ShowType : uint8_t { SUMMARY, DESCRIBE, SHOW_FROM, SHOW_UNQUALIFIED };
 
 //! Represents a SHOW/DESCRIBE/SUMMARIZE statement
 class ShowRef : public TableRef {

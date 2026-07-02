@@ -9,13 +9,12 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/blob.hpp"
 
 static constexpr uint8_t VERSION_MASK = 0xF;
 static constexpr uint8_t SORTED_STRINGS_MASK = 0x1;
 static constexpr uint8_t SORTED_STRINGS_SHIFT = 4;
 static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_MASK = 0x3;
-static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_SHIFT = 5;
+static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_SHIFT = 6;
 
 static constexpr uint8_t BASIC_TYPE_MASK = 0x3;
 static constexpr uint8_t VALUE_HEADER_SHIFT = 2;
@@ -88,7 +87,6 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 	auto data_start = metadata_offset + ((dictionary_size + 1) * header.offset_size);
 	idx_t last_offset =
 	    ReadVariableLengthLittleEndian(header.offset_size, metadata_data, metadata_offset, metadata_buffer_capacity);
-
 	for (idx_t i = 0; i < dictionary_size; i++) {
 		auto next_offset = ReadVariableLengthLittleEndian(header.offset_size, metadata_data, metadata_offset,
 		                                                  metadata_buffer_capacity);
@@ -99,6 +97,7 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 		strings.emplace_back(reinterpret_cast<const char *>(metadata_data + data_start + last_offset), string_size);
 		last_offset = next_offset;
 	}
+	//! header byte + offsets region + string bytes
 	total_size = metadata_offset + last_offset;
 }
 
@@ -127,7 +126,7 @@ VariantValueMetadata VariantValueMetadata::FromHeaderByte(uint8_t byte) {
 		break;
 	}
 	default:
-		throw IOException("VariantBasicType (%d) not handled", static_cast<uint8_t>(result.basic_type));
+		throw InternalException("VariantBasicType (%d) not handled", static_cast<uint8_t>(result.basic_type));
 	}
 	return result;
 }
@@ -141,9 +140,12 @@ static T DecodeDecimal(const_data_ptr_t data, idx_t data_offset, idx_t data_size
 	data_offset += sizeof(uint8_t);
 
 	auto result = Load<T>(data + data_offset);
-	//! FIXME: The spec says:
-	//! The implied precision of a decimal value is `floor(log_10(val)) + 1`
-	width = DecimalWidth<T>::max;
+	auto abs_val = result;
+	if (abs_val < 0) {
+		abs_val = -abs_val;
+	}
+	uint8_t digits = floor(log10(abs_val)) + 1;
+	width = digits;
 	return result;
 }
 
@@ -165,12 +167,11 @@ hugeint_t DecodeDecimal(const_data_ptr_t data, idx_t data_offset, idx_t data_siz
 	return result;
 }
 
-VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &metadata,
-                                                       const VariantValueMetadata &value_metadata,
+VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadata &value_metadata,
                                                        const_data_ptr_t data, idx_t data_offset, idx_t data_size) {
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::NULL_TYPE: {
-		return VariantValue(Value());
+		return VariantValue::NullValue();
 	}
 	case VariantPrimitiveType::BOOLEAN_TRUE: {
 		return VariantValue(Value::BOOLEAN(true));
@@ -225,24 +226,21 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 		uint8_t width;
 
 		auto value = DecodeDecimal<int32_t>(data, data_offset, data_size, scale, width);
-		auto value_str = Decimal::ToString(value, width, scale);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::DECIMAL(value, width, scale));
 	}
 	case VariantPrimitiveType::DECIMAL8: {
 		uint8_t scale;
 		uint8_t width;
 
 		auto value = DecodeDecimal<int64_t>(data, data_offset, data_size, scale, width);
-		auto value_str = Decimal::ToString(value, width, scale);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::DECIMAL(value, width, scale));
 	}
 	case VariantPrimitiveType::DECIMAL16: {
 		uint8_t scale;
 		uint8_t width;
 
 		auto value = DecodeDecimal<hugeint_t>(data, data_offset, data_size, scale, width);
-		auto value_str = Decimal::ToString(value, width, scale);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::DECIMAL(value, width, scale));
 	}
 	case VariantPrimitiveType::DATE: {
 		date_t value;
@@ -268,24 +266,21 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 		micros_ts.value = Load<int64_t>(data + data_offset);
 
 		auto value = Value::TIMESTAMP(micros_ts);
-		auto value_str = value.ToString();
-		return VariantValue(Value(value_str));
+		return VariantValue(std::move(value));
 	}
 	case VariantPrimitiveType::BINARY: {
-		//! Follow the JSON serialization guide by converting BINARY to Base64:
-		//! For example: `"dmFyaWFudAo="`
+		//! Keep the raw bytes as a BLOB so the type is preserved when reconstructing a VARIANT. The conversion to
+		//! Base64 happens now in VariantValue::ToJSON.
 		if (data_offset + sizeof(uint32_t) > data_size) {
 			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		auto size = Load<uint32_t>(data + data_offset);
 		data_offset += sizeof(uint32_t);
 
-		auto string_data = reinterpret_cast<const char *>(data + data_offset);
 		if (data_offset + size > data_size) {
 			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
-		auto base64_string = Blob::ToBase64(string_t(string_data, size));
-		return VariantValue(Value(base64_string));
+		return VariantValue(Value::BLOB(data + data_offset, size));
 	}
 	case VariantPrimitiveType::STRING: {
 		if (data_offset + sizeof(uint32_t) > data_size) {
@@ -330,16 +325,14 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 		nanos_ts.value = Load<int64_t>(data + data_offset);
 
 		auto value = Value::TIMESTAMPNS(nanos_ts);
-		auto value_str = value.ToString();
-		return VariantValue(Value(value_str));
+		return VariantValue(std::move(value));
 	}
 	case VariantPrimitiveType::UUID: {
 		if (data_offset + sizeof(hugeint_t) > data_size) {
 			throw IOException("Corrupted VARIANT 'value' buffer");
 		}
 		auto uuid_value = UUIDValueConversion::ReadParquetUUID(data + data_offset);
-		auto value_str = UUID::ToString(uuid_value);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::UUID(uuid_value));
 	}
 	default:
 		throw NotImplementedException("Variant PrimitiveTypeDecode not implemented for type (%d)",
@@ -453,7 +446,7 @@ VariantValue VariantBinaryDecoder::Decode(const VariantMetadata &variant_metadat
 
 	switch (value_metadata.basic_type) {
 	case VariantBasicType::PRIMITIVE: {
-		return PrimitiveTypeDecode(variant_metadata, value_metadata, data, data_offset, data_size);
+		return PrimitiveTypeDecode(value_metadata, data, data_offset, data_size);
 	}
 	case VariantBasicType::SHORT_STRING: {
 		return ShortStringDecode(value_metadata, data, data_offset, data_size);
@@ -465,7 +458,7 @@ VariantValue VariantBinaryDecoder::Decode(const VariantMetadata &variant_metadat
 		return ArrayDecode(variant_metadata, value_metadata, data, data_offset, data_size);
 	}
 	default:
-		throw InternalException("Unexpected value for VariantBasicType");
+		throw IOException("Unexpected value for VariantBasicType");
 	}
 }
 

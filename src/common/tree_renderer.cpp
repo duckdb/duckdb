@@ -4,6 +4,7 @@
 #include "duckdb/common/tree_renderer/html_tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/graphviz_tree_renderer.hpp"
 #include "duckdb/common/tree_renderer/yaml_tree_renderer.hpp"
+#include "duckdb/common/tree_renderer/mermaid_tree_renderer.hpp"
 
 #include <sstream>
 
@@ -22,6 +23,8 @@ unique_ptr<TreeRenderer> TreeRenderer::CreateRenderer(ExplainFormat format) {
 		return make_uniq<GRAPHVIZTreeRenderer>();
 	case ExplainFormat::YAML:
 		return make_uniq<YAMLTreeRenderer>();
+	case ExplainFormat::MERMAID:
+		return make_uniq<MermaidTreeRenderer>();
 	default:
 		throw NotImplementedException("ExplainFormat %s not implemented", EnumUtil::ToString(format));
 	}

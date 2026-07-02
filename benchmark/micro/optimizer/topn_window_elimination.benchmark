@@ -1,0 +1,23 @@
+# name: benchmark/micro/optimizer/topn_window_elimination.benchmark
+# description: Benchmark of top n window elimination
+# group: [optimizer]
+
+name TopN Window Elimination
+group micro
+subgroup optimizer
+
+load
+CREATE TABLE metrics AS (
+	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS tm, v AS v1, v % 1000 AS v2, v % 100 as v3
+	FROM range(0,100000) vals(v), range(0,100) keys(k)
+);
+CREATE TABLE tags AS (
+	SELECT k, CAST(hash(k+1) AS VARCHAR) t1, CAST(hash(k+2) AS VARCHAR) t2, CAST(hash(k+3) AS VARCHAR) t3,
+	FROM range(0,100) keys(k)
+);
+
+run
+SELECT * FROM tags t INNER JOIN LATERAL (SELECT * FROM metrics m WHERE m.k = t.k ORDER BY tm DESC LIMIT 1) AS b ON true ORDER BY t.k, b.tm DESC;
+SELECT * FROM tags t INNER JOIN LATERAL (SELECT * FROM metrics m WHERE m.k = t.k ORDER BY tm DESC LIMIT 3) AS b ON true ORDER BY t.k, b.tm DESC;
+SELECT * FROM tags t, (SELECT *, row_number() OVER (PARTITION BY m.k ORDER BY m.tm DESC) rn FROM metrics m QUALIFY rn <= 1) m WHERE t.k = m.k;
+SELECT * FROM tags t, (SELECT *, row_number() OVER (PARTITION BY m.k ORDER BY m.tm DESC) rn FROM metrics m QUALIFY rn <= 3) m WHERE t.k = m.k;

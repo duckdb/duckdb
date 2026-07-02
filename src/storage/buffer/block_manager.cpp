@@ -14,6 +14,29 @@ BlockManager::BlockManager(BufferManager &buffer_manager, const optional_idx blo
       block_alloc_size(block_alloc_size_p), block_header_size(block_header_size_p) {
 }
 
+bool BlockManager::BlockIsRegistered(block_id_t block_id) {
+	lock_guard<mutex> lock(blocks_lock);
+	// check if the block already exists
+	auto entry = blocks.find(block_id);
+	if (entry == blocks.end()) {
+		return false;
+	}
+	// already exists: check if it hasn't expired yet
+	return !entry->second.expired();
+}
+
+shared_ptr<BlockHandle> BlockManager::TryGetBlock(block_id_t block_id) {
+	lock_guard<mutex> lock(blocks_lock);
+	// check if the block already exists
+	auto entry = blocks.find(block_id);
+	if (entry == blocks.end()) {
+		// the block does not exist
+		return nullptr;
+	}
+	// the block exists - try to lock it
+	return entry->second.lock();
+}
+
 shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
 	lock_guard<mutex> lock(blocks_lock);
 	// check if the block already exists
@@ -38,24 +61,25 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
                                                           ConvertToPersistentMode mode) {
 	// register a block with the new block id
 	auto new_block = RegisterBlock(block_id);
-	D_ASSERT(new_block->GetState() == BlockState::BLOCK_UNLOADED);
-	D_ASSERT(new_block->Readers() == 0);
+	D_ASSERT(new_block->GetMemory().GetState() == BlockState::BLOCK_UNLOADED);
+	D_ASSERT(new_block->GetMemory().GetReaders() == 0);
 
 	if (mode == ConvertToPersistentMode::THREAD_SAFE) {
 		// safe mode - create a copy of the old block and operate on that
 		// this ensures we don't modify the old block - which allows other concurrent operations on the old block to
 		// continue
-		auto old_block_copy = buffer_manager.AllocateMemory(old_block->GetMemoryTag(), this, false);
+		auto old_block_copy = buffer_manager.AllocateMemory(old_block->GetMemory().GetMemoryTag(), this, false);
 		auto copy_pin = buffer_manager.Pin(old_block_copy);
 		memcpy(copy_pin.Ptr(), old_handle.Ptr(), GetBlockSize());
 		old_block = std::move(old_block_copy);
 		old_handle = std::move(copy_pin);
 	}
 
-	auto lock = old_block->GetLock();
-	D_ASSERT(old_block->GetState() == BlockState::BLOCK_LOADED);
-	D_ASSERT(old_block->GetBuffer(lock));
-	if (old_block->Readers() > 1) {
+	auto &old_block_memory = old_block->GetMemory();
+	auto lock = old_block_memory.GetLock();
+	D_ASSERT(old_block_memory.GetState() == BlockState::BLOCK_LOADED);
+	D_ASSERT(old_block_memory.GetBuffer(lock));
+	if (old_block_memory.GetReaders() > 1) {
 		throw InternalException(
 		    "BlockManager::ConvertToPersistent in destructive mode - cannot be called for block %d as old_block has "
 		    "multiple readers active",
@@ -64,16 +88,16 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
 
 	// Temp buffers can be larger than the storage block size.
 	// But persistent buffers cannot.
-	D_ASSERT(old_block->GetBuffer(lock)->AllocSize() <= GetBlockAllocSize());
+	D_ASSERT(old_block_memory.GetBuffer(lock)->AllocSize() <= GetBlockAllocSize());
 
 	// convert the buffer to a block
-	auto converted_buffer = ConvertBlock(block_id, *old_block->GetBuffer(lock));
+	auto converted_buffer = ConvertBlock(block_id, *old_block_memory.GetBuffer(lock));
 
 	// persist the new block to disk
 	Write(context, *converted_buffer, block_id);
 
 	// now convert the actual block
-	old_block->ConvertToPersistent(lock, *new_block, std::move(converted_buffer));
+	old_block_memory.ConvertToPersistent(lock, *new_block, std::move(converted_buffer));
 
 	// destroy the old buffer
 	lock.unlock();
@@ -103,16 +127,13 @@ void BlockManager::UnregisterBlock(block_id_t id) {
 	blocks.erase(id);
 }
 
-void BlockManager::UnregisterBlock(BlockHandle &block) {
-	auto id = block.BlockId();
-	if (id >= MAXIMUM_BLOCK) {
-		// in-memory buffer: buffer could have been offloaded to disk: remove the file
-		buffer_manager.DeleteTemporaryFile(block);
-	} else {
-		lock_guard<mutex> lock(blocks_lock);
-		// on-disk block: erase from list of blocks in manager
-		blocks.erase(id);
+void BlockManager::UnregisterPersistentBlock(BlockHandle &block) {
+	if (in_destruction) {
+		return;
 	}
+	auto id = block.BlockId();
+	D_ASSERT(id < MAXIMUM_BLOCK);
+	UnregisterBlock(id);
 }
 
 MetadataManager &BlockManager::GetMetadataManager() {

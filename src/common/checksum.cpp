@@ -72,7 +72,7 @@ uint64_t Checksum(uint8_t *buffer, size_t size) {
 	for (i = 0; i < size / 8; i++) {
 		result ^= Checksum(ptr[i]);
 	}
-	if (size - i * 8 > 0) {
+	if (size > i * 8) {
 		// the remaining 0-7 bytes we hash using a string hash
 		result ^= ChecksumRemainder(buffer + i * 8, size - i * 8);
 	}

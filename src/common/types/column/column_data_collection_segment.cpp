@@ -246,7 +246,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 			}
 		}
 		if (state.properties == ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
-			VectorOperations::Copy(result, result, vdata.count, 0, 0);
+			VectorOperations::Copy(result, result, vcount, 0, 0);
 		}
 	}
 	return vcount;

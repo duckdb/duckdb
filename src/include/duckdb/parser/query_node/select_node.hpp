@@ -10,7 +10,6 @@
 
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/group_by_node.hpp"
@@ -42,10 +41,6 @@ public:
 	AggregateHandling aggregate_handling;
 	//! The SAMPLE clause
 	unique_ptr<SampleOptions> sample;
-
-	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
-		return select_list;
-	}
 
 public:
 	//! Convert the query node to a string

@@ -21,7 +21,7 @@ SELECT enum_range(NULL::db1.main.mood) AS my_enum_range;
 statement error
 SELECT enum_range(NULL::xx.db1.main.mood) AS my_enum_range;
 ----
-Too many qualifications for type name
+Too many qualifications 
 
 statement ok
 DROP TYPE db1.mood

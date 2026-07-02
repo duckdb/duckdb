@@ -44,7 +44,8 @@ static unique_ptr<BaseStatistics> InStrPropagateStats(ClientContext &context, Fu
 	// can only propagate stats if the children have stats
 	// for strpos, we only care if the FIRST string has unicode or not
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.function = ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrAsciiOperator>;
+		expr.function.SetFunctionCallback(
+		    ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrAsciiOperator>);
 	}
 	return nullptr;
 }
@@ -53,7 +54,7 @@ ScalarFunction InstrFun::GetFunction() {
 	auto function = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator>, nullptr,
 	                               nullptr, InStrPropagateStats);
-	function.collation_handling = FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS;
+	function.SetCollationHandling(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS);
 	return function;
 }
 

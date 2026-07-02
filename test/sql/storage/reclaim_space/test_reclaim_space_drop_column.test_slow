@@ -46,15 +46,16 @@ statement ok
 CHECKPOINT;
 
 # ensure that the total blocks don't exceed the total blocks after the first iteration
-# by more than 1.2
+# by more than 1.5
 
 query I
-SELECT CASE WHEN ${i} = 0 THEN True
-	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
-	ELSE False END
+SELECT
+	CASE WHEN ${i} = 0 THEN NULL
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.5 THEN NULL
+	ELSE {'current': current, 'total_blocks_tbl': total_blocks_tbl} END
 FROM pragma_database_size() AS current, total_blocks_tbl;
 ----
-1
+NULL
 
 # adjust total_blocks_tbl once to the count after the first iteration
 

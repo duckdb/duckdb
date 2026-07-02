@@ -17,6 +17,14 @@
         "test/sql/storage/buffer_manager_temp_dir.test",
         "test/sql/pg_catalog/system_functions.test"
       ]
+    },
+    {
+      "reason": "Compression changes memory usage",
+      "paths": [
+        "test/sql/index/art/vacuum/test_art_vacuum_integers.test_slow",
+        "test/sql/index/art/vacuum/test_art_vacuum_strings.test_slow",
+        "test/sql/index/art/memory/test_art_varchar.test_slow"
+      ]
     }
   ]
 }

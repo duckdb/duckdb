@@ -21,6 +21,7 @@ SinkFinalizeType PhysicalExplainAnalyze::Finalize(Pipeline &pipeline, Event &eve
                                                   OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<ExplainAnalyzeStateGlobalState>();
 	auto &profiler = QueryProfiler::Get(context);
+	profiler.FinalizeMetrics();
 	gstate.analyzed_plan = profiler.ToString(format);
 	return SinkFinalizeType::READY;
 }
@@ -32,8 +33,8 @@ unique_ptr<GlobalSinkState> PhysicalExplainAnalyze::GetGlobalSinkState(ClientCon
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-SourceResultType PhysicalExplainAnalyze::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                 OperatorSourceInput &input) const {
+SourceResultType PhysicalExplainAnalyze::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                         OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<ExplainAnalyzeStateGlobalState>();
 
 	chunk.SetValue(0, 0, Value("analyzed_plan"));

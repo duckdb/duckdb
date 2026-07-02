@@ -85,6 +85,26 @@ struct TypeOfFun {
 	static ScalarFunction GetFunction();
 };
 
+struct GetTypeFun {
+	static constexpr const char *Name = "get_type";
+	static constexpr const char *Parameters = "expression";
+	static constexpr const char *Description = "Returns the type of the result of the expression";
+	static constexpr const char *Example = "get_type('abc')";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct MakeTypeFun {
+	static constexpr const char *Name = "make_type";
+	static constexpr const char *Parameters = "name,...";
+	static constexpr const char *Description = "Construct a type from its name and optional parameters";
+	static constexpr const char *Example = "make_type('DECIMAL', 10, 2)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct CanCastImplicitlyFun {
 	static constexpr const char *Name = "can_cast_implicitly";
 	static constexpr const char *Parameters = "source_type,target_type";

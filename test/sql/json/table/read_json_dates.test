@@ -128,3 +128,139 @@ query II
 select typeof(createdAt), createdAt from '{DATA_DIR}/json/timestamp_example.json'
 ----
 TIMESTAMP	2023-02-07 19:12:28
+
+# ISO 8601 timestamps with fractional seconds and/or timezone offsets should also be inferred as TIMESTAMP
+# These are all valid ISO 8601 representations that read_json_auto currently fails to detect
+
+# ISO 8601 with fractional seconds + Z suffix: "2023-02-07T19:12:28.123Z"
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28.123Z"}'))) to '{TEMP_DIR}/iso8601_frac_z.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_frac_z.json')
+----
+TIMESTAMP	2023-02-07 19:12:28.123
+
+# ISO 8601 with UTC timezone offset (+00:00): "2023-02-07T19:12:28+00:00"
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28+00:00"}'))) to '{TEMP_DIR}/iso8601_tz.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_tz.json')
+----
+TIMESTAMP	2023-02-07 19:12:28
+
+# ISO 8601 with fractional seconds + UTC timezone offset: "2023-02-07T19:12:28.456+00:00"
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28.456+00:00"}'))) to '{TEMP_DIR}/iso8601_frac_tz.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_frac_tz.json')
+----
+TIMESTAMP	2023-02-07 19:12:28.456
+
+# ISO 8601 with positive offset: "2023-02-07T14:12:28+05:00" -> UTC 09:12:28
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T14:12:28+05:00"}'))) to '{TEMP_DIR}/iso8601_pos_offset.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_pos_offset.json')
+----
+TIMESTAMP	2023-02-07 09:12:28
+
+# ISO 8601 with negative offset + fractional seconds: "2023-02-07T19:12:28.789-07:00" -> UTC 2023-02-08 02:12:28.789
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28.789-07:00"}'))) to '{TEMP_DIR}/iso8601_neg_offset.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_neg_offset.json')
+----
+TIMESTAMP	2023-02-08 02:12:28.789
+
+# Multiple timestamp formats in single JSON (issue 22103)
+statement ok
+copy (select * from (values ('{"ts1":"2026-04-01T06:01:00.010000+00:00", "ts2":"2026-04-02T06:03:00+00:01", "ts3":"2026-04-03T06:03:00Z", "ts4":"2026-04-04T06:04:00"}'))) to '{TEMP_DIR}/issue_22103.json' (format csv, quote '', header 0)
+
+query IIIIIIII
+SELECT typeof(ts1), ts1, typeof(ts2), ts2, typeof(ts3), ts3, typeof(ts4), ts4
+FROM read_json_auto('{TEMP_DIR}/issue_22103.json')
+----
+TIMESTAMP	2026-04-01 06:01:00.01	TIMESTAMP	2026-04-02 06:02:00	TIMESTAMP	2026-04-03 06:03:00	TIMESTAMP	2026-04-04 06:04:00
+
+# -----------------------------------------------------------------------------
+# Named timestamp_format produces a single-format list: only matching values
+# are typed as TIMESTAMP; others remain VARCHAR, confirming that default list
+# is ignored.
+#
+
+statement ok
+copy (select * from (values ('{"ts": "2026-04-04T06:04:00", "ts_tz": "2026-04-04T06:04:00Z"}'))) to '{TEMP_DIR}/ts_explicit_fmt.json' (format csv, quote '', header 0)
+
+query IIII
+SELECT typeof(ts), ts, typeof(ts_tz), ts_tz
+FROM read_json_auto('{TEMP_DIR}/ts_explicit_fmt.json', timestamp_format='%Y-%m-%dT%H:%M:%S')
+----
+TIMESTAMP	2026-04-04 06:04:00	VARCHAR	2026-04-04T06:04:00Z
+
+# -----------------------------------------------------------------------------
+# Safety: %Y-%m-%dT%H:%M:%S must reject trailing TZ content
+# The format fallback chain in TransformFromStringWithFormat relies on this —
+# if strptime ever accepts trailing characters, TZ offsets would be silently
+# dropped instead of being parsed by a TZ-aware format.
+#
+
+statement error
+SELECT strptime('2026-04-01T06:03:00+00:01', '%Y-%m-%dT%H:%M:%S');
+----
+trailing
+
+statement error
+SELECT strptime('2026-04-01T06:03:00Z', '%Y-%m-%dT%H:%M:%S');
+----
+trailing
+
+# test that TIMESTAMPFORMAT also applies to TIMESTAMPTZ columns
+statement ok
+create table timestamptz_test as select '1996-03-27 07:42:33+00'::TIMESTAMPTZ t
+
+statement ok
+copy (select t from timestamptz_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%Y-%m-%d')
+
+query I
+select t from '{TEMP_DIR}/my_file.json'
+----
+1996-03-27
+
+statement ok
+copy (
+    select
+        '2026-01-01T12:00:00Z'::TIMESTAMP as ts,
+        '2026-01-01T12:00:00Z'::TIMESTAMPTZ as tstz
+) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%a')
+
+query II
+select ts, tstz from read_json('{TEMP_DIR}/my_file.json')
+----
+Thu	Thu
+
+statement ok
+copy (select '2026-01-01 12:00:00+05:00'::TIMESTAMPTZ as ts) to '{TEMP_DIR}/my_file.json' (timestampformat '%Y-%m-%d %z', format json);
+
+query I
+select ts from '{TEMP_DIR}/my_file.json';
+----
+2026-01-01 +00
+
+# invalid timestampformat must produce a clear error
+statement ok
+CREATE TABLE t (ts TIMESTAMP[])
+
+statement error
+COPY t FROM '{DATA_DIR}/json/simple_timestamp.json' (FORMAT JSON, TIMESTAMPFORMAT '%Q')
+----
+Unrecognized format for strftime/strptime: %Q
+
+statement error
+SELECT * FROM read_json('{DATA_DIR}/json/simple_timestamp.json', timestampformat='%Q')
+----
+Unrecognized format for strftime/strptime: %Q

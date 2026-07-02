@@ -1,0 +1,246 @@
+# name: test/optimizer/pushdown/join_filter_pushdown_cast.test
+# description: Join filter pushdown through integral up/downcasts
+# group: [pushdown]
+
+statement ok
+PRAGMA explain_output='OPTIMIZED_ONLY';
+
+# disable this (for now - could be fixed by pushing casts instead of internal compress functions if possible)
+statement ok
+SET disabled_optimizers TO 'compressed_materialization';
+
+# Basic downcast: probe stored as INT, projected as BIGINT for the join
+statement ok
+CREATE TABLE probe_int AS SELECT range::INT AS a FROM range(100);
+
+statement ok
+CREATE TABLE build_bigint AS SELECT b::BIGINT AS b FROM (VALUES (10), (20), (30), (50)) t(b);
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_bigint ON t.a = build_bigint.b;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+
+query I
+SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_bigint ON t.a = build_bigint.b;
+----
+4
+
+query I rowsort
+SELECT t.a FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_bigint ON t.a = build_bigint.b ORDER BY 1;
+----
+10
+20
+30
+50
+
+# Out-of-range build values aren't added
+statement ok
+CREATE TABLE build_overflow AS SELECT b::BIGINT AS b FROM (VALUES (5), (10), (9999999999)) t(b);
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_overflow ON t.a = build_overflow.b;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+
+# 9999999999 overflows INT32 — only 5 and 10 should match
+query I
+SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_overflow ON t.a = build_overflow.b;
+----
+2
+
+# All build values overflow: result is empty
+statement ok
+CREATE TABLE build_all_overflow AS SELECT b::BIGINT AS b FROM (VALUES (9999999999), (8888888888)) t(b);
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_all_overflow ON t.a = build_all_overflow.b;
+----
+analyzed_plan	<!REGEX>:.*Dynamic Filters:.*
+
+query I
+SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_all_overflow ON t.a = build_all_overflow.b;
+----
+0
+
+# TINYINT probe cast to BIGINT — 200 overflows
+statement ok
+CREATE TABLE probe_tiny AS SELECT v::TINYINT AS a FROM (VALUES (1), (2), (3), (100), (127)) t(v);
+
+statement ok
+CREATE TABLE build_for_tiny AS SELECT b::BIGINT AS b FROM (VALUES (1), (100), (200)) t(b);
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_tiny) t JOIN build_for_tiny ON t.a = build_for_tiny.b;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+
+# 200 does not fit in TINYINT — only 1 and 100 match
+query I
+SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_tiny) t JOIN build_for_tiny ON t.a = build_for_tiny.b;
+----
+2
+
+# SMALLINT probe cast to INT — 40000 overflows
+statement ok
+CREATE TABLE probe_small AS SELECT v::SMALLINT AS a FROM (VALUES (100), (200), (300)) t(v);
+
+statement ok
+CREATE TABLE build_for_small AS SELECT b::INT AS b FROM (VALUES (100), (40000)) t(b);
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::INT AS a FROM probe_small) t JOIN build_for_small ON t.a = build_for_small.b;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+
+query I
+SELECT COUNT(*) FROM (SELECT a::INT AS a FROM probe_small) t JOIN build_for_small ON t.a = build_for_small.b;
+----
+1
+
+# NULL values in the build side are handled gracefully
+statement ok
+CREATE TABLE build_with_nulls AS SELECT b::BIGINT AS b FROM (VALUES (10), (NULL), (20)) t(b);
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_with_nulls ON t.a = build_with_nulls.b;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+
+query I
+SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_int) t JOIN build_with_nulls ON t.a = build_with_nulls.b;
+----
+2
+
+# Push through GROUP BY (aggregate node with an integral cast expression)
+statement ok
+CREATE TABLE probe_for_agg AS SELECT range::INT AS x FROM range(50);
+
+statement ok
+CREATE TABLE build_for_agg AS SELECT b::BIGINT AS y FROM (VALUES (5), (10), (15)) t(b);
+
+query I
+SELECT COUNT(*)
+FROM (SELECT x::BIGINT AS xb FROM probe_for_agg GROUP BY x::BIGINT) t
+JOIN build_for_agg ON t.xb = build_for_agg.y;
+----
+3
+
+# Non-integral cast
+statement ok
+CREATE TABLE probe_double AS SELECT v::DOUBLE AS a FROM (VALUES (1.0), (2.0), (3.0), (1.5)) t(v);
+
+statement ok
+CREATE TABLE build_double AS SELECT v::DOUBLE AS b FROM (VALUES (1.0), (2.0)) t(v);
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_double JOIN build_double ON probe_double.a = build_double.b;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+
+query I
+SELECT COUNT(*) FROM probe_double JOIN build_double ON probe_double.a = build_double.b;
+----
+2
+
+# HUGEINT: size check should prevent pushdown
+statement ok
+CREATE TABLE probe_bigint_for_huge AS SELECT v::BIGINT AS a FROM (VALUES (1), (2), (3)) t(v);
+
+statement ok
+CREATE TABLE build_hugeint AS SELECT v::HUGEINT AS b FROM (VALUES (1), (2)) t(v);
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::HUGEINT AS a FROM probe_bigint_for_huge) t JOIN build_hugeint ON t.a = build_hugeint.b;
+----
+analyzed_plan	<!REGEX>:.*Dynamic Filters:.*
+
+query I
+SELECT COUNT(*) FROM (SELECT a::HUGEINT AS a FROM probe_bigint_for_huge) t JOIN build_hugeint ON t.a = build_hugeint.b;
+----
+2
+
+# Negative build values against UBIGINT probe
+statement ok
+CREATE TABLE probe_ubigint AS SELECT v::UBIGINT AS a FROM (VALUES (1), (5), (10)) t(v);
+
+statement ok
+CREATE TABLE build_neg AS SELECT b::BIGINT AS b FROM (VALUES (5), (-1), (10)) t(b);
+
+# TODO HERE
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_ubigint) t JOIN build_neg ON t.a = build_neg.b;
+----
+analyzed_plan	<!REGEX>:.*Dynamic Filters:.*
+
+# -1 cannot be cast to UBIGINT — only 5 and 10 match
+query I
+SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_ubigint) t JOIN build_neg ON t.a = build_neg.b;
+----
+2
+
+# Cast directly in the join condition (not in a projection)
+statement ok
+CREATE TABLE probe_direct (a INT);
+
+statement ok
+INSERT INTO probe_direct SELECT range FROM range(100);
+
+statement ok
+CREATE TABLE build_direct (b BIGINT);
+
+statement ok
+INSERT INTO build_direct VALUES (10), (20);
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_direct JOIN build_direct ON probe_direct.a = build_direct.b;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+
+query I
+SELECT COUNT(*) FROM probe_direct JOIN build_direct ON probe_direct.a = build_direct.b;
+----
+2
+
+# All build values in range: all match
+statement ok
+INSERT INTO build_direct VALUES (9999999999);
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*) FROM probe_direct JOIN build_direct ON probe_direct.a = build_direct.b;
+----
+analyzed_plan	<!REGEX>:.*Dynamic Filters:.*
+
+query I
+SELECT COUNT(*) FROM probe_direct JOIN build_direct ON probe_direct.a = build_direct.b;
+----
+2
+
+# UNION ALL: each branch must use its OWN storage type
+statement ok
+CREATE TABLE t_union_int AS SELECT v::INT AS a FROM (VALUES (10), (40000), (99)) t(v);
+
+statement ok
+CREATE TABLE t_union_small AS SELECT v::SMALLINT AS a FROM (VALUES (10), (99)) t(v);
+
+statement ok
+CREATE TABLE build_union AS SELECT b::BIGINT AS b FROM (VALUES (10), (40000)) t(b);
+
+query II
+EXPLAIN ANALYZE
+SELECT COUNT(*) FROM (
+    SELECT a::BIGINT AS a FROM t_union_int
+    UNION ALL
+    SELECT a::BIGINT AS a FROM t_union_small
+) sub JOIN build_union ON sub.a = build_union.b;
+----
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*
+
+query I
+SELECT COUNT(*) FROM (
+    SELECT a::BIGINT AS a FROM t_union_int
+    UNION ALL
+    SELECT a::BIGINT AS a FROM t_union_small
+) sub JOIN build_union ON sub.a = build_union.b;
+----
+3

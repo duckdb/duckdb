@@ -2,6 +2,7 @@
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -19,9 +20,8 @@ InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(DatabaseMan
                                                                      const string &name, OnCreateConflict on_conflict,
                                                                      AttachOptions &options) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
-		return InsertDatabasePathResult::SUCCESS;
+		throw InternalException("DatabaseFilePathManager::InsertDatabasePath - cannot insert in-memory database");
 	}
-
 	lock_guard<mutex> path_lock(db_paths_lock);
 	auto entry = db_paths.emplace(path, DatabasePathInfo(manager, name, options.access_mode));
 	if (!entry.second) {

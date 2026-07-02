@@ -1,12 +1,8 @@
 #include "duckdb/function/table/system_functions.hpp"
 
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/common/map.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 
 namespace duckdb {
@@ -37,6 +33,9 @@ static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableF
 
 	auto entry = input.named_parameters.find("redact");
 	if (entry != input.named_parameters.end()) {
+		if (entry->second.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for redact");
+		}
 		if (BooleanValue::Get(entry->second)) {
 			result->redact = SecretDisplayType::REDACTED;
 		} else {
@@ -44,8 +43,7 @@ static unique_ptr<FunctionData> DuckDBSecretsBind(ClientContext &context, TableF
 		}
 	}
 
-	if (!DBConfig::GetConfig(context).options.allow_unredacted_secrets &&
-	    result->redact == SecretDisplayType::UNREDACTED) {
+	if (!Settings::Get<AllowUnredactedSecretsSetting>(context) && result->redact == SecretDisplayType::UNREDACTED) {
 		throw InvalidInputException("Displaying unredacted secrets is disabled");
 	}
 

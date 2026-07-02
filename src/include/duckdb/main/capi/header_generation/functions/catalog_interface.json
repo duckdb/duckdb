@@ -1,0 +1,149 @@
+{
+  "group": "catalog_interface",
+  "deprecated": false,
+  "description": "Functions to interact with database catalogs and catalog entries.\n//You will most likely not need this API for typical usage of DuckDB as SQL is the preferred way to interact with the database, but this interface can be useful for advanced extensions that need to inspect the state of the catalog from inside a running query.",
+  "entries": [
+    {
+      "name": "duckdb_client_context_get_catalog",
+      "return_type": "duckdb_catalog",
+      "params": [
+        {
+          "type": "duckdb_client_context",
+          "name": "context"
+        },
+        {
+          "type": "const char*",
+          "name": "catalog_name"
+        }
+      ],
+      "comment": {
+        "description": "Retrieve a database catalog instance by name.\nThis function can only be called from within the context of an active transaction, e.g. during execution of a registered function callback. Otherwise returns `nullptr`.\n",
+        "param_comments": {
+          "context": "The client context.",
+          "catalog_name": "The name of the catalog."
+        },
+        "return_value": "The resulting catalog instance, or `nullptr` if called from outside an active transaction or if a catalog with the specified name does not exist. Must be destroyed with `duckdb_destroy_catalog`"
+      }
+    },
+    {
+      "name": "duckdb_catalog_get_type_name",
+      "return_type": "const char*",
+      "params": [
+        {
+          "type": "duckdb_catalog",
+          "name": "catalog"
+        }
+      ],
+      "comment": {
+        "description": "Retrieve the \"type name\" of the given catalog.\nE.g. for a DuckDB database, this returns 'duckdb'.\nThe returned string is owned by the catalog and remains valid until the catalog is destroyed.\n\n",
+        "param_comments": {
+          "catalog": "The catalog."
+        },
+        "return_value": "The type name of the catalog."
+      }
+    },
+    {
+      "name": "duckdb_catalog_get_entry",
+      "return_type": "duckdb_catalog_entry",
+      "params": [
+        {
+          "type": "duckdb_catalog",
+          "name": "catalog"
+        },
+        {
+          "type": "duckdb_client_context",
+          "name": "context"
+        },
+        {
+          "type": "duckdb_catalog_entry_type",
+          "name": "entry_type"
+        },
+        {
+          "type": "const char*",
+          "name": "schema_name"
+        },
+        {
+          "type": "const char*",
+          "name": "entry_name"
+        }
+      ],
+        "comment": {
+            "description": "Retrieve a catalog entry from the given catalog by type, schema name and entry name.\nThe returned catalog entry remains valid for the duration of the current transaction.\n\n",
+            "param_comments": {
+            "catalog": "The catalog.",
+            "context": "The client context.",
+            "entry_type": "The type of the catalog entry to retrieve.",
+            "schema_name": "The schema name of the catalog entry.",
+            "entry_name": "The name of the catalog entry."
+            },
+            "return_value": "The resulting catalog entry, or `nullptr` if no such entry exists. Must be destroyed with `duckdb_destroy_catalog_entry`. Remains valid for the duration of the current transaction."
+        }
+    },
+    {
+      "name": "duckdb_destroy_catalog",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_catalog*",
+          "name": "catalog"
+        }
+      ],
+      "comment": {
+        "description": "Destroys the given catalog instance.\n\nNote that this does not actually \"drop\" the contents of the catalog; it merely frees the C API handle.\n\n",
+        "param_comments": {
+          "catalog": "The catalog instance to destroy."
+        }
+      }
+    },
+    {
+      "name": "duckdb_catalog_entry_get_type",
+      "return_type": "duckdb_catalog_entry_type",
+      "params": [
+        {
+          "type": "duckdb_catalog_entry",
+          "name": "entry"
+        }
+      ],
+      "comment": {
+        "description": "Get the type of the given catalog entry.\n\n",
+        "param_comments": {
+          "entry": "The catalog entry."
+        },
+        "return_value": "The type of the catalog entry."
+      }
+    },
+    {
+      "name": "duckdb_catalog_entry_get_name",
+      "return_type": "const char*",
+      "params": [
+        {
+          "type": "duckdb_catalog_entry",
+          "name": "entry"
+        }
+      ],
+      "comment": {
+        "description": "Get the name of the given catalog entry.\n\n",
+        "param_comments": {
+          "entry": "The catalog entry."
+        },
+        "return_value": "The name of the catalog entry. The returned string is owned by the catalog entry and remains valid until the catalog entry is destroyed."
+      }
+    },
+    {
+      "name": "duckdb_destroy_catalog_entry",
+        "return_type": "void",
+        "params": [
+            {
+            "type": "duckdb_catalog_entry*",
+            "name": "entry"
+            }
+        ],
+        "comment": {
+            "description": "Destroys the given catalog entry instance.\n\nNote that this does not actually \"drop\" the catalog entry from the database catalog; it merely frees the C API handle.\n\n",
+            "param_comments": {
+            "entry": "The catalog entry instance to destroy."
+            }
+        }
+    }
+  ]
+}

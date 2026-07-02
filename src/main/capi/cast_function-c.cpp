@@ -25,7 +25,6 @@ struct CCastFunction {
 };
 
 struct CCastFunctionUserData {
-
 	duckdb_function_info data_ptr = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
 
@@ -56,7 +55,6 @@ struct CCastFunctionData final : public BoundCastData {
 };
 
 static bool CAPICastFunction(Vector &input, Vector &output, idx_t count, CastParameters &parameters) {
-
 	const auto is_const = input.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	input.Flatten(count);
 

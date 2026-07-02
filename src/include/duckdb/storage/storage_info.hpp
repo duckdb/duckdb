@@ -12,7 +12,6 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/common/encryption_state.hpp"
 
 namespace duckdb {
 
@@ -30,11 +29,16 @@ class QueryContext;
 #define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
 //! The default block header size.
 #define DEFAULT_BLOCK_HEADER_STORAGE_SIZE 8ULL
-//! The default block header size.
+//! The default block header size for encrypted blocks.
 #define DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE 40ULL
 //! The configurable block allocation size.
+
+// Configurable block allocation size
 #ifndef DUCKDB_BLOCK_HEADER_STORAGE_SIZE
-#define DUCKDB_BLOCK_HEADER_STORAGE_SIZE     DEFAULT_BLOCK_HEADER_STORAGE_SIZE
+#define DUCKDB_BLOCK_HEADER_STORAGE_SIZE DEFAULT_BLOCK_HEADER_STORAGE_SIZE
+#endif
+
+#ifndef DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE
 #define DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE 32ULL
 #endif
 
@@ -56,8 +60,6 @@ struct Storage {
 	constexpr static idx_t DEFAULT_BLOCK_HEADER_SIZE = sizeof(idx_t);
 	//! The default block header size for blocks written to storage.
 	constexpr static idx_t MAX_BLOCK_HEADER_SIZE = 128ULL;
-	//! Block header size for encrypted blocks (64 bytes)
-	constexpr static idx_t ENCRYPTED_BLOCK_HEADER_SIZE = 64ULL;
 	//! The default block size.
 	constexpr static idx_t DEFAULT_BLOCK_SIZE = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_SIZE;
 
@@ -98,6 +100,8 @@ public:
 	uint64_t version_number;
 	//! The set of flags used by the database.
 	uint64_t flags[FLAG_COUNT];
+	//! Encryption version
+	uint8_t encryption_version;
 
 	//! The length of the unique database identifier.
 	static constexpr idx_t DB_IDENTIFIER_LEN = 16;
@@ -106,7 +110,9 @@ public:
 	//! The canary is a known plaintext for detecting wrong keys early.
 	static constexpr idx_t CANARY_BYTE_SIZE = 8;
 	//! Nonce, IV (nonce + counter) and tag length
-	static constexpr uint64_t AES_NONCE_LEN = 16;
+	static constexpr uint64_t AES_NONCE_LEN = 12;
+	static constexpr uint64_t AES_COUNTER_BYTES = 4;
+	static constexpr uint64_t AES_NONCE_LEN_DEPRECATED = 16;
 	static constexpr uint64_t AES_IV_LEN = 16;
 	static constexpr uint64_t AES_TAG_LEN = 16;
 
@@ -125,14 +131,21 @@ public:
 	void SetEncrypted() {
 		flags[0] |= MainHeader::ENCRYPTED_DATABASE_FLAG;
 	}
+	void SetEncryptionVersion(uint8_t version) {
+		encryption_version = version;
+	}
 
 	void SetEncryptionMetadata(data_ptr_t source) {
 		memset(encryption_metadata, 0, ENCRYPTION_METADATA_LEN);
 		memcpy(encryption_metadata, source, ENCRYPTION_METADATA_LEN);
 	}
 
-	EncryptionTypes::CipherType GetEncryptionCipher() {
-		return static_cast<EncryptionTypes::CipherType>(encryption_metadata[2]);
+	uint8_t GetEncryptionCipher() const {
+		return encryption_metadata[2];
+	}
+
+	uint8_t GetEncryptionVersion() const {
+		return encryption_metadata[3];
 	}
 
 	void SetDBIdentifier(data_ptr_t source) {
@@ -145,8 +158,26 @@ public:
 		memcpy(encrypted_canary, source, CANARY_BYTE_SIZE);
 	}
 
+	void SetCanaryIV(data_ptr_t source) {
+		memset(canary_iv, 0, AES_NONCE_LEN);
+		memcpy(canary_iv, source, AES_NONCE_LEN);
+	}
+
+	void SetCanaryTag(data_ptr_t source) {
+		memset(canary_tag, 0, AES_TAG_LEN);
+		memcpy(canary_tag, source, AES_TAG_LEN);
+	}
+
 	data_ptr_t GetDBIdentifier() {
 		return db_identifier;
+	}
+
+	data_ptr_t GetIV() {
+		return canary_iv;
+	}
+
+	data_ptr_t GetTag() {
+		return canary_tag;
 	}
 
 	static bool CompareDBIdentifiers(const data_ptr_t db_identifier_1, const data_ptr_t db_identifier_2) {
@@ -172,6 +203,8 @@ private:
 	//! The unique database identifier and optional encryption salt.
 	data_t db_identifier[DB_IDENTIFIER_LEN];
 	data_t encrypted_canary[CANARY_BYTE_SIZE];
+	data_t canary_iv[AES_NONCE_LEN];
+	data_t canary_tag[AES_TAG_LEN];
 };
 
 //! The DatabaseHeader contains information about the current state of the database. Every storage file has two
@@ -180,20 +213,20 @@ private:
 //! DatabaseHeader.
 struct DatabaseHeader {
 	//! The iteration count, increases by 1 every time the storage is checkpointed.
-	uint64_t iteration;
+	uint64_t iteration = 0;
 	//! A pointer to the initial meta block
-	idx_t meta_block;
+	idx_t meta_block = 0;
 	//! A pointer to the block containing the free list
-	idx_t free_list;
+	idx_t free_list = 0;
 	//! The number of blocks that is in the file as of this database header. If the file is larger than BLOCK_SIZE *
 	//! block_count any blocks appearing AFTER block_count are implicitly part of the free_list.
-	uint64_t block_count;
+	uint64_t block_count = 0;
 	//! The allocation size of blocks in this database file. Defaults to default_block_alloc_size (DBConfig).
-	idx_t block_alloc_size;
+	idx_t block_alloc_size = 0;
 	//! The vector size of the database file
-	idx_t vector_size;
+	idx_t vector_size = 0;
 	//! The serialization compatibility version
-	idx_t serialization_compatibility;
+	idx_t serialization_compatibility = 0;
 
 	void Write(WriteStream &ser);
 	static DatabaseHeader Read(const MainHeader &header, ReadStream &source);

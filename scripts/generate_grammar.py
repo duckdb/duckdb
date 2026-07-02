@@ -101,7 +101,8 @@ for kw in reserved_keywords:
     kwdict[kw] = 'RESERVED_KEYWORD'
 
 kwlist = [(x, kwdict[x]) for x in kwdict.keys()]
-kwlist.sort(key=lambda x: strip_p(x[0]))
+# sorting uppercase is different from lowercase: A-Z < _ < a-z
+kwlist.sort(key=lambda x: strip_p(x[0].lower()))
 
 # now generate kwlist.h
 # PG_KEYWORD("abort", ABORT_P, UNRESERVED_KEYWORD)

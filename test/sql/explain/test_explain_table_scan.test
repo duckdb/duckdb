@@ -14,4 +14,4 @@ INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3), (NULL, NULL)
 query II
 EXPLAIN SELECT * FROM integers
 ----
-physical_plan	<REGEX>:.*Table: integers.*
+physical_plan	<REGEX>:.*Table: .*.integers.*

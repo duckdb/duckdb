@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
-#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 

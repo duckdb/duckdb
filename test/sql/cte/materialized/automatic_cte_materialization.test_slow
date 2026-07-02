@@ -11,6 +11,9 @@ statement ok
 PRAGMA explain_output='OPTIMIZED_ONLY'
 
 statement ok
+SET disabled_optimizers TO 'common_subplan'
+
+statement ok
 CALL dbgen(sf=0.01);
 
 # TPC-H Q15

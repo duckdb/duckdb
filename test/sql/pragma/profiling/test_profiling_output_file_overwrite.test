@@ -1,0 +1,62 @@
+# name: test/sql/pragma/profiling/test_profiling_output_file_overwrite.test
+# description: Test that the profiling output can only be written to files that match the output type
+# group: [profiling]
+
+# Both the file types and the outputs match!
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiler.json';
+
+# Now the output doesn't match the file type anymore :(
+statement error
+PRAGMA enable_profiling = 'html';
+----
+Parser Error: Profiler file type (__TEST_DIR__/profiler.json) must either have the same file extension as the profiling output type (html), or be a '.txt' file. Set 'profiling_output' to a 'html' file or run "RESET profiling_output" first.
+
+# RESET
+statement ok
+RESET profiling_output;
+
+# now we can set it to html
+statement ok
+PRAGMA enable_profiling = 'html';
+
+# txt files always work!
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiler.txt';
+
+statement ok
+PRAGMA enable_profiling = 'query_tree';
+
+statement ok
+PRAGMA enable_profiling = 'GRAPHVIZ';
+
+# RESET
+statement ok
+RESET profiling_output;
+
+statement ok
+RESET enable_profiling;
+
+# Setting a JSON out of the box doesn't work because the default output type is 'query_tree'
+statement error
+PRAGMA profiling_output = '__TEST_DIR__/profiler.json';
+----
+Parser Error: Profiler file type (__TEST_DIR__/profiler.json) must either have the same file extension as the profiling output type (query_tree), or be a '.txt' file. Set "enable_profiling = 'json'" first.
+
+# Make sure we can't write over another file:
+statement ok
+ATTACH '__TEST_DIR__/my_important_database.db';
+
+statement error
+PRAGMA profiling_output = '__TEST_DIR__/my_important_database.db.db';
+----
+Parser Error: Invalid output file type: db
+
+# Trying to bypass this by passing a `db` as output type doesn't work either.
+statement error
+PRAGMA enable_profiling = 'db';
+----
+Parser Error: Unrecognized print format db, supported formats: [json, query_tree, query_tree_optimizer, no_output, html, graphviz]

@@ -1,0 +1,20 @@
+# name: test/sql/peg_parser/transformer/peg_transformer.test
+# description: Test analyze and vacuum statements in peg parser
+# group: [transformer]
+
+require autocomplete
+
+require skip_reload
+
+require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
+
+statement ok
+set allow_parser_override_extension=strict;
+
+statement ok
+SET threads=1;
+
+query I
+select 1;
+----
+1

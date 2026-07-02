@@ -1,0 +1,30 @@
+# name: benchmark/micro/join/asof_join_unpartitioned.benchmark
+# description: AsOf Join with a single partition
+# group: [join]
+
+name AsOf Join unpartitioned
+group join
+subgroup asof
+
+argument build 100000000
+argument probe 1000000
+
+load
+PRAGMA debug_asof_iejoin=False;
+SELECT SETSEED(0.8675309);
+CREATE TABLE vals AS (
+	SELECT 
+		'2021-01-01T00:00:00'::TIMESTAMP + INTERVAL (random() * 60 * 60 * 24 * 365) SECOND AS ts,
+		v
+	FROM range(0,${build}) tbl(v)
+);
+CREATE TABLE events AS
+	SELECT '2021-01-01T00:00:00'::TIMESTAMP + INTERVAL (random() * 60 * 60 * 24 * 365) SECOND AS ts,
+	FROM range(0, ${probe}) tbl(r);
+
+run
+SELECT SUM(v)
+FROM "events"
+ASOF JOIN "vals"
+USING (ts)
+;

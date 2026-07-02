@@ -62,4 +62,14 @@ def test_safe_mode_query(shell, random_filepath, sql, persistent):
     result = test.run()
     result.check_stderr('disabled')
 
+
+def test_lock_config(shell, random_filepath):
+    arguments = ['-safe']
+    test = (
+        ShellTest(shell, arguments)
+        .statement("SET memory_limit='-1'")
+    )
+    result = test.run()
+    result.check_stderr('locked')
+
 # fmt: on

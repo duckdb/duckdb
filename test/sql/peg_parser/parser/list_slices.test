@@ -1,0 +1,11 @@
+# name: test/sql/peg_parser/parser/list_slices.test
+# description: Test list slices in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT ([1,2,3])[1:-1:1];$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT ([1,2,3,4,5])[1:-:2];$TEST_PEG_PARSER$);

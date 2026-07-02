@@ -5,6 +5,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 namespace duckdb {
@@ -63,7 +64,7 @@ bool LogManager::CanScan(LoggingTargetTable table) {
 	return log_storage->CanScan(table);
 }
 
-LogManager::LogManager(DatabaseInstance &db, LogConfig config_p) : config(std::move(config_p)) {
+LogManager::LogManager(DatabaseInstance &db, LogConfig config_p) : config(std::move(config_p)), db_instance(db) {
 	log_storage = make_uniq<InMemoryLogStorage>(db);
 }
 
@@ -95,8 +96,12 @@ RegisteredLoggingContext LogManager::RegisterLoggingContextInternal(LoggingConte
 
 void LogManager::WriteLogEntry(timestamp_t timestamp, const char *log_type, LogLevel log_level, const char *log_message,
                                const RegisteredLoggingContext &context) {
-	unique_lock<mutex> lck(lock);
-	log_storage->WriteLogEntry(timestamp, log_level, log_type, log_message, context);
+	if (log_level == LogLevel::LOG_WARNING && Settings::Get<WarningsAsErrorsSetting>(db_instance)) {
+		throw InvalidInputException(log_message);
+	} else {
+		unique_lock<mutex> lck(lock);
+		log_storage->WriteLogEntry(timestamp, log_level, log_type, log_message, context);
+	}
 }
 
 void LogManager::FlushCachedLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
@@ -152,6 +157,15 @@ void LogManager::SetDisabledLogTypes(optional_ptr<unordered_set<string>> disable
 
 void LogManager::SetLogStorage(DatabaseInstance &db, const string &storage_name) {
 	unique_lock<mutex> lck(lock);
+	// 'SET logging_storage' cannot supply the path that file storage requires, so reject the switch
+	// here (active storage preserved) and point users at enable_logging instead of installing a
+	// path-less storage that throws on every later flush.
+	auto storage_name_to_lower = StringUtil::Lower(storage_name);
+	if (storage_name_to_lower == LogConfig::FILE_STORAGE_NAME && config.storage != storage_name_to_lower) {
+		throw InvalidConfigurationException(
+		    "Cannot select 'file' log storage via 'SET logging_storage' because it requires a path. "
+		    "Use CALL enable_logging(storage='file', storage_path='...') instead.");
+	}
 	SetLogStorageInternal(db, storage_name);
 }
 

@@ -154,9 +154,8 @@ logging_level	INFO
 logging_mode	LEVEL_ONLY
 logging_storage	file
 
-# Reset
 statement ok
-CALL enable_logging()
+CALL enable_logging(storage='memory')
 
 #### 
 # Some invalid invocations throw nice errors
@@ -220,4 +219,85 @@ enabled_log_types	(empty)
 logging_level	INFO
 logging_mode	LEVEL_ONLY
 logging_storage	memory
+
+# Regression: CALL enable_logging() must not silently reset logging_storage.
+
+statement ok
+CALL disable_logging()
+
+statement ok
+SET logging_storage='stdout'
+
+query I
+SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+----
+stdout
+
+# enable_logging() with no args must preserve the user's previous storage choice
+statement ok
+CALL enable_logging()
+
+query I
+SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+----
+stdout
+
+# Explicitly passing storage= still works and overrides the current setting
+statement ok
+CALL enable_logging(storage='memory')
+
+query I
+SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+----
+memory
+
+statement ok
+RESET logging_storage
+
+# Same regression with file storage: storage configured via a prior enable_logging(storage='file', ...)
+# must survive a subsequent no-arg enable_logging() call.
+statement ok
+CALL disable_logging()
+
+statement ok
+CALL enable_logging(storage='file', storage_path='__TEST_DIR__/preserve_storage.log')
+
+statement ok
+CALL disable_logging()
+
+statement ok
+CALL enable_logging()
+
+query I
+SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+----
+file
+
+statement ok
+CALL disable_logging()
+
+statement ok
+RESET logging_storage
+
+# storage_config={path:...} without an explicit storage= must auto-promote to file storage
+# (mirroring the storage_path= sugar) — not silently apply a file-only config to the current storage.
+statement ok
+CALL enable_logging(storage_config:={path:'__TEST_DIR__/auto_promote.csv'})
+
+query I
+SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+----
+file
+
+statement ok
+CALL disable_logging()
+
+statement ok
+RESET logging_storage
+
+# storage_config keys that no storage recognises must error, not silently pass.
+statement error
+CALL enable_logging(storage_config:={aaaargh:'blaargh'})
+----
+Unrecognized log storage config option
 

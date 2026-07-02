@@ -11,16 +11,10 @@
 #include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
@@ -79,7 +73,7 @@ public:
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
 		segment_data = handle.Ptr() + segment.GetBlockOffset();
-		const auto block_size = segment.GetBlockManager().GetBlockSize();
+		const auto block_size = segment.GetBlockSize();
 
 		idx_t total_segment_offset = segment.GetBlockOffset();
 		auto metadata_offset = Load<uint32_t>(segment_data);
@@ -119,7 +113,6 @@ public:
 		    actual_dictionary_size_bytes > left_parts_dict_max_size) {
 			throw IOException("Corrupted ALPRD segment: actual_dictionary_size is corrupted");
 		}
-
 		// Load the left parts dictionary which is after the segment header and is of a fixed size
 		memcpy(vector_state.left_parts_dict, segment_ptr, actual_dictionary_size_bytes);
 	}
@@ -176,7 +169,7 @@ public:
 		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		const auto block_size = segment.GetBlockManager().GetBlockSize();
+		const auto block_size = segment.GetBlockSize();
 		if (data_byte_offset >= block_size) {
 			throw IOException(
 			    "Corrupted ALPRD segment: stored data_byte_offset (%d) exceeds the segments block size (%d)",
@@ -190,7 +183,22 @@ public:
 		// Load the vector data
 		vector_state.exceptions_count = Load<uint16_t>(vector_ptr);
 		vector_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
-		D_ASSERT(vector_state.exceptions_count <= vector_size);
+
+		const bool uncompressed_mode = vector_state.exceptions_count == AlpRDConstants::UNCOMPRESSED_MODE_SENTINEL;
+		if (uncompressed_mode) {
+			if (!SKIP) {
+				// Read uncompressed values
+				const idx_t value_buffer_copy_size = sizeof(T) * vector_size;
+				if (vector_ptr + value_buffer_copy_size > segment_data + block_size) {
+					const auto bytes_remaining_in_block = (segment_data + block_size) - vector_ptr;
+					throw IOException("Corrupted ALPRD segment: stored vector_size is invalid, to-copy bytes "
+					                  "(%d) would exceed bytes remaining in the block (%d)",
+					                  value_buffer_copy_size, bytes_remaining_in_block);
+				}
+				memcpy(value_buffer, vector_ptr, value_buffer_copy_size);
+			}
+			return;
+		}
 
 		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.left_bit_width);
 		auto right_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.right_bit_width);
@@ -268,7 +276,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> AlpRDInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> AlpRDInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq_base<SegmentScanState, AlpRDScanState<T>>(segment);
 	return result;
 }

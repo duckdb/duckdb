@@ -36,14 +36,14 @@ static unique_ptr<FunctionData> CardinalityBind(ClientContext &context, ScalarFu
 		throw BinderException("Cardinality can only operate on MAPs");
 	}
 
-	bound_function.return_type = LogicalType::UBIGINT;
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	bound_function.SetReturnType(LogicalType::UBIGINT);
+	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
 ScalarFunction CardinalityFun::GetFunction() {
 	ScalarFunction fun({LogicalType::ANY}, LogicalType::UBIGINT, CardinalityFunction, CardinalityBind);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	return fun;
 }
 

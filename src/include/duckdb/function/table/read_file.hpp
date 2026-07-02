@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/multi_file/multi_file_function.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
@@ -29,6 +30,8 @@ struct ReadFileGlobalState : public GlobalTableFunctionState {
 	shared_ptr<MultiFileList> file_list;
 	vector<idx_t> column_ids;
 	bool requires_file_open = false;
+
+	unique_ptr<MemoryStream> stream;
 };
 
 } // namespace duckdb

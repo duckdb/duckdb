@@ -88,7 +88,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '[]' || ''}}
+  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
 
 jobs:
   check-draft:
@@ -125,7 +125,7 @@ jobs:
 
     env:
       # NOTE: on PRs we exclude some archs to speed things up
-      BASE_EXCLUDE_ARCHS: ${{ (github.event_name == 'pull_request' || inputs.run_all != 'true') && 'wasm_mvp;wasm_threads;windows_amd64_mingw;osx_amd64;linux_arm64;linux_amd64_musl;' || '' }}
+      BASE_EXCLUDE_ARCHS: ${{ (github.event_name == 'pull_request' || inputs.run_all != 'true') && 'wasm_mvp;wasm_threads;windows_amd64_mingw;osx_amd64;osx_arm64;linux_arm64;linux_amd64_musl;' || '' }}
       EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
       OPT_IN_ARCHS: ${{ inputs.opt_in_archs }}
     steps:
@@ -183,7 +183,7 @@ jobs:
         name: Configure External extensions (batch 2)
         env:
           CONFIG_FILE: .github/config/external_extensions2.cmake
-          DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64;linux_amd64_musl'
+          DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;linux_amd64_musl'
         run: |
           echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS;osx_amd64" >> $GITHUB_OUTPUT
           external_extensions="`cat .github/config/external_extensions2.cmake`"
@@ -204,6 +204,7 @@ jobs:
       exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
       opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
       extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
+      extra_toolchains: 'unixodbc;parser_tools'
       override_tag: ${{ inputs.override_git_describe }}
       override_duckdb_version: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
@@ -324,19 +325,12 @@ jobs:
         - create-extension-repository
 
     steps:
-      - name: Free disk space
-        uses: endersonmenezes/free-disk-space@v3
-        continue-on-error: true
-        if: inputs.run_disk_clean_step
-        with:
-          remove_haskell: true
-          remove_tool_cache: true
-          remove_folders: "/usr/local/share/powershell /usr/share/swift"
-          testing: false
 
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: ./.github/actions/cleanup_runner
 
       - uses: actions/download-artifact@v4
         with:
@@ -418,7 +412,7 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}

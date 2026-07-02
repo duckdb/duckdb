@@ -24,15 +24,6 @@ namespace duckdb {
 
 struct Radix {
 public:
-	static inline bool IsLittleEndian() {
-		int n = 1;
-		if (*char_ptr_cast(&n) == 1) {
-			return true;
-		} else {
-			return false;
-		}
-	}
-
 	template <class T>
 	static inline void EncodeData(data_ptr_t dataptr, T value) {
 		throw NotImplementedException("Cannot create data from this type");
@@ -177,7 +168,7 @@ void Radix::EncodeSigned(data_ptr_t dataptr, T value) {
 	using UNSIGNED = typename MakeUnsigned<T>::type;
 	UNSIGNED bytes;
 	Store<T>(value, data_ptr_cast(&bytes));
-	Store<UNSIGNED>(BSwap(bytes), dataptr);
+	Store<UNSIGNED>(BSwapIfLE(bytes), dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
@@ -208,17 +199,17 @@ inline void Radix::EncodeData(data_ptr_t dataptr, uint8_t value) {
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, uint16_t value) {
-	Store<uint16_t>(BSwap(value), dataptr);
+	Store<uint16_t>(BSwapIfLE(value), dataptr);
 }
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, uint32_t value) {
-	Store<uint32_t>(BSwap(value), dataptr);
+	Store<uint32_t>(BSwapIfLE(value), dataptr);
 }
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, uint64_t value) {
-	Store<uint64_t>(BSwap(value), dataptr);
+	Store<uint64_t>(BSwapIfLE(value), dataptr);
 }
 
 template <>
@@ -236,13 +227,13 @@ inline void Radix::EncodeData(data_ptr_t dataptr, uhugeint_t value) {
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, float value) {
 	uint32_t converted_value = EncodeFloat(value);
-	Store<uint32_t>(BSwap(converted_value), dataptr);
+	Store<uint32_t>(BSwapIfLE(converted_value), dataptr);
 }
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, double value) {
 	uint64_t converted_value = EncodeDouble(value);
-	Store<uint64_t>(BSwap(converted_value), dataptr);
+	Store<uint64_t>(BSwapIfLE(converted_value), dataptr);
 }
 
 template <>
@@ -266,7 +257,7 @@ T Radix::DecodeSigned(const_data_ptr_t input) {
 	auto bytes_data = data_ptr_cast(&bytes);
 	bytes_data[0] = FlipSign(bytes_data[0]);
 	T result;
-	Store<UNSIGNED>(BSwap(bytes), data_ptr_cast(&result));
+	Store<UNSIGNED>(BSwapIfLE(bytes), data_ptr_cast(&result));
 	return result;
 }
 
@@ -297,17 +288,17 @@ inline uint8_t Radix::DecodeData(const_data_ptr_t input) {
 
 template <>
 inline uint16_t Radix::DecodeData(const_data_ptr_t input) {
-	return BSwap(Load<uint16_t>(input));
+	return BSwapIfLE(Load<uint16_t>(input));
 }
 
 template <>
 inline uint32_t Radix::DecodeData(const_data_ptr_t input) {
-	return BSwap(Load<uint32_t>(input));
+	return BSwapIfLE(Load<uint32_t>(input));
 }
 
 template <>
 inline uint64_t Radix::DecodeData(const_data_ptr_t input) {
-	return BSwap(Load<uint64_t>(input));
+	return BSwapIfLE(Load<uint64_t>(input));
 }
 
 template <>
@@ -328,12 +319,12 @@ inline uhugeint_t Radix::DecodeData(const_data_ptr_t input) {
 
 template <>
 inline float Radix::DecodeData(const_data_ptr_t input) {
-	return DecodeFloat(BSwap(Load<uint32_t>(input)));
+	return DecodeFloat(BSwapIfLE(Load<uint32_t>(input)));
 }
 
 template <>
 inline double Radix::DecodeData(const_data_ptr_t input) {
-	return DecodeDouble(BSwap(Load<uint64_t>(input)));
+	return DecodeDouble(BSwapIfLE(Load<uint64_t>(input)));
 }
 
 template <>

@@ -1,7 +1,5 @@
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/expression_util.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 

@@ -1,0 +1,31 @@
+# name: test/sql/types/geo/geometry_shred_list.test
+# group: [geo]
+
+require vector_size 2048
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+SET geometry_minimum_shredding_size = 0;
+
+statement ok
+create table t1(g geometry[], id integer);
+
+statement ok
+insert into t1 select [printf('POINT(%d %d)', i, i)::geometry], i from range(0,3000) as r(i);
+
+statement ok
+CHECKPOINT;
+
+query II
+select g, id from t1 order by id limit 1;
+----
+['POINT (0 0)']	0
+
+
+# Trigger both ScanCount and Skip in the storage
+query II
+select g, id from t1 where id > 200 and id < 2500 order by id desc limit 1
+----
+['POINT (2499 2499)']	2499

@@ -31,10 +31,6 @@ public:
 	DUCKDB_API explicit ArrowQueryResult(ErrorData error);
 
 public:
-	//! Fetches a DataChunk from the query result.
-	//! This will consume the result (i.e. the result can only be scanned once with this function)
-	DUCKDB_API unique_ptr<DataChunk> Fetch() override;
-	DUCKDB_API unique_ptr<DataChunk> FetchRaw() override;
 	//! Converts the QueryResult to a string
 	DUCKDB_API string ToString() override;
 
@@ -43,6 +39,9 @@ public:
 	vector<unique_ptr<ArrowArrayWrapper>> &Arrays();
 	void SetArrowData(vector<unique_ptr<ArrowArrayWrapper>> arrays);
 	idx_t BatchSize() const;
+
+protected:
+	DUCKDB_API unique_ptr<DataChunk> FetchInternal() override;
 
 private:
 	vector<unique_ptr<ArrowArrayWrapper>> arrays;

@@ -1,0 +1,5 @@
+{
+  "base_config": "test/configs/force_storage.json",
+  "description": "Run tests with debug prefetching enabled",
+  "on_init": "SET storage_block_prefetch='debug_force_always'"
+}

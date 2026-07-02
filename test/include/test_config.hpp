@@ -56,6 +56,7 @@ public:
 	string GetInitialDBPath();
 	optional_idx GetMaxThreads();
 	optional_idx GetBlockAllocSize();
+	optional_idx GetMaxTestThreads();
 	idx_t GetCheckpointWALSize();
 	bool GetForceRestart();
 	bool GetCheckpointOnShutdown();
@@ -77,6 +78,7 @@ public:
 	vector<string> ErrorMessagesToBeSkipped();
 	string GetStorageVersion();
 	string GetTestEnv(const string &key, const string &default_value);
+	bool HasTestEnv(const string &key);
 	const unordered_map<string, string> &GetTestEnvMap();
 	vector<unordered_set<string>> GetSelectTagSets();
 	vector<unordered_set<string>> GetSkipTagSets();
@@ -88,6 +90,7 @@ public:
 	static bool TestMemoryLeaks();
 	static bool TestRunStorageFuzzer();
 
+	static void LoadBaseConfig(const Value &input);
 	static void ParseConnectScript(const Value &input);
 	static void CheckSortStyle(const Value &input);
 	static bool TryParseSortStyle(const string &sort_style, SortStyle &result);
@@ -95,8 +98,11 @@ public:
 	static void AppendSkipTagSet(const Value &tag_set);
 
 private:
+	void LoadTestEnvFromConfig();
+
 	//! Give preference to settings from loaded configs
 	bool test_env_from_config_loaded = false;
+	unordered_set<string> test_env_from_config_keys;
 	case_insensitive_map_t<Value> options;
 	unordered_set<string> tests_to_be_skipped;
 

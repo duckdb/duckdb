@@ -18,6 +18,7 @@ create table quantile as select range r, random() from range(0,1000000,100) unio
 statement error
 SELECT quantile_cont(r, NULL) FROM quantile
 ----
+Binder Error: QUANTILE argument must not be NULL
 
 query R
 SELECT quantile_cont(r, 0.5) FROM quantile
@@ -112,6 +113,7 @@ SELECT quantile_cont('00:00:00'::TIME + interval (r/100) second, 0.5) FROM quant
 statement error
 SELECT quantile_cont(interval (r/100) second, 0.5) FROM quantile
 ----
+<REGEX>:.*Binder Error: No function matches.*'quantile_cont.*
 
 # WITH TIME ZONE
 query I
@@ -150,31 +152,37 @@ NULL
 statement error
 SELECT quantile_cont(r, -1.1) FROM quantile
 ----
+Binder Error: QUANTILE can only take parameters in the range [-1, 1]
 
 statement error
 SELECT quantile_cont(r, 1.1) FROM quantile
 ----
+Binder Error: QUANTILE can only take parameters in the range [-1, 1]
 
 statement error
 SELECT quantile_cont(r, "string") FROM quantile
 ----
+Binder Error: Referenced column "string" not found in FROM clause
 
 statement error
 SELECT quantile_cont(r, NULL) FROM quantile
 ----
+Binder Error: QUANTILE argument must not be NULL
 
 statement error
 SELECT quantile_cont(r::string, 0.5) FROM quantile
 ----
+<REGEX>:.*Binder Error: No function matches.*'quantile_cont.*
 
 statement error
 SELECT quantile_cont(r) FROM quantile
 ----
+<REGEX>:.*Binder Error: No function matches.*'quantile_cont.*
 
 statement error
 SELECT quantile_cont(r, 0.1, 50) FROM quantile
 ----
-
+<REGEX>:.*Binder Error: No function matches.*'quantile_cont.*
 
 statement ok
 pragma threads=4
@@ -321,3 +329,4 @@ SELECT quantile_cont(t, 0.5) FROM bigints;
 statement error
 SELECT quantile_cont(r, random()) FROM quantile
 ----
+Binder Error: QUANTILE can only take constant parameters

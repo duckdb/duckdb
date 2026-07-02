@@ -11,6 +11,7 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/string.hpp"
+#include "duckdb/common/arena_containers/arena_ptr.hpp"
 
 namespace duckdb {
 
@@ -82,6 +83,16 @@ public:
 	T *Make(ARGS &&... args) {
 		auto mem = AllocateAligned(sizeof(T));
 		return new (mem) T(std::forward<ARGS>(args)...);
+	}
+
+	template <class T, class... ARGS>
+	arena_ptr<T> MakePtr(ARGS &&... args) {
+		return arena_ptr<T>(Make<T>(std::forward<ARGS>(args)...));
+	}
+
+	template <class T, class... ARGS>
+	unsafe_arena_ptr<T> MakeUnsafePtr(ARGS &&... args) {
+		return unsafe_arena_ptr<T>(Make<T>(std::forward<ARGS>(args)...));
 	}
 
 	String MakeString(const char *data, const size_t len) {

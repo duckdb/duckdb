@@ -13,13 +13,14 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
 struct DynamicFilterData {
 	mutex lock;
 	unique_ptr<ConstantFilter> filter;
-	bool initialized = false;
+	atomic<bool> initialized = {false};
 
 	void SetValue(Value val);
 	void Reset();

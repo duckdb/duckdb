@@ -24,6 +24,10 @@ static const TestConfigOption test_config_options[] = {
     {"comment", "Extra free form comment line", LogicalType::VARCHAR, nullptr},
     {"initial_db", "Initial database path", LogicalType::VARCHAR, nullptr},
     {"max_threads", "Max threads to use during tests", LogicalType::BIGINT, nullptr},
+    {"max_test_threads", "Max threads to be used by the test runner itself (for e.g. concurrent loop)",
+     LogicalType::BIGINT, nullptr},
+    {"base_config", "Config file to load and base initial settings on", LogicalType::VARCHAR,
+     TestConfiguration::LoadBaseConfig},
     {"block_size", "Block Alloction Size; must be a power of 2", LogicalType::BIGINT, nullptr},
     {"checkpoint_wal_size", "Size in bytes after which to trigger automatic checkpointing", LogicalType::BIGINT,
      nullptr},
@@ -66,6 +70,7 @@ static const TestConfigOption test_config_options[] = {
     {"settings", "Configuration settings to apply",
      LogicalType::LIST(LogicalType::STRUCT({{"name", LogicalType::VARCHAR}, {"value", LogicalType::VARCHAR}})),
      nullptr},
+    {"extends", "List of config files to extend from", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
@@ -219,7 +224,11 @@ bool TestConfiguration::TryParseOption(const string &name, const Value &value) {
 	if (test_config.on_set_option) {
 		test_config.on_set_option(parameter);
 	}
-	options.insert(make_pair(test_config.name, parameter));
+	options[test_config.name] = parameter;
+	if (StringUtil::CIEquals(test_config.name, "test_env")) {
+		test_env_from_config_loaded = false;
+		test_env_from_config_keys.clear();
+	}
 	return true;
 }
 
@@ -242,6 +251,14 @@ TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoL
 }
 
 bool TestConfiguration::ShouldSkipTest(const string &test_name) {
+	if (test_name.find('/') == 0) {
+		// Full path specified, strip down to base path so the extension config lookup still works
+		auto pos = test_name.find("test/sql");
+		if (pos != string::npos) {
+			const string stripped_test_name = test_name.c_str() + pos;
+			return tests_to_be_skipped.count(stripped_test_name);
+		}
+	}
 	return tests_to_be_skipped.count(test_name);
 }
 
@@ -300,8 +317,22 @@ vector<string> TestConfiguration::ErrorMessagesToBeSkipped() {
 	} else {
 		res.push_back("HTTP");
 		res.push_back("Unable to connect");
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+#ifndef AVOID_DUCKDB_DEBUG_ASYNC_THROW
+		// The first of those it's throw as a test of what would happen if a task were to be throwing
+		// It's OK that PositionalTableScanner react re-throwing a different exception, so they need to be removed in
+		// this specific test setup
+		res.push_back("ThrowAsyncTask: Test error handling when throwing mid-task");
+		res.push_back("Unexpected interrupt from table Source in PositionalTableScanner refill");
+#endif
+#endif
 	}
 	return res;
+}
+
+void TestConfiguration::LoadBaseConfig(const Value &input) {
+	auto &test_config = TestConfiguration::Get();
+	test_config.LoadConfig(input.ToString());
 }
 
 void TestConfiguration::ParseConnectScript(const Value &input) {
@@ -346,39 +377,88 @@ string TestConfiguration::ReadFileToString(const string &path) {
 }
 
 void TestConfiguration::LoadConfig(const string &config_path) {
-	// read the config file
-	auto buffer = ReadFileToString(config_path);
-	// parse json
-	auto json = StringUtil::ParseJSONMap(buffer);
-	auto json_values = json->Flatten();
-	for (auto &entry : json_values) {
-		ParseOption(entry.first, Value(entry.second));
-	}
+	try {
+		// read the config file
+		auto buffer = ReadFileToString(config_path);
+		// parse json
+		auto json = StringUtil::ParseJSONMap(buffer);
+		auto json_values = json->Flatten();
 
-	auto inherit_entry = options.find("inherit_skip_tests");
-	if (inherit_entry != options.end()) {
-		auto path_value = inherit_entry->second;
-		D_ASSERT(path_value.type().id() == LogicalTypeId::VARCHAR);
-		D_ASSERT(!path_value.IsNull());
-		auto cwd = TestGetCurrentDirectory();
-		auto path = TestJoinPath(cwd, path_value.ToString());
-		TestConfiguration inherit_config;
-		inherit_config.LoadConfig(path);
-		tests_to_be_skipped.insert(inherit_config.tests_to_be_skipped.begin(),
-		                           inherit_config.tests_to_be_skipped.end());
-	}
-
-	// Convert to unordered_set<string> the list of tests to be skipped
-	auto entry = options.find("skip_tests");
-	if (entry != options.end()) {
-		auto skip_list_entry = ListValue::GetChildren(entry->second);
-		for (const auto &value : skip_list_entry) {
-			auto children = StructValue::GetChildren(value);
-			auto skip_list = ListValue::GetChildren(children[1]);
-			for (const auto &skipped_test : skip_list) {
-				tests_to_be_skipped.insert(skipped_test.GetValue<string>());
+		auto extends_it = json_values.find("extends");
+		if (extends_it != json_values.end()) {
+			auto config_dir = StringUtil::GetFilePath(config_path);
+			auto extends_list = Value(extends_it->second).DefaultCastAs(LogicalType::LIST(LogicalType::VARCHAR));
+			for (auto &child : ListValue::GetChildren(extends_list)) {
+				auto path = child.GetValue<string>();
+				if (!config_dir.empty() && !path.empty() && path[0] != '/') {
+					path = config_dir + "/" + path;
+				}
+				LoadConfig(path);
 			}
 		}
+
+		for (auto &entry : json_values) {
+			ParseOption(entry.first, Value(entry.second));
+		}
+		auto inherit_entry = options.find("inherit_skip_tests");
+		if (inherit_entry != options.end()) {
+			auto path_value = inherit_entry->second;
+			D_ASSERT(path_value.type().id() == LogicalTypeId::VARCHAR);
+			D_ASSERT(!path_value.IsNull());
+			auto cwd = TestGetCurrentDirectory();
+			auto path = TestJoinPath(cwd, path_value.ToString());
+			TestConfiguration inherit_config;
+			inherit_config.LoadConfig(path);
+
+			tests_to_be_skipped.insert(inherit_config.tests_to_be_skipped.begin(),
+			                           inherit_config.tests_to_be_skipped.end());
+		}
+		bool found_duplicate_tests = false;
+		// Convert to unordered_set<string> the list of tests to be skipped
+		auto entry = options.find("skip_tests");
+		if (entry != options.end()) {
+			auto skip_list_entry = ListValue::GetChildren(entry->second);
+			for (const auto &value : skip_list_entry) {
+				auto children = StructValue::GetChildren(value);
+				auto skip_list = ListValue::GetChildren(children[1]);
+				for (const auto &skipped_test : skip_list) {
+					auto skipped_test_str = skipped_test.GetValue<string>();
+					auto insert_result = tests_to_be_skipped.insert(skipped_test_str);
+					if (!insert_result.second) {
+						Printer::PrintF("* Test \"%s\" was already present in skipped test list", skipped_test_str);
+						found_duplicate_tests = true;
+					}
+				}
+			}
+			options.erase("skip_tests");
+		}
+		if (found_duplicate_tests) {
+			Printer::PrintF("Run python3 scripts/cleanup_config_skip_tests.py to clean up");
+		}
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		throw std::runtime_error(
+		    StringUtil::Format("Failed to parse config file \"%s\": %s", config_path, error.Message()));
+	}
+}
+
+void TestConfiguration::LoadTestEnvFromConfig() {
+	if (test_env_from_config_loaded) {
+		return;
+	}
+	test_env_from_config_loaded = true;
+	test_env_from_config_keys.clear();
+	auto entry = options.find("test_env");
+	if (entry == options.end()) {
+		return;
+	}
+	auto list_children = ListValue::GetChildren(entry->second);
+	for (const auto &value : list_children) {
+		auto &struct_children = StructValue::GetChildren(value);
+		auto &env = StringValue::Get(struct_children[0]);
+		auto &env_value = StringValue::Get(struct_children[1]);
+		test_env_from_config_keys.insert(env);
+		test_env[env] = env_value;
 	}
 }
 
@@ -412,6 +492,10 @@ string TestConfiguration::GetInitialDBPath() {
 
 optional_idx TestConfiguration::GetMaxThreads() {
 	return GetOptionOrDefault<optional_idx, idx_t>("max_threads", optional_idx());
+}
+
+optional_idx TestConfiguration::GetMaxTestThreads() {
+	return GetOptionOrDefault<optional_idx, idx_t>("max_test_threads", optional_idx());
 }
 
 optional_idx TestConfiguration::GetBlockAllocSize() {
@@ -467,24 +551,20 @@ vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
 }
 
 string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
-	if (!test_env_from_config_loaded && options.find("test_env") != options.end()) {
-		test_env_from_config_loaded = true;
-		auto entry = options["test_env"];
-		auto list_children = ListValue::GetChildren(entry);
-		for (const auto &value : list_children) {
-			auto &struct_children = StructValue::GetChildren(value);
-			auto &env = StringValue::Get(struct_children[0]);
-			auto &env_value = StringValue::Get(struct_children[1]);
-			test_env[env] = env_value;
-		}
-	}
+	LoadTestEnvFromConfig();
 	if (test_env.find(key) == test_env.end()) {
 		return default_value;
 	}
 	return test_env[key];
 }
 
+bool TestConfiguration::HasTestEnv(const string &key) {
+	LoadTestEnvFromConfig();
+	return test_env_from_config_keys.find(key) != test_env_from_config_keys.end();
+}
+
 const unordered_map<string, string> &TestConfiguration::GetTestEnvMap() {
+	LoadTestEnvFromConfig();
 	return test_env;
 }
 

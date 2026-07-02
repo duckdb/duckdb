@@ -1,1 +1,1 @@
-DeallocateStatement <- 'DEALLOCATE'i 'PREPARE'i? Identifier
+DeallocateStatement <- 'DEALLOCATE' 'PREPARE'? Identifier

@@ -32,6 +32,7 @@ private:
 	idx_t proj_index;
 	vector<unique_ptr<Expression>> &proj_expressions;
 	string clause;
+	bool in_child_projection = false;
 };
 
 } // namespace duckdb

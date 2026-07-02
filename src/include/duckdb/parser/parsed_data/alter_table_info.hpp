@@ -11,7 +11,6 @@
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/constraint.hpp"
-#include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 
 namespace duckdb {
@@ -85,7 +84,9 @@ enum class AlterTableType : uint8_t {
 	SET_SORTED_BY = 13,
 	ADD_FIELD = 14,
 	REMOVE_FIELD = 15,
-	RENAME_FIELD = 16
+	RENAME_FIELD = 16,
+	SET_TABLE_OPTIONS = 17,
+	RESET_TABLE_OPTIONS = 18,
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -492,6 +493,46 @@ public:
 
 private:
 	SetSortedByInfo();
+};
+
+//===--------------------------------------------------------------------===//
+// SetOptionsInfo
+//===--------------------------------------------------------------------===//
+struct SetTableOptionsInfo : public AlterTableInfo {
+	SetTableOptionsInfo(AlterEntryData data, case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options);
+	~SetTableOptionsInfo() override;
+
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> table_options;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
+
+private:
+	SetTableOptionsInfo();
+};
+
+//===--------------------------------------------------------------------===//
+// ResetOptionsInfo
+//===--------------------------------------------------------------------===//
+struct ResetTableOptionsInfo : public AlterTableInfo {
+	ResetTableOptionsInfo(AlterEntryData data, case_insensitive_set_t table_options);
+	~ResetTableOptionsInfo() override;
+
+	case_insensitive_set_t table_options;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
+
+private:
+	ResetTableOptionsInfo();
 };
 
 } // namespace duckdb

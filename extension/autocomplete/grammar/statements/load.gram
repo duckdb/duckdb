@@ -1,4 +1,5 @@
-LoadStatement <- 'LOAD'i ColIdOrString
-InstallStatement <- 'FORCE'i? 'INSTALL'i Identifier FromSource? VersionNumber?
-FromSource <- 'FROM'i (Identifier / StringLiteral)
-VersionNumber <- Identifier
+LoadStatement <- 'LOAD' ColIdOrString
+InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
+UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
+FromSource <- 'FROM' (Identifier / StringLiteral)
+VersionNumber <- 'VERSION' IdentifierOrStringLiteral

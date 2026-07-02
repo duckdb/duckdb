@@ -1,0 +1,32 @@
+# name: test/sql/topn/topn_nulls_first.test
+# description: Ensure ORDER BY ... NULLS FIRST LIMIT uses TopN path
+# group: [topn]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE topn_nulls(v INTEGER)
+
+statement ok
+INSERT INTO topn_nulls
+SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END
+FROM range(12) tbl(i)
+
+statement ok
+PRAGMA explain_output='OPTIMIZED_ONLY'
+
+query II nosort
+EXPLAIN SELECT v FROM topn_nulls ORDER BY v NULLS FIRST LIMIT 6;
+----
+logical_opt	<REGEX>:.*TOP_N.*optional: v IS NULL.*
+
+query I
+SELECT v FROM topn_nulls ORDER BY v NULLS FIRST LIMIT 6;
+----
+NULL
+NULL
+NULL
+NULL
+1
+2

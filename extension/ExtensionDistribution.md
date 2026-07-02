@@ -48,7 +48,7 @@ DuckDB-Wasm extensions are are downloaded by the browsers WITHOUT appening .gz, 
 Either the git tag (`v0.8.0`, `v0.8.1`, ...) or the git hash of a given duckdb version.
 It's chosen at compile time and baked in DuckDB. A given duckdb executable or library is tied to a single version identifier.
 
-### Plaform
+### Platform
 
 Fixed at compile time via platform detection and baked in DuckDB.
 

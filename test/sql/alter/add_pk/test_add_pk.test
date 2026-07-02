@@ -80,3 +80,33 @@ query II
 SELECT * FROM scan WHERE i = 2
 ----
 2	3
+
+# test that ADD PRIMARY KEY preserves temporary flag
+statement ok
+CREATE TEMPORARY TABLE temp_pk_test(x INTEGER)
+
+query TTI
+SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_pk_test'
+----
+temp_pk_test	temp	true
+
+statement ok
+ALTER TABLE temp_pk_test ADD PRIMARY KEY (x)
+
+query TTI
+SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_pk_test'
+----
+temp_pk_test	temp	true
+
+
+# Try to add a primary key to the view - should give clear error message
+statement ok
+CREATE VIEW view_test AS SELECT 'hello' AS name, 42 AS value
+
+statement error
+ALTER TABLE view_test ADD PRIMARY KEY (name)
+----
+<REGEX>:Binder Error.*Cannot execute the `ALTER TABLE` statement on `.*`, only `Table` entries are accepted.*
+
+statement ok
+DROP VIEW view_test

@@ -1,0 +1,57 @@
+# name: test/sql/tpcds/tpc_gen_with_current_search_path.test_slow
+# description: Test that TPCH and TPCDS generation respects the current search path.
+# group: [tpcds]
+
+require tpcds
+
+require tpch
+
+statement ok
+SET threads = 1;
+
+# Both in the same catalog + schema: expect conflict.
+
+statement ok
+CALL dbgen(sf = 0.000001);
+
+statement error
+CALL dsdgen(sf = 0.000001);
+----
+already exists
+
+# Same catalog but different schemas: success.
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+USE s1;
+
+statement ok
+CALL dbgen(sf = 0.000001);
+
+statement ok
+CREATE SCHEMA s2;
+
+statement ok
+USE s2;
+
+statement ok
+CALL dsdgen(sf = 0.000001);
+
+# Different catalogs but same schema: success.
+
+statement ok
+ATTACH '__TEST_DIR__/foo.db' AS db1
+
+statement ok
+USE db1;
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+USE s1;
+
+statement ok
+CALL dsdgen(sf = 0.000001);

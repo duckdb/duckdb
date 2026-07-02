@@ -1,0 +1,19 @@
+# name: test/optimizer/issue_21011.test
+# description: TopN window elimination late materialization with projected columns in LEFT JOIN subquery
+# group: [optimizer]
+
+statement ok
+CREATE TEMP TABLE t AS
+SELECT * FROM (VALUES ('x', 0, 'x')) AS x(a, b, c)
+
+query T
+SELECT y.c
+FROM t AS x
+LEFT JOIN (
+	SELECT b, c
+	FROM t
+	WHERE a = 'x'
+	QUALIFY ROW_NUMBER() OVER(ORDER BY b DESC) = 1
+) AS y ON x.b = y.b
+----
+x

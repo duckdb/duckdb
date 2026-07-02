@@ -10,9 +10,7 @@
 
 #include "duckdb/parser/base_expression.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
-#include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
 class Deserializer;

@@ -8,11 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/main/valid_checker.hpp"
 
 namespace duckdb {
 class Catalog;
@@ -32,6 +30,17 @@ enum class AttachedDatabaseType {
 	TEMP_DATABASE,
 };
 
+enum class AttachVisibility { SHOWN, HIDDEN };
+
+//! DEFAULT is the standard ACID crash recovery mode.
+//! NO_WAL_WRITES disables the WAL for the attached database, i.e., disabling the D in ACID.
+//! Use this mode with caution, as it disables recovery from crashes for the file.
+enum class RecoveryMode : uint8_t { DEFAULT = 0, NO_WAL_WRITES = 1 };
+
+//! CHECKPOINT: Throws, if the checkpoint fails. Always cleans up.
+//! TRY_CHECKPOINT: Does not throw when failing a checkpoint. Always cleans up.
+enum class DatabaseCloseAction { CHECKPOINT, TRY_CHECKPOINT };
+
 class DatabaseFilePathManager;
 
 struct StoredDatabasePath {
@@ -42,7 +51,6 @@ struct StoredDatabasePath {
 	DatabaseFilePathManager &manager;
 	string path;
 
-public:
 	void OnDetach();
 };
 
@@ -56,14 +64,22 @@ struct AttachOptions {
 
 	//! Defaults to the access mode configured in the DBConfig, unless specified otherwise.
 	AccessMode access_mode;
+	//! The recovery type of the database.
+	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
 	//! The file format type. The default type is a duckdb database file, but other file formats are possible.
 	string db_type;
 	//! Set of remaining (key, value) options
 	unordered_map<string, Value> options;
 	//! (optionally) a catalog can be provided with a default table
 	QualifiedName default_table;
+	//! Whether this is the main database.
+	bool is_main_database = false;
+	//! The visibility of the attached database
+	AttachVisibility visibility = AttachVisibility::SHOWN;
 	//! The stored database path (in the path manager)
 	unique_ptr<StoredDatabasePath> stored_database_path;
+	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
+	optional_idx vacuum_rebuild_indexes_threshold;
 };
 
 //! The AttachedDatabase represents an attached database instance.
@@ -81,17 +97,23 @@ public:
 	//! Initializes the catalog and storage of the attached database.
 	void Initialize(optional_ptr<ClientContext> context = nullptr);
 	void FinalizeLoad(optional_ptr<ClientContext> context);
-	void Close();
+	//! Close the database before shutting it down.
+	void Close(const DatabaseCloseAction action);
 
 	Catalog &ParentCatalog() override;
 	const Catalog &ParentCatalog() const override;
 	bool HasStorageManager() const;
 	StorageManager &GetStorageManager();
+	const StorageManager &GetStorageManager() const;
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
 	DatabaseInstance &GetDatabase() {
 		return db;
 	}
+	ValidChecker &GetValidChecker() {
+		return validity;
+	}
+	void Invalidate(const string &reason);
 
 	optional_ptr<StorageExtension> GetStorageExtension() {
 		return storage_extension;
@@ -100,6 +122,9 @@ public:
 	const string &GetName() const {
 		return name;
 	}
+	void SetName(const string &new_name) {
+		name = new_name;
+	}
 	bool IsSystem() const;
 	bool IsTemporary() const;
 	bool IsReadOnly() const;
@@ -107,13 +132,29 @@ public:
 	void SetInitialDatabase();
 	void SetReadOnlyDatabase();
 	void OnDetach(ClientContext &context);
+	RecoveryMode GetRecoveryMode() const {
+		return recovery_mode;
+	}
+	AttachVisibility GetVisibility() const {
+		return visibility;
+	}
+	//! vacuum_rebuild_indexes threshold for this attached database.
+	//! Falls back to the global VacuumRebuildIndexesSetting if not overridden.
+	idx_t GetVacuumRebuildIndexThreshold() const;
+	const unordered_map<string, Value> &GetAttachOptions() const {
+		return attach_options;
+	}
 	string StoredPath() const;
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
+	// Invoke Close() on an attached database, if its use count is 1.
+	// Only call this in places where you know that the (last) shared pointer is about to go out of scope.
+	static void InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &attached_database);
 
 private:
 	DatabaseInstance &db;
+	ValidChecker validity;
 	unique_ptr<StoredDatabasePath> stored_database_path;
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;
@@ -121,8 +162,17 @@ private:
 	AttachedDatabaseType type;
 	optional_ptr<Catalog> parent_catalog;
 	optional_ptr<StorageExtension> storage_extension;
+	RecoveryMode recovery_mode = RecoveryMode::DEFAULT;
+	AttachVisibility visibility = AttachVisibility::SHOWN;
 	bool is_initial_database = false;
 	bool is_closed = false;
+	shared_ptr<mutex> close_lock;
+	optional_idx vacuum_rebuild_threshold;
+	unordered_map<string, Value> attach_options;
+
+private:
+	//! Clean any (shared) resources held by the database.
+	void Cleanup();
 };
 
 } // namespace duckdb

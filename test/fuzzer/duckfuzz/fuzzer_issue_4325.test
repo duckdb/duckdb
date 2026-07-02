@@ -1,0 +1,8 @@
+# name: test/fuzzer/duckfuzz/fuzzer_issue_4325.test
+# description: Window functions cannot be used in lateral join
+# group: [duckfuzz]
+
+statement error
+SELECT NULL FROM (VALUES (0, 1, 2, 3, 4)) AS _("0", "1", "2", "3", "4") INNER JOIN (SELECT NULL LIMIT rank_dense() OVER (PARTITION BY #4, NULL, NULL, NULL ROWS BETWEEN c83 PRECEDING AND CURRENT ROW)) USING (c19)
+----
+cannot contain window functions

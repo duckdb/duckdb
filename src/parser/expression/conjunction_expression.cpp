@@ -2,9 +2,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/expression_util.hpp"
 
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-
 namespace duckdb {
 
 ConjunctionExpression::ConjunctionExpression(ExpressionType type)

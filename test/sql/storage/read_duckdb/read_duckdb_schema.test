@@ -1,0 +1,42 @@
+# name: test/sql/storage/read_duckdb/read_duckdb_schema.test
+# description: Test basic usage of read_duckdb
+# group: [read_duckdb]
+
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_schema.db' AS rd
+
+statement ok
+CREATE SCHEMA rd.s1;
+
+
+statement ok
+CREATE SCHEMA rd.s2;
+
+statement ok
+CREATE TABLE rd.s1.my_tbl AS SELECT 42 i
+
+statement ok
+CREATE TABLE rd.s2.my_tbl AS SELECT 84 i
+
+statement ok
+DETACH rd
+
+statement error
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_schema.db')
+----
+s1.my_tbl
+
+query I
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_schema.db', schema_name='s1', table_name='my_tbl')
+----
+42
+
+query I
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_schema.db', schema_name='s2', table_name='my_tbl')
+----
+84
+
+statement error
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_schema.db', schema_name='s3', table_name='my_tbl')
+----
+schema_name="s3", table_name="my_tbl"

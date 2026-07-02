@@ -1,0 +1,15 @@
+# name: benchmark/micro/aggregate/reverse_last.benchmark
+# description: Performance of LAST using reverse iteration
+# group: [aggregate]
+
+load
+SELECT SETSEED(0.8675309);
+CREATE OR REPLACE TABLE results AS 
+	SELECT i, random() as v
+	FROM range(140_000_000) tbl(i);
+
+run
+select last(v order by i) from results;
+
+result I
+0.6547275681673601

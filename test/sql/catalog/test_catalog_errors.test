@@ -8,30 +8,47 @@ CREATE TABLE integers(i INTEGER);
 statement ok
 CREATE VIEW vintegers AS SELECT 42;
 
+# cannot create a table with the same name as a view
+statement error
+CREATE TABLE vintegers(i INTEGER);
+----
+Catalog Error: View with name "vintegers" already exists!
+
+# cannot create a view with the same name as a table
+statement error
+CREATE VIEW integers AS SELECT 42;
+----
+Catalog Error: Table with name "integers" already exists!
+
 # cannot CREATE OR REPLACE a table with a view
 statement error
 CREATE OR REPLACE VIEW integers AS SELECT 42;
 ----
+<REGEX>:.*Catalog Error: Existing object integers.*
 
 # cannot use DROP VIEW to drop a table
 statement error
 DROP VIEW integers
 ----
+<REGEX>:.*Catalog Error: Existing object integers.*
 
 # cannot drop a table that does not exist
 statement error
 DROP TABLE blabla
 ----
+<REGEX>:.*Catalog Error.*does not exist.*
 
 # cannot alter a table that does not exist
 statement error
 ALTER TABLE blabla RENAME COLUMN i TO k
 ----
+<REGEX>:.*Catalog Error.*does not exist.*
 
 # cannot drop view with DROP TABLE
 statement error
 DROP TABLE IF EXISTS vintegers
 ----
+<REGEX>:.*Catalog Error: Existing object vintegers.*
 
 statement ok
 CREATE INDEX i_index ON integers(i);
@@ -40,7 +57,7 @@ CREATE INDEX i_index ON integers(i);
 statement error
 CREATE INDEX i_index ON integers(i);
 ----
-already exists
+<REGEX>:.*Catalog Error.*already exists.*
 
 # with IF NOT EXISTS it does not fail!
 statement ok
@@ -54,6 +71,7 @@ DROP INDEX i_index
 statement error
 DROP INDEX i_index
 ----
+<REGEX>:.*Catalog Error.*does not exist.*
 
 # IF NOT EXISTS does not report the failure
 statement ok
@@ -67,7 +85,7 @@ CREATE UNIQUE INDEX i_index ON integers(i);
 statement error
 CREATE UNIQUE INDEX i_index ON integers(i);
 ----
-already exists
+<REGEX>:.*Catalog Error.*already exists.*
 
 # with IF NOT EXISTS it does not fail!
 statement ok
@@ -80,3 +98,4 @@ DROP TABLE integers;
 statement error
 DROP INDEX i_index
 ----
+<REGEX>:.*Catalog Error.*does not exist.*

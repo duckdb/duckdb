@@ -50,6 +50,7 @@ public:
 	//! Write data to the stream.
 	//! Throws if the write would exceed the capacity of the stream and the backing buffer is not owned by the stream
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
+	void GrowCapacity(idx_t write_size);
 
 	//! Read data from the stream.
 	//! Throws if the read would exceed the capacity of the stream

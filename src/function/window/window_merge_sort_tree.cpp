@@ -1,5 +1,8 @@
 #include "duckdb/function/window/window_merge_sort_tree.hpp"
+#include "duckdb/main/client_config.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 #include <thread>
 #include <utility>
@@ -40,7 +43,7 @@ WindowMergeSortTree::WindowMergeSortTree(ClientContext &client, const vector<Bou
 		auto unique_expr = make_uniq<BoundReferenceExpression>(scan_types.back(), orders.size());
 		const auto order_type = OrderType::ASCENDING;
 		const auto order_by_type = OrderByNullType::NULLS_LAST;
-		orders.emplace_back(BoundOrderByNode(order_type, order_by_type, std::move(unique_expr)));
+		orders.emplace_back(order_type, order_by_type, std::move(unique_expr));
 		key_cols.emplace_back(key_cols.size());
 	}
 

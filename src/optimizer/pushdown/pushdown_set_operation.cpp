@@ -29,54 +29,53 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	         op->type == LogicalOperatorType::LOGICAL_INTERSECT);
 	auto &setop = op->Cast<LogicalSetOperation>();
 
-	D_ASSERT(op->children.size() == 2);
-	auto left_bindings = op->children[0]->GetColumnBindings();
-	auto right_bindings = op->children[1]->GetColumnBindings();
-	if (left_bindings.size() != right_bindings.size()) {
-		throw InternalException("Filter pushdown - set operation LHS and RHS have incompatible counts");
+	for (auto &child : op->children) {
+		auto child_bindings = child->GetColumnBindings();
+
+		FilterPushdown child_pushdown(optimizer, convert_mark_joins);
+		for (auto &original_filter : filters) {
+			// first create a copy of the filter
+			auto filter = make_uniq<Filter>();
+			filter->filter = original_filter->filter->Copy();
+
+			//  rewrite references to the result of the union into references to the child index
+			ReplaceSetOpBindings(child_bindings, *filter, filter->filter, setop);
+
+			// extract bindings again
+			filter->ExtractBindings();
+
+			// move the filters into the child pushdown nodes
+			child_pushdown.filters.push_back(std::move(filter));
+		}
+
+		// pushdown into the child
+		child = child_pushdown.Rewrite(std::move(child));
 	}
-
-	// pushdown into set operation, we can duplicate the condition and pushdown the expressions into both sides
-	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
-	for (idx_t i = 0; i < filters.size(); i++) {
-		// first create a copy of the filter
-		auto right_filter = make_uniq<Filter>();
-		right_filter->filter = filters[i]->filter->Copy();
-
-		// in the original filter, rewrite references to the result of the union into references to the left_index
-		ReplaceSetOpBindings(left_bindings, *filters[i], filters[i]->filter, setop);
-		// in the copied filter, rewrite references to the result of the union into references to the right_index
-		ReplaceSetOpBindings(right_bindings, *right_filter, right_filter->filter, setop);
-
-		// extract bindings again
-		filters[i]->ExtractBindings();
-		right_filter->ExtractBindings();
-
-		// move the filters into the child pushdown nodes
-		left_pushdown.filters.push_back(std::move(filters[i]));
-		right_pushdown.filters.push_back(std::move(right_filter));
+	bool all_empty = true;
+	for (auto &child : op->children) {
+		if (child->type != LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+			all_empty = false;
+		}
 	}
-
-	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
-	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
-
-	bool left_empty = op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
-	bool right_empty = op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
-	if (left_empty && right_empty) {
-		// both empty: return empty result
+	if (all_empty) {
+		// all sides are empty: the result must be empty
 		return make_uniq<LogicalEmptyResult>(std::move(op));
 	}
+	if (op->type == LogicalOperatorType::LOGICAL_UNION) {
+		// for UNION (ALL) - delete all empty children and return
+		for (idx_t i = 0; i < op->children.size(); i++) {
+			if (op->children[i]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+				op->children.erase(op->children.begin() + static_cast<int64_t>(i));
+				i--;
+			}
+		}
+		return op;
+	}
+	bool left_empty = op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
+	bool right_empty = op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
 	if (left_empty && setop.setop_all) {
 		// left child is empty result
 		switch (op->type) {
-		case LogicalOperatorType::LOGICAL_UNION:
-			if (op->children[1]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-				// union with empty left side: return right child
-				auto &projection = op->children[1]->Cast<LogicalProjection>();
-				projection.table_index = setop.table_index;
-				return std::move(op->children[1]);
-			}
-			break;
 		case LogicalOperatorType::LOGICAL_EXCEPT:
 			// except: if left child is empty, return empty result
 		case LogicalOperatorType::LOGICAL_INTERSECT:
@@ -88,7 +87,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	} else if (right_empty && setop.setop_all) {
 		// right child is empty result
 		switch (op->type) {
-		case LogicalOperatorType::LOGICAL_UNION:
 		case LogicalOperatorType::LOGICAL_EXCEPT:
 			if (op->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 				// union or except with empty right child: return left child

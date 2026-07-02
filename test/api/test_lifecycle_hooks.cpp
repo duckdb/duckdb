@@ -2,6 +2,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/extension_manager.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -53,7 +54,9 @@ TEST_CASE("Test ClientContextState", "[api]") {
 		    return nullptr;
 	    });
 
-	ExtensionLoader loader(*db.instance, "test_extension");
+	ExtensionInfo extension_info {};
+	ExtensionActiveLoad load_info {*db.instance, extension_info, "test_extension"};
+	ExtensionLoader loader {load_info};
 	loader.RegisterFunction(table_fun);
 
 	SECTION("No error, No explicit transaction") {

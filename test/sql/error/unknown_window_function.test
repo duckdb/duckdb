@@ -5,3 +5,4 @@
 statement error
 SELECT substr('hello', 3, 2) OVER ();
 ----
+<REGEX>:.*Catalog Error: substr is not an aggregate function.*

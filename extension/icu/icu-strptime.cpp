@@ -203,8 +203,8 @@ struct ICUStrptime : public ICUDateFunc {
 
 			// If we have a time zone, we should use ICU for parsing and return a TSTZ instead.
 			if (format.HasFormatSpecifier(StrTimeSpecifier::TZ_NAME)) {
-				bound_function.function = function;
-				bound_function.return_type = LogicalType::TIMESTAMP_TZ;
+				bound_function.SetFunctionCallback(function);
+				bound_function.SetReturnType(LogicalType::TIMESTAMP_TZ);
 				return make_uniq<ICUStrptimeBindData>(context, format);
 			}
 		} else if (format_value.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
@@ -227,14 +227,14 @@ struct ICUStrptime : public ICUDateFunc {
 				formats.emplace_back(format);
 			}
 			if (has_tz) {
-				bound_function.function = function;
-				bound_function.return_type = LogicalType::TIMESTAMP_TZ;
+				bound_function.SetFunctionCallback(function);
+				bound_function.SetReturnType(LogicalType::TIMESTAMP_TZ);
 				return make_uniq<ICUStrptimeBindData>(context, formats);
 			}
 		}
 
 		// Fall back to faster, non-TZ parsing
-		bound_function.bind = bind_strptime;
+		bound_function.SetBindCallback(bind_strptime);
 		return bind_strptime(context, bound_function, arguments);
 	}
 
@@ -254,8 +254,8 @@ struct ICUStrptime : public ICUDateFunc {
 			throw InternalException("ICU - Function for TailPatch not found");
 		}
 		auto &bound_function = functions[best_index.GetIndex()];
-		bind_strptime = bound_function.bind;
-		bound_function.bind = StrpTimeBindFunction;
+		bind_strptime = bound_function.GetBindCallback();
+		bound_function.SetBindCallback(StrpTimeBindFunction);
 	}
 
 	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {

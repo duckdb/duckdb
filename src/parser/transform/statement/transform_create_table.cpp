@@ -1,6 +1,8 @@
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
@@ -59,18 +61,30 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 	} else if (!cdef.typeName) {
 		// ALTER TABLE tbl ALTER TYPE USING ...
 		target_type = LogicalType::UNKNOWN;
-	} else {
-		target_type = TransformTypeName(*cdef.typeName);
-	}
-
-	if (cdef.collClause) {
+	} else if (cdef.collClause) {
 		if (cdef.category == duckdb_libpgquery::COL_GENERATED) {
 			throw ParserException("Collations are not supported on generated columns");
 		}
-		if (target_type.id() != LogicalTypeId::VARCHAR) {
+
+		auto typename_expr = TransformTypeExpressionInternal(*cdef.typeName);
+		if (typename_expr->type != ExpressionType::TYPE) {
+			throw ParserException("Only type names can have collations!");
+		}
+
+		auto &type_expr = typename_expr->Cast<TypeExpression>();
+		if (!StringUtil::CIEquals(type_expr.GetTypeName(), "VARCHAR")) {
 			throw ParserException("Only VARCHAR columns can have collations!");
 		}
-		target_type = LogicalType::VARCHAR_COLLATION(TransformCollation(cdef.collClause));
+
+		// Push back collation as a parameter of the type expression
+		auto collation = TransformCollation(cdef.collClause);
+		auto collation_expr = make_uniq<ConstantExpression>(Value(collation));
+		collation_expr->SetAlias("collation");
+		type_expr.GetChildren().push_back(std::move(collation_expr));
+
+		target_type = LogicalType::UNBOUND(std::move(typename_expr));
+	} else {
+		target_type = TransformTypeName(*cdef.typeName);
 	}
 
 	return ColumnDefinition(name, target_type);
@@ -132,6 +146,22 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		default:
 			throw NotImplementedException("ColumnDef type not handled yet");
 		}
+	}
+
+	vector<unique_ptr<ParsedExpression>> partition_keys;
+	if (stmt.partition_list) {
+		TransformExpressionList(*stmt.partition_list, partition_keys);
+	}
+	info->partition_keys = std::move(partition_keys);
+
+	vector<unique_ptr<ParsedExpression>> order_keys;
+	if (stmt.sort_list) {
+		TransformExpressionList(*stmt.sort_list, order_keys);
+	}
+	info->sort_keys = std::move(order_keys);
+
+	if (stmt.options) {
+		TransformTableOptions(info->options, stmt.options);
 	}
 
 	if (!column_count) {

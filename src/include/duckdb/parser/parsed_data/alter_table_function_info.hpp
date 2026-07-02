@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 
 namespace duckdb {

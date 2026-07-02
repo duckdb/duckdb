@@ -25,6 +25,7 @@ class CTEInlining {
 public:
 	explicit CTEInlining(Optimizer &optimizer);
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
+	static bool EndsInAggregateOrDistinct(const LogicalOperator &op);
 
 private:
 	void TryInlining(unique_ptr<LogicalOperator> &op);

@@ -99,7 +99,7 @@ MetadataHandle MetadataManager::Pin(const MetadataPointer &pointer) {
 	return Pin(QueryContext(), pointer);
 }
 
-MetadataHandle MetadataManager::Pin(QueryContext context, const MetadataPointer &pointer) {
+MetadataHandle MetadataManager::Pin(const QueryContext &context, const MetadataPointer &pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
 	shared_ptr<BlockHandle> block_handle;
 	{
@@ -425,6 +425,17 @@ void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointe
 	}
 }
 
+bool MetadataManager::BlockIsModified(const MetaBlockPointer &pointer) {
+	unique_lock<mutex> guard(block_lock);
+	auto block_id = pointer.GetBlockId();
+	auto entry = blocks.find(block_id);
+	if (entry == blocks.end()) {
+		throw InternalException("BlockIsNotModified - Block id %llu not found in blocks", block_id);
+	}
+	auto entry2 = modified_blocks.find(block_id);
+	return entry2 != modified_blocks.end();
+}
+
 bool MetadataManager::BlockHasBeenCleared(const MetaBlockPointer &pointer) {
 	unique_lock<mutex> guard(block_lock);
 	auto block_id = pointer.GetBlockId();
@@ -469,7 +480,7 @@ block_id_t MetadataManager::PeekNextBlockId() const {
 }
 
 block_id_t MetadataManager::GetNextBlockId() const {
-	return block_manager.GetFreeBlockId();
+	return block_manager.GetFreeBlockIdForCheckpoint();
 }
 
 } // namespace duckdb

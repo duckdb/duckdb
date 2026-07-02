@@ -171,8 +171,8 @@ void PositionalJoinGlobalState::GetData(DataChunk &output) {
 	output.SetCardinality(count);
 }
 
-SourceResultType PhysicalPositionalJoin::GetData(ExecutionContext &context, DataChunk &result,
-                                                 OperatorSourceInput &input) const {
+SourceResultType PhysicalPositionalJoin::GetDataInternal(ExecutionContext &context, DataChunk &result,
+                                                         OperatorSourceInput &input) const {
 	auto &sink = sink_state->Cast<PositionalJoinGlobalState>();
 	sink.GetData(result);
 

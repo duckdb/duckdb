@@ -1,0 +1,20 @@
+{
+  "description": "Failed tests from backwards compatibility testing with v1.4.2.",
+  "skip_tests": [
+    {
+      "reason": "Unknown failure (empty reason)",
+      "paths": [
+        "test/sql/function/list/lambdas/test_lambda_storage.test",
+        "test/sql/logging/http_log_timing.test",
+        "test/sql/cte/recursive_cte_key_variant.test"
+      ]
+    },
+    {
+      "reason": "Profiling result type mismatch",
+      "paths": [
+        "test/sql/pragma/profiling/test_custom_profiling_blocked_thread_time.test",
+        "test/sql/pragma/profiling/test_profiling_fs.test"
+      ]
+    }
+  ]
+}

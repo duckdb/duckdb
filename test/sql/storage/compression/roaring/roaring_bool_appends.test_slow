@@ -1,0 +1,40 @@
+# name: test/sql/storage/compression/roaring/roaring_bool_appends.test_slow
+# group: [roaring]
+
+require block_size 262144
+
+load __TEST_DIR__/test_roaring_appends.db readwrite v1.5.0
+
+statement ok
+PRAGMA force_compression='roaring';
+
+statement ok
+set checkpoint_threshold = '100mb';
+
+statement ok
+CREATE TABLE test (a BOOL);
+
+foreach size 50 100 250 1025 1500
+
+statement ok
+delete from test;
+
+loop i 1 30
+
+statement ok
+INSERT INTO test SELECT case when i%25=0 then true else false end FROM range(0,${size}) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+select count(*) = (${size} / 25) * ${i} from test WHERE a IS true;
+----
+true
+
+
+#i
+endloop
+
+#size
+endloop

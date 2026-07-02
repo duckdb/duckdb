@@ -65,7 +65,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 		}
 
 		DBConfig config;
-		config.options.allow_unsigned_extensions = true;
+		config.SetOptionByName("allow_unsigned_extensions", true);
 		DuckDB db2(nullptr, &config);
 		Connection con2(db2);
 		auto load_parquet = con2.Query("LOAD parquet");
@@ -120,7 +120,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 		exit(0);
 	} else if (pid > 0) { // parent process
 		DBConfig config;
-		config.options.allow_unsigned_extensions = true;
+		config.SetOptionByName("allow_unsigned_extensions", true);
 		DuckDB db1(nullptr, &config);
 		Connection con1(db1);
 		auto load_parquet = con1.Query("LOAD 'parquet'");

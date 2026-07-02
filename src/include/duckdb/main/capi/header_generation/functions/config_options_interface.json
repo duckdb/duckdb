@@ -1,0 +1,186 @@
+{
+  "group": "config_options_interface",
+  "deprecated": false,
+  "description": "Functions to create, configure, and register custom configuration options.",
+  "entries": [
+    {
+      "name": "duckdb_create_config_option",
+      "return_type": "duckdb_config_option",
+      "params": [],
+      "comment": {
+        "description": "Creates a configuration option instance.\n\n",
+        "return_value": "The resulting configuration option instance. Must be destroyed with `duckdb_destroy_config_option`."
+      }
+    },
+    {
+      "name": "duckdb_destroy_config_option",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_config_option*",
+          "name": "option"
+        }
+      ],
+      "comment": {
+        "description": "Destroys the given configuration option instance.\n",
+        "param_comments": {
+          "option": "The configuration option instance to destroy."
+        }
+      }
+    },
+    {
+      "name": "duckdb_config_option_set_name",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_config_option",
+          "name": "option"
+        },
+        {
+          "type": "const char*",
+          "name": "name"
+        }
+      ],
+      "comment": {
+        "description": "Sets the name of the configuration option.\n\n",
+        "param_comments": {
+          "option": "The configuration option instance.",
+          "name": "The name to set."
+        }
+      }
+    },
+    {
+      "name": "duckdb_config_option_set_type",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_config_option",
+          "name": "option"
+        },
+        {
+          "type": "duckdb_logical_type",
+          "name": "type"
+        }
+      ],
+      "comment": {
+        "description": "Sets the type of the configuration option.\n\n",
+        "param_comments": {
+          "option": "The configuration option instance.",
+          "type": "The type to set."
+        }
+      }
+    },
+    {
+      "name": "duckdb_config_option_set_default_value",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_config_option",
+          "name": "option"
+        },
+        {
+          "type": "duckdb_value",
+          "name": "default_value"
+        }
+      ],
+      "comment": {
+        "description": "Sets the default value of the configuration option.\nIf the type of this option has already been set with `duckdb_config_option_set_type`, the value is cast to the type.\nOtherwise, the type is inferred from the value.\n\n",
+        "param_comments": {
+          "option": "The configuration option instance.",
+          "default_value": "The default value to set."
+        }
+      }
+    },
+    {
+      "name": "duckdb_config_option_set_default_scope",
+      "return_type": "void",
+        "params": [
+            {
+            "type": "duckdb_config_option",
+            "name": "option"
+            },
+            {
+            "type": "duckdb_config_option_scope",
+            "name": "default_scope"
+            }
+        ],
+      "comment": {
+        "description": "Sets the default scope of the configuration option.\nIf not set, this defaults to `DUCKDB_CONFIG_OPTION_SCOPE_SESSION`.\n\n",
+        "param_comments": {
+          "option": "The configuration option instance.",
+          "default_scope": "The default scope to set."
+        }
+      }
+    },
+    {
+      "name": "duckdb_config_option_set_description",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_config_option",
+          "name": "option"
+        },
+        {
+          "type": "const char*",
+          "name": "description"
+        }
+      ],
+      "comment": {
+        "description": "Sets the description of the configuration option.\n\n",
+        "param_comments": {
+          "option": "The configuration option instance.",
+          "description": "The description to set."
+        }
+      }
+    },
+    {
+      "name": "duckdb_register_config_option",
+      "return_type": "duckdb_state",
+      "params": [
+        {
+          "type": "duckdb_connection",
+          "name": "connection"
+        },
+        {
+          "type": "duckdb_config_option",
+          "name": "option"
+        }
+      ],
+      "comment": {
+        "description": "Registers the given configuration option on the specified connection.\n\n",
+        "param_comments": {
+          "connection": "The connection to register the option on.",
+          "option": "The configuration option instance to register."
+        },
+        "return_value": "A duckdb_state indicating success or failure."
+      }
+    },
+    {
+      "name": "duckdb_client_context_get_config_option",
+      "return_type": "duckdb_value",
+      "params": [
+        {
+          "type": "duckdb_client_context",
+          "name": "context"
+        },
+        {
+          "type": "const char*",
+          "name": "name"
+        },
+        {
+          "type": "duckdb_config_option_scope*",
+          "name": "out_scope"
+        }
+      ],
+      "comment": {
+          "description": "Retrieves the value of a configuration option by name from the given client context.\n\n",
+          "param_comments": {
+            "context": "The client context.",
+            "name": "The name of the configuration option to retrieve.",
+            "out_scope": "Output parameter to optionally store the scope that the configuration option was retrieved from.\nIf this is `nullptr`, the scope is not returned.\nIf the requested option does not exist the scope is set to `DUCKDB_CONFIG_OPTION_SCOPE_INVALID`."
+          },
+          "return_value": "The value of the configuration option. Returns `nullptr` if the option does not exist."
+      }
+    }
+  ]
+}

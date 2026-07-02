@@ -32,6 +32,8 @@ EncryptionKey::~EncryptionKey() {
 void EncryptionKey::LockEncryptionKey(data_ptr_t key, idx_t key_len) {
 #if defined(_WIN32)
 	VirtualLock(key, key_len);
+#elif defined(__MVS__)
+	__mlockall(_BPX_NONSWAP);
 #else
 	mlock(key, key_len);
 #endif
@@ -41,16 +43,15 @@ void EncryptionKey::UnlockEncryptionKey(data_ptr_t key, idx_t key_len) {
 	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(key, key_len);
 #if defined(_WIN32)
 	VirtualUnlock(key, key_len);
+#elif defined(__MVS__)
+	__mlockall(_BPX_SWAP);
 #else
 	munlock(key, key_len);
 #endif
 }
 
 EncryptionKeyManager &EncryptionKeyManager::GetInternal(ObjectCache &cache) {
-	if (!cache.Get<EncryptionKeyManager>(EncryptionKeyManager::ObjectType())) {
-		cache.Put(EncryptionKeyManager::ObjectType(), make_shared_ptr<EncryptionKeyManager>());
-	}
-	return *cache.Get<EncryptionKeyManager>(EncryptionKeyManager::ObjectType());
+	return *cache.GetOrCreate<EncryptionKeyManager>(EncryptionKeyManager::ObjectType());
 }
 
 EncryptionKeyManager &EncryptionKeyManager::Get(ClientContext &context) {

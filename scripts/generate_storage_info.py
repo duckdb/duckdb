@@ -36,7 +36,17 @@ def main():
     with open(STORAGE_INFO_PATH, "r") as cpp_file:
         content = cpp_file.read()
 
+    for key in version_map['serialization']['values'].keys():
+        if key in ['latest']:
+            continue
+        if key not in version_map['storage']['values'].keys():
+            print(f'Key {key} found in serialization version but not in storage version')
+            exit(1)
+    types = ['storage', 'serialization']
     for type in version_map:
+        if type not in types:
+            print("Unexpected key {type}")
+            exit(1)
         capitalized_type = type.capitalize()
         upper_type = type.upper()
         array_code = generate_version_info_array(

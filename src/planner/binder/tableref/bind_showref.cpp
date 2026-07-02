@@ -5,12 +5,10 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
-#include "duckdb/planner/tableref/bound_table_function.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -89,7 +87,7 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, idx_t column_index)
 	return FindBaseTableColumn(op, bindings[column_index]);
 }
 
-unique_ptr<BoundTableRef> Binder::BindShowQuery(ShowRef &ref) {
+BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 	// bind the child plan of the DESCRIBE statement
 	auto child_binder = Binder::CreateBinder(context, this);
 	auto plan = child_binder->Bind(*ref.query);
@@ -142,17 +140,32 @@ unique_ptr<BoundTableRef> Binder::BindShowQuery(ShowRef &ref) {
 	}
 	collection->Append(append_state, output);
 
-	auto show = make_uniq<LogicalColumnDataGet>(GenerateTableIndex(), return_types, std::move(collection));
-	bind_context.AddGenericBinding(show->table_index, "__show_select", return_names, return_types);
-	return make_uniq<BoundTableFunction>(std::move(show));
+	auto table_index = GenerateTableIndex();
+
+	BoundStatement result;
+	result.names = return_names;
+	result.types = return_types;
+	result.plan = make_uniq<LogicalColumnDataGet>(table_index, return_types, std::move(collection));
+	bind_context.AddGenericBinding(table_index, "__show_select", return_names, return_types);
+	return result;
 }
 
-unique_ptr<BoundTableRef> Binder::BindShowTable(ShowRef &ref) {
+BoundStatement Binder::BindShowTable(ShowRef &ref) {
 	auto lname = StringUtil::Lower(ref.table_name);
 
 	string sql;
 	if (lname == "\"databases\"") {
 		sql = PragmaShowDatabases();
+	} else if (lname == "\"schemas\"") {
+		sql = "SELECT "
+		      " schema.database_name, "
+		      " schema.schema_name, "
+		      " ((select current_schema() = schema.schema_name) "
+		      "  and (select current_database() = schema.database_name)) \"current\" "
+		      "FROM duckdb_schemas() schema "
+		      "JOIN duckdb_databases dbs USING (database_oid) "
+		      "WHERE dbs.internal = false "
+		      "ORDER BY all;";
 	} else if (lname == "\"tables\"") {
 		sql = PragmaShowTables();
 	} else if (ref.show_type == ShowType::SHOW_FROM) {
@@ -193,7 +206,7 @@ unique_ptr<BoundTableRef> Binder::BindShowTable(ShowRef &ref) {
 	return Bind(*subquery);
 }
 
-unique_ptr<BoundTableRef> Binder::Bind(ShowRef &ref) {
+BoundStatement Binder::Bind(ShowRef &ref) {
 	if (ref.show_type == ShowType::SUMMARY) {
 		return BindSummarize(ref);
 	}

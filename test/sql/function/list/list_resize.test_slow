@@ -21,3 +21,9 @@ statement ok
 CREATE OR REPLACE TABLE padded_test_table AS
 	SELECT id, list_resize(data, 10000, struct_pack(a := 0, b := 0.0, c := 'padding')) AS padded_data
 	FROM test_table;
+
+
+statement error
+SELECT list_resize(CASE WHEN i=0 THEN (SELECT list(CASE WHEN j=5 THEN NULL ELSE j END) FROM range(64) t2(j)) ELSE (SELECT list(j) FROM range(2048) t3(j)) END, CASE WHEN i=0 THEN 64::UBIGINT ELSE 18446744073709551557::UBIGINT END) FROM range(2) t(i)
+----
+Overflow

@@ -1,0 +1,118 @@
+# name: test/sql/upsert/insert_or_replace/issue_20952_non_pk_index_column.test
+# group: [insert_or_replace]
+
+# INSERT OR REPLACE should update indexed non-key columns too.
+statement ok
+create table t(
+	id varchar primary key,
+	state varchar not null,
+	name varchar not null
+);
+
+statement ok
+create index idx_state on t(state);
+
+statement ok
+insert or replace into t values ('a', 'first', 'jeremy');
+
+statement ok
+insert or replace into t values ('a', 'second', 'tim');
+
+query TTT
+select * from t;
+----
+a	second	tim
+
+# INSERT OR REPLACE with explicit column list should still update indexed non-key columns.
+statement ok
+insert or replace into t(name, id, state) values ('sam', 'a', 'third');
+
+query TTT
+select * from t;
+----
+a	third	sam
+
+# Explicit column list that excludes "name" exercises the insert.columns branch in CreateSetInfoForReplace.
+statement ok
+insert or replace into t(id, state) values ('a', 'fourth');
+
+query TTT
+select * from t;
+----
+a	fourth	sam
+
+# Regression for potential physical/logical offset issues after dropping a column.
+statement ok
+create table t_offset(
+	id integer primary key,
+	dropped_col integer,
+	state integer not null,
+	payload integer not null
+);
+
+statement ok
+insert or replace into t_offset values (1, 111, 10, 20);
+
+statement ok
+alter table t_offset drop column dropped_col;
+
+statement ok
+create index idx_state_offset on t_offset(state);
+
+statement ok
+insert or replace into t_offset values (1, 30, 40);
+
+query III
+select * from t_offset;
+----
+1	30	40
+
+statement ok
+insert or replace into t_offset(payload, id, state) values (50, 1, 60);
+
+query III
+select * from t_offset;
+----
+1	60	50
+
+query I
+select count(*) from t_offset where state = 10;
+----
+0
+
+# Non-unique composite index should also be updated by INSERT OR REPLACE.
+statement ok
+create table t_comp(
+	id integer primary key,
+	a integer,
+	b integer,
+	payload varchar
+);
+
+statement ok
+create index idx_ab on t_comp(a, b);
+
+statement ok
+insert or replace into t_comp values (1, 10, 20, 'v1');
+
+statement ok
+insert or replace into t_comp values (1, 11, 21, 'v2');
+
+query IIIT
+select * from t_comp;
+----
+1	11	21	v2
+
+# Explicit column list with composite index columns.
+statement ok
+insert or replace into t_comp(id, a) values (1, 12);
+
+query IIIT
+select * from t_comp;
+----
+1	12	21	v2
+
+query I
+select count(*) from t_comp where a = 11 and b = 21;
+----
+0

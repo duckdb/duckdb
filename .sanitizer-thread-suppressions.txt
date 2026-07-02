@@ -1,8 +1,10 @@
 deadlock:InitializeIndexes
+deadlock:TemplatedSortKeySetPayload
 race:InsertMatchesAndIncrementMisses
 race:NextInnerJoin
 race:NextRightSemiOrAntiJoin
 race:duckdb_moodycamel
-race:*duckdb/extension/jemalloc/jemalloc/*
+race:*duckdb/third_party/jemalloc/*
 race:AddToEvictionQueue
 race:ValidityAppend
+race:ResolveComplexJoin

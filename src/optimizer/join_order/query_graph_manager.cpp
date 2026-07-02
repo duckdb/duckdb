@@ -243,7 +243,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	}
 	auto &node = dp_entry->second;
 	if (!dp_entry->second->is_leaf) {
-
 		// generate the left and right children
 		auto left = GenerateJoins(extracted_relations, node->left_set);
 		auto right = GenerateJoins(extracted_relations, node->right_set);

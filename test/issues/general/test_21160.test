@@ -1,0 +1,125 @@
+# name: test/issues/general/test_21160.test
+# description: Issue 21160 - duckdb 1.5: Issues around LIMIT
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE t (id INTEGER, x VARCHAR, y DOUBLE);
+
+statement ok
+INSERT INTO t VALUES (1, NULL, NULL);
+
+foreach null_order LAST FIRST
+
+# Original regression tests: single row, all-null sort columns
+query I
+SELECT id FROM t WHERE x IS NULL ORDER BY y NULLS ${null_order};
+----
+1
+
+query I
+SELECT id FROM t WHERE x IS NULL ORDER BY y NULLS ${null_order} LIMIT 10;
+----
+1
+
+query I
+SELECT id FROM t WHERE x IS NULL ORDER BY x NULLS ${null_order};
+----
+1
+
+query I
+SELECT id FROM t WHERE x IS NULL ORDER BY x NULLS ${null_order} LIMIT 10;
+----
+1
+
+endloop
+
+# Mixed NULL and non-NULL values
+statement ok
+INSERT INTO t VALUES (2, 'b', 2.0), (3, 'a', 1.0), (4, NULL, NULL), (5, 'c', NULL), (6, NULL, 3.0);
+
+# ORDER BY DOUBLE ASC (NULLS LAST by default): non-null rows in ascending order, then NULLs
+# Use secondary sort key to get deterministic ordering of ties (the NULL rows)
+query I
+SELECT id FROM t ORDER BY y ASC, id ASC LIMIT 10;
+----
+3
+2
+6
+1
+4
+5
+
+# ORDER BY DOUBLE DESC (NULLS LAST by default): non-null rows in descending order, then NULLs
+query I
+SELECT id FROM t ORDER BY y DESC, id ASC LIMIT 10;
+----
+6
+2
+3
+1
+4
+5
+
+# ORDER BY VARCHAR ASC (NULLS LAST by default): non-null rows in ascending order, then NULLs
+query I
+SELECT id FROM t ORDER BY x ASC, id ASC LIMIT 10;
+----
+3
+2
+5
+1
+4
+6
+
+# ORDER BY VARCHAR DESC (NULLS LAST by default): non-null rows in descending order, then NULLs
+query I
+SELECT id FROM t ORDER BY x DESC, id ASC LIMIT 10;
+----
+5
+2
+3
+1
+4
+6
+
+# Explicit NULLS LAST - same as default
+query I
+SELECT id FROM t ORDER BY y ASC NULLS LAST, id ASC LIMIT 10;
+----
+3
+2
+6
+1
+4
+5
+
+# Explicit NULLS FIRST - NULLs appear before non-nulls (optimizer skips reorderer for this case)
+query I
+SELECT id FROM t ORDER BY y ASC NULLS FIRST, id ASC LIMIT 10;
+----
+1
+4
+5
+3
+2
+6
+
+# With a filter that includes some rows having NULLs in the sort column
+# WHERE y IS NULL: rows 1, 4, 5 (row 6 has y=3.0)
+query I
+SELECT id FROM t WHERE y IS NULL ORDER BY x ASC, id ASC LIMIT 10;
+----
+5
+1
+4
+
+# Ordering-only (no LIMIT) with all-null sort column - no reorderer activated but should still work
+query I
+SELECT id FROM t WHERE y IS NULL ORDER BY y ASC, id ASC;
+----
+1
+4
+5

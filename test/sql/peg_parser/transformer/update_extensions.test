@@ -1,0 +1,19 @@
+# name: test/sql/peg_parser/transformer/update_extensions.test
+# description: Test UPDATE EXTENSIONS statement parsing in peg parser
+# group: [transformer]
+
+require autocomplete
+
+# Bare UPDATE EXTENSIONS (update all)
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$UPDATE EXTENSIONS;$TEST_PEG_PARSER$);
+
+# UPDATE EXTENSIONS with explicit list
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$UPDATE EXTENSIONS (json);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$UPDATE EXTENSIONS (json, parquet);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$UPDATE EXTENSIONS (json, parquet, autocomplete);$TEST_PEG_PARSER$);

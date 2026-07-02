@@ -1,0 +1,59 @@
+# name: test/sql/storage/reclaim_space/reclaim_space_rollback_optimistic_write_checkpoint.test_slow
+# description: Test rolling back optimistic writes while checkpointing concurrently
+# group: [reclaim_space]
+
+load __TEST_DIR__/reclaim_space_rollback_optimistic_write_checkpoint.db
+
+statement ok
+CREATE OR REPLACE TABLE tbl(i INTEGER, v VARCHAR);
+
+loop k 0 10
+
+foreach action rollback commit
+
+statement ok con1
+BEGIN
+
+statement ok con1
+INSERT INTO tbl SELECT i, concat('thisisalongstring', i) FROM range(1_000_000) t(i);
+
+statement ok con2
+INSERT INTO tbl VALUES (${k}, concat('str', ${k}))
+
+statement ok con2
+CHECKPOINT
+
+onlyif action=rollback
+statement ok con1
+ROLLBACK
+
+onlyif action=commit
+statement ok con1
+COMMIT
+
+statement ok
+SELECT MIN(i), MAX(i), MIN(strlen(v)), MAX(strlen(v)) FROM tbl
+
+restart
+
+statement ok
+SELECT MIN(i), MAX(i), MIN(strlen(v)), MAX(strlen(v)) FROM tbl
+
+endloop
+
+endloop
+
+statement ok
+SELECT MIN(i), MAX(i), MIN(strlen(v)), MAX(strlen(v)) FROM tbl
+
+statement ok
+DROP TABLE tbl
+
+statement ok
+CHECKPOINT
+
+# expected almost no blocks here - the table was cleared
+query I
+SELECT case when total_blocks - free_blocks < 5 then NULL else t end FROM pragma_database_size() t
+----
+NULL

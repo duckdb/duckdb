@@ -26,7 +26,7 @@ public:
 	PhysicalBufferedBatchCollector(PhysicalPlan &physical_plan, PreparedStatementData &data);
 
 public:
-	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) override;
+	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) const override;
 
 public:
 	// Sink interface

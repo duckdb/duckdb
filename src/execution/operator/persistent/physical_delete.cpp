@@ -9,6 +9,7 @@
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 
@@ -27,7 +28,6 @@ public:
 	explicit DeleteGlobalState(ClientContext &context, const vector<LogicalType> &return_types,
 	                           TableCatalogEntry &table, const vector<unique_ptr<BoundConstraint>> &bound_constraints)
 	    : deleted_count(0), return_collection(context, return_types), has_unique_indexes(false) {
-
 		// We need to append deletes to the local delete-ART.
 		auto &storage = table.GetStorage();
 		if (storage.HasUniqueIndexes()) {
@@ -90,14 +90,13 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto storage = local_storage.GetStorage(table);
 		unordered_set<column_t> indexed_column_id_set;
-		storage->delete_indexes.Scan([&](Index &index) {
+		for (auto &index : storage->delete_indexes.Indexes()) {
 			if (!index.IsBound() || !index.IsUnique()) {
-				return false;
+				continue;
 			}
 			auto &set = index.GetColumnIdSet();
 			indexed_column_id_set.insert(set.begin(), set.end());
-			return false;
-		});
+		}
 		for (auto &col : indexed_column_id_set) {
 			column_ids.emplace_back(col);
 		}
@@ -130,22 +129,10 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	l_state.delete_chunk.SetCardinality(fetch_chunk);
 
 	// Append the deleted row IDs to the delete indexes.
-	// If we only delete local row IDs, then the delete_chunk is empty.
 	if (g_state.has_unique_indexes && l_state.delete_chunk.size() != 0) {
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto storage = local_storage.GetStorage(table);
-		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
-		storage->delete_indexes.Scan([&](Index &index) {
-			if (!index.IsBound() || !index.IsUnique()) {
-				return false;
-			}
-			auto &bound_index = index.Cast<BoundIndex>();
-			auto error = bound_index.Append(l_state.delete_chunk, row_ids, index_append_info);
-			if (error.HasError()) {
-				throw InternalException("failed to update delete ART in physical delete: ", error.Message());
-			}
-			return false;
-		});
+		storage->AppendToDeleteIndexes(row_ids, l_state.delete_chunk);
 	}
 
 	auto deleted_count = table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
@@ -213,8 +200,8 @@ unique_ptr<GlobalSourceState> PhysicalDelete::GetGlobalSourceState(ClientContext
 	return make_uniq<DeleteSourceState>(*this);
 }
 
-SourceResultType PhysicalDelete::GetData(ExecutionContext &context, DataChunk &chunk,
-                                         OperatorSourceInput &input) const {
+SourceResultType PhysicalDelete::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<DeleteSourceState>();
 	auto &g = sink_state->Cast<DeleteGlobalState>();
 	if (!return_chunk) {

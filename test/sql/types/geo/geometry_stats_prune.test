@@ -1,0 +1,53 @@
+# name: test/sql/types/geo/geometry_stats_prune.test
+# group: [geo]
+
+# Originall reported in issue duckdb-spatial/#817
+
+require noforcestorage
+
+#statement ok
+#set geometry_minimum_shredding_size=0;
+
+statement ok
+ATTACH '__TEST_DIR__/repro_geo_rowgroup.db' AS geoms (ROW_GROUP_SIZE 2048, STORAGE_VERSION 'v1.5.0');
+
+statement ok
+USE geoms;
+
+statement ok
+CREATE TABLE geoms AS
+SELECT
+printf('POLYGON((%f %f, %f %f, %f %f, %f %f, %f %f))',
+	x, 			y,
+	x, 			y + 0.005,
+	x + 0.005, 	y + 0.005,
+	x + 0.005, 	y,
+	x, 			y
+)::GEOMETRY AS geom
+FROM (
+    SELECT
+        ((i % 10)::DOUBLE * 0.01) AS x,
+        (floor(i / 10)::DOUBLE * 0.01) AS y
+    FROM range(2048) AS t(i)
+);
+
+# Correct before detach: count = 16.
+query II rowsort results
+SELECT count(*) AS count FROM geoms WHERE geom && 'POLYGON ((0.02 0.02, 0.02 0.05, 0.05 0.05, 0.05 0.02, 0.02 0.02))'::GEOMETRY;
+----
+
+statement ok
+USE memory;
+
+statement ok
+DETACH geoms;
+
+statement ok
+ATTACH '__TEST_DIR__/repro_geo_rowgroup.db' AS geoms (STORAGE_VERSION 'v1.5.0');
+
+statement ok
+USE geoms;
+
+query II rowsort results
+SELECT count(*) AS count FROM geoms WHERE geom && 'POLYGON ((0.02 0.02, 0.02 0.05, 0.05 0.05, 0.05 0.02, 0.02 0.02))'::GEOMETRY;
+----

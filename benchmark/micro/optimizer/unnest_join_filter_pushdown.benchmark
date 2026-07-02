@@ -1,0 +1,14 @@
+# name: benchmark/micro/optimizer/unnest_join_filter_pushdown.benchmark
+# description: Benchmark filter pushdown with unnest
+# group: [optimizer]
+
+name Unnest Filter Pushdown
+group micro
+subgroup optimizer
+
+load
+CREATE TABLE test_table as
+SELECT s.i as id,  [1, 2, 3]::bigint[] AS VALUES FROM generate_series(1, 10000000) AS s(i);
+
+run
+SELECT id, value FROM test_table CROSS JOIN UNNEST(values) AS values(value) WHERE id = 87100;

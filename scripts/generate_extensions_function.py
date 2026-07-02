@@ -332,9 +332,6 @@ def get_extension_names() -> List[str]:
         next(f)
         for line in f:
             extension_name = line.split(',')[0].rstrip()
-            if "jemalloc" in extension_name:
-                # We skip jemalloc as it doesn't produce a loadable extension but is in the config
-                continue
             extension_names.append(extension_name)
     return extension_names
 
@@ -342,13 +339,26 @@ def get_extension_names() -> List[str]:
 def get_query(sql_query, load_query) -> list:
     # Optionally perform a LOAD of an extension
     # Then perform a SQL query, fetch the output
-    query = f'{DUCKDB_PATH} -json -unsigned -c "{load_query}{sql_query}" '
+    import csv
+    import io
+
+    query = f'{DUCKDB_PATH} -unsigned -csv -c "{load_query}{sql_query}" '
     query_result = os.popen(query).read()
-    result = [x for x in query_result[1:-2].split("\n") if x != '']
+    f = io.StringIO(query_result)
+    reader = csv.reader(f)
+    header = next(reader)
+    result = []
+    for line in reader:
+        result_obj = {}
+        for i in range(len(header)):
+            result_obj[header[i]] = line[i]
+        result.append(result_obj)
     return result
 
 
 def transform_parameter(parameter) -> LogicalType:
+    if parameter is None:
+        return LogicalType("INVALID")
     parameter = parameter.upper()
     if parameter.endswith('[]'):
         return LogicalType(transform_parameter(parameter[0 : len(parameter) - 2]).type + '[]')
@@ -358,7 +368,7 @@ def transform_parameter(parameter) -> LogicalType:
 
 
 def transform_parameters(parameters) -> FunctionOverload:
-    parameters = parameters[1:-1].split(', ')
+    parameters = [x for x in parameters.lstrip('[').rstrip(']').split(', ') if len(x) > 0]
     return tuple(transform_parameter(param) for param in parameters)
 
 
@@ -373,17 +383,15 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
         ORDER BY function_name, function_type;
     """
     # ['name_1,type_1', ..., 'name_n,type_n']
-    results = set(get_query(GET_FUNCTIONS_QUERY, load))
+    results = get_query(GET_FUNCTIONS_QUERY, load)
 
     functions = set()
     function_overloads = {}
-    for x in results:
-        if x[-1] == ',':
-            # Remove the trailing comma
-            x = x[:-1]
-        function_name, function_type, parameter_types, return_type = [
-            x.lower() if x else "null" for x in json.loads(x).values()
-        ]
+    for func in results:
+        function_name = func["function_name"].lower()
+        function_type = func["function_type"]
+        parameter_types = func["parameter_types"]
+        return_type = func["return_type"]
         function_parameters = transform_parameters(parameter_types)
         function_return = transform_parameter(return_type)
         function = Function(function_name, catalog_type_from_string(function_type))
@@ -405,13 +413,10 @@ def get_settings(load="") -> Set[str]:
             name
         from duckdb_settings();
     """
-    settings = set(get_query(GET_SETTINGS_QUERY, load))
+    settings = get_query(GET_SETTINGS_QUERY, load)
     res = set()
-    for x in settings:
-        if x[-1] == ',':
-            # Remove the trailing comma
-            x = x[:-1]
-        name = json.loads(x)['name']
+    for setting in settings:
+        name = setting['name']
         res.add(name)
     return res
 
@@ -422,13 +427,10 @@ def get_secret_types(load="") -> Set[str]:
             type
         from duckdb_secret_types();
     """
-    secret_types = set(get_query(GET_SECRET_TYPES_QUERY, load))
+    secret_types = get_query(GET_SECRET_TYPES_QUERY, load)
     res = set()
-    for x in secret_types:
-        if x[-1] == ',':
-            # Remove the trailing comma
-            x = x[:-1]
-        type = json.loads(x)['type']
+    for secret_type in secret_types:
+        type = secret_type['type']
         res.add(type)
     return res
 
@@ -789,7 +791,8 @@ struct ExtensionFunctionOverloadEntry {
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
     {"parquet", "parquet"},
     {"json", "json"},
-    {"avro", "avro"}
+    {"avro", "avro"},
+    {"iceberg", "iceberg"}
 }; // END_OF_EXTENSION_COPY_FUNCTIONS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -797,7 +800,6 @@ static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
 static constexpr ExtensionEntry EXTENSION_TYPES[] = {
     {"json", "json"},
     {"inet", "inet"},
-    {"geometry", "spatial"}
 }; // END_OF_EXTENSION_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -866,6 +868,7 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {{"s3/config", "h
                                                                 {"gcs/credential_chain", "aws"},
                                                                 {"r2/credential_chain", "aws"},
                                                                 {"aws/credential_chain", "aws"},
+                                                                {"rds/credential_chain", "aws"},
                                                                 {"azure/access_token", "azure"},
                                                                 {"azure/config", "azure"},
                                                                 {"azure/credential_chain", "azure"},
@@ -878,10 +881,10 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {{"s3/config", "h
 }; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
+    "autocomplete",
     "avro",
     "aws",
     "azure",
-    "autocomplete",
     "core_functions",
     "delta",
     "ducklake",
@@ -890,19 +893,20 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "fts",
     "httpfs",
     "iceberg",
-    "inet",
     "icu",
+    "inet",
     "json",
     "motherduck",
     "mysql_scanner",
     "parquet",
+    "postgres_scanner",
+    "quack",
     "sqlite_scanner",
     "sqlsmith",
-    "postgres_scanner",
     "tpcds",
     "tpch",
-    "uc_catalog",
-    "ui"
+    "ui",
+    "unity_catalog"
 }; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb"""

@@ -72,18 +72,18 @@ public:
 WindowCustomAggregatorLocalState::WindowCustomAggregatorLocalState(ExecutionContext &context,
                                                                    const AggregateObject &aggr,
                                                                    const WindowExcludeMode exclude_mode)
-    : WindowAggregatorLocalState(context), aggr(aggr), state(aggr.function.state_size(aggr.function)),
+    : WindowAggregatorLocalState(context), aggr(aggr), state(aggr.function.GetStateSizeCallback()(aggr.function)),
       statef(Value::POINTER(CastPointerToValue(state.data()))), frames(3, {0, 0}) {
 	// if we have a frame-by-frame method, share the single state
-	aggr.function.initialize(aggr.function, state.data());
+	aggr.function.GetStateInitCallback()(aggr.function, state.data());
 
 	InitSubFrames(frames, exclude_mode);
 }
 
 WindowCustomAggregatorLocalState::~WindowCustomAggregatorLocalState() {
-	if (aggr.function.destructor) {
+	if (aggr.function.HasStateDestructorCallback()) {
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-		aggr.function.destructor(statef, aggr_input_data, 1);
+		aggr.function.GetStateDestructorCallback()(statef, aggr_input_data, 1);
 	}
 }
 
@@ -115,13 +115,13 @@ void WindowCustomAggregator::Finalize(ExecutionContext &context, CollectionPtr c
 	filter_mask.Pack(filter_packed, filter_mask.Capacity());
 	gcsink.glstate = GetLocalState(context, gcsink);
 
-	if (aggr.function.window_init) {
+	if (aggr.function.HasWindowInitCallback()) {
 		auto &gcstate = gcsink.glstate->Cast<WindowCustomAggregatorLocalState>();
 		WindowPartitionInput partition(context, inputs, count, child_idx, all_valids, filter_packed, stats,
 		                               sink.interrupt_state);
 
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), gcstate.allocator);
-		aggr.function.window_init(aggr_input_data, partition, gcstate.state.data());
+		aggr.function.GetWindowInitCallback()(aggr_input_data, partition, gcstate.state.data());
 	}
 
 	++gcsink.finalized;
@@ -153,7 +153,8 @@ void WindowCustomAggregator::Evaluate(ExecutionContext &context, const DataChunk
 	EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		// Extract the range
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lcstate.allocator);
-		aggr.function.window(aggr_input_data, partition, gstate_p, lcstate.state.data(), frames, result, i);
+		aggr.function.GetWindowCallback()(aggr_input_data, partition, gstate_p, lcstate.state.data(), frames, result,
+		                                  i);
 	});
 }
 

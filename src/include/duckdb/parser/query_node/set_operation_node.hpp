@@ -11,7 +11,6 @@
 #include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 
@@ -26,14 +25,8 @@ public:
 	SetOperationType setop_type = SetOperationType::NONE;
 	//! whether the ALL modifier was used or not
 	bool setop_all = false;
-	//! The left side of the set operation
-	unique_ptr<QueryNode> left;
-	//! The right side of the set operation
-	unique_ptr<QueryNode> right;
-
-	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
-		return left->GetSelectList();
-	}
+	//! The children of the set operation
+	vector<unique_ptr<QueryNode>> children;
 
 public:
 	//! Convert the query node to a string
@@ -54,7 +47,8 @@ public:
 	SetOperationNode(SetOperationType setop_type, unique_ptr<QueryNode> left, unique_ptr<QueryNode> right,
 	                 vector<unique_ptr<QueryNode>> children, bool setop_all);
 
-	vector<unique_ptr<QueryNode>> SerializeChildNodes() const;
+	unique_ptr<QueryNode> SerializeChildNode(Serializer &serializer, idx_t index) const;
+	bool SerializeChildList(Serializer &serializer) const;
 };
 
 } // namespace duckdb

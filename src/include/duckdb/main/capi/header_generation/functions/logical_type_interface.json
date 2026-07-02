@@ -1,6 +1,7 @@
 {
     "group": "logical_type_interface",
     "deprecated": false,
+    "description": "Functions to create and interact with `duckdb_logical_type`.",
     "entries": [
         {
             "name": "duckdb_create_logical_type",
@@ -210,10 +211,10 @@
             "comment": {
                 "description": "Creates a DECIMAL type with the specified width and scale.\nThe resulting type should be destroyed with `duckdb_destroy_logical_type`.\n\n",
                 "param_comments": {
-                    "width": "The width of the decimal type",
-                    "scale": "The scale of the decimal type"
+                    "width": "The width of the decimal type. Must be between 1 and 38.",
+                    "scale": "The scale of the decimal type. Must not exceed the width."
                 },
-                "return_value": "The logical type."
+                "return_value": "The logical type, or `nullptr` if the width or scale are out of range."
             }
         },
         {

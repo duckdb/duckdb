@@ -6,14 +6,17 @@
 statement error
 SELEC 42;
 ----
+Parser Error: syntax error at or near "SELEC"
 
 statement error
 SELEC 42, 'thisisareallylongstringloremipsumblablathisisareallylongstringloremipsumblablalthisisareallylongstringloremipsumblablalthisisareallylongstringloremipsumblablal';
 ----
+Parser Error: syntax error at or near "SELEC"
 
 statement error
 SELEC 42, '🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆';
 ----
+Parser Error: syntax error at or near "SELEC"
 
 # unrecognized column
 statement error
@@ -58,17 +61,20 @@ SELECT * FROM READ_CSV('x', hello=3);
 statement error
 SELECT 42 WHERE 1=1 WHERE 1=0;
 ----
+Parser Error: syntax error at or near "WHERE"
 
 # multiple statements without semi colon
 statement error
 SELECT 42
 SELECT 42;
 ----
+Parser Error: syntax error at or near "SELECT"
 
 # multiple statements, but error is only in second statement
 statement error
 SELECT 42; SELEC 42;
 ----
+Parser Error: syntax error at or near "SELEC"
 
 # non-existent table
 statement error
