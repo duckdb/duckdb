@@ -1080,6 +1080,12 @@
     "custom_implementation": true
   },
   {
+    "class": "LogicalRefreshFeature",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_REFRESH_FEATURE",
+    "custom_implementation": true
+  },
+  {
     "class": "LogicalExport",
     "base": "LogicalOperator",
     "enum": "LOGICAL_EXPORT",

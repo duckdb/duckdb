@@ -26,7 +26,6 @@ add_library_unity(
   duckdb_sequences.cpp
   duckdb_triggers.cpp
   duckdb_features.cpp
-  refresh_feature.cpp
   feature_at_version.cpp
   current_feature.cpp
   duckdb_settings.cpp

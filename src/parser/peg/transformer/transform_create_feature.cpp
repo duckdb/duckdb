@@ -4,6 +4,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/statement/call_statement.hpp"
+#include "duckdb/parser/statement/refresh_feature_statement.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -199,12 +200,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformRefreshFeatureStatement
 	// index 1: 'FEATURE' keyword
 	auto feature_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2)).name;
 
-	// Rewrite to: CALL refresh_feature('feature_name')
-	auto result = make_uniq<CallStatement>();
-	vector<unique_ptr<ParsedExpression>> args;
-	args.push_back(make_uniq<ConstantExpression>(Value(feature_name)));
-	auto function_expression = make_uniq<FunctionExpression>("refresh_feature", std::move(args));
-	result->function = std::move(function_expression);
+	auto result = make_uniq<RefreshFeatureStatement>();
+	result->feature_name = std::move(feature_name);
 	return std::move(result);
 }
 

@@ -59,6 +59,7 @@ class TableStorageInfo;
 class BoundConstraint;
 class AtClause;
 class BoundAtClause;
+class RefreshFeatureStatement;
 class ServeFeatureStatement;
 
 struct CreateInfo;
@@ -422,6 +423,7 @@ private:
 	BoundStatement Bind(MergeIntoStatement &stmt);
 	BoundStatement Bind(ConnectStatement &stmt);
 	BoundStatement Bind(DisconnectStatement &stmt);
+	BoundStatement Bind(RefreshFeatureStatement &stmt);
 	BoundStatement Bind(ServeFeatureStatement &stmt);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,

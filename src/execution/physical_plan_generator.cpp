@@ -145,6 +145,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_CREATE_TRIGGER:
 	case LogicalOperatorType::LOGICAL_CREATE_FEATURE:
 		return CreatePlan(op.Cast<LogicalCreate>());
+	case LogicalOperatorType::LOGICAL_REFRESH_FEATURE:
+		return CreatePlan(op.Cast<LogicalRefreshFeature>());
 	case LogicalOperatorType::LOGICAL_PRAGMA:
 		return CreatePlan(op.Cast<LogicalPragma>());
 	case LogicalOperatorType::LOGICAL_VACUUM:

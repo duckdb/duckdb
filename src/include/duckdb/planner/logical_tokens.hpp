@@ -48,6 +48,7 @@ class LogicalPrepare;
 class LogicalProjection;
 class LogicalRecursiveCTE;
 class LogicalMaterializedCTE;
+class LogicalRefreshFeature;
 class LogicalSetOperation;
 class LogicalSample;
 class LogicalSimple;

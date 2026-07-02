@@ -133,6 +133,7 @@ protected:
 	PhysicalOperator &CreatePlan(LogicalTopN &op);
 	PhysicalOperator &CreatePlan(LogicalPositionalJoin &op);
 	PhysicalOperator &CreatePlan(LogicalProjection &op);
+	PhysicalOperator &CreatePlan(LogicalRefreshFeature &op);
 	PhysicalOperator &CreatePlan(LogicalInsert &op);
 	PhysicalOperator &CreatePlan(LogicalCopyToFile &op);
 	PhysicalOperator &CreatePlan(LogicalExplain &op);

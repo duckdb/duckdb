@@ -22,6 +22,7 @@ add_library_unity(
   multi_statement.cpp
   pragma_statement.cpp
   prepare_statement.cpp
+  refresh_feature_statement.cpp
   relation_statement.cpp
   serve_feature_statement.cpp
   select_statement.cpp
