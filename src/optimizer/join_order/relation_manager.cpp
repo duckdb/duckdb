@@ -134,6 +134,11 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	// DML operators have side effects and must never be reordered away or passed through (a correlated
+	// trigger body can place an INSERT/UPDATE/DELETE mid-plan, as a cross-product child for example).
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
 		return true;
 	default:
 		return false;
@@ -265,8 +270,9 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	optional_ptr<LogicalOperator> op = &input_op;
 	vector<reference<LogicalOperator>> datasource_filters;
 	optional_ptr<LogicalOperator> limit_op = nullptr;
-	// pass through single child operators
-	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type)) {
+	// pass through single child operators (but never past a non-reorderable op such as a DML node, which
+	// must be preserved as its own relation rather than skipped over and dropped during reconstruction)
+	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type) && !OperatorIsNonReorderable(op->type)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			if (HasNonReorderableChild(*op)) {
 				datasource_filters.push_back(*op);

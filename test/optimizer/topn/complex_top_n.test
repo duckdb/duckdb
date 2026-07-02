@@ -2,6 +2,9 @@
 # description: topN
 # group: [topn]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require vector_size 1024
 
 set seed 0.42

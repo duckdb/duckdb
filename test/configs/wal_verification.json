@@ -22,6 +22,12 @@
       ]
     },
     {
+      "reason": "Autocheckpoint cannot be triggered: this config overrides checkpoint_wal_size and restarts between statements, resetting wal_autocheckpoint_entries.",
+      "paths": [
+        "test/sql/storage/checkpoint/initial_database_autocheckpoint_failure.test"
+      ]
+    },
+    {
       "reason": "Empty WAL is necessary to trigger optimizer rule.",
       "paths": [
         "test/sql/topn/top_n_pruning.test",

@@ -113,6 +113,14 @@ MetadataResult SetStorageVersion(ShellState &state, const vector<string> &args) 
 	return MetadataResult::SUCCESS;
 }
 
+template <HighlightMode mode>
+MetadataResult SetColorScheme(ShellState &state, const vector<string> &args) {
+	state.highlight_mode = mode;
+	ShellHighlight highlight(state);
+	highlight.ToggleMode(mode);
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ProcessFile(ShellState &state, const vector<string> &args) {
 	state.readStdin = false;
 	auto &file = args[1];
@@ -200,6 +208,8 @@ static const CommandLineOption command_line_options[] = {
     {"cmd", 1, "COMMAND", nullptr, RunCommand<false>, "run \"COMMAND\" before reading stdin"},
     {"csv", 0, "", nullptr, ToggleCSVMode, "set output mode to 'csv'"},
     {"c", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
+    {"dark-mode", 0, "", SetColorScheme<HighlightMode::DARK_MODE>, SetColorScheme<HighlightMode::DARK_MODE>,
+     "use dark mode colors"},
     {"echo", 0, "", nullptr, EnableEcho, "print commands before execution"},
     {"f", 1, "FILENAME", EnableBatch, ProcessFile, "read/process named file and exit"},
     {"format", 0, "", EnableBatch, FormatStdin, "format SQL from stdin, writing result to stdout"},
@@ -212,6 +222,8 @@ static const CommandLineOption command_line_options[] = {
     {"interactive", 0, "", nullptr, DisableBatch, "force interactive I/O"},
     {"json", 0, "", nullptr, ToggleOutputMode<RenderMode::JSON>, "set output mode to 'json'"},
     {"jsonlines", 0, "", nullptr, ToggleOutputMode<RenderMode::JSONLINES>, "set output mode to 'jsonlines'"},
+    {"light-mode", 0, "", SetColorScheme<HighlightMode::LIGHT_MODE>, SetColorScheme<HighlightMode::LIGHT_MODE>,
+     "use light mode colors"},
     {"line", 0, "", nullptr, ToggleOutputMode<RenderMode::LINE>, "set output mode to 'line'"},
     {"list", 0, "", nullptr, ToggleOutputMode<RenderMode::LIST>, "set output mode to 'list'"},
     {"markdown", 0, "", nullptr, ToggleOutputMode<RenderMode::MARKDOWN>, "set output mode to 'markdown'"},

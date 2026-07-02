@@ -2,6 +2,9 @@
 # description: Test that CTEs are automatically materialized
 # group: [materialized]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require tpch
 
 statement ok

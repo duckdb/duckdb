@@ -4,6 +4,11 @@
 		"includes": [
 			"duckdb/catalog/dependency.hpp"
 		],
+		"finalize_deserialization": [
+			"if (result.schema_path.empty() && result.type != CatalogType::SCHEMA_ENTRY && !schema.empty()) {",
+			"\tresult.schema_path.push_back(std::move(schema));",
+			"}"
+		],
 		"members": [
 			{
 				"id": 100,
@@ -13,12 +18,22 @@
 			{
 				"id": 101,
 				"name": "schema",
-				"type": "Identifier"
+				"type": "Identifier",
+				"serialize_property": "LegacySchema()",
+				"serialize_until": "v2.0.0",
+				"deserialize_skip_assign": true
 			},
 			{
 				"id": 102,
 				"name": "name",
 				"type": "Identifier"
+			},
+			{
+				"id": 103,
+				"name": "schema_path",
+				"type": "vector<Identifier>",
+				"version": "v2.0.0",
+				"default": "vector<Identifier>()"
 			}
 		],
 		"pointer_type": "none"

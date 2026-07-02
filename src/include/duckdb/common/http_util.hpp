@@ -12,6 +12,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/http_status_code.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/time_point.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -20,8 +21,6 @@ class Logger;
 class HTTPUtil;
 class FileOpener;
 struct FileOpenerInfo;
-
-struct HTTPLogWriter {};
 
 struct HTTPParams {
 	explicit HTTPParams(HTTPUtil &http_util) : http_util(http_util) {
@@ -151,8 +150,13 @@ struct BaseRequest {
 
 	//! Requests will optionally contain their timings
 	bool have_request_timing = false;
-	timestamp_t request_start;
-	timestamp_t request_end;
+	// System clock start timestamp
+	timestamp_t request_system_start;
+	// Monotonic clock start and end timestamp
+	TimePoint request_monotonic_start;
+	TimePoint request_monotonic_end;
+	//! Request body size in bytes (the Content-Length we send). Only set for PUT/POST.
+	idx_t request_body_length = 0;
 
 	//! Optional per-request network measurements, populated by clients that measure them.
 	bool have_time_to_fst_byte = false;
@@ -194,6 +198,7 @@ struct PutRequestInfo : public BaseRequest {
 	               idx_t buffer_in_len, const string &content_type)
 	    : BaseRequest(RequestType::PUT_REQUEST, path, headers, params), buffer_in(buffer_in),
 	      buffer_in_len(buffer_in_len), content_type(content_type) {
+		request_body_length = buffer_in_len;
 	}
 
 	const_data_ptr_t buffer_in;
@@ -224,6 +229,7 @@ struct PostRequestInfo : public BaseRequest {
 	                idx_t buffer_in_len)
 	    : BaseRequest(RequestType::POST_REQUEST, path, headers, params), buffer_in(buffer_in),
 	      buffer_in_len(buffer_in_len) {
+		request_body_length = buffer_in_len;
 	}
 
 	const_data_ptr_t buffer_in;

@@ -37,8 +37,7 @@ vector<PivotColumn> PEGTransformerFactory::TransformPivotColumnList(PEGTransform
 				}
 			}
 			if (!has_tuple_entries) {
-				auto row_function = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row",
-				                                                  std::move(col.pivot_expressions));
+				auto row_function = make_uniq<FunctionExpression>("row", std::move(col.pivot_expressions));
 				col.pivot_expressions.push_back(std::move(row_function));
 			}
 		}

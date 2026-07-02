@@ -4,7 +4,7 @@ This file provides guidance to coding agents when working with code in this repo
 
 ## Overview
 
-DuckDB is a high-performance analytical database system designed to be fast, reliable, portable, and easy to use. It is an in-process SQL OLAP database management system with a rich SQL dialect, vectorized execution engine, and columnar storage format.
+DuckDB is a high-performance analytical database system designed to be fast, reliable, portable, and easy to use. It is an analytical database management system with a rich SQL dialect, vectorized execution engine, and columnar storage format.
 
 ## Build Commands
 

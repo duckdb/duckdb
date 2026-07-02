@@ -105,7 +105,12 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
 	old_block.reset();
 
 	// potentially purge the queue
-	auto purge_queue = buffer_manager.GetBufferPool().AddToEvictionQueue(new_block);
+	bool purge_queue;
+	{
+		// AddToEvictionQueue requires the block lock. new_block was just created here, so this is uncontended.
+		auto new_lock = new_block->GetMemory().GetLock();
+		purge_queue = buffer_manager.GetBufferPool().AddToEvictionQueue(new_lock, new_block);
+	}
 	if (purge_queue) {
 		buffer_manager.GetBufferPool().PurgeQueue(*new_block);
 	}

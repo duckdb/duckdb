@@ -1,0 +1,109 @@
+# name: test/sql/aggregate/aggregate_state_export/approx_top_k_export_state.test
+# description: Test EXPORT_STATE for approx_top_k - the state is explicitly (de)serialized
+# group: [aggregate_state_export]
+
+# approx_top_k's parallel combine is approximate (it overestimates counts for values not present in
+# both partial states), so results are only deterministic with a single state - force single-threaded
+# execution so the exact-value comparisons below are stable across vector sizes
+statement ok
+SET threads=1;
+
+# empty input exports a NULL state
+query I
+SELECT approx_top_k(x, 3) EXPORT_STATE FROM (SELECT 'a' AS x WHERE false) t;
+----
+NULL
+
+query I
+SELECT finalize(approx_top_k(x, 3) EXPORT_STATE) FROM (SELECT 'a' AS x WHERE false) t;
+----
+NULL
+
+# basic roundtrips - strings
+query II nosort topk_strings
+SELECT approx_top_k(x, 2), approx_top_k(x, 1) FROM (VALUES ('a'), ('a'), ('b'), ('a'), ('c'), ('b')) t(x);
+----
+
+query II nosort topk_strings
+SELECT finalize(approx_top_k(x, 2) EXPORT_STATE), finalize(approx_top_k(x, 1) EXPORT_STATE) FROM (VALUES ('a'), ('a'), ('b'), ('a'), ('c'), ('b')) t(x);
+----
+
+# other types are exported with the input type of the aggregate (decoded from the internal sort keys)
+query I
+SELECT (approx_top_k(x, 2) EXPORT_STATE)::STRUCT(k UBIGINT, "values" STRUCT("value" INTEGER, "count" UBIGINT)[], "filter" UBIGINT[])."values" FROM (VALUES (5), (5), (6)) t(x);
+----
+[{'value': 5, 'count': 2}, {'value': 6, 'count': 1}]
+
+query I
+SELECT (approx_top_k(d, 1) EXPORT_STATE)::STRUCT(k UBIGINT, "values" STRUCT("value" DATE, "count" UBIGINT)[], "filter" UBIGINT[])."values" FROM (VALUES (DATE '2000-01-01'), (DATE '2000-01-01')) t(d);
+----
+[{'value': 2000-01-01, 'count': 2}]
+
+query II nosort topk_ints
+SELECT approx_top_k(x, 2), approx_top_k(d, 2) FROM (VALUES (5, DATE '2000-01-01'), (5, DATE '2000-01-01'), (6, DATE '2010-01-01'), (5, DATE '2000-01-01')) t(x, d);
+----
+
+query II nosort topk_ints
+SELECT finalize(approx_top_k(x, 2) EXPORT_STATE), finalize(approx_top_k(d, 2) EXPORT_STATE) FROM (VALUES (5, DATE '2000-01-01'), (5, DATE '2000-01-01'), (6, DATE '2010-01-01'), (5, DATE '2000-01-01')) t(x, d);
+----
+
+# nested types also roundtrip
+query I
+SELECT finalize(approx_top_k(l, 2) EXPORT_STATE) FROM (VALUES ([1, 2]), ([1, 2]), ([3])) t(l);
+----
+[[1, 2], [3]]
+
+# the state stores the k value, the monitored values with their counts, and the sketch filter
+query I
+SELECT (approx_top_k(x, 1) EXPORT_STATE)::STRUCT(k UBIGINT, "values" STRUCT("value" VARCHAR, "count" UBIGINT)[], "filter" UBIGINT[]).k FROM (VALUES ('a'), ('a'), ('b')) t(x);
+----
+1
+
+query I
+SELECT (approx_top_k(x, 1) EXPORT_STATE)::STRUCT(k UBIGINT, "values" STRUCT("value" VARCHAR, "count" UBIGINT)[], "filter" UBIGINT[])."values" FROM (VALUES ('a'), ('a'), ('b')) t(x);
+----
+[{'value': a, 'count': 2}, {'value': b, 'count': 1}]
+
+# grouped aggregation matches the regular aggregate
+statement ok
+CREATE TABLE dummy AS SELECT range % 10 g, 'val' || (range % 3)::VARCHAR v FROM range(100);
+
+query II nosort grouped_topk
+SELECT g, approx_top_k(v, 2) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort grouped_topk
+SELECT g, finalize(approx_top_k(v, 2) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# we can persist the state and finalize later
+statement ok
+CREATE TABLE topk_state AS SELECT g, approx_top_k(v, 2) EXPORT_STATE s FROM dummy GROUP BY g;
+
+query II nosort grouped_topk
+SELECT g, finalize(s) FROM topk_state ORDER BY g;
+----
+
+# combine two states
+query I
+SELECT finalize(combine(approx_top_k(x, 2) EXPORT_STATE, (SELECT approx_top_k(y, 2) EXPORT_STATE FROM (VALUES ('a'), ('c')) s(y)))) FROM (VALUES ('a'), ('b'), ('a')) t(x);
+----
+[a, c]
+
+# combine_aggr across groups, including a NULL state
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT approx_top_k(x, 3) EXPORT_STATE AS s FROM (VALUES ('a'), ('b'), ('a')) t(x)
+    UNION ALL
+    SELECT approx_top_k(x, 3) EXPORT_STATE AS s FROM (VALUES ('a'), ('c')) t(x)
+    UNION ALL
+    SELECT approx_top_k(x, 3) EXPORT_STATE AS s FROM (SELECT 'a' AS x WHERE false) t
+) t;
+----
+[a, b, c]
+
+# combining states with different k values is an error
+statement error
+SELECT finalize(combine(approx_top_k(x, 2) EXPORT_STATE, (SELECT approx_top_k(y, 3) EXPORT_STATE FROM (VALUES ('a')) s(y)))) FROM (VALUES ('a')) t(x);
+----
+<REGEX>:.*cannot combine approx_top_K with different k values.*

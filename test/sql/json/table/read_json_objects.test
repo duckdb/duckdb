@@ -229,3 +229,17 @@ query I
 select * from read_json_objects('{DATA_DIR}/json/top_level_array.json', format='nd')
 ----
 [{"conclusion":"cancelled"}, {"conclusion":"cancelled"}]
+
+# trailing content after an otherwise valid document makes the line invalid JSON
+statement error
+select * from read_ndjson_objects('{DATA_DIR}/json/trailing_content.ndjson')
+----
+Invalid Input Error: Malformed JSON in file "{DATA_DIR}/json/trailing_content.ndjson"
+
+# with ignore_errors the invalid line becomes NULL
+query I
+select * from read_ndjson_objects('{DATA_DIR}/json/trailing_content.ndjson', ignore_errors=true)
+----
+{"a":1}
+NULL
+{"a":3}

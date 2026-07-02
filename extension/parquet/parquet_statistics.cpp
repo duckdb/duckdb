@@ -361,21 +361,30 @@ bool IsVariantNull(const string &str) {
 	return str.size() == 1 && str[0] == '\0';
 }
 
-static bool ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStatistics> input_p) {
+// The conversion is best-effort and non-fatal: when the statistics of a particular (sub)node cannot be
+// converted, that node is left as UNKNOWN stats (which makes it "not fully shredded", so consumers fall
+// back to a full scan for that field) instead of discarding the statistics of the entire variant.
+static void ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStatistics> input_p) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::UINTEGER);
 
 	if (!input_p) {
-		return false;
+		//! No overlay statistics -> conservatively unknown (this node is not "fully shredded")
+		result.Copy(BaseStatistics::CreateUnknown(LogicalType::UINTEGER));
+		return;
 	}
 	auto &input = *input_p;
 	D_ASSERT(input.GetType().id() == LogicalTypeId::BLOB);
 	result.CopyValidity(input);
 
 	if (!result.CanHaveNoNull()) {
-		return true;
+		//! The overlay is entirely NULL -> no overlay values -> fully shredded
+		return;
 	}
 	if (!StringStats::HasMinMax(input)) {
-		return false;
+		//! The overlay may contain values but we can't tell what they are (e.g. the writer dropped min/max for
+		//! a large blob value) -> conservatively unknown so this node is treated as not fully shredded
+		result.Copy(BaseStatistics::CreateUnknown(LogicalType::UINTEGER));
+		return;
 	}
 
 	auto min = StringStats::Min(input);
@@ -386,12 +395,12 @@ static bool ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStat
 		NumericStats::SetMax<uint32_t>(result, 0);
 		result.SetHasNoNull();
 	}
-	return true;
+	//! else: there are real overlay values -> leave min/max unset, so this node is not fully shredded
 }
 
-static bool ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatistics> input_p);
+static void ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatistics> input_p);
 
-static bool ConvertShreddedStatsItem(BaseStatistics &result, BaseStatistics &input) {
+static void ConvertShreddedStatsItem(BaseStatistics &result, BaseStatistics &input) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::STRUCT);
 	D_ASSERT(input.GetType().id() == LogicalTypeId::STRUCT);
 
@@ -403,41 +412,37 @@ static bool ConvertShreddedStatsItem(BaseStatistics &result, BaseStatistics &inp
 	auto &value_stats = StructStats::GetChildStats(input, 0);
 	auto &typed_value_input = StructStats::GetChildStats(input, 1);
 
-	if (!ConvertUnshreddedStats(untyped_value_index_stats, value_stats)) {
-		return false;
-	}
-	if (!ConvertShreddedStats(typed_value_result, typed_value_input)) {
-		return false;
-	}
-	return true;
+	ConvertUnshreddedStats(untyped_value_index_stats, value_stats);
+	ConvertShreddedStats(typed_value_result, typed_value_input);
 }
 
-static bool ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatistics> input_p) {
+static void ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatistics> input_p) {
 	if (!input_p) {
-		return false;
+		//! No statistics for this shredded subtree -> leave it unknown (conservative)
+		result.Copy(BaseStatistics::CreateUnknown(result.GetType()));
+		return;
 	}
 	auto &input = *input_p;
 	result.CopyValidity(input);
 
 	auto type_id = result.GetType().id();
 	if (type_id == LogicalTypeId::LIST) {
-		auto &child_result = ListStats::GetChildStats(result);
-		auto &child_input = ListStats::GetChildStats(input);
-		return ConvertShreddedStatsItem(child_result, child_input);
+		ConvertShreddedStatsItem(ListStats::GetChildStats(result), ListStats::GetChildStats(input));
+		return;
 	}
 	if (type_id == LogicalTypeId::STRUCT) {
 		auto field_count = StructType::GetChildCount(result.GetType());
 		for (idx_t i = 0; i < field_count; i++) {
-			auto &result_field = StructStats::GetChildStats(result, i);
-			auto &input_field = StructStats::GetChildStats(input, i);
-			if (!ConvertShreddedStatsItem(result_field, input_field)) {
-				return false;
-			}
+			ConvertShreddedStatsItem(StructStats::GetChildStats(result, i), StructStats::GetChildStats(input, i));
 		}
-		return true;
+		return;
 	}
-	result.Copy(input);
-	return true;
+	//! Primitive leaf - copy the parquet stats if the types line up, otherwise leave it unknown
+	if (result.GetType() == input.GetType()) {
+		result.Copy(input);
+	} else {
+		result.Copy(BaseStatistics::CreateUnknown(result.GetType()));
+	}
 }
 
 bool StringStatsAreValid(const string &stats, bool is_varchar, StringStatsType stats_type) {
@@ -629,17 +634,13 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		auto &value = schema.children[1];
 		D_ASSERT(value.name == "value");
 		auto value_stats = ParquetStatisticsUtils::TransformColumnStatistics(value, columns, can_have_nan);
-		if (!ConvertUnshreddedStats(untyped_value_index_stats, value_stats.get())) {
-			//! Couldn't convert the stats, or there are no stats
-			return nullptr;
-		}
+		//! Best-effort: nodes whose stats can't be converted are left UNKNOWN (not fully shredded) rather
+		//! than discarding the statistics for the entire variant column
+		ConvertUnshreddedStats(untyped_value_index_stats, value_stats.get());
 
 		auto parquet_typed_value_stats =
 		    ParquetStatisticsUtils::TransformColumnStatistics(typed_value, columns, can_have_nan);
-		if (!ConvertShreddedStats(typed_value_stats, parquet_typed_value_stats.get())) {
-			//! Couldn't convert the stats, or there are no stats
-			return nullptr;
-		}
+		ConvertShreddedStats(typed_value_stats, parquet_typed_value_stats.get());
 		//! Set validity to UNKNOWN
 		variant_stats.SetHasNoNull();
 		variant_stats.SetHasNull();

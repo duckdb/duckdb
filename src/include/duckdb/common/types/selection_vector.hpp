@@ -23,6 +23,11 @@ struct SelectionData {
 	//! Empty SelectionData, used as the backing store for a bitmap-backed SelectionVector
 	//! (the index array in owned_data is allocated lazily on Flatten()).
 	SelectionData() = default;
+	// Out-of-line destructor: prevents GCC IPA-ICF from folding
+	// _Sp_counted_ptr_inplace<SelectionData>::_M_dispose with the
+	// corresponding instantiation for TemplatedValidityData, which produces
+	// a spurious -Warray-bounds with g++ >= 14.
+	DUCKDB_API ~SelectionData();
 
 	//! The materialized index array (sel_t[]); for bitmap-backed data this is filled lazily.
 	AllocatedData owned_data;

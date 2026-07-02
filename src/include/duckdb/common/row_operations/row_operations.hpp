@@ -11,6 +11,7 @@
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/function.hpp"
 
 namespace duckdb {
 
@@ -32,6 +33,8 @@ struct RowOperationsState {
 
 	ArenaAllocator &allocator;
 	unique_ptr<Vector> addresses; // Re-usable vector for row_aggregate.cpp
+	//! Per-aggregate slots in which the aggregates can cache state across finalize calls
+	vector<unique_ptr<FunctionLocalState>> local_states;
 };
 
 // RowOperations contains a set of operations that operate on data using a TupleDataLayout

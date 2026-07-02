@@ -4,7 +4,9 @@
 int main() {
 	duckdb_database db = NULL;
 	duckdb_connection con = NULL;
-	duckdb_result result;
+	duckdb_result result = {0};
+	idx_t row_count = 0;
+	idx_t column_count = 0;
 
 	if (duckdb_open(NULL, &db) == DuckDBError) {
 		fprintf(stderr, "Failed to open database\n");
@@ -27,8 +29,8 @@ int main() {
 		goto cleanup;
 	}
 	// print the names of the result
-	idx_t row_count = duckdb_row_count(&result);
-	idx_t column_count = duckdb_column_count(&result);
+	row_count = duckdb_row_count(&result);
+	column_count = duckdb_column_count(&result);
 	for (size_t i = 0; i < column_count; i++) {
 		printf("%s ", duckdb_column_name(&result, i));
 	}
@@ -42,7 +44,6 @@ int main() {
 		}
 		printf("\n");
 	}
-	// duckdb_print_result(result);
 cleanup:
 	duckdb_destroy_result(&result);
 	duckdb_disconnect(&con);

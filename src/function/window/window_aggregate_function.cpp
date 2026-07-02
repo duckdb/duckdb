@@ -39,7 +39,7 @@ static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &w
 		}
 		if (aggr->GetOrderDependent() != AggregateOrderDependent::ORDER_DEPENDENT) {
 			arg_orders.clear();
-		} else {
+		} else if (!wexpr.Distinct()) {
 			//	If the argument order is prefix of the partition ordering,
 			//	then we can just use the partition ordering.
 			if (BoundWindowExpression::GetSharedOrders(wexpr.OrderBy(), arg_orders) == arg_orders.size()) {

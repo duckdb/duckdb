@@ -115,11 +115,18 @@ void StructColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t
 	}
 }
 
-void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
+void StructColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<StructColumnWriterState>();
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		// we add the null count of the struct to the null count of the children
 		state.child_states[child_idx]->null_count += state_p.null_count;
+		child_writers[child_idx]->PrepareWrite(*state.child_states[child_idx]);
+	}
+}
+
+void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
+	auto &state = state_p.Cast<StructColumnWriterState>();
+	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		child_writers[child_idx]->FinalizeWrite(*state.child_states[child_idx]);
 	}
 }

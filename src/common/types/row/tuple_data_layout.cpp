@@ -1,6 +1,5 @@
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 
 namespace duckdb {
@@ -226,6 +225,15 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 
 bool TupleDataLayout::IsSortKeyLayout() const {
 	return sort_key_type != SortKeyType::INVALID;
+}
+
+bool TupleDataLayout::HasNestedTypes() const {
+	for (const auto &type : types) {
+		if (type.IsNested()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 } // namespace duckdb

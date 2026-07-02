@@ -555,7 +555,7 @@ const DBConfig &DBConfig::GetConfig(const ClientContext &context) {
 }
 
 idx_t DatabaseInstance::NumberOfThreads() {
-	return NumericCast<idx_t>(scheduler->NumberOfThreads());
+	return scheduler->NumberOfThreads();
 }
 
 idx_t DuckDB::NumberOfThreads() {

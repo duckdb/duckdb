@@ -260,9 +260,15 @@ static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, V
 	VariantNormalizer::Normalize(variant_vec, result);
 }
 
+static unique_ptr<BaseStatistics> VariantNormalizeStats(ClientContext &context, FunctionStatisticsInput &input) {
+	// variant_normalize re-encodes the VARIANT in a canonical binary form, but does not change any values
+	return input.child_stats[0].ToUnique();
+}
+
 ScalarFunction VariantNormalizeFun::GetFunction() {
 	auto variant_type = LogicalType::VARIANT();
-	return ScalarFunction("variant_normalize", {variant_type}, variant_type, VariantNormalizeFunction);
+	return ScalarFunction("variant_normalize", {variant_type}, variant_type, VariantNormalizeFunction, nullptr,
+	                      VariantNormalizeStats);
 }
 
 } // namespace duckdb

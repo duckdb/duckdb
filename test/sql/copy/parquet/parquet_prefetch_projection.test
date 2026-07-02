@@ -8,7 +8,7 @@ statement ok
 SET threads=1
 
 statement ok
-SET prefetch_all_parquet_files=true
+SET parquet_prefetch_column_gap=16384
 
 statement ok
 COPY (

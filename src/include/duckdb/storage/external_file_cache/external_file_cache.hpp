@@ -35,6 +35,8 @@ class ExternalFileCache {
 public:
 	//! Get the cache block size for a given file path.
 	DUCKDB_API idx_t GetCacheBlockSize(const string &path) const;
+	//! Whether reads of the given file should go through the cache (remote files only, unless forced).
+	DUCKDB_API bool ShouldCacheFile(const string &path) const;
 
 	//! Cached files
 	struct CachedFile {

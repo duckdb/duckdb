@@ -298,20 +298,21 @@ CommonTableExpressionMap CommonTableExpressionMap::Deserialize(Deserializer &des
 }
 
 void ExportedTableData::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<Identifier>(1, "table_name", table_name);
-	serializer.WritePropertyWithDefault<Identifier>(2, "schema_name", schema_name);
-	serializer.WritePropertyWithDefault<Identifier>(3, "database_name", database_name);
+	serializer.WritePropertyWithDefault<Identifier>(1, "table_name", qualified_name.Name());
+	serializer.WritePropertyWithDefault<Identifier>(2, "schema_name", qualified_name.Schema());
+	serializer.WritePropertyWithDefault<Identifier>(3, "database_name", qualified_name.Catalog());
 	serializer.WritePropertyWithDefault<string>(4, "file_path", file_path);
 	serializer.WritePropertyWithDefault<vector<Identifier>>(5, "not_null_columns", not_null_columns);
 }
 
 ExportedTableData ExportedTableData::Deserialize(Deserializer &deserializer) {
 	ExportedTableData result;
-	deserializer.ReadPropertyWithDefault<Identifier>(1, "table_name", result.table_name);
-	deserializer.ReadPropertyWithDefault<Identifier>(2, "schema_name", result.schema_name);
-	deserializer.ReadPropertyWithDefault<Identifier>(3, "database_name", result.database_name);
+	auto table_name = deserializer.ReadPropertyWithDefault<Identifier>(1, "table_name");
+	auto schema_name = deserializer.ReadPropertyWithDefault<Identifier>(2, "schema_name");
+	auto database_name = deserializer.ReadPropertyWithDefault<Identifier>(3, "database_name");
 	deserializer.ReadPropertyWithDefault<string>(4, "file_path", result.file_path);
 	deserializer.ReadPropertyWithDefault<vector<Identifier>>(5, "not_null_columns", result.not_null_columns);
+	result.SetQualifiedName(std::move(database_name), std::move(schema_name), std::move(table_name));
 	return result;
 }
 
@@ -531,6 +532,7 @@ void SampleOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<SampleMethod>(102, "method", method);
 	serializer.WritePropertyWithDefault<int64_t>(103, "seed", GetSeed());
 	serializer.WritePropertyWithDefault<bool>(104, "repeatable", repeatable);
+	serializer.WritePropertyWithDefault<double>(105, "sample_rate", sample_rate, -1.0);
 }
 
 unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &deserializer) {
@@ -543,6 +545,7 @@ unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &deserializer)
 	result->is_percentage = is_percentage;
 	result->method = method;
 	deserializer.ReadPropertyWithDefault<bool>(104, "repeatable", result->repeatable);
+	deserializer.ReadPropertyWithExplicitDefault<double>(105, "sample_rate", result->sample_rate, -1.0);
 	return result;
 }
 

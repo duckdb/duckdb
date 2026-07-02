@@ -52,6 +52,8 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"partitioned_execution", OptimizerType::PARTITIONED_EXECUTION},
     {"partial_aggregate_pushdown", OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN},
     {"remote_pushdown", OptimizerType::REMOTE_PUSHDOWN},
+    {"grouping_sets", OptimizerType::GROUPING_SETS},
+    {"type_pushdown", OptimizerType::TYPE_PUSHDOWN},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {

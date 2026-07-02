@@ -9,19 +9,19 @@ ProfilerPrintFormat ParseProfilerPrintFormat(const Value &val) {
 	if (val.type().id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("Expected a string as argument to FORMAT");
 	}
-	// resolve the format name through the shared explain format registry (see main/profiler/profiler_print_format.hpp)
-	return ProfilerPrintFormat::FromString(val.GetValue<string>());
+	// the format name is validated when the renderer is created (needs a ClientContext); only normalize it here
+	return ProfilerPrintFormat(StringUtil::Lower(val.GetValue<string>()));
 }
 
 unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, const bool &explain_analyze,
-                                                 const vector<GenericCopyOption> &explain_option_list,
+PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer, const optional<bool> &explain_analyze,
+                                                 const optional<vector<GenericCopyOption>> &explain_option_list,
                                                  unique_ptr<SQLStatement> explainable_statements) {
 	auto explain_type = explain_analyze ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
 	bool format_is_set = false;
 	auto format = ProfilerPrintFormat::Default();
-	if (!explain_option_list.empty()) {
-		for (auto option : explain_option_list) {
+	if (explain_option_list) {
+		for (auto option : *explain_option_list) {
 			auto option_name = StringUtil::Lower(option.name.GetIdentifierName());
 			if (option_name == "format") {
 				if (format_is_set) {
@@ -58,18 +58,19 @@ PEGTransformerFactory::TransformExplainOptionList(PEGTransformer &transformer,
 
 GenericCopyOption PEGTransformerFactory::TransformExplainOption(PEGTransformer &transformer,
                                                                 const Identifier &explain_option_name,
-                                                                unique_ptr<ParsedExpression> expression) {
+                                                                optional<unique_ptr<ParsedExpression>> expression) {
 	GenericCopyOption copy_option;
 	copy_option.name = Identifier(StringUtil::Lower(explain_option_name.GetIdentifierName()));
 	if (!expression) {
 		return copy_option;
 	}
-	if (expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		copy_option.children.push_back(Value(expression->Cast<ConstantExpression>().GetValue()));
-	} else if (expression->GetExpressionType() == ExpressionType::COLUMN_REF) {
-		copy_option.children.push_back(Value(expression->Cast<ColumnRefExpression>().GetColumnName()));
+	auto &expr = *expression;
+	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		copy_option.children.push_back(Value(expr->Cast<ConstantExpression>().GetValue()));
+	} else if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
+		copy_option.children.push_back(Value(expr->Cast<ColumnRefExpression>().GetColumnName()));
 	} else {
-		copy_option.expression = std::move(expression);
+		copy_option.expression = std::move(expr);
 	}
 	return copy_option;
 }

@@ -2,6 +2,9 @@
 # description: Test partial precomputation of aggregates (count_star, min, max)
 # group: [optimizer]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 require no_alternative_verify
 
 statement ok

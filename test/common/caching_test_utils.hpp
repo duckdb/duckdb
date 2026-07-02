@@ -33,4 +33,19 @@ public:
 	string GetVersionTag(FileHandle &handle) override;
 };
 
+//! A file system that returns no ETag and timestamp_t(0) for Last-Modified, simulating servers that do not
+//! provide cache-validation headers.
+class NoValidationMetadataFileSystem : public LocalFileSystem {
+public:
+	string GetName() const override;
+	bool CanHandleFile(const string &path) override;
+	bool CanSeek() override;
+	string GetVersionTag(FileHandle &handle) override;
+	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
+};
+
+//! In-memory DuckDB with the external file cache forced to also cache local files (off by default), so the external
+//! file cache tests can exercise the cache machinery on local temp files.
+DuckDB MakeCacheLocalFilesDB();
+
 } // namespace duckdb

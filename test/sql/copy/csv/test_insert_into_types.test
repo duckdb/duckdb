@@ -134,13 +134,13 @@ CREATE TABLE proj (
         id VARCHAR NOT NULL,  /*primary key*/
 );
 
-# A cast will not be pushed down
+# The cast is pushed down, so the reader reports the conversion error
 statement error
 INSERT INTO proj
 SELECT name, id::INTEGER
 FROM read_csv('{DATA_DIR}/csv/file_error.csv');
 ----
-Could not convert string '3r' to INT32
+Could not convert string "3r" to 'INTEGER'
 
 statement ok
 DROP table proj;

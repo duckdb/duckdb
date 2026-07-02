@@ -61,7 +61,6 @@ public:
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
-	static string QualifierToString(const Identifier &catalog, const Identifier &schema, const Identifier &name);
 	static string TypeToString(CatalogType type);
 };
 

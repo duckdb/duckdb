@@ -10,6 +10,7 @@ add_subdirectory(capi)
 
 set(TEST_API_OBJECTS
     test_api.cpp
+    test_bind_statement.cpp
     test_config.cpp
     test_custom_allocator.cpp
     test_extension_setting_autoload.cpp
@@ -30,6 +31,7 @@ set(TEST_API_OBJECTS
     test_query_profiler.cpp
     test_dbdir.cpp
     test_pending_with_parameters.cpp
+    test_parse_statement_iterator.cpp
     test_progress_bar.cpp
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp

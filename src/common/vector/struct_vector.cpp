@@ -287,11 +287,15 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::FlattenSliceInternal(const LogicalT
 }
 
 vector<Vector> &StructVector::GetEntries(Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION ||
-	         vector.GetType().id() == LogicalTypeId::VARIANT);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::TUPLE ||
+	         vector.GetType().id() == LogicalTypeId::UNION || vector.GetType().id() == LogicalTypeId::VARIANT);
 
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		throw InternalException("Struct vectors cannot be dictionary vectors");
+	}
+	if (vector.GetVectorType() != VectorType::FLAT_VECTOR && vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+		// non-flat representation (e.g. a shredded variant) - flatten so we can access the struct entries
+		vector.Flatten();
 	}
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);

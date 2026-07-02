@@ -1,0 +1,22 @@
+# name: benchmark/tpch/aggregate/lineitem_rollup.benchmark
+# description: ROLLUP aggregation over lineitem
+# group: [aggregate]
+
+include benchmark/tpch/tpch_load.benchmark.in
+
+name Lineitem Rollup
+group aggregate
+subgroup tpch
+
+run
+SELECT l_returnflag, l_linestatus, SUM(l_quantity) FROM lineitem GROUP BY ROLLUP(l_returnflag, l_linestatus) ORDER BY ALL;
+
+result III sf=1
+A	F	37734107.00
+A	NULL	37734107.00
+N	F	991417.00
+N	O	76633518.00
+N	NULL	77624935.00
+R	F	37719753.00
+R	NULL	37719753.00
+NULL	NULL	153078795.00

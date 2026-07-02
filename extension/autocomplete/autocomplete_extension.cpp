@@ -558,6 +558,11 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	// `+ 1` accounts for the EOI sentinel — the autocomplete walk may report SUCCESS without
 	// consuming it.
 	if (match_result != MatchResultType::SUCCESS || state.token_index + 1 < root_tokens.size()) {
+		auto error_token = string("<eof>");
+		if (state.token_index < root_tokens.size() && root_tokens[state.token_index].type != TokenType::END_OF_INPUT &&
+		    root_tokens[state.token_index].type != TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			error_token = root_tokens[state.token_index].text;
+		}
 		string token_list;
 		for (idx_t i = 0; i < root_tokens.size(); i++) {
 			if (!token_list.empty()) {
@@ -570,7 +575,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 		}
 		throw BinderException(
 		    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql,
-		    state.token_index, root_tokens[state.token_index].text, token_list);
+		    state.token_index, error_token, token_list);
 	}
 	return nullptr;
 }

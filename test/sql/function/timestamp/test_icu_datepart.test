@@ -820,3 +820,33 @@ ORDER BY ALL;
 5872	11	November
 5872	12	December
 5872	13	Undecimber
+
+statement ok
+CREATE TABLE t1(c0 TIMESTAMPTZ);
+
+statement ok
+INSERT INTO t1(c0) VALUES ('-infinity'), ('infinity');
+
+query III
+SELECT WEEKOFYEAR(c0), WEEKOFYEAR(c0) IS NULL, WEEKOFYEAR(c0) IS NOT NULL FROM t1;
+----
+NULL	true	false
+NULL	true	false
+
+query II
+SELECT WEEKDAY(c0), WEEKDAY(c0) IS NULL FROM t1;
+----
+NULL	true
+NULL	true
+
+query II
+SELECT DAYOFMONTH(c0), DAYOFMONTH(c0) IS NULL FROM t1;
+----
+NULL	true
+NULL	true
+
+query II
+SELECT EXTRACT(month FROM c0) IS NULL, EXTRACT(quarter FROM c0) IS NULL FROM t1;
+----
+true	true
+true	true

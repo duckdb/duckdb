@@ -110,6 +110,7 @@ public:
 	DUCKDB_API virtual FileCompressionType GetFileCompressionType();
 
 	DUCKDB_API bool CanSeek();
+	DUCKDB_API bool SupportsPositionalWrites();
 	DUCKDB_API bool IsPipe();
 	DUCKDB_API bool OnDiskFile();
 	//! Try to obtain a network throughput estimate (Local files return false).
@@ -148,6 +149,10 @@ public:
 	FileOpenFlags flags;
 
 	shared_ptr<Logger> logger;
+	//! Whether reads/writes through this handle are counted in the query's I/O metrics. Set to false for
+	//! wrapper handles (e.g. compressed files) that delegate the real on-disk I/O to a child handle, so that
+	//! the bytes are attributed to the child handle (the actual disk I/O) and not double-counted.
+	bool track_io = true;
 };
 
 class FileSystem {
@@ -307,6 +312,8 @@ public:
 
 	//! If FS was manually set by the user
 	DUCKDB_API virtual bool IsManuallySet();
+	//! Whether positional writes to this handle can be issued independently and out of order
+	DUCKDB_API virtual bool SupportsPositionalWrites(FileHandle &handle);
 	//! Whether or not we can seek into the file
 	DUCKDB_API virtual bool CanSeek();
 	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads

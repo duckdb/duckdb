@@ -67,6 +67,7 @@ LogicalType HTTPLogType::GetLogType() {
 	    {"url", LogicalType::VARCHAR},
 	    {"start_time", LogicalType::TIMESTAMP_TZ},
 	    {"duration_ms", LogicalType::BIGINT},
+	    {"request_body_length", LogicalType::UBIGINT},
 	    {"headers", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
 	};
 	auto request_type = LogicalType::STRUCT(request_child_list);
@@ -77,7 +78,6 @@ LogicalType HTTPLogType::GetLogType() {
 	    {"headers", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
 	};
 	auto response_type = LogicalType::STRUCT(response_child_list);
-	;
 
 	LogicalType result_type;
 	child_list_t<LogicalType> child_list = {{"request", request_type}, {"response", response_type}};
@@ -99,16 +99,18 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 	    {"type", Value(EnumUtil::ToString(request.type))},
 	    {"url", Value(request.url)},
 	    {"headers", CreateHTTPHeadersValue(request.headers)},
-	    {"start_time", request.have_request_timing ? Value::TIMESTAMP(request.request_start) : Value()},
-	    {"duration_ms", request.have_request_timing ? Value::BIGINT(Timestamp::GetEpochMs(request.request_end) -
-	                                                                Timestamp::GetEpochMs(request.request_start))
-	                                                : Value()}};
+	    {"start_time", request.have_request_timing ? Value::TIMESTAMP(request.request_system_start) : Value()},
+	    {"duration_ms",
+	     request.have_request_timing
+	         ? Value::BIGINT(TimePoint::ElapsedMillis(request.request_monotonic_start, request.request_monotonic_end))
+	         : Value()},
+	    {"request_body_length", request.request_body_length ? Value::UBIGINT(request.request_body_length) : Value()}};
 	auto request_value = Value::STRUCT(request_child_list);
 	Value response_value;
 	if (response) {
 		child_list_t<Value> response_child_list = {
 		    {"status", Value(EnumUtil::ToString(response->status))},
-		    {"reason", Value(response->reason)},
+		    {"reason", Value(response->reason.empty() ? response->GetRequestError() : response->reason)},
 		    {"headers", CreateHTTPHeadersValue(response->headers)},
 		};
 		response_value = Value::STRUCT(response_child_list);

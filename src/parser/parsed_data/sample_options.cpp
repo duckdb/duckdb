@@ -26,6 +26,7 @@ unique_ptr<SampleOptions> SampleOptions::Copy() {
 	result->method = method;
 	result->seed = seed;
 	result->repeatable = repeatable;
+	result->sample_rate = sample_rate;
 	return result;
 }
 
@@ -49,7 +50,7 @@ bool SampleOptions::Equals(SampleOptions *a, SampleOptions *b) {
 		return true;
 	}
 	if (a->sample_size != b->sample_size || a->is_percentage != b->is_percentage || a->method != b->method ||
-	    a->seed.GetIndex() != b->seed.GetIndex()) {
+	    a->sample_rate != b->sample_rate || a->seed.GetIndex() != b->seed.GetIndex()) {
 		return false;
 	}
 	return true;

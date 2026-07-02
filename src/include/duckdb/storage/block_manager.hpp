@@ -70,7 +70,7 @@ public:
 	virtual void Read(QueryContext context, Block &block) = 0;
 
 	//! Read the content of the block from disk
-	virtual void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) = 0;
+	virtual void ReadBlocks(QueryContext context, FileBuffer &buffer, block_id_t start_block, idx_t block_count) = 0;
 	//! Writes the block to disk.
 	virtual void Write(FileBuffer &block, block_id_t block_id) = 0;
 	virtual void Write(QueryContext context, FileBuffer &block, block_id_t block_id);

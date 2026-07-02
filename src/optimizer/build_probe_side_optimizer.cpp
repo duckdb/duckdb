@@ -24,6 +24,7 @@ namespace duckdb {
 struct JoinFilterBuildSideHeuristics {
 	static constexpr idx_t MIN_FILTER_TARGET_CARDINALITY = 1000000;
 	static constexpr idx_t MAX_BUILD_TO_TARGET_RATIO = 64;
+	static constexpr idx_t SEMI_JOIN_FILTER_TARGET_RATIO = 3;
 };
 
 static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &bindings) {
@@ -152,6 +153,19 @@ static double DynamicFilterBuildBonus(LogicalComparisonJoin &join, const idx_t p
 	return static_cast<double>(max_target_cardinality) / static_cast<double>(MaxValue<idx_t>(build_cardinality, 1));
 }
 
+static idx_t MaxDynamicFilterTargetCardinality(LogicalComparisonJoin &join, const idx_t probe_idx) {
+	idx_t max_target_cardinality = 0;
+	for (auto &cond : join.conditions) {
+		if (!cond.IsComparison() || cond.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+			continue;
+		}
+		auto &probe_expr = probe_idx == 0 ? cond.GetLHS() : cond.GetRHS();
+		max_target_cardinality =
+		    MaxValue(max_target_cardinality, MaxDynamicFilterTargetCardinality(*join.children[probe_idx], probe_expr));
+	}
+	return max_target_cardinality;
+}
+
 BuildSize BuildProbeSideOptimizer::GetBuildSizes(const LogicalOperator &op, const idx_t lhs_cardinality,
                                                  const idx_t rhs_cardinality) {
 	BuildSize ret;
@@ -248,6 +262,16 @@ bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 		if (HasInverseJoinType(join.join_type) &&
 		    JoinFilterPushdownUtil::JoinTypeIsSupported(InverseJoinType(join.join_type))) {
 			left_side_build_cost /= DynamicFilterBuildBonus(join, 1, 0, lhs_cardinality);
+		}
+		if (join.join_type == JoinType::SEMI && JoinFilterPushdownOptimizer::IsFiltering(join.children[0])) {
+			// SEMI joins often have a filtered domain on the LHS and a larger RHS with residual filters. If flipping
+			// lets that domain generate a runtime filter for a much larger RHS scan, prefer the domain build side.
+			auto right_filter_target = MaxDynamicFilterTargetCardinality(join, 1);
+			if (right_filter_target >= JoinFilterBuildSideHeuristics::MIN_FILTER_TARGET_CARDINALITY &&
+			    right_filter_target / JoinFilterBuildSideHeuristics::SEMI_JOIN_FILTER_TARGET_RATIO > lhs_cardinality &&
+			    right_filter_target / JoinFilterBuildSideHeuristics::SEMI_JOIN_FILTER_TARGET_RATIO > rhs_cardinality) {
+				swap = true;
+			}
 		}
 	}
 

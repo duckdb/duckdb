@@ -4,14 +4,46 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 
 namespace duckdb {
+
+/**
+ * When a BoundColumnRefExpression that's part of expr (a filter) arrives here, its
+ * name will be set to the projection name i.e. "other" for SELECT col as other.
+ * If CTE inlining optimizer collapses the CTE in
+ * WITH cte AS (SELECT col AS other FROM reader()) SELECT * WHERE other > 0 FROM cte,
+ * reader() will get a complex filter with "other" which doesn't exist.
+ * Rename the columns back to their original names
+ */
+static void NormalizeColumnRefAliases(unique_ptr<Expression> &expr, const LogicalGet &get) {
+	const vector<ColumnIndex> &column_ids = get.GetColumnIds();
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(expr, [&](auto &ref, auto &) {
+		const ColumnBinding &binding = ref.Binding();
+		if (binding.table_index != get.table_index || binding.column_index >= column_ids.size()) {
+			return;
+		}
+		const ColumnIndex &col_idx = column_ids[binding.column_index];
+		const idx_t primary = col_idx.GetPrimaryIndex();
+		if (col_idx.IsVirtualColumn()) {
+			if (const auto it = get.virtual_columns.find(primary); it != get.virtual_columns.end()) {
+				ref.SetAlias(Identifier(it->second.name.GetIdentifierName()));
+			}
+		} else if (primary < get.names.size()) {
+			ref.SetAlias(Identifier(col_idx.GetName(get.names[primary].GetIdentifierName())));
+		}
+	});
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = op->Cast<LogicalGet>();
+
+	for (auto &filter : filters) {
+		NormalizeColumnRefAliases(filter->filter, get);
+	}
 
 	if (get.function.pushdown_complex_filter || get.function.filter_pushdown) {
 		// this scan supports some form of filter push-down

@@ -72,6 +72,16 @@ struct VariantNestedData {
 	uint32_t children_idx;
 };
 
+//! The (width, scale) of a DECIMAL value - the physical storage type (and hence the payload) follows
+//! from the width (see VariantDecimalData::GetPhysicalType)
+struct VariantDecimalProperties {
+	VariantDecimalProperties(uint32_t width, uint32_t scale) : width(width), scale(scale) {
+	}
+
+	uint32_t width;
+	uint32_t scale;
+};
+
 struct VariantDecimalData {
 public:
 	VariantDecimalData(uint32_t width, uint32_t scale, const_data_ptr_t value_ptr)

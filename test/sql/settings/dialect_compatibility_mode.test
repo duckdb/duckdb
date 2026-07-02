@@ -1,0 +1,43 @@
+# name: test/sql/settings/dialect_compatibility_mode.test
+# description: Test dialect_compatibility_mode setting
+# group: [settings]
+
+query I
+SELECT current_setting('dialect_compatibility_mode')
+----
+NONE
+
+# value matching is case-insensitive
+statement ok
+SET dialect_compatibility_mode='spark'
+
+query I
+SELECT current_setting('dialect_compatibility_mode')
+----
+spark
+
+# invalid dialects are rejected at SET time
+statement error
+SET dialect_compatibility_mode='some_random_non_existing_thing'
+----
+<REGEX>:.*unrecognized value.*
+
+statement ok
+RESET dialect_compatibility_mode
+
+query I
+SELECT current_setting('dialect_compatibility_mode')
+----
+NONE
+
+# the setting can also be set globally
+statement ok
+SET GLOBAL dialect_compatibility_mode='SPARK'
+
+query I
+SELECT current_setting('dialect_compatibility_mode')
+----
+SPARK
+
+statement ok
+RESET GLOBAL dialect_compatibility_mode
