@@ -31,13 +31,13 @@ struct IndexEntry {
 
 	//! Give the caller a stable snapshot of the current Index
 	shared_ptr<Index> PinIndex() const {
-		lock_guard<mutex> lock(index_entries_lock);
+		lock_guard<mutex> lock(index_pointer_lock);
 		return owned_index;
 	}
 
 	//! Replace the current snapshot with another, which happens either during bind or checkpointing
 	void ReplaceIndex(unique_ptr<Index> index) {
-		lock_guard<mutex> lock(index_entries_lock);
+		lock_guard<mutex> lock(index_pointer_lock);
 		owned_index = std::move(index);
 	}
 
@@ -56,7 +56,7 @@ private:
 	//! The owning pointer of the index
 	shared_ptr<Index> owned_index;
 	//! Lock held when accessing or modifying the owned_index pointer
-	mutable mutex index_entries_lock;
+	mutable mutex index_pointer_lock;
 };
 
 struct IndexSerializationInfo {
