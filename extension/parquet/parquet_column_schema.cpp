@@ -15,7 +15,7 @@ namespace duckdb {
 optional_idx ParquetColumnSchema::GetChildIndexByName(const string &name) const {
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto &child = children[i];
-		if (StringUtil::CIEquals(name, child.name)) {
+		if (name == child.name) {
 			return i;
 		}
 	}
