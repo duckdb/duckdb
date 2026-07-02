@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/helper.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
@@ -40,7 +39,8 @@ public:
 	ParseIterator(const ParseIterator &) = delete;
 	ParseIterator &operator=(const ParseIterator &) = delete;
 	DUCKDB_API ParseIterator(ParseIterator &&) noexcept;
-	DUCKDB_API ParseIterator &operator=(ParseIterator &&) noexcept;
+	// Not move-assignable: holds a ClientContext reference, which cannot be rebound.
+	ParseIterator &operator=(ParseIterator &&) = delete;
 
 	//! Returns true if a statement is currently available (after parsing as needed). Returns
 	//! false when the iterator is exhausted. Non-const: parses on demand and buffers the result.
@@ -65,7 +65,7 @@ private:
 
 private:
 	//! The bound context, used for parser options / metrics / override extensions.
-	reference<ClientContext> context;
+	ClientContext &context;
 	string sql;
 	//! Parser instance kept alive across Peek calls so its PEG matcher / transformer caches
 	//! stay warm. Constructed lazily on the first Peek.

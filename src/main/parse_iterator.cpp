@@ -20,14 +20,13 @@ ParseIterator::ParseIterator(ClientContext &context_p, const string &sql_p)
 ParseIterator::~ParseIterator() = default;
 
 ParseIterator::ParseIterator(ParseIterator &&) noexcept = default;
-ParseIterator &ParseIterator::operator=(ParseIterator &&) noexcept = default;
 
 ClientContext &ParseIterator::GetClientContext() {
-	return context.get();
+	return context;
 }
 
 bool ParseIterator::Peek() {
-	auto &client_context = context.get();
+	auto &client_context = context;
 	// Already buffered from a prior Peek — just report it.
 	if (current_statement) {
 		return true;
