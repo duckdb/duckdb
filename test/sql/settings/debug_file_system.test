@@ -1,0 +1,52 @@
+# name: test/sql/settings/debug_file_system.test
+# description: Test DebugFileSystem latency injection settings
+# group: [settings]
+
+require debug_fs
+
+statement ok
+SET debug_fs_random_seed=42;
+
+statement ok
+SET debug_fs_delay_mean_ms=1.0;
+
+statement ok
+SET debug_fs_delay_stddev_ms=0.3;
+
+statement ok
+COPY (SELECT 42 AS i) TO '{TEMP_DIR}/debug_fs_test.csv' (FORMAT csv);
+
+statement error
+SET debug_fs_random_seed=100;
+----
+<REGEX>:.*Cannot change debug_fs_random_seed after the random engine has been initialized.*
+
+statement ok
+CREATE TABLE debug_fs_readback (i INTEGER);
+
+statement ok
+COPY debug_fs_readback FROM '{TEMP_DIR}/debug_fs_test.csv';
+
+query I
+FROM debug_fs_readback;
+----
+42
+
+statement ok
+RESET debug_fs_delay_mean_ms;
+
+statement ok
+RESET debug_fs_delay_stddev_ms;
+
+statement ok
+RESET debug_fs_random_seed;
+
+statement error
+SET debug_fs_delay_mean_ms=-1.0;
+----
+Invalid option for debug_fs_delay_mean_ms: value must be greater than or equal to 0
+
+statement error
+SET debug_fs_delay_stddev_ms=-1.0;
+----
+Invalid option for debug_fs_delay_stddev_ms: value must be greater than or equal to 0
