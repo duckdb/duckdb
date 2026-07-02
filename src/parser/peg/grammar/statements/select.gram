@@ -64,7 +64,9 @@ TableUnpivotClauseBody <- UnpivotHeader 'FOR' UnpivotValueList+
 
 PivotHeader <- BaseExpression
 PivotValueList <- PivotHeader 'IN' PivotValueTarget
-PivotValueTarget <- Identifier / PivotTargetList
+PivotValueTarget <- PivotEnumTarget / PivotListTarget
+PivotEnumTarget <- Identifier
+PivotListTarget <- PivotTargetList
 UnpivotValueList <- UnpivotHeader 'IN' UnpivotTargetList
 PivotTargetList <- Parens(TargetList)
 UnpivotTargetList <- Parens(TargetList)

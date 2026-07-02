@@ -844,6 +844,8 @@ PivotColumn:
     - PivotColumnExpression
     - PivotValueList
     - PivotValueTarget
+    - PivotEnumTarget
+    - PivotListTarget
     - UnpivotValueList
 
 UnpivotNameValues:

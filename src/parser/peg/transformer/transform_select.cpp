@@ -725,13 +725,16 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTablePivotClause(PEGTransfo
 	return table_pivot_clause_body;
 }
 
-PivotColumn PEGTransformerFactory::TransformPivotValueTarget(PEGTransformer &transformer, ParseResult &choice_result) {
+PivotColumn PEGTransformerFactory::TransformPivotEnumTarget(PEGTransformer &transformer, const Identifier &identifier) {
 	PivotColumn result;
-	if (choice_result.type == ParseResultType::IDENTIFIER) {
-		result.pivot_enum = choice_result.Cast<IdentifierParseResult>().identifier;
-	} else {
-		result.entries = transformer.Transform<vector<PivotColumnEntry>>(choice_result);
-	}
+	result.pivot_enum = identifier;
+	return result;
+}
+
+PivotColumn PEGTransformerFactory::TransformPivotListTarget(PEGTransformer &transformer,
+                                                            vector<PivotColumnEntry> pivot_target_list) {
+	PivotColumn result;
+	result.entries = std::move(pivot_target_list);
 	return result;
 }
 

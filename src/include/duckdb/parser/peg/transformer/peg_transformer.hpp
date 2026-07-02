@@ -441,10 +441,6 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeUpdateExtensionsStatementTrampoline(PEGTransformer &transformer,
 	                                                                                    TransformStack &stack,
 	                                                                                    TransformStackFrame &frame);
-	static void InitializeExecuteStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                 TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeExecuteStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializePrepareStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -2203,6 +2199,10 @@ public:
 	                                                  TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeDropSecretStorageTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeExecuteStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeExecuteStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeExplainStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -3906,6 +3906,14 @@ public:
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizePivotValueTargetTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializePivotEnumTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizePivotEnumTargetTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializePivotListTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizePivotListTargetTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeUnpivotValueListTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -7539,7 +7547,13 @@ public:
 	                                           PivotColumn pivot_value_target);
 	static unique_ptr<TransformResultValue> TransformPivotValueTargetInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
-	static PivotColumn TransformPivotValueTarget(PEGTransformer &transformer, ParseResult &choice_result);
+	static unique_ptr<TransformResultValue> TransformPivotEnumTargetInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static PivotColumn TransformPivotEnumTarget(PEGTransformer &transformer, const Identifier &identifier);
+	static unique_ptr<TransformResultValue> TransformPivotListTargetInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static PivotColumn TransformPivotListTarget(PEGTransformer &transformer,
+	                                            vector<PivotColumnEntry> pivot_target_list);
 	static unique_ptr<TransformResultValue> TransformUnpivotValueListInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static PivotColumn TransformUnpivotValueList(PEGTransformer &transformer, const vector<string> &unpivot_header,

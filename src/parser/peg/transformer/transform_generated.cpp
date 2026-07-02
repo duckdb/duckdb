@@ -8437,7 +8437,23 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPivotValueTarge
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = TransformPivotValueTarget(transformer, choice_pr.GetResult());
+	auto result = transformer.Transform<PivotColumn>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPivotEnumTargetInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
+	auto result = TransformPivotEnumTarget(transformer, identifier);
+	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPivotListTargetInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto pivot_target_list = transformer.Transform<vector<PivotColumnEntry>>(list_pr.GetChild(0));
+	auto result = TransformPivotListTarget(transformer, std::move(pivot_target_list));
 	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
 }
 
@@ -10831,6 +10847,8 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"PivotHeader", &PEGTransformerFactory::TransformPivotHeaderInternal},
 	    {"PivotValueList", &PEGTransformerFactory::TransformPivotValueListInternal},
 	    {"PivotValueTarget", &PEGTransformerFactory::TransformPivotValueTargetInternal},
+	    {"PivotEnumTarget", &PEGTransformerFactory::TransformPivotEnumTargetInternal},
+	    {"PivotListTarget", &PEGTransformerFactory::TransformPivotListTargetInternal},
 	    {"UnpivotValueList", &PEGTransformerFactory::TransformUnpivotValueListInternal},
 	    {"PivotTargetList", &PEGTransformerFactory::TransformPivotTargetListInternal},
 	    {"UnpivotTargetList", &PEGTransformerFactory::TransformUnpivotTargetListInternal},

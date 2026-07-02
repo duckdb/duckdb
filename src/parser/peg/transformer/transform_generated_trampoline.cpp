@@ -2311,6 +2311,12 @@ static const TransformFrameOps PIVOT_VALUE_LIST_OPS = {"PivotValueList",
 static const TransformFrameOps PIVOT_VALUE_TARGET_OPS = {"PivotValueTarget",
                                                          &PEGTransformerFactory::InitializePivotValueTargetTrampoline,
                                                          &PEGTransformerFactory::FinalizePivotValueTargetTrampoline};
+static const TransformFrameOps PIVOT_ENUM_TARGET_OPS = {"PivotEnumTarget",
+                                                        &PEGTransformerFactory::InitializePivotEnumTargetTrampoline,
+                                                        &PEGTransformerFactory::FinalizePivotEnumTargetTrampoline};
+static const TransformFrameOps PIVOT_LIST_TARGET_OPS = {"PivotListTarget",
+                                                        &PEGTransformerFactory::InitializePivotListTargetTrampoline,
+                                                        &PEGTransformerFactory::FinalizePivotListTargetTrampoline};
 static const TransformFrameOps UNPIVOT_VALUE_LIST_OPS = {"UnpivotValueList",
                                                          &PEGTransformerFactory::InitializeUnpivotValueListTrampoline,
                                                          &PEGTransformerFactory::FinalizeUnpivotValueListTrampoline};
@@ -3556,6 +3562,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"PivotHeader", &PIVOT_HEADER_OPS},
 	    {"PivotValueList", &PIVOT_VALUE_LIST_OPS},
 	    {"PivotValueTarget", &PIVOT_VALUE_TARGET_OPS},
+	    {"PivotEnumTarget", &PIVOT_ENUM_TARGET_OPS},
+	    {"PivotListTarget", &PIVOT_LIST_TARGET_OPS},
 	    {"UnpivotValueList", &UNPIVOT_VALUE_LIST_OPS},
 	    {"PivotTargetList", &PIVOT_TARGET_LIST_OPS},
 	    {"UnpivotTargetList", &UNPIVOT_TARGET_LIST_OPS},
@@ -11456,6 +11464,31 @@ PEGTransformerFactory::FinalizeDropSecretStorageTrampoline(PEGTransformer &trans
 	auto identifier = list_pr.GetChild(1).Cast<IdentifierParseResult>().identifier;
 	auto result = PEGTransformerFactory::TransformDropSecretStorage(transformer, identifier);
 	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeExecuteStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	auto &table_function_arguments_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (table_function_arguments_opt.HasResult()) {
+		stack.PushFrame(table_function_arguments_opt.GetResult(), TABLE_FUNCTION_ARGUMENTS_OPS,
+		                TransformFrameResultTarget(frame.frame_index, 0));
+	}
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExecuteStatementTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto identifier = list_pr.GetChild(1).Cast<IdentifierParseResult>().identifier;
+	optional<vector<FunctionArgument>> table_function_arguments {};
+	if (frame.child_results[0]) {
+		table_function_arguments = std::move(frame.TakeResult<vector<FunctionArgument>>(0));
+	}
+	auto result =
+	    PEGTransformerFactory::TransformExecuteStatement(transformer, identifier, std::move(table_function_arguments));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeExplainStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -19844,6 +19877,35 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotValueTarget
                                                                                            TransformStack &stack,
                                                                                            TransformStackFrame &frame) {
 	auto result = frame.TakeResult<PivotColumn>(0);
+	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializePivotEnumTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotEnumTargetTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
+	auto result = PEGTransformerFactory::TransformPivotEnumTarget(transformer, identifier);
+	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializePivotListTargetTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), PIVOT_TARGET_LIST_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotListTargetTrampoline(PEGTransformer &transformer,
+                                                                                          TransformStack &stack,
+                                                                                          TransformStackFrame &frame) {
+	auto pivot_target_list = frame.TakeResult<vector<PivotColumnEntry>>(0);
+	auto result = PEGTransformerFactory::TransformPivotListTarget(transformer, std::move(pivot_target_list));
 	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
 }
 
