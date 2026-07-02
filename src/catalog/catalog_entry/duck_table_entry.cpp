@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/enum_util.hpp"

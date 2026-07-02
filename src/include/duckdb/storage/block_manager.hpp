@@ -12,7 +12,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/main/query_context.hpp"
+#include "duckdb/common/query_context.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
 

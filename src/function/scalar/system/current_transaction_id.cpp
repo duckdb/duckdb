@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/system_functions.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"

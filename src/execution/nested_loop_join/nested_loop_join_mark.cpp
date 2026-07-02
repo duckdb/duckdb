@@ -1,4 +1,6 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"

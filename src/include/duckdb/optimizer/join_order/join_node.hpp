@@ -8,7 +8,6 @@
 #pragma once
 
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
-#include "duckdb/optimizer/join_order/query_graph.hpp"
 
 namespace duckdb {
 

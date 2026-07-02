@@ -14,6 +14,7 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 
 namespace duckdb {
+struct CastParameters;
 class CSVCast {
 	template <class OP, class T>
 	static bool TemplatedTryCastFloatingVector(const CSVReaderOptions &options, Vector &input_vector,

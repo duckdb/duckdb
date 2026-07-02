@@ -1,4 +1,5 @@
 #include "duckdb/function/table/read_duckdb.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"

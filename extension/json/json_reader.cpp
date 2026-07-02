@@ -1,4 +1,5 @@
 #include "json_reader.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include <utility>
 

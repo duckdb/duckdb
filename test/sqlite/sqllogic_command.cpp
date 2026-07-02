@@ -1,4 +1,5 @@
 #include "sqllogic_command.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "result_helper.hpp"
 #include "duckdb/main/connection_manager.hpp"

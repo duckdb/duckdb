@@ -13,7 +13,6 @@
 #include "duckdb/common/enums/index_removal_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/block.hpp"
 
 namespace duckdb {

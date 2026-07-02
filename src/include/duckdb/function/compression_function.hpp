@@ -21,6 +21,7 @@
 #include "duckdb/storage/storage_lock.hpp"
 
 namespace duckdb {
+class CompressionFunction;
 class DatabaseInstance;
 class ColumnData;
 struct ColumnDataCheckpointData;
