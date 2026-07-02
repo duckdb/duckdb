@@ -9,11 +9,11 @@
 #pragma once
 
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
+class ClientContext;
 class LogicalGet;
 class LogicalOperator;
 

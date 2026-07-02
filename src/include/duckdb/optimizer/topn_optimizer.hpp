@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/constants.hpp"
 
 namespace duckdb {
+class ClientContext;
 class LogicalOperator;
 class LogicalTopN;
 class Optimizer;
