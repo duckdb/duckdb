@@ -266,6 +266,9 @@ OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatis
 			return {row_offset, 0, 0};
 		}
 
+		if (!partition_stats.min_max_exact) {
+			return {row_offset, 0, 0};
+		}
 		auto column_stats = partition_stats.partition_row_group->GetColumnStatistics(storage_index);
 		if (!column_stats) {
 			return {new_row_offset, 0, leading_null_group_offset};

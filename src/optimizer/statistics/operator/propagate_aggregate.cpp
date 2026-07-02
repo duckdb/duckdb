@@ -253,6 +253,10 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				if (!column_stats) {
 					return;
 				}
+				if (!prg->MinMaxIsExact(*column_stats, storage_index)) {
+					filter_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+					break;
+				}
 				auto &expr_filter =
 				    ExpressionFilter::GetExpressionFilter(filter.get(), "AggregateStats::CheckPartitionFilters");
 				auto col_filter_result = expr_filter.CheckStatistics(*column_stats);

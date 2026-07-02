@@ -1,0 +1,144 @@
+# name: test/optimizer/partition_stats_exactness.test
+# description: Partition stats exactness for count / min / max with version info and deletions
+# group: [optimizer]
+
+load {TEST_DIR}/partition_stats_exactness.db
+
+statement ok
+CREATE TABLE big AS
+SELECT i AS id, (i % 100) AS g
+FROM range(0, 100_000) t(i);
+
+# Append-only operation
+statement ok
+INSERT INTO big SELECT i, i % 100 FROM range(100_000, 101_000) t(i);
+
+# Same process, before checkpoint: committed count is still exact.
+query II
+EXPLAIN SELECT count(*) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+# Force reload: no in-memory version info; append-only operation has no deletions.
+restart
+
+# Reloaded append-only table: count and min/max still exact
+query II
+EXPLAIN SELECT count(*) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+SELECT min(id), max(id) FROM big
+----
+0	100999
+
+query I
+SELECT count(*) FROM big WHERE g = 7
+----
+1010
+
+# In-process deletes: count is transaction-visible and exact, while min/max remains inexact.
+statement ok
+DELETE FROM big WHERE id = 0;
+
+query II
+EXPLAIN SELECT count(*) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM big
+----
+physical_plan	<REGEX>:.*Sequential Scan.*
+
+statement ok
+CHECKPOINT;
+
+# Still in-process after checkpoint with loaded deletes: count remains exact, min/max remains inexact.
+query II
+EXPLAIN SELECT count(*) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM big
+----
+physical_plan	<REGEX>:.*Sequential Scan.*
+
+# After restart: persisted deletes are not loaded during optimization, so count and min/max are inexact.
+restart
+
+query II
+EXPLAIN SELECT count(*) FROM big
+----
+physical_plan	<REGEX>:.*Sequential Scan.*
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM big
+----
+physical_plan	<REGEX>:.*Sequential Scan.*
+
+query III
+SELECT count(*), min(id), max(id) FROM big
+----
+100999	1	100999
+
+# count(*) inside a transaction must reflect the transaction's own uncommitted deletes.
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM big WHERE id BETWEEN 1 AND 10
+
+query II
+EXPLAIN SELECT count(*) FROM big
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query I
+SELECT count(*) FROM big
+----
+100989
+
+statement ok
+ROLLBACK
+
+# After rollback the uncommitted deletes are gone again
+query I
+SELECT count(*) FROM big
+----
+100999
+
+# Loaded deletes make min/max inexact, so offset pruning must not use stale row group ordering stats.
+statement ok
+CREATE TABLE rg_order AS
+SELECT i AS id FROM range(0, 122_880) t(i)
+UNION ALL
+SELECT 1_000_000 + i AS id FROM range(0, 122_880) t(i);
+
+statement ok
+DELETE FROM rg_order WHERE id < 122_000;
+
+query II
+EXPLAIN ANALYZE SELECT id FROM rg_order ORDER BY id LIMIT 1 OFFSET 1_000
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+
+query I
+SELECT id FROM rg_order ORDER BY id LIMIT 1 OFFSET 1_000
+----
+1000120
