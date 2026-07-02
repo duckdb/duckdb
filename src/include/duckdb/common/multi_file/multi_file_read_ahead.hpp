@@ -65,7 +65,7 @@ private:
 	void Drain() noexcept;
 
 	idx_t read_ahead_depth;
-	//! Maximum bytes of I/O scheduled ahead of decoding, additional jobs wait until claims free up bytes
+	//! Maximum bytes of I/O scheduled ahead of decoding, additional jobs wait until claims free up bytes.
 	const idx_t io_byte_budget;
 
 	mutable mutex lock;

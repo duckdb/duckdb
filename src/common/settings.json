@@ -1219,7 +1219,10 @@
         "description": "Number of scan jobs the multi-file reader prefetches ahead of decoding. -1 = automatic (based on thread count), 0 = disabled.",
         "type": "BIGINT",
         "default_scope": "global",
-        "default_value": "-1"
+        "default_value": "-1",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "regex_match_operator_semantics",

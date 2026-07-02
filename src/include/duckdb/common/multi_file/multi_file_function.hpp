@@ -796,7 +796,8 @@ public:
 			lstate.job_state = MultiFileJobState::SCHEDULE;
 		}
 		if (lstate.job_state == MultiFileJobState::SCHEDULE) {
-			auto scheduled = lstate.job.reader->ScheduleIO(context, *gstate.global_state, *lstate.job.reader_scan_state);
+			auto scheduled =
+			    lstate.job.reader->ScheduleIO(context, *gstate.global_state, *lstate.job.reader_scan_state);
 			lstate.job_state = MultiFileJobState::DECODE;
 			if (scheduled.GetResultType() == AsyncResultType::BLOCKED && HandleBlocked(input, scheduled)) {
 				return MultiFileAcquireResult::PARKED;

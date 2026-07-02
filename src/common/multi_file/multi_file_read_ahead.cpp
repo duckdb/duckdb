@@ -31,14 +31,17 @@ private:
 };
 
 MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p)
-    : read_ahead_depth(read_ahead_depth_p),io_byte_budget(BufferManager::GetBufferManager(context).GetMaxMemory() / 4) {
+    : read_ahead_depth(read_ahead_depth_p),
+      io_byte_budget(Settings::Get<ReadAheadDepthSetting>(context) == -1
+                         ? BufferManager::GetBufferManager(context).GetMaxMemory() / 4
+                         : NumericLimits<idx_t>::Maximum()) {
 	D_ASSERT(read_ahead_depth_p > 0);
 	executor = make_uniq<TaskExecutor>(context, TaskSchedulerType::ASYNC);
 }
 
 idx_t MultiFileReadAhead::ResolveDepth(ClientContext &context, idx_t max_threads) {
 	auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
-	if (configured_depth < 0) {
+	if (configured_depth == -1) {
 		return MaxValue<idx_t>(max_threads / 4, 4);
 	}
 	return NumericCast<idx_t>(configured_depth);
@@ -159,7 +162,7 @@ void MultiFileReadAhead::Drain() noexcept {
 		executor->PushError(ErrorData(ExceptionType::INTERRUPT, "read-ahead scan was torn down"));
 		executor->WorkOnTasks();
 	} catch (...) { // LCOV_EXCL_START
-	} // LCOV_EXCL_STOP
+	}               // LCOV_EXCL_STOP
 }
 
 MultiFileGlobalState::~MultiFileGlobalState() = default;

@@ -1,6 +1,6 @@
 # name: test/sql/copy/parquet/read_ahead/readahead_active_jobs_hang.test
 # description: Decode error at read_ahead_depth=1 leaks active_jobs slot, hangs scan
-# group: [read_ahead_bugs]
+# group: [read_ahead]
 
 require parquet
 

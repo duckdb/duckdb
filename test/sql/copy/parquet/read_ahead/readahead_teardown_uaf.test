@@ -1,6 +1,6 @@
 # name: test/sql/copy/parquet/read_ahead/readahead_teardown_uaf.test
 # description: Read-ahead use-after-free when LIMIT frees TaskExecutor mid async I/O
-# group: [read_ahead_bugs]
+# group: [read_ahead]
 
 require parquet
 
