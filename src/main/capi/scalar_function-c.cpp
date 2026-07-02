@@ -354,11 +354,13 @@ duckdb_expression duckdb_scalar_function_bind_get_argument(duckdb_bind_info info
 		return nullptr;
 	}
 	auto &bind_info = GetCScalarFunctionBindInfo(info);
+	ExpressionWrapper *wrapper = nullptr;
 	try {
-		auto wrapper = new ExpressionWrapper();
+		wrapper = new ExpressionWrapper();
 		wrapper->expr = bind_info.arguments[index]->Copy();
 		return reinterpret_cast<duckdb_expression>(wrapper);
 	} catch (std::exception &e) {
+		delete wrapper;
 		duckdb_scalar_function_bind_set_error(info, e.what());
 		return nullptr;
 	}
