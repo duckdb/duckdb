@@ -23,6 +23,7 @@ public:
 	~SQLLogicTestLogger();
 
 	static void Log(const string &annotation, const string &str);
+	static void PrintSkip(const string &file_name, const string &reason, bool partial = false);
 	void PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise);
 	static void PrintLineSep();
 	static void PrintHeader(string header);

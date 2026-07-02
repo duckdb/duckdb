@@ -18,6 +18,16 @@
 #include DUCKDB_EXTENSION_HEADER
 #endif
 
+// PROTOTYPE: shadow Catch's SKIP_TEST so every skip also emits a stable, parseable
+// marker (consumed by the pytest collector) before recording the skip with Catch.
+// `file_name` is the runner's member, in scope at all skip sites in this TU.
+#undef SKIP_TEST
+#define SKIP_TEST(reason)                                                                                              \
+	do {                                                                                                               \
+		duckdb::SQLLogicTestLogger::PrintSkip(file_name, (reason));                                                    \
+		Catch::getResultCapture().skipTestDuringRun(reason);                                                           \
+	} while (0)
+
 namespace duckdb {
 
 mutex SQLLogicTestRunner::skip_reason_lock;
@@ -943,7 +953,13 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 						reason += " " + token.parameters[i];
 					}
 				}
-				AddSkipReason("mode skip " + reason);
+				auto skip_reason = "mode skip " + reason;
+				AddSkipReason(skip_reason);
+				// Also emit the parseable marker (gated on --emit-on-skip inside PrintSkip), tagged
+				// partial: unlike SkipTest() this does NOT abort via Catch — `mode skip` is a region
+				// skip (skip_level), so the test keeps running (and may `mode unskip`), hence
+				// [SKIP_TEST_PARTIAL] rather than the whole-test [SKIP_TEST].
+				SQLLogicTestLogger::PrintSkip(file_name, skip_reason, /* partial */ true);
 				skip_level++;
 			} else if (parameter == "unskip") {
 				skip_level--;

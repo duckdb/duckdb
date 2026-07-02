@@ -37,6 +37,19 @@ void SQLLogicTestLogger::LogFailureAnnotation(const string &log_message) {
 	Log(prefix, log_message);
 }
 
+void SQLLogicTestLogger::PrintSkip(const string &file_name, const string &reason, bool partial) {
+	// Opt-in via --emit-on-skip (SetEmitOnSkip): off by default so normal runs stay quiet.
+	if (!EmitOnSkipEnabled()) {
+		return;
+	}
+	// Stable, uncolored marker consumable by e.g. pytest collector. Emitted to std::cerr (which
+	// survives subprocess capture) per skipped test, so skips are attributable even inside a
+	// batched invocation. Two kinds: [SKIP_TEST] = the whole test was skipped (Catch aborts the
+	// run, e.g. require-env); [SKIP_TEST_PARTIAL] = a region was skipped but the test kept running
+	// (mode skip) — so a consumer can tell "skipped" from "passed with skips".
+	std::cerr << (partial ? "[SKIP_TEST_PARTIAL] " : "[SKIP_TEST] ") << file_name << " :: " << reason << "\n";
+}
+
 void SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name, idx_t query_line) {
 	auto failures_count = to_string(FailureSummary::GetSummaryCounter());
 	if (std::getenv("NO_DUPLICATING_HEADERS") == 0) {
