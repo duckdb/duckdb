@@ -33,11 +33,15 @@ void SelectionVector::Flatten() const {
 	if (sel_vector || !selection_data || !selection_data->is_bitmap) {
 		return; // already materialized, or not bitmap-backed
 	}
-	// Keep the bitmap alive: BitmapToSelectionVector re-Initializes *this with a fresh index buffer,
-	// replacing selection_data; `keep` holds the bitmap data referenced by `bm` during conversion.
+	// `keep` holds the bitmap data referenced by `bm` during conversion. Materialize into a local vector,
+	// then adopt its index buffer into our own (mutable) state - no const_cast of *this required.
 	auto keep = selection_data;
 	auto bm = reinterpret_cast<const validity_t *>(keep->bitmap_data.get());
-	BitmapToSelectionVector(bm, keep->row_span, const_cast<SelectionVector &>(*this));
+	SelectionVector materialized;
+	BitmapToSelectionVector(bm, keep->row_span, materialized);
+	selection_data = std::move(materialized.selection_data);
+	sel_vector = materialized.sel_vector;
+	capacity = materialized.capacity;
 }
 
 SelectionData::SelectionData(idx_t count) {

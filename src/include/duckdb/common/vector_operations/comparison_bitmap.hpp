@@ -11,7 +11,7 @@
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
-#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_size.hpp"
 
 #include <type_traits>

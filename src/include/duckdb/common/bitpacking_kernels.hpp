@@ -80,6 +80,8 @@ static inline void UnpackValue(const uint32_t *__restrict in, OUT *__restrict ou
 
 #if defined(__clang__)
 #define DUCKDB_BITPACKING_VECTORIZE _Pragma("clang loop vectorize(enable)")
+// if a template instantiation fails to vectorize, make assert would trip on the warning
+#pragma clang diagnostic ignored "-Wpass-failed" 
 #else
 #define DUCKDB_BITPACKING_VECTORIZE
 #endif

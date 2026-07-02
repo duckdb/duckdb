@@ -181,3 +181,31 @@ query III
 SELECT (a + b), (a - b), (a * b) FROM autovec_farith_t WHERE a = 3
 ----
 9	-3	18
+
+# IS [NOT] DISTINCT FROM over a flat numeric column. IS NOT DISTINCT FROM <non-null const> takes the bitmap
+# fast path (== equality); IS DISTINCT FROM and NULL constants must decline and fall back - all must be correct.
+statement ok
+CREATE TABLE autovec_distinct_t(a INTEGER);
+
+statement ok
+INSERT INTO autovec_distinct_t SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END FROM range(20) tbl(i);
+
+query I
+SELECT count(*) FROM autovec_distinct_t WHERE a IS NOT DISTINCT FROM 5
+----
+1
+
+query I
+SELECT count(*) FROM autovec_distinct_t WHERE a IS DISTINCT FROM 5
+----
+19
+
+query I
+SELECT count(*) FROM autovec_distinct_t WHERE a IS NOT DISTINCT FROM NULL
+----
+7
+
+query I
+SELECT count(*) FROM autovec_distinct_t WHERE a IS DISTINCT FROM NULL
+----
+13

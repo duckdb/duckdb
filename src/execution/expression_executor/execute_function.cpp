@@ -37,7 +37,15 @@ bool TrySelectComparisonFromChunk(const BoundFunctionExpression &expr, DataChunk
 	if (!BoundComparisonExpression::IsComparison(expr)) {
 		return false;
 	}
+	// IsComparison() yields the 6 ordered ops (handled by the kernel) plus IS [NOT] DISTINCT FROM. NOT DISTINCT
+	// FROM equals `=` for a non-null constant (NULL constant declined below); DISTINCT FROM must keep NULL rows.
 	auto op = expr.GetExpressionType();
+	if (op == ExpressionType::COMPARE_DISTINCT_FROM) {
+		return false;
+	}
+	if (op == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		op = ExpressionType::COMPARE_EQUAL;
+	}
 	auto &left = BoundComparisonExpression::Left(expr);
 	auto &right = BoundComparisonExpression::Right(expr);
 	optional_ptr<const BoundReferenceExpression> ref;
