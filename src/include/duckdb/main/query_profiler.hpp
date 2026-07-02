@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/profiling_coverage.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/main/profiler/profiler_print_format.hpp"
@@ -39,7 +40,6 @@ class SQLStatement;
 struct MetricsTimer;
 class OperatorProfiler;
 
-enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
 //! A JSON-like recursive profiling value.
 //! FIXME: this should at some point be replaced by a "Value" - but that's not easily possible until our VARIANT Value
