@@ -122,8 +122,8 @@ static shared_ptr<BoundIndex> FindBoundIndex(const TableIndexList &index_list, c
 }
 
 struct IndexKeyBindData : public FunctionData {
-	IndexKeyBindData(const shared_ptr<ART> &art, vector<LogicalType> key_types)
-	    : art(art), key_types(std::move(key_types)) {
+	IndexKeyBindData(shared_ptr<ART> art, vector<LogicalType> key_types)
+	    : art(std::move(art)), key_types(std::move(key_types)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -192,8 +192,8 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 		bound_function.GetArguments().push_back(key_type);
 	}
 
-	auto &art = bound_index->Cast<ART>();
-	return make_uniq<IndexKeyBindData>(shared_ptr(bound_index, &art), std::move(key_types));
+	auto art = PinIndexCast<ART>(bound_index);
+	return make_uniq<IndexKeyBindData>(std::move(art), std::move(key_types));
 }
 
 static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {

@@ -143,8 +143,7 @@ shared_ptr<BoundIndex> TableIndexList::Find(const Identifier &name) const {
 		if (!index->IsBound()) {
 			throw InternalException("TableIndexList::Find cannot return an unbound index");
 		}
-		auto &bound_index = index->Cast<BoundIndex>();
-		return shared_ptr(index, &bound_index);
+		return PinIndexCast<BoundIndex>(index);
 	}
 	return nullptr;
 }
