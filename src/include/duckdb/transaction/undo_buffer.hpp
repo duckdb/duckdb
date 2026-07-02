@@ -22,6 +22,7 @@ class StorageCommitState;
 class WriteAheadLog;
 struct UndoBufferPointer;
 struct CommitInfo;
+struct DataTableInfo;
 
 struct UndoBufferProperties {
 	idx_t estimated_size = 0;
@@ -62,6 +63,9 @@ public:
 	//! table). Used by deferred (group) commits: after the WAL flush marker is written the commit can no longer
 	//! be aborted, so any conflicts must be detected before that point.
 	ErrorData ValidateCommitConflicts();
+	//! Collect the DataTableInfos of tables modified by data changes (INSERT/DELETE/UPDATE) in this buffer,
+	//! deduplicated and ordered by address, so a commit can take each table's publish gate in a deadlock-free order.
+	vector<shared_ptr<DataTableInfo>> GetModifiedTableInfos();
 	//! Iterate the undo buffer and commit each entry. Deferred drop side effects accumulate in
 	//! info.drop_state so they can be applied after the commit chain succeeds.
 	void Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info);

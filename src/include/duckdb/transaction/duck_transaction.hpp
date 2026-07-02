@@ -81,6 +81,11 @@ public:
 	//! Second phase of a deferred (group) commit: make the committed changes visible to other transactions.
 	//! Caller must hold the transaction lock. A failure here is fatal - the commit is already durable in the WAL.
 	ErrorData PublishCommit(AttachedDatabase &db, CommitInfo &commit_info) noexcept;
+	//! DataTableInfos of tables this transaction modified (deduplicated, address-ordered) - used to take each
+	//! table's publish gate SHARED while committing (see DuckTransactionManager::BlockPendingCommits).
+	vector<shared_ptr<DataTableInfo>> GetModifiedTableInfos() {
+		return undo_buffer.GetModifiedTableInfos();
+	}
 	//! Returns whether or not a commit of this transaction should trigger an automatic checkpoint
 	bool AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties);
 

@@ -10,6 +10,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
@@ -351,18 +352,19 @@ void DuckTransactionManager::FinishPendingCommit(idx_t publish_seq) {
 	publish_cv.notify_all();
 }
 
-unique_ptr<StorageLockKey> DuckTransactionManager::BlockPendingCommits() {
-	// The system catalog has no storage, and in-memory databases have no WAL - neither has deferred (group) commits,
-	// so there is nothing to block (DDL on them, e.g. registering built-in functions at load, must not touch a WAL
-	// lock that does not apply).
-	if (db.IsSystem() || db.GetStorageManager().InMemory()) {
+unique_ptr<StorageLockKey> DuckTransactionManager::BlockPendingCommits(optional_ptr<DataTableInfo> table_info) {
+	// Nothing to gate when this is not a table DDL (table_info is null), on the system catalog, or on an in-memory
+	// database - none of those have group commits (DDL on them, e.g. registering built-in functions at load, must
+	// not touch a gate that does not apply).
+	if (!table_info || db.IsSystem() || db.GetStorageManager().InMemory()) {
 		return nullptr;
 	}
-	// Take the WAL lock exclusively: this waits for all in-flight deferred commits (which hold it SHARED through
-	// publish) to finish and blocks new ones until the returned handle is released, so the caller can attach a new
-	// catalog version without a deferred commit's catalog validation going stale in between. Writer priority in
-	// StorageLock prevents a steady stream of commits from starving this acquisition.
-	return db.GetStorageManager().GetWALLockExclusive();
+	// Take this table's publish gate exclusively: this waits for all in-flight commits on the table (which hold it
+	// SHARED from before their catalog validation through publish) to finish and blocks new ones until the returned
+	// handle is released, so the caller can mutate the table's catalog entry / index list without a commit's
+	// validation going stale or its publish racing the index-list change. Scoped to the table, so commits to other
+	// tables are unaffected. Writer priority in StorageLock prevents a steady stream of commits from starving this.
+	return table_info->GetPublishGateExclusive();
 }
 
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
@@ -390,6 +392,13 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// shared WAL lock alone would let concurrent committers interleave their entries and corrupt the WAL. Released
 	// before the fsync so batching is preserved. Exclusive committers do not need it (the WAL lock serializes them).
 	unique_lock<mutex> append_guard;
+	// Per-table publish gates: a commit holds each modified table's gate SHARED from before its catalog validation
+	// (in WriteToWAL) through publish, so a concurrent DDL on that table (which takes the gate EXCLUSIVE via
+	// BlockPendingCommits) cannot make the validation stale or race the publish's index updates. Acquired in
+	// address order (see GetModifiedTableInfos) for deadlock-freedom; released after publish. modified_table_infos
+	// keeps the DataTableInfos alive while their gate handles are held.
+	vector<shared_ptr<DataTableInfo>> modified_table_infos;
+	vector<unique_ptr<StorageLockKey>> table_gates;
 	unique_ptr<StorageCommitState> commit_state;
 	bool skip_wal_write_due_to_checkpoint = false;
 	bool wal_written = false;
@@ -410,8 +419,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	}
 	bool should_write_to_wal = transaction.ShouldWriteToWAL(db);
 	// Catalog-changing commits cannot defer publishing their changes (see below) - they publish while holding the
-	// transaction lock. To guarantee that no catalog change can interleave between a data commit's WAL flush marker
-	// and its publish, they first wait for all pending (unpublished) commits to be published.
+	// transaction lock. A DDL's catalog-version attachment is kept from interleaving a data commit's validation and
+	// publish by the per-table publish gate (see BlockPendingCommits / table_gates), not by this commit path.
 	bool has_catalog_changes = undo_properties.has_catalog_changes;
 	if (should_write_to_wal) {
 		auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
@@ -432,6 +441,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			// shared WAL holders can run concurrently, so serialize their entry+marker appends to keep each
 			// transaction's WAL entries contiguous (released after the marker, before the fsync)
 			append_guard = storage_manager.GetWALAppendLock();
+		}
+		// take each modified table's publish gate SHARED before validating/writing, held through publish
+		modified_table_infos = transaction.GetModifiedTableInfos();
+		for (auto &table_info : modified_table_infos) {
+			table_gates.push_back(table_info->GetPublishGateShared());
 		}
 
 		// Commit the changes to the WAL.
@@ -490,8 +504,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// the publish sequence orders deferred publishes in WAL order; it is independent of the commit timestamp
 	idx_t publish_seq = 0;
 	if (defer_publish) {
-		// assign the publish sequence and register for in-order publishing. A concurrent catalog change cannot
-		// interleave: it takes the WAL lock EXCLUSIVELY (BlockPendingCommits) while we hold it SHARED through publish.
+		// assign the publish sequence and register for in-order publishing. A concurrent catalog change on a table we
+		// modified cannot interleave: it takes that table's publish gate EXCLUSIVELY (BlockPendingCommits) while we
+		// hold it SHARED through publish (see table_gates above).
 		publish_seq = next_publish_sequence++;
 		RegisterPendingCommit(publish_seq);
 	}
@@ -642,6 +657,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	if (!skip_wal_write_due_to_checkpoint && held_wal_lock) {
 		held_wal_lock.reset();
 	}
+	// publish is complete: release the per-table gates so DDL on those tables can proceed
+	table_gates.clear();
+	modified_table_infos.clear();
 	if (defer_publish) {
 		// the commit is now published - wake up any waiters (later commits and checkpoints)
 		FinishPendingCommit(publish_seq);

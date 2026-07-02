@@ -349,10 +349,18 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 		}
 	}
 
-	// Block deferred (group) commits from being in-flight while we attach the new catalog version:
-	// a deferred commit validates against the catalog before writing its WAL flush marker, and that validation
-	// must stay authoritative until the commit is published (see DuckTransactionManager::BlockPendingCommits).
-	auto publish_gate = DuckTransactionManager::Get(GetCatalog().GetAttached()).BlockPendingCommits();
+	// Block deferred (group) commits on this table from being in-flight while we attach the new catalog version:
+	// a commit validates against the catalog before writing its WAL flush marker, and that validation must stay
+	// authoritative until the commit is published (see DuckTransactionManager::BlockPendingCommits). Only table
+	// DDL races data commits, so the gate is scoped to the altered table's DataTableInfo (null for non-tables).
+	optional_ptr<DataTableInfo> gate_table_info;
+	if (value->type == CatalogType::TABLE_ENTRY) {
+		auto &table_entry = value->Cast<TableCatalogEntry>();
+		if (table_entry.IsDuckTable()) {
+			gate_table_info = table_entry.Cast<DuckTableEntry>().GetStorage().GetDataTableInfo().get();
+		}
+	}
+	auto publish_gate = DuckTransactionManager::Get(GetCatalog().GetAttached()).BlockPendingCommits(gate_table_info);
 	// lock the catalog for writing
 	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 	// lock this catalog set to disallow reading
@@ -456,8 +464,17 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const Identifier &nam
 	if (!DropDependencies(transaction, name, cascade, allow_drop_internal)) {
 		return false;
 	}
-	// block deferred (group) commits while attaching the tombstone version (see AlterEntry)
-	auto publish_gate = DuckTransactionManager::Get(GetCatalog().GetAttached()).BlockPendingCommits();
+	// block deferred (group) commits on this table while attaching the tombstone version (see AlterEntry); scoped to
+	// the dropped table's DataTableInfo (null for non-tables, which do not race data commits)
+	optional_ptr<DataTableInfo> gate_table_info;
+	auto drop_entry = GetEntry(transaction, name);
+	if (drop_entry && drop_entry->type == CatalogType::TABLE_ENTRY) {
+		auto &table_entry = drop_entry->Cast<TableCatalogEntry>();
+		if (table_entry.IsDuckTable()) {
+			gate_table_info = table_entry.Cast<DuckTableEntry>().GetStorage().GetDataTableInfo().get();
+		}
+	}
+	auto publish_gate = DuckTransactionManager::Get(GetCatalog().GetAttached()).BlockPendingCommits(gate_table_info);
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> read_lock(catalog_lock);
 	return DropEntryInternal(transaction, name, allow_drop_internal);

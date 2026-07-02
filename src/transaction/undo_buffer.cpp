@@ -223,6 +223,36 @@ ErrorData UndoBuffer::ValidateCommitConflicts() {
 	}
 }
 
+vector<shared_ptr<DataTableInfo>> UndoBuffer::GetModifiedTableInfos() {
+	unordered_set<DataTableInfo *> seen;
+	vector<shared_ptr<DataTableInfo>> result;
+	UndoBuffer::IteratorState iterator_state;
+	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) {
+		optional_ptr<DuckTableEntry> table;
+		switch (type) {
+		case UndoFlags::INSERT_TUPLE:
+			table = reinterpret_cast<AppendInfo *>(data)->table;
+			break;
+		case UndoFlags::DELETE_TUPLE:
+			table = reinterpret_cast<DeleteInfo *>(data)->table;
+			break;
+		case UndoFlags::UPDATE_TUPLE:
+			table = reinterpret_cast<UpdateInfo *>(data)->table;
+			break;
+		default:
+			return;
+		}
+		auto info = table->GetStorage().GetDataTableInfo();
+		if (seen.insert(info.get()).second) {
+			result.push_back(std::move(info));
+		}
+	});
+	// order by address: commits and DDL both acquire per-table gates in this order, so they cannot deadlock
+	std::sort(result.begin(), result.end(),
+	          [](const shared_ptr<DataTableInfo> &a, const shared_ptr<DataTableInfo> &b) { return a.get() < b.get(); });
+	return result;
+}
+
 void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info) {
 	active_transaction_state = info.active_transactions;
 
