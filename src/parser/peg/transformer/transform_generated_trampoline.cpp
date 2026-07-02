@@ -3950,7 +3950,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeAddColumnEntryTr
 	}
 	optional<GeneratedColumnDefinition> generated_column {};
 	if (frame.child_results[2]) {
-		generated_column = std::move(frame.TakeResult<GeneratedColumnDefinition>(2));
+		generated_column = frame.TakeResult<GeneratedColumnDefinition>(2);
 	}
 	optional<vector<ColumnConstraintEntry>> column_constraint {};
 	if (dynamic_child_count > 0) {
@@ -4371,7 +4371,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeAlterTypeTrampol
 	}
 	optional<unique_ptr<ParsedExpression>> using_expression {};
 	if (frame.child_results[1]) {
-		using_expression = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(1));
+		using_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
 	}
 	auto result = PEGTransformerFactory::TransformAlterType(transformer, has_result, type, std::move(using_expression));
 	return make_uniq<TypedTransformResult<unique_ptr<AlterTableInfo>>>(std::move(result));
@@ -4585,7 +4585,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeAnalyzeStatement
 	}
 	optional<AnalyzeTarget> analyze_target {};
 	if (frame.child_results[1]) {
-		analyze_target = std::move(frame.TakeResult<AnalyzeTarget>(1));
+		analyze_target = frame.TakeResult<AnalyzeTarget>(1);
 	}
 	auto result =
 	    PEGTransformerFactory::TransformAnalyzeStatement(transformer, analyze_verbose, std::move(analyze_target));
@@ -5165,7 +5165,7 @@ PEGTransformerFactory::FinalizeCharacterSimpleTypeTrampoline(PEGTransformer &tra
                                                              TransformStackFrame &frame) {
 	optional<vector<unique_ptr<ParsedExpression>>> type_modifiers {};
 	if (frame.child_results[0]) {
-		type_modifiers = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0));
+		type_modifiers = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformCharacterSimpleType(transformer, std::move(type_modifiers));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -5189,7 +5189,7 @@ PEGTransformerFactory::FinalizeQualifiedSimpleTypeTrampoline(PEGTransformer &tra
 	auto qualified_type_name = frame.TakeResult<QualifiedName>(0);
 	optional<vector<unique_ptr<ParsedExpression>>> type_modifiers {};
 	if (frame.child_results[1]) {
-		type_modifiers = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1));
+		type_modifiers = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1);
 	}
 	auto result = PEGTransformerFactory::TransformQualifiedSimpleType(transformer, qualified_type_name,
 	                                                                  std::move(type_modifiers));
@@ -5713,7 +5713,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeGeometryTypeTram
                                                                                        TransformStackFrame &frame) {
 	optional<unique_ptr<ParsedExpression>> expression {};
 	if (frame.child_results[0]) {
-		expression = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(0));
+		expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformGeometryType(transformer, std::move(expression));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -5914,8 +5914,8 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeFloatTypeTrampol
 	optional<unique_ptr<ParsedExpression>> number_literal {};
 	auto &number_literal_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (number_literal_opt.HasResult()) {
-		number_literal = std::move(PEGTransformerFactory::TransformNumberLiteral(
-		    transformer, ExtractResultFromParens(number_literal_opt.GetResult())));
+		number_literal = PEGTransformerFactory::TransformNumberLiteral(
+		    transformer, ExtractResultFromParens(number_literal_opt.GetResult()));
 	}
 	auto result = PEGTransformerFactory::TransformFloatType(transformer, std::move(number_literal));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -5937,7 +5937,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDecimalTypeTramp
                                                                                       TransformStackFrame &frame) {
 	optional<vector<unique_ptr<ParsedExpression>>> type_modifiers {};
 	if (frame.child_results[0]) {
-		type_modifiers = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0));
+		type_modifiers = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformDecimalType(transformer, std::move(type_modifiers));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -5959,7 +5959,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDecTypeTrampolin
                                                                                   TransformStackFrame &frame) {
 	optional<vector<unique_ptr<ParsedExpression>>> type_modifiers {};
 	if (frame.child_results[0]) {
-		type_modifiers = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0));
+		type_modifiers = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformDecType(transformer, std::move(type_modifiers));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -5981,7 +5981,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNumericModTypeTr
                                                                                          TransformStackFrame &frame) {
 	optional<vector<unique_ptr<ParsedExpression>>> type_modifiers {};
 	if (frame.child_results[0]) {
-		type_modifiers = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0));
+		type_modifiers = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformNumericModType(transformer, std::move(type_modifiers));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -6276,7 +6276,7 @@ PEGTransformerFactory::FinalizeSquareBracketsArrayTrampoline(PEGTransformer &tra
                                                              TransformStackFrame &frame) {
 	optional<unique_ptr<ParsedExpression>> expression {};
 	if (frame.child_results[0]) {
-		expression = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(0));
+		expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformSquareBracketsArray(transformer, std::move(expression));
 	return make_uniq<TypedTransformResult<int64_t>>(result);
@@ -6304,7 +6304,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTimeTypeTrampoli
 	auto time_or_timestamp = frame.TakeResult<LogicalTypeId>(0);
 	optional<vector<unique_ptr<ParsedExpression>>> type_modifiers {};
 	if (frame.child_results[1]) {
-		type_modifiers = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1));
+		type_modifiers = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1);
 	}
 	optional<bool> time_zone {};
 	if (frame.child_results[2]) {
@@ -6436,7 +6436,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeConnectStatement
                                                                                            TransformStackFrame &frame) {
 	optional<unique_ptr<ConnectInfo>> session_target {};
 	if (frame.child_results[0]) {
-		session_target = std::move(frame.TakeResult<unique_ptr<ConnectInfo>>(0));
+		session_target = frame.TakeResult<unique_ptr<ConnectInfo>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformConnectStatement(transformer, std::move(session_target));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
@@ -7195,7 +7195,7 @@ PEGTransformerFactory::FinalizeGenericCopyOptionTrampoline(PEGTransformer &trans
 	auto copy_option_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	optional<GenericCopyOptionValue> generic_copy_option_value {};
 	if (frame.child_results[0]) {
-		generic_copy_option_value = std::move(frame.TakeResult<GenericCopyOptionValue>(0));
+		generic_copy_option_value = frame.TakeResult<GenericCopyOptionValue>(0);
 	}
 	auto result = PEGTransformerFactory::TransformGenericCopyOption(transformer, copy_option_name,
 	                                                                std::move(generic_copy_option_value));
@@ -7497,12 +7497,11 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCreateIndexStmtT
 	}
 	optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list {};
 	if (frame.child_results[6 + dynamic_child_count - 1]) {
-		with_list = std::move(
-		    frame.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(6 + dynamic_child_count - 1));
+		with_list = frame.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(6 + dynamic_child_count - 1);
 	}
 	optional<unique_ptr<ParsedExpression>> where_clause {};
 	if (frame.child_results[7 + dynamic_child_count - 1]) {
-		where_clause = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(7 + dynamic_child_count - 1));
+		where_clause = frame.TakeResult<unique_ptr<ParsedExpression>>(7 + dynamic_child_count - 1);
 	}
 	auto result = PEGTransformerFactory::TransformCreateIndexStmt(
 	    transformer, unique_index, if_not_exists, index_name, std::move(base_table_name), insert_column_list,
@@ -7710,7 +7709,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeRelOptionTrampol
 	auto rel_option_name = frame.TakeResult<Identifier>(0);
 	optional<unique_ptr<ParsedExpression>> rel_option_argument_opt {};
 	if (frame.child_results[1]) {
-		rel_option_argument_opt = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(1));
+		rel_option_argument_opt = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
 	}
 	auto result =
 	    PEGTransformerFactory::TransformRelOption(transformer, rel_option_name, std::move(rel_option_argument_opt));
@@ -7980,7 +7979,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeMacroDefinitionT
                                                                                           TransformStackFrame &frame) {
 	optional<vector<MacroParameter>> macro_parameters {};
 	if (frame.child_results[0]) {
-		macro_parameters = std::move(frame.TakeResult<vector<MacroParameter>>(0));
+		macro_parameters = frame.TakeResult<vector<MacroParameter>>(0);
 	}
 	auto macro_definition_body = frame.TakeResult<unique_ptr<MacroFunction>>(1);
 	auto result = PEGTransformerFactory::TransformMacroDefinition(transformer, std::move(macro_parameters),
@@ -8673,15 +8672,15 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCreateTableAsTra
                                                                                         TransformStackFrame &frame) {
 	optional<ColumnList> identifier_list {};
 	if (frame.child_results[0]) {
-		identifier_list = std::move(frame.TakeResult<ColumnList>(0));
+		identifier_list = frame.TakeResult<ColumnList>(0);
 	}
 	optional<PartitionSortedOptions> partition_sorted_options {};
 	if (frame.child_results[1]) {
-		partition_sorted_options = std::move(frame.TakeResult<PartitionSortedOptions>(1));
+		partition_sorted_options = frame.TakeResult<PartitionSortedOptions>(1);
 	}
 	optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list {};
 	if (frame.child_results[2]) {
-		with_list = std::move(frame.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(2));
+		with_list = frame.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(2);
 	}
 	auto statement = frame.TakeResult<unique_ptr<SQLStatement>>(3);
 	optional<bool> with_data {};
@@ -8735,7 +8734,7 @@ PEGTransformerFactory::FinalizePartitionOptSortedOptionsTrampoline(PEGTransforme
 	auto partition_options = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0);
 	optional<vector<unique_ptr<ParsedExpression>>> sorted_options {};
 	if (frame.child_results[1]) {
-		sorted_options = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1));
+		sorted_options = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1);
 	}
 	auto result = PEGTransformerFactory::TransformPartitionOptSortedOptions(transformer, std::move(partition_options),
 	                                                                        std::move(sorted_options));
@@ -8761,7 +8760,7 @@ PEGTransformerFactory::FinalizeSortedOptPartitionOptionsTrampoline(PEGTransforme
 	auto sorted_options = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0);
 	optional<vector<unique_ptr<ParsedExpression>>> partition_options {};
 	if (frame.child_results[1]) {
-		partition_options = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1));
+		partition_options = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1);
 	}
 	auto result = PEGTransformerFactory::TransformSortedOptPartitionOptions(transformer, std::move(sorted_options),
 	                                                                        std::move(partition_options));
@@ -8910,15 +8909,15 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCreateColumnList
                                                                                            TransformStackFrame &frame) {
 	optional<ColumnElements> create_table_column_list {};
 	if (frame.child_results[0]) {
-		create_table_column_list = std::move(frame.TakeResult<ColumnElements>(0));
+		create_table_column_list = frame.TakeResult<ColumnElements>(0);
 	}
 	optional<PartitionSortedOptions> partition_sorted_options {};
 	if (frame.child_results[1]) {
-		partition_sorted_options = std::move(frame.TakeResult<PartitionSortedOptions>(1));
+		partition_sorted_options = frame.TakeResult<PartitionSortedOptions>(1);
 	}
 	optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list {};
 	if (frame.child_results[2]) {
-		with_list = std::move(frame.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(2));
+		with_list = frame.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(2);
 	}
 	auto result = PEGTransformerFactory::TransformCreateColumnList(
 	    transformer, std::move(create_table_column_list), std::move(partition_sorted_options), std::move(with_list));
@@ -9292,7 +9291,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColumnDefinition
 	}
 	optional<GeneratedColumnDefinition> generated_column {};
 	if (frame.child_results[2]) {
-		generated_column = std::move(frame.TakeResult<GeneratedColumnDefinition>(2));
+		generated_column = frame.TakeResult<GeneratedColumnDefinition>(2);
 	}
 	bool has_result {};
 	auto &has_result_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
@@ -10578,7 +10577,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCreateViewStmtTr
 	}
 	optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list {};
 	if (frame.child_results[4]) {
-		with_list = std::move(frame.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(4));
+		with_list = frame.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(4);
 	}
 	auto select_statement_internal = frame.TakeResult<unique_ptr<SelectStatement>>(5);
 	auto result = PEGTransformerFactory::TransformCreateViewStmt(
@@ -10666,20 +10665,20 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDeleteStatementT
                                                                                           TransformStackFrame &frame) {
 	optional<CommonTableExpressionMap> with_clause {};
 	if (frame.child_results[0]) {
-		with_clause = std::move(frame.TakeResult<CommonTableExpressionMap>(0));
+		with_clause = frame.TakeResult<CommonTableExpressionMap>(0);
 	}
 	auto target_opt_alias = frame.TakeResult<unique_ptr<BaseTableRef>>(1);
 	optional<vector<unique_ptr<TableRef>>> delete_using_clause {};
 	if (frame.child_results[2]) {
-		delete_using_clause = std::move(frame.TakeResult<vector<unique_ptr<TableRef>>>(2));
+		delete_using_clause = frame.TakeResult<vector<unique_ptr<TableRef>>>(2);
 	}
 	optional<unique_ptr<ParsedExpression>> where_clause {};
 	if (frame.child_results[3]) {
-		where_clause = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(3));
+		where_clause = frame.TakeResult<unique_ptr<ParsedExpression>>(3);
 	}
 	optional<vector<unique_ptr<ParsedExpression>>> returning_clause {};
 	if (frame.child_results[4]) {
-		returning_clause = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(4));
+		returning_clause = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(4);
 	}
 	auto result = PEGTransformerFactory::TransformDeleteStatement(
 	    transformer, std::move(with_clause), std::move(target_opt_alias), std::move(delete_using_clause),
@@ -10838,7 +10837,7 @@ PEGTransformerFactory::FinalizeShowQualifiedNameTrampoline(PEGTransformer &trans
 	auto show_or_describe_or_summarize = frame.TakeResult<ShowType>(0);
 	optional<DescribeTarget> describe_target {};
 	if (frame.child_results[1]) {
-		describe_target = std::move(frame.TakeResult<DescribeTarget>(1));
+		describe_target = frame.TakeResult<DescribeTarget>(1);
 	}
 	auto result = PEGTransformerFactory::TransformShowQualifiedName(transformer, show_or_describe_or_summarize,
 	                                                                std::move(describe_target));
@@ -11760,7 +11759,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExecuteStatement
 	auto identifier = list_pr.GetChild(1).Cast<IdentifierParseResult>().identifier;
 	optional<vector<FunctionArgument>> table_function_arguments {};
 	if (frame.child_results[0]) {
-		table_function_arguments = std::move(frame.TakeResult<vector<FunctionArgument>>(0));
+		table_function_arguments = frame.TakeResult<vector<FunctionArgument>>(0);
 	}
 	auto result =
 	    PEGTransformerFactory::TransformExecuteStatement(transformer, identifier, std::move(table_function_arguments));
@@ -11857,7 +11856,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExplainOptionTra
 	auto explain_option_name = frame.TakeResult<Identifier>(0);
 	optional<unique_ptr<ParsedExpression>> expression {};
 	if (frame.child_results[1]) {
-		expression = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(1));
+		expression = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
 	}
 	auto result =
 	    PEGTransformerFactory::TransformExplainOption(transformer, explain_option_name, std::move(expression));
@@ -12128,18 +12127,18 @@ PEGTransformerFactory::FinalizeFunctionExpressionTrampoline(PEGTransformer &tran
 	auto function_expression_arguments = frame.TakeResult<MethodArguments>(1);
 	optional<vector<OrderByNode>> within_group_clause {};
 	if (frame.child_results[2]) {
-		within_group_clause = std::move(frame.TakeResult<vector<OrderByNode>>(2));
+		within_group_clause = frame.TakeResult<vector<OrderByNode>>(2);
 	}
 	optional<unique_ptr<ParsedExpression>> filter_clause {};
 	if (frame.child_results[3]) {
-		filter_clause = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(3));
+		filter_clause = frame.TakeResult<unique_ptr<ParsedExpression>>(3);
 	}
 	bool has_result {};
 	auto &has_result_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
 	has_result = has_result_opt.HasResult();
 	optional<unique_ptr<WindowExpression>> over_clause {};
 	if (frame.child_results[4]) {
-		over_clause = std::move(frame.TakeResult<unique_ptr<WindowExpression>>(4));
+		over_clause = frame.TakeResult<unique_ptr<WindowExpression>>(4);
 	}
 	auto result = PEGTransformerFactory::TransformFunctionExpression(
 	    transformer, function_identifier, std::move(function_expression_arguments), std::move(within_group_clause),
@@ -12200,11 +12199,11 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeFunctionExpressi
 	}
 	optional<vector<FunctionArgument>> function_argument_list {};
 	if (frame.child_results[1]) {
-		function_argument_list = std::move(frame.TakeResult<vector<FunctionArgument>>(1));
+		function_argument_list = frame.TakeResult<vector<FunctionArgument>>(1);
 	}
 	optional<vector<OrderByNode>> order_by_clause {};
 	if (frame.child_results[2]) {
-		order_by_clause = std::move(frame.TakeResult<vector<OrderByNode>>(2));
+		order_by_clause = frame.TakeResult<vector<OrderByNode>>(2);
 	}
 	optional<bool> ignore_or_respect_nulls {};
 	if (frame.child_results[3]) {
@@ -12696,7 +12695,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeStarExpressionTr
 	}
 	optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> replace_list {};
 	if (frame.child_results[2]) {
-		replace_list = std::move(frame.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(2));
+		replace_list = frame.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(2);
 	}
 	optional<qualified_column_map_t<string>> rename_list {};
 	if (frame.child_results[3]) {
@@ -13146,7 +13145,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCaseExpressionTr
 	auto dynamic_child_count = dynamic_repeat_children.size();
 	optional<unique_ptr<ParsedExpression>> expression {};
 	if (frame.child_results[0]) {
-		expression = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(0));
+		expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
 	}
 	vector<CaseCheck> case_when_then;
 	for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
@@ -13154,7 +13153,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCaseExpressionTr
 	}
 	optional<unique_ptr<ParsedExpression>> case_else {};
 	if (frame.child_results[2 + dynamic_child_count - 1]) {
-		case_else = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(2 + dynamic_child_count - 1));
+		case_else = frame.TakeResult<unique_ptr<ParsedExpression>>(2 + dynamic_child_count - 1);
 	}
 	auto result = PEGTransformerFactory::TransformCaseExpression(transformer, std::move(expression),
 	                                                             std::move(case_when_then), std::move(case_else));
@@ -13754,15 +13753,15 @@ PEGTransformerFactory::FinalizeWindowFrameContentsTrampoline(PEGTransformer &tra
                                                              TransformStackFrame &frame) {
 	optional<vector<unique_ptr<ParsedExpression>>> window_partition {};
 	if (frame.child_results[0]) {
-		window_partition = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0));
+		window_partition = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0);
 	}
 	optional<vector<OrderByNode>> order_by_clause {};
 	if (frame.child_results[1]) {
-		order_by_clause = std::move(frame.TakeResult<vector<OrderByNode>>(1));
+		order_by_clause = frame.TakeResult<vector<OrderByNode>>(1);
 	}
 	optional<WindowFrame> frame_clause {};
 	if (frame.child_results[2]) {
-		frame_clause = std::move(frame.TakeResult<WindowFrame>(2));
+		frame_clause = frame.TakeResult<WindowFrame>(2);
 	}
 	auto result = PEGTransformerFactory::TransformWindowFrameContents(
 	    transformer, std::move(window_partition), std::move(order_by_clause), std::move(frame_clause));
@@ -14258,8 +14257,7 @@ PEGTransformerFactory::FinalizeListComprehensionExpressionTrampoline(PEGTransfor
 	auto expression_1 = frame.TakeResult<unique_ptr<ParsedExpression>>(2 + dynamic_child_count - 1);
 	optional<unique_ptr<ParsedExpression>> list_comprehension_filter {};
 	if (frame.child_results[3 + dynamic_child_count - 1]) {
-		list_comprehension_filter =
-		    std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(3 + dynamic_child_count - 1));
+		list_comprehension_filter = frame.TakeResult<unique_ptr<ParsedExpression>>(3 + dynamic_child_count - 1);
 	}
 	auto result = PEGTransformerFactory::TransformListComprehensionExpression(transformer, std::move(expression),
 	                                                                          col_id_or_string, std::move(expression_1),
@@ -14681,7 +14679,7 @@ PEGTransformerFactory::FinalizeLogicalNotExpressionTrampoline(PEGTransformer &tr
                                                               TransformStackFrame &frame) {
 	optional<vector<bool>> not_expression {};
 	if (frame.child_results[0]) {
-		not_expression = std::move(frame.TakeResult<vector<bool>>(0));
+		not_expression = frame.TakeResult<vector<bool>>(0);
 	}
 	auto is_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
 	auto result = PEGTransformerFactory::TransformLogicalNotExpression(transformer, std::move(not_expression),
@@ -15071,7 +15069,7 @@ PEGTransformerFactory::FinalizeComparisonExpressionTailTrampoline(PEGTransformer
 	auto comparison_operator = frame.TakeResult<ExpressionType>(0);
 	optional<vector<bool>> not_expression {};
 	if (frame.child_results[1]) {
-		not_expression = std::move(frame.TakeResult<vector<bool>>(1));
+		not_expression = frame.TakeResult<vector<bool>>(1);
 	}
 	auto between_in_like_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(2);
 	auto result = PEGTransformerFactory::TransformComparisonExpressionTail(
@@ -15194,7 +15192,7 @@ PEGTransformerFactory::FinalizeBetweenInLikeExpressionTrampoline(PEGTransformer 
 	auto other_operator_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
 	optional<BetweenInLikeOperator> between_in_like_op {};
 	if (frame.child_results[1]) {
-		between_in_like_op = std::move(frame.TakeResult<BetweenInLikeOperator>(1));
+		between_in_like_op = frame.TakeResult<BetweenInLikeOperator>(1);
 	}
 	auto result = PEGTransformerFactory::TransformBetweenInLikeExpression(
 	    transformer, std::move(other_operator_expression), std::move(between_in_like_op));
@@ -15265,7 +15263,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeLikeClauseTrampo
 	auto other_operator_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
 	optional<unique_ptr<ParsedExpression>> escape_clause {};
 	if (frame.child_results[2]) {
-		escape_clause = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(2));
+		escape_clause = frame.TakeResult<unique_ptr<ParsedExpression>>(2);
 	}
 	auto result = PEGTransformerFactory::TransformLikeClause(
 	    transformer, like_variations, std::move(other_operator_expression), std::move(escape_clause));
@@ -16381,7 +16379,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeBaseExpressionTr
 	auto single_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
 	optional<vector<unique_ptr<ParsedExpression>>> indirection_list {};
 	if (frame.child_results[1]) {
-		indirection_list = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1));
+		indirection_list = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1);
 	}
 	auto result = PEGTransformerFactory::TransformBaseExpression(transformer, std::move(single_expression),
 	                                                             std::move(indirection_list));
@@ -16576,11 +16574,11 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeMethodExpression
 	}
 	optional<vector<FunctionArgument>> method_function_arguments {};
 	if (frame.child_results[1]) {
-		method_function_arguments = std::move(frame.TakeResult<vector<FunctionArgument>>(1));
+		method_function_arguments = frame.TakeResult<vector<FunctionArgument>>(1);
 	}
 	optional<vector<OrderByNode>> order_by_clause {};
 	if (frame.child_results[2]) {
-		order_by_clause = std::move(frame.TakeResult<vector<OrderByNode>>(2));
+		order_by_clause = frame.TakeResult<vector<OrderByNode>>(2);
 	}
 	optional<bool> ignore_or_respect_nulls {};
 	if (frame.child_results[3]) {
@@ -16660,15 +16658,15 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSliceBoundTrampo
                                                                                      TransformStackFrame &frame) {
 	optional<unique_ptr<ParsedExpression>> expression {};
 	if (frame.child_results[0]) {
-		expression = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(0));
+		expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
 	}
 	optional<unique_ptr<ParsedExpression>> end_slice_bound {};
 	if (frame.child_results[1]) {
-		end_slice_bound = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(1));
+		end_slice_bound = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
 	}
 	optional<unique_ptr<ParsedExpression>> step_slice_bound {};
 	if (frame.child_results[2]) {
-		step_slice_bound = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(2));
+		step_slice_bound = frame.TakeResult<unique_ptr<ParsedExpression>>(2);
 	}
 	auto result = PEGTransformerFactory::TransformSliceBound(transformer, std::move(expression),
 	                                                         std::move(end_slice_bound), std::move(step_slice_bound));
@@ -16691,7 +16689,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeEndSliceBoundTra
                                                                                         TransformStackFrame &frame) {
 	optional<unique_ptr<ParsedExpression>> end_slice_value {};
 	if (frame.child_results[0]) {
-		end_slice_value = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(0));
+		end_slice_value = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformEndSliceBound(transformer, std::move(end_slice_value));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -16745,7 +16743,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeStepSliceBoundTr
                                                                                          TransformStackFrame &frame) {
 	optional<unique_ptr<ParsedExpression>> expression {};
 	if (frame.child_results[0]) {
-		expression = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(0));
+		expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformStepSliceBound(transformer, std::move(expression));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -17162,7 +17160,7 @@ PEGTransformerFactory::FinalizeSubstringFromOptionalForTrampoline(PEGTransformer
 	auto from_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
 	optional<unique_ptr<ParsedExpression>> for_expression {};
 	if (frame.child_results[1]) {
-		for_expression = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(1));
+		for_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
 	}
 	auto result = PEGTransformerFactory::TransformSubstringFromOptionalFor(transformer, std::move(from_expression),
 	                                                                       std::move(for_expression));
@@ -17234,7 +17232,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTrimArgumentsTra
 	}
 	optional<unique_ptr<ParsedExpression>> trim_source {};
 	if (frame.child_results[1]) {
-		trim_source = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(1));
+		trim_source = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
 	}
 	vector<unique_ptr<ParsedExpression>> expression;
 	for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
@@ -17317,7 +17315,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTrimSourceTrampo
                                                                                      TransformStackFrame &frame) {
 	optional<unique_ptr<ParsedExpression>> expression {};
 	if (frame.child_results[0]) {
-		expression = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(0));
+		expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformTrimSource(transformer, std::move(expression));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
@@ -17382,7 +17380,7 @@ PEGTransformerFactory::FinalizeOverlayParametersTrampoline(PEGTransformer &trans
 	auto from_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(2);
 	optional<unique_ptr<ParsedExpression>> for_expression {};
 	if (frame.child_results[3]) {
-		for_expression = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(3));
+		for_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(3);
 	}
 	auto result =
 	    PEGTransformerFactory::TransformOverlayParameters(transformer, std::move(expression), std::move(expression_1),
@@ -17577,7 +17575,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeInsertStatementT
                                                                                           TransformStackFrame &frame) {
 	optional<CommonTableExpressionMap> with_clause {};
 	if (frame.child_results[0]) {
-		with_clause = std::move(frame.TakeResult<CommonTableExpressionMap>(0));
+		with_clause = frame.TakeResult<CommonTableExpressionMap>(0);
 	}
 	optional<OnConflictAction> or_action {};
 	if (frame.child_results[1]) {
@@ -17595,11 +17593,11 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeInsertStatementT
 	auto insert_values = frame.TakeResult<InsertValues>(5);
 	optional<unique_ptr<OnConflictInfo>> on_conflict_clause {};
 	if (frame.child_results[6]) {
-		on_conflict_clause = std::move(frame.TakeResult<unique_ptr<OnConflictInfo>>(6));
+		on_conflict_clause = frame.TakeResult<unique_ptr<OnConflictInfo>>(6);
 	}
 	optional<vector<unique_ptr<ParsedExpression>>> returning_clause {};
 	if (frame.child_results[7]) {
-		returning_clause = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(7));
+		returning_clause = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(7);
 	}
 	auto result = PEGTransformerFactory::TransformInsertStatement(
 	    transformer, std::move(with_clause), or_action, std::move(insert_target), by_name_or_position,
@@ -17873,7 +17871,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOnConflictClause
                                                                                            TransformStackFrame &frame) {
 	optional<OnConflictExpressionTarget> on_conflict_target {};
 	if (frame.child_results[0]) {
-		on_conflict_target = std::move(frame.TakeResult<OnConflictExpressionTarget>(0));
+		on_conflict_target = frame.TakeResult<OnConflictExpressionTarget>(0);
 	}
 	auto on_conflict_action = frame.TakeResult<unique_ptr<OnConflictInfo>>(1);
 	auto result = PEGTransformerFactory::TransformOnConflictClause(transformer, std::move(on_conflict_target),
@@ -17921,7 +17919,7 @@ PEGTransformerFactory::FinalizeOnConflictExpressionTargetTrampoline(PEGTransform
 	auto column_id_list = frame.TakeResult<vector<string>>(0);
 	optional<unique_ptr<ParsedExpression>> where_clause {};
 	if (frame.child_results[1]) {
-		where_clause = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(1));
+		where_clause = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
 	}
 	auto result = PEGTransformerFactory::TransformOnConflictExpressionTarget(transformer, column_id_list,
 	                                                                         std::move(where_clause));
@@ -17983,7 +17981,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOnConflictUpdate
 	auto update_set_clause = frame.TakeResult<unique_ptr<UpdateSetInfo>>(0);
 	optional<unique_ptr<ParsedExpression>> where_clause {};
 	if (frame.child_results[1]) {
-		where_clause = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(1));
+		where_clause = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
 	}
 	auto result = PEGTransformerFactory::TransformOnConflictUpdate(transformer, std::move(update_set_clause),
 	                                                               std::move(where_clause));
@@ -18193,7 +18191,7 @@ PEGTransformerFactory::FinalizeMergeIntoStatementTrampoline(PEGTransformer &tran
 	auto dynamic_child_count = dynamic_repeat_children.size();
 	optional<CommonTableExpressionMap> with_clause {};
 	if (frame.child_results[0]) {
-		with_clause = std::move(frame.TakeResult<CommonTableExpressionMap>(0));
+		with_clause = frame.TakeResult<CommonTableExpressionMap>(0);
 	}
 	auto target_opt_alias = frame.TakeResult<unique_ptr<BaseTableRef>>(1);
 	auto merge_into_using_clause = frame.TakeResult<unique_ptr<TableRef>>(2);
@@ -18204,8 +18202,7 @@ PEGTransformerFactory::FinalizeMergeIntoStatementTrampoline(PEGTransformer &tran
 	}
 	optional<vector<unique_ptr<ParsedExpression>>> returning_clause {};
 	if (frame.child_results[5 + dynamic_child_count - 1]) {
-		returning_clause =
-		    std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(5 + dynamic_child_count - 1));
+		returning_clause = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(5 + dynamic_child_count - 1);
 	}
 	auto result = PEGTransformerFactory::TransformMergeIntoStatement(
 	    transformer, std::move(with_clause), std::move(target_opt_alias), std::move(merge_into_using_clause),
@@ -18266,7 +18263,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeMatchedClauseTra
                                                                                         TransformStackFrame &frame) {
 	optional<unique_ptr<ParsedExpression>> and_expression {};
 	if (frame.child_results[0]) {
-		and_expression = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(0));
+		and_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
 	}
 	auto matched_clause_action = frame.TakeResult<unique_ptr<MergeIntoAction>>(1);
 	auto result = PEGTransformerFactory::TransformMatchedClause(transformer, std::move(and_expression),
@@ -18311,7 +18308,7 @@ PEGTransformerFactory::FinalizeUpdateMatchClauseTrampoline(PEGTransformer &trans
                                                            TransformStackFrame &frame) {
 	optional<unique_ptr<MergeIntoAction>> update_match_info {};
 	if (frame.child_results[0]) {
-		update_match_info = std::move(frame.TakeResult<unique_ptr<MergeIntoAction>>(0));
+		update_match_info = frame.TakeResult<unique_ptr<MergeIntoAction>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformUpdateMatchClause(transformer, std::move(update_match_info));
 	return make_uniq<TypedTransformResult<unique_ptr<MergeIntoAction>>>(std::move(result));
@@ -18397,7 +18394,7 @@ PEGTransformerFactory::FinalizeInsertMatchClauseTrampoline(PEGTransformer &trans
                                                            TransformStackFrame &frame) {
 	optional<unique_ptr<MergeIntoAction>> insert_match_info {};
 	if (frame.child_results[0]) {
-		insert_match_info = std::move(frame.TakeResult<unique_ptr<MergeIntoAction>>(0));
+		insert_match_info = frame.TakeResult<unique_ptr<MergeIntoAction>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformInsertMatchClause(transformer, std::move(insert_match_info));
 	return make_uniq<TypedTransformResult<unique_ptr<MergeIntoAction>>>(std::move(result));
@@ -18527,7 +18524,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeErrorMatchClause
                                                                                            TransformStackFrame &frame) {
 	optional<unique_ptr<ParsedExpression>> expression {};
 	if (frame.child_results[0]) {
-		expression = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(0));
+		expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformErrorMatchClause(transformer, std::move(expression));
 	return make_uniq<TypedTransformResult<unique_ptr<MergeIntoAction>>>(std::move(result));
@@ -18615,7 +18612,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeNotMatchedClause
 	}
 	optional<unique_ptr<ParsedExpression>> and_expression {};
 	if (frame.child_results[1]) {
-		and_expression = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(1));
+		and_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(1);
 	}
 	auto matched_clause_action = frame.TakeResult<unique_ptr<MergeIntoAction>>(2);
 	auto result = PEGTransformerFactory::TransformNotMatchedClause(
@@ -18984,7 +18981,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePragmaFunctionTr
 	auto pragma_name = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	optional<vector<unique_ptr<ParsedExpression>>> pragma_parameters {};
 	if (frame.child_results[0]) {
-		pragma_parameters = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0));
+		pragma_parameters = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0);
 	}
 	auto result =
 	    PEGTransformerFactory::TransformPragmaFunction(transformer, pragma_name, std::move(pragma_parameters));
@@ -19393,11 +19390,11 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeResultModifiersT
                                                                                           TransformStackFrame &frame) {
 	optional<vector<OrderByNode>> order_by_clause {};
 	if (frame.child_results[0]) {
-		order_by_clause = std::move(frame.TakeResult<vector<OrderByNode>>(0));
+		order_by_clause = frame.TakeResult<vector<OrderByNode>>(0);
 	}
 	optional<unique_ptr<ResultModifier>> limit_offset {};
 	if (frame.child_results[1]) {
-		limit_offset = std::move(frame.TakeResult<unique_ptr<ResultModifier>>(1));
+		limit_offset = frame.TakeResult<unique_ptr<ResultModifier>>(1);
 	}
 	auto result = PEGTransformerFactory::TransformResultModifiers(transformer, std::move(order_by_clause),
 	                                                              std::move(limit_offset));
@@ -19443,7 +19440,7 @@ PEGTransformerFactory::FinalizeLimitOffsetClauseTrampoline(PEGTransformer &trans
 	auto limit_clause = frame.TakeResult<LimitPercentResult>(0);
 	optional<LimitPercentResult> offset_clause {};
 	if (frame.child_results[1]) {
-		offset_clause = std::move(frame.TakeResult<LimitPercentResult>(1));
+		offset_clause = frame.TakeResult<LimitPercentResult>(1);
 	}
 	auto result = PEGTransformerFactory::TransformLimitOffsetClause(transformer, std::move(limit_clause),
 	                                                                std::move(offset_clause));
@@ -19468,7 +19465,7 @@ PEGTransformerFactory::FinalizeOffsetLimitClauseTrampoline(PEGTransformer &trans
 	auto offset_clause = frame.TakeResult<LimitPercentResult>(0);
 	optional<LimitPercentResult> limit_clause {};
 	if (frame.child_results[1]) {
-		limit_clause = std::move(frame.TakeResult<LimitPercentResult>(1));
+		limit_clause = frame.TakeResult<LimitPercentResult>(1);
 	}
 	auto result = PEGTransformerFactory::TransformOffsetLimitClause(transformer, std::move(offset_clause),
 	                                                                std::move(limit_clause));
@@ -19566,7 +19563,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSelectFromClause
 	auto select_clause = frame.TakeResult<unique_ptr<SelectNode>>(0);
 	optional<unique_ptr<TableRef>> from_clause {};
 	if (frame.child_results[1]) {
-		from_clause = std::move(frame.TakeResult<unique_ptr<TableRef>>(1));
+		from_clause = frame.TakeResult<unique_ptr<TableRef>>(1);
 	}
 	auto result =
 	    PEGTransformerFactory::TransformSelectFromClause(transformer, std::move(select_clause), std::move(from_clause));
@@ -19591,7 +19588,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeFromSelectClause
 	auto from_clause = frame.TakeResult<unique_ptr<TableRef>>(0);
 	optional<unique_ptr<SelectNode>> select_clause {};
 	if (frame.child_results[1]) {
-		select_clause = std::move(frame.TakeResult<unique_ptr<SelectNode>>(1));
+		select_clause = frame.TakeResult<unique_ptr<SelectNode>>(1);
 	}
 	auto result =
 	    PEGTransformerFactory::TransformFromSelectClause(transformer, std::move(from_clause), std::move(select_clause));
@@ -19630,7 +19627,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeWithStatementTra
 	}
 	optional<vector<unique_ptr<ParsedExpression>>> using_key {};
 	if (frame.child_results[2]) {
-		using_key = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(2));
+		using_key = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(2);
 	}
 	optional<bool> materialized {};
 	if (frame.child_results[3]) {
@@ -19747,11 +19744,11 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSelectClauseTram
                                                                                        TransformStackFrame &frame) {
 	optional<DistinctClause> distinct_clause {};
 	if (frame.child_results[0]) {
-		distinct_clause = std::move(frame.TakeResult<DistinctClause>(0));
+		distinct_clause = frame.TakeResult<DistinctClause>(0);
 	}
 	optional<vector<unique_ptr<ParsedExpression>>> target_list {};
 	if (frame.child_results[1]) {
-		target_list = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1));
+		target_list = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(1);
 	}
 	auto result =
 	    PEGTransformerFactory::TransformSelectClause(transformer, std::move(distinct_clause), std::move(target_list));
@@ -19861,7 +19858,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDistinctOnTrampo
                                                                                      TransformStackFrame &frame) {
 	optional<vector<unique_ptr<ParsedExpression>>> distinct_on_targets {};
 	if (frame.child_results[0]) {
-		distinct_on_targets = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0));
+		distinct_on_targets = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(0);
 	}
 	auto result = PEGTransformerFactory::TransformDistinctOn(transformer, std::move(distinct_on_targets));
 	return make_uniq<TypedTransformResult<DistinctClause>>(std::move(result));
@@ -19986,11 +19983,11 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeBaseTableRefTram
 	}
 	optional<unique_ptr<AtClause>> at_clause {};
 	if (frame.child_results[3]) {
-		at_clause = std::move(frame.TakeResult<unique_ptr<AtClause>>(3));
+		at_clause = frame.TakeResult<unique_ptr<AtClause>>(3);
 	}
 	optional<unique_ptr<SampleOptions>> sample_clause {};
 	if (frame.child_results[4]) {
-		sample_clause = std::move(frame.TakeResult<unique_ptr<SampleOptions>>(4));
+		sample_clause = frame.TakeResult<unique_ptr<SampleOptions>>(4);
 	}
 	auto result =
 	    PEGTransformerFactory::TransformBaseTableRef(transformer, table_alias_colon, std::move(base_table_name),
@@ -20072,7 +20069,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeParensTableRefTr
 	}
 	optional<unique_ptr<SampleOptions>> sample_clause {};
 	if (frame.child_results[3]) {
-		sample_clause = std::move(frame.TakeResult<unique_ptr<SampleOptions>>(3));
+		sample_clause = frame.TakeResult<unique_ptr<SampleOptions>>(3);
 	}
 	auto result = PEGTransformerFactory::TransformParensTableRef(transformer, table_alias_colon, std::move(table_ref),
 	                                                             table_alias, std::move(sample_clause));
@@ -20583,7 +20580,7 @@ PEGTransformerFactory::FinalizeTableFunctionAliasColonTrampoline(PEGTransformer 
 	}
 	optional<unique_ptr<SampleOptions>> sample_clause {};
 	if (frame.child_results[4]) {
-		sample_clause = std::move(frame.TakeResult<unique_ptr<SampleOptions>>(4));
+		sample_clause = frame.TakeResult<unique_ptr<SampleOptions>>(4);
 	}
 	auto result = PEGTransformerFactory::TransformTableFunctionAliasColon(
 	    transformer, table_alias_colon, qualified_table_function, std::move(table_function_arguments), with_ordinality,
@@ -22858,21 +22855,21 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeUpdateStatementT
                                                                                           TransformStackFrame &frame) {
 	optional<CommonTableExpressionMap> with_clause {};
 	if (frame.child_results[0]) {
-		with_clause = std::move(frame.TakeResult<CommonTableExpressionMap>(0));
+		with_clause = frame.TakeResult<CommonTableExpressionMap>(0);
 	}
 	auto update_target = frame.TakeResult<unique_ptr<TableRef>>(1);
 	auto update_set_clause = frame.TakeResult<unique_ptr<UpdateSetInfo>>(2);
 	optional<unique_ptr<TableRef>> from_clause {};
 	if (frame.child_results[3]) {
-		from_clause = std::move(frame.TakeResult<unique_ptr<TableRef>>(3));
+		from_clause = frame.TakeResult<unique_ptr<TableRef>>(3);
 	}
 	optional<unique_ptr<ParsedExpression>> where_clause {};
 	if (frame.child_results[4]) {
-		where_clause = std::move(frame.TakeResult<unique_ptr<ParsedExpression>>(4));
+		where_clause = frame.TakeResult<unique_ptr<ParsedExpression>>(4);
 	}
 	optional<vector<unique_ptr<ParsedExpression>>> returning_clause {};
 	if (frame.child_results[5]) {
-		returning_clause = std::move(frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(5));
+		returning_clause = frame.TakeResult<vector<unique_ptr<ParsedExpression>>>(5);
 	}
 	auto result = PEGTransformerFactory::TransformUpdateStatement(
 	    transformer, std::move(with_clause), std::move(update_target), std::move(update_set_clause),
@@ -23245,7 +23242,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeVacuumStatementT
 	}
 	optional<AnalyzeTarget> analyze_target {};
 	if (frame.child_results[1]) {
-		analyze_target = std::move(frame.TakeResult<AnalyzeTarget>(1));
+		analyze_target = frame.TakeResult<AnalyzeTarget>(1);
 	}
 	auto result =
 	    PEGTransformerFactory::TransformVacuumStatement(transformer, vacuum_options, std::move(analyze_target));

@@ -921,8 +921,6 @@ class UseGramPreviewEmitter:
                 lines.append(f"\tif ({arg.var_name}_opt.HasResult()) {{")
                 child_expr = arg.result_expr_template.format(opt=f"{arg.var_name}_opt")
                 value_expr = self.matcher_transform_expr(arg.rule_name, child_expr)
-                if self.by_value(arg.rule_name):
-                    value_expr = f"std::move({value_expr})"
                 lines.append(f"\t\t{arg.var_name} = {value_expr};")
                 lines.append("\t}")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, arg.var_name))
@@ -967,8 +965,6 @@ class UseGramPreviewEmitter:
                 lines.append(f"\toptional<{self.cpp_type(arg.rule_name)}> {var_name} {{}};")
                 lines.append(f"\tif (frame.child_results[{slot_expr}]) {{")
                 value_expr = f"frame.TakeResult<{self.cpp_type(arg.rule_name)}>({slot_expr})"
-                if self.by_value(arg.rule_name):
-                    value_expr = f"std::move({value_expr})"
                 lines.append(f"\t\t{var_name} = {value_expr};")
                 lines.append("\t}")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
@@ -979,8 +975,6 @@ class UseGramPreviewEmitter:
                 lines.append(f"\tif ({var_name}_opt.HasResult()) {{")
                 lines.append(f"\t\tauto slot_idx = frame.child_results.size() - 1;")
                 value_expr = f"frame.TakeResult<{self.cpp_type(arg.rule_name)}>(slot_idx)"
-                if self.by_value(arg.rule_name):
-                    value_expr = f"std::move({value_expr})"
                 lines.append(f"\t\t{var_name} = {value_expr};")
                 lines.append("\t}")
                 arg_names.append(self.transform_arg_expr(arg.rule_name, var_name))
