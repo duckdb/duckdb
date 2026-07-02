@@ -597,7 +597,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTrans
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformExpression(PEGTransformer &transformer,
                                            unique_ptr<ParsedExpression> lambda_arrow_expression) {
-	return std::move(lambda_arrow_expression);
+	return lambda_arrow_expression;
 }
 
 unique_ptr<ParsedExpression>
