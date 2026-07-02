@@ -960,8 +960,7 @@ if (NOT EXTENSION_CONFIG_BUILD)
   if(NOT DUCKDB_EXPLICIT_PLATFORM)
     set(VERSION_SOURCES tools/utils/test_platform.cpp)
 
-    add_executable(duckdb_platform_binary ${VERSION_SOURCES}
-      src/include/duckdb/execution/operator/schema/physical_refresh_feature.hpp)
+    add_executable(duckdb_platform_binary ${VERSION_SOURCES})
     link_threads(duckdb_platform_binary "")
 
     set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
