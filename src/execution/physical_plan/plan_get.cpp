@@ -117,8 +117,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 					}
 				}
 				if (!column_id_filter.IsValid()) {
-					projection_ids.push_back(filter_idx);
-					column_id_filter = projection_ids.size() - 1;
+					if (projection_ids.empty()) {
+						// empty projection_ids == identity mapping: column position is its index in column_ids
+						column_id_filter = filter_idx.GetIndex();
+					} else {
+						projection_ids.push_back(filter_idx);
+						column_id_filter = projection_ids.size() - 1;
+					}
 				}
 				auto column = make_uniq<BoundReferenceExpression>(column_type, column_id_filter.GetIndex());
 				select_list.push_back(filter_expr.ToExpression(*column));
@@ -131,13 +136,23 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 
 		if (!select_list.empty()) {
 			vector<LogicalType> filter_types;
-			for (auto &c : projection_ids) {
-				auto column_id = column_ids[c].GetPrimaryIndex();
+			// empty projection_ids == identity mapping: the scan emits all column_ids in order
+			auto build_filter_type = [&](idx_t col_index) {
+				auto column_id = column_ids[col_index].GetPrimaryIndex();
 				if (IsVirtualColumn(column_id)) {
 					auto &column = virtual_columns.at(column_id);
 					filter_types.push_back(column.type);
 				} else {
 					filter_types.push_back(op.returned_types[column_id]);
+				}
+			};
+			if (projection_ids.empty()) {
+				for (idx_t i = 0; i < column_ids.size(); i++) {
+					build_filter_type(i);
+				}
+			} else {
+				for (auto &c : projection_ids) {
+					build_filter_type(c);
 				}
 			}
 			filter = Make<PhysicalFilter>(filter_types, std::move(select_list), op.estimated_cardinality);
