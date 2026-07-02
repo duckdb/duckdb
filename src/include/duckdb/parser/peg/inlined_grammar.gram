@@ -1592,7 +1592,7 @@ ConnectStatement <- 'CONNECT' SessionTarget?
 DisconnectStatement <- 'DISCONNECT'
 SessionTarget <- LocalSessionTarget / StringSessionTarget / CatalogSessionTarget
 LocalSessionTarget <- 'LOCAL'
-StringSessionTarget <- StringLiteral
+StringSessionTarget <- StringLiteral GenericCopyOptionList?
 CatalogSessionTarget <- CatalogName
 
 CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType
