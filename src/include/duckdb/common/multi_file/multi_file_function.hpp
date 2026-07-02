@@ -763,7 +763,11 @@ public:
 			while (!read_ahead.IsDone() && read_ahead.ActiveJobs() < read_ahead.ReadAheadDepth()) {
 				// We still have work to do and our budget is not full
 				auto job = make_uniq<MultiFileScanJob>();
-				job->reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
+				// prefer a finished job's scan state, so learned reader state carries over across jobs
+				job->reader_scan_state = read_ahead.TryPopState();
+				if (!job->reader_scan_state) {
+					job->reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
+				}
 				if (!ClaimNextJob(context, bind_data, gstate, *job)) {
 					// If there are no more jobs we are done
 					read_ahead.SetDone();
@@ -840,7 +844,8 @@ public:
 	}
 
 	static MultiFileFinishResult FinishReadAhead(MultiFileLocalState &lstate, MultiFileGlobalState &gstate) {
-		// free this job's in-flight slot, the next AcquireNext pulls the next queued job
+		// hand the scan state back for reuse, then free this job's in-flight slot
+		gstate.read_ahead->PushState(std::move(lstate.job.reader_scan_state));
 		gstate.read_ahead->FinishJob();
 		lstate.job_state = MultiFileJobState::NONE;
 		return MultiFileFinishResult::CONTINUE;

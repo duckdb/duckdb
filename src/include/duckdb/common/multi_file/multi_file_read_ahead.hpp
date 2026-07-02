@@ -19,6 +19,7 @@ class ClientContext;
 class TaskExecutor;
 class AsyncTask;
 struct MultiFileScanJob;
+struct LocalTableFunctionState;
 
 //! Drives read-ahead for the multi-file scan, it's purpose is to keep several scan jobs scheduled ahead of decoding
 class MultiFileReadAhead {
@@ -48,6 +49,10 @@ public:
 	//! Pop the oldest queued job
 	unique_ptr<MultiFileScanJob> ClaimJob();
 
+	//! Push a finished job's scan state, so learned reader state carries over to jobs created later
+	void PushState(unique_ptr<LocalTableFunctionState> state);
+	//! Pop a recycled scan state, returns null when none is available
+	unique_ptr<LocalTableFunctionState> TryPopState();
 
 	bool TryBecomeProducer();
 	void EndProducer();
@@ -66,6 +71,9 @@ private:
 
 	mutable mutex lock;
 	deque<unique_ptr<MultiFileScanJob>> ready_queue;
+	//! Scan states of finished jobs, reused by the producer for new jobs, we keep a pool to reuse the per-thread effect
+	//! Of non-read ahead
+	vector<unique_ptr<LocalTableFunctionState>> state_pool;
 	atomic<idx_t> active_jobs {0};
 	atomic<bool> done {false};
 	//! Set while a thread is producing, so only one thread fills the queue at a time, so we can keep batch_index in order

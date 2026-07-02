@@ -84,6 +84,22 @@ unique_ptr<MultiFileScanJob> MultiFileReadAhead::ClaimJob() {
 	return job;
 }
 
+void MultiFileReadAhead::PushState(unique_ptr<LocalTableFunctionState> state) {
+	D_ASSERT(state);
+	lock_guard<mutex> guard(lock);
+	state_pool.push_back(std::move(state));
+}
+
+unique_ptr<LocalTableFunctionState> MultiFileReadAhead::TryPopState() {
+	lock_guard<mutex> guard(lock);
+	if (state_pool.empty()) {
+		return nullptr;
+	}
+	auto state = std::move(state_pool.back());
+	state_pool.pop_back();
+	return state;
+}
+
 bool MultiFileReadAhead::TryBecomeProducer() {
 	bool expected = false;
 	return producing.compare_exchange_strong(expected, true);
