@@ -1,5 +1,5 @@
 duckdb_extension_load(quack
     ## LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-quack
-    GIT_TAG 40de7badae4193c29d9c0834473fb76acc6c51e6
+    GIT_TAG 29fc0391dc14bc69914aaad0493a1d31bc67e07f
 )
