@@ -105,16 +105,7 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result, con
 	auto &expression = expressions[0];
 	auto &state = states[0];
 	D_ASSERT(result.GetType().id() == expression->GetReturnType().id());
-	if (count == 0) {
-		return;
-	}
-	if (count == input.size()) {
-		Execute(*expression, state->root_state.get(), nullptr, count, result);
-		return;
-	}
-	Vector intermediate_result(expression->GetReturnType());
-	Execute(*expression, state->root_state.get(), &sel, count, intermediate_result);
-	FillSwitch(intermediate_result, result, sel, NumericCast<sel_t>(count));
+	Execute(*expression, state->root_state.get(), &sel, count, result);
 }
 
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &sel) {

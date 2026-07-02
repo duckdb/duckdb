@@ -141,3 +141,25 @@ FROM '{TEST_DIR}/variant_pushdown_nested_terminal_fully.parquet'
 WHERE v.obj.a = 2
 ----
 2	[3]
+
+statement ok
+COPY (
+	FROM (
+		VALUES
+		({'arr': [1::INTEGER,2,3], 'tag': 'a'}::VARIANT),
+		({'arr': [4::INTEGER,5,6], 'tag': 'b'}::VARIANT),
+		({'arr': [7::INTEGER,8,9], 'tag': 'c'}::VARIANT)
+	) t(v))
+TO '{TEST_DIR}/variant_pushdown_array_extract.parquet' (
+	SHREDDING {
+		'v': 'STRUCT(arr INTEGER[], tag VARCHAR)'
+	}
+);
+
+query I
+SELECT
+	v.arr::INTEGER[3]
+FROM '{TEST_DIR}/variant_pushdown_array_extract.parquet'
+WHERE v.tag = 'b';
+----
+[4, 5, 6]
