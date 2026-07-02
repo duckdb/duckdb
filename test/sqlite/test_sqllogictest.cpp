@@ -92,6 +92,8 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	runner.environment_variables["TEST_NAME"] = name;
 	runner.environment_variables["TEST_NAME__NO_SLASH"] = StringUtil::Replace(name, "/", "_");
 
+	runner.EmitBegin(name);
+
 	ErrorData error;
 	try {
 		if (input) {
@@ -101,6 +103,12 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 		}
 	} catch (std::exception &ex) {
 		error = ErrorData(ex);
+	} catch (...) {
+		// Catch's own assertion-failure control exception (not std::exception): the test aborted
+		// mid-run. Emit the error terminal (no message in hand here — the diff is in the captured
+		// output), then rethrow so Catch still records the verdict.
+		runner.EmitEnd(name, "error", "");
+		throw;
 	}
 
 	if (!input && AUTO_SWITCH_TEST_DIR) {
@@ -129,6 +137,16 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	// clear test directory after running tests
 	ClearTestDirectory();
 
+	// Single terminal event (--emit-test-events): status = skip-requirement (whole-test skip) /
+	// error (a std::exception escaped: LoadDatabase / cleanup / unexpected) / ok. Catch-thrown
+	// statement failures are handled by the catch(...) above.
+	if (runner.test_skipped_requirement) {
+		runner.EmitEnd(name, "skip-requirement", runner.test_skip_reason);
+	} else if (error.HasError()) {
+		runner.EmitEnd(name, "error", error.Message());
+	} else {
+		runner.EmitEnd(name, "ok", "");
+	}
 	if (error.HasError()) {
 		FAIL(error.Message());
 	}
