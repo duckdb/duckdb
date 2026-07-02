@@ -34,7 +34,6 @@
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/user_settings.hpp"
-#include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/types/type_manager.hpp"
 #include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/enums/debug_verification_mode.hpp"
