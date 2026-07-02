@@ -192,55 +192,6 @@ QualifiedName PEGTransformerFactory::TransformIdentifierOrStringLiteral(PEGTrans
 	return result;
 }
 
-void PEGTransformerFactory::InitializeIdentifierOrStringLiteralTrampoline(PEGTransformer &transformer,
-                                                                          TransformStack &stack,
-                                                                          TransformStackFrame &frame) {
-	frame.ReserveChildSlots(0);
-}
-
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeIdentifierOrStringLiteralTrampoline(PEGTransformer &transformer, TransformStack &stack,
-                                                                   TransformStackFrame &frame) {
-	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	string child;
-	if (choice_result.type == ParseResultType::IDENTIFIER) {
-		child = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
-	} else if (choice_result.type == ParseResultType::KEYWORD) {
-		child = choice_result.Cast<KeywordParseResult>().keyword;
-	} else if (choice_result.type == ParseResultType::STRING) {
-		child = choice_result.Cast<StringLiteralParseResult>().result;
-	} else {
-		throw InternalException("Unsupported IdentifierOrStringLiteral parse result type for trampoline transformer");
-	}
-	auto result = TransformIdentifierOrStringLiteral(transformer, child);
-	return make_uniq<TypedTransformResult<QualifiedName>>(result);
-}
-
-void PEGTransformerFactory::InitializeReservedIdentifierOrStringLiteralTrampoline(PEGTransformer &transformer,
-                                                                                  TransformStack &stack,
-                                                                                  TransformStackFrame &frame) {
-	frame.ReserveChildSlots(0);
-}
-
-unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeReservedIdentifierOrStringLiteralTrampoline(
-    PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame) {
-	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	Identifier result;
-	if (choice_result.type == ParseResultType::IDENTIFIER) {
-		result = choice_result.Cast<IdentifierParseResult>().identifier;
-	} else if (choice_result.type == ParseResultType::KEYWORD) {
-		result = Identifier(choice_result.Cast<KeywordParseResult>().keyword);
-	} else if (choice_result.type == ParseResultType::STRING) {
-		result = Identifier(choice_result.Cast<StringLiteralParseResult>().result);
-	} else {
-		throw InternalException(
-		    "Unsupported ReservedIdentifierOrStringLiteral parse result type for trampoline transformer");
-	}
-	return make_uniq<TypedTransformResult<Identifier>>(result);
-}
-
 string PEGTransformerFactory::TransformColLabelOrString(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
@@ -277,29 +228,6 @@ Identifier PEGTransformerFactory::TransformColIdOrString(PEGTransformer &transfo
 	return transformer.Transform<Identifier>(choice_result);
 }
 
-void PEGTransformerFactory::InitializeColIdTrampoline(PEGTransformer &transformer, TransformStack &stack,
-                                                      TransformStackFrame &frame) {
-	frame.ReserveChildSlots(0);
-}
-
-unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColIdTrampoline(PEGTransformer &transformer,
-                                                                                TransformStack &stack,
-                                                                                TransformStackFrame &frame) {
-	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	Identifier result;
-	if (choice_result.type == ParseResultType::IDENTIFIER) {
-		result = choice_result.Cast<IdentifierParseResult>().identifier;
-	} else if (choice_result.type == ParseResultType::KEYWORD) {
-		result = Identifier(choice_result.Cast<KeywordParseResult>().keyword);
-	} else if (choice_result.type == ParseResultType::STRING) {
-		result = Identifier(choice_result.Cast<StringLiteralParseResult>().result);
-	} else {
-		result = Identifier(TransformIdentifierOrKeyword(transformer, choice_result));
-	}
-	return make_uniq<TypedTransformResult<Identifier>>(result);
-}
-
 string PEGTransformerFactory::TransformIdentifier(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return list_pr.Child<IdentifierParseResult>(0).identifier.GetIdentifierName();
@@ -317,19 +245,6 @@ vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &
 
 string PEGTransformerFactory::TransformDotColLabel(PEGTransformer &transformer, const string &col_label) {
 	return col_label;
-}
-
-void PEGTransformerFactory::InitializeDotColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack,
-                                                            TransformStackFrame &frame) {
-	frame.ReserveChildSlots(0);
-}
-
-unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDotColLabelTrampoline(PEGTransformer &transformer,
-                                                                                      TransformStack &stack,
-                                                                                      TransformStackFrame &frame) {
-	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto col_label = TransformIdentifierOrKeyword(transformer, list_pr.GetChild(1));
-	return make_uniq<TypedTransformResult<string>>(col_label);
 }
 
 ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(

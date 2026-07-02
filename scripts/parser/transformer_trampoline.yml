@@ -13,6 +13,11 @@ rules:
   Statement:
     mode: excluded
 
+  CommentValue:
+    mode: manual
+    init: InitializeCommentValueTrampoline
+    finalize: FinalizeCommentValueTrampoline
+
   PivotStatement:
     mode: manual
     init: InitializePivotStatementTrampoline
@@ -23,65 +28,20 @@ rules:
     init: InitializeUnpivotStatementTrampoline
     finalize: FinalizeUnpivotStatementTrampoline
 
-  CommentValue:
+  EnumStringLiteralList:
     mode: manual
-    init: InitializeCommentValueTrampoline
-    finalize: FinalizeCommentValueTrampoline
+    init: InitializeEnumStringLiteralListTrampoline
+    finalize: FinalizeEnumStringLiteralListTrampoline
 
   UpdateExtensionsStatement:
     mode: manual
     init: InitializeUpdateExtensionsStatementTrampoline
     finalize: FinalizeUpdateExtensionsStatementTrampoline
 
-  PrepareStatement:
-    mode: manual
-    init: InitializePrepareStatementTrampoline
-    finalize: FinalizePrepareStatementTrampoline
-
-  EnumStringLiteralList:
-    mode: manual
-    init: InitializeEnumStringLiteralListTrampoline
-    finalize: FinalizeEnumStringLiteralListTrampoline
-
-  SimpleNumericType:
-    mode: manual
-    init: InitializeSimpleNumericTypeTrampoline
-    finalize: FinalizeSimpleNumericTypeTrampoline
-
-  DescribeStatement:
-    mode: manual
-    init: InitializeDescribeStatementTrampoline
-    finalize: FinalizeDescribeStatementTrampoline
-
-  ExplainOptionName:
-    mode: manual
-    init: InitializeExplainOptionNameTrampoline
-    finalize: FinalizeExplainOptionNameTrampoline
-
-  ColId:
-    mode: manual
-    init: InitializeColIdTrampoline
-    finalize: FinalizeColIdTrampoline
-
   ColLabel:
     mode: manual
     init: InitializeColLabelTrampoline
     finalize: FinalizeColLabelTrampoline
-
-  DotColLabel:
-    mode: manual
-    init: InitializeDotColLabelTrampoline
-    finalize: FinalizeDotColLabelTrampoline
-
-  IdentifierOrStringLiteral:
-    mode: manual
-    init: InitializeIdentifierOrStringLiteralTrampoline
-    finalize: FinalizeIdentifierOrStringLiteralTrampoline
-
-  ReservedIdentifierOrStringLiteral:
-    mode: manual
-    init: InitializeReservedIdentifierOrStringLiteralTrampoline
-    finalize: FinalizeReservedIdentifierOrStringLiteralTrampoline
 
   Expression:
     mode: forward
@@ -105,16 +65,6 @@ rules:
     init: InitializePrefixExpressionTrampoline
     finalize: FinalizePrefixExpressionTrampoline
 
-  FunctionIdentifier:
-    mode: manual
-    init: InitializeFunctionIdentifierTrampoline
-    finalize: FinalizeFunctionIdentifierTrampoline
-
-  ColumnReference:
-    mode: manual
-    init: InitializeColumnReferenceTrampoline
-    finalize: FinalizeColumnReferenceTrampoline
-
   ColLabelOrString:
     mode: manual
     init: InitializeColLabelOrStringTrampoline
@@ -129,11 +79,6 @@ rules:
     mode: manual
     init: InitializeSelectStatementInternalTrampoline
     finalize: FinalizeSelectStatementInternalTrampoline
-
-  NamedParameter:
-    mode: manual
-    init: InitializeNamedParameterTrampoline
-    finalize: FinalizeNamedParameterTrampoline
 
   SimpleSelect:
     mode: manual
