@@ -8,6 +8,7 @@
 #include "duckdb/main/feature_refresh_scheduler.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
@@ -27,6 +28,7 @@ SourceResultType PhysicalCreateFeature::GetDataInternal(ExecutionContext &contex
 	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		auto old_entry = set.GetEntry(transaction, info->feature_name);
 		if (old_entry) {
+			FlatVector::SetSize(chunk.data[0], 1);
 			chunk.SetCardinality(1);
 			chunk.data[0].SetValue(0, Value(info->feature_name));
 			return SourceResultType::FINISHED;
@@ -63,6 +65,7 @@ SourceResultType PhysicalCreateFeature::GetDataInternal(ExecutionContext &contex
 	auto &duck_catalog = catalog.Cast<DuckCatalog>();
 	duck_catalog.GetDependencyManager()->AddOwnership(transaction, *feature_entry, *view_entry);
 
+	FlatVector::SetSize(chunk.data[0], 1);
 	chunk.SetCardinality(1);
 	chunk.data[0].SetValue(0, Value(info->feature_name));
 	return SourceResultType::FINISHED;
