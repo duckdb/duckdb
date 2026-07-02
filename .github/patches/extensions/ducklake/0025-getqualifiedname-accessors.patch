@@ -1,13 +1,3 @@
-From ecab0bbbd942b89c05968873c06bf787264075f1 Mon Sep 17 00:00:00 2001
-From: duckdb <x@x>
-Date: Thu, 25 Jun 2026 23:16:38 +0200
-Subject: [PATCH] 0025-getqualifiedname-accessors.patch
-
----
- src/storage/ducklake_catalog.cpp      | 10 ++++-----
- src/storage/ducklake_schema_entry.cpp | 30 +++++++++++++--------------
- 2 files changed, 20 insertions(+), 20 deletions(-)
-
 diff --git a/src/storage/ducklake_catalog.cpp b/src/storage/ducklake_catalog.cpp
 index 38648c00..b37a6318 100644
 --- a/src/storage/ducklake_catalog.cpp
@@ -149,6 +139,3 @@ index eaf7bb4b..7a828ff1 100644
  	}
  	if (catalog_entry->type != info.type) {
  		throw CatalogException("Existing object %s is of type %s, trying to drop type %s", catalog_entry->name,
--- 
-2.39.5 (Apple Git-154)
-

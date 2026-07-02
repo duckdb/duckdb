@@ -35,6 +35,8 @@
         "test/sql/storage/total_string_length_repeated_insert.test",
         "test/sql/types/geo/geometry_from_wkb_stats.test",
         "test/parquet/variant/variant_stats_propagation.test",
+        "test/parquet/parquet_extract_pushdown.test",
+        "test/parquet/variant/variant_shred_unsigned_types.test",
         "test/sql/types/geo/geometry_stats.test",
         "test/sql/types/geo/geometry_compatability.test",
         "test/sql/function/numeric/test_random.test",
