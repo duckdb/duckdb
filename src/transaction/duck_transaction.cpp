@@ -21,7 +21,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/transaction/checkpoint_lock.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
@@ -351,7 +351,7 @@ void DuckTransaction::SetModifications(DatabaseModificationType type) {
 	}
 }
 
-unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
+unique_ptr<CheckpointLockKey> DuckTransaction::TryGetCheckpointLock() {
 	if (!checkpoint_lock) {
 		return GetTransactionManager().TryGetCheckpointLock();
 	} else {

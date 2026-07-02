@@ -30,6 +30,7 @@
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/transaction/vacuum_lock.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
@@ -129,7 +130,7 @@ public:
 	mutex index_scan_lock;
 	//! Synchronize <ART version, SegmentTree<RowGroup>> when vacuum_rebuild_indexes is enabled (since
 	//! ART indexes are rebuilt during vacuuming with this setting).
-	unique_ptr<StorageLockKey> vacuum_lock;
+	unique_ptr<VacuumLockKey> vacuum_lock;
 
 public:
 	unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
@@ -448,7 +449,7 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 
 unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &context, TableFunctionInitInput &input,
                                                              const TableScanBindData &bind_data, set<row_t> &row_ids,
-                                                             unique_ptr<StorageLockKey> vacuum_lock) {
+                                                             unique_ptr<VacuumLockKey> vacuum_lock) {
 	auto g_state = make_uniq<DuckIndexScanState>(context, input.bind_data.get());
 	g_state->vacuum_lock = std::move(vacuum_lock);
 	g_state->finished_first_phase = row_ids.empty() ? true : false;
@@ -805,7 +806,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	// scanning the index. This prevents the checkpoint from rebuilding the index and swapping
 	// row groups while we hold row IDs from the ART, ensuring we always see a consistent
 	// <ART index, SegmentTree<RowGroup> pairing.
-	unique_ptr<StorageLockKey> vacuum_lock;
+	unique_ptr<VacuumLockKey> vacuum_lock;
 	const auto &attached = storage.GetAttached();
 	if (attached.GetVacuumRebuildIndexThreshold() > 0) {
 		auto &transaction_manager = DuckTransactionManager::Get(storage.GetAttached());
