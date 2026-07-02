@@ -68,17 +68,17 @@ public:
 	}
 
 	//! Adds an index and its respective delete_index.
-	void AddIndex(BoundIndex &index, optional_ptr<BoundIndex> delete_index) {
+	void AddIndex(const shared_ptr<BoundIndex> &index, optional_ptr<BoundIndex> delete_index) {
 		matching_indexes.push_back(index);
 		matching_delete_indexes.push_back(delete_index);
-		index_names.insert(index.name);
+		index_names.insert(index->name);
 	}
 	//! Returns true, if the index is in this conflict manager.
 	bool IndexMatches(BoundIndex &index) {
 		return index_names.find(index.name) != index_names.end();
 	}
 	//! Returns a reference to the matching indexes.
-	const vector<reference<BoundIndex>> &MatchingIndexes() const {
+	const vector<shared_ptr<BoundIndex>> &MatchingIndexes() const {
 		return matching_indexes;
 	}
 	//! Returns a reference to the matching delete indexes.
@@ -134,7 +134,7 @@ private:
 	ConflictManagerMode mode;
 
 	//! Indexes matching the conflict target.
-	vector<reference<BoundIndex>> matching_indexes;
+	vector<shared_ptr<BoundIndex>> matching_indexes;
 	//! Delete indexes matching the conflict target.
 	vector<optional_ptr<BoundIndex>> matching_delete_indexes;
 	//! All matching indexes by their name (unique identifier).

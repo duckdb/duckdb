@@ -960,7 +960,8 @@ struct IndexRemovalTargets {
 
 void GetIndexRemovalTargetsActiveCheckpoint(IndexEntry &entry, IndexRemovalType removal_type,
                                             IndexRemovalTargets &targets) {
-	auto &main_index = entry.index->Cast<BoundIndex>();
+	const auto index = entry.PinIndex();
+	const auto &main_index = index->Cast<BoundIndex>();
 
 	// create "removed_data_during_checkpoint" if it does not exist
 	if (!entry.removed_data_during_checkpoint) {
@@ -1011,7 +1012,8 @@ void GetIndexRemovalTargetsActiveCheckpoint(IndexEntry &entry, IndexRemovalType 
 }
 void GetIndexRemovalTargets(IndexEntry &entry, IndexRemovalType removal_type, IndexRemovalTargets &targets,
                             optional_idx active_checkpoint) {
-	auto &main_index = entry.index->Cast<BoundIndex>();
+	const auto &index = entry.PinIndex();
+	auto &main_index = index->Cast<BoundIndex>();
 
 	// not all indexes require delta indexes - this is tracked through BoundIndex::RequiresTransactionality
 	// if an index does not require this we skip creating to and appending to "deleted_rows_in_use"
@@ -1072,8 +1074,8 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	// Collect all Indexed columns on the table.
 	unordered_set<column_t> indexed_column_id_set;
 
-	for (auto &index : indexes.Indexes()) {
-		auto &set = index.GetColumnIdSet();
+	for (auto &index : indexes.PinIndexes()) {
+		auto &set = index->GetColumnIdSet();
 		indexed_column_id_set.insert(set.begin(), set.end());
 	}
 
@@ -1117,10 +1119,9 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	}
 
 	for (auto &entry : indexes.IndexEntries()) {
-		auto &index = *entry.index;
-		if (index.IsBound()) {
-			lock_guard<mutex> guard(entry.lock);
-
+		lock_guard<mutex> guard(entry.lock);
+		auto index = entry.PinIndex();
+		if (index->IsBound()) {
 			// check which indexes we should append to or remove from
 			// note that this method might also involve appending to indexes
 			// the reason for that is that we have "delta" indexes that we must fill with data we are removing
@@ -1176,7 +1177,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			auto col_id = column_ids[i].GetPrimaryIndex();
 			index_column_chunk.data[i].Reference(result_chunk.data[col_id]);
 		}
-		auto &unbound_index = index.Cast<UnboundIndex>();
+		auto &unbound_index = index->Cast<UnboundIndex>();
 		unbound_index.BufferChunk(index_column_chunk, row_identifiers, column_ids, BufferedIndexReplay::DEL_ENTRY);
 	}
 }

@@ -99,17 +99,17 @@ static string GetStringArgument(ClientContext &context, const Expression &expr, 
 	return StringValue::Get(value);
 }
 
-static BoundIndex &FindBoundIndex(TableIndexList &index_list, const Identifier &index_name,
-                                  const TableDescription &path) {
+static shared_ptr<BoundIndex> FindBoundIndex(const TableIndexList &index_list, const Identifier &index_name,
+                                             const TableDescription &path) {
 	auto found = index_list.Find(index_name);
 	if (found) {
-		return *found;
+		return found;
 	}
 
 	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	vector<Identifier> available;
-	for (auto &idx : index_list.Indexes()) {
-		available.push_back(idx.GetIndexName());
+	for (const auto &idx : index_list.PinIndexes()) {
+		available.push_back(idx->GetIndexName());
 	}
 
 	if (available.empty()) {
@@ -122,7 +122,8 @@ static BoundIndex &FindBoundIndex(TableIndexList &index_list, const Identifier &
 }
 
 struct IndexKeyBindData : public FunctionData {
-	IndexKeyBindData(ART &art, vector<LogicalType> key_types) : art(art), key_types(std::move(key_types)) {
+	IndexKeyBindData(shared_ptr<ART> art, vector<LogicalType> key_types)
+	    : art(std::move(art)), key_types(std::move(key_types)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -131,10 +132,10 @@ struct IndexKeyBindData : public FunctionData {
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<IndexKeyBindData>();
-		return &art == &other.art && key_types == other.key_types;
+		return art.get() == other.art.get() && key_types == other.key_types;
 	}
 
-	ART &art;
+	shared_ptr<ART> art;
 	vector<LogicalType> key_types;
 };
 
@@ -162,17 +163,16 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	// option to this function to bind or not.
 	data_table_info.BindIndexes(context);
 
-	auto &index_list = data_table_info.GetIndexes();
-	auto &bound_index = FindBoundIndex(index_list, Identifier(index_name), path);
+	const auto &index_list = data_table_info.GetIndexes();
+	const auto bound_index = FindBoundIndex(index_list, Identifier(index_name), path);
 
-	auto index_type = bound_index.GetIndexType();
+	const auto &index_type = bound_index->GetIndexType();
 	if (index_type != ART::TYPE_NAME) {
 		throw NotImplementedException(
 		    "index_key: index type '%s' is not yet supported (only ART indexes are supported)", index_type);
 	}
-	auto &art = bound_index.Cast<ART>();
 
-	auto key_types = bound_index.logical_types;
+	auto key_types = bound_index->logical_types;
 
 	idx_t num_key_args = arguments.size() - INDEX_KEY_FIXED_ARGS;
 	if (num_key_args != key_types.size()) {
@@ -192,7 +192,8 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 		bound_function.GetArguments().push_back(key_type);
 	}
 
-	return make_uniq<IndexKeyBindData>(art, std::move(key_types));
+	auto art = PinIndexCast<ART>(bound_index);
+	return make_uniq<IndexKeyBindData>(std::move(art), std::move(key_types));
 }
 
 static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -208,10 +209,10 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 		key_chunk.data[i].Reference(args.data[INDEX_KEY_FIXED_ARGS + i]);
 	}
 
-	auto &art = bind_data.art;
+	const auto &art = bind_data.art;
 	unsafe_vector<ARTKey> keys(count);
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
-	art.GenerateKeys<>(allocator, key_chunk, keys);
+	art->GenerateKeys<>(allocator, key_chunk, keys);
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {

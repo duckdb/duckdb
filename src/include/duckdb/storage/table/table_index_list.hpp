@@ -25,13 +25,25 @@ class TableIndexIterationHelper;
 enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND };
 
 //! IndexEntry contains an atomic in addition to the index to ensure correct binding.
+//! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 struct IndexEntry {
 	explicit IndexEntry(unique_ptr<Index> index);
 
+	//! Give the caller a stable snapshot of the current Index
+	shared_ptr<Index> PinIndex() const {
+		lock_guard<mutex> lock(index_pointer_lock);
+		return owned_index;
+	}
+
+	//! Replace the current snapshot with another
+	void ReplaceIndex(unique_ptr<Index> index) {
+		lock_guard<mutex> lock(index_pointer_lock);
+		owned_index = std::move(index);
+	}
+
 	atomic<IndexBindState> bind_state;
-	//! lock that should be used if access to "index" and "deleted_rows_in_use" at the same time is necessary
+	//! lock that should be used if access to "owned_index" and "deleted_rows_in_use" at the same time is necessary
 	mutex lock;
-	unique_ptr<Index> index;
 	unique_ptr<BoundIndex> deleted_rows_in_use;
 	//! Data that was added to the index during the last checkpoint
 	unique_ptr<BoundIndex> added_data_during_checkpoint;
@@ -39,7 +51,22 @@ struct IndexEntry {
 	unique_ptr<BoundIndex> removed_data_during_checkpoint;
 	//! The last checkpoint index that was written with this index
 	optional_idx last_written_checkpoint;
+
+private:
+	//! The owning pointer of the index
+	shared_ptr<Index> owned_index;
+	//! Lock held when accessing or modifying the owned_index pointer
+	mutable mutex index_pointer_lock;
 };
+
+//! Cast a pinned index to a more specific type while preserving ownership of the original snapshot.
+//! The returned pointer keeps the original index snapshot alive.
+template <class TARGET, class SOURCE>
+shared_ptr<TARGET> PinIndexCast(const shared_ptr<SOURCE> &index) {
+	D_ASSERT(index);
+	auto &target = index->template Cast<TARGET>();
+	return shared_ptr<TARGET>(index, &target);
+}
 
 struct IndexSerializationInfo {
 	case_insensitive_map_t<Value> options;
@@ -64,15 +91,15 @@ struct IndexSerializationResult {
 class TableIndexList {
 public:
 	TableIndexIterationHelper<IndexEntry> IndexEntries() const;
-	TableIndexIterationHelper<Index> Indexes() const;
+	vector<shared_ptr<Index>> PinIndexes() const;
 	//! Adds an index entry to the list of index entries.
 	void AddIndex(unique_ptr<Index> index);
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(const Identifier &name);
 	//! Returns true, if the index name does not exist.
-	bool NameIsUnique(const string &name);
+	bool NameIsUnique(const string &name) const;
 	//! Returns an optional pointer to the index matching the name.
-	optional_ptr<BoundIndex> Find(const Identifier &name);
+	shared_ptr<BoundIndex> Find(const Identifier &name) const;
 	//! Binds unbound indexes possibly present after loading an extension.
 	void Bind(ClientContext &context, DataTableInfo &table_info, const char *index_type = nullptr);
 	//! Returns true, if there are no index entries.
@@ -97,7 +124,7 @@ public:
 		index_entries = std::move(other.index_entries);
 	}
 	//! Merge any changes added to deltas during a checkpoint back into the main indexes
-	void MergeCheckpointDeltas(transaction_t checkpoint_id);
+	void MergeCheckpointDeltas(transaction_t checkpoint_id) const;
 	//! Returns true, if all indexes
 	//! Find the foreign key matching the keys.
 	optional_ptr<IndexEntry> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);
@@ -105,7 +132,7 @@ public:
 	void VerifyForeignKey(optional_ptr<LocalTableStorage> storage, const vector<PhysicalIndex> &fk_keys,
 	                      DataChunk &chunk, ConflictManager &conflict_manager);
 	//! Get the combined column ids of the indexes.
-	unordered_set<column_t> GetRequiredColumns();
+	unordered_set<column_t> GetRequiredColumns() const;
 	//! Serialize all indexes of the table.
 	IndexSerializationResult SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
 
@@ -160,7 +187,5 @@ public:
 
 template <>
 IndexEntry &TableIndexIterationHelper<IndexEntry>::TableIndexIterator::operator*() const;
-template <>
-Index &TableIndexIterationHelper<Index>::TableIndexIterator::operator*() const;
 
 } // namespace duckdb
