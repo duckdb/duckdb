@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/query_context.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector.hpp"
