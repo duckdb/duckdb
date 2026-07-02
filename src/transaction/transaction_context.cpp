@@ -1,4 +1,5 @@
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
