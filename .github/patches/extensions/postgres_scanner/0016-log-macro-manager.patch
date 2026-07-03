@@ -1,0 +1,8 @@
+--- a/src/postgres_connection.cpp
++++ b/src/postgres_connection.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/storage/table_storage_info.hpp"
++#include "duckdb/logging/logger.hpp"
+ #include "duckdb/main/client_context.hpp"
+ #include "duckdb/parser/column_list.hpp"
+ #include "duckdb/parser/parser.hpp"
