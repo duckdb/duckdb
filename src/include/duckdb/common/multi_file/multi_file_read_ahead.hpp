@@ -90,6 +90,8 @@ private:
 	void Drain() noexcept;
 
 	idx_t read_ahead_depth;
+	//! Whether the depth came from the -1 auto mode, enables the byte budget and the producer slot exemption
+	const bool auto_depth;
 	//! Maximum bytes of I/O scheduled ahead of decoding, additional jobs wait until claims free up bytes.
 	const idx_t io_byte_budget;
 

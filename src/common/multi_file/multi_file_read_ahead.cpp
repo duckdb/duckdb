@@ -12,7 +12,8 @@ namespace duckdb {
 // Async task that runs one scan job's I/O and releases the job's pending count when done.
 class ReadAheadIOTask : public BaseExecutorTask {
 public:
-	ReadAheadIOTask(TaskExecutor &executor, unique_ptr<AsyncTask> task_p, shared_ptr<ReadAheadJobCompletion> completion_p)
+	ReadAheadIOTask(TaskExecutor &executor, unique_ptr<AsyncTask> task_p,
+	                shared_ptr<ReadAheadJobCompletion> completion_p)
 	    : BaseExecutorTask(executor), task(std::move(task_p)), completion(std::move(completion_p)) {
 	}
 	~ReadAheadIOTask() override {
@@ -52,10 +53,9 @@ bool ReadAheadJobCompletion::TryPark(const InterruptState &interrupt_state) {
 }
 
 MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p)
-    : read_ahead_depth(read_ahead_depth_p),
-      io_byte_budget(Settings::Get<ReadAheadDepthSetting>(context) == -1
-                         ? BufferManager::GetBufferManager(context).GetMaxMemory() / 4
-                         : NumericLimits<idx_t>::Maximum()) {
+    : read_ahead_depth(read_ahead_depth_p), auto_depth(Settings::Get<ReadAheadDepthSetting>(context) == -1),
+      io_byte_budget(auto_depth ? BufferManager::GetBufferManager(context).GetMaxMemory() / 4
+                                : NumericLimits<idx_t>::Maximum()) {
 	D_ASSERT(read_ahead_depth_p > 0);
 	executor = make_uniq<TaskExecutor>(context, TaskSchedulerType::ASYNC);
 }
@@ -84,7 +84,11 @@ bool MultiFileReadAhead::TryReserveSlot() {
 	if (pending_io_bytes.load() >= io_byte_budget) {
 		return false;
 	}
-	if (active_jobs.fetch_add(1) >= read_ahead_depth) {
+	if (auto_depth) {
+		if (active_jobs.load() >= read_ahead_depth) {
+			return false;
+		}
+	} else if (active_jobs.fetch_add(1) >= read_ahead_depth) {
 		--active_jobs;
 		return false;
 	}
@@ -93,7 +97,9 @@ bool MultiFileReadAhead::TryReserveSlot() {
 }
 
 void MultiFileReadAhead::AbortProduce() {
-	ReleaseSlot();
+	if (!auto_depth) {
+		ReleaseSlot();
+	}
 	--active_producers;
 }
 
@@ -108,6 +114,10 @@ void MultiFileReadAhead::PushJob(unique_ptr<MultiFileScanJob> job, vector<unique
 		job->io_bytes += task->GetIOSize();
 	}
 	pending_io_bytes += job->io_bytes;
+	if (auto_depth) {
+		// the job starts occupying a depth slot only now that it is queued ahead of decoding
+		++active_jobs;
+	}
 	// schedule the reads detached on the async pool right away
 	for (auto &task : io_tasks) {
 		executor->ScheduleTask(make_uniq<ReadAheadIOTask>(*executor, std::move(task), completion));

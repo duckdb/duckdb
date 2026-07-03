@@ -1451,6 +1451,27 @@ ParquetScanFilter::ParquetScanFilter(ClientContext &context, ProjectionIndex fil
 ParquetScanFilter::~ParquetScanFilter() {
 }
 
+unique_ptr<CachingFileHandle> ParquetReader::OpenScanHandle(ClientContext &context, bool &prefetch_mode) const {
+	auto flags = FileFlags::FILE_FLAGS_READ;
+	prefetch_mode = ShouldAndCanPrefetch(context, *file_handle);
+	if (prefetch_mode) {
+		flags |= FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
+		if (file_handle->IsRemoteFile()) {
+			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+		}
+	}
+	return fs.OpenFile(context, file, flags);
+}
+
+void ParquetReader::PrepareReader(ClientContext &context, GlobalTableFunctionState &) {
+	// pre-open the scan handle while the file is opened, so the first InitializeScan skips its file-open
+	bool prefetch_mode;
+	auto handle = OpenScanHandle(context, prefetch_mode);
+	lock_guard<mutex> guard(prewarm_lock);
+	prewarmed_scan_handle = std::move(handle);
+	prewarmed_prefetch_mode = prefetch_mode;
+}
+
 void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state, idx_t group_to_read) const {
 	state.resuming_payload = false;
 	state.offset_in_group = 0;
@@ -1458,18 +1479,18 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.group_index = group_to_read;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 	if (!state.file_handle || state.file_handle->GetPath() != file_handle->GetPath()) {
-		auto flags = FileFlags::FILE_FLAGS_READ;
-		if (ShouldAndCanPrefetch(context, *file_handle)) {
-			state.prefetch_mode = true;
-			flags |= FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
-			if (file_handle->IsRemoteFile()) {
-				flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
-			}
-		} else {
-			state.prefetch_mode = false;
+		unique_ptr<CachingFileHandle> scan_handle;
+		bool prefetch_mode;
+		{
+			lock_guard<mutex> guard(prewarm_lock);
+			scan_handle = std::move(prewarmed_scan_handle);
+			prefetch_mode = prewarmed_prefetch_mode;
 		}
-
-		state.file_handle = fs.OpenFile(context, file, flags);
+		if (!scan_handle) {
+			scan_handle = OpenScanHandle(context, prefetch_mode);
+		}
+		state.prefetch_mode = prefetch_mode;
+		state.file_handle = std::move(scan_handle);
 	}
 	state.scan_filters.clear();
 	if (filters) {
