@@ -32,8 +32,6 @@ public:
 
 	TableIndex cte_index;
 	optional_idx delim_index;
-	optional_idx cte_exchange_consumer;
-	bool cte_direct_fanout = false;
 
 public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;

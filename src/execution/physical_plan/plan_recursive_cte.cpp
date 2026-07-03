@@ -120,7 +120,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 			auto &source = Make<PhysicalCTEConsumerSource>(op.chunk_types, op.estimated_cardinality, op.cte_index,
 			                                               exchange->second, consumer_idx);
 			cast_chunk_scan.cte_source = source;
-			cast_chunk_scan.cte_exchange_consumer = consumer_idx;
 		} else {
 			auto cte = recursive_cte_tables.find(op.cte_index);
 			if (cte == recursive_cte_tables.end()) {

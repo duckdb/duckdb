@@ -117,7 +117,6 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 				current.SetExternalInput();
 				current.AddExternalFinishDependency(cte_dependency);
 				cte_dependency->AddDataflowDependency(current_pipeline);
-				cte_direct_fanout = true;
 				source.direct_fanout = true;
 				state.SetPipelineSource(current, *cte_source);
 				return;
@@ -164,14 +163,6 @@ InsertionOrderPreservingMap<string> PhysicalColumnDataScan::ParamsToString() con
 	case PhysicalOperatorType::CTE_SCAN:
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
 		result["CTE Index"] = StringUtil::Format("%llu", cte_index.index);
-		if (cte_direct_fanout) {
-			result["CTE Mode"] = "DIRECT_FANOUT";
-		} else if (cte_source) {
-			result["CTE Mode"] = "STREAMING_FANOUT";
-			if (cte_exchange_consumer.IsValid()) {
-				result["Consumer"] = StringUtil::Format("%llu", cte_exchange_consumer.GetIndex());
-			}
-		}
 		break;
 	}
 	default:

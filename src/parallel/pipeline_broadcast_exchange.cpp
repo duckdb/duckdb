@@ -151,23 +151,22 @@ struct PipelineBroadcastExchange::BroadcastSpool {
 		auto &entry = chunks[chunk_idx];
 		result.Reset();
 
+		auto row_idx = entry.row_offset;
+		auto offset = SeekLocked(position, entry, row_idx, reader);
+		auto available = reader.scan_chunk.size() - offset;
+		if (available >= entry.row_count) {
+			if (offset == 0 && entry.row_count == reader.scan_chunk.size()) {
+				result.Reference(reader.scan_chunk);
+			} else {
+				result.Slice(reader.scan_chunk, offset, offset + entry.row_count);
+			}
+			return;
+		}
+
 		idx_t rows_read = 0;
 		while (rows_read < entry.row_count) {
-			auto row_idx = entry.row_offset + rows_read;
-			if (reader.observed_generation != append_generation && !reader.Contains(row_idx)) {
-				ResetReaderLocked(reader);
-			}
-			if (!collection.Seek(row_idx, reader.scan_state, reader.scan_chunk)) {
-				throw InternalException(
-				    "Failed to read pipeline broadcast spool chunk (position=%llu, base=%llu, next=%llu, row=%llu, "
-				    "row_offset=%llu, row_count=%llu, current=%llu, next_row=%llu, generation=%llu, observed=%llu)",
-				    position, base_position, next_position, row_idx, entry.row_offset, entry.row_count,
-				    reader.scan_state.current_row_index, reader.scan_state.next_row_index, append_generation,
-				    reader.observed_generation);
-			}
-			D_ASSERT(reader.scan_state.current_row_index <= row_idx);
-			auto offset = row_idx - reader.scan_state.current_row_index;
-			D_ASSERT(offset < reader.scan_chunk.size());
+			row_idx = entry.row_offset + rows_read;
+			offset = SeekLocked(position, entry, row_idx, reader);
 			auto append_count = MinValue<idx_t>(reader.scan_chunk.size() - offset, entry.row_count - rows_read);
 			auto sel = SelectionVector::Incremental(offset, append_count);
 			result.Append(reader.scan_chunk, sel, append_count);
@@ -186,11 +185,6 @@ struct PipelineBroadcastExchange::BroadcastSpool {
 		return retired_bytes;
 	}
 
-	void Clear() {
-		lock_guard<mutex> guard(lock);
-		chunks.clear();
-	}
-
 	bool HasPosition(idx_t position) {
 		lock_guard<mutex> guard(lock);
 		return position >= base_position && position < next_position;
@@ -205,6 +199,24 @@ struct PipelineBroadcastExchange::BroadcastSpool {
 	void ResetReaderLocked(BroadcastSpoolReader &reader) {
 		collection.InitializeScan(reader.scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
 		reader.observed_generation = append_generation;
+	}
+
+	idx_t SeekLocked(idx_t position, const ChunkEntry &entry, idx_t row_idx, BroadcastSpoolReader &reader) {
+		if (reader.observed_generation != append_generation && !reader.Contains(row_idx)) {
+			ResetReaderLocked(reader);
+		}
+		if (!collection.Seek(row_idx, reader.scan_state, reader.scan_chunk)) {
+			throw InternalException(
+			    "Failed to read pipeline broadcast spool chunk (position=%llu, base=%llu, next=%llu, row=%llu, "
+			    "row_offset=%llu, row_count=%llu, current=%llu, next_row=%llu, generation=%llu, observed=%llu)",
+			    position, base_position, next_position, row_idx, entry.row_offset, entry.row_count,
+			    reader.scan_state.current_row_index, reader.scan_state.next_row_index, append_generation,
+			    reader.observed_generation);
+		}
+		D_ASSERT(reader.scan_state.current_row_index <= row_idx);
+		auto offset = row_idx - reader.scan_state.current_row_index;
+		D_ASSERT(offset < reader.scan_chunk.size());
+		return offset;
 	}
 
 	mutex lock;
@@ -456,6 +468,9 @@ SinkResultType PipelineBroadcastExchange::Append(DataChunk &chunk, const Interru
 		if (cancelled || ShouldStopProducerLocked()) {
 			return SinkResultType::FINISHED;
 		}
+		if (ShouldCreateSharedSpoolLocked()) {
+			CreateSharedSpoolLocked();
+		}
 		DetachLaggingConsumersLocked();
 		if (ShouldThrottleProducerLocked()) {
 			blocked_writers.push_back(interrupt_state);
@@ -471,16 +486,16 @@ SinkResultType PipelineBroadcastExchange::Append(DataChunk &chunk, const Interru
 		if (cancelled || ShouldStopProducerLocked()) {
 			return SinkResultType::FINISHED;
 		}
+		if (ShouldCreateSharedSpoolLocked()) {
+			CreateSharedSpoolLocked();
+		}
 		DetachLaggingConsumersLocked();
 		if (ShouldThrottleProducerLocked()) {
 			blocked_writers.push_back(interrupt_state);
 			return SinkResultType::BLOCKED;
 		}
 		BufferedChunk buffered {copy, bytes};
-		if (UseSharedSpoolLocked()) {
-			if (!shared_spool) {
-				shared_spool = make_shared_ptr<BroadcastSpool>(context, types, next_position);
-			}
+		if (shared_spool) {
 			shared_spool->Append(*copy, bytes);
 			shared_buffered_bytes += bytes;
 		} else if (HasActiveSharedConsumersLocked()) {
@@ -779,7 +794,7 @@ bool PipelineBroadcastExchange::ShouldStopProducerLocked() const {
 }
 
 bool PipelineBroadcastExchange::ShouldThrottleProducerLocked() const {
-	if (UseSharedSpoolLocked()) {
+	if (shared_spool) {
 		return false;
 	}
 	return active_consumers > 0 && shared_buffered_bytes >= high_watermark;
@@ -794,8 +809,18 @@ bool PipelineBroadcastExchange::HasActiveSharedConsumersLocked() const {
 	return false;
 }
 
-bool PipelineBroadcastExchange::UseSharedSpoolLocked() const {
-	return direct_pipelines.empty() && consumers.size() > 1;
+bool PipelineBroadcastExchange::ShouldCreateSharedSpoolLocked() const {
+	return !shared_spool && direct_pipelines.empty() && consumers.size() > 1 &&
+	       shared_buffered_bytes >= high_watermark;
+}
+
+void PipelineBroadcastExchange::CreateSharedSpoolLocked() {
+	D_ASSERT(!shared_spool);
+	shared_spool = make_shared_ptr<BroadcastSpool>(context, types, base_position);
+	for (auto &chunk : chunks) {
+		shared_spool->Append(*chunk.chunk, chunk.bytes);
+	}
+	chunks.clear();
 }
 
 void PipelineBroadcastExchange::DetachLaggingConsumersLocked() {
@@ -903,7 +928,6 @@ void PipelineBroadcastExchange::ClearDetachedBufferLocked(ConsumerState &consume
 	if (!consumer.detached_spool) {
 		return;
 	}
-	consumer.detached_spool->Clear();
 	consumer.detached_spool.reset();
 }
 

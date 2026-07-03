@@ -125,7 +125,8 @@ private:
 	bool ShouldStopProducerLocked() const;
 	bool ShouldThrottleProducerLocked() const;
 	bool HasActiveSharedConsumersLocked() const;
-	bool UseSharedSpoolLocked() const;
+	bool ShouldCreateSharedSpoolLocked() const;
+	void CreateSharedSpoolLocked();
 	void DetachLaggingConsumersLocked();
 	void DetachConsumerLocked(ConsumerState &consumer);
 	void RetireChunksLocked();
