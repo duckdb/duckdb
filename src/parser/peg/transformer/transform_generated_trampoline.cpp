@@ -186,9 +186,14 @@ static const TransformFrameOps EXPRESSION_STATEMENT_OPS = {
 static const TransformFrameOps EXPRESSION_ALIAS_OPS = {"ExpressionAlias",
                                                        &PEGTransformerFactory::InitializeExpressionAliasTrampoline,
                                                        &PEGTransformerFactory::FinalizeExpressionAliasTrampoline};
+static const TransformFrameOps INDEX_NAME_OPS = {"IndexName", &PEGTransformerFactory::InitializeIndexNameTrampoline,
+                                                 &PEGTransformerFactory::FinalizeIndexNameTrampoline};
 static const TransformFrameOps CONSTRAINT_NAME_OPS = {"ConstraintName",
                                                       &PEGTransformerFactory::InitializeConstraintNameTrampoline,
                                                       &PEGTransformerFactory::FinalizeConstraintNameTrampoline};
+static const TransformFrameOps SEQUENCE_NAME_OPS = {"SequenceName",
+                                                    &PEGTransformerFactory::InitializeSequenceNameTrampoline,
+                                                    &PEGTransformerFactory::FinalizeSequenceNameTrampoline};
 static const TransformFrameOps COLLATION_NAME_OPS = {"CollationName",
                                                      &PEGTransformerFactory::InitializeCollationNameTrampoline,
                                                      &PEGTransformerFactory::FinalizeCollationNameTrampoline};
@@ -868,6 +873,8 @@ static const TransformFrameOps DOTTED_IDENTIFIER_OPS = {"DottedIdentifier",
 static const TransformFrameOps DOT_COL_LABEL_OPS = {"DotColLabel",
                                                     &PEGTransformerFactory::InitializeDotColLabelTrampoline,
                                                     &PEGTransformerFactory::FinalizeDotColLabelTrampoline};
+static const TransformFrameOps IDENTIFIER_OPS = {"Identifier", &PEGTransformerFactory::InitializeIdentifierTrampoline,
+                                                 &PEGTransformerFactory::FinalizeIdentifierTrampoline};
 static const TransformFrameOps COL_ID_OPS = {"ColId", &PEGTransformerFactory::InitializeColIdTrampoline,
                                              &PEGTransformerFactory::FinalizeColIdTrampoline};
 static const TransformFrameOps COL_ID_OR_STRING_OPS = {"ColIdOrString",
@@ -2829,7 +2836,9 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"CommentValue", &COMMENT_VALUE_OPS},
 	    {"ExpressionStatement", &EXPRESSION_STATEMENT_OPS},
 	    {"ExpressionAlias", &EXPRESSION_ALIAS_OPS},
+	    {"IndexName", &INDEX_NAME_OPS},
 	    {"ConstraintName", &CONSTRAINT_NAME_OPS},
+	    {"SequenceName", &SEQUENCE_NAME_OPS},
 	    {"CollationName", &COLLATION_NAME_OPS},
 	    {"NumberLiteral", &NUMBER_LITERAL_OPS},
 	    {"StringLiteral", &STRING_LITERAL_OPS},
@@ -3073,6 +3082,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ColumnIdList", &COLUMN_ID_LIST_OPS},
 	    {"DottedIdentifier", &DOTTED_IDENTIFIER_OPS},
 	    {"DotColLabel", &DOT_COL_LABEL_OPS},
+	    {"Identifier", &IDENTIFIER_OPS},
 	    {"ColId", &COL_ID_OPS},
 	    {"ColIdOrString", &COL_ID_OR_STRING_OPS},
 	    {"TypeFuncName", &TYPE_FUNC_NAME_OPS},
@@ -5040,6 +5050,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExpressionAliasT
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+void PEGTransformerFactory::InitializeIndexNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                          TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeIndexNameTrampoline(PEGTransformer &transformer,
+                                                                                    TransformStack &stack,
+                                                                                    TransformStackFrame &frame) {
+	auto result = frame.parse_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
 void PEGTransformerFactory::InitializeConstraintNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
@@ -5053,6 +5075,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeConstraintNameTr
 	auto col_id_or_string = frame.TakeResult<Identifier>(0);
 	auto result = TransformConstraintName(transformer, col_id_or_string);
 	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeSequenceNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSequenceNameTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	auto result = frame.parse_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	return make_uniq<TypedTransformResult<string>>(result);
 }
 
 void PEGTransformerFactory::InitializeCollationNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -9914,6 +9948,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDotColLabelTramp
                                                                                       TransformStackFrame &frame) {
 	auto col_label = frame.TakeResult<string>(0);
 	auto result = TransformDotColLabel(transformer, col_label);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+void PEGTransformerFactory::InitializeIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                           TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeIdentifierTrampoline(PEGTransformer &transformer,
+                                                                                     TransformStack &stack,
+                                                                                     TransformStackFrame &frame) {
+	auto result = frame.parse_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 

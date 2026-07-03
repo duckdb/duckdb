@@ -1330,7 +1330,7 @@ class UseGramPreviewEmitter:
             return f"TransformNumberLiteral(transformer, {parse_expr})"
         if matcher == "operator":
             return f"{parse_expr}.Cast<OperatorParseResult>().operator_token"
-        if matcher == "identifier_string":
+        if matcher in ("identifier", "identifier_string"):
             return f"{parse_expr}.Cast<IdentifierParseResult>().identifier.GetIdentifierName()"
         raise NotImplementedError(f"unsupported matcher override: {matcher}")
 
