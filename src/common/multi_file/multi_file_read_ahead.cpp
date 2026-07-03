@@ -180,6 +180,14 @@ void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
 	while (!TryCompleteJobIO(job)) {
 		TaskScheduler::YieldThread();
 	}
+	ThrowIfError();
+}
+
+void MultiFileReadAhead::PushError(ErrorData error) {
+	executor->PushError(std::move(error));
+}
+
+void MultiFileReadAhead::ThrowIfError() {
 	if (executor->HasError()) {
 		executor->ThrowError();
 	}

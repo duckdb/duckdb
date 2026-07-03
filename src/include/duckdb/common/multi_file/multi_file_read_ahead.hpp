@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/deque.hpp"
@@ -82,6 +83,11 @@ public:
 	bool TryCompleteJobIO(MultiFileScanJob &job);
 	//! Block until the claimed job's scheduled I/O has completed
 	void WaitForJob(MultiFileScanJob &job);
+
+	//! Push an error onto the async executor
+	void PushError(ErrorData error);
+	//! Throw if any read-ahead thread or task pushed an error
+	void ThrowIfError();
 
 private:
 	//! Release a look-ahead slot

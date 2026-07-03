@@ -766,6 +766,8 @@ public:
 	static bool TryProduceJob(ClientContext &context, const MultiFileBindData &bind_data,
 	                          MultiFileGlobalState &gstate) {
 		auto &read_ahead = *gstate.read_ahead;
+		// surface errors pushed by other producers: every consumer passes through here while spinning
+		read_ahead.ThrowIfError();
 		if (read_ahead.IsDone() || !read_ahead.TryReserveSlot()) {
 			return false;
 		}
@@ -789,11 +791,15 @@ public:
 				io_tasks = scheduled.ExtractAsyncTasks();
 			}
 			read_ahead.PushJob(std::move(job), std::move(io_tasks));
-		} catch (...) {
-			// give the slot back so other threads do not wait for a job that will never come
+		} catch (std::exception &ex) {
+			read_ahead.PushError(ErrorData(ex));
 			read_ahead.AbortProduce();
 			throw;
-		}
+		} catch (...) { // LCOV_EXCL_START
+			read_ahead.PushError(ErrorData("Unknown exception while producing a read-ahead job"));
+			read_ahead.AbortProduce();
+			throw;
+		} // LCOV_EXCL_STOP
 		return true;
 	}
 
