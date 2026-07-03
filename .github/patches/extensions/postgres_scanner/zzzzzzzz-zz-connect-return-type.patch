@@ -1,0 +1,14 @@
+diff --git a/src/postgres_query.cpp b/src/postgres_query.cpp
+index 8096f14..4f31936 100644
+--- a/src/postgres_query.cpp
++++ b/src/postgres_query.cpp
+@@ -85,6 +85,9 @@ static unique_ptr<FunctionData> PGQueryBind(ClientContext &context, TableFunctio
+ 		// the prepare/describe just done — no extra round-trip — and defer execution to
+ 		// InitGlobalState (execution time, not bind, so EXPLAIN does not run it).
+ 		result->command_only = true;
++		// No result set (DDL, or DML without RETURNING): flag the return type so a CONNECT-routed
++		// statement reports as NOTHING instead of a spurious result table.
++		input.table_function.call_return_type = StatementReturnType::NOTHING;
+ 		return_types.emplace_back(LogicalType::BOOLEAN);
+ 		names.emplace_back("Success");
+ 		result->SetCatalog(pg_catalog);
