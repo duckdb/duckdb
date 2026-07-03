@@ -49,18 +49,6 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 	throw ParserException("Unexpected ParseResult type in identifier transformation.");
 }
 
-void PEGTransformerFactory::InitializeColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack,
-                                                         TransformStackFrame &frame) {
-	frame.ReserveChildSlots(0);
-}
-
-unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColLabelTrampoline(PEGTransformer &transformer,
-                                                                                   TransformStack &stack,
-                                                                                   TransformStackFrame &frame) {
-	auto result = TransformIdentifierOrKeyword(transformer, frame.parse_result);
-	return make_uniq<TypedTransformResult<string>>(result);
-}
-
 LogicalType PEGTransformerFactory::TransformType(PEGTransformer &transformer,
                                                  unique_ptr<ParsedExpression> type_variations,
                                                  const optional<vector<int64_t>> &array_bounds) {

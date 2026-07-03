@@ -1238,11 +1238,13 @@ DotColLabel <- '.' ColLabel
 Identifier <- QuotedIdentifier / PlainIdentifier
 
 ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier
-ColIdOrString <- ColId / StringLiteral
+ColIdOrString <- ColId / StringLiteralIdentifier
 TypeFuncName <- UnreservedKeyword / TypeNameKeyword / FuncNameKeyword / Identifier
 TypeName <- UnreservedKeyword / TypeNameKeyword / Identifier
 ColLabel <- ReservedKeyword / UnreservedKeyword / ColumnNameKeyword / FuncNameKeyword / TypeNameKeyword / Identifier
-ColLabelOrString <- ColLabel / StringLiteral
+ColLabelOrString <- ColLabelIdentifier / StringLiteralIdentifier
+ColLabelIdentifier <- ColLabel
+StringLiteralIdentifier <- StringLiteral
 GeneratedColumn <- Generated? 'AS' Parens(Expression) GeneratedColumnType?
 
 Generated <- 'GENERATED' AlwaysOrByDefault?

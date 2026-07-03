@@ -1616,6 +1616,8 @@ IdentifierType:
     - ColId
     - ColIdOrString
     - ColLabelOrString
+    - ColLabelIdentifier
+    - StringLiteralIdentifier
     - TypeFuncName
     - IdentifierColId
     - ReservedIdentifierOrStringLiteral
@@ -1739,8 +1741,6 @@ excluded_rules:
   - StartOrBegin
   - Transaction
   - VariableAssign
-  - ColLabel
-  - ColLabelOrString
   - RowOrRows
   - FirstOrNext
   - Recursive

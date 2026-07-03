@@ -23,11 +23,6 @@ rules:
     init: InitializeUnpivotStatementTrampoline
     finalize: FinalizeUnpivotStatementTrampoline
 
-  ColLabel:
-    mode: manual
-    init: InitializeColLabelTrampoline
-    finalize: FinalizeColLabelTrampoline
-
   Expression:
     mode: forward
 
@@ -49,11 +44,6 @@ rules:
     mode: manual
     init: InitializePrefixExpressionTrampoline
     finalize: FinalizePrefixExpressionTrampoline
-
-  ColLabelOrString:
-    mode: manual
-    init: InitializeColLabelOrStringTrampoline
-    finalize: FinalizeColLabelOrStringTrampoline
 
   OverClause:
     mode: manual

@@ -161,7 +161,6 @@ void PEGTransformerFactory::RegisterCommon() {
 
 void PEGTransformerFactory::RegisterCreateTable() {
 	// create_table.gram
-	REGISTER_TRANSFORM(TransformColLabelOrString);
 	REGISTER_TRANSFORM(TransformIdentifier);
 }
 
@@ -190,7 +189,6 @@ void PEGTransformerFactory::RegisterSelect() {
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("PragmaName", &TransformIdentifierOrKeyword);
 	Register("TypeName", &TransformIdentifierOrKeyword);
-	Register("ColLabel", &TransformIdentifierOrKeyword);
 	Register("PlainIdentifier", &TransformIdentifierOrKeyword);
 	Register("QuotedIdentifier", &TransformIdentifierOrKeyword);
 	Register("ReservedKeyword", &TransformIdentifierOrKeyword);

@@ -187,40 +187,13 @@ QualifiedName PEGTransformerFactory::TransformIdentifierOrStringLiteral(PEGTrans
 	return QualifiedName(Identifier(child));
 }
 
-string PEGTransformerFactory::TransformColLabelOrString(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	if (choice_pr.GetResult().type == ParseResultType::STRING) {
-		return choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
-	}
-	return transformer.Transform<string>(choice_pr.GetResult());
+Identifier PEGTransformerFactory::TransformColLabelIdentifier(PEGTransformer &transformer, const string &col_label) {
+	return Identifier(col_label);
 }
 
-void PEGTransformerFactory::InitializeColLabelOrStringTrampoline(PEGTransformer &transformer, TransformStack &stack,
-                                                                 TransformStackFrame &frame) {
-	frame.ReserveChildSlots(0);
-}
-
-unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColLabelOrStringTrampoline(PEGTransformer &transformer,
-                                                                                           TransformStack &stack,
-                                                                                           TransformStackFrame &frame) {
-	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto &choice_result = choice_pr.GetResult();
-	Identifier result;
-	if (choice_result.type == ParseResultType::STRING) {
-		result = Identifier(choice_result.Cast<StringLiteralParseResult>().result);
-	} else {
-		result = Identifier(TransformIdentifierOrKeyword(transformer, choice_result));
-	}
-	return make_uniq<TypedTransformResult<Identifier>>(result);
-}
-
-Identifier PEGTransformerFactory::TransformColIdOrString(PEGTransformer &transformer, ParseResult &choice_result) {
-	if (choice_result.type == ParseResultType::STRING) {
-		return Identifier(choice_result.Cast<StringLiteralParseResult>().result);
-	}
-	return transformer.Transform<Identifier>(choice_result);
+Identifier PEGTransformerFactory::TransformStringLiteralIdentifier(PEGTransformer &transformer,
+                                                                   const string &string_literal) {
+	return Identifier(string_literal);
 }
 
 string PEGTransformerFactory::TransformIdentifier(PEGTransformer &transformer, ParseResult &parse_result) {

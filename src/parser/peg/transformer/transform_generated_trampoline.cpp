@@ -891,6 +891,12 @@ static const TransformFrameOps COL_LABEL_OPS = {"ColLabel", &PEGTransformerFacto
 static const TransformFrameOps COL_LABEL_OR_STRING_OPS = {"ColLabelOrString",
                                                           &PEGTransformerFactory::InitializeColLabelOrStringTrampoline,
                                                           &PEGTransformerFactory::FinalizeColLabelOrStringTrampoline};
+static const TransformFrameOps COL_LABEL_IDENTIFIER_OPS = {
+    "ColLabelIdentifier", &PEGTransformerFactory::InitializeColLabelIdentifierTrampoline,
+    &PEGTransformerFactory::FinalizeColLabelIdentifierTrampoline};
+static const TransformFrameOps STRING_LITERAL_IDENTIFIER_OPS = {
+    "StringLiteralIdentifier", &PEGTransformerFactory::InitializeStringLiteralIdentifierTrampoline,
+    &PEGTransformerFactory::FinalizeStringLiteralIdentifierTrampoline};
 static const TransformFrameOps GENERATED_COLUMN_OPS = {"GeneratedColumn",
                                                        &PEGTransformerFactory::InitializeGeneratedColumnTrampoline,
                                                        &PEGTransformerFactory::FinalizeGeneratedColumnTrampoline};
@@ -3092,6 +3098,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"TypeFuncName", &TYPE_FUNC_NAME_OPS},
 	    {"ColLabel", &COL_LABEL_OPS},
 	    {"ColLabelOrString", &COL_LABEL_OR_STRING_OPS},
+	    {"ColLabelIdentifier", &COL_LABEL_IDENTIFIER_OPS},
+	    {"StringLiteralIdentifier", &STRING_LITERAL_IDENTIFIER_OPS},
 	    {"GeneratedColumn", &GENERATED_COLUMN_OPS},
 	    {"GeneratedColumnType", &GENERATED_COLUMN_TYPE_OPS},
 	    {"CommitAction", &COMMIT_ACTION_OPS},
@@ -10059,11 +10067,8 @@ void PEGTransformerFactory::InitializeColIdOrStringTrampoline(PEGTransformer &tr
 	    choice_result.type == ParseResultType::KEYWORD || choice_result.type == ParseResultType::STRING) {
 		return;
 	}
-	if (ops_entry == ops_map.end() && (choice_result.name == "StringLiteral")) {
-		return;
-	}
 	if (ops_entry == ops_map.end()) {
-		return;
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
 	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
 }
@@ -10071,13 +10076,21 @@ void PEGTransformerFactory::InitializeColIdOrStringTrampoline(PEGTransformer &tr
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColIdOrStringTrampoline(PEGTransformer &transformer,
                                                                                         TransformStack &stack,
                                                                                         TransformStackFrame &frame) {
-	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
-	Identifier result {};
+	Identifier result;
 	if (frame.child_results[0]) {
 		result = frame.TakeResult<Identifier>(0);
 	} else {
-		result = TransformColIdOrString(transformer, choice_result);
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier;
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = Identifier(choice_result.Cast<KeywordParseResult>().keyword);
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = Identifier(choice_result.Cast<StringLiteralParseResult>().result);
+		} else {
+			result = Identifier(TransformIdentifierOrKeyword(transformer, choice_result));
+		}
 	}
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
@@ -10124,6 +10137,118 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTypeFuncNameTram
 			result = Identifier(TransformIdentifierOrKeyword(transformer, choice_result));
 		}
 	}
+	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                         TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
+		return;
+	}
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColLabelTrampoline(PEGTransformer &transformer,
+                                                                                   TransformStack &stack,
+                                                                                   TransformStackFrame &frame) {
+	string result;
+	if (frame.child_results[0]) {
+		result = frame.TakeResult<string>(0);
+	} else {
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			result = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			result = transformer.Transform<string>(choice_result);
+		}
+	}
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+void PEGTransformerFactory::InitializeColLabelOrStringTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (choice_result.name.empty() || choice_result.type == ParseResultType::IDENTIFIER ||
+	    choice_result.type == ParseResultType::KEYWORD || choice_result.type == ParseResultType::STRING) {
+		return;
+	}
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeColLabelOrStringTrampoline(PEGTransformer &transformer,
+                                                                                           TransformStack &stack,
+                                                                                           TransformStackFrame &frame) {
+	Identifier result;
+	if (frame.child_results[0]) {
+		result = frame.TakeResult<Identifier>(0);
+	} else {
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier;
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = Identifier(choice_result.Cast<KeywordParseResult>().keyword);
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = Identifier(choice_result.Cast<StringLiteralParseResult>().result);
+		} else {
+			result = Identifier(TransformIdentifierOrKeyword(transformer, choice_result));
+		}
+	}
+	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeColLabelIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	frame.ReserveChildSlots(1);
+	stack.PushFrame(list_pr.GetChild(0), COL_LABEL_OPS, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeColLabelIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	auto col_label = frame.TakeResult<string>(0);
+	auto result = TransformColLabelIdentifier(transformer, col_label);
+	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeStringLiteralIdentifierTrampoline(PEGTransformer &transformer,
+                                                                        TransformStack &stack,
+                                                                        TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeStringLiteralIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                 TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(0));
+	auto result = TransformStringLiteralIdentifier(transformer, string_literal);
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 

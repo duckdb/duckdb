@@ -444,14 +444,6 @@ public:
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeUnpivotStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                         TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeColLabelOrStringTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                 TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeColLabelOrStringTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializeLiteralExpressionTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                  TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -1823,6 +1815,24 @@ public:
 	                                             TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeTypeFuncNameTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                         TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeColLabelTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeColLabelOrStringTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                 TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeColLabelOrStringTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeColLabelIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                   TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeColLabelIdentifierTrampoline(PEGTransformer &transformer,
+	                                                                             TransformStack &stack,
+	                                                                             TransformStackFrame &frame);
+	static void InitializeStringLiteralIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                        TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeStringLiteralIdentifierTrampoline(PEGTransformer &transformer,
+	                                                                                  TransformStack &stack,
+	                                                                                  TransformStackFrame &frame);
 	static void InitializeGeneratedColumnTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -4657,7 +4667,6 @@ public:
 	static string ExtractFormat(const string &file_path);
 
 	// create_table.gram
-	static string TransformColLabelOrString(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformIdentifier(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// expression.gram
@@ -5784,9 +5793,18 @@ public:
 	                                                               ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformColIdOrStringInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
-	static Identifier TransformColIdOrString(PEGTransformer &transformer, ParseResult &choice_result);
 	static unique_ptr<TransformResultValue> TransformTypeFuncNameInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformColLabelInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformColLabelOrStringInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformColLabelIdentifierInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static Identifier TransformColLabelIdentifier(PEGTransformer &transformer, const string &col_label);
+	static unique_ptr<TransformResultValue> TransformStringLiteralIdentifierInternal(PEGTransformer &transformer,
+	                                                                                 ParseResult &parse_result);
+	static Identifier TransformStringLiteralIdentifier(PEGTransformer &transformer, const string &string_literal);
 	static unique_ptr<TransformResultValue> TransformGeneratedColumnInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer, const bool &has_result,

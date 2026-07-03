@@ -3194,7 +3194,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColIdOrStringIn
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = TransformColIdOrString(transformer, choice_pr.GetResult());
+	auto result = transformer.Transform<Identifier>(choice_pr.GetResult());
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
@@ -3212,6 +3212,50 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeFuncNameInt
 	} else {
 		result = transformer.Transform<Identifier>(choice_pr.GetResult());
 	}
+	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColLabelInternal(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	string result;
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		result = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	} else if (choice_pr.GetResult().type == ParseResultType::KEYWORD) {
+		result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	} else if (choice_pr.GetResult().type == ParseResultType::STRING) {
+		result = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+	} else if (choice_pr.GetResult().type == ParseResultType::OPERATOR) {
+		result = choice_pr.GetResult().Cast<OperatorParseResult>().operator_token;
+	} else {
+		result = transformer.Transform<string>(choice_pr.GetResult());
+	}
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColLabelOrStringInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<Identifier>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformColLabelIdentifierInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_label = transformer.Transform<string>(list_pr.GetChild(0));
+	auto result = TransformColLabelIdentifier(transformer, col_label);
+	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformStringLiteralIdentifierInternal(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(0));
+	auto result = TransformStringLiteralIdentifier(transformer, string_literal);
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
@@ -10543,6 +10587,10 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ColId", &PEGTransformerFactory::TransformColIdInternal},
 	    {"ColIdOrString", &PEGTransformerFactory::TransformColIdOrStringInternal},
 	    {"TypeFuncName", &PEGTransformerFactory::TransformTypeFuncNameInternal},
+	    {"ColLabel", &PEGTransformerFactory::TransformColLabelInternal},
+	    {"ColLabelOrString", &PEGTransformerFactory::TransformColLabelOrStringInternal},
+	    {"ColLabelIdentifier", &PEGTransformerFactory::TransformColLabelIdentifierInternal},
+	    {"StringLiteralIdentifier", &PEGTransformerFactory::TransformStringLiteralIdentifierInternal},
 	    {"GeneratedColumn", &PEGTransformerFactory::TransformGeneratedColumnInternal},
 	    {"GeneratedColumnType", &PEGTransformerFactory::TransformGeneratedColumnTypeInternal},
 	    {"CommitAction", &PEGTransformerFactory::TransformCommitActionInternal},
