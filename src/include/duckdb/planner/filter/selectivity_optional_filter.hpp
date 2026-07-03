@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 
 namespace duckdb {
 

@@ -21,6 +21,11 @@
 #include <exception>
 #include <functional>
 #include <type_traits>
+#include "duckdb/common/types/hyperloglog.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/logging/logger.hpp"
+#include "duckdb/logging/log_type.hpp"
 
 namespace duckdb {
 

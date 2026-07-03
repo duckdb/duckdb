@@ -11,6 +11,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 struct FileSystemRegistry;

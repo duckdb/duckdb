@@ -14,6 +14,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 
 namespace duckdb {
 class BlockManager;

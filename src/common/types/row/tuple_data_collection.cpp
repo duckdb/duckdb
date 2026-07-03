@@ -15,6 +15,7 @@
 #include "duckdb/parallel/parallel_destroy_task.hpp"
 
 #include <algorithm>
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 

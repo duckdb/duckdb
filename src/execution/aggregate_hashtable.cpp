@@ -13,6 +13,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/common/atomic.hpp"
 namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;

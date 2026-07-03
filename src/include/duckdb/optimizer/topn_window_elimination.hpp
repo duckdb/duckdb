@@ -11,6 +11,7 @@
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/common/enums/order_type.hpp"
 
 namespace duckdb {
 class ClientContext;

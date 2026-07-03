@@ -6,6 +6,7 @@
 #include "duckdb/common/types/value.hpp"
 
 #include "utf8proc.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 

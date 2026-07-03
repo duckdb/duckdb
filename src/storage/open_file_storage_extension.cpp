@@ -5,6 +5,7 @@
 #include "duckdb/catalog/default/default_views.hpp"
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 

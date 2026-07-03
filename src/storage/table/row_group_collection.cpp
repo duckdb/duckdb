@@ -27,6 +27,8 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
 
 namespace duckdb {
 
