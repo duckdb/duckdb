@@ -64,8 +64,7 @@ PhysicalColumnDataScan::PhysicalColumnDataScan(PhysicalPlan &physical_plan, vect
 class PhysicalColumnDataGlobalScanState : public GlobalSourceState {
 public:
 	PhysicalColumnDataGlobalScanState(ClientContext &context, const ColumnDataCollection &collection,
-	                                  const vector<column_t> &column_ids,
-	                                  const OperatorPartitionInfo &partition_info)
+	                                  const vector<column_t> &column_ids, const OperatorPartitionInfo &partition_info)
 	    : batch_size(GetColumnDataScanBatchSize(context, partition_info)),
 	      max_threads(ColumnDataScanBatchCount(collection.Count(), batch_size)) {
 		collection.InitializeScan(global_scan_state, column_ids);
