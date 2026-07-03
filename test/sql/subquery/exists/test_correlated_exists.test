@@ -116,15 +116,6 @@ ORDER BY x1, x2, y1, y2;
 3	4	1	4
 3	4	4	11
 
-statement ok
-DROP VIEW x;
-
-statement ok
-DROP VIEW y;
-
-statement ok
-DROP VIEW z;
-
 # correlated EXISTS with aggregations
 query T
 SELECT EXISTS(SELECT i FROM integers WHERE i>MIN(i1.i)) FROM integers i1;
