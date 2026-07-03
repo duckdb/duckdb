@@ -493,6 +493,21 @@ SELECT * FROM assorted_lists;
 ----
 [8, 7, 6]	[hello, 'Duck\'DB']	[2022-12-02, 1929-01-25]
 
+# Issue 23373: a failed child cast should not inspect list entries for NULL parent rows
+statement ok
+COPY (
+	SELECT *
+	FROM (VALUES
+		(1, '[["a0974028-d682-4796-b142-b96580b1c103","2afb4b62-0eeb-4f1a-b351-1464a79d6db2"],["205ffd21-db5c-463d-9575-f7cbf6d73746","2b6705fd-2154-4815-a418-d86cb381efa9"]]'),
+		(2, NULL)
+	) tbl(id, v)
+) TO '__TEST_DIR__/issue_23373_uuid_list.csv' (HEADER true, NULLSTR '\N');
+
+statement error
+SELECT id, v FROM read_csv('__TEST_DIR__/issue_23373_uuid_list.csv', columns={'id':'BIGINT','v':'UUID[]'}, header=true, delim=',', quote='"', escape='"', nullstr='\N');
+----
+Could not convert string
+
 #              Escape tests
 #---------------------------------------------------
 

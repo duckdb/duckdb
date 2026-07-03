@@ -180,6 +180,9 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 		varchar_vector.ToUnifiedFormat(total_list_size, parse_column_data);
 		// Something went wrong in the conversion, we need to nullify the parent
 		for (idx_t i = 0; i < count; i++) {
+			if (!result_mask.RowIsValid(i)) {
+				continue;
+			}
 			for (idx_t j = list_data[i].offset; j < list_data[i].offset + list_data[i].length; j++) {
 				if (!inserted_column_data.validity.RowIsValid(j) && parse_column_data.validity.RowIsValid(j)) {
 					result_mask.SetInvalid(i);
