@@ -120,4 +120,56 @@ select id, g::VARCHAR from t3 order by id;
 statement error
 select 'GEOMETRYCOLLECTION Z (POINT Z (1 1 2), LINESTRING (0 0, 1 1))'::GEOMETRY;
 ----
-Invalid Input Error: Geometry has inconsistent Z/M dimensions
+Invalid Input Error: Failed to parse geometry: Geometry has inconsistent Z/M dimensions at offset 50
+
+# Scientific notation coordinates must not be corrupted during text rendering
+# (exponents ending in 0 were previously truncated, e.g. 1e+20 -> 1e+2)
+query I
+SELECT 'POINT(1e20 1e-10)'::GEOMETRY::VARCHAR;
+----
+POINT (1e+20 1e-10)
+
+query I
+SELECT 'POINT(5e30 3e-20)'::GEOMETRY::VARCHAR;
+----
+POINT (5e+30 3e-20)
+
+query I
+SELECT 'POINT(4.56e20 1.23e-10)'::GEOMETRY::VARCHAR;
+----
+POINT (4.56e+20 1.23e-10)
+
+# Round-trip through text must preserve scientific notation values
+query I
+SELECT ('POINT(1e20 1e-10)'::GEOMETRY::VARCHAR)::GEOMETRY::VARCHAR;
+----
+POINT (1e+20 1e-10)
+
+# Leading whitespace
+query I
+SELECT '  POINT(1 2)'::GEOMETRY::VARCHAR;
+----
+POINT (1 2)
+
+# Leading SRID (EWKT dialect, ignored by us)
+query I
+SELECT 'SRID=4326;POINT(1 2)'::GEOMETRY::VARCHAR;
+----
+POINT (1 2)
+
+# Special case: Empty multipart geometries
+query I
+SELECT 'MULTIPOINT((1 2), EMPTY, (3 4))'::GEOMETRY::VARCHAR;
+----
+MULTIPOINT (1 2, EMPTY, 3 4)
+
+query I
+SELECT 'MULTILINESTRING((0 0, 1 1), EMPTY, (2 2, 3 3))'::GEOMETRY::VARCHAR;
+----
+MULTILINESTRING ((0 0, 1 1), EMPTY, (2 2, 3 3))
+
+query I
+SELECT 'MULTIPOLYGON(((0 0, 4 0, 4 4, 0 4, 0 0)), EMPTY, ((5 5, 7 5, 7 7, 5 7, 5 5)))'::GEOMETRY::VARCHAR;
+----
+MULTIPOLYGON (((0 0, 4 0, 4 4, 0 4, 0 0)), EMPTY, ((5 5, 7 5, 7 7, 5 7, 5 5)))
+

@@ -15,10 +15,10 @@ namespace duckdb {
 
 struct TableColumn {
 	TableColumn() = default;
-	TableColumn(string name_p, LogicalType type_p) : name(std::move(name_p)), type(std::move(type_p)) {
+	TableColumn(Identifier name_p, LogicalType type_p) : name(std::move(name_p)), type(std::move(type_p)) {
 	}
 
-	string name;
+	Identifier name;
 	LogicalType type;
 
 	void Serialize(Serializer &serializer) const;

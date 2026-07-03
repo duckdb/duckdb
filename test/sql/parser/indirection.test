@@ -2,9 +2,6 @@
 # description: Test indirection
 # group: [parser]
 
-statement ok
-PRAGMA enable_verification
-
 # . after case
 query I
 select case when true then {'a': 42} end.a;

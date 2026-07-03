@@ -2,9 +2,6 @@
 # description: Test ART INTEGER key type
 # group: [types]
 
-statement ok
-PRAGMA enable_verification
-
 require skip_reload
 
 # BEGIN TYPE INTEGER
@@ -56,7 +53,7 @@ SELECT i FROM integers WHERE i=CAST(1001 AS INTEGER)
 loop i 0 1000
 
 query I
-SELECT COUNT(*) FROM integers WHERE i=CAST(${i}+1 AS INTEGER)
+SELECT COUNT(*) FROM integers WHERE i=CAST({i}+1 AS INTEGER)
 ----
 1
 

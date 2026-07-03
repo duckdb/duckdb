@@ -3,21 +3,20 @@
 namespace duckdb {
 
 CreateSequenceInfo::CreateSequenceInfo()
-    : CreateInfo(CatalogType::SEQUENCE_ENTRY, INVALID_SCHEMA), name(string()), usage_count(0), increment(1),
-      min_value(1), max_value(NumericLimits<int64_t>::Maximum()), start_value(1), cycle(false) {
+    : CreateInfo(CatalogType::SEQUENCE_ENTRY, Identifier::InvalidSchema()), usage_count(0), increment(1), min_value(1),
+      max_value(NumericLimits<int64_t>::Maximum()), start_value(1), cycle(false) {
 }
 
 unique_ptr<CreateInfo> CreateSequenceInfo::Copy() const {
 	auto result = make_uniq<CreateSequenceInfo>();
 	CopyProperties(*result);
-	result->name = name;
-	result->schema = schema;
 	result->usage_count = usage_count;
 	result->increment = increment;
 	result->min_value = min_value;
 	result->max_value = max_value;
 	result->start_value = start_value;
 	result->cycle = cycle;
+	result->last_value = last_value;
 	return std::move(result);
 }
 
@@ -34,7 +33,7 @@ string CreateSequenceInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ss << " IF NOT EXISTS ";
 	}
-	ss << QualifierToString(temporary ? "" : catalog, schema, name);
+	ss << QualifiedNameToString();
 	ss << " INCREMENT BY " << increment;
 	ss << " MINVALUE " << min_value;
 	ss << " MAXVALUE " << max_value;

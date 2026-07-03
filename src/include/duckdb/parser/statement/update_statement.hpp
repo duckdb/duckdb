@@ -35,7 +35,7 @@ public:
 	// The condition that needs to be met to perform the update
 	unique_ptr<ParsedExpression> condition;
 	// The columns to update
-	vector<string> columns;
+	vector<Identifier> columns;
 	// The set expressions to execute
 	vector<unique_ptr<ParsedExpression>> expressions;
 
@@ -51,6 +51,7 @@ public:
 
 public:
 	UpdateStatement();
+	~UpdateStatement() override;
 
 	unique_ptr<UpdateQueryNode> node;
 

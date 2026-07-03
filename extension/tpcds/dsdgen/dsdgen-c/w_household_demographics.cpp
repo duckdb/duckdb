@@ -72,11 +72,11 @@ int mk_w_household_demographics(void *info_arr, ds_key_t index) {
 
 	void *info = append_info_get(info_arr, HOUSEHOLD_DEMOGRAPHICS);
 	append_row_start(info);
-	append_key(info, r->hd_demo_sk);
-	append_key(info, r->hd_income_band_id);
-	append_varchar(info, r->hd_buy_potential);
-	append_integer(info, r->hd_dep_count);
-	append_integer(info, r->hd_vehicle_count);
+	append_key(info, r->hd_demo_sk, HD_DEMO_SK);
+	append_key(info, r->hd_income_band_id, HD_INCOME_BAND_ID);
+	append_varchar(info, r->hd_buy_potential, HD_BUY_POTENTIAL);
+	append_integer(info, r->hd_dep_count, HD_DEP_COUNT);
+	append_integer(info, r->hd_vehicle_count, HD_VEHICLE_COUNT);
 	append_row_end(info);
 
 	return 0;

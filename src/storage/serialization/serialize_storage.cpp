@@ -25,7 +25,7 @@ BlockPointer BlockPointer::Deserialize(Deserializer &deserializer) {
 }
 
 void DataPointer::Serialize(Serializer &serializer) const {
-	if (!serializer.ShouldSerialize(7)) {
+	if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		serializer.WritePropertyWithDefault<uint64_t>(100, "row_start", row_start);
 	}
 	serializer.WritePropertyWithDefault<uint64_t>(101, "tuple_count", tuple_count);
@@ -86,7 +86,7 @@ FixedSizeAllocatorInfo FixedSizeAllocatorInfo::Deserialize(Deserializer &deseria
 }
 
 void IndexStorageInfo::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<string>(100, "name", name);
+	serializer.WritePropertyWithDefault<Identifier>(100, "name", name);
 	serializer.WritePropertyWithDefault<idx_t>(101, "root", root);
 	serializer.WritePropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", allocator_infos);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<Value>>(103, "options", options, case_insensitive_map_t<Value>());
@@ -94,7 +94,7 @@ void IndexStorageInfo::Serialize(Serializer &serializer) const {
 
 IndexStorageInfo IndexStorageInfo::Deserialize(Deserializer &deserializer) {
 	IndexStorageInfo result;
-	deserializer.ReadPropertyWithDefault<string>(100, "name", result.name);
+	deserializer.ReadPropertyWithDefault<Identifier>(100, "name", result.name);
 	deserializer.ReadPropertyWithDefault<idx_t>(101, "root", result.root);
 	deserializer.ReadPropertyWithDefault<vector<FixedSizeAllocatorInfo>>(102, "allocator_infos", result.allocator_infos);
 	deserializer.ReadPropertyWithExplicitDefault<case_insensitive_map_t<Value>>(103, "options", result.options, case_insensitive_map_t<Value>());

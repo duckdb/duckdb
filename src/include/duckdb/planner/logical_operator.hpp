@@ -11,7 +11,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
-#include "duckdb/common/enums/explain_format.hpp"
+#include "duckdb/main/profiler/profiler_print_format.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
@@ -57,9 +57,15 @@ public:
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();
 
+	//! Returns true if this operator or any of its descendants has side effects
+	//! (INSERT, UPDATE, DELETE, MERGE INTO). Used to prevent inlining or
+	//! elimination of DML CTEs.
+	bool HasSideEffects() const;
+
 	virtual string GetName() const;
 	virtual InsertionOrderPreservingMap<string> ParamsToString() const;
-	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
+	virtual string ToString(optional_ptr<ClientContext> context = nullptr,
+	                        const ProfilerPrintFormat &format = ProfilerPrintFormat::Default()) const;
 	DUCKDB_API void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify(ClientContext &context);

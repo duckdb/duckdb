@@ -2,9 +2,6 @@
 # description: UNION_BY_NAME test
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query IIIIIIIIIIIII
 SELECT typeof(#1), typeof(#2), typeof(#3), typeof(#4), typeof(#5), typeof(#6), typeof(#7), typeof(#8), typeof(#9), typeof(#10), typeof(#11), typeof(#12), typeof(#13)
 FROM read_csv(['{DATA_DIR}/csv/union-by-name/gabor/Post/*.csv', '{DATA_DIR}/csv/union-by-name/gabor/Comment/*.csv'], union_by_name=true)

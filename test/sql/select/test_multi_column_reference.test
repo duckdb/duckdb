@@ -2,9 +2,6 @@
 # description: Test multi column reference
 # group: [select]
 
-statement ok
-PRAGMA enable_verification
-
 # column names can have an arbitrary amount of dots
 # here is how the resolution works:
 # no dots (i.e. "part1")

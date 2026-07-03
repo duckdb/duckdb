@@ -1,5 +1,12 @@
 [
     {
+        "name": "__delta_only_variant_encoding_enabled",
+        "description": "Enables the Parquet reader to identify a Variant structurally.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "access_mode",
         "description": "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)",
         "type": "ENUM<AccessMode>",
@@ -29,8 +36,11 @@
         "name": "allocator_flush_threshold",
         "description": "Peak allocation threshold at which to flush the allocator after completing a task.",
         "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true
+        "default_scope": "global",
+        "default_value": "134217728B",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "allow_community_extensions",
@@ -105,6 +115,13 @@
         "custom_implementation": true
     },
     {
+        "name": "approximate_join_order_threshold",
+        "description": "The minimum number of tables in a join to determine the optimal join order approximately instead of exactly.",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "12"
+    },
+    {
         "name": "arrow_large_buffer_size",
         "description": "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
         "type": "BOOLEAN",
@@ -139,6 +156,13 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "64"
+    },
+    {
+        "name": "async_threads",
+        "description": "The number of total async threads used by the system for tasks like I/O.",
+        "type": "BIGINT",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "auto_checkpoint_skip_wal_threshold",
@@ -185,6 +209,13 @@
             "set",
             "reset"
         ]
+    },
+    {
+        "name": "cache_local_files",
+        "description": "Whether the external file cache also caches local files (remote files are always cached)",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
     },
     {
         "name": "catalog_error_max_schemas",
@@ -276,6 +307,13 @@
         "default_value": "0"
     },
     {
+        "name": "debug_disable_optimizer",
+        "description": "DEBUG SETTING: disable optimizer for most queries",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "debug_eviction_queue_sleep_micro_seconds",
         "description": "DEBUG SETTING: time for the eviction queue to sleep before acquiring shared ownership of block memory",
         "type": "UBIGINT",
@@ -283,11 +321,32 @@
         "default_value": "0"
     },
     {
+        "name": "debug_force_commit_failure",
+        "description": "DEBUG SETTING: force transaction commit to fail after the undo buffer has been committed, used for testing commit error recovery",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_force_commit_revert_failure",
+        "description": "DEBUG SETTING: force RevertCommit to fail while recovering from a commit failure, used for testing",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_force_external",
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
-        "scope": "local",
-        "internal_setting": "force_external"
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_force_fetch_row",
+        "description": "DEBUG SETTING: force per-row fetching during scans, used for testing",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "debug_force_no_cross_product",
@@ -295,6 +354,19 @@
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "false"
+    },
+    {
+        "name": "debug_local_file_system_delay_ms",
+        "description": "DEBUG SETTING: time to sleep before local file system open/read/write operations",
+        "type": "UBIGINT",
+        "scope": "global",
+        "default_value": "0"
+    },
+    {
+        "name": "debug_order_verification",
+        "description": "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)",
+        "type": "ENUM<DebugOrderVerification>",
+        "scope": "global"
     },
     {
         "name": "debug_physical_table_scan_execution_strategy",
@@ -311,8 +383,64 @@
         "default_value": "false"
     },
     {
+        "name": "debug_transformer_trampoline_style",
+        "description": "Use the experimental trampoline-style parser transformer",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verification_mode",
+        "description": "DEBUG SETTING: toggle the verification mode.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "debug_verification_projection",
+        "description": "DEBUG SETTING: add internal verification projections to stress optimizers",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_aggregate_state_export",
+        "description": "DEBUG SETTING: enable verification of aggregate state export",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_verify_blocks",
         "description": "DEBUG SETTING: verify block metadata during checkpointing",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_column_bindings",
+        "description": "DEBUG SETTING: run extra internal verification of column bindings",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_serializer",
+        "description": "DEBUG SETTING: verify logical plan serializer",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_statement",
+        "description": "DEBUG SETTING: the type of statement verification to perform",
+        "type": "ENUM<DebugStatementVerification>",
+        "default_scope": "global",
+        "default_value": "NONE"
+    },
+    {
+        "name": "debug_verify_stats",
+        "description": "DEBUG SETTING: verify statistics are correct during execution, instead of assuming",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
@@ -352,6 +480,13 @@
         ]
     },
     {
+        "name": "default_io_mode",
+        "description": "The default IO_MODE for newly attached database files when no explicit IO_MODE is given (BUFFERED_IO or MMAP)",
+        "type": "ENUM<FileIOMode>",
+        "default_value": "BUFFERED_IO",
+        "default_scope": "global"
+    },
+    {
         "name": "default_null_order",
         "description": "NULL ordering used when none is specified (NULLS_FIRST or NULLS_LAST)",
         "type": "ENUM<DefaultOrderByNullType>",
@@ -382,11 +517,32 @@
         "custom_implementation": true
     },
     {
+        "name": "default_transaction_invalidation_policy",
+        "description": "When to invalidate transactions when errors occur (SYNTACTIC_ERRORS_DO_NOT_INVALIDATE, i.e. parser and binder exceptions do not invalidate, or ALL_ERRORS_INVALIDATE_TRANSACTION)",
+        "type": "ENUM<TransactionInvalidationPolicy>",
+        "default_scope": "global",
+        "default_value": "ALL_ERRORS_INVALIDATE_TRANSACTION"
+    },
+    {
+        "name": "delim_join_as_cte",
+        "description": "Rewrite delim joins to materialized CTEs during dependent join flattening",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true"
+    },
+    {
         "name": "deprecated_using_key_syntax",
         "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
         "type": "ENUM<DeprecatedUsingKeySyntax>",
         "default_scope": "local",
         "default_value": "DEFAULT"
+    },
+    {
+        "name": "dialect_compatibility_mode",
+        "description": "Enable SQL dialect compatibility for a certain engine (e.g. `SET dialect_compatibility_mode='spark'`)",
+        "type": "ENUM<DialectCompatibilityMode>",
+        "default_scope": "local",
+        "default_value": "NONE"
     },
     {
         "name": "disable_database_invalidation",
@@ -453,6 +609,13 @@
         "default_value": "50"
     },
     {
+        "name": "enable_caching_operators",
+        "description": "Enables caching operators that cache intermediate results",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true"
+    },
+    {
         "name": "enable_external_access",
         "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV \"\n\t    \"readers, pandas replacement scans, etc)",
         "type": "BOOLEAN",
@@ -479,14 +642,6 @@
         "scope": "global",
         "default_value": "false",
         "struct": "EnableFSSTVectorsSetting"
-    },
-    {
-        "name": "enable_http_logging",
-        "description": "(deprecated) Enables HTTP logging",
-        "type": "BOOLEAN",
-        "scope": "local",
-        "struct": "EnableHTTPLoggingSetting",
-        "custom_implementation": true
     },
     {
         "name": "enable_http_metadata_cache",
@@ -517,6 +672,13 @@
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
+    },
+    {
+        "name": "enable_optimizer",
+        "description": "Whether or not query optimization is enabled",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "true"
     },
     {
         "name": "enable_profiling",
@@ -594,6 +756,32 @@
         "default_value": ""
     },
     {
+        "name": "external_file_cache_local_block_size",
+        "description": "Block size in bytes for the external file cache when reading local (non-remote) files.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "16384",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "external_file_cache_remote_block_size",
+        "description": "Block size in bytes for the external file cache when reading remote files (e.g. HTTP/S3).",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "2097152",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "external_threads",
         "description": "The number of external threads that work on DuckDB tasks.",
         "type": "UBIGINT",
@@ -618,6 +806,13 @@
         "default_value": "AUTO"
     },
     {
+        "name": "force_column_metadata_reuse",
+        "description": "Force re-use of row group metadata on a column-level when checkpointing on older storage versions 6 and 7. This breaks storage backward-compatibility with older DuckDB versions.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "force_compression",
         "description": "DEBUG SETTING: forces a specific compression method to be used",
         "type": "ENUM<CompressionType>",
@@ -633,6 +828,13 @@
         "type": "BOOLEAN",
         "scope": "global",
         "custom_implementation": true
+    },
+    {
+        "name": "force_update_to_del_and_insert",
+        "description": "DEBUG SETTING: forces all updates to use the delete + insert code path instead of in-place updates",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "force_variant_shredding",
@@ -661,20 +863,15 @@
         ]
     },
     {
-        "name": "http_logging_output",
-        "description": "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal",
-        "type": "VARCHAR",
-        "scope": "local",
-        "struct": "HTTPLoggingOutputSetting",
-        "custom_implementation": true
-    },
-    {
         "name": "http_proxy",
-        "description": "HTTP proxy host",
+        "description": "HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)",
         "type": "VARCHAR",
         "scope": "global",
-        "default_value": "",
-        "struct": "HTTPProxySetting"
+        "struct": "HTTPProxySetting",
+        "custom_implementation": [
+            "set",
+            "reset"
+        ]
     },
     {
         "name": "http_proxy_password",
@@ -694,7 +891,7 @@
     },
     {
         "name": "ieee_floating_point_ops",
-        "description": "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).",
+        "description": "Use IEEE 754 behavior for supported floating point operations, returning NAN/INF instead of errors/NULL.",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"
@@ -731,6 +928,16 @@
         ]
     },
     {
+        "name": "initial_column_segment_size",
+        "description": "The initial memory (in bytes) reserved for the first transient column segment. Must be a power of two. Internally, we subtract the block header size (typically 8 bytes) for segments with or exceeding 1024 bytes. Subsequent segments double in size until reaching the block size.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "2048",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "integer_division",
         "description": "Whether or not the / operator defaults to integer division, or to floating point division",
         "type": "BOOLEAN",
@@ -750,6 +957,20 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "50"
+    },
+    {
+        "name": "legacy_disable_null_type",
+        "description": "When enabled, prevent the NULL type from leaving the binder (< v2.0 default behavior)",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "legacy_metrics_format",
+        "description": "When enabled, profiling output uses the legacy flat format instead of the current grouped format",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "lock_configuration",
@@ -796,7 +1017,7 @@
         "name": "max_execution_time",
         "description": "The maximum execution time per query in milliseconds (0 = no limit)",
         "type": "BIGINT",
-        "scope": "local",
+        "default_scope": "local",
         "default_value": "0"
     },
     {
@@ -874,6 +1095,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "parallelize_sequential_sources",
+        "description": "Whether to automatically parallelize sequential sources",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true"
     },
     {
         "name": "partitioned_write_flush_threshold",
@@ -956,16 +1184,6 @@
         "default_value": "false"
     },
     {
-        "name": "profile_output",
-        "description": "The file to which profile output should be saved, or empty to print to the terminal",
-        "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true,
-        "aliases": [
-            "profiling_output"
-        ]
-    },
-    {
         "name": "profiling_coverage",
         "description": "The profiling coverage (SELECT or ALL)",
         "type": "VARCHAR",
@@ -974,8 +1192,25 @@
     },
     {
         "name": "profiling_mode",
-        "description": "The profiling mode (STANDARD or DETAILED)",
+        "description": "DEPRECATED: Sets the profiling mode",
         "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "profiling_output",
+        "description": "The file to which profile output should be saved, or empty to print to the terminal",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true,
+        "aliases": [
+            "profile_output"
+        ]
+    },
+    {
+        "name": "profiling_renderer_settings",
+        "description": "A map of settings passed to the renderer of the profiler output (e.g. {'max_extra_lines': 100}) - settings not recognized by the active renderer are ignored",
+        "type": "MAP(VARCHAR, VARCHAR)",
         "scope": "local",
         "custom_implementation": true
     },
@@ -985,6 +1220,13 @@
         "type": "BIGINT",
         "scope": "local",
         "custom_implementation": true
+    },
+    {
+        "name": "regex_match_operator_semantics",
+        "description": "Configures whether regex match operators use partial or full string matching",
+        "type": "ENUM<RegexMatchOperatorSemantics>",
+        "default_scope": "local",
+        "default_value": "partial"
     },
     {
         "name": "scalar_subquery_error_on_multiple_rows",
@@ -1025,6 +1267,17 @@
         "custom_implementation": true
     },
     {
+        "name": "standard_vector_size",
+        "description": "The compiled-in STANDARD_VECTOR_SIZE (read-only)",
+        "type": "UBIGINT",
+        "scope": "global",
+        "custom_implementation": [
+            "get",
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "storage_block_prefetch",
         "description": "In which scenarios to use storage block prefetching",
         "type": "ENUM<StorageBlockPrefetch>",
@@ -1044,6 +1297,13 @@
         "type": "VARCHAR",
         "scope": "local",
         "custom_implementation": true
+    },
+    {
+        "name": "table_function_identifier_conversion",
+        "description": "Configures the use of deprecated implicit conversion of unbound identifiers to strings in table function arguments.",
+        "type": "ENUM<TableFunctionIdentifierConversion>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
     },
     {
         "name": "temp_directory",
@@ -1073,6 +1333,13 @@
         ]
     },
     {
+        "name": "tracked_metrics",
+        "description": "A list of metric glob patterns to enable for collection (e.g. ['query.*', 'optimizer.*'])",
+        "type": "VARCHAR[]",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "username",
         "description": "The username to use. Ignored for legacy compatibility.",
         "type": "VARCHAR",
@@ -1080,6 +1347,16 @@
         "default_value": "",
         "aliases": [
             "user"
+        ]
+    },
+    {
+        "name": "vacuum_rebuild_indexes",
+        "description": "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled. Can also be set per-database via the 'vacuum_rebuild_indexes' ATTACH option, which overrides this default.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0",
+        "on_callbacks": [
+            "set"
         ]
     },
     {
@@ -1119,6 +1396,13 @@
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "5"
+    },
+    {
+        "name": "write_buffer_row_group_memory_limit",
+        "description": "The maximum data to buffer in row groups (in bytes) to buffer prior to flushing them together. When either this limit is reached, or write_buffer_row_group_count is reached, we flush the data to disk. Defaults to 20% of memory limit divided by thread count.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "zstd_min_string_length",

@@ -3,9 +3,6 @@
 # group: [collate]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA default_collation=NOCASE;
 
 query I

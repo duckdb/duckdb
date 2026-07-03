@@ -29,13 +29,24 @@ public:
 public:
 	DUCKDB_API CaseExpression();
 
-	vector<CaseCheck> case_checks;
-	unique_ptr<ParsedExpression> else_expr;
+public:
+	const vector<CaseCheck> &CaseChecks() const {
+		return case_checks;
+	}
+	const ParsedExpression &Else() const {
+		return *else_expr;
+	}
+	vector<CaseCheck> &CaseChecksMutable() {
+		return case_checks;
+	}
+	unique_ptr<ParsedExpression> &ElseMutable() {
+		return else_expr;
+	}
 
 public:
 	string ToString() const override;
 
-	static bool Equal(const CaseExpression &a, const CaseExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
@@ -46,13 +57,17 @@ public:
 	template <class T, class BASE>
 	static string ToString(const T &entry) {
 		string case_str = "CASE ";
-		for (auto &check : entry.case_checks) {
+		for (auto &check : entry.CaseChecks()) {
 			case_str += " WHEN (" + check.when_expr->ToString() + ")";
 			case_str += " THEN (" + check.then_expr->ToString() + ")";
 		}
-		case_str += " ELSE " + entry.else_expr->ToString();
+		case_str += " ELSE " + entry.Else().ToString();
 		case_str += " END";
 		return case_str;
 	}
+
+private:
+	vector<CaseCheck> case_checks;
+	unique_ptr<ParsedExpression> else_expr;
 };
 } // namespace duckdb

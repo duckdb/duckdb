@@ -3,9 +3,6 @@
 # group: [variables]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 SET VARIABLE animal = 'duck'
 
 query I

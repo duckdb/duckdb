@@ -1,0 +1,2 @@
+CreateViewStmt <- CreateRecursive? 'VIEW' IfNotExists? QualifiedName InsertColumnList? WithList? 'AS' SelectStatementInternal
+CreateRecursive <- 'RECURSIVE'

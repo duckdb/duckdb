@@ -19,7 +19,8 @@ bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &c
 	return false;
 }
 
-void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace) {
+void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace,
+                       bool *no_match_returns_input) {
 	for (idx_t i = 0; i < options.size(); i++) {
 		switch (options[i]) {
 		case 'c':
@@ -52,6 +53,14 @@ void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, 
 				throw InvalidInputException("Option 'g' (global replace) is only valid for regexp_replace");
 			}
 			break;
+		case 'k':
+			// keep (return) the input on no match instead of an empty string (regexp_extract only)
+			if (no_match_returns_input) {
+				*no_match_returns_input = true;
+			} else {
+				throw InvalidInputException("Option 'k' (keep input on no match) is only valid for regexp_extract");
+			}
+			break;
 		case ' ':
 		case '\t':
 		case '\n':
@@ -63,7 +72,8 @@ void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, 
 	}
 }
 
-void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace) {
+void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace,
+                       bool *no_match_returns_input) {
 	if (expr.HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -77,7 +87,7 @@ void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &t
 	if (options_str.type().id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("Regex options field must be a string");
 	}
-	ParseRegexOptions(StringValue::Get(options_str), target, global_replace);
+	ParseRegexOptions(StringValue::Get(options_str), target, global_replace, no_match_returns_input);
 }
 
 void ParseGroupNameList(ClientContext &context, const string &function_name, Expression &group_expr,
@@ -97,16 +107,16 @@ void ParseGroupNameList(ClientContext &context, const string &function_name, Exp
 	if (children.empty()) {
 		throw BinderException("Group name list must be non-empty");
 	}
-	case_insensitive_set_t name_set;
+	identifier_set_t name_set;
 	for (auto &child : children) {
 		if (child.IsNull()) {
 			throw BinderException("NULL group name in %s", function_name);
 		}
 		auto name = child.ToString();
-		if (name_set.find(name) != name_set.end()) {
+		if (name_set.find(Identifier(name)) != name_set.end()) {
 			throw BinderException("Duplicate group name '%s' in %s", name, function_name);
 		}
-		name_set.insert(name);
+		name_set.insert(Identifier(name));
 		out_names.push_back(name);
 		out_struct_children.emplace_back(make_pair(name, LogicalType::VARCHAR));
 	}

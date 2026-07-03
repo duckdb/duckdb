@@ -29,6 +29,14 @@ BoundStatement Binder::BindNode(DeleteQueryNode &node) {
 		throw BinderException("Can only delete from base table");
 	}
 	auto &table = *table_ptr;
+
+	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::DELETE_EVENT)) {
+		return std::move(*expanded);
+	}
+	if (auto expanded = TryExpandRowTriggers(node, node.returning_list, table, TriggerEventType::DELETE_EVENT)) {
+		return std::move(*expanded);
+	}
+
 	if (!table.temporary) {
 		// delete from persistent table: not read only!
 		auto &properties = GetStatementProperties();

@@ -5,6 +5,7 @@
 #include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/box_renderer_context.hpp"
 
 namespace duckdb {
 
@@ -165,7 +166,8 @@ string SQLLogicTestLogger::ResultToString(MaterializedQueryResult &result) {
 	BoxRendererConfig config;
 	config.max_rows = 100;
 	config.max_width = -1;
-	return result.ToBox(*connection.context, config);
+	ClientBoxRendererContext render_context(*connection.context);
+	return result.ToBox(render_context, config);
 }
 
 void SQLLogicTestLogger::PrintResultString(MaterializedQueryResult &result) {

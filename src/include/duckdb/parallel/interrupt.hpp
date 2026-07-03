@@ -68,6 +68,11 @@ public:
 		can_block = false;
 	}
 
+	void ResetBlocking() DUCKDB_REQUIRES(lock) {
+		can_block = true;
+		blocked_tasks.clear();
+	}
+
 	//! Add a task to 'blocked_tasks' before returning SourceResultType::BLOCKED (must hold the lock)
 	bool BlockTask(const InterruptState &interrupt_state) DUCKDB_REQUIRES(lock) {
 		if (can_block) {

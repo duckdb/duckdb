@@ -29,9 +29,9 @@ struct SetseedBindData : public FunctionData {
 
 void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<SetseedBindData>();
+	auto &info = func_expr.BindInfo()->Cast<SetseedBindData>();
 	auto &input = args.data[0];
-	input.Flatten(args.size());
+	input.Flatten();
 
 	auto input_seeds = FlatVector::GetData<double>(input);
 	uint32_t half_max = NumericLimits<uint32_t>::Maximum() / 2;
@@ -45,12 +45,11 @@ void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		random_engine.SetSeed(norm_seed);
 	}
 
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::SetNull(result, true);
+	ConstantVector::SetNull(result, count_t(args.size()));
 }
 
-unique_ptr<FunctionData> SetSeedBind(ClientContext &context, ScalarFunction &bound_function,
-                                     vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> SetSeedBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
 	return make_uniq<SetseedBindData>(context);
 }
 

@@ -2,15 +2,12 @@
 # description: ENUM types used inside structs
 # group: [enum]
 
-statement ok
-PRAGMA enable_verification
-
 # FIXME: this test fails with the latest storage version due to the introduced dependencies
 statement ok
 SET storage_compatibility_version='v0.10.2';
 
 # load the DB from disk
-load __TEST_DIR__/enum_types.db
+load {TEST_DIR}/enum_types.db
 
 statement ok
 CREATE TYPE mood AS ENUM (
@@ -40,7 +37,7 @@ FROM person
 1	{'name': Mark, 'current_mood': happy}
 
 # FIXME: dependencies between enums and tables are currently disabled
-mode skip
+mode skip unsupported
 
 statement error
 DROP TYPE mood
@@ -73,7 +70,7 @@ ALTER TABLE person ADD COLUMN c STRUCT(
     )
 
 # FIXME: dependencies between enums and tables are currently disabled
-mode skip
+mode skip unsupported
 
 # we cannot drop the type after adding it back
 statement error
@@ -107,7 +104,7 @@ FROM person
 1	NULL
 
 # FIXME: dependencies between enums and tables are currently disabled
-mode skip
+mode skip unsupported
 
 # we cannot drop the type after adding it using an alter type
 statement error

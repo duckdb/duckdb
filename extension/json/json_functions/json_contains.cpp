@@ -111,24 +111,22 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
-	auto &haystacks = args.data[0];
-	auto &needles = args.data[1];
+	const auto &haystacks = args.data[0];
+	const auto &needles = args.data[1];
 
 	if (needles.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(needles)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
-			return;
+			throw InternalException("JSON Contains called with constant NULL needles");
 		}
 		auto &needle_str = *ConstantVector::GetData<string_t>(needles);
 		auto needle_doc = JSONCommon::ReadDocument(needle_str, JSONCommon::READ_FLAG, alc);
-		UnaryExecutor::Execute<string_t, bool>(haystacks, result, args.size(), [&](string_t haystack_str) {
+		UnaryExecutor::Execute<string_t, bool>(haystacks, result, [&](string_t haystack_str) {
 			auto haystack_doc = JSONCommon::ReadDocument(haystack_str, JSONCommon::READ_FLAG, alc);
 			return JSONContains(haystack_doc->root, needle_doc->root);
 		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, bool>(
-		    haystacks, needles, result, args.size(), [&](string_t haystack_str, string_t needle_str) {
+		    haystacks, needles, result, [&](string_t haystack_str, string_t needle_str) {
 			    auto needle_doc = JSONCommon::ReadDocument(needle_str, JSONCommon::READ_FLAG, alc);
 			    auto haystack_doc = JSONCommon::ReadDocument(haystack_str, JSONCommon::READ_FLAG, alc);
 			    return JSONContains(haystack_doc->root, needle_doc->root);
@@ -137,7 +135,7 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 static void GetContainsFunctionInternal(ScalarFunctionSet &set, const LogicalType &lhs, const LogicalType &rhs) {
-	set.AddFunction(ScalarFunction({lhs, rhs}, LogicalType::BOOLEAN, JSONContainsFunction, nullptr, nullptr, nullptr,
+	set.AddFunction(ScalarFunction({lhs, rhs}, LogicalType::BOOLEAN, JSONContainsFunction, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
 }
 
@@ -146,6 +144,9 @@ ScalarFunctionSet JSONFunctions::GetContainsFunction() {
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::VARCHAR);
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::JSON());
 	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR);
+	for (auto &func : set.functions) {
+		func.SetFallible();
+	}
 	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::JSON());
 	// TODO: implement json_contains that accepts path argument as well
 

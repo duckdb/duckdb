@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -16,7 +17,7 @@
 
 namespace duckdb {
 
-PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &tableref,
+PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> types, DuckTableEntry &tableref,
                                DataTable &table, vector<PhysicalIndex> columns,
                                vector<unique_ptr<Expression>> expressions,
                                vector<unique_ptr<Expression>> bound_defaults,
@@ -72,7 +73,7 @@ public:
 		vector<LogicalType> update_types;
 		update_types.reserve(expressions.size());
 		for (auto &expr : expressions) {
-			update_types.push_back(expr->return_type);
+			update_types.push_back(expr->GetReturnType());
 		}
 		update_chunk.Initialize(allocator, update_types);
 
@@ -113,7 +114,6 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	DataChunk &update_chunk = l_state.update_chunk;
 	update_chunk.Reset();
-	update_chunk.SetCardinality(chunk);
 
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		// Default expression, set to the default value of the column.
@@ -124,7 +124,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 		D_ASSERT(expressions[i]->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &binding = expressions[i]->Cast<BoundReferenceExpression>();
-		update_chunk.data[i].Reference(chunk.data[binding.index]);
+		update_chunk.data[i].Reference(chunk.data[binding.Index()]);
 	}
 
 	auto &row_ids = chunk.data[chunk.ColumnCount() - 1];
@@ -133,13 +133,15 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	// Regular in-place update.
 	if (!update_is_del_and_insert) {
 		if (return_chunk) {
-			mock_chunk.SetCardinality(update_chunk);
+			// (re)reference all output columns first, then validate + set the cardinality. mock_chunk is not reset
+			// here, but with return_chunk the update projects every table column, so all columns are referenced.
 			for (idx_t i = 0; i < columns.size(); i++) {
 				mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 			}
+			mock_chunk.CheckCardinality(update_chunk.size());
 		}
 		auto &update_state = l_state.GetUpdateState(table, tableref, context.client);
-		table.Update(update_state, context.client, row_ids, columns, update_chunk);
+		table.Update(update_state, context.client, tableref, row_ids, columns, update_chunk);
 
 		if (return_chunk) {
 			lock_guard<mutex> glock(g_state.lock);
@@ -176,7 +178,6 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	auto &delete_chunk = index_update ? l_state.delete_chunk : l_state.mock_chunk;
 	delete_chunk.Reset();
-	delete_chunk.SetCardinality(update_count);
 
 	if (index_update) {
 		auto &transaction = DuckTransaction::Get(context.client, table.db);
@@ -190,13 +191,14 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
-	table.Delete(delete_state, context.client, del_row_ids, update_count);
+	table.Delete(delete_state, context.client, tableref, del_row_ids, update_count);
 
-	// Arrange the columns in the standard table order.
-	mock_chunk.SetCardinality(update_count);
+	// Arrange the columns in the standard table order, then validate + set the cardinality from the referenced
+	// columns. The del+insert path projects every table column (it re-inserts the full row), so all are referenced.
 	for (idx_t i = 0; i < columns.size(); i++) {
 		mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 	}
+	mock_chunk.CheckCardinality(update_count);
 
 	table.LocalAppend(tableref, context.client, mock_chunk, bound_constraints, del_row_ids, delete_chunk);
 	if (return_chunk) {
@@ -248,8 +250,7 @@ SourceResultType PhysicalUpdate::GetDataInternal(ExecutionContext &context, Data
 	auto &state = input.global_state.Cast<UpdateSourceState>();
 	auto &g = sink_state->Cast<UpdateGlobalState>();
 	if (!return_chunk) {
-		chunk.SetCardinality(1);
-		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.updated_count.load())));
+		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.updated_count.load())));
 		return SourceResultType::FINISHED;
 	}
 

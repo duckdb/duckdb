@@ -26,7 +26,7 @@ struct CheckpointOptions {
 	transaction_t transaction_id;
 	//! The WAL lock - in case we are holding it during the entire checkpoint.
 	//! This is only required if we are doing a checkpoint instead of writing to the WAL
-	optional_ptr<lock_guard<mutex>> wal_lock;
+	optional_ptr<unique_lock<mutex>> wal_lock;
 };
 
 } // namespace duckdb

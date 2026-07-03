@@ -26,21 +26,21 @@ public:
 		result.child_data.push_back(std::move(child_buffer));
 	}
 
-	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+	static void Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(input_size, format);
+		input.ToUnifiedFormat(format);
 		idx_t size = to - from;
 		vector<sel_t> child_indices;
 		append_data.AppendValidity(format, from, to);
 		AppendListMetadata(append_data, format, from, to, child_indices);
 
 		// append the child vector of the list
-		SelectionVector child_sel(child_indices.data());
-		auto &child = ListVector::GetEntry(input);
+		SelectionVector child_sel(child_indices.data(), child_indices.size());
+		auto &child = ListVector::GetChild(input);
 		auto child_size = child_indices.size();
 		Vector child_copy(child.GetType());
 		child_copy.Slice(child, child_sel, child_size);
-		append_data.child_data[0]->append_vector(*append_data.child_data[0], child_copy, 0, child_size, child_size);
+		append_data.child_data[0]->AppendChild(child_copy, 0, child_size, child_size);
 		append_data.row_count += size;
 	}
 

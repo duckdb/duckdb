@@ -1,6 +1,21 @@
-#include "duckdb/common/vector/map_vector.hpp"
+#include <stdint.h>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "writer/struct_column_writer.hpp"
+#include "column_writer.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
 
@@ -66,11 +81,13 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
                                  bool vector_can_span_multiple_pages) {
 	auto &state = state_p.Cast<StructColumnWriterState>();
 
-	auto &validity = FlatVector::Validity(vector);
+	auto &validity = FlatVector::ValidityMutable(vector);
 	if (parent) {
 		// propagate empty entries from the parent
 		if (state.is_empty.size() < parent->is_empty.size()) {
-			state.is_empty.insert(state.is_empty.end(), parent->is_empty.begin() + state.is_empty.size(),
+			state.is_empty.insert(state.is_empty.end(),
+			                      parent->is_empty.begin() +
+			                          NumericCast<duckdb::vector<bool>::difference_type>(state.is_empty.size()),
 			                      parent->is_empty.end());
 		}
 	}
@@ -98,11 +115,18 @@ void StructColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t
 	}
 }
 
-void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
+void StructColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<StructColumnWriterState>();
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		// we add the null count of the struct to the null count of the children
 		state.child_states[child_idx]->null_count += state_p.null_count;
+		child_writers[child_idx]->PrepareWrite(*state.child_states[child_idx]);
+	}
+}
+
+void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
+	auto &state = state_p.Cast<StructColumnWriterState>();
+	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		child_writers[child_idx]->FinalizeWrite(*state.child_states[child_idx]);
 	}
 }

@@ -3,6 +3,10 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/enums/cte_materialize.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
@@ -28,6 +32,7 @@
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 #include <algorithm>
 
@@ -54,29 +59,20 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
     : context(context), bind_context(*this), parent(std::move(parent_p)), binder_type(binder_type),
       global_binder_state(parent ? parent->global_binder_state : make_shared_ptr<GlobalBinderState>()),
-      query_binder_state(parent && binder_type == BinderType::REGULAR_BINDER ? parent->query_binder_state
-                                                                             : make_shared_ptr<QueryBinderState>()),
       entry_retriever(context), depth(parent ? parent->GetBinderDepth() : 1) {
 	IncreaseDepth();
 	if (parent) {
 		entry_retriever.Inherit(parent->entry_retriever);
+		inside_subquery = parent->inside_subquery;
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
 		lambda_bindings = parent->lambda_bindings;
+		if (binder_type != BinderType::VIEW_BINDER) {
+			// inherit expression binders from parent
+			active_binders = parent->active_binders;
+		}
 	}
-}
-
-template <class T>
-BoundStatement Binder::BindWithCTE(T &statement) {
-	auto &cte_map = statement.cte_map;
-	if (cte_map.map.empty()) {
-		return Bind(statement);
-	}
-
-	auto stmt_node = make_uniq<StatementNode>(statement);
-	stmt_node->cte_map = cte_map.Copy();
-	return Bind(*stmt_node);
 }
 
 BoundStatement Binder::Bind(SQLStatement &statement) {
@@ -132,7 +128,11 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		return Bind(statement.Cast<UpdateExtensionsStatement>());
 	case StatementType::MERGE_INTO_STATEMENT:
-		return BindWithCTE(statement.Cast<MergeIntoStatement>());
+		return Bind(statement.Cast<MergeIntoStatement>());
+	case StatementType::CONNECT_STATEMENT:
+		return Bind(statement.Cast<ConnectStatement>());
+	case StatementType::DISCONNECT_STATEMENT:
+		return Bind(statement.Cast<DisconnectStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -233,6 +233,20 @@ StatementProperties &Binder::GetStatementProperties() {
 	return global_binder_state->prop;
 }
 
+optional_ptr<LogicalGet> Binder::GetPassthroughTableFunctionGet(LogicalOperator &op) {
+	// Follow single-child projections down to a lone LOGICAL_GET; anything else is not a passthrough.
+	auto *current = &op;
+	while (true) {
+		if (current->type == LogicalOperatorType::LOGICAL_GET) {
+			return current->Cast<LogicalGet>();
+		}
+		if (current->type != LogicalOperatorType::LOGICAL_PROJECTION || current->children.size() != 1) {
+			return nullptr;
+		}
+		current = current->children[0].get();
+	}
+}
+
 optional_ptr<BoundParameterMap> Binder::GetParameters() {
 	return global_binder_state->parameters;
 }
@@ -241,18 +255,26 @@ void Binder::SetParameters(BoundParameterMap &parameters) {
 	global_binder_state->parameters = parameters;
 }
 
-void Binder::PushExpressionBinder(ExpressionBinder &binder) {
-	GetActiveBinders().push_back(binder);
+void Binder::SetInsideSubquery() {
+	inside_subquery = true;
 }
 
-void Binder::PopExpressionBinder() {
-	D_ASSERT(HasActiveBinder());
-	GetActiveBinders().pop_back();
+bool Binder::IsInsideSubquery() const {
+	return inside_subquery;
 }
 
-void Binder::SetActiveBinder(ExpressionBinder &binder) {
-	D_ASSERT(HasActiveBinder());
-	GetActiveBinders().back() = binder;
+void Binder::BeginSubqueryBind(Binder &parent, ExpressionBinder &binder) {
+	// push all active expression binders
+	auto &active_binders = GetActiveBinders();
+	for (auto &active_binder : parent.GetActiveBinders()) {
+		active_binders.push_back(active_binder);
+	}
+	// finally push this binder
+	active_binders.push_back(binder);
+}
+
+void Binder::FinishSubqueryBind() {
+	GetActiveBinders().clear();
 }
 
 ExpressionBinder &Binder::GetActiveBinder() {
@@ -264,7 +286,7 @@ bool Binder::HasActiveBinder() {
 }
 
 vector<reference<ExpressionBinder>> &Binder::GetActiveBinders() {
-	return query_binder_state->active_binders;
+	return active_binders;
 }
 
 void Binder::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
@@ -289,20 +311,20 @@ void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 	}
 }
 
-optional_ptr<Binding> Binder::GetMatchingBinding(const string &table_name, const string &column_name,
+optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &table_name, const Identifier &column_name,
                                                  ErrorData &error) {
-	string empty_schema;
+	Identifier empty_schema;
 	return GetMatchingBinding(empty_schema, table_name, column_name, error);
 }
 
-optional_ptr<Binding> Binder::GetMatchingBinding(const string &schema_name, const string &table_name,
-                                                 const string &column_name, ErrorData &error) {
-	string empty_catalog;
+optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &schema_name, const Identifier &table_name,
+                                                 const Identifier &column_name, ErrorData &error) {
+	Identifier empty_catalog;
 	return GetMatchingBinding(empty_catalog, schema_name, table_name, column_name, error);
 }
 
-optional_ptr<Binding> Binder::GetMatchingBinding(const string &catalog_name, const string &schema_name,
-                                                 const string &table_name, const string &column_name,
+optional_ptr<Binding> Binder::GetMatchingBinding(const Identifier &catalog_name, const Identifier &schema_name,
+                                                 const Identifier &table_name, const Identifier &column_name,
                                                  ErrorData &error) {
 	optional_ptr<Binding> binding;
 	if (macro_binding && table_name == macro_binding->GetAlias()) {
@@ -323,7 +345,15 @@ BindingMode Binder::GetBindingMode() {
 }
 
 void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
-	can_contain_nulls = can_contain_nulls_p;
+	legacy_can_contain_nulls = can_contain_nulls_p;
+}
+
+bool Binder::CanContainNulls() const {
+	if (!Settings::Get<LegacyDisableNullTypeSetting>(context)) {
+		// if this legacy setting is not enabled nulls are not special - they can just occur anywhere
+		return true;
+	}
+	return legacy_can_contain_nulls;
 }
 
 void Binder::SetAlwaysRequireRebind() {
@@ -335,7 +365,7 @@ void Binder::AddTableName(string table_name) {
 	global_binder_state->table_names.insert(std::move(table_name));
 }
 
-void Binder::AddReplacementScan(const string &table_name, unique_ptr<TableRef> replacement) {
+void Binder::AddReplacementScan(const Identifier &table_name, unique_ptr<TableRef> replacement) {
 	auto it = global_binder_state->replacement_scans.find(table_name);
 	replacement->column_name_alias.clear();
 	replacement->alias.clear();
@@ -350,7 +380,7 @@ const unordered_set<string> &Binder::GetTableNames() {
 	return global_binder_state->table_names;
 }
 
-case_insensitive_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
+identifier_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
 	return global_binder_state->replacement_scans;
 }
 
@@ -507,17 +537,17 @@ void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, v
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
-                                     const string &alias, TableIndex update_table_index,
+                                     const Identifier &alias, TableIndex update_table_index,
                                      unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns) {
 	vector<LogicalType> types;
-	vector<string> names;
+	vector<Identifier> names;
 
 	auto binder = Binder::CreateBinder(context);
 
 	vector<ColumnIndex> bound_columns;
 	idx_t column_count = 0;
 	for (auto &col : table.GetColumns().Logical()) {
-		names.push_back(col.Name());
+		names.emplace_back(col.Name());
 		types.push_back(col.Type());
 		if (!col.Generated()) {
 			bound_columns.emplace_back(column_count);
@@ -558,14 +588,16 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	return result;
 }
 
-optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const string &catalog, const string &schema,
+optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
                                                    const EntryLookupInfo &lookup_info,
                                                    OnEntryNotFound on_entry_not_found) {
-	return entry_retriever.GetEntry(catalog, schema, lookup_info, on_entry_not_found);
+	return entry_retriever.GetEntry(
+	    EntryLookupInfo(lookup_info, QualifiedName(catalog, schema, lookup_info.GetEntryIdentifier())),
+	    on_entry_not_found);
 }
 
 //! Create a binder whose catalog search path is anchored to the table's catalog+schema
-shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const string &catalog_name, const string &schema_name) {
+shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const Identifier &catalog_name, const Identifier &schema_name) {
 	shared_ptr<Binder> new_binder = Binder::CreateBinder(context, this);
 
 	vector<CatalogSearchEntry> search_path;

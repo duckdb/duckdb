@@ -1,0 +1,5 @@
+{
+  "description": "Run with debug_verify_stats=true - checking that stats are propagated correctly through the plan",
+  "on_init": "SET debug_verify_stats=true;",
+  "skip_compiled": "true"
+}

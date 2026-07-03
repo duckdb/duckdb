@@ -2,16 +2,19 @@
 
 using namespace duckdb;
 
-string BuildSettingsString(const duckdb::vector<string> &settings) {
-	string result = "'{";
-	for (idx_t i = 0; i < settings.size(); i++) {
-		result += "\"" + settings[i] + "\": \"true\"";
-		if (i < settings.size() - 1) {
-			result += ", ";
+// Find the first direct child of `info` that has a VALUE entry for `key`.
+// Returns nullptr if not found.
+static duckdb_profiling_info FindChildWithKey(duckdb_profiling_info info, const char *key) {
+	idx_t n = duckdb_profiling_info_get_child_count(info);
+	for (idx_t i = 0; i < n; i++) {
+		auto child = duckdb_profiling_info_get_child(info, i);
+		auto val = duckdb_profiling_info_get_value(child, key);
+		if (val) {
+			duckdb_destroy_value(&val);
+			return child;
 		}
 	}
-	result += "}'";
-	return result;
+	return nullptr;
 }
 
 void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cumulative_counter,
@@ -19,7 +22,6 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 	auto map = duckdb_profiling_info_get_metrics(info);
 	REQUIRE(map);
 	auto count = duckdb_get_map_size(map);
-	REQUIRE(count != 0);
 
 	// Test index out of bounds for MAP value.
 	if (depth == 0) {
@@ -27,6 +29,13 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 		REQUIRE(!invalid_key);
 		auto invalid_value = duckdb_get_map_value(map, 10000000);
 		REQUIRE(!invalid_value);
+	}
+
+	// The root node (depth=0) has no direct VALUE children — all query/system/etc.
+	// metrics are stored in named OBJECT children accessible via get_child.
+	// Nodes at depth>0 always carry at least one metric when profiling is enabled.
+	if (depth > 0) {
+		REQUIRE(count != 0);
 	}
 
 	for (idx_t i = 0; i < count; i++) {
@@ -41,22 +50,23 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 		auto value_str = duckdb::string(value_c_str);
 
 		if (depth == 0) {
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_CARDINALITY));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_ROWS_SCANNED));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_TIMING));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_NAME));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_TYPE));
+			// Root node has no direct VALUE children — these should never appear.
+			REQUIRE(key_str != "intermediate_rows");
+			REQUIRE(key_str != "rows_scanned");
+			REQUIRE(key_str != "timing");
+			REQUIRE(key_str != "name");
+			REQUIRE(key_str != "type");
 		} else {
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::QUERY_NAME));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::BLOCKED_THREAD_TIME));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::LATENCY));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::ROWS_RETURNED));
+			// Operator nodes and metric-group objects: keys are unprefixed.
+			// Prefixed names (like "query.sql") must not appear here.
+			REQUIRE(key_str != "query.sql");
+			REQUIRE(key_str != "system.blocked_thread_time");
+			REQUIRE(key_str != "query.total_time");
+			REQUIRE(key_str != "query.rows_returned");
 		}
 
-		if (key_str == EnumUtil::ToString(MetricType::QUERY_NAME) ||
-		    key_str == EnumUtil::ToString(MetricType::OPERATOR_NAME) ||
-		    key_str == EnumUtil::ToString(MetricType::OPERATOR_TYPE) ||
-		    key_str == EnumUtil::ToString(MetricType::EXTRA_INFO)) {
+		// String-valued metrics — skip numeric conversion for these.
+		if (key_str == "name" || key_str == "type" || key_str == "extra_info" || key_str == "sql") {
 			REQUIRE(!value_str.empty());
 		} else {
 			double result = 0;
@@ -87,7 +97,7 @@ void TraverseTree(duckdb_profiling_info profiling_info, duckdb::map<string, doub
                   duckdb::map<string, double> &cumulative_result, const idx_t depth) {
 	RetrieveMetrics(profiling_info, cumulative_counter, cumulative_result, depth);
 
-	// Recurse into the child node.
+	// Recurse into children (operator nodes and metric-group OBJECT children).
 	auto child_count = duckdb_profiling_info_get_child_count(profiling_info);
 	if (depth == 0) {
 		REQUIRE(child_count != 0);
@@ -110,15 +120,23 @@ TEST_CASE("Test profiling with a single metric and get_value", "[capi]") {
 
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
 
-	// test only CPU_TIME profiling
-	duckdb::vector<string> settings = {"CPU_TIME"};
-	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildSettingsString(settings)));
+	// test query.cpu_time profiling alongside operator.extra_info so the metrics map is non-empty
+	REQUIRE_NO_FAIL(tester.Query("SET tracked_metrics = ['query.cpu_time', 'operator.extra_info']"));
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
 
 	auto info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(info != nullptr);
-	// Retrieve a metric that is not enabled.
-	REQUIRE(duckdb_profiling_info_get_value(info, "EXTRA_INFO") == nullptr);
+
+	// Retrieve a metric that is not enabled — must return nullptr at every level.
+	REQUIRE(duckdb_profiling_info_get_value(info, "operator.intermediate_rows") == nullptr);
+
+	// query.cpu_time lives inside the "query" metric-group child, not at the root level.
+	// Navigate to it via get_child, then retrieve the unprefixed key "cpu_time".
+	auto query_group = FindChildWithKey(info, "cpu_time");
+	REQUIRE(query_group != nullptr);
+	auto cpu_time_val = duckdb_profiling_info_get_value(query_group, "cpu_time");
+	REQUIRE(cpu_time_val != nullptr);
+	duckdb_destroy_value(&cpu_time_val);
 
 	duckdb::map<string, double> cumulative_counter;
 	duckdb::map<string, double> cumulative_result;
@@ -135,25 +153,41 @@ TEST_CASE("Test profiling with cumulative metrics", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
 
 	// test all profiling metrics
-	duckdb::vector<string> settings = {"BLOCKED_THREAD_TIME",  "CPU_TIME",       "CUMULATIVE_CARDINALITY", "EXTRA_INFO",
-	                                   "OPERATOR_CARDINALITY", "OPERATOR_TIMING"};
-	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildSettingsString(settings)));
+	REQUIRE_NO_FAIL(tester.Query(
+	    "SET tracked_metrics = ['system.blocked_thread_time', 'query.cpu_time', 'query.total_intermediate_rows', "
+	    "'operator.extra_info', 'operator.intermediate_rows', 'operator.timing']"));
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
 
 	auto info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(info != nullptr);
 
-	duckdb::map<string, double> cumulative_counter = {{"OPERATOR_TIMING", 0}, {"OPERATOR_CARDINALITY", 0}};
-	duckdb::map<string, double> cumulative_result {
-	    {"CPU_TIME", 0},
-	    {"CUMULATIVE_CARDINALITY", 0},
-	};
+	// All operator nodes (depth>0) have unprefixed keys: "timing", "intermediate_rows"
+	duckdb::map<string, double> cumulative_counter = {{"timing", 0}, {"intermediate_rows", 0}};
+	duckdb::map<string, double> cumulative_result;
 
 	TraverseTree(info, cumulative_counter, cumulative_result, 0);
 
-	REQUIRE(ConvertToInt(cumulative_result["CPU_TIME"]) == ConvertToInt(cumulative_counter["OPERATOR_TIMING"]));
-	REQUIRE(ConvertToInt(cumulative_result["CUMULATIVE_CARDINALITY"]) ==
-	        ConvertToInt(cumulative_counter["OPERATOR_CARDINALITY"]));
+	// query.cpu_time and query.total_intermediate_rows live in the "query" metric-group child.
+	// Navigate to it and retrieve the unprefixed keys.
+	auto query_group = FindChildWithKey(info, "cpu_time");
+	REQUIRE(query_group != nullptr);
+
+	auto cpu_time_val = duckdb_profiling_info_get_value(query_group, "cpu_time");
+	REQUIRE(cpu_time_val != nullptr);
+	auto cpu_time_str = duckdb_get_varchar(cpu_time_val);
+	double root_cpu_time = std::stod(cpu_time_str);
+	duckdb_free(cpu_time_str);
+	duckdb_destroy_value(&cpu_time_val);
+
+	auto total_rows_val = duckdb_profiling_info_get_value(query_group, "total_intermediate_rows");
+	REQUIRE(total_rows_val != nullptr);
+	auto total_rows_str = duckdb_get_varchar(total_rows_val);
+	double root_total_intermediate_rows = std::stod(total_rows_str);
+	duckdb_free(total_rows_str);
+	duckdb_destroy_value(&total_rows_val);
+
+	REQUIRE(ConvertToInt(root_cpu_time) == ConvertToInt(cumulative_counter["timing"]));
+	REQUIRE(ConvertToInt(root_total_intermediate_rows) == ConvertToInt(cumulative_counter["intermediate_rows"]));
 	tester.Cleanup();
 }
 
@@ -269,14 +303,13 @@ TEST_CASE("Test profiling with Extra Info enabled", "[capi]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
-	duckdb::vector<string> settings = {"EXTRA_INFO"};
-	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildSettingsString(settings)));
-	REQUIRE_NO_FAIL(tester.Query("SELECT 1"));
+	REQUIRE_NO_FAIL(tester.Query("SET tracked_metrics = ['operator.extra_info']"));
+	REQUIRE_NO_FAIL(tester.Query("SELECT unnest([1,2,3]) ORDER BY 1"));
 
 	auto info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(info);
 
-	// Retrieve the child node.
+	// get_child(root, 0) returns the root operator (LIST items come before OBJECT children).
 	auto child_info = duckdb_profiling_info_get_child(info, 0);
 	REQUIRE(duckdb_profiling_info_get_child_count(child_info) != 0);
 
@@ -297,9 +330,8 @@ TEST_CASE("Test profiling with Extra Info enabled", "[capi]") {
 		auto value_c_str = duckdb_get_varchar(value);
 		auto value_str = duckdb::string(value_c_str);
 
-		if (key_str == EnumUtil::ToString(MetricType::EXTRA_INFO)) {
-			REQUIRE(value_str.find("__order_by__"));
-			REQUIRE(value_str.find("ASC"));
+		if (key_str == "extra_info") {
+			REQUIRE(!value_str.empty());
 			found_extra_info = true;
 		}
 
@@ -353,8 +385,11 @@ TEST_CASE("Test profiling with the appender", "[capi]") {
 	auto info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(info);
 
-	// Check that the query name matches the appender query.
-	auto query_name = duckdb_profiling_info_get_value(info, "QUERY_NAME");
+	// query.sql lives in the "query" metric-group child. Navigate to it and
+	// retrieve the unprefixed key "sql".
+	auto query_group = FindChildWithKey(info, "sql");
+	REQUIRE(query_group != nullptr);
+	auto query_name = duckdb_profiling_info_get_value(query_group, "sql");
 	REQUIRE(query_name);
 	auto query_name_c_str = duckdb_get_varchar(query_name);
 	auto query_name_str = duckdb::string(query_name_c_str);
@@ -393,8 +428,10 @@ TEST_CASE("Test profiling with the non-query appender", "[capi]") {
 	auto info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(info);
 
-	// Check that the query name matches the appender query.
-	auto query_name = duckdb_profiling_info_get_value(info, "QUERY_NAME");
+	// Navigate to the "query" metric-group child and check the sql value.
+	auto query_group = FindChildWithKey(info, "sql");
+	REQUIRE(query_group != nullptr);
+	auto query_name = duckdb_profiling_info_get_value(query_group, "sql");
 	REQUIRE(query_name);
 
 	auto query_name_c_str = duckdb_get_varchar(query_name);

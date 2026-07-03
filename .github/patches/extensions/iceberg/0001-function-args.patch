@@ -1,0 +1,50 @@
+diff --git a/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp b/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp
+index e88b6c63..ce20f92f 100644
+--- a/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp
++++ b/src/catalog/rest/catalog_entry/table/iceberg_table_information.cpp
+@@ -361,17 +361,17 @@ IcebergTableInformation::BuildPartitionSpec(const vector<unique_ptr<ParsedExpres
+ 		} else if (key_type == ExpressionType::FUNCTION) {
+ 			auto &funcexpr = key->Cast<FunctionExpression>();
+ 			transform = funcexpr.FunctionName();
+-			if (funcexpr.GetChildren().empty()) {
++			if (funcexpr.GetArguments().empty()) {
+ 				throw NotImplementedException("Unrecognized transform ('%s')", transform);
+ 			} else if (!IcebergTransform::TransformFunctionSupported(transform)) {
+ 				throw NotImplementedException("Unrecognized transform ('%s')", transform);
+ 			}
+ 			if (transform == "bucket" || transform == "truncate") {
+ 				// Spark-compatible syntax: bucket(N, col) / truncate(W, col)
+-				if (funcexpr.GetChildren().size() < 2) {
++				if (funcexpr.GetArguments().size() < 2) {
+ 					throw InvalidInputException("%s requires two arguments, e.g. %s(16, col)", transform, transform);
+ 				}
+-				auto &param_expr = *funcexpr.GetChildren()[0];
++				auto &param_expr = funcexpr.GetArguments()[0].GetExpression();
+ 				if (param_expr.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+ 					throw InvalidInputException("%s first argument must be a constant integer", transform);
+ 				}
+@@ -382,18 +382,18 @@ IcebergTableInformation::BuildPartitionSpec(const vector<unique_ptr<ParsedExpres
+ 				}
+ 				bucket_modulo_val = const_expr.GetValue().GetValue<idx_t>();
+ 				transform = StringUtil::Format("%s[%d]", transform, bucket_modulo_val);
+-				if (funcexpr.GetChildren()[1]->GetExpressionType() != ExpressionType::COLUMN_REF) {
++				if (funcexpr.GetArguments()[1].GetExpression().GetExpressionType() != ExpressionType::COLUMN_REF) {
+ 					throw NotImplementedException("Transforms are only supported on column references, not %s",
+-					                              EnumUtil::ToChars(funcexpr.GetChildren()[1]->GetExpressionType()));
++					                              EnumUtil::ToChars(funcexpr.GetArguments()[1].GetExpression().GetExpressionType()));
+ 				}
+-				auto &colref = funcexpr.GetChildren()[1]->Cast<ColumnRefExpression>();
++				auto &colref = funcexpr.GetArguments()[1].GetExpression().Cast<ColumnRefExpression>();
+ 				column_name = colref.ColumnNames().back();
+ 			} else {
+-				if (funcexpr.GetChildren()[0]->GetExpressionType() != ExpressionType::COLUMN_REF) {
++				if (funcexpr.GetArguments()[0].GetExpression().GetExpressionType() != ExpressionType::COLUMN_REF) {
+ 					throw NotImplementedException("Transforms are only supported on column references, not %s",
+-					                              EnumUtil::ToChars(funcexpr.GetChildren()[0]->GetExpressionType()));
++					                              EnumUtil::ToChars(funcexpr.GetArguments()[0].GetExpression().GetExpressionType()));
+ 				}
+-				auto &colref = funcexpr.GetChildren()[0]->Cast<ColumnRefExpression>();
++				auto &colref = funcexpr.GetArguments()[0].GetExpression().Cast<ColumnRefExpression>();
+ 				column_name = colref.ColumnNames().back();
+ 			}
+ 		} else {

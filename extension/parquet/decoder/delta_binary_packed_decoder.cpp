@@ -1,8 +1,17 @@
 #include "decoder/delta_binary_packed_decoder.hpp"
+
+#include <stdexcept>
+
 #include "column_reader.hpp"
 #include "parquet_reader.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_types.h"
+#include "resizable_buffer.hpp"
 
 namespace duckdb {
+class Vector;
 
 DeltaBinaryPackedDecoder::DeltaBinaryPackedDecoder(ColumnReader &reader)
     : reader(reader), decoded_data_buffer(reader.encoding_buffers[0]) {

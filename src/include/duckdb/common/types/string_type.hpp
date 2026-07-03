@@ -40,6 +40,7 @@ public:
 	string_t() = default;
 	explicit string_t(uint32_t len) {
 		value.inlined.length = len;
+		memset(value.inlined.inlined, 0, INLINE_BYTES);
 	}
 	string_t(const char *data, uint32_t len) {
 		value.inlined.length = len;
@@ -94,6 +95,14 @@ public:
 		return value.inlined.inlined;
 	}
 
+	uint32_t GetPrefixIntegerComparable() const {
+#ifdef DUCKDB_DEBUG_NO_INLINE
+		return 0;
+#else
+		return BSwapIfLE(Load<uint32_t>(const_data_ptr_cast(GetPrefix())));
+#endif
+	}
+
 	idx_t GetSize() const {
 		return value.inlined.length;
 	}
@@ -107,7 +116,6 @@ public:
 			memcpy(GetDataWriteable(), ptr, size);
 		}
 		Finalize();
-		VerifyCharacters();
 	}
 
 	bool Empty() const {
@@ -149,9 +157,10 @@ public:
 	}
 
 	void Verify() const;
+	//! Verify also in release mode
+	void ForceVerify() const;
 	void VerifyUTF8() const;
 	void VerifyCharacters() const;
-	void VerifyNull() const;
 
 	struct StringComparisonOperators {
 		static inline bool Equals(const string_t &a, const string_t &b) {

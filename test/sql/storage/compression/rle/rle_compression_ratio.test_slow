@@ -3,7 +3,7 @@
 # group: [rle]
 
 # load the DB from disk
-load __TEST_DIR__/test_rle.db
+load {TEST_DIR}/test_rle.db
 
 statement ok
 PRAGMA force_compression='rle'
@@ -51,7 +51,7 @@ statement ok
 PRAGMA force_compression='uncompressed';
 
 statement ok
-CREATE TABLE test_uncompressed AS SELECT ((i//10)%100)::${type} FROM range(0, 2500000) tbl(i);
+CREATE TABLE test_uncompressed AS SELECT ((i//10)%100)::{type} FROM range(0, 2500000) tbl(i);
 
 statement ok
 checkpoint
@@ -60,14 +60,14 @@ statement ok
 PRAGMA force_compression='rle'
 
 statement ok
-CREATE TABLE test_rle AS SELECT ((i//10)%100)::${type} FROM range(0, 2500000) tbl(i);
+CREATE TABLE test_rle AS SELECT ((i//10)%100)::{type} FROM range(0, 2500000) tbl(i);
 
 statement ok
 checkpoint
 
 # assert compression ratio >2 wich should be achieved for even the smallest types for this data
 query II
-select (uncompressed::FLOAT // rle::FLOAT) > 2, CAST(1 as ${type}) FROM (
+select (uncompressed::FLOAT // rle::FLOAT) > 2, CAST(1 as {type}) FROM (
     select
         (select count(distinct block_id) from pragma_storage_info('test_rle') where segment_type not in('VARCHAR', 'VALIDITY')) as rle,
         (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed

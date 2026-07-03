@@ -80,14 +80,16 @@ public:
 	             AttachedDatabase &db);
 
 public:
+	void ResetStorage() override;
+
 	bool IsBound() const override {
 		return false;
 	}
 	const string &GetIndexType() const override {
 		return GetCreateInfo().index_type;
 	}
-	const string &GetIndexName() const override {
-		return GetCreateInfo().index_name;
+	const Identifier &GetIndexName() const override {
+		return GetCreateInfo().GetIndexName();
 	}
 	IndexConstraintType GetConstraintType() const override {
 		return GetCreateInfo().constraint_type;
@@ -101,11 +103,9 @@ public:
 	const vector<unique_ptr<ParsedExpression>> &GetParsedExpressions() const {
 		return GetCreateInfo().parsed_expressions;
 	}
-	const string &GetTableName() const {
+	const Identifier &GetTableName() const {
 		return GetCreateInfo().table;
 	}
-
-	void CommitDrop() override;
 
 	//! Buffer Index delete or insert (replay_type) data chunk.
 	//! See note above on mapped_column_ids, this function assumes that index_column_chunk maps into

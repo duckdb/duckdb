@@ -10,6 +10,7 @@
 
 #include "duckdb/common/fixed_size_map.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
@@ -23,6 +24,8 @@ public:
 	}
 
 public:
+	bool compute_reverse_partition_sel = false;
+
 	Vector partition_indices;
 	SelectionVector partition_sel;
 	SelectionVector reverse_partition_sel;
@@ -30,6 +33,7 @@ public:
 	static constexpr idx_t MAP_THRESHOLD = 256;
 	perfect_map_t<list_entry_t> partition_entries;
 	fixed_size_map_t<list_entry_t> fixed_partition_entries;
+	unsafe_vector<idx_t> partition_offsets;
 
 	unsafe_vector<TupleDataPinState> partition_pin_states;
 	TupleDataChunkState chunk_state;
@@ -74,6 +78,14 @@ enum class PartitionedTupleDataType : uint8_t {
 	RADIX
 };
 
+class PartitionedTupleDataRepartitionKeyTracker {
+public:
+	virtual ~PartitionedTupleDataRepartitionKeyTracker() = default;
+
+	virtual void RepartitionChunk(TupleDataCollection &source_partition, TupleDataChunkState &source_chunk,
+	                              PartitionedTupleDataAppendState &target_append, idx_t count) = 0;
+};
+
 //! PartitionedTupleData represents partitioned row data, which serves as an interface for different types of
 //! partitioning, e.g., radix, hive
 class PartitionedTupleData {
@@ -89,6 +101,10 @@ public:
 	//! Initializes a local state for parallel partitioning that can be merged into this PartitionedTupleData
 	void InitializeAppendState(PartitionedTupleDataAppendState &state,
 	                           TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
+	//! Reuses an existing append state for a new iteration - faster than InitializeAppendState when the
+	//! append state already has pre-allocated buffers (selection vectors, partition pin states, chunk state)
+	virtual void ResetAppendState(PartitionedTupleDataAppendState &state,
+	                              TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
 	//! Appends a DataChunk to this PartitionedTupleData
 	void Append(PartitionedTupleDataAppendState &state, DataChunk &input,
 	            const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
@@ -107,7 +123,8 @@ public:
 	//! Resets this PartitionedTupleData
 	void Reset();
 	//! Repartition this PartitionedTupleData into the new PartitionedTupleData
-	void Repartition(ClientContext &context, PartitionedTupleData &new_partitioned_data);
+	void Repartition(ClientContext &context, PartitionedTupleData &new_partitioned_data,
+	                 optional_ptr<PartitionedTupleDataRepartitionKeyTracker> key_tracker = nullptr);
 	//! Unpins the data
 	void Unpin();
 	//! Get the partitions in this PartitionedTupleData
@@ -161,7 +178,7 @@ protected:
 protected:
 	//! PartitionedTupleData can only be instantiated by derived classes
 	PartitionedTupleData(PartitionedTupleDataType type, BufferManager &buffer_manager,
-	                     shared_ptr<TupleDataLayout> &layout_ptr, MemoryTag tag);
+	                     shared_ptr<TupleDataLayout> &layout_ptr, MemoryTag tag, QueryContext context = QueryContext());
 	PartitionedTupleData(PartitionedTupleData &other);
 
 	//! Whether to use fixed size map or regular map
@@ -170,16 +187,16 @@ protected:
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
 	void BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
 	                       const idx_t append_count) const;
-	template <bool fixed>
+	template <bool FIXED>
 	static void BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
 	                              const idx_t append_count, const idx_t max_partition_idx);
 	//! Builds out the buffer space in the partitions
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
-	template <bool fixed>
+	template <bool FIXED>
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection() {
-		return make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, tag, stl_allocator);
+		return make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, tag, stl_allocator, context);
 	}
 	//! Verify count/data size of this PartitionedTupleData
 	void Verify() const;
@@ -188,6 +205,8 @@ protected:
 	PartitionedTupleDataType type;
 
 	BufferManager &buffer_manager;
+	//! The query context, used to attribute eviction/spill I/O of the partitions to the query
+	QueryContext context;
 	shared_ptr<ArenaAllocator> stl_allocator;
 
 	shared_ptr<TupleDataLayout> layout_ptr;

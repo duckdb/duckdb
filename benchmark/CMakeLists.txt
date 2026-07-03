@@ -30,3 +30,5 @@ add_executable(benchmark_runner benchmark_runner.cpp interpreted_benchmark.cpp
 
 target_link_libraries(benchmark_runner duckdb_static imdb test_helpers)
 link_extension_libraries(benchmark_runner "")
+
+duckdb_codesign_for_debugging(benchmark_runner)

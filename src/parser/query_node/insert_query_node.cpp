@@ -8,7 +8,7 @@
 namespace duckdb {
 
 InsertQueryNode::InsertQueryNode()
-    : QueryNode(QueryNodeType::INSERT_QUERY_NODE), schema(DEFAULT_SCHEMA), catalog(INVALID_CATALOG),
+    : QueryNode(QueryNodeType::INSERT_QUERY_NODE), qualified_name({Identifier::DefaultSchema()}, Identifier()),
       column_order(InsertColumnOrder::INSERT_BY_POSITION) {
 }
 
@@ -23,16 +23,10 @@ string InsertQueryNode::ToString() const {
 		result += " OR REPLACE";
 	}
 	result += " INTO ";
-	if (!catalog.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
-	}
-	if (!schema.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
-	}
-	result += KeywordHelper::WriteOptionallyQuoted(table);
+	result += qualified_name.ToString();
 	// Write the (optional) alias of the insert target
 	if (table_ref && !table_ref->alias.empty()) {
-		result += StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(table_ref->alias));
+		result += StringUtil::Format(" AS %s", SQLIdentifier(table_ref->alias));
 	}
 	if (column_order == InsertColumnOrder::INSERT_BY_NAME) {
 		result += " BY NAME";
@@ -43,16 +37,16 @@ string InsertQueryNode::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(columns[i]);
+			result += SQLIdentifier(columns[i]);
 		}
-		result += " )";
+		result += ")";
 	}
 	result += " ";
 	auto values_list = GetValuesList();
 	if (values_list) {
 		D_ASSERT(!default_values);
 		auto saved_alias = values_list->alias;
-		values_list->alias = string();
+		values_list->alias = Identifier(string());
 		result += values_list->ToString();
 		values_list->alias = saved_alias;
 	} else if (select_statement) {
@@ -70,7 +64,7 @@ string InsertQueryNode::ToString() const {
 			result += "(";
 			auto &cols = conflict_info.indexed_columns;
 			for (auto it = cols.begin(); it != cols.end();) {
-				result += StringUtil::Lower(*it);
+				result += StringUtil::Lower(it->GetIdentifierName());
 				if (++it != cols.end()) {
 					result += ", ";
 				}
@@ -95,7 +89,7 @@ string InsertQueryNode::ToString() const {
 				if (i) {
 					result += ", ";
 				}
-				result += StringUtil::Lower(column) + " = " + expr->ToString();
+				result += StringUtil::Lower(column.GetIdentifierName()) + " = " + expr->ToString();
 			}
 			// (optional) where clause
 			if (set_info.condition) {
@@ -111,8 +105,7 @@ string InsertQueryNode::ToString() const {
 			}
 			auto col = returning_list[i]->ToString();
 			if (!returning_list[i]->GetAlias().empty()) {
-				col +=
-				    StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(returning_list[i]->GetAlias()));
+				col += StringUtil::Format(" AS %s", SQLIdentifier(returning_list[i]->GetAlias()));
 			}
 			result += col;
 		}
@@ -128,13 +121,7 @@ bool InsertQueryNode::Equals(const QueryNode *other_p) const {
 		return false;
 	}
 	auto &other = other_p->Cast<InsertQueryNode>();
-	if (table != other.table) {
-		return false;
-	}
-	if (schema != other.schema) {
-		return false;
-	}
-	if (catalog != other.catalog) {
+	if (qualified_name != other.qualified_name) {
 		return false;
 	}
 	if (columns != other.columns) {
@@ -173,9 +160,7 @@ bool InsertQueryNode::Equals(const QueryNode *other_p) const {
 
 unique_ptr<QueryNode> InsertQueryNode::Copy() const {
 	auto result = make_uniq<InsertQueryNode>();
-	result->table = table;
-	result->schema = schema;
-	result->catalog = catalog;
+	result->qualified_name = qualified_name;
 	result->columns = columns;
 	result->default_values = default_values;
 	result->column_order = column_order;

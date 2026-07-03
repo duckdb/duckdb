@@ -12,13 +12,13 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 
 namespace duckdb {
 class ExpressionListRef;
 class UpdateSetInfo;
 class Serializer;
 class Deserializer;
-class InsertQueryNode;
 
 enum class OnConflictAction : uint8_t {
 	THROW,
@@ -45,7 +45,7 @@ public:
 public:
 	OnConflictAction action_type;
 
-	vector<string> indexed_columns;
+	vector<Identifier> indexed_columns;
 	//! The SET information (if action_type == UPDATE)
 	unique_ptr<UpdateSetInfo> set_info;
 	//! The condition determining whether we apply the DO .. for conflicts that arise

@@ -12,10 +12,9 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 
 namespace duckdb {
-
-class DeleteQueryNode;
 
 class DeleteStatement : public SQLStatement {
 public:

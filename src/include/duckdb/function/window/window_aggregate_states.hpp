@@ -23,7 +23,7 @@ struct WindowAggregateStates {
 		return states.size() / state_size;
 	}
 	data_ptr_t *GetData() {
-		return FlatVector::GetData<data_ptr_t>(*statef);
+		return FlatVector::GetDataMutable<data_ptr_t>(*statef);
 	}
 	data_ptr_t GetStatePtr(idx_t idx) {
 		return states.data() + idx * state_size;

@@ -2,13 +2,10 @@
 # description: Test LIMIT with a parameter (issue 1866)
 # group: [order]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT 'Test' LIMIT ?
 ----
-<REGEX>:Invalid Input Error.*Expected 1 parameters, but none were supplied.*
+<REGEX>:Invalid Input Error.*Values were not provided for the following.*
 
 statement ok
 PREPARE v1 AS SELECT 'Test' LIMIT ?

@@ -88,7 +88,7 @@ public:
 	unsafe_vector<idx_t> non_distinct_filter;
 	unsafe_vector<idx_t> distinct_filter;
 
-	unordered_map<Expression *, size_t> filter_indexes;
+	reference_map_t<const Expression, size_t> filter_indexes;
 
 public:
 	// Source interface

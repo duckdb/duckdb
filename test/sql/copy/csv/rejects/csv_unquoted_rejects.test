@@ -86,7 +86,7 @@ query II
 SELECT * FROM read_csv(
     '{DATA_DIR}/csv/rejects/unquoted/basic.csv',
     columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
-    buffer_size=${buffer_size},
+    buffer_size={buffer_size},
     store_rejects=true, auto_detect=false, header = 1, quote = '"', escape = '"', strict_mode=true);
 ----
 bla	1

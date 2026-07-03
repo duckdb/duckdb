@@ -1,0 +1,19 @@
+# name: test/sql/copy/parquet/delta_byte_array_fixed_variable.test_slow
+# description: Test reading a delta byte array encoded columns with fixed length
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+statement ok
+FROM 'http://blobs.duckdb.org/data/owi-remote-index-nl-metadata.parquet' limit 10;
+
+query I
+SELECT url FROM 'http://blobs.duckdb.org/data/owi-remote-index-nl-metadata.parquet' WHERE docid = 126899;
+----
+https://profs.library.uu.nl/hoogleraar/poll-l/
+
+# test if the whole table can be copied correctly
+statement ok
+CREATE TABLE copy_tbl AS SELECT * FROM 'http://blobs.duckdb.org/data/owi-remote-index-nl-metadata.parquet';

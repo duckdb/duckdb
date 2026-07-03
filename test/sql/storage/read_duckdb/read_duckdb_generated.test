@@ -3,7 +3,7 @@
 # group: [read_duckdb]
 
 statement ok
-ATTACH '__TEST_DIR__/read_duckdb_generated.db' AS rd
+ATTACH '{TEST_DIR}/read_duckdb_generated.db' AS rd
 
 statement ok
 CREATE TABLE rd.tbl (
@@ -20,11 +20,11 @@ statement ok
 DETACH rd
 
 statement error
-SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_generated.db')
+SELECT * FROM read_duckdb('{TEST_DIR}/read_duckdb_generated.db')
 ----
 total_profit
 
 query III
-SELECT non_generated + 42, price, amount_sold FROM read_duckdb('__TEST_DIR__/read_duckdb_generated.db')
+SELECT non_generated + 42, price, amount_sold FROM read_duckdb('{TEST_DIR}/read_duckdb_generated.db')
 ----
 142	5	4

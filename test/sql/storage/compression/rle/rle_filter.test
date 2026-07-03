@@ -3,10 +3,7 @@
 # group: [rle]
 
 # load the DB from disk
-load __TEST_DIR__/test_rle_filter.db
-
-statement ok
-pragma enable_verification
+load {TEST_DIR}/test_rle_filter.db
 
 statement ok
 PRAGMA force_compression = 'rle'

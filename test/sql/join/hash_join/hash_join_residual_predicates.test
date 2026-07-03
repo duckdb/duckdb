@@ -3,12 +3,11 @@
 # group: [hash_join]
 
 statement ok
-PRAGMA enable_verification
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
-require tpch
+set variable sf 0
 
-statement ok
-CALL dbgen(sf=0);
+include test/sql/tpch/tpch_setup.test_template
 
 statement ok
 set disabled_optimizers to 'build_side_probe_side';

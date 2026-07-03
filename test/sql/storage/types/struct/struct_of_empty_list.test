@@ -1,7 +1,7 @@
 # name: test/sql/storage/types/struct/struct_of_empty_list.test
 # group: [struct]
 
-load __TEST_DIR__/empty_list_in_struct.db
+load {TEST_DIR}/empty_list_in_struct.db
 
 statement ok
 create table tbl (col STRUCT(a VARCHAR[]))

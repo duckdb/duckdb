@@ -2,9 +2,6 @@
 # description: Issue 536
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Nondeterministic clause when using an UNION query and HAVING clause
 statement ok
 CREATE TABLE t0(c0 INT);

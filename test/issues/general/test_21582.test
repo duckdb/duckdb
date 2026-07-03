@@ -1,0 +1,23 @@
+# name: test/issues/general/test_21582.test
+# description: Issue 21582: TopN window elimination with external CTE refs should not fail CTE pruning
+# group: [general]
+
+statement ok
+CREATE OR REPLACE MACRO m(t) AS TABLE
+WITH i1 AS MATERIALIZED (
+	SELECT v
+	FROM query_table(t)
+)
+SELECT *
+FROM i1;
+
+query I
+WITH c AS MATERIALIZED (
+	SELECT NULL AS v
+)
+SELECT c.v
+FROM c
+LEFT JOIN m('c') ti USING (v)
+QUALIFY ROW_NUMBER() OVER (ORDER BY 1) = 1;
+----
+NULL

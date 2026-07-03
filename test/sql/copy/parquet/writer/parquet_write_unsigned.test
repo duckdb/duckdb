@@ -5,9 +5,6 @@
 require parquet
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE values_UTINYINT AS SELECT d::UTINYINT d FROM (VALUES
     (0), (42), (NULL), (255)) tbl (d);
 
@@ -26,49 +23,49 @@ CREATE TABLE values_UBIGINT AS SELECT d::UBIGINT d FROM (VALUES
 foreach type UTINYINT USMALLINT UINTEGER UBIGINT
 
 statement ok
-CREATE OR REPLACE TABLE unsigned(d ${type})
+CREATE OR REPLACE TABLE unsigned(d {type})
 
 statement ok
-INSERT INTO unsigned SELECT * FROM values_${type}
+INSERT INTO unsigned SELECT * FROM values_{type}
 
 statement ok
-COPY unsigned TO '__TEST_DIR__/unsigned.parquet' (FORMAT 'parquet');
+COPY unsigned TO '{TEST_DIR}/unsigned.parquet' (FORMAT 'parquet');
 
 query I
-SELECT * FROM '__TEST_DIR__/unsigned.parquet' EXCEPT SELECT * FROM unsigned
+SELECT * FROM '{TEST_DIR}/unsigned.parquet' EXCEPT SELECT * FROM unsigned
 ----
 
 query I
-SELECT * FROM unsigned EXCEPT SELECT * FROM '__TEST_DIR__/unsigned.parquet'
+SELECT * FROM unsigned EXCEPT SELECT * FROM '{TEST_DIR}/unsigned.parquet'
 ----
 
 query I
-SELECT * FROM '__TEST_DIR__/unsigned.parquet' WHERE d=42
+SELECT * FROM '{TEST_DIR}/unsigned.parquet' WHERE d=42
 ----
 42
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/unsigned.parquet' WHERE d>42
+SELECT COUNT(*) FROM '{TEST_DIR}/unsigned.parquet' WHERE d>42
 ----
 1
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/unsigned.parquet' WHERE d>=42
+SELECT COUNT(*) FROM '{TEST_DIR}/unsigned.parquet' WHERE d>=42
 ----
 2
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/unsigned.parquet' WHERE d<42
+SELECT COUNT(*) FROM '{TEST_DIR}/unsigned.parquet' WHERE d<42
 ----
 1
 
 query I
-SELECT COUNT(*) FROM '__TEST_DIR__/unsigned.parquet' WHERE d<=42
+SELECT COUNT(*) FROM '{TEST_DIR}/unsigned.parquet' WHERE d<=42
 ----
 2
 
 query I
-SELECT typeof(d)='${type}' FROM '__TEST_DIR__/unsigned.parquet' LIMIT 1
+SELECT typeof(d)='{type}' FROM '{TEST_DIR}/unsigned.parquet' LIMIT 1
 ----
 true
 

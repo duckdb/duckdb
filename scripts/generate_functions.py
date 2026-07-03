@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 function_groups = {
-    ('src', 'include/duckdb', 'function'): ['scalar', 'aggregate'],
+    ('src', 'include/duckdb', 'function'): ['scalar', 'aggregate', 'window'],
     ('extension', 'core_functions/include', 'core_functions'): ['scalar', 'aggregate'],
 }
 
@@ -150,6 +150,12 @@ def create_header_file(root, include_dir, path, all_function_list, function_type
         elif entry['type'] == 'aggregate_function_set':
             function_text = 'static AggregateFunctionSet GetFunctions();'
             all_function_list.append([entry['name'], f"DUCKDB_AGGREGATE_FUNCTION_SET({struct_name})"])
+        elif entry['type'] == 'window_function':
+            function_text = 'static WindowFunction GetFunction();'
+            all_function_list.append([entry['name'], f"DUCKDB_WINDOW_FUNCTION({struct_name})"])
+        elif entry['type'] == 'window_function_set':
+            function_text = 'static WindowFunctionSet GetFunctions();'
+            all_function_list.append([entry['name'], f"DUCKDB_WINDOW_FUNCTION_SET({struct_name})"])
         else:
             print("Unknown entry type " + entry['type'] + ' for entry ' + struct_name)
             exit(1)
@@ -206,6 +212,10 @@ def create_header_file(root, include_dir, path, all_function_list, function_type
                     all_function_list.append([alias, f"DUCKDB_AGGREGATE_FUNCTION_ALIAS({alias_struct_name})"])
                 elif aliased_type == 'aggregate_function_set':
                     all_function_list.append([alias, f"DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS({alias_struct_name})"])
+                elif aliased_type == 'window_function':
+                    all_function_list.append([alias, f"DUCKDB_WINDOW_FUNCTION_ALIAS({alias_struct_name})"])
+                elif aliased_type == 'window_function_set':
+                    all_function_list.append([alias, f"DUCKDB_WINDOW_FUNCTION_SET_ALIAS({alias_struct_name})"])
                 else:
                     print("Unknown entry type " + aliased_type + ' for entry ' + struct_name)
                     exit(1)

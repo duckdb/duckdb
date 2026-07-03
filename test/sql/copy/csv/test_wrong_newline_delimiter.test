@@ -2,9 +2,6 @@
 # description: Test error messages printing exact newline delimiters
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r', strict_mode=false)
 ----

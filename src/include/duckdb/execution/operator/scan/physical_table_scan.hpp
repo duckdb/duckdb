@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
@@ -81,14 +82,14 @@ public:
 		return true;
 	}
 	bool ParallelSource() const override;
+	TableFunctionParallelism SourceParallelism() const override;
 
 	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override;
 
 	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 
-	InsertionOrderPreservingMap<string> ExtraSourceParams(GlobalSourceState &gstate,
-	                                                      LocalSourceState &lstate) const override;
-	optional_idx GetRowsScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const;
+	void GetMetrics(ClientContext &context, GlobalSourceState &gstate_p, LocalSourceState &lstate,
+	                OperatorMetrics &operator_metrics) const;
 
 private:
 	string GetFilterInfo(const TableFilterSet &filter_set) const;

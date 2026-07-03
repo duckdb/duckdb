@@ -22,15 +22,14 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/Android.yml'
+      - 'gh-readonly-queue/**'
+    paths:
+      - '.github/workflows/Android.yml'
   pull_request:
     types: [opened, reopened, ready_for_review]
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/Android.yml'
-      - '!.github/patches/duckdb-wasm/**'
+    paths:
+      - '.github/workflows/Android.yml'
+      - '.github/patches/duckdb-wasm/**'
 
 
 concurrency:
@@ -78,7 +77,7 @@ jobs:
     - name: Install Android NDK
       shell: bash
       run: |
-        wget https://dl.google.com/android/repository/android-ndk-r27-linux.zip
+        python3 scripts/ci/retry.py -- wget https://dl.google.com/android/repository/android-ndk-r27-linux.zip
         unzip android-ndk-r27-linux.zip
         mv android-ndk-r27 android-ndk
 

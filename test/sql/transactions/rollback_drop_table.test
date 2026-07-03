@@ -1,0 +1,40 @@
+# name: test/sql/transactions/rollback_drop_table.test
+# description: A reverted DROP TABLE must not leave row-group blocks marked, so a retried DROP TABLE does not hit a double-mark assertion.
+# group: [transactions]
+
+load {TEST_DIR}/test_row_group_double_mark_repro.db
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+CREATE TABLE t1 (id INTEGER)
+
+statement ok
+INSERT INTO t1 SELECT i FROM range(10) tbl(i)
+
+statement ok
+CREATE TABLE t2 (id INTEGER)
+
+statement ok
+INSERT INTO t2 SELECT i FROM range(10) tbl(i)
+
+statement ok con1
+BEGIN
+
+statement ok con1
+DROP TABLE t1
+
+statement ok con1
+DELETE FROM t2 WHERE id < 5
+
+statement ok
+DROP TABLE t2
+
+statement error con1
+COMMIT
+----
+another transaction has dropped this table
+
+statement ok
+DROP TABLE t1

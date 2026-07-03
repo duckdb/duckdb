@@ -7,17 +7,17 @@ require parquet
 foreach unsupported_type ubigint uhugeint hugeint utinyint usmallint uinteger
 
 statement ok
-COPY (SELECT 1::${unsupported_type}::variant v) TO '__TEST_DIR__/invalid_parquet_variant.parquet';
+COPY (SELECT 1::{unsupported_type}::variant v) TO '{TEST_DIR}/invalid_parquet_variant.parquet';
 
 query II
 SELECT v,
 	variant_typeof(v) =
 	CASE
-		WHEN '${unsupported_type}' = 'utinyint' THEN 'INT16'
-		WHEN '${unsupported_type}' = 'usmallint' THEN 'INT32'
+		WHEN '{unsupported_type}' = 'utinyint' THEN 'INT16'
+		WHEN '{unsupported_type}' = 'usmallint' THEN 'INT32'
 		ELSE 'INT64'
 	END
-FROM '__TEST_DIR__/invalid_parquet_variant.parquet'
+FROM '{TEST_DIR}/invalid_parquet_variant.parquet'
 ----
 1	true
 
@@ -27,7 +27,7 @@ endloop
 foreach unsupported_type ubigint uhugeint hugeint
 
 statement error
-copy (select '18446744073709551615'::${unsupported_type}::VARIANT) to '__TEST_DIR__/out_of_range_variant.parquet';
+copy (select '18446744073709551615'::{unsupported_type}::VARIANT) to '{TEST_DIR}/out_of_range_variant.parquet';
 ----
 value is out of range
 

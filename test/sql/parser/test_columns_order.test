@@ -3,9 +3,6 @@
 # group: [parser]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl(col1 INTEGER, col2 INTEGER, col3 INTEGER);
 
 statement ok

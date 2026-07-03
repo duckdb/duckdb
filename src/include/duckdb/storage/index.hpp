@@ -52,7 +52,7 @@ public:
 	virtual const string &GetIndexType() const = 0;
 
 	//! The name of the index
-	virtual const string &GetIndexName() const = 0;
+	virtual const Identifier &GetIndexName() const = 0;
 
 	//! The index constraint type
 	virtual IndexConstraintType GetConstraintType() const = 0;
@@ -83,8 +83,7 @@ public:
 		return column_id_set;
 	}
 
-	// All indexes can be dropped, even if they are unbound
-	virtual void CommitDrop() = 0;
+	virtual void ResetStorage() = 0;
 
 public:
 	template <class TARGET>

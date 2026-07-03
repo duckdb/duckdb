@@ -22,16 +22,15 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/DockerTests.yml'
-      - '!scripts/test_docker_images.sh'
+      - 'gh-readonly-queue/**'
+    paths:
+      - '.github/workflows/DockerTests.yml'
+      - 'scripts/test_docker_images.sh'
   pull_request:
     types: [opened, reopened, ready_for_review]
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/DockerTests.yml'
-      - '!scripts/test_docker_images.sh'
+    paths:
+      - '.github/workflows/DockerTests.yml'
+      - 'scripts/test_docker_images.sh'
 
 concurrency:
   group: docker-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}

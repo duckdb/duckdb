@@ -175,6 +175,7 @@ InsertionOrderPreservingMap<string> PhysicalLimitPercent::ParamsToString() const
 			result["Offset"] = to_string(offset);
 		}
 	}
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

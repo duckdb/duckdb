@@ -1,2 +1,0 @@
-AnalyzeStatement <- 'ANALYZE' 'VERBOSE'? AnalyzeTarget?
-AnalyzeTarget <- BaseTableName NameList?

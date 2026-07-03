@@ -3,9 +3,6 @@
 # group: [date]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE dates(i DATE)
 
 statement ok

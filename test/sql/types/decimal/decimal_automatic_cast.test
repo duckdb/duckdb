@@ -2,9 +2,6 @@
 # description: Test automatic decimal casting
 # group: [decimal]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT [1.33, 10.0]
 ----

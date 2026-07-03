@@ -2,9 +2,6 @@
 # description: tests for regexp_extract_all struct multi-match variant
 # group: [string]
 
-statement ok
-PRAGMA enable_verification;
-
 query I
 SELECT regexp_extract_all('Peter:33 Paul:14', '(\w+):(\d+)', ['name','num']) AS res;
 ----

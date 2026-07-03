@@ -2,9 +2,6 @@
 # description: Test format extensions
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # thousands separator
 query I
 select printf('%,d', 123456789)
@@ -103,7 +100,7 @@ select printf('%,.3f', 123456.789::DOUBLE)
 foreach val 1.724e12 1.7e12 1.72456e12 1.723456e11 1.724567e12 1.234e4
 
 query I
-select printf('%,.f', ${val}::double) = printf('%,d', ${val}::bigint);
+select printf('%,.f', {val}::double) = printf('%,d', {val}::bigint);
 ----
 true
 

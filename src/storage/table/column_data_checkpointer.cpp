@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
@@ -47,26 +48,33 @@ StorageManager &ColumnDataCheckpointData::GetStorageManager() {
 
 //! ColumnDataCheckpointer
 
-static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> &states) {
+static void CreateIntermediateVector(vector<reference<ColumnCheckpointState>> &states, DataChunk &chunk) {
 	D_ASSERT(!states.empty());
 
 	auto &first_state = states[0];
 	auto &col_data = first_state.get().original_column;
 	auto &type = col_data.type;
+
+	vector<LogicalType> types;
 	if (type.id() == LogicalTypeId::VALIDITY) {
-		return Vector(LogicalType::BOOLEAN, true, /* initialize_to_zero = */ true);
+		types.emplace_back(LogicalType::BOOLEAN);
+	} else if (type.InternalType() == PhysicalType::LIST) {
+		types.emplace_back(LogicalType::UBIGINT);
+	} else {
+		types.emplace_back(type);
 	}
-	if (type.InternalType() == PhysicalType::LIST) {
-		return Vector(LogicalType::UBIGINT, true, false);
+	chunk.Initialize(Allocator::DefaultAllocator(), types);
+	if (type.id() == LogicalTypeId::VALIDITY) {
+		auto data = FlatVector::GetData<bool>(chunk.data[0]);
+		memset((void *)data, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 	}
-	return Vector(type, true, false);
 }
 
 ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpointState>> &checkpoint_states,
                                                StorageManager &storage_manager, const RowGroup &row_group,
                                                ColumnCheckpointInfo &checkpoint_info)
     : checkpoint_states(checkpoint_states), storage_manager(storage_manager), row_group(row_group),
-      intermediate(CreateIntermediateVector(checkpoint_states)), checkpoint_info(checkpoint_info) {
+      checkpoint_info(checkpoint_info) {
 	auto &db = storage_manager.GetDatabase();
 	auto &config = DBConfig::GetConfig(db);
 	compression_functions.resize(checkpoint_states.size());
@@ -78,10 +86,10 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpoint
 			functions.push_back(&func.get());
 		}
 	}
+	CreateIntermediateVector(checkpoint_states, intermediate);
 }
 
-void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
-	Vector scan_vector(intermediate.GetType(), nullptr);
+void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &)> &callback) {
 	auto &first_state = checkpoint_states[0];
 	auto &col_data = first_state.get().original_column;
 
@@ -92,14 +100,16 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 		scan_state.current = segment_node;
 		segment.InitializeScan(scan_state);
 
+		auto &scan_vector = intermediate.data[0];
 		for (idx_t base_row_index = 0; base_row_index < segment.count; base_row_index += STANDARD_VECTOR_SIZE) {
-			scan_vector.Reference(intermediate);
+			intermediate.Reset();
 
 			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
 			scan_state.offset_in_column = segment_node.GetRowStart() + base_row_index;
 
 			col_data.CheckpointScan(segment, scan_state, count, scan_vector);
-			callback(scan_vector, count);
+			scan_vector.BufferMutable().SetVectorSize(count);
+			callback(scan_vector);
 		}
 	}
 }
@@ -182,7 +192,7 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 	InitAnalyze();
 
 	// scan over all the segments and run the analyze step
-	ScanSegments([&](Vector &scan_vector, idx_t count) {
+	ScanSegments([&](Vector &scan_vector) {
 		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 			auto &functions = compression_functions[i];
 			auto &states = analyze_states[i];
@@ -193,7 +203,7 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 				if (!state) {
 					continue;
 				}
-				if (!func->analyze(*state, scan_vector, count)) {
+				if (!func->analyze(*state, scan_vector)) {
 					state = nullptr;
 					func = nullptr;
 				}
@@ -328,11 +338,11 @@ void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions 
 	}
 
 	// Scan over the existing segment + changes and compress the data
-	ScanSegments([&](Vector &scan_vector, idx_t count) {
+	ScanSegments([&](Vector &scan_vector) {
 		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 			auto &function = analyze_result[i].function;
 			auto &compression_state = compression_states[i];
-			function->compress(*compression_state, scan_vector, count);
+			function->compress(*compression_state, scan_vector);
 		}
 	});
 
@@ -370,7 +380,7 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 		current_row += segment.count;
 
 		// merge the persistent stats into the global column stats
-		state.global_stats->Merge(segment.stats.statistics);
+		state.global_stats->Merge(segment.GetStats());
 		state.data_pointers.push_back(std::move(pointer));
 	}
 	if (error_segment_start.IsValid()) {

@@ -2,7 +2,7 @@
 # description: Verify that altering columns with multi-use blocks does not leak memory
 # group: [partial_blocks]
 
-load __TEST_DIR__/many_columns.db
+load {TEST_DIR}/many_columns.db
 
 
 statement ok
@@ -30,7 +30,7 @@ BEGIN TRANSACTION
 loop i 0 99
 
 statement ok
-ALTER TABLE integers ALTER i${i} SET DATA TYPE ${type}
+ALTER TABLE integers ALTER i{i} SET DATA TYPE {type}
 
 endloop
 

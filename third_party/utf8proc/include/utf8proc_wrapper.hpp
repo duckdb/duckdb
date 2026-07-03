@@ -36,12 +36,27 @@ public:
 	//! Returns the position (in bytes) of the previous grapheme cluster
 	static size_t PreviousGraphemeCluster(const char *s, size_t len, size_t pos);
 
+	//! Find the next legal-UTF8 string
+	static bool FindNextLegalUTF8(std::string &str);
+
+	//! Given a string that may end with a truncated (incomplete) UTF-8 sequence,
+	//! compute the smallest valid UTF-8 string that is strictly greater than every
+	//! string that shares the same byte prefix.  Returns false when no finite upper
+	//! bound exists (e.g. the string is empty or consists entirely of U+10FFFF).
+	static bool ValidUpperBound(const std::string &str, std::string &result);
+
+	//! Given a string that may contain an invalid or truncated UTF-8 sequence,
+	//! compute a valid UTF-8 lower bound by replacing the first invalid byte (and
+	//! everything after it) with a NUL byte.
+	static bool ValidLowerBound(const std::string &str, std::string &result);
+
 	//! Transform a codepoint to utf8 and writes it to "c", sets "sz" to the size of the codepoint
 	static bool CodepointToUtf8(int cp, int &sz, char *c);
 	//! Returns the codepoint length in bytes when encoded in UTF8
 	static int CodepointLength(int cp);
 	//! Transform a UTF8 string to a codepoint; returns the codepoint and writes the length of the codepoint (in UTF8) to sz
-	static int32_t UTF8ToCodepoint(const char *c, int &sz);
+	//! length is the number of bytes available at c, used to reject truncated multi-byte sequences
+	static int32_t UTF8ToCodepoint(const char *c, int &sz, size_t length);
 	//! Returns the render width of a single character in a string
 	static size_t RenderWidth(const char *s, size_t len, size_t pos);
 	static size_t RenderWidth(const std::string &str);

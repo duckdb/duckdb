@@ -1,0 +1,2 @@
+CheckpointStatement <- CheckpointForce? 'CHECKPOINT' CatalogName?
+CheckpointForce <- 'FORCE'

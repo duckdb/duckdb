@@ -33,7 +33,7 @@ duckdb_date duckdb_to_date(duckdb_date_struct date) {
 }
 
 bool duckdb_is_finite_date(duckdb_date date) {
-	return Date::IsFinite(date_t(date.days));
+	return date_t(date.days).IsFinite();
 }
 
 duckdb_time_struct duckdb_from_time(duckdb_time time) {
@@ -54,7 +54,7 @@ duckdb_time_tz_struct duckdb_from_time_tz(duckdb_time_tz input) {
 
 	duckdb::dtime_tz_t time_tz(input.bits);
 
-	time.micros = time_tz.time().micros;
+	time.micros = time_tz.time().value;
 
 	result.time = duckdb_from_time(time);
 	result.offset = time_tz.offset();
@@ -69,7 +69,7 @@ duckdb_time_tz duckdb_create_time_tz(int64_t micros, int32_t offset) {
 
 duckdb_time duckdb_to_time(duckdb_time_struct time) {
 	duckdb_time result;
-	result.micros = Time::FromTime(time.hour, time.min, time.sec, time.micros).micros;
+	result.micros = Time::FromTime(time.hour, time.min, time.sec, time.micros).value;
 	return result;
 }
 
@@ -82,7 +82,7 @@ duckdb_timestamp_struct duckdb_from_timestamp(duckdb_timestamp ts) {
 	ddate.days = date.days;
 
 	duckdb_time dtime;
-	dtime.micros = time.micros;
+	dtime.micros = time.value;
 
 	duckdb_timestamp_struct result;
 	result.date = duckdb_from_date(ddate);
@@ -100,17 +100,17 @@ duckdb_timestamp duckdb_to_timestamp(duckdb_timestamp_struct ts) {
 }
 
 bool duckdb_is_finite_timestamp(duckdb_timestamp ts) {
-	return Timestamp::IsFinite(timestamp_t(ts.micros));
+	return timestamp_t(ts.micros).IsFinite();
 }
 
 bool duckdb_is_finite_timestamp_s(duckdb_timestamp_s ts) {
-	return Timestamp::IsFinite(timestamp_sec_t(ts.seconds));
+	return timestamp_sec_t(ts.seconds).IsFinite();
 }
 
 bool duckdb_is_finite_timestamp_ms(duckdb_timestamp_ms ts) {
-	return Timestamp::IsFinite(timestamp_ms_t(ts.millis));
+	return timestamp_ms_t(ts.millis).IsFinite();
 }
 
 bool duckdb_is_finite_timestamp_ns(duckdb_timestamp_ns ts) {
-	return Timestamp::IsFinite(timestamp_ns_t(ts.nanos));
+	return timestamp_ns_t(ts.nanos).IsFinite();
 }

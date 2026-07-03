@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-PRAGMA enable_verification
-
 # original from the issue
 statement ok
 FROM '{DATA_DIR}/json/15601/fragment*.json'

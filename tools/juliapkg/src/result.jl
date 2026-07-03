@@ -87,6 +87,15 @@ function convert_blob(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::U
     return unsafe_wrap(Array, data_ptr, len; own = false) |> copy
 end
 
+function convert_geometry(
+    column_data::ColumnConversionData,
+    val::Ptr{Cvoid},
+    idx::UInt64
+)::Base.CodeUnits{UInt8, String}
+    data_ptr, len = _string_data_ptr(val, idx)
+    return codeunits(unsafe_string(data_ptr, len))
+end
+
 convert_date(column_data::ColumnConversionData, val) = convert(Date, val)
 convert_time(column_data::ColumnConversionData, val) = convert(Time, val)
 convert_time_tz(column_data::ColumnConversionData, val) = convert(Time, convert(duckdb_time_tz, val))
@@ -500,7 +509,9 @@ function init_conversion_loop(logical_type::LogicalType)
         child_symbols::Vector{Symbol} = Vector()
         child_data::Vector{ListConversionData} = Vector()
         for i in 1:child_count
-            child_symbol = Symbol(child_name_fun(logical_type, i))
+            child_name = child_name_fun(logical_type, i)
+            # TUPLE (unnamed struct) children have empty names - synthesize positional names for the NamedTuple
+            child_symbol = isempty(child_name) ? Symbol("v", i) : Symbol(child_name)
             child_type = child_type_fun(logical_type, i)
             child_conv_data = create_child_conversion_data(child_type)
             push!(child_symbols, child_symbol)
@@ -518,6 +529,8 @@ function get_conversion_function(logical_type::LogicalType)::Function
         return convert_string
     elseif type == DUCKDB_TYPE_BLOB || type == DUCKDB_TYPE_BIT
         return convert_blob
+    elseif type == DUCKDB_TYPE_GEOMETRY
+        return convert_geometry
     elseif type == DUCKDB_TYPE_DATE
         return convert_date
     elseif type == DUCKDB_TYPE_TIME
@@ -531,6 +544,8 @@ function get_conversion_function(logical_type::LogicalType)::Function
     elseif type == DUCKDB_TYPE_TIMESTAMP_MS
         return convert_timestamp_ms
     elseif type == DUCKDB_TYPE_TIMESTAMP_NS
+        return convert_timestamp_ns
+    elseif type == DUCKDB_TYPE_TIMESTAMP_TZ_NS
         return convert_timestamp_ns
     elseif type == DUCKDB_TYPE_INTERVAL
         return convert_interval
@@ -556,7 +571,10 @@ end
 
 function get_conversion_loop_function(logical_type::LogicalType)::Function
     type = get_type_id(logical_type)
-    if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_BLOB || type == DUCKDB_TYPE_BIT
+    if type == DUCKDB_TYPE_VARCHAR ||
+       type == DUCKDB_TYPE_BLOB ||
+       type == DUCKDB_TYPE_BIT ||
+       type == DUCKDB_TYPE_GEOMETRY
         return convert_vector_string
     elseif type == DUCKDB_TYPE_LIST
         return convert_vector_list

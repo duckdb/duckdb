@@ -70,6 +70,7 @@ static const TestConfigOption test_config_options[] = {
     {"settings", "Configuration settings to apply",
      LogicalType::LIST(LogicalType::STRUCT({{"name", LogicalType::VARCHAR}, {"value", LogicalType::VARCHAR}})),
      nullptr},
+    {"extends", "List of config files to extend from", LogicalType::LIST(LogicalType::VARCHAR), nullptr},
     {nullptr, nullptr, LogicalType::INVALID, nullptr},
 };
 
@@ -125,7 +126,13 @@ void TestConfiguration::UpdateEnvironment() {
 	test_env["DATA_DIR"] = working_dir + "/data"; // default: data/
 
 	string temp_dir = TestDirectoryPath();
+	auto fs = FileSystem::CreateLocal();
+	string temp_dir_absolute = temp_dir;
+	if (!fs->IsPathAbsolute(temp_dir_absolute)) {
+		temp_dir_absolute = fs->JoinPath(working_dir, temp_dir_absolute);
+	}
 	test_env["TEMP_DIR"] = temp_dir;                      // default: duckdb_unittest_tempdir/$PID
+	test_env["TEMP_DIR_ABSOLUTE"] = temp_dir_absolute;    // default: {WORKING_DIR}/duckdb_unittest_tempdir/$PID
 	test_env["CATALOG_DIR"] = temp_dir + "/" + test_uuid; // _not_ guaranteed to exist
 }
 
@@ -219,11 +226,28 @@ bool TestConfiguration::TryParseOption(const string &name, const Value &value) {
 		return false;
 	}
 	auto &test_config = test_config_options[config_index.GetIndex()];
-	auto parameter = value.DefaultCastAs(test_config.type);
+	// Config values arrive as strings, parsed as SQL types. Lists in particular are
+	// user-unfriendly, requiring [] wrappers instead of just-plain-commas.
+	// Help out here, and add [] for list params. This intentionally also
+	// allows a meaningful '' empty arg to work for list-type params,
+	// eg --skip-error-messages '' -> [], and 'HTTP' -> [HTTP]
+	Value to_cast = value;
+	if (test_config.type.id() == LogicalTypeId::LIST && value.type().id() == LogicalTypeId::VARCHAR &&
+	    !value.IsNull()) {
+		auto str = value.GetValue<string>();
+		if (str.empty() || str[0] != '[') {
+			to_cast = Value("[" + str + "]");
+		}
+	}
+	auto parameter = to_cast.DefaultCastAs(test_config.type);
 	if (test_config.on_set_option) {
 		test_config.on_set_option(parameter);
 	}
-	options.insert(make_pair(test_config.name, parameter));
+	options[test_config.name] = parameter;
+	if (StringUtil::CIEquals(test_config.name, "test_env")) {
+		test_env_from_config_loaded = false;
+		test_env_from_config_keys.clear();
+	}
 	return true;
 }
 
@@ -231,6 +255,14 @@ void TestConfiguration::ParseOption(const string &name, const Value &value) {
 	if (!TryParseOption(name, value)) {
 		throw std::runtime_error("Failed to find option " + name + " - it does not exist");
 	}
+}
+
+void TestConfiguration::SetLocalExtensionRepository(const string &repo) {
+	local_extension_repo = repo;
+}
+
+string TestConfiguration::GetLocalExtensionRepository() const {
+	return local_extension_repo;
 }
 
 TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoLoadingMode() {
@@ -376,8 +408,29 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 		// read the config file
 		auto buffer = ReadFileToString(config_path);
 		// parse json
-		auto json = StringUtil::ParseJSONMap(buffer);
-		auto json_values = json->Flatten();
+		auto json_values = StringUtil::ParseJSONMap(buffer);
+
+		auto extends_it = json_values.find("extends");
+		if (extends_it != json_values.end()) {
+			auto config_dir = StringUtil::GetFilePath(config_path);
+			auto extends_list = Value(extends_it->second).DefaultCastAs(LogicalType::LIST(LogicalType::VARCHAR));
+			for (auto &child : ListValue::GetChildren(extends_list)) {
+				auto path = child.GetValue<string>();
+				if (!config_dir.empty() && !path.empty() && path[0] != '/') {
+					path = config_dir + "/" + path;
+				}
+				LoadConfig(path);
+			}
+		}
+
+		// load the base config (if any) before processing the rest, so that this config's options
+		// and skip_tests are layered on top of the base instead of depending on map iteration order
+		auto base_it = json_values.find("base_config");
+		if (base_it != json_values.end()) {
+			LoadConfig(base_it->second);
+			json_values.erase(base_it);
+		}
+
 		for (auto &entry : json_values) {
 			ParseOption(entry.first, Value(entry.second));
 		}
@@ -423,15 +476,45 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 	}
 }
 
+void TestConfiguration::LoadTestEnvFromConfig() {
+	if (test_env_from_config_loaded) {
+		return;
+	}
+	test_env_from_config_loaded = true;
+	test_env_from_config_keys.clear();
+	auto entry = options.find("test_env");
+	if (entry == options.end()) {
+		return;
+	}
+	auto list_children = ListValue::GetChildren(entry->second);
+	for (const auto &value : list_children) {
+		auto &struct_children = StructValue::GetChildren(value);
+		auto &env = StringValue::Get(struct_children[0]);
+		auto &env_value = StringValue::Get(struct_children[1]);
+		test_env_from_config_keys.insert(env);
+		test_env[env] = env_value;
+	}
+}
+
 void TestConfiguration::ProcessPath(string &path, const string &test_name) {
 	path = StringUtil::Replace(path, "{TEST_DIR}", TestDirectoryPath());
+	path = StringUtil::Replace(path, "{WORKING_DIRECTORY}", FileSystem::GetWorkingDirectory());
 	path = StringUtil::Replace(path, "{UUID}", UUID::ToString(UUID::GenerateRandomUUID()));
 	path = StringUtil::Replace(path, "{TEST_NAME}", test_name);
 
 	auto base_test_name = StringUtil::Replace(test_name, "/", "_");
 	path = StringUtil::Replace(path, "{BASE_TEST_NAME}", base_test_name);
-	path = StringUtil::Replace(path, "__TEST_DIR__", TestDirectoryPath());
-	path = StringUtil::Replace(path, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
+	if (StringUtil::Contains(path, "__TEST_DIR__")) {
+		Printer::PrintF("Replacing deprecated string __TEST_DIR__ in path \"%s\" - please replace with {TEST_DIR}",
+		                path);
+		path = StringUtil::Replace(path, "__TEST_DIR__", TestDirectoryPath());
+	}
+	if (StringUtil::Contains(path, "__WORKING_DIRECTORY__")) {
+		Printer::PrintF("Replacing deprecated string __WORKING_DIRECTORY__ in path \"%s\" - please replace with "
+		                "{WORKING_DIRECTORY}",
+		                path);
+		path = StringUtil::Replace(path, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
+	}
 }
 
 template <class T, class VAL_T>
@@ -512,24 +595,20 @@ vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
 }
 
 string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
-	if (!test_env_from_config_loaded && options.find("test_env") != options.end()) {
-		test_env_from_config_loaded = true;
-		auto entry = options["test_env"];
-		auto list_children = ListValue::GetChildren(entry);
-		for (const auto &value : list_children) {
-			auto &struct_children = StructValue::GetChildren(value);
-			auto &env = StringValue::Get(struct_children[0]);
-			auto &env_value = StringValue::Get(struct_children[1]);
-			test_env[env] = env_value;
-		}
-	}
+	LoadTestEnvFromConfig();
 	if (test_env.find(key) == test_env.end()) {
 		return default_value;
 	}
 	return test_env[key];
 }
 
+bool TestConfiguration::HasTestEnv(const string &key) {
+	LoadTestEnvFromConfig();
+	return test_env_from_config_keys.find(key) != test_env_from_config_keys.end();
+}
+
 const unordered_map<string, string> &TestConfiguration::GetTestEnvMap() {
+	LoadTestEnvFromConfig();
 	return test_env;
 }
 

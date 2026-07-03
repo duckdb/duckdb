@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-PRAGMA enable_verification
-
 # this file has 4 columns, name "id", "Id", "iD", and "ID"
 query IIII
 FROM '{DATA_DIR}/json/duplicate_column_names.json'

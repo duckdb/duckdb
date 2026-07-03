@@ -36,7 +36,7 @@ unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<re
 	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), root, result_value)) {
 		return nullptr;
 	}
-	D_ASSERT(result_value.type().InternalType() == root.return_type.InternalType());
+	D_ASSERT(result_value.type().InternalType() == root.GetReturnType().InternalType());
 	// now get the value from the result vector and insert it back into the plan as a constant expression
 	return make_uniq<BoundConstantExpression>(result_value);
 }

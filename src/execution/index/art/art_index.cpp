@@ -28,12 +28,10 @@ unique_ptr<IndexBuildBindData> ARTBuildBind(IndexBuildBindInput &input) {
 	auto bind_data = make_uniq<ARTBuildBindData>();
 
 	// TODO: Verify that the the ART is applicable for the given columns and types.
+
+	// We used to not sort for VARCHAR and multi-column indexes with the old sort implementation
+	// The new sorting implementation handles these cases much better and sorting improves performance now
 	bind_data->sorted = true;
-	if (input.expressions.size() > 1) {
-		bind_data->sorted = false;
-	} else if (input.expressions[0]->return_type.InternalType() == PhysicalType::VARCHAR) {
-		bind_data->sorted = false;
-	}
 
 	return std::move(bind_data);
 }
@@ -55,7 +53,7 @@ unique_ptr<IndexBuildGlobalState> ARTBuildGlobalInit(IndexBuildInitGlobalStateIn
 	auto state = make_uniq<ARTBuildGlobalState>();
 
 	auto &storage = input.table.GetStorage();
-	state->global_index = make_uniq<ART>(input.info.index_name, input.info.constraint_type, input.storage_ids,
+	state->global_index = make_uniq<ART>(input.info.GetIndexName(), input.info.constraint_type, input.storage_ids,
 	                                     TableIOManager::Get(storage), input.expressions, storage.db);
 
 	return std::move(state);
@@ -80,7 +78,7 @@ unique_ptr<IndexBuildLocalState> ARTBuildLocalInit(IndexBuildInitLocalStateInput
 	auto state = make_uniq<ARTBuildLocalState>(input.context);
 
 	auto &storage = input.table.GetStorage();
-	state->local_index = make_uniq<ART>(input.info.index_name, input.info.constraint_type, input.storage_ids,
+	state->local_index = make_uniq<ART>(input.info.GetIndexName(), input.info.constraint_type, input.storage_ids,
 	                                    TableIOManager::Get(storage), input.expressions, storage.db);
 
 	// Initialize the local sink state.
@@ -104,7 +102,6 @@ void ARTBuildSinkUnsorted(IndexBuildSinkInput &input, DataChunk &key_chunk, Data
 		auto conflict_type =
 		    ARTOperator::Insert(l_state.arena_allocator, art, art.tree, l_state.keys[i], 0, l_state.row_ids[i], status,
 		                        DeleteIndexInfo(), IndexAppendMode::DEFAULT);
-		D_ASSERT(conflict_type != ARTConflictType::TRANSACTION);
 		if (conflict_type == ARTConflictType::CONSTRAINT) {
 			throw ConstraintException("Data contains duplicates on indexed column(s)");
 		}
@@ -117,7 +114,7 @@ void ARTBuildSinkSorted(IndexBuildSinkInput &input, DataChunk &key_chunk, DataCh
 	auto &l_index = l_state.local_index;
 
 	// Construct an ART for this chunk.
-	auto art = make_uniq<ART>(input.info.index_name, l_index->GetConstraintType(), l_index->GetColumnIds(),
+	auto art = make_uniq<ART>(input.info.GetIndexName(), l_index->GetConstraintType(), l_index->GetColumnIds(),
 	                          l_index->table_io_manager, l_index->unbound_expressions, storage.db,
 	                          l_index->Cast<ART>().allocators);
 	if (art->Build(l_state.keys, l_state.row_ids, key_chunk.size()) != ARTConflictType::NO_CONFLICT) {

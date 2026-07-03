@@ -2,7 +2,7 @@
 # description: Test MIN/MAX with transaction local updates
 # group: [transactions]
 
-load __TEST_DIR__/min_max_updates.db
+load {TEST_DIR}/min_max_updates.db
 
 statement ok
 CREATE TABLE tbl(i INT);

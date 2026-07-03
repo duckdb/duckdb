@@ -26,12 +26,12 @@ class LogicalDependencyList;
 struct LogicalDependency {
 public:
 	CatalogEntryInfo entry;
-	string catalog;
+	Identifier catalog;
 
 public:
 	explicit LogicalDependency(CatalogEntry &entry);
 	LogicalDependency();
-	LogicalDependency(optional_ptr<Catalog> catalog, CatalogEntryInfo entry, string catalog_str);
+	LogicalDependency(optional_ptr<Catalog> catalog, CatalogEntryInfo entry, Identifier catalog_str);
 	bool operator==(const LogicalDependency &other) const;
 
 public:
@@ -58,7 +58,7 @@ public:
 	DUCKDB_API bool Contains(CatalogEntry &entry);
 
 public:
-	DUCKDB_API void VerifyDependencies(Catalog &catalog, const string &name);
+	DUCKDB_API void VerifyDependencies(Catalog &catalog, const Identifier &name);
 	void Serialize(Serializer &serializer) const;
 	static LogicalDependencyList Deserialize(Deserializer &deserializer);
 	bool operator==(const LogicalDependencyList &other) const;

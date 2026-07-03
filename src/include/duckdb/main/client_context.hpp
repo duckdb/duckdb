@@ -24,16 +24,19 @@
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/main/pending_query_result.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/main/query_context.hpp"
 #include "duckdb/main/query_parameters.hpp"
 
 namespace duckdb {
 
 class Appender;
+class AttachedDatabase;
 class Catalog;
 class CatalogSearchPath;
 class ColumnDataCollection;
@@ -57,9 +60,25 @@ class RegisteredStateManager;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
-	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
+	optional_ptr<identifier_map_t<BoundParameterData>> parameters;
 	//! Whether a stream/buffer-managed result should be allowed
 	QueryParameters query_parameters;
+};
+
+//! A statement parameter: identifier ($1 -> "1"), binding index, and inferred type (UNKNOWN if not inferred).
+struct StatementParameter {
+	Identifier identifier;
+	idx_t index;
+	LogicalType type;
+};
+
+//! A bound statement's signature: result schema (names/types) and parameter schema, without a
+//! PreparedStatement. names/types are never empty; parameters are unordered (sort by index for positional use).
+struct StatementSignature {
+	vector<Identifier> names;
+	vector<LogicalType> types;
+	vector<StatementParameter> parameters;
+	StatementProperties properties;
 };
 
 //! Interrupt state for the client context
@@ -97,6 +116,20 @@ public:
 	TransactionContext transaction;
 
 public:
+	//! Connect this client to a remote-style AttachedDatabase. Subsequent non-control SQL routes via
+	//! Catalog::GetConnectFunctionName. Use DisconnectFromCatalog() to revert to LOCAL.
+	DUCKDB_API void ConnectToCatalog(const shared_ptr<AttachedDatabase> &target);
+	//! Clear any active CONNECT; subsequent SQL goes through the normal DuckDB pipeline.
+	DUCKDB_API void DisconnectFromCatalog();
+	//! True iff a CONNECT is currently active (even if the target was detached out from under us).
+	DUCKDB_API bool IsConnected() const {
+		return is_connected;
+	}
+	//! Resolve the currently-connected AttachedDatabase. Returns nullptr if not connected or if the
+	//! target has been detached out from under us (in that case IsConnected() is still true — call it
+	//! directly to disambiguate "never connected" from "was connected, target was detached elsewhere").
+	DUCKDB_API shared_ptr<AttachedDatabase> TryGetConnectedCatalog() const;
+
 	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}
@@ -132,21 +165,20 @@ public:
 
 	//! Create a pending query with a list of parameters
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
-	                                                       case_insensitive_map_t<BoundParameterData> &values,
+	                                                       identifier_map_t<BoundParameterData> &values,
 	                                                       QueryParameters query_parameters);
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query,
-	                                                       case_insensitive_map_t<BoundParameterData> &values,
-	                                                       QueryParameters query_parameters);
+	DUCKDB_API unique_ptr<PendingQueryResult>
+	PendingQuery(const string &query, identifier_map_t<BoundParameterData> &values, QueryParameters query_parameters);
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, PendingQueryParameters parameters);
 
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
 
 	//! Get the table info of a specific table, or nullptr if it cannot be found.
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &database_name, const string &schema_name,
-	                                                  const string &table_name);
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &database_name, const Identifier &schema_name,
+	                                                  const Identifier &table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG.
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const Identifier &schema_name, const Identifier &table_name);
 	//! Executes a query with the given collection "attached" to the query using a CTE.
 	DUCKDB_API void Append(unique_ptr<SQLStatement> stmt);
 	//! Appends a ColumnDataCollection to the described table.
@@ -168,6 +200,9 @@ public:
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
 	//! Directly prepare a SQL statement
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
+	//! Bind a statement and return its signature, without building a PreparedStatement, optimizing, or
+	//! executing. Read-only: binding touches no in-flight query state, so a live result survives. Throws on error.
+	DUCKDB_API StatementSignature BindStatement(unique_ptr<SQLStatement> statement);
 
 	//! Create a pending query result from a prepared statement with the given name and set of parameters
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
@@ -181,7 +216,7 @@ public:
 	//! modified in between the prepared statement being bound and the prepared statement being run.
 	DUCKDB_API unique_ptr<QueryResult>
 	Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-	        case_insensitive_map_t<BoundParameterData> &values,
+	        identifier_map_t<BoundParameterData> &values,
 	        QueryParameters query_parameters = QueryResultOutputType::ALLOW_STREAMING);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
 	                                           const PendingQueryParameters &parameters);
@@ -192,12 +227,19 @@ public:
 	//! Register function in the temporary schema
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
 
-	//! Parse statements from a query
-	DUCKDB_API vector<unique_ptr<SQLStatement>> ParseStatements(const string &query);
+	//! Iterate a query's statements as a StatementIterator (iterator-style API). The caller drives
+	//! Peek() + GetStatement() to walk through ready-to-execute statements one by one
+	DUCKDB_API StatementIterator IterateStatements(const string &query);
+
+	//! Preprocess a peel of parse-facing statements into engine-facing ones (PRAGMA reparse,
+	//! MULTI_STATEMENT unpack, transaction wrapping), replacing `buffer` in place. Acquires the
+	//! context lock internally when `lock` is null (callers that do not already hold it, e.g. the
+	//! shell). Drives StatementIterator's preprocessing.
+	DUCKDB_API void PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffer,
+	                                     optional_ptr<ClientContextLock> lock = nullptr);
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
-	DUCKDB_API void PreprocessStatements(vector<unique_ptr<SQLStatement>> &statements);
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
@@ -245,8 +287,6 @@ public:
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
 private:
-	//! Parse statements and resolve pragmas from a query
-	vector<unique_ptr<SQLStatement>> ParseStatements(ClientContextLock &lock, const string &query);
 	//! Issues a query to the database and returns a Pending Query Result
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                    const PendingQueryParameters &parameters, bool verify = true);
@@ -254,10 +294,8 @@ private:
 
 	//! Parse statements from a query
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
-	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
-	//! true.
-	ErrorData VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                      PendingQueryParameters parameters);
+	void StatementVerification(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> &statement,
+	                           PendingQueryParameters query_parameters);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
@@ -333,6 +371,11 @@ private:
 	QueryProgress query_progress;
 	//! The connection corresponding to this client context
 	connection_t connection_id;
+	//! Routing target for SQL execution while CONNECT-ed (CONNECT/DISCONNECT). When is_connected is
+	//! true and connected_to_database can be locked, the chokepoint dispatches non-control SQL via
+	//! `Catalog::RemoteExecute(string)` and wraps the returned TableRef into a SelectStatement.
+	weak_ptr<AttachedDatabase> connected_to_database;
+	bool is_connected = false;
 };
 
 class ClientContextLock {
@@ -345,29 +388,6 @@ public:
 
 private:
 	lock_guard<mutex> client_guard;
-};
-
-//! The QueryContext wraps an optional client context.
-//! It makes query-related information available to operations.
-class QueryContext {
-public:
-	QueryContext() : context(nullptr) {
-	}
-	QueryContext(optional_ptr<ClientContext> context) : context(context) { // NOLINT: allow implicit construction
-	}
-	QueryContext(ClientContext &context) : context(&context) { // NOLINT: allow implicit construction
-	}
-
-public:
-	bool Valid() const {
-		return context != nullptr;
-	}
-	optional_ptr<ClientContext> GetClientContext() const {
-		return context;
-	}
-
-private:
-	optional_ptr<ClientContext> context;
 };
 
 } // namespace duckdb

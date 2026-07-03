@@ -2,9 +2,6 @@
 # description: Issue 625
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # DROP column results in an assertion failure unique.index < base.columns.size()
 statement ok
 CREATE TABLE t0(c0 INT, c INT UNIQUE);

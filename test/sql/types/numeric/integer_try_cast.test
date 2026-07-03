@@ -2,9 +2,6 @@
 # description: Integer try cast
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 # integer casts
 statement ok
 CREATE TABLE integers AS SELECT i::INTEGER i FROM (VALUES (-2147483648), (0), (2147483647)) tbl(i)

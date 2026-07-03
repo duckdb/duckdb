@@ -4,7 +4,9 @@ add_library_unity(
   physical_batch_collector.cpp
   physical_buffered_collector.cpp
   physical_buffered_batch_collector.cpp
+  physical_connect.cpp
   physical_create_secret.cpp
+  physical_disconnect.cpp
   physical_execute.cpp
   physical_explain_analyze.cpp
   physical_limit.cpp

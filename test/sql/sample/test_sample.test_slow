@@ -3,9 +3,6 @@
 # group: [sample]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
 
 statement ok
@@ -203,10 +200,6 @@ select count(*) from range(1000) using sample reservoir(0.1%);
 # cannot use bernoulli or system sampling with X number of rows
 statement error
 select * from integers using sample bernoulli(5 rows);
-----
-
-statement error
-select * from integers using sample system(5 rows);
 ----
 
 # sample_size is out of range

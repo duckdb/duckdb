@@ -3,9 +3,6 @@
 # group: [date]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE dates(d DATE);
 
 # test stats propagation from empty table
@@ -128,10 +125,46 @@ query I
 SELECT
 	CASE WHEN stats.min = expected_result.min AND stats.max = expected_result.max THEN NULL ELSE {'stats': stats, 'expected_result': expected_result} END
 FROM (
-	SELECT STATS(EXTRACT(${component} FROM d)) AS stats, (SELECT expected_result FROM expected_result WHERE component = '${component}') expected_result FROM dates LIMIT 1
+	SELECT STATS(EXTRACT({component} FROM d)) AS stats, (SELECT expected_result FROM expected_result WHERE component = '{component}') expected_result FROM dates LIMIT 1
 )
 ----
 NULL
 
 endloop
 
+foreach type DATE TIMESTAMP TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS
+
+statement ok
+CREATE TABLE t0(c0 ${type});
+
+statement ok
+INSERT INTO t0(c0) VALUES ('-infinity'), ('infinity');
+
+query III
+SELECT (t0.c0), WEEKOFYEAR(t0.c0), WEEKOFYEAR(t0.c0) IS NULL FROM t0 ORDER BY c0;
+----
+-infinity	NULL	true
+infinity	NULL	true
+
+query III
+SELECT (t0.c0), WEEKDAY(t0.c0), WEEKDAY(t0.c0) IS NULL FROM t0 ORDER BY c0;
+----
+-infinity	NULL	true
+infinity	NULL	true
+
+query III
+SELECT (t0.c0), DAYOFMONTH(t0.c0), DAYOFMONTH(t0.c0) IS NULL FROM t0 ORDER BY c0;
+----
+-infinity	NULL	true
+infinity	NULL	true
+
+query I
+SELECT WEEKOFYEAR(t0.c0) IS NOT NULL FROM t0;
+----
+false
+false
+
+statement ok
+DROP TABLE t0
+
+endloop

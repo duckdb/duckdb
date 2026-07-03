@@ -12,7 +12,7 @@ statement ok
 CALL enable_logging();
 
 statement ok
-set logging_level='debug';
+set logging_level='info';
 
 loop i 0 100
 

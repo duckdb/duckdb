@@ -11,10 +11,10 @@ require vector_size 2048
 
 # Make a copy of the testing database so we can make modifications
 statement ok
-copy (select content from read_blob('{DATA_DIR}/storage/spatial_geo.db')) to '__TEST_DIR__/geo.db' (format BLOB);
+copy (select content from read_blob('{DATA_DIR}/storage/spatial_geo.db')) to '{TEST_DIR}/geo.db' (format BLOB);
 
 statement ok
-ATTACH '__TEST_DIR__/geo.db'
+ATTACH '{TEST_DIR}/geo.db'
 
 statement ok
 USE geo;
@@ -106,7 +106,7 @@ statement ok
 DETACH geo;
 
 statement ok
-ATTACH '__TEST_DIR__/geo.db' (STORAGE_VERSION 'v1.5.0');
+ATTACH '{TEST_DIR}/geo.db' (STORAGE_VERSION 'v1.5.0');
 
 statement ok
 USE geo;

@@ -334,6 +334,9 @@ SequenceException::SequenceException(const string &msg) : Exception(ExceptionTyp
 InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, INTERRUPT_MESSAGE) {
 }
 
+InterruptException::InterruptException(const string &message) : Exception(ExceptionType::INTERRUPT, message) {
+}
+
 FatalException::FatalException(ExceptionType type, const string &msg) : Exception(type, msg) {
 	// FIXME: Make any log context available to add error logging.
 }
@@ -371,7 +374,7 @@ OutOfMemoryException::OutOfMemoryException(const string &msg)
 }
 
 string OutOfMemoryException::ExtendOutOfMemoryError(const string &msg) {
-	string link = "https://duckdb.org/docs/stable/guides/performance/how_to_tune_workloads";
+	string link = "https://duckdb.org/docs/current/guides/performance/how_to_tune_workloads";
 	if (StringUtil::Contains(msg, link)) {
 		// already extended
 		return msg;

@@ -26,7 +26,7 @@ protected:
 	void InitializeAlias(const vector<string> &input);
 
 public:
-	string GetAlias() override;
+	Identifier GetAlias() override;
 };
 
 } // namespace duckdb

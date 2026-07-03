@@ -232,6 +232,17 @@
         "type": "scalar_function_set"
     },
     {
+        "name": "overlay",
+        "parameters": "string,replacement,start,count",
+        "description": "Replaces a substring of `string` starting at character `start` with `replacement`. If `count` is not specified, it defaults to the length of `replacement`. Note that a `start` value of `1` refers to the first character of the `string`.",
+        "examples": [
+            "overlay('hello' placing 'xyz' from 2 for 3)",
+            "overlay('hello' placing 'xyz' from 2)"
+        ],
+        "categories": ["string"],
+        "type": "scalar_function_set"
+    },
+    {
         "name": "substring",
         "parameters": "string,start,length",
         "description": "Extracts substring starting from character `start` up to the end of the string. If optional argument `length` is set, extracts a substring of `length` characters instead. Note that a `start` value of `1` refers to the first character of the `string`.",

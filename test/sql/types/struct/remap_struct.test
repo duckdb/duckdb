@@ -2,9 +2,6 @@
 # description: Test struct remapping
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 # remap without targets
 query I
 SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v2 INT), NULL, {'v2': NULL::INTEGER});

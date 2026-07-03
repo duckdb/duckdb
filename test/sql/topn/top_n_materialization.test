@@ -3,7 +3,7 @@
 # group: [topn]
 
 statement ok
-PRAGMA enable_verification
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
 statement ok
 CREATE TABLE test AS SELECT i, i + 1 AS j, i + 2 AS k, -i AS l FROM range(10) t(i);

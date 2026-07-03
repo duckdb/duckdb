@@ -10,30 +10,30 @@ CALL dbgen(sf=0.1, suffix='_original');
 foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
 
 statement ok
-COPY ${tpch_tbl}_original TO '__TEST_DIR__/${tpch_tbl}.csv' (DELIMITER '|', HEADER);
+COPY {tpch_tbl}_original TO '{TEST_DIR}/{tpch_tbl}.csv' (DELIMITER '|', HEADER);
 
 statement ok
-DROP TABLE ${tpch_tbl}_original
+DROP TABLE {tpch_tbl}_original
 
 statement ok
-CREATE VIEW ${tpch_tbl} AS FROM read_csv_auto('__TEST_DIR__/${tpch_tbl}.csv', sep='|');
+CREATE VIEW {tpch_tbl} AS FROM read_csv_auto('{TEST_DIR}/{tpch_tbl}.csv', sep='|');
 
 endloop
 
 loop i 1 9
 
 query I
-PRAGMA tpch(${i})
+PRAGMA tpch({i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf0.1/q0${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q0{i}.csv
 
 endloop
 
 loop i 10 23
 
 query I
-PRAGMA tpch(${i})
+PRAGMA tpch({i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf0.1/q${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q{i}.csv
 
 endloop

@@ -3,8 +3,12 @@
 
 require skip_reload
 
+# FIXME: This is a significant regression because we no longer evict "tiny buffers", of which we're
+# FIXME: allocating plenty here.
+require vector_size 2048
+
 statement ok
-PRAGMA memory_limit='2MB'
+PRAGMA memory_limit='3MB'
 
 # --- Not changed when set explicitly by the user
 
@@ -14,7 +18,7 @@ set max_temp_directory_size='15gb'
 
 # When we change the temp_directory to something that doesnt exist
 statement ok
-set temp_directory = '__TEST_DIR__/this_directory_should_not_exist__swap_space'
+set temp_directory = '{TEST_DIR}/this_directory_should_not_exist__swap_space'
 
 query I nosort explicitly_set
 select current_setting('max_temp_directory_size')

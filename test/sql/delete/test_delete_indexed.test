@@ -3,9 +3,6 @@
 # group: [delete]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t (id INT PRIMARY KEY, s TEXT, j BIGINT);
 
 statement ok

@@ -2,9 +2,6 @@
 # description: Test basic decimals
 # group: [decimal]
 
-statement ok
-PRAGMA enable_verification
-
 # negate
 query II
 SELECT -('0.1'::DECIMAL), -('-0.1'::DECIMAL)

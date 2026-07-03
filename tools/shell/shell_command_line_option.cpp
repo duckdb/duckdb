@@ -1,5 +1,6 @@
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
+#include "terminal.hpp"
 
 namespace duckdb_shell {
 
@@ -102,14 +103,21 @@ MetadataResult SetNewlineSeparator(ShellState &state, const vector<string> &args
 MetadataResult SetStorageVersion(ShellState &state, const vector<string> &args) {
 	auto &storage_version = args[1];
 	try {
-		state.config.options.serialization_compatibility =
-		    duckdb::SerializationCompatibility::FromString(storage_version);
+		state.config.options.storage_compatibility = duckdb::StorageCompatibility::FromString(storage_version);
 	} catch (std::exception &ex) {
 		duckdb::ErrorData error(ex);
 		state.PrintF(PrintOutput::STDERR, "%s: Error: unknown argument (%s) for '-storage-version': %s\n",
 		             state.program_name, storage_version.c_str(), error.Message().c_str());
 		return MetadataResult::EXIT;
 	}
+	return MetadataResult::SUCCESS;
+}
+
+template <HighlightMode mode>
+MetadataResult SetColorScheme(ShellState &state, const vector<string> &args) {
+	state.highlight_mode = mode;
+	ShellHighlight highlight(state);
+	highlight.ToggleMode(mode);
 	return MetadataResult::SUCCESS;
 }
 
@@ -152,6 +160,45 @@ MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult FormatStdin(ShellState &state, const vector<string> &args) {
+	state.readStdin = false;
+
+	if (duckdb::Terminal::IsAtty()) {
+		state.PrintF(PrintOutput::STDERR,
+		             "%s: Error: -format requires SQL input on stdin (e.g. echo 'SELECT 1' | duckdb -format)\n",
+		             state.program_name);
+		return MetadataResult::FAIL;
+	}
+
+	// Read all of stdin into a string.
+	string sql = state.ReadFileContents(stdin);
+
+	auto result = state.FormatSQL(sql);
+	if (result != MetadataResult::SUCCESS) {
+		return result;
+	}
+
+	// Write formatted SQL to stdout, with syntax highlighting if stdout is a terminal.
+	state.HighlightSQL(sql);
+	state.Print(PrintOutput::STDOUT, sql);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult FormatFile(ShellState &state, const vector<string> &args) {
+	state.readStdin = false;
+	const string &filename = args[1];
+
+	string sql = state.ReadFileContents(filename);
+
+	auto result = state.FormatSQL(sql);
+	if (result != MetadataResult::SUCCESS) {
+		return result;
+	}
+	state.HighlightSQL(sql);
+	state.Print(PrintOutput::STDOUT, sql);
+	return MetadataResult::SUCCESS;
+}
+
 static const CommandLineOption command_line_options[] = {
     {"ascii", 0, "", nullptr, ToggleASCIIMode, "set output mode to 'ascii'"},
     {"bail", 0, "", nullptr, EnableBail, "stop after hitting an error"},
@@ -161,8 +208,12 @@ static const CommandLineOption command_line_options[] = {
     {"cmd", 1, "COMMAND", nullptr, RunCommand<false>, "run \"COMMAND\" before reading stdin"},
     {"csv", 0, "", nullptr, ToggleCSVMode, "set output mode to 'csv'"},
     {"c", 1, "COMMAND", EnableBatch, RunCommand<true>, "run \"COMMAND\" and exit"},
+    {"dark-mode", 0, "", SetColorScheme<HighlightMode::DARK_MODE>, SetColorScheme<HighlightMode::DARK_MODE>,
+     "use dark mode colors"},
     {"echo", 0, "", nullptr, EnableEcho, "print commands before execution"},
     {"f", 1, "FILENAME", EnableBatch, ProcessFile, "read/process named file and exit"},
+    {"format", 0, "", EnableBatch, FormatStdin, "format SQL from stdin, writing result to stdout"},
+    {"format-file", 1, "FILENAME", EnableBatch, FormatFile, "format SQL in file, writing result to stdout"},
     {"init", 1, "FILENAME", SetInitFile, nullptr, "read/process named file"},
     {"header", 0, "", nullptr, ToggleHeader<true>, "turn headers on"},
     {"h", 0, "", EnableBatch, PrintHelpAndExit, "show help message"},
@@ -171,6 +222,8 @@ static const CommandLineOption command_line_options[] = {
     {"interactive", 0, "", nullptr, DisableBatch, "force interactive I/O"},
     {"json", 0, "", nullptr, ToggleOutputMode<RenderMode::JSON>, "set output mode to 'json'"},
     {"jsonlines", 0, "", nullptr, ToggleOutputMode<RenderMode::JSONLINES>, "set output mode to 'jsonlines'"},
+    {"light-mode", 0, "", SetColorScheme<HighlightMode::LIGHT_MODE>, SetColorScheme<HighlightMode::LIGHT_MODE>,
+     "use light mode colors"},
     {"line", 0, "", nullptr, ToggleOutputMode<RenderMode::LINE>, "set output mode to 'line'"},
     {"list", 0, "", nullptr, ToggleOutputMode<RenderMode::LIST>, "set output mode to 'list'"},
     {"markdown", 0, "", nullptr, ToggleOutputMode<RenderMode::MARKDOWN>, "set output mode to 'markdown'"},

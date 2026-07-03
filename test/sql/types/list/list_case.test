@@ -2,9 +2,6 @@
 # description: Test list case
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 query T
 SELECT case when 1=1 then [1] else [2] end
 ----

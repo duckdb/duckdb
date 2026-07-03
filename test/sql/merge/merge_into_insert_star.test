@@ -3,9 +3,6 @@
 # group: [merge]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE Stock(item_id int, balance int DEFAULT 0);
 
 query I
@@ -41,7 +38,7 @@ WHEN NOT MATCHED THEN INSERT BY NAME
 1
 
 query II
-FROM Stock
+FROM Stock order by all
 ----
 5	10
 6	12

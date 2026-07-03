@@ -31,14 +31,18 @@ public:
 	//! Returns whether or not the BufferHandle is valid.
 	DUCKDB_API bool IsValid() const;
 	//! Returns a pointer to the buffer data. Handle must be valid.
-	inline data_ptr_t Ptr() const {
+	inline const_data_ptr_t Ptr() const {
 		D_ASSERT(IsValid());
-		return node->buffer;
+		return node->GetData();
 	}
 	//! Returns a pointer to the buffer data. Handle must be valid.
-	inline data_ptr_t Ptr() {
+	inline const_data_ptr_t Ptr() {
 		D_ASSERT(IsValid());
-		return node->buffer;
+		return node->GetData();
+	}
+	inline data_ptr_t GetDataMutable() {
+		D_ASSERT(IsValid());
+		return node->GetDataMutable();
 	}
 	//! Gets the underlying file buffer. Handle must be valid.
 	DUCKDB_API FileBuffer &GetFileBuffer();

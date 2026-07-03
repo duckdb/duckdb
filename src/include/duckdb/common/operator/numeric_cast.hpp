@@ -588,8 +588,8 @@ bool TryCastWithOverflowCheck(double value, uhugeint_t &result) {
 
 struct NumericTryCastToBit {
 	template <class SRC>
-	static inline string_t Operation(SRC input, Vector &result) {
-		return StringVector::AddStringOrBlob(result, Bit::NumericToBit(input));
+	static inline string_t Operation(SRC input, StringHeap &heap) {
+		return heap.AddBlob(Bit::NumericToBit(input));
 	}
 };
 

@@ -4,13 +4,14 @@
 namespace duckdb {
 
 AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type)
-    : AlterInfo(AlterType::ALTER_DATABASE, string(), "", "", OnEntryNotFound::THROW_EXCEPTION),
+    : AlterInfo(AlterType::ALTER_DATABASE, QualifiedName(), OnEntryNotFound::THROW_EXCEPTION),
       alter_database_type(alter_database_type) {
 }
 
-AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type, string catalog_p,
+AlterDatabaseInfo::AlterDatabaseInfo(AlterDatabaseType alter_database_type, Identifier catalog_p,
                                      OnEntryNotFound if_not_found)
-    : AlterInfo(AlterType::ALTER_DATABASE, std::move(catalog_p), "", "", if_not_found),
+    : AlterInfo(AlterType::ALTER_DATABASE, QualifiedName(std::move(catalog_p), Identifier(), Identifier()),
+                if_not_found),
       alter_database_type(alter_database_type) {
 }
 
@@ -24,13 +25,13 @@ CatalogType AlterDatabaseInfo::GetCatalogType() const {
 RenameDatabaseInfo::RenameDatabaseInfo() : AlterDatabaseInfo(AlterDatabaseType::RENAME_DATABASE) {
 }
 
-RenameDatabaseInfo::RenameDatabaseInfo(string catalog_p, string new_name_p, OnEntryNotFound if_not_found)
+RenameDatabaseInfo::RenameDatabaseInfo(Identifier catalog_p, Identifier new_name_p, OnEntryNotFound if_not_found)
     : AlterDatabaseInfo(AlterDatabaseType::RENAME_DATABASE, std::move(catalog_p), if_not_found),
       new_name(std::move(new_name_p)) {
 }
 
 unique_ptr<AlterInfo> RenameDatabaseInfo::Copy() const {
-	return make_uniq<RenameDatabaseInfo>(catalog, new_name, if_not_found);
+	return make_uniq<RenameDatabaseInfo>(GetQualifiedName().Catalog(), new_name, if_not_found);
 }
 
 string RenameDatabaseInfo::ToString() const {
@@ -39,7 +40,7 @@ string RenameDatabaseInfo::ToString() const {
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
-	result += StringUtil::Format("%s RENAME TO %s", SQLIdentifier(catalog), SQLIdentifier(new_name));
+	result += StringUtil::Format("%s SET ALIAS TO %s", GetQualifiedName().Catalog(), new_name);
 	return result;
 }
 

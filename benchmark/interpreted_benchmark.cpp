@@ -59,7 +59,7 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	duckdb::unique_ptr<DBConfig> GetBenchmarkConfig(const string &version = "") {
 		auto result = make_uniq<DBConfig>();
 		if (!version.empty()) {
-			result->options.serialization_compatibility = SerializationCompatibility::FromString(version);
+			result->options.storage_compatibility = StorageCompatibility::FromString(version);
 		}
 		result->options.load_extensions = false;
 		return result;
@@ -783,7 +783,7 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 		if (i > 0) {
 			create_tbl += ", ";
 		}
-		create_tbl += KeywordHelper::WriteOptionallyQuoted(names[i]);
+		create_tbl += SQLIdentifier(names[i]);
 		create_tbl += " ";
 		create_tbl += types[i].ToString();
 	}

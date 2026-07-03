@@ -32,8 +32,7 @@ void DuckDBConnectionCountFunction(ClientContext &context, TableFunctionInput &d
 	if (data.finished) {
 		return;
 	}
-	output.SetValue(0, 0, Value::UBIGINT(data.count));
-	output.SetCardinality(1);
+	output.data[0].Append(Value::UBIGINT(data.count));
 	data.finished = true;
 }
 

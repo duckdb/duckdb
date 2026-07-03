@@ -2,9 +2,6 @@
 # description: Issue #7219 - Wrong GROUPING SETS implementation when using 2 empty grouping sets
 # group: [grouping_sets]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select count(*)
 group by grouping sets ((), ())

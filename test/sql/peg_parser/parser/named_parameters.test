@@ -1,0 +1,23 @@
+# name: test/sql/peg_parser/parser/named_parameters.test
+# description: Test named parameter syntax (:= and =>) in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT * FROM read_csv('file.csv', columns := {'a': 'INTEGER'})$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT * FROM read_csv('file.csv', columns => {'a': 'INTEGER'})$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT * FROM read_csv('file.csv', auto_detect := true)$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT range(start => 1, stop => 10)$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT range(start := 1, stop := 10)$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT * FROM read_csv('file.csv', auto_detect := true, columns := {'a': 'INTEGER', 'b': 'VARCHAR'})$TEST_PEG_PARSER$);

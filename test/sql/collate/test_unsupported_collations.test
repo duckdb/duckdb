@@ -21,7 +21,7 @@ CREATE TABLE collate_test(s VARCHAR COLLATE NOACCENT.NOACCENT)
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 1)
 ----
-Parser Error: syntax error at or near "1"
+<REGEX>:(.*syntax error at or near "1".*|.*Collation with name 1 does not exist.*)
 
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 'hello')

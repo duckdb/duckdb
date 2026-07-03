@@ -7,7 +7,7 @@ from pathlib import Path
 
 def open_utf8(file_path, mode):
     """Open a file with UTF-8 encoding."""
-    return open(file_path, mode, encoding='utf-8')
+    return open(file_path, mode, encoding='utf-8', errors='surrogateescape')
 
 
 def format_file_content(full_path, lines):

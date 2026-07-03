@@ -1,0 +1,7 @@
+{
+  "version": "unstable_new_geo_functions",
+  "description": "API to operate on GEOMETRY types.",
+  "entries": [
+    "duckdb_geometry_type_get_crs"
+  ]
+}

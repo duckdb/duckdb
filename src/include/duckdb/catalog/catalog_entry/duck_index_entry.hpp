@@ -11,16 +11,17 @@
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 
 namespace duckdb {
+class CommitDropState;
 class TableCatalogEntry;
 
 //! Wrapper class to allow copying a DuckIndexEntry (for altering the DuckIndexEntry metadata such as comments)
 struct IndexDataTableInfo {
-	IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const string &index_name_p);
+	IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const Identifier &index_name_p);
 
 	//! Pointer to the DataTableInfo
 	shared_ptr<DataTableInfo> info;
 	//! The index to be removed on destruction
-	string index_name;
+	Identifier index_name;
 };
 
 //! A duck index entry
@@ -42,13 +43,13 @@ public:
 	idx_t initial_index_size;
 
 public:
-	string GetSchemaName() const override;
-	string GetTableName() const override;
+	Identifier GetSchemaName() const override;
+	Identifier GetTableName() const override;
 
 	DataTableInfo &GetDataTableInfo() const;
 
-	//! Drops in-memory index data and marks all blocks on disk as free blocks, allowing to reclaim them
-	void CommitDrop();
+	//! Saves index removal into drop_state to be removed after FlushCommit().
+	void CommitDrop(CommitDropState &drop_state);
 };
 
 } // namespace duckdb

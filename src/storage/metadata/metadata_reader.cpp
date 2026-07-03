@@ -36,7 +36,7 @@ void MetadataReader::ReadData(QueryContext context, data_ptr_t buffer, idx_t rea
 			memcpy(buffer, Ptr(), to_read);
 			read_size -= to_read;
 			buffer += to_read;
-			offset += read_size;
+			offset += to_read;
 		}
 		// then move to the next block
 		ReadNextBlock(context);
@@ -51,18 +51,6 @@ MetaBlockPointer MetadataReader::GetMetaBlockPointer() {
 		throw InternalException("GetMetaBlockPointer called but there is no active pointer");
 	}
 	return manager.GetDiskPointer(block.pointer, UnsafeNumericCast<uint32_t>(offset));
-}
-
-vector<MetaBlockPointer> MetadataReader::GetRemainingBlocks(MetaBlockPointer last_block) {
-	vector<MetaBlockPointer> result;
-	while (has_next_block) {
-		if (last_block.IsValid() && next_pointer.block_pointer == last_block.block_pointer) {
-			break;
-		}
-		result.push_back(next_pointer);
-		ReadNextBlock();
-	}
-	return result;
 }
 
 void MetadataReader::ReadNextBlock() {
@@ -98,7 +86,7 @@ void MetadataReader::ReadNextBlock(QueryContext context) {
 }
 
 data_ptr_t MetadataReader::BasePtr() {
-	return block.handle.Ptr() + index * GetMetadataManager().GetMetadataBlockSize();
+	return block.handle.GetDataMutable() + index * GetMetadataManager().GetMetadataBlockSize();
 }
 
 data_ptr_t MetadataReader::Ptr() {

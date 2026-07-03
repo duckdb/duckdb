@@ -11,38 +11,39 @@ BinderException::BinderException(const unordered_map<string, string> &extra_info
     : Exception(extra_info, ExceptionType::BINDER, msg) {
 }
 
-BinderException BinderException::ColumnNotFound(const string &name, const vector<string> &similar_bindings,
+BinderException BinderException::ColumnNotFound(const Identifier &name, const vector<Identifier> &similar_bindings,
                                                 QueryErrorContext context) {
 	auto extra_info = Exception::InitializeExtraInfo("COLUMN_NOT_FOUND", context.query_location);
-	string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
-	extra_info["name"] = name;
+	string candidate_str = StringUtil::CandidatesMessage(IdentifiersToStrings(similar_bindings), "Candidate bindings");
+	extra_info["name"] = name.GetIdentifierName();
 	if (!similar_bindings.empty()) {
 		extra_info["candidates"] = StringUtil::Join(similar_bindings, ",");
 		return BinderException(extra_info, StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s",
-		                                                      name, candidate_str));
+		                                                      name.GetIdentifierName(), candidate_str));
 	} else {
 		return BinderException(
-		    extra_info,
-		    StringUtil::Format("Referenced column \"%s\" was not found because the FROM clause is missing", name));
+		    extra_info, StringUtil::Format("Referenced column \"%s\" was not found because the FROM clause is missing",
+		                                   name.GetIdentifierName()));
 	}
 }
 
-BinderException BinderException::NoMatchingFunction(const string &catalog_name, const string &schema_name,
-                                                    const string &name, const vector<LogicalType> &arguments,
+BinderException BinderException::NoMatchingFunction(const Identifier &catalog_name, const Identifier &schema_name,
+                                                    const Identifier &name, const vector<LogicalType> &arguments,
+                                                    const vector<pair<Identifier, LogicalType>> &named_arguments,
                                                     const vector<string> &candidates) {
 	auto extra_info = Exception::InitializeExtraInfo("NO_MATCHING_FUNCTION", optional_idx());
 	// no matching function was found, throw an error
-	string call_str = Function::CallToString(catalog_name, schema_name, name, arguments);
+	string call_str = Function::CallToString(catalog_name, schema_name, name, arguments, named_arguments);
 	string candidate_str;
 	for (auto &candidate : candidates) {
 		candidate_str += "\t" + candidate + "\n";
 	}
-	extra_info["name"] = name;
+	extra_info["name"] = name.GetIdentifierName();
 	if (!catalog_name.empty()) {
-		extra_info["catalog"] = catalog_name;
+		extra_info["catalog"] = catalog_name.GetIdentifierName();
 	}
 	if (!schema_name.empty()) {
-		extra_info["schema"] = schema_name;
+		extra_info["schema"] = schema_name.GetIdentifierName();
 	}
 	extra_info["call"] = call_str;
 	if (!candidates.empty()) {

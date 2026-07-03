@@ -2,9 +2,6 @@
 # description: Test COLUMNS REPLACE with NATURAL JOIN and JOIN USING
 # group: [projection]
 
-statement ok
-PRAGMA enable_verification
-
 # Test COLUMNS(* REPLACE) with NATURAL JOIN
 # Issue: COLUMNS(* REPLACE a AS a) was generating duplicate columns for USING columns
 # Expected: Should produce the same result as SELECT *

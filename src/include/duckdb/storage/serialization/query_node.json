@@ -23,9 +23,9 @@
       }
     ],
     "finalize_deserialization": [
-        "if (type == QueryNodeType::CTE_NODE) {",
-        "\tresult = std::move(result->Cast<CTENode>().child);",
-        "}"
+      "if (type == QueryNodeType::CTE_NODE) {",
+      "\tresult = std::move(result->Cast<CTENode>().child);",
+      "}"
     ]
   },
   {
@@ -114,10 +114,16 @@
         "id": 204,
         "name": "children",
         "type": "vector<QueryNode*>",
-        "version": "6"
+        "version": "v1.5.0"
       }
     ],
-    "constructor": ["setop_type", "left", "right", "children", "setop_all"]
+    "constructor": [
+      "setop_type",
+      "left",
+      "right",
+      "children",
+      "setop_all"
+    ]
   },
   {
     "class": "RecursiveCTENode",
@@ -127,7 +133,7 @@
       {
         "id": 200,
         "name": "cte_name",
-        "type": "string",
+        "type": "Identifier",
         "property": "ctename"
       },
       {
@@ -149,7 +155,7 @@
       {
         "id": 204,
         "name": "aliases",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 205,
@@ -166,7 +172,7 @@
       {
         "id": 200,
         "name": "cte_name",
-        "type": "string",
+        "type": "Identifier",
         "property": "ctename"
       },
       {
@@ -182,7 +188,7 @@
       {
         "id": 203,
         "name": "aliases",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 204,
@@ -276,22 +282,25 @@
       {
         "id": 201,
         "name": "columns",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       },
       {
         "id": 202,
         "name": "table",
-        "type": "string"
+        "type": "Identifier",
+        "serialize_property": "qualified_name.Name()"
       },
       {
         "id": 203,
         "name": "schema",
-        "type": "string"
+        "type": "Identifier",
+        "serialize_property": "qualified_name.Schema()"
       },
       {
         "id": 204,
         "name": "catalog",
-        "type": "string"
+        "type": "Identifier",
+        "serialize_property": "qualified_name.Catalog()"
       },
       {
         "id": 205,
@@ -319,6 +328,54 @@
         "name": "column_order",
         "type": "InsertColumnOrder",
         "default": "InsertColumnOrder::INSERT_BY_POSITION"
+      }
+    ],
+    "methods": {
+      "SetQualifiedName": [
+        "catalog",
+        "schema",
+        "table"
+      ]
+    }
+  },
+  {
+    "class": "MergeQueryNode",
+    "base": "QueryNode",
+    "enum": "MERGE_QUERY_NODE",
+    "includes": [
+      "duckdb/parser/query_node/merge_query_node.hpp",
+      "duckdb/parser/statement/merge_into_statement.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "target",
+        "type": "TableRef*"
+      },
+      {
+        "id": 201,
+        "name": "source",
+        "type": "TableRef*"
+      },
+      {
+        "id": 202,
+        "name": "join_condition",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 203,
+        "name": "using_columns",
+        "type": "vector<Identifier>"
+      },
+      {
+        "id": 204,
+        "name": "actions",
+        "type": "map<MergeActionCondition, vector<unique_ptr<MergeIntoAction>>>"
+      },
+      {
+        "id": 205,
+        "name": "returning_list",
+        "type": "vector<ParsedExpression*>"
       }
     ]
   }

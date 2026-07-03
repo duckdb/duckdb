@@ -3,7 +3,7 @@
 # group: [optimizer]
 
 statement ok
-PRAGMA enable_verification;
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
 statement ok
 create table a(ida int, valuea int);

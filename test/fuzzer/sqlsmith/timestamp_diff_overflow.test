@@ -3,9 +3,6 @@
 # group: [sqlsmith]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE ts("timestamp" TIMESTAMP);;
 
 statement ok

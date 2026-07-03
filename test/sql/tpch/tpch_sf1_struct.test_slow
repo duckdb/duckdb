@@ -4,7 +4,7 @@
 
 require tpch
 
-load __TEST_DIR__/tpch_sf1_struct.db
+load {TEST_DIR}/tpch_sf1_struct.db
 
 statement ok
 CALL dbgen(sf=1, suffix='_normal');
@@ -198,17 +198,17 @@ FROM nation_struct
 loop i 1 9
 
 query I
-PRAGMA tpch(${i})
+PRAGMA tpch({i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf1/q0{i}.csv
 
 endloop
 
 loop i 10 23
 
 query I
-PRAGMA tpch(${i})
+PRAGMA tpch({i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf1/q{i}.csv
 
 endloop

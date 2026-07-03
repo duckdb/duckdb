@@ -35,6 +35,7 @@ class Serializer;
 class ScalarMacroCatalogEntry;
 class TableMacroCatalogEntry;
 class TableCatalogEntry;
+class TriggerCatalogEntry;
 class ViewCatalogEntry;
 class TableDataWriter;
 class TypeCatalogEntry;
@@ -51,7 +52,7 @@ public:
 
 	~ActiveCheckpointWrapper();
 
-	//! Begin the transaction withint the newly created connection.
+	//! Begin the transaction within the newly created connection.
 	void GetCheckpointTransaction(CheckpointOptions &options);
 	void Commit();
 	bool HasCheckpointContext() const;
@@ -89,6 +90,7 @@ protected:
 	virtual void WriteTableMacro(TableMacroCatalogEntry &table, Serializer &serializer);
 	virtual void WriteIndex(IndexCatalogEntry &index_catalog_entry, Serializer &serializer);
 	virtual void WriteType(TypeCatalogEntry &type, Serializer &serializer);
+	virtual void WriteTrigger(TriggerCatalogEntry &trigger, Serializer &serializer);
 };
 
 class CheckpointReader {
@@ -112,6 +114,7 @@ protected:
 	virtual void ReadTableMacro(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadIndex(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadType(CatalogTransaction transaction, Deserializer &deserializer);
+	virtual void ReadTrigger(CatalogTransaction transaction, Deserializer &deserializer);
 
 	virtual void ReadTableData(CatalogTransaction transaction, Deserializer &deserializer,
 	                           BoundCreateTableInfo &bound_info);

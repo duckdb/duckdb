@@ -34,14 +34,14 @@ static unique_ptr<FunctionData> PragmaMetadataInfoBind(ClientContext &context, T
 	names.emplace_back("free_list");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::BIGINT));
 
-	string db_name;
+	Identifier db_name;
 	if (input.inputs.empty()) {
 		db_name = DatabaseManager::GetDefaultDatabase(context);
 	} else {
 		if (input.inputs[0].IsNull()) {
 			throw BinderException("Database argument for pragma_metadata_info cannot be NULL");
 		}
-		db_name = StringValue::Get(input.inputs[0]);
+		db_name = Identifier(StringValue::Get(input.inputs[0]));
 	}
 	auto &catalog = Catalog::GetCatalog(context, db_name);
 	auto result = make_uniq<PragmaMetadataFunctionData>();
@@ -57,25 +57,29 @@ static void PragmaMetadataInfoFunction(ClientContext &context, TableFunctionInpu
 	auto &bind_data = data_p.bind_data->Cast<PragmaMetadataFunctionData>();
 	auto &data = data_p.global_state->Cast<PragmaMetadataOperatorData>();
 	idx_t count = 0;
+
+	// block_id
+	auto &block_id = output.data[0];
+	// total_blocks
+	auto &total_blocks = output.data[1];
+	// free_blocks
+	auto &free_blocks = output.data[2];
+	// free_list
+	auto &free_list = output.data[3];
+
 	while (data.offset < bind_data.metadata_info.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.metadata_info[data.offset++];
 
-		idx_t col_idx = 0;
-		// block_id
-		output.SetValue(col_idx++, count, Value::BIGINT(entry.block_id));
-		// total_blocks
-		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.total_blocks)));
-		// free_blocks
-		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.free_list.size())));
-		// free_list
+		block_id.Append(Value::BIGINT(entry.block_id));
+		total_blocks.Append(Value::BIGINT(NumericCast<int64_t>(entry.total_blocks)));
+		free_blocks.Append(Value::BIGINT(NumericCast<int64_t>(entry.free_list.size())));
 		vector<Value> list_values;
 		for (auto &free_id : entry.free_list) {
 			list_values.push_back(Value::BIGINT(NumericCast<int64_t>(free_id)));
 		}
-		output.SetValue(col_idx++, count, Value::LIST(LogicalType::BIGINT, std::move(list_values)));
+		free_list.Append(Value::LIST(LogicalType::BIGINT, std::move(list_values)));
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void PragmaMetadataInfo::RegisterFunction(BuiltinFunctions &set) {

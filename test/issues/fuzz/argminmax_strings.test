@@ -3,9 +3,6 @@
 # group: [fuzz]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE i_class_id AS
 	SELECT
 		LIST(i_category_id::integer) AS i_category_id,

@@ -67,6 +67,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	result.emplace_back(LogicalType::TIMESTAMP_NS, "timestamp_ns");
 	result.emplace_back(LogicalType::TIME_TZ, "time_tz");
 	result.emplace_back(LogicalType::TIMESTAMP_TZ, "timestamp_tz");
+	result.emplace_back(LogicalType::TIMESTAMP_TZ_NS, "timestamp_tz_ns");
 
 	// More complex numeric types.
 	result.emplace_back(LogicalType::FLOAT, "float", Value::FLOAT(std::numeric_limits<float>::lowest()),
@@ -101,31 +102,31 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 
 	// ENUMs.
 	Vector small_enum(LogicalType::VARCHAR, 2);
-	auto small_enum_ptr = FlatVector::GetData<string_t>(small_enum);
-	small_enum_ptr[0] = StringVector::AddStringOrBlob(small_enum, "DUCK_DUCK_ENUM");
-	small_enum_ptr[1] = StringVector::AddStringOrBlob(small_enum, "GOOSE");
+	auto small_enum_ptr = FlatVector::Writer<string_t>(small_enum, 2);
+	small_enum_ptr.WriteValue(string_t("DUCK_DUCK_ENUM"));
+	small_enum_ptr.WriteValue(string_t("GOOSE"));
 	result.emplace_back(LogicalType::ENUM(small_enum, 2), "small_enum");
 
 	Vector medium_enum(LogicalType::VARCHAR, 300);
-	auto medium_enum_ptr = FlatVector::GetData<string_t>(medium_enum);
+	auto medium_enum_ptr = FlatVector::Writer<string_t>(medium_enum, 300);
 	for (idx_t i = 0; i < 300; i++) {
-		medium_enum_ptr[i] = StringVector::AddStringOrBlob(medium_enum, string("enum_") + to_string(i));
+		medium_enum_ptr.WriteValue(string_t(string("enum_") + to_string(i)));
 	}
 	result.emplace_back(LogicalType::ENUM(medium_enum, 300), "medium_enum");
 
 	if (use_large_enum) {
 		// this is a big one... not sure if we should push this one here, but it's required for completeness
 		Vector large_enum(LogicalType::VARCHAR, 70000);
-		auto large_enum_ptr = FlatVector::GetData<string_t>(large_enum);
+		auto large_enum_ptr = FlatVector::Writer<string_t>(large_enum, 70000);
 		for (idx_t i = 0; i < 70000; i++) {
-			large_enum_ptr[i] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(i));
+			large_enum_ptr.WriteValue(string_t(string("enum_") + to_string(i)));
 		}
 		result.emplace_back(LogicalType::ENUM(large_enum, 70000), "large_enum");
 	} else {
 		Vector large_enum(LogicalType::VARCHAR, 2);
-		auto large_enum_ptr = FlatVector::GetData<string_t>(large_enum);
-		large_enum_ptr[0] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(0));
-		large_enum_ptr[1] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(69999));
+		auto large_enum_ptr = FlatVector::Writer<string_t>(large_enum, 2);
+		large_enum_ptr.WriteValue(string_t(string("enum_") + to_string(0)));
+		large_enum_ptr.WriteValue(string_t(string("enum_") + to_string(69999)));
 		result.emplace_back(LogicalType::ENUM(large_enum, 2), "large_enum");
 	}
 
@@ -164,8 +165,8 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	auto empty_timestamptz_list = Value::LIST(LogicalType::TIMESTAMP_TZ, vector<Value>());
 	auto timestamptz_list =
 	    Value::LIST(LogicalType::TIMESTAMP_TZ,
-	                {Value::TIMESTAMPTZ(timestamp_tz_t()), Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::infinity())),
-	                 Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::ninfinity())), Value(LogicalType::TIMESTAMP_TZ),
+	                {Value::TIMESTAMPTZ(timestamp_tz_t()), Value::TIMESTAMPTZ(timestamp_tz_t::infinity()),
+	                 Value::TIMESTAMPTZ(timestamp_tz_t::ninfinity()), Value(LogicalType::TIMESTAMP_TZ),
 	                 Value::TIMESTAMPTZ(timestamp_tz_t(Timestamp::FromString("2022-05-12 16:23:45-07", true)))});
 	result.emplace_back(timestamptz_list_type, "timestamptz_array", empty_timestamptz_list, timestamptz_list);
 
@@ -184,36 +185,43 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 
 	// structs
 	child_list_t<LogicalType> struct_type_list;
-	struct_type_list.push_back(make_pair("a", LogicalType::INTEGER));
-	struct_type_list.push_back(make_pair("b", LogicalType::VARCHAR));
+	struct_type_list.emplace_back(make_pair("a", LogicalType::INTEGER));
+	struct_type_list.emplace_back(make_pair("b", LogicalType::VARCHAR));
 	auto struct_type = LogicalType::STRUCT(struct_type_list);
 
 	child_list_t<Value> min_struct_list;
-	min_struct_list.push_back(make_pair("a", Value(LogicalType::INTEGER)));
-	min_struct_list.push_back(make_pair("b", Value(LogicalType::VARCHAR)));
+	min_struct_list.emplace_back(make_pair("a", Value(LogicalType::INTEGER)));
+	min_struct_list.emplace_back(make_pair("b", Value(LogicalType::VARCHAR)));
 	auto min_struct_val = Value::STRUCT(std::move(min_struct_list));
 
 	child_list_t<Value> max_struct_list;
-	max_struct_list.push_back(make_pair("a", Value::INTEGER(42)));
-	max_struct_list.push_back(make_pair("b", Value("🦆🦆🦆🦆🦆🦆")));
+	max_struct_list.emplace_back(make_pair("a", Value::INTEGER(42)));
+	max_struct_list.emplace_back(make_pair("b", Value("🦆🦆🦆🦆🦆🦆")));
 	auto max_struct_val = Value::STRUCT(std::move(max_struct_list));
 
 	result.emplace_back(struct_type, "struct", min_struct_val, max_struct_val);
 
+	// Empty struct
+	child_list_t<Value> empty_struct_values;
+	child_list_t<LogicalType> empty_struct_types;
+	auto empty_struct_type = LogicalType::STRUCT(empty_struct_types);
+	auto empty_struct_val = Value::STRUCT(empty_struct_values);
+	result.emplace_back(empty_struct_type, "empty_struct", empty_struct_val, empty_struct_val);
+
 	// structs with lists
 	child_list_t<LogicalType> struct_list_type_list;
-	struct_list_type_list.push_back(make_pair("a", int_list_type));
-	struct_list_type_list.push_back(make_pair("b", varchar_list_type));
+	struct_list_type_list.emplace_back(make_pair("a", int_list_type));
+	struct_list_type_list.emplace_back(make_pair("b", varchar_list_type));
 	auto struct_list_type = LogicalType::STRUCT(struct_list_type_list);
 
 	child_list_t<Value> min_struct_vl_list;
-	min_struct_vl_list.push_back(make_pair("a", Value(int_list_type)));
-	min_struct_vl_list.push_back(make_pair("b", Value(varchar_list_type)));
+	min_struct_vl_list.emplace_back(make_pair("a", Value(int_list_type)));
+	min_struct_vl_list.emplace_back(make_pair("b", Value(varchar_list_type)));
 	auto min_struct_val_list = Value::STRUCT(std::move(min_struct_vl_list));
 
 	child_list_t<Value> max_struct_vl_list;
-	max_struct_vl_list.push_back(make_pair("a", int_list));
-	max_struct_vl_list.push_back(make_pair("b", varchar_list));
+	max_struct_vl_list.emplace_back(make_pair("a", int_list));
+	max_struct_vl_list.emplace_back(make_pair("b", varchar_list));
 	auto max_struct_val_list = Value::STRUCT(std::move(max_struct_vl_list));
 
 	result.emplace_back(struct_list_type, "struct_of_arrays", std::move(min_struct_val_list),
@@ -231,11 +239,11 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	auto min_map_value = Value::MAP(ListType::GetChildType(map_type), vector<Value>());
 
 	child_list_t<Value> map_struct1;
-	map_struct1.push_back(make_pair("key", Value("key1")));
-	map_struct1.push_back(make_pair("value", Value("🦆🦆🦆🦆🦆🦆")));
+	map_struct1.emplace_back(make_pair("key", Value("key1")));
+	map_struct1.emplace_back(make_pair("value", Value("🦆🦆🦆🦆🦆🦆")));
 	child_list_t<Value> map_struct2;
-	map_struct2.push_back(make_pair("key", Value("key2")));
-	map_struct2.push_back(make_pair("value", Value("goose")));
+	map_struct2.emplace_back(make_pair("key", Value("key2")));
+	map_struct2.emplace_back(make_pair("value", Value("goose")));
 
 	vector<Value> map_values;
 	map_values.push_back(Value::STRUCT(map_struct1));
@@ -320,6 +328,55 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 
 	result.emplace_back(LogicalType::TIME_NS, "time_ns");
 
+	// GEOMETRY
+	// - For min, use a regular empty point
+	// - For max, use some complicated nested geometry collection with a variety of empty and non-empty geometries,
+	// to cover as many code paths as possible
+
+	constexpr auto big_geom_wkt = R"WKT_LITERAL(
+		GEOMETRYCOLLECTION (
+			POINT (1 2),
+			POINT EMPTY,
+			LINESTRING (0 0, 1 1),
+			LINESTRING EMPTY,
+			POLYGON ((0 0, 0 1, 1 1, 1 0, 0 0)),
+			POLYGON EMPTY,
+	        MULTIPOINT (
+				5 6,
+				EMPTY
+			),
+			MULTILINESTRING (
+				(0 0, 1 1),
+				EMPTY,
+				(2 2, 3 3),
+				EMPTY
+			),
+			MULTILINESTRING EMPTY,
+			MULTIPOLYGON (
+				((0 0, 0 1, 1 1, 1 0, 0 0)),
+				EMPTY,
+				((0 0, 0 2, 2 2, 2 0, 0 0)),
+				EMPTY
+			),
+			MULTIPOLYGON EMPTY,
+			GEOMETRYCOLLECTION (
+				POINT (5 6)
+			),
+			GEOMETRYCOLLECTION EMPTY
+		)
+	)WKT_LITERAL";
+
+	auto min_geometry = Value("POINT EMPTY").DefaultCastAs(LogicalType::GEOMETRY());
+	auto max_geometry = Value(big_geom_wkt).DefaultCastAs(LogicalType::GEOMETRY());
+
+	result.emplace_back(LogicalType::GEOMETRY(), "geometry", min_geometry, max_geometry);
+
+	// unnamed tuple - added last so existing column positions are unchanged
+	auto tuple_type = LogicalType::TUPLE({LogicalType::INTEGER, LogicalType::VARCHAR});
+	auto min_tuple_val = Value::TUPLE({Value(LogicalType::INTEGER), Value(LogicalType::VARCHAR)});
+	auto max_tuple_val = Value::TUPLE({Value::INTEGER(42), Value("🦆🦆🦆🦆🦆🦆")});
+	result.emplace_back(tuple_type, "tuple", min_tuple_val, max_tuple_val);
+
 	return result;
 }
 
@@ -354,7 +411,7 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
 	return std::move(result);
 }
 
-unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, TableFunctionInitInput &input) {
+static unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<TestAllTypesBindData>();
 	auto result = make_uniq<TestAllTypesData>();
 	// 3 rows: min, max and NULL
@@ -368,7 +425,7 @@ unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, Ta
 	return std::move(result);
 }
 
-void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+static void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<TestAllTypesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -380,11 +437,10 @@ void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &vals = data.entries[data.offset++];
 		for (idx_t col_idx = 0; col_idx < vals.size(); col_idx++) {
-			output.SetValue(col_idx, count, vals[col_idx]);
+			output.data[col_idx].Append(vals[col_idx]);
 		}
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void TestAllTypesFun::RegisterFunction(BuiltinFunctions &set) {

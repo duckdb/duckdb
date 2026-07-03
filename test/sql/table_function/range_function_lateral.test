@@ -2,9 +2,6 @@
 # description: Test range functions with lateral functions
 # group: [table_function]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT * FROM range(1, NULL, 1);
 ----

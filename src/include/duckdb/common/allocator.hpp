@@ -68,9 +68,6 @@ public:
 	data_ptr_t get() { // NOLINT: matching std style
 		return pointer;
 	}
-	operator bool() const { // NOLINT: missing explicit
-		return pointer != nullptr;
-	}
 	const_data_ptr_t get() const { // NOLINT: matching std style
 		return pointer;
 	}
@@ -133,6 +130,10 @@ public:
 	static void SetBackgroundThreads(bool enable);
 
 private:
+	//! Returns free memory in the system heap (glibc) to the OS via malloc_trim, rate-limited to once
+	//! per 100ms. No-op on non-glibc platforms. Shared by the flush paths of both allocator backends.
+	static void MallocTrim(idx_t pad);
+
 	allocate_function_ptr_t allocate_function;
 	free_function_ptr_t free_function;
 	reallocate_function_ptr_t reallocate_function;

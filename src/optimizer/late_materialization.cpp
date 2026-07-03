@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/late_materialization.hpp"
 
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -121,7 +122,7 @@ void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, Table
 void LateMaterialization::ReplaceTableReferences(unique_ptr<Expression> &root_expr, TableIndex new_table_index) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_column_ref, unique_ptr<Expression> &expr) {
-		    bound_column_ref.binding.table_index = new_table_index;
+		    bound_column_ref.BindingMutable().table_index = new_table_index;
 	    });
 }
 
@@ -133,7 +134,7 @@ unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, P
 		auto &column_id = get.GetColumnIndex(column_binding);
 		auto column_name = get.GetColumnName(column_id);
 		auto &column_type = get.GetColumnType(column_id);
-		auto expr = make_uniq<BoundColumnRefExpression>(column_name, column_type, column_binding);
+		auto expr = make_uniq<BoundColumnRefExpression>(Identifier(column_name), column_type, column_binding);
 		return std::move(expr);
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
@@ -150,7 +151,7 @@ unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, P
 void LateMaterialization::ReplaceExpressionReferences(LogicalOperator &next_op, unique_ptr<Expression> &root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_column_ref, unique_ptr<Expression> &expr) {
-		    expr = GetExpression(next_op, bound_column_ref.binding.column_index);
+		    expr = GetExpression(next_op, bound_column_ref.Binding().column_index);
 	    });
 }
 
@@ -211,13 +212,25 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 		}
 	}
 	auto &get = child.get().Cast<LogicalGet>();
-	if (column_references.size() >= get.GetColumnIds().size()) {
+	column_binding_set_t required_columns;
+	for (auto &entry : column_references) {
+		required_columns.insert(entry.first);
+	}
+	for (auto &filter_entry : get.table_filters) {
+		required_columns.insert(ColumnBinding(get.table_index, filter_entry.GetIndex()));
+	}
+	if (required_columns.size() >= get.GetColumnIds().size()) {
 		// we do not benefit from late materialization
-		// we need all of the columns to compute the root node anyway (Top-N/Limit/etc)
+		// every column the scan reads is already required upstream (Top-N/Limit/etc) or by its pushed-down filters
 		return false;
 	}
 	if (!get.function.late_materialization) {
 		// this function does not support late materialization
+		return false;
+	}
+	if (get.extra_info.sample_options && !get.extra_info.sample_options->is_percentage) {
+		// we should not apply late materialization when row-count sampling is pushed down
+		// the sample scan is already fast and creating a semi-join would duplicate the full table scan
 		return false;
 	}
 	if (!get.function.get_row_id_columns) {

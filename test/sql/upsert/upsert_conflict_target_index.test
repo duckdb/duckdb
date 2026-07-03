@@ -2,9 +2,6 @@
 # group: [upsert]
 
 statement ok
-pragma enable_verification;
-
-statement ok
 create or replace table index_tbl (
 	i integer,
 	j integer
@@ -30,4 +27,4 @@ select * from index_tbl;
 statement error
 insert into index_tbl values (5, 10) on conflict on constraint other_index do update set j = excluded.j;
 ----
-Not implemented Error: ON CONSTRAINT conflict target is not supported yet
+<REGEX>:.*ON CONSTRAINT conflict target is not supported yet.*

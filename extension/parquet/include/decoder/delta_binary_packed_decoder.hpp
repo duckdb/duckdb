@@ -8,12 +8,18 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include "duckdb.hpp"
 #include "parquet_dbp_decoder.hpp"
 #include "resizable_buffer.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 class ColumnReader;
+class ResizeableBuffer;
+class Vector;
 
 class DeltaBinaryPackedDecoder {
 public:

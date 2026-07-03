@@ -2,9 +2,6 @@
 # description: Test casting from decimal to numeric
 # group: [decimal]
 
-statement ok
-PRAGMA enable_verification
-
 # tinyint
 query IIIII
 SELECT 127::DECIMAL(3,0)::TINYINT, -127::DECIMAL(3,0)::TINYINT, -7::DECIMAL(9,1)::TINYINT, 27::DECIMAL(18,1)::TINYINT, 33::DECIMAL(38,1)::TINYINT

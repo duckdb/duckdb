@@ -9,6 +9,8 @@
 #include "tpcds_constants.hpp"
 #include "dsdgen_schema.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "dsdgen-c/porting.h"
+#include "dsdgen-c/parallel.h"
 
 #include <cassert>
 
@@ -17,21 +19,19 @@ using namespace duckdb;
 namespace tpcds {
 
 template <class T>
-static void CreateTPCDSTable(ClientContext &context, string catalog_name, string schema, string suffix, bool keys,
-                             bool overwrite) {
+static void CreateTPCDSTable(ClientContext &context, const Identifier &catalog_name, const Identifier &schema,
+                             string suffix, bool keys, bool overwrite) {
 	auto info = make_uniq<CreateTableInfo>();
-	info->catalog = catalog_name;
-	info->schema = schema;
-	info->table = T::Name + suffix;
+	info->SetQualifiedName(QualifiedName(catalog_name, schema, Identifier(T::Name + suffix)));
 	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
 		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
 	}
 	if (keys) {
-		duckdb::vector<string> pk_columns;
+		duckdb::vector<duckdb::Identifier> pk_columns;
 		for (idx_t i = 0; i < T::PrimaryKeyCount; i++) {
-			pk_columns.push_back(T::PrimaryKeyColumns[i]);
+			pk_columns.emplace_back(T::PrimaryKeyColumns[i]);
 		}
 		info->constraints.push_back(make_uniq<UniqueConstraint>(std::move(pk_columns), true));
 	}
@@ -39,8 +39,8 @@ static void CreateTPCDSTable(ClientContext &context, string catalog_name, string
 	catalog.CreateTable(context, std::move(info));
 }
 
-void DSDGenWrapper::CreateTPCDSSchema(ClientContext &context, string catalog, string schema, string suffix, bool keys,
-                                      bool overwrite) {
+void DSDGenWrapper::CreateTPCDSSchema(ClientContext &context, const Identifier &catalog, const Identifier &schema,
+                                      string suffix, bool keys, bool overwrite) {
 	CreateTPCDSTable<CallCenterInfo>(context, catalog, schema, suffix, keys, overwrite);
 	CreateTPCDSTable<CatalogPageInfo>(context, catalog, schema, suffix, keys, overwrite);
 	CreateTPCDSTable<CatalogReturnsInfo>(context, catalog, schema, suffix, keys, overwrite);
@@ -67,7 +67,8 @@ void DSDGenWrapper::CreateTPCDSSchema(ClientContext &context, string catalog, st
 	CreateTPCDSTable<WebSiteInfo>(context, catalog, schema, suffix, keys, overwrite);
 }
 
-void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_name, string schema, string suffix) {
+void DSDGenWrapper::DSDGen(double scale, ClientContext &context, const Identifier &catalog_name,
+                           const Identifier &schema, string suffix) {
 	if (scale <= 0) {
 		// schema only
 		return;
@@ -95,7 +96,8 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_
 		auto table_def = GetTDefByNumber(table_id);
 		auto table_name = table_def.name + suffix;
 		assert(table_def.name);
-		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
+		auto &table_entry =
+		    catalog.GetEntry<TableCatalogEntry>(context, QualifiedName(catalog.GetName(), schema, Identifier(table_name)));
 
 		if (!table_entry.IsDuckTable()) {
 			throw InvalidInputException("dsdgen is only supported for DuckDB database files");
@@ -135,6 +137,7 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_
 			if (builder_func((void *)&append_info, i)) {
 				throw InternalException("Table generation failed");
 			}
+			row_stop(table_id);
 		}
 	}
 

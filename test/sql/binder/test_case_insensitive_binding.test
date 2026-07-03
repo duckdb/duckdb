@@ -2,9 +2,6 @@
 # description: Test case insensitive binding of columns
 # group: [binder]
 
-statement ok
-PRAGMA enable_verification
-
 # we can bind case insensitive column names
 
 statement ok

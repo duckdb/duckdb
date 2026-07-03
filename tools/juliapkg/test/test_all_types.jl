@@ -183,7 +183,10 @@
             missing
         ]
     )
-    @test isequal(df.array_of_structs, [[], [(a = missing, b = missing), (a = 42, b = "🦆🦆🦆🦆🦆🦆"), missing], missing])
+    @test isequal(
+        df.array_of_structs,
+        [[], [(a = missing, b = missing), (a = 42, b = "🦆🦆🦆🦆🦆🦆"), missing], missing]
+    )
     @test isequal(df.map, [Dict(), Dict("key1" => "🦆🦆🦆🦆🦆🦆", "key2" => "goose"), missing])
     @test isequal(df.fixed_int_array, [[missing, 2, 3], [4, 5, 6], missing])
     @test isequal(df.fixed_varchar_array, [["a", missing, "c"], ["d", "e", "f"], missing])
@@ -223,4 +226,7 @@
         df.list_of_fixed_int_array,
         [[[missing, 2, 3], [4, 5, 6], [missing, 2, 3]], [[4, 5, 6], [missing, 2, 3], [4, 5, 6]], missing]
     )
+    @test df.geometry[1] isa Base.CodeUnits{UInt8, String}
+    @test df.geometry[2] isa Base.CodeUnits{UInt8, String}
+    @test ismissing(df.geometry[3])
 end

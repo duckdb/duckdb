@@ -8,12 +8,12 @@ SET default_null_order='nulls_first';
 foreach type FLOAT DOUBLE
 
 query III
-SELECT isnan(3::${type}), isnan('nan'::${type}), isnan(NULL::${type})
+SELECT isnan(3::{type}), isnan('nan'::{type}), isnan(NULL::{type})
 ----
 false	true	NULL
 
 statement ok
-CREATE TABLE floats(f ${type})
+CREATE TABLE floats(f {type})
 
 statement ok
 INSERT INTO floats VALUES (3), ('nan'), ('inf'), ('-inf'), (NULL)

@@ -4,12 +4,12 @@
 
 namespace duckdb {
 
-CreateMacroInfo::CreateMacroInfo(CatalogType type) : CreateFunctionInfo(type, INVALID_SCHEMA) {
+CreateMacroInfo::CreateMacroInfo(CatalogType type) : CreateFunctionInfo(type, Identifier::InvalidSchema()) {
 }
 
 CreateMacroInfo::CreateMacroInfo(CatalogType type, unique_ptr<MacroFunction> function,
                                  vector<unique_ptr<MacroFunction>> extra_functions)
-    : CreateFunctionInfo(type, INVALID_SCHEMA) {
+    : CreateFunctionInfo(type, Identifier::InvalidSchema()) {
 	macros.push_back(std::move(function));
 	for (auto &macro : extra_functions) {
 		macros.push_back(std::move(macro));
@@ -18,7 +18,7 @@ CreateMacroInfo::CreateMacroInfo(CatalogType type, unique_ptr<MacroFunction> fun
 
 string CreateMacroInfo::ToString() const {
 	auto prefix = GetCreatePrefix("MACRO");
-	prefix += QualifierToString(temporary ? "" : catalog, schema, name) + " ";
+	prefix += QualifiedNameToString() + " ";
 	string definitions;
 	for (auto &function : macros) {
 		if (!definitions.empty()) {
@@ -34,7 +34,7 @@ unique_ptr<CreateInfo> CreateMacroInfo::Copy() const {
 	for (auto &macro : macros) {
 		result->macros.push_back(macro->Copy());
 	}
-	result->name = name;
+	result->SetFunctionName(GetFunctionName());
 	CopyFunctionProperties(*result);
 	return std::move(result);
 }

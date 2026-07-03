@@ -4,11 +4,9 @@
 
 require autocomplete
 
-require tpch
+set variable sf 0
 
-# column names
-statement ok
-CALL dbgen(sf=0);
+include test/sql/tpch/tpch_setup.test_template
 
 query II
 SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT l_ord') LIMIT 1;

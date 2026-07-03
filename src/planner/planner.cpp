@@ -17,12 +17,44 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/planner/operator/logical_trigger.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/planner/planner_extension.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
 
 Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
+}
+
+// Pre-decorrelation pass: replace LogicalTrigger with LogicalDependentJoin so the standard
+// FlattenDependentJoins machinery can decorrelate the trigger body.
+static void RewriteTriggersToDependent(Binder &binder, LogicalOperator &op) {
+	for (auto &child : op.children) {
+		if (child) {
+			RewriteTriggersToDependent(binder, *child);
+		}
+	}
+	for (idx_t i = 0; i < op.children.size(); i++) {
+		if (!op.children[i] || op.children[i]->type != LogicalOperatorType::LOGICAL_TRIGGER) {
+			continue;
+		}
+		auto &trig = op.children[i]->Cast<LogicalTrigger>();
+		auto dep_join = make_uniq<LogicalDependentJoin>(JoinType::INNER);
+		dep_join->correlated_columns = std::move(trig.correlated_columns);
+		// Trigger bodies have side effects and must fire once per row. Dedup on a synthetic per-row
+		// row_number() key instead of the NEW columns (mirrors PerformDuplicateElimination's
+		// perform_delim=false path). otherwise rows with identical NEW values would underfire.
+		auto binding = ColumnBinding(binder.GenerateTableIndex(), ProjectionIndex(0));
+		CorrelatedColumnInfo info(binding, LogicalType::BIGINT, "delim_index", 0);
+		dep_join->correlated_columns.AddColumn(std::move(info));
+		dep_join->correlated_columns.SetDelimIndexToZero();
+		dep_join->perform_delim = false;
+		dep_join->children.push_back(std::move(trig.children[0]));
+		dep_join->children.push_back(std::move(trig.children[1]));
+		op.children[i] = std::move(dep_join);
+	}
 }
 
 static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t depth = 0) {
@@ -52,10 +84,10 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	// first bind the tables and columns to the catalog
 	bool parameters_resolved = true;
 	try {
-		profiler.StartPhase(MetricType::PLANNER_BINDING);
+		auto binding_timer = profiler.StartTimer<MetricPlannerBindingTime>();
 		binder->SetParameters(bound_parameters);
 		auto bound_statement = binder->Bind(statement);
-		profiler.EndPhase();
+		binding_timer.EndTimer();
 
 		RunPostBindExtensions(context, *binder, bound_statement);
 
@@ -95,6 +127,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		auto max_tree_depth = Settings::Get<MaxExpressionDepthSetting>(context);
 		CheckTreeDepth(*plan, max_tree_depth);
 
+		RewriteTriggersToDependent(*this->binder, *this->plan);
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
 	}
 	this->properties = binder->GetStatementProperties();
@@ -120,6 +153,9 @@ void Planner::CreatePlan(SQLStatement &statement) {
 shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLStatement> statement) {
 	auto copied_statement = statement->Copy();
 	// create a plan of the underlying statement
+	// set PREPARE binding mode so that $params without supplied values create placeholder slots
+	// instead of falling back to user variables (user variables serve as defaults at EXECUTE time)
+	binder->SetBindingMode(BindingMode::PREPARE);
 	CreatePlan(std::move(statement));
 	// now create the logical prepare
 	auto prepared_data = make_shared_ptr<PreparedStatementData>(copied_statement->type);
@@ -133,6 +169,9 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 
 void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement);
+	Optimizer optimizer(*binder, context);
+	optimizer.OptimizeStatement(statement);
+
 	switch (statement->type) {
 	case StatementType::SELECT_STATEMENT:
 	case StatementType::INSERT_STATEMENT:
@@ -160,6 +199,8 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::COPY_DATABASE_STATEMENT:
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 	case StatementType::MERGE_INTO_STATEMENT:
+	case StatementType::CONNECT_STATEMENT:
+	case StatementType::DISCONNECT_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
@@ -178,41 +219,30 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 
 void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op,
                          optional_ptr<bound_parameter_map_t> map) {
-	auto &config = DBConfig::GetConfig(context);
-#ifdef DUCKDB_ALTERNATIVE_VERIFY
-	{
-		auto &serialize_comp = config.options.serialization_compatibility;
-		auto latest_version = SerializationCompatibility::Latest();
-		if (serialize_comp.manually_set &&
-		    serialize_comp.serialization_version != latest_version.serialization_version) {
-			// Serialization should not be skipped, this test relies on the serialization to remove certain fields for
-			// compatibility with older versions. This might change behavior, not doing this might make this test fail.
-		} else {
-			// if alternate verification is enabled we run the original operator
-			return;
-		}
+	if (!op) {
+		return;
 	}
-#endif
-	if (!op || !ClientConfig::GetConfig(context).verify_serializer) {
+	// verify the column bindings of the plan
+	ColumnBindingResolver::Verify(context, *op);
+	if (!Settings::Get<DebugVerifySerializerSetting>(context)) {
 		return;
 	}
 	//! SELECT only for now
 	if (!OperatorSupportsSerialization(*op)) {
 		return;
 	}
-	// verify the column bindings of the plan
-	ColumnBindingResolver::Verify(*op);
 
+	auto &config = DBConfig::GetConfig(context);
 	// format (de)serialization of this operator
 	try {
 		MemoryStream stream(Allocator::Get(context));
 
 		SerializationOptions options;
-		if (config.options.serialization_compatibility.manually_set) {
+		if (config.options.storage_compatibility.manually_set) {
 			// Override the default of 'latest' if this was manually set (for testing, mostly)
-			options.serialization_compatibility = config.options.serialization_compatibility;
+			options.storage_compatibility = config.options.storage_compatibility;
 		} else {
-			options.serialization_compatibility = SerializationCompatibility::Latest();
+			options.storage_compatibility = StorageCompatibility::Latest();
 		}
 
 		BinarySerializer::Serialize(*op, stream, options);

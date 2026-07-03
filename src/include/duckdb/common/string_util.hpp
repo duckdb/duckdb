@@ -14,7 +14,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/common/complex_json.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 
 #include <cstring>
@@ -23,7 +23,7 @@ namespace duckdb {
 
 #ifndef DUCKDB_QUOTE_DEFINE
 // Preprocessor trick to allow text to be converted to C-string / string
-// Expecte use is:
+// Expected use is:
 //	#ifdef SOME_DEFINE
 //	string str = DUCKDB_QUOTE_DEFINE(SOME_DEFINE)
 //	...do something with str
@@ -123,9 +123,9 @@ public:
 	DUCKDB_API static optional_idx Find(const string &haystack, const string &needle);
 
 	//! Returns true if the target string starts with the given prefix
-	DUCKDB_API static bool StartsWith(string str, string prefix);
+	DUCKDB_API static bool StartsWith(const string &str, const string &prefix);
 
-	//! Returns true if the target string <b>ends</b> with the given suffix.
+	//! Returns true if the target string ends with the given suffix
 	DUCKDB_API static bool EndsWith(const string &str, const string &suffix);
 
 	//! Repeat a string multiple times
@@ -138,11 +138,12 @@ public:
 	DUCKDB_API static vector<string> SplitWithParentheses(const string &str, char delimiter = ',', char par_open = '(',
 	                                                      char par_close = ')');
 
-	//! Split the input string allong a quote. Note that any escaping is NOT supported.
+	//! Split the input string along a quote. Note that any escaping is NOT supported.
 	DUCKDB_API static vector<string> SplitWithQuote(const string &str, char delimiter = ',', char quote = '"');
 
 	//! Join multiple strings into one string. Components are concatenated by the given separator
 	DUCKDB_API static string Join(const vector<string> &input, const string &separator);
+	DUCKDB_API static string Join(const vector<Identifier> &input, const string &separator);
 	DUCKDB_API static string Join(const set<string> &input, const string &separator);
 
 	//! Encode special URL characters in a string
@@ -229,6 +230,7 @@ public:
 
 	//! Case insensitive find, returns DConstants::INVALID_INDEX if not found
 	DUCKDB_API static idx_t CIFind(vector<string> &vec, const string &str);
+	DUCKDB_API static idx_t CIFind(const vector<Identifier> &vec, const Identifier &str);
 
 	//! Format a string using printf semantics
 	template <typename... ARGS>
@@ -262,6 +264,7 @@ public:
 	DUCKDB_API static idx_t SimilarityScore(const string &s1, const string &s2);
 	//! Returns a normalized similarity rating between 0.0 - 1.0 (higher is more similar)
 	DUCKDB_API static double SimilarityRating(const string &s1, const string &s2);
+	DUCKDB_API static double SimilarityRating(const Identifier &s1, const Identifier &s2);
 	//! Get the top-n strings (sorted by the given score distance) from a set of scores.
 	//! The scores should be normalized between 0.0 and 1.0, where 1.0 is the highest score
 	//! At least one entry is returned (if there is one).
@@ -278,6 +281,8 @@ public:
 	                                                 idx_t threshold = 5);
 	//! Computes the jaro winkler distance of each string in strings, and compares it to target, then returns
 	//! TopNStrings with the given params.
+	DUCKDB_API static vector<string> TopNJaroWinkler(const vector<string> &strings, const Identifier &target,
+	                                                 idx_t n = 5, double threshold = 0.5);
 	DUCKDB_API static vector<string> TopNJaroWinkler(const vector<string> &strings, const string &target, idx_t n = 5,
 	                                                 double threshold = 0.5);
 	DUCKDB_API static string CandidatesMessage(const vector<string> &candidates,
@@ -311,12 +316,12 @@ public:
 	static bool Equals(const string_t &s1, const char *s2);
 	static bool Equals(const char *s1, const string_t &s2);
 
-	//! JSON method that parses a { string: value } JSON blob
+	//! JSON method that parses a { string: value } JSON blob into a flat key -> value map. Nested objects/arrays are
+	//! kept as their (re-serialized) JSON string value.
 	//! NOTE: this method is not efficient
 	//! NOTE: this method is used in Exception construction - as such it does NOT throw on invalid JSON, instead an
 	//! empty map is returned
-	//! Parses complex (i.e., nested) Json maps, it also parses invalid JSONs, as a pure string.
-	DUCKDB_API static unique_ptr<ComplexJSON> ParseJSONMap(const string &json, bool ignore_errors = false);
+	DUCKDB_API static unordered_map<string, string> ParseJSONMap(const string &json, bool ignore_errors = false);
 
 	//! JSON method that constructs a { string: value } JSON map
 	//! This is the inverse of ParseJSONMap
@@ -326,8 +331,6 @@ public:
 
 	//! Transforms an unordered map to a JSON string
 	DUCKDB_API static string ToJSONMap(const unordered_map<string, string> &map);
-	//! Transforms an complex JSON to a JSON string
-	DUCKDB_API static string ToComplexJSONMap(const ComplexJSON &complex_json);
 
 	DUCKDB_API static string ValidateJSON(const char *data, const idx_t &len);
 

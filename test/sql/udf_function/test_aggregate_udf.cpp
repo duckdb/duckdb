@@ -11,7 +11,6 @@ TEST_CASE("Aggregate UDFs", "[udf_function]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	SECTION("Testing a binary aggregate UDF using only template parameters") {
 		// using DOUBLEs
@@ -121,7 +120,7 @@ TEST_CASE("Aggregate UDFs", "[udf_function]") {
 
 		// Trying to use the aggregate UDFs with a different connection, it must fail
 		Connection con_NEW(db);
-		con_NEW.EnableQueryVerification();
+
 		REQUIRE_FAIL(con_NEW.Query("SELECT udf_avg_double(1)"));
 		REQUIRE_FAIL(con_NEW.Query("SELECT udf_avg_int(1)"));
 		REQUIRE_FAIL(con_NEW.Query("SELECT udf_avg_int_args(1)"));

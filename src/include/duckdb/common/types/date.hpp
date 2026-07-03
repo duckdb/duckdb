@@ -17,8 +17,6 @@
 
 namespace duckdb {
 
-struct timestamp_t; // NOLINT: primitive case
-
 //! Type used to represent dates (days since 1970-01-01)
 struct date_t { // NOLINT
 	int32_t days;
@@ -80,6 +78,10 @@ struct date_t { // NOLINT
 	static inline date_t epoch() { // NOLINT
 		return date_t(0);
 	} // NOLINT
+
+	inline bool IsFinite() const {
+		return *this != infinity() && *this != ninfinity();
+	}
 };
 
 enum class DateCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_RANGE };
@@ -126,6 +128,18 @@ public:
 	DUCKDB_API static date_t FromString(const string &str, bool strict = false);
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
 	DUCKDB_API static date_t FromCString(const char *str, idx_t len, bool strict = false);
+	//! Convert an infinite temporal object to a string
+	template <typename T>
+	static inline string ToInfinity(const T &t) {
+		if (t == T::infinity()) {
+			return PINF.str;
+		} else if (t == T::ninfinity()) {
+			return NINF.str;
+		} else {
+			D_ASSERT(!t.IsFinite());
+			return string();
+		}
+	}
 	//! Convert a date object to a string in the format "YYYY-MM-DD"
 	DUCKDB_API static string ToString(date_t date);
 	//! Try to convert the string as a give "special" date (e.g, PINF, ...)
@@ -152,11 +166,6 @@ public:
 	//! Returns true if the specified (year, month, day) combination is a valid
 	//! date
 	DUCKDB_API static bool IsValid(int32_t year, int32_t month, int32_t day);
-
-	//! Returns true if the specified date is finite
-	static inline bool IsFinite(date_t date) {
-		return date != date_t::infinity() && date != date_t::ninfinity();
-	}
 
 	//! The max number of days in a month of a given year
 	DUCKDB_API static int32_t MonthDays(int32_t year, int32_t month);

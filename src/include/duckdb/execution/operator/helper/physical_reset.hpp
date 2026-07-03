@@ -24,9 +24,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RESET;
 
 public:
-	PhysicalReset(PhysicalPlan &physical_plan, const std::string &name_p, SetScope scope_p, idx_t estimated_cardinality)
+	PhysicalReset(PhysicalPlan &physical_plan, const Identifier &name_p, SetScope scope_p, idx_t estimated_cardinality)
 	    : PhysicalOperator(physical_plan, PhysicalOperatorType::RESET, {LogicalType::BOOLEAN}, estimated_cardinality),
-	      name(physical_plan.ArenaRef().MakeString(name_p)), scope(scope_p) {
+	      name(physical_plan.ArenaRef().MakeString(name_p.GetIdentifierName())), scope(scope_p) {
 	}
 
 public:

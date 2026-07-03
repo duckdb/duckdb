@@ -3,9 +3,6 @@
 # group: [inner]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table t1(i integer);
 
 statement ok
@@ -35,7 +32,7 @@ select * from t1 join t2 on (i=j), t3 join t4 on (k=l) order by 1, 2, 3, 4;
 1	1	2	2
 1	1	3	3
 
-mode skip
+mode skip instable
 
 # lateral join
 query IIII rowsort

@@ -79,15 +79,15 @@ int mk_w_customer_demographics(void *info_arr, ds_key_t index) {
 	void *info = append_info_get(info_arr, CUSTOMER_DEMOGRAPHICS);
 	append_row_start(info);
 
-	append_key(info, r->cd_demo_sk);
-	append_varchar(info, r->cd_gender);
-	append_varchar(info, r->cd_marital_status);
-	append_varchar(info, r->cd_education_status);
-	append_integer(info, r->cd_purchase_estimate);
-	append_varchar(info, r->cd_credit_rating);
-	append_integer(info, r->cd_dep_count);
-	append_integer(info, r->cd_dep_employed_count);
-	append_integer(info, r->cd_dep_college_count);
+	append_key(info, r->cd_demo_sk, CD_DEMO_SK);
+	append_varchar(info, r->cd_gender, CD_GENDER);
+	append_varchar(info, r->cd_marital_status, CD_MARITAL_STATUS);
+	append_varchar(info, r->cd_education_status, CD_EDUCATION_STATUS);
+	append_integer(info, r->cd_purchase_estimate, CD_PURCHASE_ESTIMATE);
+	append_varchar(info, r->cd_credit_rating, CD_CREDIT_RATING);
+	append_integer(info, r->cd_dep_count, CD_DEP_COUNT);
+	append_integer(info, r->cd_dep_employed_count, CD_DEP_EMPLOYED_COUNT);
+	append_integer(info, r->cd_dep_college_count, CD_DEP_COLLEGE_COUNT);
 
 	append_row_end(info);
 

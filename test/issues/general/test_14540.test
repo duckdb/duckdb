@@ -3,9 +3,6 @@
 # group: [general]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE TABLE QueryRequest AS SELECT * FROM (
   
     SELECT

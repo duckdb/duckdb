@@ -3,9 +3,6 @@
 # group: [binder]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers AS SELECT * FROM range(5) tbl(i);
 
 # use an alias to an aggregate in the having clause

@@ -2,9 +2,6 @@
 # description: ENUM tests
 # group: [enum]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 CREATE TYPE type_a AS ENUM (SELECT '1', '2');
 ----

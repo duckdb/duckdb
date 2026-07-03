@@ -87,7 +87,7 @@ duckdb_catalog duckdb_client_context_get_catalog(duckdb_client_context context, 
 		return nullptr;
 	}
 
-	auto catalog_ptr = duckdb::Catalog::GetCatalogEntry(context_ref.context, name);
+	auto catalog_ptr = duckdb::Catalog::GetCatalogEntry(context_ref.context, duckdb::Identifier(name));
 
 	if (!catalog_ptr) {
 		return nullptr;
@@ -125,8 +125,9 @@ duckdb_catalog_entry duckdb_catalog_get_entry(duckdb_catalog catalog, duckdb_cli
 	auto &catalog_ref = *reinterpret_cast<duckdb::CCatalogWrapper *>(catalog);
 	auto &context_ref = *reinterpret_cast<duckdb::CClientContextWrapper *>(context);
 
-	auto entry = catalog_ref.catalog.GetEntry(context_ref.context, duckdb::CatalogTypeFromC(entry_type), schema_name,
-	                                          entry_name, duckdb::OnEntryNotFound::RETURN_NULL);
+	auto entry = catalog_ref.catalog.GetEntry(context_ref.context, duckdb::CatalogTypeFromC(entry_type),
+	                                          duckdb::Identifier(schema_name), duckdb::Identifier(entry_name),
+	                                          duckdb::OnEntryNotFound::RETURN_NULL);
 
 	if (!entry) {
 		return nullptr;

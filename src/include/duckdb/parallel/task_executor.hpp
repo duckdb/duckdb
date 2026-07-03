@@ -13,6 +13,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
+#include "duckdb/common/enums/task_scheduler_type.hpp"
 
 namespace duckdb {
 class TaskScheduler;
@@ -20,8 +21,8 @@ class TaskScheduler;
 //! The TaskExecutor is a helper class that enables parallel scheduling and execution of tasks
 class TaskExecutor {
 public:
-	explicit TaskExecutor(ClientContext &context);
-	explicit TaskExecutor(TaskScheduler &scheduler);
+	explicit TaskExecutor(ClientContext &context, TaskSchedulerType type = TaskSchedulerType::REGULAR);
+	explicit TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type = TaskSchedulerType::REGULAR);
 	~TaskExecutor();
 
 	//! Push an error into the TaskExecutor
@@ -44,6 +45,7 @@ public:
 
 private:
 	TaskScheduler &scheduler;
+	const TaskSchedulerType type;
 	TaskErrorManager error_manager;
 	unique_ptr<ProducerToken> token;
 	atomic<idx_t> completed_tasks;

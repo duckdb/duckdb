@@ -108,7 +108,7 @@ int getScaleSlot(int nTargetGB) {
  * TODO: None
  */
 static ds_key_t LogScale(int nTable, int nTargetGB) {
-	int nIndex = 1, nDelta, i;
+	int nDelta, i;
 	float fOffset;
 	ds_key_t hgRowcount = 0;
 
@@ -118,7 +118,7 @@ static ds_key_t LogScale(int nTable, int nTargetGB) {
 	fOffset = (float)(nTargetGB - arScaleVolume[i - 1]) / (float)(arScaleVolume[i] - arScaleVolume[i - 1]);
 
 	hgRowcount = (int)(fOffset * (float)nDelta);
-	hgRowcount += dist_weight(NULL, "rowcounts", nTable + 1, nIndex);
+	hgRowcount += dist_weight(NULL, "rowcounts", nTable + 1, i);
 
 	return (hgRowcount);
 }

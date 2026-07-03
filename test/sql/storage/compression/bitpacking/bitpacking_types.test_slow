@@ -6,7 +6,7 @@
 # because the bitpacking groups no longer fit the blocks.
 require block_size 262144
 
-load __TEST_DIR__/test_bitpacking.db
+load {TEST_DIR}/test_bitpacking.db
 
 statement ok
 PRAGMA force_compression = 'bitpacking'
@@ -14,12 +14,12 @@ PRAGMA force_compression = 'bitpacking'
 foreach bitpacking_mode delta_for for constant_delta constant
 
 statement ok
-PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+PRAGMA force_bitpacking_mode='{bitpacking_mode}'
 
 foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
 
 statement ok
-CREATE TABLE a AS SELECT MOD(i,3)::${type} i FROM range(10000) tbl(i)
+CREATE TABLE a AS SELECT MOD(i,3)::{type} i FROM range(10000) tbl(i)
 
 query IIIII
 SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM a

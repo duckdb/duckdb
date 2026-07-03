@@ -2,9 +2,6 @@
 # description: Test various functions on unsigned huge integers
 # group: [uhugeint]
 
-statement ok
-PRAGMA enable_verification
-
 # abs
 query III
 select abs(1::UHUGEINT), abs('1329227995784915872903807060280344576'::UHUGEINT), abs(0::UHUGEINT)

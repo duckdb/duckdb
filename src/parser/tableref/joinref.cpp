@@ -5,12 +5,35 @@
 
 namespace duckdb {
 
+//! True if the join type is expressible with standard SQL JOIN syntax (e.g. INNER JOIN, LEFT JOIN).
+//! Internal join types (MARK, SINGLE, ...) instead use the JOIN BY (TYPE <type>) form.
+static bool JoinTypeUsesStandardSyntax(JoinType type) {
+	switch (type) {
+	case JoinType::INNER:
+	case JoinType::LEFT:
+	case JoinType::RIGHT:
+	case JoinType::OUTER:
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+		return true;
+	default:
+		return false;
+	}
+}
+
 string JoinRef::ToString() const {
 	string result;
-	result = left->ToString() + " ";
+	if (!is_implicit) {
+		result += "(";
+	}
+	result += left->ToString() + " ";
 	switch (ref_type) {
 	case JoinRefType::REGULAR:
-		result += EnumUtil::ToString(type) + " JOIN ";
+		if (JoinTypeUsesStandardSyntax(type)) {
+			result += EnumUtil::ToString(type) + " JOIN ";
+		} else {
+			result += "JOIN BY (TYPE " + EnumUtil::ToString(type) + ") ";
+		}
 		break;
 	case JoinRefType::NATURAL:
 		result += "NATURAL ";
@@ -42,8 +65,11 @@ string JoinRef::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(using_columns[i]);
+			result += SQLIdentifier(using_columns[i]);
 		}
+		result += ")";
+	}
+	if (!is_implicit) {
 		result += ")";
 	}
 	return result;

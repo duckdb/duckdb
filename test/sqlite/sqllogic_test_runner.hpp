@@ -9,9 +9,11 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "sqllogic_command.hpp"
 #include "test_config.hpp"
+#include <istream>
 
 namespace duckdb {
 
@@ -43,6 +45,11 @@ public:
 	unordered_map<string, CachedLabelData> map;
 };
 
+struct NewDatabaseConnection {
+	unique_ptr<DuckDB> db;
+	unique_ptr<Connection> con;
+};
+
 class SQLLogicTestRunner {
 public:
 	explicit SQLLogicTestRunner(string dbpath);
@@ -55,6 +62,7 @@ public:
 	duckdb::unique_ptr<Connection> con;
 	duckdb::unique_ptr<DBConfig> config;
 	unordered_set<string> extensions;
+	unordered_map<string, duckdb::unique_ptr<DuckDB>> named_db;
 	unordered_map<string, duckdb::unique_ptr<Connection>> named_connection_map;
 	bool output_hash_mode = false;
 	bool output_result_mode = false;
@@ -65,7 +73,6 @@ public:
 	duckdb::unique_ptr<Command> top_level_loop;
 	bool original_sqlite_test = false;
 	bool output_sql = false;
-	bool enable_verification = false;
 	bool skip_reload = false;
 	unordered_map<string, string> environment_variables;
 	string local_extension_repo;
@@ -73,9 +80,9 @@ public:
 	bool autoinstall_is_checked;
 
 	// If these error msgs occur in a test, the test will abort but still count as passed
-	unordered_set<string> ignore_error_messages = {"HTTP", "Unable to connect"};
+	unordered_set<string> ignore_error_messages;
 	// If these error msgs occur a statement that is expected to fail, the test will fail
-	unordered_set<string> always_fail_error_messages = {"differs from original result!", "INTERNAL"};
+	unordered_set<string> always_fail_error_messages = {"INTERNAL"};
 
 	//! The map converting the labels to the hash values
 	HashLabelMap hash_label_map;
@@ -83,6 +90,7 @@ public:
 
 public:
 	void ExecuteFile(string script);
+	void ExecuteStream(std::istream &input, const string &source_name);
 	virtual void LoadDatabase(string dbpath, bool load_extensions);
 
 	string ReplaceKeywords(string input);
@@ -96,11 +104,23 @@ public:
 	void EndLoop();
 	string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
 	string LoopReplacement(string text, const vector<LoopDefinition> &loops);
-	bool ForEachTokenReplace(const string &parameter, vector<string> &result);
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
+	void SkipTest(const string &reason);
+	static string GetSkipReasonSummary();
+	NewDatabaseConnection CreateDatabase(const string &db_path, bool load_database);
+	unique_ptr<Connection> ConnectToDatabase(DuckDB &db_ref);
+	bool IsVariableReplacement(const string &token_name);
+	Value GetVariableReplacement(const string &token_name, string &variable_name);
 
 private:
+	void ExecuteInternal(SQLLogicParser &parser, const string &script);
 	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);
+	void ConfigureDefaultInMemoryTemporaryDirectory(const string &script);
+	static void AddSkipReason(const string &reason);
+
+private:
+	static mutex skip_reason_lock;
+	static map<string, idx_t> skip_reason_counts;
 };
 
 } // namespace duckdb

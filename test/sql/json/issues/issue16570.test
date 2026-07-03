@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 query II
 with cte as (
     select '{"a":1}'::JSON as j

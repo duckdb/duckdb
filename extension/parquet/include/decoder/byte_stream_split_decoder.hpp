@@ -8,11 +8,17 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include "duckdb.hpp"
 #include "parquet_bss_decoder.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 class ColumnReader;
+class ResizeableBuffer;
+class Vector;
 
 class ByteStreamSplitDecoder {
 public:

@@ -16,12 +16,12 @@ namespace duckdb {
 constexpr const char *SequenceCatalogEntry::Name;
 
 SequenceData::SequenceData(CreateSequenceInfo &info)
-    : usage_count(info.usage_count), counter(info.start_value), last_value(info.start_value), increment(info.increment),
+    : usage_count(info.usage_count), counter(info.start_value), last_value(info.last_value), increment(info.increment),
       start_value(info.start_value), min_value(info.min_value), max_value(info.max_value), cycle(info.cycle) {
 }
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info)
-    : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.name), data(info) {
+    : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.GetSequenceName()), data(info) {
 	this->temporary = info.temporary;
 	this->comment = info.comment;
 	this->tags = info.tags;
@@ -45,10 +45,10 @@ SequenceData SequenceCatalogEntry::GetData() const {
 int64_t SequenceCatalogEntry::CurrentValue() {
 	lock_guard<mutex> seqlock(lock);
 	int64_t result;
-	if (data.usage_count == 0u) {
+	if (!data.last_value) {
 		throw SequenceException("currval: sequence is not yet defined in this session");
 	}
-	result = data.last_value;
+	result = data.last_value.value();
 	return result;
 }
 
@@ -81,10 +81,11 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 	return result;
 }
 
-void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter) {
+void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter, optional<int64_t> last_value) {
 	if (v_usage_count > data.usage_count) {
 		data.usage_count = v_usage_count;
 		data.counter = v_counter;
+		data.last_value = last_value;
 	}
 }
 
@@ -92,15 +93,14 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	auto seq_data = GetData();
 
 	auto result = make_uniq<CreateSequenceInfo>();
-	result->catalog = catalog.GetName();
-	result->schema = schema.name;
-	result->name = name;
+	result->SetQualifiedName(QualifiedName(catalog.GetName(), schema.name, name));
 	result->usage_count = seq_data.usage_count;
 	result->increment = seq_data.increment;
 	result->min_value = seq_data.min_value;
 	result->max_value = seq_data.max_value;
 	result->start_value = seq_data.counter;
 	result->cycle = seq_data.cycle;
+	result->last_value = seq_data.last_value;
 	result->dependencies = dependencies;
 	result->comment = comment;
 	result->tags = tags;
@@ -112,7 +112,7 @@ string SequenceCatalogEntry::ToSQL() const {
 
 	duckdb::stringstream ss;
 	ss << "CREATE SEQUENCE ";
-	ss << name;
+	ss << name.GetIdentifierName();
 	ss << " INCREMENT BY " << seq_data.increment;
 	ss << " MINVALUE " << seq_data.min_value;
 	ss << " MAXVALUE " << seq_data.max_value;

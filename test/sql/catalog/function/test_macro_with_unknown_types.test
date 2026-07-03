@@ -3,9 +3,6 @@
 # group: [function]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE TEMP MACRO m1(x, y) AS (
     SELECT list_has_all(x, y) AND list_has_all(y, x)
 );

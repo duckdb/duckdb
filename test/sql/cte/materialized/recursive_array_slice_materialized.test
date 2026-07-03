@@ -3,9 +3,6 @@
 # group: [materialized]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE p(loc int8);
 
 statement ok

@@ -44,7 +44,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, MemoryTag memory_t
 
 	// Zero-initialize the buffer as it might get serialized to storage.
 	auto block_size = block_manager.GetBlockSize();
-	memset(buffer_handle.Ptr(), 0, block_size);
+	memset(buffer_handle.GetDataMutable(), 0, block_size);
 }
 
 FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
@@ -113,7 +113,7 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 		D_ASSERT(block_pointer.offset > 0);
 		auto &p_block_for_index = allocation.partial_block->Cast<PartialBlockForIndex>();
 		auto dst_handle = buffer_manager.Pin(p_block_for_index.block_handle);
-		memcpy(dst_handle.Ptr() + block_pointer.offset, buffer_handle.Ptr(), allocation_size);
+		memcpy(dst_handle.GetDataMutable() + block_pointer.offset, buffer_handle.Ptr(), allocation_size);
 
 	} else {
 		// No partial block available, so we create a new partial block.
@@ -150,7 +150,7 @@ void FixedSizeBuffer::LoadFromDisk() {
 	shared_ptr<BlockHandle> new_block_handle;
 	auto new_buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, &block_manager, false);
 	new_block_handle = new_buffer_handle.GetBlockHandle();
-	memcpy(new_buffer_handle.Ptr(), pinned_buffer_handle.Ptr() + block_pointer.offset, allocation_size);
+	memcpy(new_buffer_handle.GetDataMutable(), pinned_buffer_handle.Ptr() + block_pointer.offset, allocation_size);
 
 	buffer_handle = std::move(new_buffer_handle);
 	block_handle = std::move(new_block_handle);
@@ -240,7 +240,7 @@ SegmentHandle::SegmentHandle(FixedSizeBuffer &buffer_p, const idx_t offset) : bu
 		buffer_ptr->block_manager.buffer_manager.Pin(buffer_ptr->block_handle);
 	}
 
-	ptr = buffer_ptr->buffer_handle.Ptr() + offset;
+	ptr = buffer_ptr->buffer_handle.GetDataMutable() + offset;
 	buffer_ptr->readers++;
 }
 

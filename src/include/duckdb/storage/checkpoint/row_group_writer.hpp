@@ -24,7 +24,7 @@ class MetadataWriter;
 // Writes data for an entire row group.
 class RowGroupWriter {
 public:
-	RowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager);
+	RowGroupWriter(TableDataWriter &writer, TableCatalogEntry &table, PartialBlockManager &partial_block_manager);
 	virtual ~RowGroupWriter() {
 	}
 
@@ -43,6 +43,9 @@ public:
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttachedDatabase();
+	TableDataWriter &GetTableWriter() {
+		return writer;
+	}
 	PartialBlockManager &GetPartialBlockManager() {
 		return partial_block_manager;
 	}
@@ -54,6 +57,7 @@ public:
 	}
 
 protected:
+	TableDataWriter &writer;
 	TableCatalogEntry &table;
 	PartialBlockManager &partial_block_manager;
 	vector<CompressionType> compression_types;
@@ -75,8 +79,6 @@ public:
 	void FinishWritingColumns() override;
 
 private:
-	//! Underlying writer object
-	TableDataWriter &writer;
 	//! MetadataWriter is a cursor on a given BlockManager. This returns the
 	//! cursor against which we should write payload data for the specified RowGroup.
 	MetadataWriter &table_data_writer;

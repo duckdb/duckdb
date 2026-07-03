@@ -33,9 +33,8 @@ OperatorResultType VerifyEmitConstantVectors(const DataChunk &input, DataChunk &
 
 	// emit constant vectors at the current index
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-		ConstantVector::Reference(chunk.data[c], copied_input.data[c], state.const_idx, 1);
+		ConstantVector::Reference(chunk.data[c], count_t(1), copied_input.data[c], state.const_idx, 1);
 	}
-	chunk.SetCardinality(1);
 	state.const_idx++;
 	if (state.const_idx >= copied_input.size()) {
 		state.const_idx = 0;
@@ -47,7 +46,7 @@ OperatorResultType VerifyEmitConstantVectors(const DataChunk &input, DataChunk &
 OperatorResultType VerifyEmitDictionaryVectors(const DataChunk &input, DataChunk &chunk, OperatorState &state) {
 	input.Copy(chunk);
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-		Vector::DebugTransformToDictionary(chunk.data[c], chunk.size());
+		Vector::DebugTransformToDictionary(chunk.data[c]);
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }
@@ -57,9 +56,14 @@ struct ConstantOrSequenceInfo {
 	bool is_constant = true;
 };
 
-OperatorResultType VerifyEmitSequenceVector(const DataChunk &input, DataChunk &chunk, OperatorState &state_p) {
+OperatorResultType VerifyEmitSequenceVector(const DataChunk &input_p, DataChunk &chunk, OperatorState &state_p) {
 	auto &state = state_p.Cast<VerifyVectorState>();
-	D_ASSERT(state.const_idx < input.size());
+	D_ASSERT(state.const_idx < input_p.size());
+
+	// FIXME: work-around for variant bug...
+	DataChunk input;
+	input.Initialize(Allocator::DefaultAllocator(), input_p.GetTypes());
+	input_p.Copy(input);
 
 	// find the longest length sequence or constant vector to emit
 	vector<ConstantOrSequenceInfo> infos;
@@ -189,7 +193,7 @@ OperatorResultType VerifyEmitSequenceVector(const DataChunk &input, DataChunk &c
 			chunk.data[c].Slice(input.data[c], sel, max_length);
 		} else if (info.is_constant) {
 			// constant vector
-			chunk.data[c].Reference(info.values[0]);
+			chunk.data[c].Reference(info.values[0], count_t(max_length));
 		} else {
 			// sequence vector
 			int64_t start = info.values[0].GetValue<int64_t>();
@@ -197,7 +201,6 @@ OperatorResultType VerifyEmitSequenceVector(const DataChunk &input, DataChunk &c
 			chunk.data[c].Sequence(start, increment, max_length);
 		}
 	}
-	chunk.SetCardinality(max_length);
 	state.const_idx += max_length;
 	if (state.const_idx >= input.size()) {
 		state.const_idx = 0;
@@ -209,7 +212,7 @@ OperatorResultType VerifyEmitSequenceVector(const DataChunk &input, DataChunk &c
 OperatorResultType VerifyEmitNestedShuffleVector(const DataChunk &input, DataChunk &chunk, OperatorState &state) {
 	input.Copy(chunk);
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-		Vector::DebugShuffleNestedVector(chunk.data[c], chunk.size());
+		Vector::DebugShuffleNestedVector(chunk.data[c]);
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }

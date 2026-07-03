@@ -7,10 +7,10 @@ require no_latest_storage
 require vector_size 512
 
 statement ok
-ATTACH '__TEST_DIR__/test_empty_new.db' AS db_v13 (STORAGE_VERSION 'v1.3.0');
+ATTACH '{TEST_DIR}/test_empty_new.db' AS db_v13 (STORAGE_VERSION 'v1.3.0');
 
 statement ok
-ATTACH '__TEST_DIR__/test_empty_old.db' AS db_v1 (STORAGE_VERSION 'v1.0.0');
+ATTACH '{TEST_DIR}/test_empty_old.db' AS db_v1 (STORAGE_VERSION 'v1.0.0');
 
 foreach compression fsst dictionary dict_fsst
 
@@ -22,7 +22,7 @@ statement ok
 USE db_v13
 
 statement ok
-PRAGMA force_compression='${compression}'
+PRAGMA force_compression='{compression}'
 
 statement ok
 CREATE TABLE test_empty (a VARCHAR);
@@ -49,7 +49,7 @@ B
 A
 
 query I
-SELECT lower(compression)='${compression}' FROM pragma_storage_info('test_empty') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+SELECT lower(compression)='{compression}' FROM pragma_storage_info('test_empty') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
 1
 
@@ -65,7 +65,7 @@ select count(*), min(a[1]), max(a[1]) from test_empty_large limit 5;
 10002	(empty)	A
 
 query I
-SELECT lower(compression)='${compression}' FROM pragma_storage_info('test_empty_large') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+SELECT lower(compression)='{compression}' FROM pragma_storage_info('test_empty_large') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
 1
 

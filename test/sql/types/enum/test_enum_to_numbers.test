@@ -144,7 +144,7 @@ statement ok
 create type new_type as enum ('1', '2', '3', '4', '5');
 
 statement ok
-create table t1 as select range::${type} as a from range(8);
+create table t1 as select range::{type} as a from range(8);
 
 statement ok
 create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(8);

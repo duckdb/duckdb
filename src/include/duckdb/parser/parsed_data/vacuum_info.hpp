@@ -11,6 +11,7 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/tableref.hpp"
 
+#include "duckdb/common/identifier.hpp"
 namespace duckdb {
 class Serializer;
 class Deserializer;
@@ -34,7 +35,7 @@ public:
 	explicit VacuumInfo(VacuumOptions options);
 
 	const VacuumOptions options;
-	vector<string> columns;
+	vector<Identifier> columns;
 	bool has_table;
 	unique_ptr<TableRef> ref;
 

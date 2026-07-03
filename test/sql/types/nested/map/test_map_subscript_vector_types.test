@@ -2,9 +2,6 @@
 # description: Test cardinality function for maps
 # group: [map]
 
-statement ok
-PRAGMA enable_verification;
-
 # expected result
 query I nosort correct
 SELECT true as equal

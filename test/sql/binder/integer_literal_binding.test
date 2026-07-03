@@ -2,20 +2,17 @@
 # description: Test integer literal binding
 # group: [binder]
 
-statement ok
-PRAGMA enable_verification
-
 # integer literal binding for arithmetic
 foreach type UTINYINT USMALLINT UINTEGER UBIGINT TINYINT SMALLINT INTEGER BIGINT
 
 query I
-SELECT typeof(100::${type} + 1) == '${type}';
+SELECT typeof(100::{type} + 1) == '{type}';
 ----
 true
 
 
 query I
-SELECT typeof(100 + 1::${type}) == '${type}';
+SELECT typeof(100 + 1::{type}) == '{type}';
 ----
 true
 

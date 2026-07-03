@@ -2,9 +2,6 @@
 # description: Test CSV with a timestamptz
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 FROM read_csv('{DATA_DIR}/csv/timestamp_tz.csv', dtypes = [TIMESTAMPTZ]);
 ----

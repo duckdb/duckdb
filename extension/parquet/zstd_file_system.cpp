@@ -1,6 +1,18 @@
 #include "zstd_file_system.hpp"
 
+#include <exception>
+#include <utility>
+
 #include "zstd.h"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/logging/logger.hpp"
 
 namespace duckdb {
 
@@ -47,7 +59,7 @@ ZstdStreamWrapper::~ZstdStreamWrapper() {
 }
 
 void ZstdStreamWrapper::Initialize(QueryContext context, CompressedFile &file, bool write) {
-	Close();
+	D_ASSERT(!zstd_stream_ptr && !zstd_compress_ptr);
 	this->file = &file;
 	this->writing = write;
 	if (write) {
@@ -111,7 +123,7 @@ void ZstdStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t u
 		sd.out_buff_start += written_to_output;
 		if (sd.out_buff_start == sd.out_buff.get() + sd.out_buf_size) {
 			// no more output buffer available: flush
-			file.child_handle->Write(sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
+			file.child_handle->Write(file.context, sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
 			sd.out_buff_start = sd.out_buff.get();
 		}
 		uncompressed_data += input_consumed;
@@ -142,7 +154,7 @@ void ZstdStreamWrapper::FlushStream() {
 		idx_t written_to_output = out_buffer.pos;
 		sd.out_buff_start += written_to_output;
 		if (sd.out_buff_start > sd.out_buff.get()) {
-			file->child_handle->Write(sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
+			file->child_handle->Write(file->context, sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
 			sd.out_buff_start = sd.out_buff.get();
 		}
 		if (res == 0) {

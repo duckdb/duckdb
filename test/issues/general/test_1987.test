@@ -3,9 +3,6 @@
 # group: [general]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table test (consumption decimal(14,5));
 
 statement ok

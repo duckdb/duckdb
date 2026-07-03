@@ -3,11 +3,10 @@
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
-#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
@@ -27,11 +26,11 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto prepared = entry->second;
 	auto &named_param_map = prepared->unbound_statement->named_param_map;
 
-	PreparedStatement::VerifyParameters(stmt.named_values, named_param_map);
+	PreparedStatement::VerifyParameters(stmt.named_values, named_param_map, &context);
 
 	auto &mapped_named_values = stmt.named_values;
 	// bind any supplied parameters
-	case_insensitive_map_t<BoundParameterData> bind_values;
+	identifier_map_t<BoundParameterData> bind_values;
 	auto constant_binder = Binder::CreateBinder(context);
 	constant_binder->SetCanContainNulls(true);
 	for (auto &pair : mapped_named_values) {
@@ -43,15 +42,15 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		if (is_literal) {
 			auto &constant = bound_expr->Cast<BoundConstantExpression>();
 			LogicalType return_type;
-			if (constant.return_type == LogicalTypeId::VARCHAR &&
-			    StringType::GetCollation(constant.return_type).empty()) {
+			if (constant.GetReturnType() == LogicalTypeId::VARCHAR &&
+			    StringType::GetCollation(constant.GetReturnType()).empty()) {
 				return_type = LogicalTypeId::STRING_LITERAL;
-			} else if (constant.return_type.IsIntegral()) {
-				return_type = LogicalType::INTEGER_LITERAL(constant.value);
+			} else if (constant.GetReturnType().IsIntegral()) {
+				return_type = LogicalType::INTEGER_LITERAL(constant.GetValueMutable());
 			} else {
-				return_type = constant.value.type();
+				return_type = constant.GetValueMutable().type();
 			}
-			parameter_data = BoundParameterData(std::move(constant.value), std::move(return_type));
+			parameter_data = BoundParameterData(std::move(constant.GetValueMutable()), std::move(return_type));
 		} else {
 			auto value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
 			auto value_type = value.type();
@@ -59,6 +58,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		}
 		bind_values[pair.first] = std::move(parameter_data);
 	}
+	prepared->PopulateMissingParameterValues(context, bind_values);
 	unique_ptr<LogicalOperator> rebound_plan;
 
 	RebindQueryInfo rebind = RebindQueryInfo::DO_NOT_REBIND;
@@ -90,7 +90,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	result.names = prepared->names;
 	result.types = prepared->types;
 
-	prepared->Bind(std::move(bind_values));
+	prepared->Bind(context, bind_values);
 	if (rebound_plan) {
 		auto execute_plan = make_uniq<LogicalExecute>(std::move(prepared));
 		execute_plan->children.push_back(std::move(rebound_plan));

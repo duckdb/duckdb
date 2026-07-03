@@ -2,9 +2,6 @@
 # description: Issue #7599 - read_json/auto with SELECT output as source parameter raises INTERNAL Error
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 WITH urls AS (
 	SELECT 'a.csv' AS url UNION ALL SELECT 'b.csv'

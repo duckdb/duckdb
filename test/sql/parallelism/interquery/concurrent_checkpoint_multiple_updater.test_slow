@@ -2,7 +2,7 @@
 # description: Concurrent checkpoint with single updater
 # group: [interquery]
 
-load __TEST_DIR__/concurrent_checkpoint.db
+load {TEST_DIR}/concurrent_checkpoint.db
 
 statement ok
 CREATE TABLE accounts(threadid INTEGER, id INTEGER, money INTEGER)
@@ -49,17 +49,17 @@ BEGIN TRANSACTION
 # store how much money the accounts had before
 onlyif threadid>0
 statement ok
-SET VARIABLE prev_money = (SELECT {'from_money': MIN(money) FILTER (WHERE id=getvariable('from_account')), 'to_money': MIN(money) FILTER (WHERE id=getvariable('to_account'))} FROM accounts WHERE threadid=${threadid})
+SET VARIABLE prev_money = (SELECT {'from_money': MIN(money) FILTER (WHERE id=getvariable('from_account')), 'to_money': MIN(money) FILTER (WHERE id=getvariable('to_account'))} FROM accounts WHERE threadid={threadid})
 
 onlyif threadid>0
 query I
-UPDATE accounts SET money = money - getvariable('amount') WHERE id=getvariable('from_account') AND threadid=${threadid}
+UPDATE accounts SET money = money - getvariable('amount') WHERE id=getvariable('from_account') AND threadid={threadid}
 ----
 1
 
 onlyif threadid>0
 query I
-UPDATE accounts SET money = money + getvariable('amount') WHERE id=getvariable('to_account') AND threadid=${threadid}
+UPDATE accounts SET money = money + getvariable('amount') WHERE id=getvariable('to_account') AND threadid={threadid}
 ----
 1
 
@@ -71,7 +71,7 @@ SELECT CASE
 	THEN NULL
 	ELSE {'prev': getvariable('prev_money'), 'current': t.s, 'amount': getvariable('amount'), 'from_account': getvariable('from_account'), 'to_account': getvariable('to_account')}
 	END
-FROM (SELECT {'from_money': MIN(money) FILTER (WHERE id=getvariable('from_account')), 'to_money': MIN(money) FILTER (WHERE id=getvariable('to_account'))} s FROM accounts WHERE threadid=${threadid}) t
+FROM (SELECT {'from_money': MIN(money) FILTER (WHERE id=getvariable('from_account')), 'to_money': MIN(money) FILTER (WHERE id=getvariable('to_account'))} s FROM accounts WHERE threadid={threadid}) t
 ----
 NULL
 

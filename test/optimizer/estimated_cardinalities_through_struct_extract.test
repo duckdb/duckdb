@@ -9,7 +9,7 @@ call dsdgen(sf=0.01, suffix='_normal')
 foreach tbl web_site web_sales web_returns web_page warehouse time_dim store_sales store_returns store ship_mode reason promotion item inventory income_band household_demographics date_dim customer_demographics customer_address customer catalog_sales catalog_returns catalog_page call_center
 
 statement ok
-create TABLE ${tbl}_struct as select ${tbl}_normal ${tbl} from ${tbl}_normal;
+create TABLE {tbl}_struct as select {tbl}_normal {tbl} from {tbl}_normal;
 
 endloop
 

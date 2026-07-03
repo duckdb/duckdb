@@ -2,19 +2,19 @@
 # group: [alprd]
 
 # load the DB from disk
-load __TEST_DIR__/test_alprd_inf.db
+load {TEST_DIR}/test_alprd_inf.db
 
 foreach compression uncompressed alprd
 
 # Set the compression algorithm
 
 statement ok
-pragma force_compression='${compression}'
+pragma force_compression='{compression}'
 
 # Create tables
 
 statement ok
-create table tbl1_${compression}(
+create table tbl1_{compression}(
 	a INTEGER DEFAULT 5,
 	b VARCHAR DEFAULT 'test',
 	c BOOL DEFAULT false,
@@ -24,7 +24,7 @@ create table tbl1_${compression}(
 );
 
 statement ok
-create table tbl2_${compression}(
+create table tbl2_{compression}(
 	a INTEGER DEFAULT 5,
 	b VARCHAR DEFAULT 'test',
 	c BOOL DEFAULT false,
@@ -34,7 +34,7 @@ create table tbl2_${compression}(
 );
 
 statement ok
-create table tbl3_${compression}(
+create table tbl3_{compression}(
 	a INTEGER DEFAULT 5,
 	b VARCHAR DEFAULT 'test',
 	c BOOL DEFAULT false,
@@ -47,7 +47,7 @@ create table tbl3_${compression}(
 
 # Mixed NULLs
 statement ok
-insert into tbl1_${compression}(d,f) VALUES
+insert into tbl1_{compression}(d,f) VALUES
 ('Infinity', 'Infinity'),
 ('Infinity', 'Infinity'),
 ('Infinity', 'Infinity'),
@@ -123,7 +123,7 @@ insert into tbl1_${compression}(d,f) VALUES
 
 # Only NULLS
 statement ok
-insert into tbl2_${compression}(d,f) VALUES
+insert into tbl2_{compression}(d,f) VALUES
 (NULL, NULL),
 ('Infinity', 'Infinity'),
 ('Infinity', 'Infinity'),
@@ -200,7 +200,7 @@ insert into tbl2_${compression}(d,f) VALUES
 
 # Starting with NULLS
 statement ok
-insert into tbl3_${compression}(d,f) VALUES
+insert into tbl3_{compression}(d,f) VALUES
 (NULL, NULL),
 (NULL, NULL),
 (NULL, NULL),

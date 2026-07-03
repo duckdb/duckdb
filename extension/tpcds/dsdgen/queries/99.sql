@@ -1,6 +1,6 @@
 SELECT w_substr ,
        sm_type ,
-       LOWER(cc_name) cc_name_lower ,
+       cc_name ,
        sum(CASE
                WHEN (cs_ship_date_sk - cs_sold_date_sk <= 30) THEN 1
                ELSE 0
@@ -40,6 +40,6 @@ GROUP BY w_substr ,
          cc_name
 ORDER BY w_substr  NULLS FIRST,
          sm_type  NULLS FIRST,
-        cc_name_lower NULLS FIRST
+        cc_name NULLS FIRST
 LIMIT 100;
 

@@ -14,8 +14,9 @@ LogicalDelete::LogicalDelete(TableCatalogEntry &table, TableIndex table_index)
 
 LogicalDelete::LogicalDelete(ClientContext &context, const unique_ptr<CreateInfo> &table_info)
     : LogicalOperator(LogicalOperatorType::LOGICAL_DELETE),
-      table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->catalog, table_info->schema,
-                                                 table_info->Cast<CreateTableInfo>().table)) {
+      table(Catalog::GetEntry<TableCatalogEntry>(
+          context, QualifiedName(table_info->GetQualifiedName().Catalog(), table_info->GetQualifiedName().Schema(),
+                                 table_info->Cast<CreateTableInfo>().GetTableName()))) {
 	auto binder = Binder::CreateBinder(context);
 	bound_constraints = binder->BindConstraints(table);
 }
@@ -34,7 +35,7 @@ vector<ColumnBinding> LogicalDelete::GetColumnBindings() {
 		auto virtual_columns = table.GetVirtualColumns();
 		return GenerateColumnBindings(table_index, table.GetTypes().size() + virtual_columns.size());
 	}
-	return {ColumnBinding(TableIndex(0), ProjectionIndex(0))};
+	return {ColumnBinding(table_index, ProjectionIndex(0))};
 }
 
 void LogicalDelete::ResolveTypes() {

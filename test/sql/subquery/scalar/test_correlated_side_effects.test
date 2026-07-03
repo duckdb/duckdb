@@ -4,7 +4,7 @@
 
 # FIXME: we should not perform duplicate elimination for subqueries that have side-effects
 
-mode skip
+mode skip instable
 
 query I
 SELECT COUNT(DISTINCT

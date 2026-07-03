@@ -2,10 +2,9 @@
 # description: Test using an index scan for IN filter pushdown via hash joins.
 # group: [scan]
 
-require tpch
+set variable sf 0.01
 
-statement ok
-CALL dbgen(sf=0.01);
+include test/sql/tpch/tpch_setup.test_template
 
 statement ok
 CREATE TABLE random_orders AS (
@@ -42,3 +41,12 @@ SELECT o_orderkey FROM orders_shuffled WHERE o_orderkey IN (
 ) ORDER BY ALL;
 ----
 analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# The exact PRF supplements the InFilter without preventing the InFilter from selecting the ART index scan.
+query II
+EXPLAIN ANALYZE
+SELECT o_orderkey FROM orders_shuffled WHERE o_orderkey IN (
+	SELECT UNNEST(LIST(o_orderkey)) FROM random_orders
+) ORDER BY ALL;
+----
+analyzed_plan	<REGEX>:.*o_orderkey IN.*PRF.*\(#.*\).*

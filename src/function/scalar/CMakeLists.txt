@@ -1,3 +1,4 @@
+add_subdirectory(comparison)
 add_subdirectory(compressed_materialization)
 add_subdirectory(date)
 add_subdirectory(generic)

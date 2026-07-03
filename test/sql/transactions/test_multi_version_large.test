@@ -2,9 +2,6 @@
 # description: Test multiple versions of the same data with a data set that exceeds a single block
 # group: [transactions]
 
-statement ok
-PRAGMA enable_verification
-
 # set up the database
 statement ok con1
 CREATE TABLE integers(i INTEGER);

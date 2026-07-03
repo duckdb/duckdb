@@ -107,12 +107,12 @@ select DATESUB('millennium', '1004-02-29 11:00:00-08'::TIMESTAMPTZ, '2004-02-29 
 foreach datepart day doy dow isodow julian
 
 query I
-select DATESUB('${datepart}', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-29 13:00:00-08'::TIMESTAMPTZ);
+select DATESUB('{datepart}', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-29 13:00:00-08'::TIMESTAMPTZ);
 ----
 29
 
 query I
-select DATESUB('${datepart}', '2004-01-31 13:00:00-08'::TIMESTAMPTZ, '2004-02-29 12:00:00-08'::TIMESTAMPTZ);
+select DATESUB('{datepart}', '2004-01-31 13:00:00-08'::TIMESTAMPTZ, '2004-02-29 12:00:00-08'::TIMESTAMPTZ);
 ----
 28
 
@@ -121,12 +121,12 @@ endloop
 foreach datepart week yearweek
 
 query I
-select DATESUB('${datepart}', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-28 13:00:00-08'::TIMESTAMPTZ);
+select DATESUB('{datepart}', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-28 13:00:00-08'::TIMESTAMPTZ);
 ----
 4
 
 query I
-select DATESUB('${datepart}', '2004-01-31 13:00:00-08'::TIMESTAMPTZ, '2004-02-28 12:00:00-08'::TIMESTAMPTZ);
+select DATESUB('{datepart}', '2004-01-31 13:00:00-08'::TIMESTAMPTZ, '2004-02-28 12:00:00-08'::TIMESTAMPTZ);
 ----
 3
 
@@ -219,12 +219,12 @@ foreach lspecial infinity -infinity 2004-01-31T12:00:00.000050-08
 foreach rspecial infinity -infinity
 
 query I
-SELECT DATESUB('${specifier}', '${lspecial}'::TIMESTAMPTZ, '${rspecial}'::TIMESTAMPTZ);
+SELECT DATESUB('{specifier}', '{lspecial}'::TIMESTAMPTZ, '{rspecial}'::TIMESTAMPTZ);
 ----
 NULL
 
 query I
-SELECT DATESUB('${specifier}', '${rspecial}'::TIMESTAMPTZ, '${lspecial}'::TIMESTAMPTZ);
+SELECT DATESUB('{specifier}', '{rspecial}'::TIMESTAMPTZ, '{lspecial}'::TIMESTAMPTZ);
 ----
 NULL
 
@@ -286,7 +286,7 @@ FROM datetime1, dateparts
 foreach datepart year month day hour minute second millisecond microsecond
 
 query I
-SELECT DATESUB('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+SELECT DATESUB('{datepart}', startdate, startdate + INTERVAL 1 {datepart})
 FROM (
 	SELECT '2021-07-30 00:00:00-07'::TIMESTAMPTZ + INTERVAL (d) DAY AS startdate
 	FROM range(0, 5) tbl(d)

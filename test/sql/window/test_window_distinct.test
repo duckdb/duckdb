@@ -2,13 +2,26 @@
 # description: Windowed distinct aggregates functionality
 # group: [window]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT COUNT(DISTINCT 42) OVER ()
 ----
 1
+
+# DISTINCT with an aggregate-local ORDER BY keeps that ordering even when it
+# matches the window ORDER BY.
+query I
+WITH src(c) AS (
+	SELECT range % 2
+	FROM range(33)
+)
+SELECT LIST(DISTINCT c ORDER BY c) OVER (
+	ORDER BY c
+	ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+) AS window_list
+FROM src
+LIMIT 1
+----
+[0, 1]
 
 query IIII
 WITH t AS (

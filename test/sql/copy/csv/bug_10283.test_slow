@@ -2,9 +2,6 @@
 # description: Test for issue #10283
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 from read_csv("{DATA_DIR}/csv/bug_10283.csv",
 Skip=1,header =0,all_varchar=1,sample_size=-1,

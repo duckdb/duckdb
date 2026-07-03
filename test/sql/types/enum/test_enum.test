@@ -3,9 +3,6 @@
 # group: [enum]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
 statement ok
@@ -62,7 +59,7 @@ CREATE TYPE bla AS ENUM ('sad','sad');
 statement ok
 CREATE TYPE mood_2 AS ENUM ('sad','Sad','SAD');
 
-mode skip
+mode skip unsupported
 #We should be able to update enums eventually
 statement ok
 ALTER TYPE mood ADD VALUE 'depressive';

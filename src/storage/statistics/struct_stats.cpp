@@ -85,7 +85,7 @@ void StructStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 	}
 }
 
-void StructStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
+void StructStats::Merge(BaseStatistics &stats, const BaseStatistics &other, StatsMergeType merge_type) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
 	}
@@ -93,7 +93,7 @@ void StructStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	D_ASSERT(StructType::GetChildCount(stats.GetType()) == StructType::GetChildCount(other.GetType()));
 	auto child_count = StructType::GetChildCount(stats.GetType());
 	for (idx_t i = 0; i < child_count; i++) {
-		stats.child_stats[i].Merge(other.child_stats[i]);
+		stats.child_stats[i].Merge(other.child_stats[i], merge_type);
 	}
 }
 
@@ -130,8 +130,8 @@ child_list_t<Value> StructStats::ToStruct(const BaseStatistics &stats) {
 	return result;
 }
 
-void StructStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
-	auto &child_entries = StructVector::GetEntries(vector);
+void StructStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
+	const auto &child_entries = StructVector::GetEntries(vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
 		stats.child_stats[i].Verify(child_entries[i], sel, count, true);
 	}

@@ -20,6 +20,8 @@ add_library_unity(
   json_normalize.cpp
   json_serialize_sql.cpp
   json_deep_merge.cpp
+  json_merge_patch_diff.cpp
+  json_strip_nulls.cpp
   read_json.cpp
   read_json_objects.cpp)
 set(ALL_OBJECT_FILES

@@ -32,19 +32,19 @@ BEGIN TRANSACTION
 
 onlyif threadid>0
 statement ok
-UPDATE accounts SET money = money + ${i} * 2 WHERE id = ${threadid}
+UPDATE accounts SET money = money + {i} * 2 WHERE id = {threadid}
 
 onlyif threadid>0
 statement ok
-UPDATE accounts SET money = money - ${i} WHERE id = ${threadid}
+UPDATE accounts SET money = money - {i} WHERE id = {threadid}
 
 onlyif threadid>0
 statement ok
-UPDATE accounts SET money = money - ${i} * 2 WHERE id = ${threadid}
+UPDATE accounts SET money = money - {i} * 2 WHERE id = {threadid}
 
 onlyif threadid>0
 statement ok
-UPDATE accounts SET money = money + ${i} WHERE id = ${threadid}
+UPDATE accounts SET money = money + {i} WHERE id = {threadid}
 
 # we test both commit and rollback
 # the result of both should be the same since the updates have a

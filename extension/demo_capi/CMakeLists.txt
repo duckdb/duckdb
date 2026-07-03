@@ -17,6 +17,7 @@ option(
 
 if(USE_UNSTABLE_C_API)
   build_loadable_extension_capi_unstable(${EXTENSION_NAME} ${EXTENSION_FILES})
+  build_static_extension_capi_unstable(${EXTENSION_NAME} ${EXTENSION_FILES})
 else()
   # Minimum supported DuckDB version
   set(CAPI_MAJOR 1)
@@ -24,4 +25,6 @@ else()
   set(CAPI_PATCH 0)
   build_loadable_extension_capi(${EXTENSION_NAME} ${CAPI_MAJOR} ${CAPI_MINOR}
                                 ${CAPI_PATCH} ${EXTENSION_FILES})
+  build_static_extension_capi(${EXTENSION_NAME} ${CAPI_MAJOR} ${CAPI_MINOR}
+                              ${CAPI_PATCH} ${EXTENSION_FILES})
 endif()

@@ -18,6 +18,6 @@ DUCKDB_EXTENSION_ENTRYPOINT(duckdb_connection connection, duckdb_extension_info 
 	duckdb_destroy_arrow(&result);
 #endif
 
-	// Return true to indicate succesful initialization
+	// Return true to indicate successful initialization
 	return true;
 }

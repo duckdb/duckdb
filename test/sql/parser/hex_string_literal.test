@@ -1,0 +1,23 @@
+# name: test/sql/parser/hex_string_literal.test
+# description: Test hex string literals being converted to blob
+# group: [parser]
+
+query I
+SELECT pg_typeof(X'FF');
+----
+blob
+
+query I
+SELECT X'41'::VARCHAR;
+----
+A
+
+query I
+SELECT X'48656C6C6F'::VARCHAR;
+----
+Hello
+
+query I
+SELECT octet_length(X'DEADBEEF');
+----
+4

@@ -11,20 +11,20 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-CREATE TEMPORARY TABLE count_table_${threadid} AS SELECT * FROM integers
+CREATE TEMPORARY TABLE count_table_{threadid} AS SELECT * FROM integers
 
 loop i 0 100
 
 statement ok
-INSERT INTO integers VALUES (${threadid} * 10000 + ${i})
+INSERT INTO integers VALUES ({threadid} * 10000 + {i})
 
 # verify that we inserted exactly one element in this transaction
 query I
-SELECT * FROM integers EXCEPT (SELECT * FROM count_table_${threadid} UNION SELECT ${threadid} * 10000 + ${i})
+SELECT * FROM integers EXCEPT (SELECT * FROM count_table_{threadid} UNION SELECT {threadid} * 10000 + {i})
 ----
 
 statement ok
-CREATE OR REPLACE TEMPORARY TABLE count_table_${threadid} AS (SELECT * FROM count_table_${threadid} UNION SELECT ${threadid} * 10000 + ${i})
+CREATE OR REPLACE TEMPORARY TABLE count_table_{threadid} AS (SELECT * FROM count_table_{threadid} UNION SELECT {threadid} * 10000 + {i})
 
 endloop
 

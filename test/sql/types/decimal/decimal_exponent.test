@@ -2,9 +2,6 @@
 # description: Test casting from varchar to decimal (exponents)
 # group: [decimal]
 
-statement ok
-PRAGMA enable_verification
-
 # standard exponents
 query IIII
 SELECT '1e3'::DECIMAL, '1e-1'::DECIMAL, '.1e3'::DECIMAL, '0.1e3'::DECIMAL

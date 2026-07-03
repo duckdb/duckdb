@@ -2,9 +2,6 @@
 # description: REVERSE test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # test reverse on scalars
 query TTTT
 select REVERSE(''), REVERSE('Hello'), REVERSE('MotörHead'), REVERSE(NULL)

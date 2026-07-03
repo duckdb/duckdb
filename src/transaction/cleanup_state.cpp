@@ -6,6 +6,7 @@
 #include "duckdb/storage/data_table.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
@@ -33,7 +34,7 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::INSERT_TUPLE: {
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		// mark the tuples as committed
-		info->table->CleanupAppend(lowest_active_transaction, info->start_row, info->count);
+		info->table->GetStorage().CleanupAppend(lowest_active_transaction, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {

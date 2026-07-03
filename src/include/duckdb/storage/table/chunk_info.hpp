@@ -40,11 +40,10 @@ public:
 	//! with the tuples
 	virtual idx_t GetSelVector(ScanOptions options, optional_ptr<SelectionVector> sel_vector,
 	                           idx_t max_count) const = 0;
-	idx_t GetCheckpointRowCount(TransactionData transaction, idx_t max_count);
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
 	virtual bool Fetch(TransactionData transaction, row_t row) = 0;
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
-	idx_t GetCommittedDeletedCount(idx_t max_count) const;
+	idx_t GetRowCount(ScanOptions options, idx_t max_count);
 	virtual bool Cleanup(transaction_t lowest_transaction) const;
 	virtual string ToString(idx_t max_count) const = 0;
 

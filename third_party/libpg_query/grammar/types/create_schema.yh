@@ -1,2 +1,0 @@
-%type <list> OptSchemaEltList
-%type <node> schema_stmt

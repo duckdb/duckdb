@@ -23,9 +23,12 @@ struct GetVariableBindData : FunctionData {
 	}
 };
 
-unique_ptr<FunctionData> GetVariableBind(ClientContext &context, ScalarFunction &function,
-                                         vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+unique_ptr<FunctionData> GetVariableBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+	auto &function = input.GetBoundFunction();
+
+	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 	if (!arguments[0]->IsFoldable()) {

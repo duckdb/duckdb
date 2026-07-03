@@ -4,6 +4,10 @@
 // Link this to libduckdb_static.a to get a working system.
 
 namespace duckdb {
+ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const string &extension) {
+	return ExtensionLoadResult::NOT_LOADED;
+}
+
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	// nop
 }

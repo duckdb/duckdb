@@ -1,0 +1,125 @@
+# name: test/sql/types/bit/bit_try_cast.test
+# description: TRY_CAST from BIT to numeric types
+# group: [bit]
+
+# TRY_CAST returns NULL for oversized bitstrings
+query I
+SELECT try_cast(1::BIT as TINYINT);
+----
+NULL
+
+query I
+SELECT try_cast(1::BIT as SMALLINT);
+----
+NULL
+
+query I
+SELECT try_cast(1::BIT as UTINYINT);
+----
+NULL
+
+query I
+SELECT try_cast(1::BIT as USMALLINT);
+----
+NULL
+
+query I
+SELECT try_cast(bitstring('1', 9) as TINYINT);
+----
+NULL
+
+query I
+SELECT try_cast(bitstring('1', 17) as SMALLINT);
+----
+NULL
+
+query I
+SELECT try_cast(bitstring('1', 33) as INT);
+----
+NULL
+
+query I
+SELECT try_cast(bitstring('1', 65) as BIGINT);
+----
+NULL
+
+query I
+SELECT try_cast(bitstring('1', 33) as FLOAT);
+----
+NULL
+
+query I
+SELECT try_cast(bitstring('1', 65) as DOUBLE);
+----
+NULL
+
+query I
+SELECT try_cast(bitstring('1', 129) as HUGEINT);
+----
+NULL
+
+query I
+SELECT try_cast(bitstring('1', 129) as UHUGEINT);
+----
+NULL
+
+# TRY_CAST succeeds for valid bitstring conversions
+query I
+SELECT try_cast('00001111'::BIT as TINYINT);
+----
+15
+
+query I
+SELECT try_cast('00001111'::BIT as SMALLINT);
+----
+15
+
+query I
+SELECT try_cast('00001111'::BIT as INTEGER);
+----
+15
+
+query I
+SELECT try_cast('00001111'::BIT as BIGINT);
+----
+15
+
+query I
+SELECT try_cast('00001111'::BIT as UTINYINT);
+----
+15
+
+query I
+SELECT try_cast('00001111'::BIT as USMALLINT);
+----
+15
+
+query I
+SELECT try_cast('00001111'::BIT as UINTEGER);
+----
+15
+
+query I
+SELECT try_cast('00001111'::BIT as UBIGINT);
+----
+15
+
+query I
+SELECT try_cast('00001111'::BIT as HUGEINT);
+----
+15
+
+query I
+SELECT try_cast('00001111'::BIT as UHUGEINT);
+----
+15
+
+query I
+SELECT try_cast('00001111'::BIT as FLOAT);
+----
+2.1e-44
+
+query I
+SELECT try_cast('00001111'::BIT as DOUBLE);
+----
+7.4e-323

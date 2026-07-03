@@ -15,6 +15,7 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/enums/preserve_order.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 
@@ -27,6 +28,8 @@ public:
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_COPY_TO_FILE), function(std::move(function)),
 	      bind_data(std::move(bind_data)), copy_info(std::move(copy_info)) {
 	}
+
+public:
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;
 	unique_ptr<CopyInfo> copy_info;
@@ -50,7 +53,9 @@ public:
 	bool hive_file_pattern = true;
 	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	vector<idx_t> partition_columns;
-	vector<string> names;
+	vector<BoundOrderByNode> order_columns;
+
+	vector<Identifier> names;
 	vector<LogicalType> expected_types;
 
 public:
@@ -60,8 +65,8 @@ public:
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 	static vector<LogicalType> GetTypesWithoutPartitions(const vector<LogicalType> &col_types,
 	                                                     const vector<idx_t> &part_cols, bool write_part_cols);
-	static vector<string> GetNamesWithoutPartitions(const vector<string> &col_names, const vector<column_t> &part_cols,
-	                                                bool write_part_cols);
+	static vector<Identifier> GetNamesWithoutPartitions(const vector<Identifier> &col_names,
+	                                                    const vector<column_t> &part_cols, bool write_part_cols);
 
 protected:
 	void ResolveTypes() override {

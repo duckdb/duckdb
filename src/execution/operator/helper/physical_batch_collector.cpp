@@ -33,8 +33,8 @@ SinkFinalizeType PhysicalBatchCollector::Finalize(Pipeline &pipeline, Event &eve
 	auto &gstate = input.global_state.Cast<BatchCollectorGlobalState>();
 	auto collection = gstate.data.FetchCollection();
 	D_ASSERT(collection);
-	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),
-	                                                 context.GetClientProperties());
+	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, IdentifiersToStrings(names),
+	                                                 std::move(collection), context.GetClientProperties());
 	gstate.result = std::move(result);
 	return SinkFinalizeType::READY;
 }

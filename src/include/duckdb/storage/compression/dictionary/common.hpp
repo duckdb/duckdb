@@ -29,32 +29,50 @@ public:
 
 	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
-};
 
-//! Abstract class managing the compression state for size analysis or compression.
-class DictionaryCompressionState : public CompressionState {
-public:
-	explicit DictionaryCompressionState(const CompressionInfo &info);
-	~DictionaryCompressionState() override;
+	template <class T>
+	static bool UpdateState(T &state, const Vector &scan_vector) {
+		state.Verify();
 
-public:
-	bool UpdateState(Vector &scan_vector, idx_t count);
+		for (auto entry : scan_vector.Values<string_t>()) {
+			idx_t string_size = 0;
+			bool new_string = false;
+			auto row_is_valid = entry.IsValid();
 
-protected:
-	// Should verify the State
-	virtual void Verify() = 0;
-	// Performs a lookup of str, storing the result internally
-	virtual bool LookupString(string_t str) = 0;
-	// Add the most recently looked up str to compression state
-	virtual void AddLastLookup() = 0;
-	// Add string to the state that is known to not be seen yet
-	virtual void AddNewString(string_t str) = 0;
-	// Add a null value to the compression state
-	virtual void AddNull() = 0;
-	// Needs to be called before adding a value. Will return false if a flush is required first.
-	virtual bool CalculateSpaceRequirements(bool new_string, idx_t string_size) = 0;
-	// Flush the segment to disk if compressing or reset the counters if analyzing
-	virtual void Flush(bool final = false) = 0;
+			if (row_is_valid) {
+				auto &str = entry.GetValue();
+				string_size = str.GetSize();
+				if (string_size >= StringUncompressed::GetStringBlockLimit(state.info.GetBlockSize())) {
+					// Big strings not implemented for dictionary compression
+					return false;
+				}
+				new_string = !state.LookupString(str);
+			}
+
+			bool fits = state.CalculateSpaceRequirements(new_string, string_size);
+			if (!fits) {
+				state.Flush();
+				new_string = true;
+
+				fits = state.CalculateSpaceRequirements(new_string, string_size);
+				if (!fits) {
+					throw InternalException("Dictionary compression could not write to new segment");
+				}
+			}
+
+			if (!row_is_valid) {
+				state.AddNull();
+			} else if (new_string) {
+				state.AddNewString(entry.GetValue());
+			} else {
+				state.AddLastLookup();
+			}
+
+			state.Verify();
+		}
+
+		return true;
+	}
 };
 
 } // namespace duckdb

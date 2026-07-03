@@ -16,7 +16,15 @@ blacklist = [
     "DictFSSTMode",
     "ComplexJSONType",
     "UnavailableReason",
+    "VirtualColumnBindingType",
     "Slot",
+    "ScheduleMode",
+    "MemoryUpdateMode",
+    "SchedulePolicy",
+    "DrainMode",
+    "BatchDrainMode",
+    "PendingTaskCountMode",
+    "PartitionKeyTrackerState",
 ]
 
 enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")
@@ -29,6 +37,7 @@ overrides = {
         "TIMESTAMP_TZ": "TIMESTAMP WITH TIME ZONE",
         "TIME_TZ": "TIME WITH TIME ZONE",
         "TIMESTAMP_SEC": "TIMESTAMP_S",
+        "TIMESTAMP_TZ_NS": "TIMESTAMPTZ_NS",
     },
     "JoinType": {"OUTER": "FULL"},
     "OrderType": {
@@ -54,6 +63,8 @@ overrides = {
         "DEBUG_ABORT_BEFORE_WAL_FINISH": "BEFORE_WAL_FINISH",
         "DEBUG_ABORT_BEFORE_MOVING_RECOVERY": "BEFORE_MOVING_RECOVERY",
         "DEBUG_ABORT_BEFORE_DELETING_CHECKPOINT_WAL": "BEFORE_DELETING_CHECKPOINT_WAL",
+        "DEBUG_ABORT_BEFORE_HEADER_NON_FATAL": "BEFORE_HEADER_NON_FATAL",
+        "DEBUG_ABORT_IN_MEMORY_CHECKPOINT": "IN_MEMORY_CHECKPOINT",
     },
     "SampleMethod": {"SYSTEM_SAMPLE": "System", "BERNOULLI_SAMPLE": "Bernoulli", "RESERVOIR_SAMPLE": "Reservoir"},
     "TableReferenceType": {"EMPTY_FROM": "EMPTY"},
@@ -71,6 +82,7 @@ overrides = {
         "HEAD_REQUEST": "HEAD",
         "DELETE_REQUEST": "DELETE",
         "POST_REQUEST": "POST",
+        "OPTIONS_REQUEST": "OPTIONS",
     },
     "CompressionType": {
         "COMPRESSION_AUTO": "AUTO",
@@ -91,6 +103,9 @@ overrides = {
         "COMPRESSION_DICT_FSST": "DICT_FSST",
     },
     "ArrowFormatVersion": {"V1_0": "1.0", "V1_1": "1.1", "V1_2": "1.2", "V1_3": "1.3", "V1_4": "1.4", "V1_5": "1.5"},
+    "TriggerTiming": {"BEFORE": "BEFORE", "AFTER": "AFTER", "INSTEAD_OF": "INSTEAD OF"},
+    "TriggerEventType": {"INSERT_EVENT": "INSERT", "DELETE_EVENT": "DELETE", "UPDATE_EVENT": "UPDATE"},
+    "TriggerForEach": {"STATEMENT": "STATEMENT", "ROW": "ROW"},
 }
 
 # get all the headers
@@ -99,8 +114,6 @@ for root, dirs, files in os.walk(os.path.join("..", "src")):
     for file in files:
         # Dont include the generated header itself recursively
         if file == "enum_util.hpp":
-            continue
-        if 'amalgamation' in root:
             continue
 
         if file.endswith(".hpp"):

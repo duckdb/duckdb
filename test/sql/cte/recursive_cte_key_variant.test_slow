@@ -3,9 +3,6 @@
 # group: [cte]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE TABLE tbl(a int);
 
 query I
@@ -83,7 +80,7 @@ WITH RECURSIVE tbl(a,b,c) USING KEY (a,b,c) AS (SELECT * FROM (VALUES (1, 2, 3),
 # Reference the recurring table more than once
 query III
 WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (
-	SELECT 1, NULL, NULL
+	SELECT 1, NULL::INT, NULL::INT
 	UNION ALL
 	(SELECT DISTINCT ON (tbl.a) tbl.a+1, rec1.a, rec2.b
 	FROM tbl, recurring.tbl AS rec1, recurring.tbl AS rec2

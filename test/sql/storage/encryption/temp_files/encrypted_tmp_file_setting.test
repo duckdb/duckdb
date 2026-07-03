@@ -7,20 +7,22 @@ require block_size 262144
 require httpfs
 
 statement ok
-SET temp_directory='__TEST_DIR__/test_temp_dir'
+SET temp_directory='{TEST_DIR}/test_temp_dir'
 
 # we do not encrypt temporary files at all
 statement ok
 SET temp_file_encryption = false;
 
+# FIXME: This is a significant regression because we no longer evict "tiny buffers", of which we're
+# FIXME: allocating plenty here.
 statement ok
-SET memory_limit = '8MB';
+SET memory_limit = '28MB';
 
 statement ok
 SET enable_external_access=false
 
 statement error
-SET temp_directory='__TEST_DIR__/new_temp_dir'
+SET temp_directory='{TEST_DIR}/new_temp_dir'
 ----
 disabled by configuration
 

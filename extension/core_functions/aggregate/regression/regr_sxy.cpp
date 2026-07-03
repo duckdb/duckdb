@@ -11,17 +11,14 @@ namespace duckdb {
 namespace {
 
 struct RegrSXyState {
+	static constexpr const char *STATE_NAMES[] = {"count", "cov_pop"};
+	using STATE_TYPE = StructStateType<uint64_t, CovarState>;
+
 	uint64_t count;
 	CovarState cov_pop;
 };
 
 struct RegrSXYOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		RegrCountFunction::Initialize<uint64_t>(state.count);
-		CovarOperation::Initialize<CovarState>(state.cov_pop);
-	}
-
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		RegrCountFunction::Operation<A_TYPE, B_TYPE, uint64_t, OP>(state.count, y, x, idata);
@@ -47,19 +44,11 @@ struct RegrSXYOperation {
 	}
 };
 
-LogicalType GetRegrSXYStateType(const AggregateFunction &) {
-	child_list_t<LogicalType> state_children;
-	state_children.emplace_back("count", LogicalType::UBIGINT);
-	state_children.emplace_back("cov_pop", CovarPopFun::GetFunction().GetStateType());
-	return LogicalType::STRUCT(std::move(state_children));
-}
-
 } // namespace
 
 AggregateFunction RegrSXYFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrSXyState, double, double, double, RegrSXYOperation>(
-	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetRegrSXYStateType);
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

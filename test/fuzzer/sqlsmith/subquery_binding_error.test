@@ -3,10 +3,7 @@
 # group: [sqlsmith]
 
 # FIXME
-mode skip
-
-statement ok
-PRAGMA enable_verification
+mode skip flaky
 
 statement ok
 CREATE TABLE all_types("varchar" VARCHAR);

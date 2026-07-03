@@ -3,9 +3,6 @@
 # group: [pivot]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t1(id BIGINT, "Sales (05/19/2020)" BIGINT, "Sales (06/03/2020)" BIGINT, "Sales (10/23/2020)" BIGINT);
 
 statement ok

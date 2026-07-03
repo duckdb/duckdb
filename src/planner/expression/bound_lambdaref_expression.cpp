@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-BoundLambdaRefExpression::BoundLambdaRefExpression(string alias_p, LogicalType type, ColumnBinding binding,
+BoundLambdaRefExpression::BoundLambdaRefExpression(Identifier alias_p, LogicalType type, ColumnBinding binding,
                                                    idx_t lambda_idx, idx_t depth)
     : Expression(ExpressionType::BOUND_LAMBDA_REF, ExpressionClass::BOUND_LAMBDA_REF, std::move(type)),
       binding(binding), lambda_idx(lambda_idx), depth(depth) {
@@ -14,7 +14,7 @@ BoundLambdaRefExpression::BoundLambdaRefExpression(string alias_p, LogicalType t
 
 BoundLambdaRefExpression::BoundLambdaRefExpression(LogicalType type, ColumnBinding binding, idx_t lambda_idx,
                                                    idx_t depth)
-    : BoundLambdaRefExpression(string(), std::move(type), binding, lambda_idx, depth) {
+    : BoundLambdaRefExpression(Identifier(), std::move(type), binding, lambda_idx, depth) {
 }
 
 unique_ptr<Expression> BoundLambdaRefExpression::Copy() const {
@@ -39,7 +39,7 @@ bool BoundLambdaRefExpression::Equals(const BaseExpression &other_p) const {
 
 string BoundLambdaRefExpression::ToString() const {
 	if (!alias.empty()) {
-		return alias;
+		return alias.GetIdentifierName();
 	}
 	return "#[" + to_string(binding.table_index.index) + "." + to_string(binding.column_index) + "." +
 	       to_string(lambda_idx) + "]";

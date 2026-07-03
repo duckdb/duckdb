@@ -16,8 +16,8 @@ struct DBGenFunctionData : public TableFunctionData {
 
 	bool finished = false;
 	double sf = 0;
-	string catalog = INVALID_CATALOG;
-	string schema = DEFAULT_SCHEMA;
+	Identifier catalog = INVALID_CATALOG;
+	Identifier schema = DEFAULT_SCHEMA;
 	string suffix;
 	bool overwrite = false;
 	uint32_t children = 1;
@@ -30,7 +30,7 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 
 	// Set the current catalog and schema.
 	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
-	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
+	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().GetSchema();
 	result->catalog = current_catalog;
 	result->schema = current_schema;
 
@@ -41,9 +41,9 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 		if (kv.first == "sf") {
 			result->sf = DoubleValue::Get(kv.second);
 		} else if (kv.first == "catalog") {
-			result->catalog = StringValue::Get(kv.second);
+			result->catalog = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "schema") {
-			result->schema = StringValue::Get(kv.second);
+			result->schema = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "suffix") {
 			result->suffix = StringValue::Get(kv.second);
 		} else if (kv.first == "overwrite") {
@@ -112,16 +112,19 @@ static void TPCHQueryFunction(ClientContext &context, TableFunctionInput &data_p
 		return;
 	}
 	idx_t chunk_count = 0;
+
+	// query_nr, INTEGER
+	auto &query_nr = output.data[0];
+	// query, VARCHAR
+	auto &query_col = output.data[1];
+
 	while (data.offset < tpch_queries && chunk_count < STANDARD_VECTOR_SIZE) {
 		auto query = tpch::DBGenWrapper::GetQuery(data.offset + 1);
-		// "query_nr", PhysicalType::INT32
-		output.SetValue(0, chunk_count, Value::INTEGER((int32_t)data.offset + 1));
-		// "query", PhysicalType::VARCHAR
-		output.SetValue(1, chunk_count, Value(query));
+		query_nr.Append(Value::INTEGER((int32_t)data.offset + 1));
+		query_col.Append(Value(query));
 		data.offset++;
 		chunk_count++;
 	}
-	output.SetCardinality(chunk_count);
 }
 
 static duckdb::unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
@@ -148,20 +151,24 @@ static void TPCHQueryAnswerFunction(ClientContext &context, TableFunctionInput &
 		return;
 	}
 	idx_t chunk_count = 0;
+
+	// query_nr, INTEGER
+	auto &query_nr = output.data[0];
+	// scale_factor, DOUBLE
+	auto &scale_factor = output.data[1];
+	// answer, VARCHAR
+	auto &answer_col = output.data[2];
+
 	while (data.offset < total_answers && chunk_count < STANDARD_VECTOR_SIZE) {
 		idx_t cur_query = data.offset % tpch_queries;
 		idx_t cur_sf = data.offset / tpch_queries;
 		auto answer = tpch::DBGenWrapper::GetAnswer(scale_factors[cur_sf], cur_query + 1);
-		// "query_nr", PhysicalType::INT32
-		output.SetValue(0, chunk_count, Value::INTEGER((int32_t)cur_query + 1));
-		// "scale_factor", PhysicalType::INT32
-		output.SetValue(1, chunk_count, Value::DOUBLE(scale_factors[cur_sf]));
-		// "query", PhysicalType::VARCHAR
-		output.SetValue(2, chunk_count, Value(answer));
+		query_nr.Append(Value::INTEGER((int32_t)cur_query + 1));
+		scale_factor.Append(Value::DOUBLE(scale_factors[cur_sf]));
+		answer_col.Append(Value(answer));
 		data.offset++;
 		chunk_count++;
 	}
-	output.SetCardinality(chunk_count);
 }
 
 static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &parameters) {
@@ -178,6 +185,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
 	dbgen_func.named_parameters["children"] = LogicalType::UINTEGER;
 	dbgen_func.named_parameters["step"] = LogicalType::UINTEGER;
+	dbgen_func.call_return_type = StatementReturnType::NOTHING;
 	loader.RegisterFunction(dbgen_func);
 
 	// create the TPCH pragma that allows us to run the query

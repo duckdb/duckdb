@@ -45,5 +45,8 @@ GROUP BY ROLLUP (i_item_id,
 ORDER BY ca_country NULLS FIRST,
     ca_state NULLS FIRST,
     ca_county NULLS FIRST,
-    i_item_id NULLS FIRST
+    i_item_id NULLS FIRST,
+    grouping (ca_country) NULLS FIRST,
+    grouping (ca_state) NULLS FIRST,
+    grouping (ca_county) NULLS FIRST
 LIMIT 100;

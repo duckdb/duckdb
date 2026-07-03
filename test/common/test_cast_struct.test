@@ -2,9 +2,6 @@
 # description: Test casting structs
 # group: [common]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT struct_pack(b => 42)::STRUCT(a INT);
 ----
@@ -95,15 +92,16 @@ SELECT ROW(42, 'asdf');
 ----
 (42, asdf)
 
-statement error
+# ROW() with no arguments produces an empty (unnamed) TUPLE
+query I
 SELECT ROW();
 ----
-pack nothing into a struct
+()
 
 query I
 SELECT ROW(NULL);
 ----
-(NULL)
+(NULL,)
 
 query I
 SELECT ROW(NULL, NULL);

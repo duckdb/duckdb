@@ -2,9 +2,6 @@
 # description: Use-after-free on temporary table after transaction has stopped running
 # group: [pedro]
 
-statement ok
-PRAGMA enable_verification
-
 concurrentloop i 0 10
 
 statement ok

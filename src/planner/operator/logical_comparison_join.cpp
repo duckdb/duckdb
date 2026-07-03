@@ -19,8 +19,8 @@ InsertionOrderPreservingMap<string> LogicalComparisonJoin::ParamsToString() cons
 		}
 		auto &condition = conditions[i];
 		if (condition.IsComparison()) {
-			auto expr = make_uniq<BoundComparisonExpression>(condition.GetComparisonType(), condition.GetLHS().Copy(),
-			                                                 condition.GetRHS().Copy());
+			auto expr = BoundComparisonExpression::Create(condition.GetComparisonType(), condition.GetLHS().Copy(),
+			                                              condition.GetRHS().Copy());
 			conditions_info += expr->ToString();
 		} else {
 			conditions_info += condition.GetJoinExpression().ToString();

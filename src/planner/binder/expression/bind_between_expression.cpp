@@ -12,16 +12,16 @@ namespace duckdb {
 BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
 	ErrorData error;
-	BindChild(expr.input, depth, error);
-	BindChild(expr.lower, depth, error);
-	BindChild(expr.upper, depth, error);
+	BindChild(expr.InputMutable(), depth, error);
+	BindChild(expr.LowerBoundMutable(), depth, error);
+	BindChild(expr.UpperBoundMutable(), depth, error);
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
 	// the children have been successfully resolved
-	auto &input = BoundExpression::GetExpression(*expr.input);
-	auto &lower = BoundExpression::GetExpression(*expr.lower);
-	auto &upper = BoundExpression::GetExpression(*expr.upper);
+	auto &input = BoundExpression::GetExpression(*expr.InputMutable());
+	auto &lower = BoundExpression::GetExpression(*expr.LowerBoundMutable());
+	auto &upper = BoundExpression::GetExpression(*expr.UpperBoundMutable());
 
 	auto input_sql_type = ExpressionBinder::GetExpressionReturnType(*input);
 	auto lower_sql_type = ExpressionBinder::GetExpressionReturnType(*lower);
@@ -55,17 +55,17 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 		// the expression does not have side effects and can be copied: create two comparisons
 		// the reason we do this is that individual comparisons are easier to handle in optimizers
 		// if both comparisons remain they will be folded together again into a single BETWEEN in the optimizer
-		auto left_compare = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-		                                                         input->Copy(), std::move(lower));
-		auto right_compare = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
-		                                                          std::move(input), std::move(upper));
+		auto left_compare = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+		                                                      input->Copy(), std::move(lower));
+		auto right_compare = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+		                                                       std::move(input), std::move(upper));
 		return BindResult(make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
 		                                                        std::move(left_compare), std::move(right_compare)));
 	} else {
 		// expression has side effects: we cannot duplicate it
 		// create a bound_between directly
 		return BindResult(
-		    make_uniq<BoundBetweenExpression>(std::move(input), std::move(lower), std::move(upper), true, true));
+		    BoundBetweenExpression::Create(std::move(input), std::move(lower), std::move(upper), true, true));
 	}
 }
 

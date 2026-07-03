@@ -25,7 +25,7 @@ BindCastFunction::BindCastFunction(bind_cast_function_t function_p, unique_ptr<B
     : function(function_p), info(std::move(info_p)) {
 }
 
-CastFunctionSet::CastFunctionSet() : map_info(nullptr) {
+CastFunctionSet::CastFunctionSet() : combine_rules(DefaultCombineTypesRules()), map_info(nullptr) {
 	bind_functions.emplace_back(DefaultCasts::GetDefaultCastFunction);
 }
 
@@ -61,7 +61,7 @@ BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const 
 		BindCastInput input(*this, bind_function.info.get(), get_input.context);
 		input.query_location = get_input.query_location;
 		auto result = bind_function.function(input, source, target);
-		if (result.function) {
+		if (result.HasFunction()) {
 			// found a cast function! return it
 			return result;
 		}
@@ -91,6 +91,8 @@ static auto RelaxedTypeMatch(type_map_t<MAP_VALUE_TYPE> &map, const LogicalType 
 		return map.find(LogicalType::LIST(LogicalType::ANY));
 	case LogicalTypeId::STRUCT:
 		return map.find(LogicalType::STRUCT({{"any", LogicalType::ANY}}));
+	case LogicalTypeId::TUPLE:
+		return map.find(LogicalType::TUPLE({LogicalType::ANY}));
 	case LogicalTypeId::MAP:
 		for (auto it = map.begin(); it != map.end(); it++) {
 			const auto &entry_type = it->first;
@@ -234,6 +236,28 @@ void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const Logi
 		bind_functions.emplace_back(MapCastFunction, std::move(info));
 	}
 	map_info->AddEntry(source, target, std::move(node));
+}
+
+void CastFunctionSet::RegisterCombineTypesRule(CombineTypesRule rule) {
+	combine_rules.insert(combine_rules.begin(), rule); // newest extension first, ahead of built-ins
+}
+
+bool CastFunctionSet::TryCombineTypes(const vector<CombineTypesRule> &rules, LogicalTypeResolver &resolver,
+                                      const LogicalType &left, const LogicalType &right, LogicalType &result,
+                                      bool &success) {
+	// first matching rule wins
+	for (auto &rule : rules) {
+		if (rule.matches(left, right)) {
+			success = rule.function(resolver, left, right, result);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool CastFunctionSet::TryCombineTypes(LogicalTypeResolver &resolver, const LogicalType &left, const LogicalType &right,
+                                      LogicalType &result, bool &success) {
+	return TryCombineTypes(combine_rules, resolver, left, right, result, success);
 }
 
 } // namespace duckdb

@@ -5,19 +5,20 @@
 
 namespace duckdb {
 
-CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY, INVALID_SCHEMA) {
+CreateIndexInfo::CreateIndexInfo() : CreateInfo(CatalogType::INDEX_ENTRY, Identifier::InvalidSchema()) {
 }
 
 CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
-    : CreateInfo(CatalogType::INDEX_ENTRY, info.schema), table(info.table), index_name(info.index_name),
-      options(info.options), index_type(info.index_type), constraint_type(info.constraint_type),
-      column_ids(info.column_ids), scan_types(info.scan_types), names(info.names) {
+    : CreateInfo(CatalogType::INDEX_ENTRY, info.GetQualifiedName().Schema()), table(info.table), options(info.options),
+      index_type(info.index_type), constraint_type(info.constraint_type), column_ids(info.column_ids),
+      scan_types(info.scan_types), names(info.names) {
+	SetIndexName(info.GetIndexName());
 }
 
-static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &root_expr, const string &table_name) {
+static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &root_expr, const Identifier &table_name) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
 	    *root_expr, [&](ColumnRefExpression &col_ref) {
-		    auto &col_names = col_ref.column_names;
+		    auto &col_names = col_ref.ColumnNamesMutable();
 		    if (col_ref.IsQualified() && col_ref.GetTableName() == table_name) {
 			    col_names.erase(col_names.begin());
 		    }
@@ -69,12 +70,13 @@ string CreateIndexInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += "IF NOT EXISTS ";
 	}
-	result += KeywordHelper::WriteOptionallyQuoted(index_name);
+	result += SQLIdentifier(GetIndexName());
 	result += " ON ";
-	result += QualifierToString(temporary ? "" : catalog, schema, table);
+	result += QualifiedName(temporary ? Identifier() : GetQualifiedName().Catalog(), GetQualifiedName().Schema(), table)
+	              .ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	if (index_type != "ART") {
 		result += " USING ";
-		result += KeywordHelper::WriteOptionallyQuoted(index_type);
+		result += SQLIdentifier(index_type);
 		result += " ";
 	}
 	result += "(";
@@ -84,9 +86,13 @@ string CreateIndexInfo::ToString() const {
 		result += " WITH (";
 		idx_t i = 0;
 		for (auto &opt : options) {
-			result += StringUtil::Format("%s = %s", opt.first, opt.second.ToString());
 			if (i > 0) {
 				result += ", ";
+			}
+			if (opt.second.IsNull()) {
+				result += opt.first;
+			} else {
+				result += StringUtil::Format("%s = %s", opt.first, opt.second.ToString());
 			}
 			i++;
 		}

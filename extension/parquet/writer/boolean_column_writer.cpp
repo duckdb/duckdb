@@ -1,6 +1,17 @@
 #include "writer/boolean_column_writer.hpp"
 
+#include <stdint.h>
+#include <utility>
+
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "parquet_column_schema.hpp"
+
 namespace duckdb {
+class ParquetWriter;
+class Vector;
 
 class BooleanStatisticsState : public ColumnWriterStatistics {
 public:
@@ -36,7 +47,7 @@ public:
 };
 
 BooleanColumnWriter::BooleanColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
-                                         vector<string> schema_path_p)
+                                         vector<Identifier> schema_path_p)
     : PrimitiveColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
 }
 

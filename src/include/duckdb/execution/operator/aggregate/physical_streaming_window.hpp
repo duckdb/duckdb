@@ -18,7 +18,7 @@ class PhysicalStreamingWindow : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::STREAMING_WINDOW;
 
-	static bool IsStreamingFunction(ClientContext &context, unique_ptr<Expression> &expr);
+	static bool IsStreamingFunction(ClientContext &context, BoundWindowExpression &wexpr);
 
 public:
 	PhysicalStreamingWindow(PhysicalPlan &physical_plan, vector<LogicalType> types,

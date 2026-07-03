@@ -1,10 +1,16 @@
 #include "parquet_shredding.hpp"
+
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/exception/binder_exception.hpp"
-#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
+class ClientContext;
 
-ChildShreddingTypes::ChildShreddingTypes() : types(make_uniq<case_insensitive_map_t<ShreddingType>>()) {
+ChildShreddingTypes::ChildShreddingTypes() : types(make_uniq<identifier_map_t<ShreddingType>>()) {
 }
 
 ChildShreddingTypes ChildShreddingTypes::Copy() const {
@@ -93,11 +99,11 @@ static ShreddingType ConvertShreddingTypeRecursive(const LogicalType &type) {
 	throw BinderException("VARIANT can only be shredded on LIST/STRUCT/ANY/non-nested type, not %s", type.ToString());
 }
 
-void ShreddingType::AddChild(const string &name, ShreddingType &&child) {
+void ShreddingType::AddChild(const Identifier &name, ShreddingType &&child) {
 	children.types->emplace(name, std::move(child));
 }
 
-optional_ptr<const ShreddingType> ShreddingType::GetChild(const string &name) const {
+optional_ptr<const ShreddingType> ShreddingType::GetChild(const Identifier &name) const {
 	auto it = children.types->find(name);
 	if (it == children.types->end()) {
 		return nullptr;

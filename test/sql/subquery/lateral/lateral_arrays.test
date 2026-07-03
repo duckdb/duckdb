@@ -3,9 +3,6 @@
 # group: [lateral]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl(i INTEGER, arr INT[]);
 
 statement ok

@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/optimizer.hpp"
 
+#include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -16,6 +17,7 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/grouping_sets_optimizer.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_elimination.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
@@ -35,16 +37,24 @@
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/topn_window_elimination.hpp"
+#include "duckdb/optimizer/type_pushdown.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
+#include "duckdb/optimizer/partitioned_execution.hpp"
 #include "duckdb/optimizer/window_self_join.hpp"
+#include "duckdb/optimizer/row_number_rewriter.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/optimizer/outer_join_simplification.hpp"
+#include "duckdb/optimizer/partial_aggregate_pushdown.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
+#include "duckdb/optimizer/rule/contains_to_in_clause.hpp"
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -59,6 +69,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<DateTruncSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ComparisonSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<InClauseSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<InEnumSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EqualOrNullSimplification>(rewriter));
 	rewriter.rules.push_back(make_uniq<MoveConstantsRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<LikeOptimizationRule>(rewriter));
@@ -66,12 +77,14 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<DistinctAggregateOptimizer>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistinctWindowedOptimizer>(rewriter));
 	rewriter.rules.push_back(make_uniq<RegexOptimizationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<RegexpReplaceExtractRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EmptyNeedleRemovalRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EnumComparisonRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<JoinDependentFilterRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<TimeStampComparison>(rewriter));
 	rewriter.rules.push_back(make_uniq<PredicateFactoringRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ListComprehensionRewriteRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<ContainsToInClauseRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
@@ -90,6 +103,10 @@ bool Optimizer::OptimizerDisabled(OptimizerType type) {
 }
 
 bool Optimizer::OptimizerDisabled(ClientContext &context_p, OptimizerType type) {
+	if (!Settings::Get<EnableOptimizerSetting>(context_p)) {
+		// all optimizes are disabled
+		return true;
+	}
 	auto &config = DBConfig::GetConfig(context_p);
 	return config.options.disabled_optimizers.find(type) != config.options.disabled_optimizers.end();
 }
@@ -104,16 +121,53 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 		return;
 	}
 	auto &profiler = QueryProfiler::Get(context);
-	profiler.StartPhase(MetricsUtils::GetOptimizerMetricByType(type));
-	callback();
-	profiler.EndPhase();
+	{
+		auto optimizer_timer = profiler.StartTimerInternal("optimizer." + StringUtil::Lower(EnumUtil::ToString(type)));
+		callback();
+	}
 	if (plan) {
 		Verify(*plan);
 	}
 }
 
 void Optimizer::Verify(LogicalOperator &op) {
-	ColumnBindingResolver::Verify(op);
+	ColumnBindingResolver::Verify(context, op);
+}
+
+// Returns true if the plan contains a DML statement (INSERT/UPDATE/DELETE/MERGE INTO)
+// inside a CTE body. When that is the case, several optimizations are unsafe because
+// they use table statistics captured at plan time, which do not reflect the table
+// state after the DML has executed.
+// Note: a top-level INSERT/UPDATE/DELETE (e.g. INSERT ... RETURNING) is NOT flagged —
+// only DML nested under a MATERIALIZED_CTE or RECURSIVE_CTE node.
+static bool CTEContainsDML(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
+	    op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+		for (auto &child : op.children) {
+			if (child->HasSideEffects()) {
+				return true;
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		if (CTEContainsDML(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void Optimizer::OptimizeStatement(unique_ptr<SQLStatement> &statement) {
+	if (!Settings::Get<EnableOptimizerSetting>(context)) {
+		return;
+	}
+	if (DatabaseManager::Get(context).GetRemoteCatalogCount() > 0) {
+		// if we have any remote catalogs attached then pushdown into remote
+		RunOptimizer(OptimizerType::REMOTE_PUSHDOWN, [&]() {
+			RemotePushdownOptimizer optimizer(binder);
+			optimizer.Rewrite(statement);
+		});
+	}
 }
 
 void Optimizer::RunBuiltInOptimizers() {
@@ -155,6 +209,16 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = filter_pullup.Rewrite(std::move(plan));
 	});
 
+	/* Push down type casts in SELECT e.g. SELECT num::UHUGEINT to file readers.
+	 * This pass must run before FILTER_PUSHDOWN. After filter pushdown
+	 * get.table_filters are populated because WHERE clauses may have been
+	 * pushed. This makes type pushdown much more complex.
+	 */
+	RunOptimizer(OptimizerType::TYPE_PUSHDOWN, [&] {
+		TypePushdown type_pushdown(context);
+		plan = type_pushdown.Optimize(std::move(plan));
+	});
+
 	// perform filter pushdown
 	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
 		FilterPushdown filter_pushdown(*this);
@@ -185,6 +249,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = deliminator.Optimize(std::move(plan));
 	});
 
+	// rewrite aggregates over multiple grouping sets (ROLLUP/CUBE/GROUPING SETS) into a cascade of aggregations
+	RunOptimizer(OptimizerType::GROUPING_SETS, [&]() {
+		GroupingSetsOptimizer grouping_sets_optimizer(*this);
+		grouping_sets_optimizer.VisitOperator(plan);
+	});
+
 	// try to inline CTEs instead of materialization
 	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {
 		CTEInlining cte_inlining(*this);
@@ -205,7 +275,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// Pull up projection from joins
 	RunOptimizer(OptimizerType::PROJECTION_PULLUP, [&]() {
-		ProjectionPullup projection_pullup(*this, *plan);
+		ProjectionPullup projection_pullup(*this, plan);
 		projection_pullup.Optimize(plan);
 	});
 
@@ -220,6 +290,13 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
 		JoinOrderOptimizer optimizer(context);
 		plan = optimizer.Optimize(std::move(plan));
+	});
+
+	// Pre-aggregate SUM/COUNT below joins when GROUP BY is on dimension columns
+	// and the fact side dominates cardinality — reduces probe-side work.
+	RunOptimizer(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN, [&]() {
+		PartialAggregatePushdown partial_aggregate_pushdown(*this);
+		partial_aggregate_pushdown.VisitOperator(plan);
 	});
 
 	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
@@ -241,7 +318,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// Remove duplicate groups from aggregates
 	RunOptimizer(OptimizerType::DUPLICATE_GROUPS, [&]() {
-		RemoveDuplicateGroups remove;
+		RemoveDuplicateGroups remove(*this);
 		remove.VisitOperator(*plan);
 	});
 
@@ -265,10 +342,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// convert common subplans into materialized CTEs
-	RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
-		CommonSubplanOptimizer common_subplan_optimizer(*this);
-		plan = common_subplan_optimizer.Optimize(std::move(plan));
-	});
+	// Skip when the plan contains a DML CTE: table statistics are stale at plan
+	// time and could cause incorrect deduplication of scans across a DML boundary.
+	if (!CTEContainsDML(*plan)) {
+		RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
+			CommonSubplanOptimizer common_subplan_optimizer(*this);
+			plan = common_subplan_optimizer.Optimize(std::move(plan));
+		});
+	}
 
 	// pushes LIMIT below PROJECTION
 	RunOptimizer(OptimizerType::LIMIT_PUSHDOWN, [&]() {
@@ -283,7 +364,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// perform sampling pushdown
 	RunOptimizer(OptimizerType::SAMPLING_PUSHDOWN, [&]() {
-		SamplingPushdown sampling_pushdown;
+		SamplingPushdown sampling_pushdown(context);
 		plan = sampling_pushdown.Optimize(std::move(plan));
 	});
 
@@ -300,12 +381,18 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// perform statistics propagation
+	// Skip when the plan contains a DML CTE: statistics are captured at plan time
+	// and do not reflect the table state after the DML executes.  Propagating them
+	// can cause filters or scans to be incorrectly eliminated (e.g. replaced with
+	// EMPTY_RESULT because an empty table has no statistics for a given predicate).
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
-	RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
-		StatisticsPropagator propagator(*this, *plan);
-		propagator.PropagateStatistics(plan);
-		statistics_map = propagator.GetStatisticsMap();
-	});
+	if (!CTEContainsDML(*plan)) {
+		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
+			StatisticsPropagator propagator(*this, *plan);
+			propagator.PropagateStatistics(plan);
+			statistics_map = propagator.GetStatisticsMap();
+		});
+	}
 
 	// rewrite row_number window function + filter on row_number to aggregate
 	RunOptimizer(OptimizerType::TOP_N_WINDOW_ELIMINATION, [&]() {
@@ -331,14 +418,29 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = expression_heuristics.Rewrite(std::move(plan));
 	});
 
+	// split pipelines into partitions and union them back together
+	RunOptimizer(OptimizerType::PARTITIONED_EXECUTION, [&]() {
+		PartitionedExecution partitioned_execution(*this, plan);
+		partitioned_execution.Optimize(plan);
+	});
+
 	// perform join filter pushdown after the dust has settled
 	RunOptimizer(OptimizerType::JOIN_FILTER_PUSHDOWN, [&]() {
 		JoinFilterPushdownOptimizer join_filter_pushdown(*this);
 		join_filter_pushdown.VisitOperator(*plan);
 	});
+
+	// Rewrite ROW_NUMBER() OVER() window functions to use the row_number virtual column
+	RunOptimizer(OptimizerType::ROW_NUMBER_REWRITER, [&]() {
+		RowNumberRewriter window_rewriter;
+		plan = window_rewriter.Optimize(std::move(plan));
+	});
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
+	if (!Settings::Get<EnableOptimizerSetting>(context)) {
+		return plan_p;
+	}
 	Verify(*plan_p);
 
 	this->plan = std::move(plan_p);
@@ -368,13 +470,13 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	return std::move(plan);
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1) {
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(c1));
 	return BindScalarFunction(name, std::move(children));
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1,
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1,
                                                      unique_ptr<Expression> c2) {
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(c1));
@@ -382,10 +484,19 @@ unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_
 	return BindScalarFunction(name, std::move(children));
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, vector<unique_ptr<Expression>> children) {
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, unique_ptr<Expression> c1,
+                                                     unique_ptr<Expression> c2, unique_ptr<Expression> c3) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(c1));
+	children.push_back(std::move(c2));
+	children.push_back(std::move(c3));
+	return BindScalarFunction(name, std::move(children));
+}
+
+unique_ptr<Expression> Optimizer::BindScalarFunction(const Identifier &name, vector<unique_ptr<Expression>> children) {
 	FunctionBinder binder(context);
 	ErrorData error;
-	auto expr = binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error);
+	auto expr = binder.BindScalarFunction(Identifier::DefaultSchema(), name, std::move(children), error);
 	if (error.HasError()) {
 		throw InternalException("Optimizer exception - failed to bind function %s: %s", name, error.Message());
 	}

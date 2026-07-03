@@ -2,6 +2,8 @@ add_library_unity(
   duckdb_optimizer_join_order
   OBJECT
   query_graph.cpp
+  filter_info.cpp
+  join_predicate.cpp
   join_relation_set.cpp
   join_node.cpp
   join_order_optimizer.cpp

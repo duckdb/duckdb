@@ -6,9 +6,6 @@ require noforcestorage
 
 require skip_reload
 
-statement ok
-PRAGMA enable_verification
-
 # Create a table with a primary key and store the memory usage.
 # Verify that the memory stays stable when deleting all entries from the table.
 # We keep a single empty buffer alive for each allocator, so we never drop to zero bytes.

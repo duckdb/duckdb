@@ -70,7 +70,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
 		// continue
 		auto old_block_copy = buffer_manager.AllocateMemory(old_block->GetMemory().GetMemoryTag(), this, false);
 		auto copy_pin = buffer_manager.Pin(old_block_copy);
-		memcpy(copy_pin.Ptr(), old_handle.Ptr(), GetBlockSize());
+		memcpy(copy_pin.GetDataMutable(), old_handle.Ptr(), GetBlockSize());
 		old_block = std::move(old_block_copy);
 		old_handle = std::move(copy_pin);
 	}
@@ -105,7 +105,12 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
 	old_block.reset();
 
 	// potentially purge the queue
-	auto purge_queue = buffer_manager.GetBufferPool().AddToEvictionQueue(new_block);
+	bool purge_queue;
+	{
+		// AddToEvictionQueue requires the block lock. new_block was just created here, so this is uncontended.
+		auto new_lock = new_block->GetMemory().GetLock();
+		purge_queue = buffer_manager.GetBufferPool().AddToEvictionQueue(new_lock, new_block);
+	}
 	if (purge_queue) {
 		buffer_manager.GetBufferPool().PurgeQueue(*new_block);
 	}

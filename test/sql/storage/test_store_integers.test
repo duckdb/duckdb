@@ -3,12 +3,12 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/test_store_integers.db
+load {TEST_DIR}/test_store_integers.db
 
 foreach compression <compression>
 
 statement ok
-PRAGMA force_compression='${compression}'
+PRAGMA force_compression='{compression}'
 
 # create a database and insert values
 statement ok

@@ -1,6 +1,5 @@
-#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
@@ -8,13 +7,13 @@ namespace duckdb {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCastExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExecuteFunctionState>(expr, root);
-	result->AddChild(*expr.child);
+	result->AddChild(expr.Child());
 	result->Finalize();
 
-	if (expr.bound_cast.init_local_state) {
+	if (expr.GetBoundCast().HasInitLocalState()) {
 		auto context_ptr = root.executor->HasContext() ? &root.executor->GetContext() : nullptr;
-		CastLocalStateParameters parameters(context_ptr, expr.bound_cast.cast_data);
-		result->local_state = expr.bound_cast.init_local_state(parameters);
+		CastLocalStateParameters parameters(context_ptr, expr.GetBoundCast().GetCastData());
+		result->local_state = expr.GetBoundCast().InitLocalState(parameters);
 	}
 	return std::move(result);
 }
@@ -29,23 +28,39 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 	auto &child = state->intermediate_chunk.data[0];
 	auto child_state = state->child_states[0].get();
 
-	Execute(*expr.child, child_state, sel, count, child);
+	Execute(expr.Child(), child_state, sel, count, child);
 
 	string error_message;
-	auto error_ref = expr.try_cast ? &error_message : nullptr;
-	CastParameters parameters(expr.bound_cast.cast_data.get(), false, error_ref, lstate);
+	auto error_ref = expr.IsTryCast() ? &error_message : nullptr;
+	CastParameters parameters(expr.GetBoundCast().GetCastData(), false, error_ref, lstate);
 	parameters.query_location = expr.GetQueryLocation();
-	parameters.cast_source = expr.child.get();
+	parameters.cast_source = &expr.Child();
 	parameters.cast_target = expr;
+	idx_t cast_count = count;
 	bool all_constant = child.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	if (all_constant) {
 		// if the input is constant we only need to cast one value
-		count = 1;
+		if (ConstantVector::IsNull(child) && result.GetType().id() != LogicalTypeId::UNION) {
+			// if the input is constant NULL the output is always constant NULL
+			// ... except for unions, that are special
+			ConstantVector::SetNull(result, count_t(count));
+			return;
+		}
+		// temporarily set the input size to 1
+		FlatVector::SetSize(child, 1ULL);
+		cast_count = 1;
 	}
-	expr.bound_cast.function(child, result, count, parameters);
+	expr.GetBoundCast().Cast(child, result, cast_count, parameters);
 	if (all_constant) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		if (child.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			child.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
+		// restore the size of the input vector
+		FlatVector::SetSize(child, count);
+		// ensure the result type is constant
+		result.FlattenAndSetConstant();
 	}
+	FlatVector::SetSize(result, count_t(count));
 }
 
 } // namespace duckdb

@@ -1,9 +1,6 @@
 # name: test/sql/types/struct/struct_contains.test
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 # ==========================================================
 # Unnamed struct
 # ==========================================================

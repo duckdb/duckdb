@@ -1,0 +1,61 @@
+# name: test/sql/storage/extended_string_stats.test
+# description: Test storage of extended (new) string stats
+# group: [storage]
+
+load {TEST_DIR}/extended_string_stats.db readwrite v2.0.0
+
+statement ok
+create table test as from (values
+		('hello world'),
+		(NULL),
+		('this is a long string')
+	) t(s)
+	;
+
+query IIIII
+select s.min, s.max, s.min_string_length, s.max_string_length, s.total_string_length from (select stats(s) s from test limit 1)
+----
+hello world	this is a lo	11	21	32
+
+statement ok
+insert into test values ('how about this one'), ('')
+
+query II
+select s.min_string_length, s.total_string_length from (select stats(s) s from test limit 1)
+----
+0	50
+
+# update
+statement ok
+update test set s='my new bigger string' where s='hello world'
+
+# total_string_length is only exact after a checkpoint when updates have occurred
+# (updates cannot maintain the exact sum without knowing old string lengths)
+statement ok
+CHECKPOINT
+
+query I
+select s.total_string_length from (select stats(s) s from test limit 1)
+----
+59
+
+# test deleting and re-inserting
+statement ok
+delete from test;
+
+statement ok
+insert into test from (values
+		('hello world'),
+		(NULL),
+		('this is a long string')
+	) t(s)
+	;
+
+# checkpoint to ensure stats are re-calculated
+statement ok
+checkpoint
+
+query II
+select s.min_string_length, s.total_string_length from (select stats(s) s from test limit 1)
+----
+11	32

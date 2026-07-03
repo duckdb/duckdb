@@ -2,9 +2,6 @@
 # group: [virtual]
 
 statement ok
-pragma enable_verification;
-
-statement ok
 CREATE TABLE tbl (
     foo INTEGER,
     bar INTEGER GENERATED ALWAYS AS (foo+1) VIRTUAL,
@@ -51,23 +48,23 @@ select * from non_generated;
 foreach table_name tbl non_generated
 
 query IIIIII nosort r2
-select count(*), foobar, foo, last(foo), avg(bar), count(bar) from ${table_name} group by bar, foobar, foo order by all;
+select count(*), foobar, foo, last(foo), avg(bar), count(bar) from {table_name} group by bar, foobar, foo order by all;
 ----
 
 query IIII nosort r3
-select count(*), last(foo), avg(bar), count(bar) from ${table_name} group by bar order by all;
+select count(*), last(foo), avg(bar), count(bar) from {table_name} group by bar order by all;
 ----
 
 query III nosort r4
-select count(bar order by foobar desc), count(bar), count(distinct bar), avg(bar) from ${table_name} group by foo, foobar order by all;
+select count(bar order by foobar desc), count(bar), count(distinct bar), avg(bar) from {table_name} group by foo, foobar order by all;
 ----
 
 query III nosort r5
-select count(bar order by foo asc), count(distinct bar) filter ((foo+1) != bar) from ${table_name} group by foo order by all;
+select count(bar order by foo asc), count(distinct bar) filter ((foo+1) != bar) from {table_name} group by foo order by all;
 ----
 
 query IIII nosort r6
-select count(foo), count(foobar), bar from ${table_name} group by CUBE(foo, foobar, bar), bar, foo, CUBE(foo) order by all;
+select count(foo), count(foobar), bar from {table_name} group by CUBE(foo, foobar, bar), bar, foo, CUBE(foo) order by all;
 ----
 
 endloop

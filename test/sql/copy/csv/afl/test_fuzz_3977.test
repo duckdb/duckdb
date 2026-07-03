@@ -361,7 +361,4 @@ statement maybe
 FROM read_csv('{DATA_DIR}/csv/afl/3977/case_88.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', strict_mode=true);
 ----
 
-statement ok
-PRAGMA enable_verification
-
 endloop

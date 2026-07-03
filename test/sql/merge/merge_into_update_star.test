@@ -3,9 +3,6 @@
 # group: [merge]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE Stock(item_id int, balance int DEFAULT 0);
 
 statement ok
@@ -31,7 +28,7 @@ WHEN MATCHED THEN UPDATE BY NAME
 1
 
 query II
-FROM Stock
+FROM Stock ORDER BY ALL
 ----
 5	10
 10	30

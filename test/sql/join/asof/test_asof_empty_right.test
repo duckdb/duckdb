@@ -1,0 +1,25 @@
+# name: test/sql/join/asof/test_asof_empty_right.test
+# description: Test ASOF join with empty right table
+# group: [asof]
+
+query II
+select lefttable.x, righttable.y
+from (select 1 as x) lefttable
+asof left join (select 1 as x, 1 as y limit 0) righttable
+on lefttable.x >= righttable.x;
+----
+1	NULL
+
+query II
+select lefttable.x, righttable.y
+from (select 1 as x limit 0) lefttable
+asof left join (select 1 as x, 1 as y) righttable
+on lefttable.x >= righttable.x;
+----
+
+query II
+select lefttable.x, righttable.y
+from (select 1 as x) lefttable
+asof join (select 1 as x, 1 as y limit 0) righttable
+on lefttable.x >= righttable.x;
+----

@@ -10,8 +10,10 @@
 
 #include "writer/primitive_column_writer.hpp"
 #include "writer/parquet_write_operators.hpp"
+#include "parquet_bss_encoder.hpp"
 #include "parquet_dbp_encoder.hpp"
 #include "parquet_dlba_encoder.hpp"
+#include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "duckdb/common/primitive_dictionary.hpp"
 
@@ -117,7 +119,7 @@ public:
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 class StandardColumnWriter : public PrimitiveColumnWriter {
 public:
-	StandardColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p)
+	StandardColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<Identifier> schema_path_p)
 	    : PrimitiveColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
 	}
 	~StandardColumnWriter() override = default;
@@ -308,7 +310,8 @@ public:
 		});
 
 		// flush the dictionary page and add it to the to-be-written pages
-		WriteDictionary(state, state.dictionary.GetTargetMemoryStream(), state.dictionary.GetSize());
+		auto dictionary_size = state.dictionary.GetSize();
+		WriteDictionary(state, state.dictionary.TakeTargetData(), dictionary_size);
 		// bloom filter will be queued for writing in ParquetWriter::BufferBloomFilter one level up
 	}
 

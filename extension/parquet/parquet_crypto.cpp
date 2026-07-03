@@ -1,7 +1,8 @@
 #include "parquet_crypto.hpp"
 
-#include "mbedtls_wrapper.hpp"
-#include "thrift_tools.hpp"
+#include <string.h>
+#include <memory>
+#include <utility>
 
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/helper.hpp"
@@ -9,6 +10,26 @@
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/encryption_state.hpp"
+#include "duckdb/common/encryption_types.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/original/std/memory.hpp"
+#include "thrift/TBase.h"
+#include "thrift/protocol/TCompactProtocol.h"
+#include "thrift/protocol/TProtocol.h"
+#include "thrift/transport/TTransport.h"
+
+namespace duckdb {
+class ClientContext;
+} // namespace duckdb
 
 using duckdb_parquet::ColumnChunk;
 
@@ -126,7 +147,7 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 	const auto &keys = ParquetKeys::Get(context);
 	for (idx_t i = 0; i < StructType::GetChildCount(arg.type()); i++) {
 		auto &struct_key = child_types[i].first;
-		if (StringUtil::Lower(struct_key) == "footer_key") {
+		if (struct_key == "footer_key") {
 			const auto footer_key_name = StringValue::Get(children[i].DefaultCastAs(LogicalType::VARCHAR));
 			if (!keys.HasKey(footer_key_name)) {
 				throw BinderException(
@@ -136,9 +157,9 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 			// footer key name provided - read the key from the config
 			const auto &keys = ParquetKeys::Get(context);
 			footer_key = keys.GetKey(footer_key_name);
-		} else if (StringUtil::Lower(struct_key) == "footer_key_value") {
+		} else if (struct_key == "footer_key_value") {
 			footer_key = StringValue::Get(children[i].DefaultCastAs(LogicalType::BLOB));
-		} else if (StringUtil::Lower(struct_key) == "column_keys") {
+		} else if (struct_key == "column_keys") {
 			throw NotImplementedException("Parquet encryption_config column_keys not yet implemented");
 		} else {
 			throw BinderException("Unknown key in encryption_config \"%s\"", struct_key);

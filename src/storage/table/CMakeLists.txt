@@ -13,8 +13,10 @@ add_library_unity(
   list_column_data.cpp
   in_memory_checkpoint.cpp
   update_segment.cpp
+  per_column_metadata_blocks.cpp
   persistent_table_data.cpp
   row_id_column_data.cpp
+  row_number_column_data.cpp
   row_group.cpp
   row_group_collection.cpp
   row_group_reorderer.cpp

@@ -52,7 +52,7 @@ RETURNING *;
 
 
 # FIXME: not consistent
-mode skip
+mode skip instable
 
 # Here we have conflicts within the inserted data
 # Only the last occurrence of this conflict should be present in the returning clause.

@@ -9,18 +9,18 @@ foreach codec UNCOMPRESSED SNAPPY GZIP ZSTD LZ4 LZ4_RAW BROTLI
 
 # codec uncompressed
 statement ok
-COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/${codec}.parquet' (FORMAT 'parquet', CODEC '${codec}');
+COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/{codec}.parquet' (FORMAT 'parquet', CODEC '{codec}');
 
 query II
-SELECT * FROM parquet_scan('{TEMP_DIR}/${codec}.parquet');
+SELECT * FROM parquet_scan('{TEMP_DIR}/{codec}.parquet');
 ----
 42	hello
 
 statement ok
-COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-${codec}.parquet' (FORMAT 'parquet', CODEC '${codec}', ROW_GROUP_SIZE 10);
+COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-{codec}.parquet' (FORMAT 'parquet', CODEC '{codec}', ROW_GROUP_SIZE 10);
 
 statement ok
-FROM "{TEMP_DIR}/userdata-${codec}.parquet";
+FROM "{TEMP_DIR}/userdata-{codec}.parquet";
 
 endloop
 

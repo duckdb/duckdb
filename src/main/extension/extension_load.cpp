@@ -120,7 +120,7 @@ struct ExtensionAccess {
 			}
 		} else if (load_state.init_result.abi_type == ExtensionABIType::C_STRUCT_UNSTABLE) {
 			// NOTE: we currently don't check anything here: the version of extensions of ABI type C_STRUCT_UNSTABLE is
-			// ignored because C_STRUCT_UNSTABLE extensions are tied 1:1 to duckdb verions meaning they will always
+			// ignored because C_STRUCT_UNSTABLE extensions are tied 1:1 to duckdb versions meaning they will always
 			// receive the whole function pointer struct
 		} else {
 			load_state.has_error = true;
@@ -136,6 +136,43 @@ struct ExtensionAccess {
 		return &load_state.api_struct;
 	}
 };
+
+//===--------------------------------------------------------------------===//
+// Static C API Extension Loading
+//===--------------------------------------------------------------------===//
+void DuckDB::LoadStaticCAPIExtension(const string &name, ext_init_c_api_fun_t init_fun) {
+	auto &manager = ExtensionManager::Get(*instance);
+	auto load_info = manager.BeginLoad({name});
+	if (!load_info) {
+		// already loaded
+		return;
+	}
+
+	ExtensionInitResult init_result;
+	init_result.filename = name;
+	init_result.filebase = name;
+	// Statically compiled extensions are always tied to the exact DuckDB version
+	init_result.abi_type = ExtensionABIType::C_STRUCT_UNSTABLE;
+	init_result.lib_hdl = nullptr;
+
+	DuckDBExtensionLoadState load_state(*instance, init_result);
+
+	// For static loading, get_api is null - the extension uses direct DuckDB symbols (no vtable needed)
+	duckdb_extension_access access;
+	access.set_error = ExtensionAccess::SetError;
+	access.get_database = ExtensionAccess::GetDatabase;
+	access.get_api = nullptr;
+
+	if (!(*init_fun)(load_state.ToCStruct(), &access)) {
+		string msg = load_state.has_error ? load_state.error_data.Message() : "unknown error";
+		load_info->LoadFail(ErrorData(msg));
+		throw IOException("Failed to load static C API extension '%s': %s", name, msg);
+	}
+
+	ExtensionInstallInfo install_info;
+	install_info.mode = ExtensionInstallMode::STATICALLY_LINKED;
+	load_info->FinishLoad(install_info);
+}
 
 //===--------------------------------------------------------------------===//
 // Load External Extension
@@ -190,7 +227,7 @@ static string ComputeFinalHash(const vector<string> &chunks) {
 	return two_level_hash;
 }
 
-static void IntializeAncillaryData(vector<string> &hash_chunks, vector<idx_t> &splits, idx_t length) {
+static void InitializeAncillaryData(vector<string> &hash_chunks, vector<idx_t> &splits, idx_t length) {
 	const idx_t maxLenChunks = 1024ULL * 1024ULL;
 	const idx_t numChunks = (length + maxLenChunks - 1) / maxLenChunks;
 	hash_chunks.resize(numChunks);
@@ -327,7 +364,7 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 
 	vector<string> hash_chunks;
 	vector<idx_t> splits;
-	IntializeAncillaryData(hash_chunks, splits, signature_offset);
+	InitializeAncillaryData(hash_chunks, splits, signature_offset);
 
 	ComputeHashesOnSegments(ComputeSHA256FileSegment, &handle, splits, hash_chunks);
 
@@ -343,7 +380,7 @@ bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t bu
                                                     const bool allow_community_extensions) {
 	vector<string> hash_chunks;
 	vector<idx_t> splits;
-	IntializeAncillaryData(hash_chunks, splits, buffer_length);
+	InitializeAncillaryData(hash_chunks, splits, buffer_length);
 
 	ComputeHashesOnSegments(ComputeSHA256Buffer, buffer, splits, hash_chunks);
 
@@ -509,7 +546,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 #ifdef WASM_LOADABLE_EXTENSIONS
 	EM_ASM(
 	    {
-		    // Next few lines should argubly in separate JavaScript-land function call
+		    // Next few lines should arguably in separate JavaScript-land function call
 		    // TODO: move them out / have them configurable
 		    const xhr = new XMLHttpRequest();
 		    xhr.open("GET", UTF8ToString($0), false);
@@ -595,6 +632,7 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 	if (!IsFullPath(extension)) {
 		return ExtensionHelper::ApplyExtensionAlias(extension);
 	}
+	// split the name if it's a full path
 	auto splits = StringUtil::Split(StringUtil::Replace(extension, "\\", "/"), '/');
 	if (splits.empty()) {
 		return ExtensionHelper::ApplyExtensionAlias(extension);
@@ -606,14 +644,34 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 	return ExtensionHelper::ApplyExtensionAlias(splits.front());
 }
 
-void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension) {
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options) {
+	// If this is a logical extension name (not an explicit path), prefer the
+	// statically linked implementation for built-in linked extensions only.
+	// This avoids loading a second copy from disk (ASan ODR violation) while
+	// keeping externally installed/autoloaded extensions on the normal path.
+	auto logical_name = ExtensionHelper::GetExtensionName(options.extension_name);
+	if (!ExtensionHelper::IsFullPath(options.extension_name)) {
+		for (idx_t i = 0; i < ExtensionHelper::DefaultExtensionCount(); i++) {
+			auto default_extension = ExtensionHelper::GetDefaultExtension(i);
+			if (!default_extension.statically_loaded || logical_name != default_extension.name) {
+				continue;
+			}
+			DuckDB db_wrapper(db);
+			auto load_result = ExtensionHelper::LoadExtension(db_wrapper, logical_name);
+			if (load_result == ExtensionLoadResult::LOADED_EXTENSION) {
+				return;
+			}
+			break;
+		}
+	}
+
 	auto &manager = ExtensionManager::Get(db);
-	auto info = manager.BeginLoad(extension);
+	auto info = manager.BeginLoad(options);
 	if (!info) {
 		return;
 	}
 	try {
-		LoadExternalExtensionInternal(db, fs, extension, *info);
+		LoadExternalExtensionInternal(db, fs, options.extension_name, *info);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		info->LoadFail(error);
@@ -699,8 +757,8 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 #endif
 }
 
-void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
-	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), extension);
+void ExtensionHelper::LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options) {
+	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), options);
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {

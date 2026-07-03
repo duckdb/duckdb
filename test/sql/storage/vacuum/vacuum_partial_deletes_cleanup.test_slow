@@ -2,7 +2,7 @@
 # description: Verify that deleting rows and re-appending does not increase storage size
 # group: [vacuum]
 
-load __TEST_DIR__/vacuum_deletes_partial_cleanup.db
+load {TEST_DIR}/vacuum_deletes_partial_cleanup.db
 
 statement ok
 CREATE TABLE integers(i INTEGER);
@@ -46,7 +46,7 @@ NULL
 # ensure that the total blocks don't exceed the total blocks after the first iteration
 # by more than 2
 query I
-SELECT CASE WHEN ${i} = 0 THEN MAP {'within_limits': True}
+SELECT CASE WHEN {i} = 0 THEN MAP {'within_limits': True}
 	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 2 THEN MAP {'within_limits': True}
 	ELSE MAP {'within_limits': False, 'current.total_blocks': current.total_blocks, 'total_blocks_tbl.total_blocks': total_blocks_tbl.total_blocks} END
 FROM pragma_database_size() AS current, total_blocks_tbl;
@@ -57,7 +57,7 @@ FROM pragma_database_size() AS current, total_blocks_tbl;
 
 statement ok
 UPDATE total_blocks_tbl SET total_blocks = (
-	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+	SELECT CASE WHEN {i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
 		ELSE (total_blocks) END);
 
 endloop

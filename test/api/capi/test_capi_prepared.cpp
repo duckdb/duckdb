@@ -336,7 +336,7 @@ TEST_CASE("Test duckdb_prepared_statement return value APIs", "[capi]") {
 	auto column_name = duckdb_prepared_statement_column_name(stmt, 0);
 	std::string col_name_str = column_name;
 	duckdb_free((void *)column_name);
-	REQUIRE(col_name_str == "CAST($1 AS VARCHAR)");
+	REQUIRE(col_name_str == "CAST($1 AS TEXT)");
 
 	duckdb_destroy_prepare(&stmt);
 
@@ -394,6 +394,43 @@ TEST_CASE("Test duckdb_param_type and duckdb_param_logical_type", "[capi]") {
 	duckdb_destroy_result(&result);
 
 	duckdb_destroy_prepare(&stmt);
+	duckdb_disconnect(&conn);
+	duckdb_close(&db);
+}
+
+TEST_CASE("Test duckdb_param_type with nested casts", "[capi]") {
+	duckdb_database db;
+	duckdb_connection conn;
+	duckdb_prepared_statement stmt;
+
+	REQUIRE(duckdb_open("", &db) == DuckDBSuccess);
+	REQUIRE(duckdb_connect(db, &conn) == DuckDBSuccess);
+
+	// Single cast: parameter type is the inner cast target.
+	REQUIRE(duckdb_prepare(conn, "SELECT CAST($1 AS INTEGER)", &stmt) == DuckDBSuccess);
+	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_INTEGER);
+	duckdb_destroy_prepare(&stmt);
+
+	// Nested cast: parameter type should still be the innermost cast target.
+	REQUIRE(duckdb_prepare(conn, "SELECT CAST(CAST($1 AS INTEGER) AS VARCHAR)", &stmt) == DuckDBSuccess);
+	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_INTEGER);
+	duckdb_destroy_prepare(&stmt);
+
+	REQUIRE(duckdb_prepare(conn, "SELECT CAST(CAST($1 AS TIMESTAMPTZ) AS VARCHAR)", &stmt) == DuckDBSuccess);
+	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_TIMESTAMP_TZ);
+	duckdb_destroy_prepare(&stmt);
+
+	// Triple-nested cast: still pinned by the innermost target.
+	REQUIRE(duckdb_prepare(conn, "SELECT CAST(CAST(CAST($1 AS INTEGER) AS BIGINT) AS VARCHAR)", &stmt) ==
+	        DuckDBSuccess);
+	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_INTEGER);
+	duckdb_destroy_prepare(&stmt);
+
+	// Multiple independent casts on the same parameter remain ambiguous and invalidate.
+	REQUIRE(duckdb_prepare(conn, "SELECT $1::INTEGER + $1::BIGINT", &stmt) == DuckDBSuccess);
+	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_INVALID);
+	duckdb_destroy_prepare(&stmt);
+
 	duckdb_disconnect(&conn);
 	duckdb_close(&db);
 }

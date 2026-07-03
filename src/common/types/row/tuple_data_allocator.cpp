@@ -36,13 +36,16 @@ TupleDataBlock &TupleDataBlock::operator=(TupleDataBlock &&other) noexcept {
 }
 
 TupleDataAllocator::TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr_p,
-                                       MemoryTag tag_p, shared_ptr<ArenaAllocator> stl_allocator_p)
-    : stl_allocator(std::move(stl_allocator_p)), buffer_manager(buffer_manager), layout_ptr(std::move(layout_ptr_p)),
-      layout(*layout_ptr), tag(tag_p), row_blocks(*stl_allocator), heap_blocks(*stl_allocator) {
+                                       MemoryTag tag_p, shared_ptr<ArenaAllocator> stl_allocator_p,
+                                       QueryContext context_p)
+    : stl_allocator(std::move(stl_allocator_p)), buffer_manager(buffer_manager), context(context_p),
+      layout_ptr(std::move(layout_ptr_p)), layout(*layout_ptr), tag(tag_p), row_blocks(*stl_allocator),
+      heap_blocks(*stl_allocator) {
 }
 
 TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
-    : TupleDataAllocator(allocator.buffer_manager, allocator.layout_ptr, allocator.tag, allocator.stl_allocator) {
+    : TupleDataAllocator(allocator.buffer_manager, allocator.layout_ptr, allocator.tag, allocator.stl_allocator,
+                         allocator.context) {
 }
 
 void TupleDataAllocator::SetDestroyBufferUponUnpin() {
@@ -50,6 +53,14 @@ void TupleDataAllocator::SetDestroyBufferUponUnpin() {
 	if (!layout.AllConstant()) {
 		DestroyHeapBlocks(0, heap_blocks.size());
 	}
+}
+
+void TupleDataAllocator::Reset() {
+	// Mark existing blocks for cleanup when they are unpinned, then drop our references.
+	// Avoids copy-constructing a fresh TupleDataAllocator object just to clear the block lists.
+	SetDestroyBufferUponUnpin();
+	row_blocks.clear();
+	heap_blocks.clear();
 }
 
 void TupleDataAllocator::DestroyRowBlocks(const idx_t row_block_begin, const idx_t row_block_end) {
@@ -146,10 +157,10 @@ bool TupleDataAllocator::BuildFastPath(TupleDataSegment &segment, TupleDataPinSt
 	}
 
 	// We can do the fast path append!
-	auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
+	auto row_locations = FlatVector::Writer<data_ptr_t>(chunk_state.row_locations, append_count, append_offset);
 	const auto base_row_ptr = GetRowPointer(pin_state, part) + part.count * row_width;
 	for (idx_t i = 0; i < append_count; i++) {
-		row_locations[append_offset + i] = base_row_ptr + i * row_width;
+		row_locations.WriteValue(base_row_ptr + i * row_width);
 	}
 
 	// Increment counts and sizes
@@ -327,6 +338,7 @@ void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDa
 
 	InitializeChunkStateInternal(pin_state, chunk_state, 0, true, init_heap, init_heap, chunk_state.chunk_parts,
 	                             sort_key_payload_state);
+	FlatVector::SetSize(chunk_state.row_locations, chunk.count);
 
 	chunk_state.chunk_lock = &chunk.lock.get();
 }
@@ -397,9 +409,9 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
                                                       bool init_heap_sizes,
                                                       unsafe_vector<reference<TupleDataChunkPart>> &parts,
                                                       optional_ptr<SortKeyPayloadState> sort_key_payload_state) {
-	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
-	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
-	const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
+	const auto row_locations = FlatVector::GetDataMutable<data_ptr_t>(chunk_state.row_locations);
+	const auto heap_sizes = FlatVector::GetDataMutable<idx_t>(chunk_state.heap_sizes);
+	const auto heap_locations = FlatVector::GetDataMutable<data_ptr_t>(chunk_state.heap_locations);
 
 	for (auto &part_ref : parts) {
 		auto &part = part_ref.get();
@@ -414,7 +426,8 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 
 		if (sort_key_payload_state) {
 			D_ASSERT(!layout.IsSortKeyLayout()); // This must be the payload collection
-			lock_guard<mutex> guard(part.lock);
+			// SortKeySetPayload() guards sort-key payload mutations with the sort-key chunk lock.
+			// Avoid nesting part.lock with that lock, which can introduce lock-order inversions.
 			SortKeySetPayload(row_locations, offset, next, *sort_key_payload_state);
 		}
 
@@ -438,10 +451,10 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 				lock_guard<mutex> guard(part.lock);
 				const auto old_base_heap_ptr = part.base_heap_ptr;
 				if (old_base_heap_ptr != new_base_heap_ptr) {
-					Vector old_heap_ptrs(
-					    Value::POINTER(CastPointerToValue(old_base_heap_ptr + part.heap_block_offset)));
-					Vector new_heap_ptrs(
-					    Value::POINTER(CastPointerToValue(new_base_heap_ptr + part.heap_block_offset)));
+					Vector old_heap_ptrs(Value::POINTER(CastPointerToValue(old_base_heap_ptr + part.heap_block_offset)),
+					                     count_t(next));
+					Vector new_heap_ptrs(Value::POINTER(CastPointerToValue(new_base_heap_ptr + part.heap_block_offset)),
+					                     count_t(next));
 					RecomputeHeapPointers(old_heap_ptrs, *ConstantVector::ZeroSelectionVector(), row_locations,
 					                      new_heap_ptrs, offset, next, layout, 0);
 					part.base_heap_ptr = new_base_heap_ptr;
@@ -502,7 +515,7 @@ void SortKeyRecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &
 	const auto old_heap_locations = FlatVector::GetData<data_ptr_t>(old_heap_ptrs);
 
 	UnifiedVectorFormat new_heap_data;
-	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
+	new_heap_ptrs.ToUnifiedFormat(new_heap_data);
 	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto &new_heap_sel = *new_heap_data.sel;
 
@@ -554,7 +567,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 	const auto old_heap_locations = FlatVector::GetData<data_ptr_t>(old_heap_ptrs);
 
 	UnifiedVectorFormat new_heap_data;
-	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
+	new_heap_ptrs.ToUnifiedFormat(new_heap_data);
 	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto new_heap_sel = *new_heap_data.sel;
 
@@ -640,7 +653,7 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
                                           const idx_t base_col_offset) {
 	D_ASSERT(!layout.AllConstant());
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
-	const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
+	const auto heap_locations = FlatVector::GetDataMutable<data_ptr_t>(chunk_state.heap_locations);
 
 	const auto all_valid = layout.CannotHaveNull();
 	const auto column_count = layout.ColumnCount();
@@ -782,7 +795,7 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment
 
 void TupleDataAllocator::CreateRowBlock(TupleDataSegment &segment, TupleDataPinState &pin_state) {
 	auto block_size = buffer_manager.GetBlockSize();
-	auto buffer_handle = buffer_manager.Allocate(tag, block_size, false);
+	auto buffer_handle = buffer_manager.Allocate(context, tag, block_size, false);
 	auto block_handle = buffer_handle.GetBlockHandle();
 	if (partition_index.IsValid()) {
 		block_handle->GetMemory().SetEvictionQueueIndex(RadixPartitioning::RadixBits(partition_index.GetIndex()));
@@ -794,7 +807,7 @@ void TupleDataAllocator::CreateRowBlock(TupleDataSegment &segment, TupleDataPinS
 }
 
 void TupleDataAllocator::CreateHeapBlock(TupleDataSegment &segment, TupleDataPinState &pin_state, idx_t size) {
-	auto buffer_handle = buffer_manager.Allocate(tag, size, false);
+	auto buffer_handle = buffer_manager.Allocate(context, tag, size, false);
 	auto block_handle = buffer_handle.GetBlockHandle();
 	if (partition_index.IsValid()) {
 		block_handle->GetMemory().SetEvictionQueueIndex(RadixPartitioning::RadixBits(partition_index.GetIndex()));
@@ -814,7 +827,7 @@ BufferHandle &TupleDataAllocator::PinRowBlock(TupleDataPinState &pin_state, cons
 		D_ASSERT(row_block.handle);
 		D_ASSERT(part.row_block_offset < row_block.size);
 		D_ASSERT(part.row_block_offset + part.count * layout.GetRowWidth() <= row_block.size);
-		it = pin_state.row_handles.emplace(row_block_index, buffer_manager.Pin(row_block.handle)).first;
+		it = pin_state.row_handles.emplace(row_block_index, buffer_manager.Pin(context, row_block.handle)).first;
 	}
 	return it->second;
 }
@@ -828,17 +841,17 @@ BufferHandle &TupleDataAllocator::PinHeapBlock(TupleDataPinState &pin_state, con
 		D_ASSERT(heap_block.handle);
 		D_ASSERT(part.heap_block_offset < heap_block.size);
 		D_ASSERT(part.heap_block_offset + part.total_heap_size <= heap_block.size);
-		it = pin_state.heap_handles.emplace(heap_block_index, buffer_manager.Pin(heap_block.handle)).first;
+		it = pin_state.heap_handles.emplace(heap_block_index, buffer_manager.Pin(context, heap_block.handle)).first;
 	}
 	return it->second;
 }
 
 data_ptr_t TupleDataAllocator::GetRowPointer(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
-	return PinRowBlock(pin_state, part).Ptr() + part.row_block_offset;
+	return PinRowBlock(pin_state, part).GetDataMutable() + part.row_block_offset;
 }
 
 data_ptr_t TupleDataAllocator::GetBaseHeapPointer(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
-	return PinHeapBlock(pin_state, part).Ptr();
+	return PinHeapBlock(pin_state, part).GetDataMutable();
 }
 
 } // namespace duckdb

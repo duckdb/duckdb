@@ -6,11 +6,11 @@
 namespace duckdb {
 
 template <class T, class OP>
-static void TemplatedMarkJoin(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
+static void TemplatedMarkJoin(const Vector &left, const Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
 	using MATCH_OP = ComparisonOperationWrapper<OP>;
 
-	auto left_entries = left.Values<T>(lcount);
-	auto right_entries = right.Values<T>(rcount);
+	auto left_entries = left.Values<T>();
+	auto right_entries = right.Values<T>();
 	for (idx_t i = 0; i < lcount; i++) {
 		if (found_match[i]) {
 			continue;
@@ -35,14 +35,14 @@ static void TemplatedMarkJoin(Vector &left, Vector &right, idx_t lcount, idx_t r
 	}
 }
 
-static void MarkJoinNested(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
+static void MarkJoinNested(const Vector &left, const Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
                            ExpressionType comparison_type) {
 	Vector left_reference(left.GetType());
 	for (idx_t i = 0; i < lcount; i++) {
 		if (found_match[i]) {
 			continue;
 		}
-		ConstantVector::Reference(left_reference, left, i, rcount);
+		ConstantVector::Reference(left_reference, count_t(rcount), left, i, lcount);
 		idx_t count;
 		switch (comparison_type) {
 		case ExpressionType::COMPARE_EQUAL:
@@ -79,7 +79,7 @@ static void MarkJoinNested(Vector &left, Vector &right, idx_t lcount, idx_t rcou
 }
 
 template <class OP>
-static void MarkJoinSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
+static void MarkJoinSwitch(const Vector &left, const Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -113,8 +113,8 @@ static void MarkJoinSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcou
 	}
 }
 
-static void MarkJoinComparisonSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
-                                     ExpressionType comparison_type) {
+static void MarkJoinComparisonSwitch(const Vector &left, const Vector &right, idx_t lcount, idx_t rcount,
+                                     bool found_match[], ExpressionType comparison_type) {
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:

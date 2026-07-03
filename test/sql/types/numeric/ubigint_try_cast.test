@@ -2,9 +2,6 @@
 # description: ubigint try cast
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 # ubigint casts
 statement ok
 CREATE TABLE ubigints AS SELECT i::UBIGINT i FROM (VALUES (0), (18446744073709551615)) tbl(i)

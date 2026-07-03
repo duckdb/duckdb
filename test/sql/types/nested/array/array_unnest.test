@@ -2,9 +2,6 @@
 # description: Test unnest with arrays
 # group: [array]
 
-statement ok
-PRAGMA enable_verification;
-
 query I
 SELECT UNNEST(array_value(1, 2, NULL, 4, 5));
 ----

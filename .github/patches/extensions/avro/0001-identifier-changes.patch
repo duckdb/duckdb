@@ -1,0 +1,187 @@
+diff --git a/src/avro_copy.cpp b/src/avro_copy.cpp
+index 634aadc..ee47234 100644
+--- a/src/avro_copy.cpp
++++ b/src/avro_copy.cpp
+@@ -260,13 +260,13 @@ public:
+ 			auto fields = yyjson_mut_obj_add_arr(doc, type_val, "fields");
+ 			for (auto &it : struct_children) {
+ 				auto &child_name = it.first;
+-				if (StringUtil::CIEquals(child_name, "__duckdb_empty_struct_marker")) {
++				if (child_name == "__duckdb_empty_struct_marker") {
+ 					continue;
+ 				}
+ 				auto &child_type = it.second;
+-				auto child_field_id = GetChildFieldIdByName(field_id, child_name);
++				auto child_field_id = GetChildFieldIdByName(field_id, child_name.GetIdentifierName());
+ 
+-				auto struct_field = CreateStructField(child_name, child_type, child_field_id);
++				auto struct_field = CreateStructField(child_name.GetIdentifierName(), child_type, child_field_id);
+ 				yyjson_mut_arr_add_val(fields, struct_field);
+ 			}
+ 		} else if (type_id == LogicalTypeId::LIST) {
+@@ -473,7 +473,7 @@ static string CreateJSONMetadata(const case_insensitive_map_t<vector<Value>> &op
+ 	for (idx_t i = 0; i < children.size(); i++) {
+ 		auto &child = children[i];
+ 		auto &child_name = child_types[i].first;
+-		metadata[child_name] = child.ToString();
++		metadata[child_name.GetIdentifierName()] = child.ToString();
+ 	}
+ 
+ 	std::unique_ptr<yyjson_mut_doc, YyjsonDocDeleter> doc_p(yyjson_mut_doc_new(nullptr));
+@@ -497,14 +497,14 @@ static string CreateJSONMetadata(const case_insensitive_map_t<vector<Value>> &op
+ 	return res;
+ }
+ 
+-WriteAvroBindData::WriteAvroBindData(CopyFunctionBindInput &input, const vector<string> &names,
++WriteAvroBindData::WriteAvroBindData(CopyFunctionBindInput &input, const vector<Identifier> &names,
+                                      const vector<LogicalType> &types)
+-    : names(names), types(types) {
++    : names(IdentifiersToStrings(names)), types(types) {
+ 
+ 	case_insensitive_set_t recognized;
+ 
+ 	json_metadata = CreateJSONMetadata(input.info.options, recognized);
+-	json_schema = CreateJSONSchema(input.info.options, names, types, recognized);
++	json_schema = CreateJSONSchema(input.info.options, this->names, types, recognized);
+ 
+ 	vector<string> unrecognized_options;
+ 	for (auto &option : input.info.options) {
+@@ -588,7 +588,7 @@ WriteAvroGlobalState::WriteAvroGlobalState(ClientContext &context, FunctionData
+ }
+ 
+ static unique_ptr<FunctionData> WriteAvroBind(ClientContext &context, CopyFunctionBindInput &input,
+-                                              const vector<string> &names, const vector<LogicalType> &sql_types) {
++                                              const vector<Identifier> &names, const vector<LogicalType> &sql_types) {
+ 	auto res = make_uniq<WriteAvroBindData>(input, names, sql_types);
+ 	return std::move(res);
+ }
+@@ -748,7 +748,7 @@ static idx_t PopulateValue(avro_value_t *target, const Value &val) {
+ 		auto &child_types = StructType::GetChildTypes(val.type());
+ 		idx_t struct_value_size = 0;
+ 		for (idx_t i = 0; i < struct_values.size(); i++) {
+-			if (StringUtil::CIEquals(child_types[i].first, "__duckdb_empty_struct_marker")) {
++			if (child_types[i].first == "__duckdb_empty_struct_marker") {
+ 				continue;
+ 			}
+ 			const char *unused_name;
+diff --git a/src/avro_multi_file_info.cpp b/src/avro_multi_file_info.cpp
+index dad38c7..6ee3cb5 100644
+--- a/src/avro_multi_file_info.cpp
++++ b/src/avro_multi_file_info.cpp
+@@ -40,7 +40,7 @@ unique_ptr<TableFunctionData> AvroMultiFileInfo::InitializeBindData(MultiFileBin
+ 	return result;
+ }
+ 
+-void AvroMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
++void AvroMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
+                                    MultiFileBindData &bind_data) {
+ 	if (bind_data.file_options.union_by_name) {
+ 		throw NotImplementedException("'union_by_name' not implemented for Avro reader yet");
+diff --git a/src/avro_reader.cpp b/src/avro_reader.cpp
+index 7a37a58..766767d 100644
+--- a/src/avro_reader.cpp
++++ b/src/avro_reader.cpp
+@@ -123,7 +123,7 @@ static AvroType TransformSchema(avro_schema_t &avro_schema, unordered_set<string
+ 		for (idx_t child_idx = 0; child_idx < num_children; child_idx++) {
+ 			auto child_schema = avro_schema_union_branch(avro_schema, child_idx);
+ 			auto child_type = TransformSchema(child_schema, parent_schema_names);
+-			union_children.push_back(
++			union_children.emplace_back(
+ 			    std::pair<std::string, AvroType>(StringUtil::Format("u%llu", child_idx), std::move(child_type)));
+ 			if (child_type.duckdb_type.id() != LogicalTypeId::SQLNULL) {
+ 				union_child_map[child_idx] = non_null_child_idx++;
+@@ -154,7 +154,7 @@ static AvroType TransformSchema(avro_schema_t &avro_schema, unordered_set<string
+ 				throw InvalidInputException("Empty avro field name");
+ 			}
+ 
+-			struct_children.push_back(std::pair<std::string, AvroType>(child_name, std::move(child_type)));
++			struct_children.emplace_back(std::pair<std::string, AvroType>(child_name, std::move(child_type)));
+ 		}
+ 
+ 		return AvroType(AVRO_RECORD, LogicalTypeId::STRUCT, std::move(struct_children));
+@@ -178,7 +178,7 @@ static AvroType TransformSchema(avro_schema_t &avro_schema, unordered_set<string
+ 		auto child_type = TransformSchema(child_schema, parent_schema_names);
+ 		child_type.field_id = element_id;
+ 		child_list_t<AvroType> list_children;
+-		list_children.push_back(std::pair<std::string, AvroType>("list_entry", std::move(child_type)));
++		list_children.emplace_back(std::pair<std::string, AvroType>("list_entry", std::move(child_type)));
+ 		bool is_map = avro_schema_array_is_map(avro_schema);
+ 		if (is_map) {
+ 			return AvroType(AVRO_ARRAY, LogicalTypeId::MAP, std::move(list_children));
+@@ -196,8 +196,8 @@ static AvroType TransformSchema(avro_schema_t &avro_schema, unordered_set<string
+ 		value_type.field_id = value_id;
+ 
+ 		child_list_t<AvroType> map_children;
+-		map_children.push_back(std::pair<std::string, AvroType>("key_entry", std::move(key_type)));
+-		map_children.push_back(std::pair<std::string, AvroType>("value_entry", std::move(value_type)));
++		map_children.emplace_back(std::pair<std::string, AvroType>("key_entry", std::move(key_type)));
++		map_children.emplace_back(std::pair<std::string, AvroType>("value_entry", std::move(value_type)));
+ 		return AvroType(AVRO_MAP, LogicalTypeId::MAP, std::move(map_children));
+ 	}
+ 	case AVRO_LINK: {
+diff --git a/src/field_ids.cpp b/src/field_ids.cpp
+index e40979d..66aba41 100644
+--- a/src/field_ids.cpp
++++ b/src/field_ids.cpp
+@@ -64,7 +64,7 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids_p
+ 	auto &field_ids = field_ids_p.Ids();
+ 	D_ASSERT(StructType::GetChildTypes(struct_type).size() == struct_children.size());
+ 	for (idx_t i = 0; i < struct_children.size(); i++) {
+-		const auto &col_name = StringUtil::Lower(StructType::GetChildName(struct_type, i));
++		const auto &col_name = StringUtil::Lower(StructType::GetChildName(struct_type, i).GetIdentifierName());
+ 		if (col_name == FieldID::DUCKDB_FIELD_ID || col_name == FieldID::DUCKDB_NULLABLE_ID) {
+ 			continue;
+ 		}
+diff --git a/src/include/avro_copy.hpp b/src/include/avro_copy.hpp
+index e1d7f29..1a99b19 100644
+--- a/src/include/avro_copy.hpp
++++ b/src/include/avro_copy.hpp
+@@ -13,7 +13,7 @@ struct AvroCopyFunction {
+ 
+ struct WriteAvroBindData : public FunctionData {
+ public:
+-	WriteAvroBindData(CopyFunctionBindInput &input, const vector<string> &names, const vector<LogicalType> &types);
++	WriteAvroBindData(CopyFunctionBindInput &input, const vector<Identifier> &names, const vector<LogicalType> &types);
+ 	WriteAvroBindData() {
+ 	}
+ 	virtual ~WriteAvroBindData();
+diff --git a/src/include/avro_multi_file_info.hpp b/src/include/avro_multi_file_info.hpp
+index 194e980..ef0e7bc 100644
+--- a/src/include/avro_multi_file_info.hpp
++++ b/src/include/avro_multi_file_info.hpp
+@@ -32,7 +32,7 @@ struct AvroMultiFileInfo : MultiFileReaderInterface {
+ 	//! This is where the actual binding must happen, so in this function we either:
+ 	//! 1. union_by_name = False. We set the schema/name depending on the first file
+ 	//! 2. union_by_name = True.
+-	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
++	void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<Identifier> &names,
+ 	                MultiFileBindData &bind_data) override;
+ 
+ 	optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
+diff --git a/src/include/avro_type.hpp b/src/include/avro_type.hpp
+index 513eed1..01962c6 100644
+--- a/src/include/avro_type.hpp
++++ b/src/include/avro_type.hpp
+@@ -44,7 +44,7 @@ public:
+ 		case LogicalTypeId::STRUCT: {
+ 			child_list_t<LogicalType> type_children;
+ 			for (auto &child : avro_type.children) {
+-				auto child_col = TransformAvroType(child.first, child.second);
++				auto child_col = TransformAvroType(child.first.GetIdentifierName(), child.second);
+ 				type_children.emplace_back(child_col.name, child_col.type);
+ 				children.push_back(std::move(child_col));
+ 			}
+@@ -89,11 +89,11 @@ public:
+ 				if (child.second.duckdb_type == LogicalTypeId::SQLNULL) {
+ 					continue;
+ 				}
+-				auto member = TransformAvroType(child.first, child.second);
++				auto member = TransformAvroType(child.first.GetIdentifierName(), child.second);
+ 				children.push_back(std::move(member));
+ 			}
+ 			if (children.size() == 1) {
+-				children[0].name = name;
++				children[0].name = Identifier(name);
+ 
+ 				if (avro_type.HasFieldId()) {
+ 					children[0].identifier = Value::INTEGER(avro_type.GetFieldId());

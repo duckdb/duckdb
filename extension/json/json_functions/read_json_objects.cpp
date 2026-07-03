@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-TableFunction GetReadJSONObjectsTableFunction(string name, shared_ptr<JSONScanInfo> function_info) {
+TableFunction GetReadJSONObjectsTableFunction(Identifier name, shared_ptr<JSONScanInfo> function_info) {
 	MultiFileFunction<JSONMultiFileInfo> table_function(std::move(name));
 	JSONScan::TableFunctionDefaults(table_function);
 	table_function.function_info = std::move(function_info);

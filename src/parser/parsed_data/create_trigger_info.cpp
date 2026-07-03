@@ -1,26 +1,26 @@
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
 CreateTriggerInfo::CreateTriggerInfo()
-    : CreateInfo(CatalogType::TRIGGER_ENTRY, INVALID_SCHEMA), timing(TriggerTiming::AFTER),
+    : CreateInfo(CatalogType::TRIGGER_ENTRY, Identifier::InvalidSchema()), timing(TriggerTiming::AFTER),
       event_type(TriggerEventType::INSERT_EVENT), for_each(TriggerForEach::STATEMENT) {
 }
 
 unique_ptr<CreateInfo> CreateTriggerInfo::Copy() const {
 	auto result = make_uniq<CreateTriggerInfo>();
 	CopyProperties(*result);
-	result->trigger_name = trigger_name;
+	result->SetTriggerName(GetTriggerName());
 	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(base_table->Copy());
 	result->timing = timing;
 	result->event_type = event_type;
 	result->columns = columns;
 	result->for_each = for_each;
-	result->sql_body_text = sql_body_text;
-	if (sql_body) {
-		result->sql_body = sql_body->Copy();
-	}
+	result->referencing_new_table = referencing_new_table;
+	result->referencing_old_table = referencing_old_table;
+	result->trigger_action = trigger_action->Copy();
 	return std::move(result);
 }
 
@@ -34,53 +34,36 @@ string CreateTriggerInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ss << "IF NOT EXISTS ";
 	}
-	ss << KeywordHelper::WriteOptionallyQuoted(trigger_name);
-	ss << " ";
-	switch (timing) {
-	case TriggerTiming::BEFORE:
-		ss << "BEFORE";
-		break;
-	case TriggerTiming::AFTER:
-		ss << "AFTER";
-		break;
-	case TriggerTiming::INSTEAD_OF:
-		ss << "INSTEAD OF";
-		break;
+	if (!IsInvalidSchema(GetQualifiedName().Schema())) {
+		ss << SQLIdentifier(GetQualifiedName().Schema()) << ".";
 	}
+	ss << SQLIdentifier(GetTriggerName());
 	ss << " ";
-	switch (event_type) {
-	case TriggerEventType::INSERT_EVENT:
-		ss << "INSERT";
-		break;
-	case TriggerEventType::DELETE_EVENT:
-		ss << "DELETE";
-		break;
-	case TriggerEventType::UPDATE_EVENT:
-		ss << "UPDATE";
-		if (!columns.empty()) {
-			ss << " OF ";
-			for (idx_t i = 0; i < columns.size(); i++) {
-				if (i > 0) {
-					ss << ", ";
-				}
-				ss << KeywordHelper::WriteOptionallyQuoted(columns[i]);
+	ss << EnumUtil::ToString(timing);
+	ss << " ";
+	ss << EnumUtil::ToString(event_type);
+	if (event_type == TriggerEventType::UPDATE_EVENT && !columns.empty()) {
+		ss << " OF ";
+		for (idx_t i = 0; i < columns.size(); i++) {
+			if (i > 0) {
+				ss << ", ";
 			}
+			ss << SQLIdentifier(columns[i]);
 		}
-		break;
 	}
 	ss << " ON ";
 	ss << base_table->ToString();
-	switch (for_each) {
-	case TriggerForEach::ROW:
-		ss << " FOR EACH ROW";
-		break;
-	case TriggerForEach::STATEMENT:
-		ss << " FOR EACH STATEMENT";
-		break;
+	if (!referencing_new_table.empty() || !referencing_old_table.empty()) {
+		ss << " REFERENCING";
+		if (!referencing_new_table.empty()) {
+			ss << " NEW TABLE AS " << SQLIdentifier(referencing_new_table);
+		}
+		if (!referencing_old_table.empty()) {
+			ss << " OLD TABLE AS " << SQLIdentifier(referencing_old_table);
+		}
 	}
-	if (sql_body) {
-		ss << " " << sql_body->ToString();
-	}
+	ss << " FOR EACH " << EnumUtil::ToString(for_each);
+	ss << " " << trigger_action->ToString();
 	ss << ";";
 	return ss.str();
 }

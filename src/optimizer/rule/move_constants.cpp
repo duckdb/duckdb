@@ -18,7 +18,8 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 	// we handle multiplication, addition and subtraction because those are "easy"
 	// integer division makes the division case difficult
 	// e.g. [x / 2 = 3] means [x = 6 OR x = 7] because of truncation -> no clean rewrite rules
-	arithmetic->function = make_uniq<ManyFunctionMatcher>(unordered_set<string> {"+", "-", "*"});
+	arithmetic->function =
+	    make_uniq<ManyFunctionMatcher>(identifier_set_t {Identifier("+"), Identifier("-"), Identifier("*")});
 	// we match only on integral numeric types
 	arithmetic->type = make_uniq<IntegerTypeMatcher>();
 	auto child_constant_matcher = make_uniq<ConstantExpressionMatcher>();
@@ -34,25 +35,25 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 
 unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                 bool &changes_made, bool is_root) {
-	auto &comparison = bindings[0].get().Cast<BoundComparisonExpression>();
+	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &outer_constant = bindings[1].get().Cast<BoundConstantExpression>();
 	auto &arithmetic = bindings[2].get().Cast<BoundFunctionExpression>();
 	auto &inner_constant = bindings[3].get().Cast<BoundConstantExpression>();
-	D_ASSERT(arithmetic.return_type.IsIntegral());
-	D_ASSERT(arithmetic.children[0]->return_type.IsIntegral());
-	if (inner_constant.value.IsNull() || outer_constant.value.IsNull()) {
+	D_ASSERT(arithmetic.GetReturnType().IsIntegral());
+	D_ASSERT(arithmetic.GetChildren()[0]->GetReturnType().IsIntegral());
+	if (inner_constant.GetValue().IsNull() || outer_constant.GetValue().IsNull()) {
 		if (comparison.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
 		    comparison.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			return nullptr;
 		}
-		return make_uniq<BoundConstantExpression>(Value(comparison.return_type));
+		return make_uniq<BoundConstantExpression>(Value(comparison.GetReturnType()));
 	}
-	auto &constant_type = outer_constant.return_type;
-	hugeint_t outer_value = IntegralValue::Get(outer_constant.value);
-	hugeint_t inner_value = IntegralValue::Get(inner_constant.value);
+	auto &constant_type = outer_constant.GetReturnType();
+	hugeint_t outer_value = IntegralValue::Get(outer_constant.GetValue());
+	hugeint_t inner_value = IntegralValue::Get(inner_constant.GetValue());
 
-	idx_t arithmetic_child_index = arithmetic.children[0].get() == &inner_constant ? 1 : 0;
-	auto &op_type = arithmetic.function.name;
+	idx_t arithmetic_child_index = arithmetic.GetChildrenMutable()[0].get() == &inner_constant ? 1 : 0;
+	auto &op_type = arithmetic.Function().GetName();
 	if (op_type == "+") {
 		// [x + 1 COMP 10] OR [1 + x COMP 10]
 		// order does not matter in addition:
@@ -68,10 +69,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			// if the cast is not possible then the comparison is not possible
 			// for example, if we have x + 5 = 3, where x is an unsigned number, we will get x = -2
 			// since this is not possible we can remove the entire branch here
-			return ExpressionRewriter::ConstantOrNull(std::move(arithmetic.children[arithmetic_child_index]),
-			                                          Value::BOOLEAN(false));
+			return ExpressionRewriter::ConstantOrNull(
+			    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
 		}
-		outer_constant.value = std::move(result_value);
+		outer_constant.GetValueMutable() = std::move(result_value);
 	} else if (op_type == "-") {
 		// [x - 1 COMP 10] O R [1 - x COMP 10]
 		// order matters in subtraction:
@@ -87,10 +88,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 				if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 					return nullptr;
 				}
-				return ExpressionRewriter::ConstantOrNull(std::move(arithmetic.children[arithmetic_child_index]),
-				                                          Value::BOOLEAN(false));
+				return ExpressionRewriter::ConstantOrNull(
+				    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
 			}
-			outer_constant.value = std::move(result_value);
+			outer_constant.GetValueMutable() = std::move(result_value);
 		} else {
 			// [1 - x COMP 10]
 			// change right side to 1-10=-9
@@ -103,13 +104,13 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 				if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 					return nullptr;
 				}
-				return ExpressionRewriter::ConstantOrNull(std::move(arithmetic.children[arithmetic_child_index]),
-				                                          Value::BOOLEAN(false));
+				return ExpressionRewriter::ConstantOrNull(
+				    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
 			}
-			outer_constant.value = std::move(result_value);
+			outer_constant.GetValueMutable() = std::move(result_value);
 			// in this case, we should also flip the comparison
 			// e.g. if we have [4 - x < 2] then we should have [x > 2]
-			comparison.SetExpressionTypeUnsafe(FlipComparisonExpression(comparison.GetExpressionType()));
+			BoundComparisonExpression::FlipType(comparison);
 		}
 	} else {
 		D_ASSERT(op_type == "*");
@@ -132,8 +133,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 				// we know the values are not equal
 				// the result will be either FALSE or NULL (if COMPARE_EQUAL)
 				// or TRUE or NULL (if COMPARE_NOTEQUAL)
-				return ExpressionRewriter::ConstantOrNull(std::move(arithmetic.children[arithmetic_child_index]),
-				                                          Value::BOOLEAN(is_inequality));
+				return ExpressionRewriter::ConstantOrNull(
+				    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(is_inequality));
 			} else {
 				// not cleanly divisible and we are doing > >= < <=, skip the simplification for now
 				return nullptr;
@@ -141,26 +142,26 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		}
 		if (inner_value < 0) {
 			// multiply by negative value, need to flip expression
-			comparison.SetExpressionTypeUnsafe(FlipComparisonExpression(comparison.GetExpressionType()));
+			BoundComparisonExpression::FlipType(comparison);
 		}
 		// else divide the RHS by the LHS
 		// we need to do a range check on the cast even though we do a division
 		// because e.g. -128 / -1 = 128, which is out of range
 		auto result_value = Value::HUGEINT(outer_value / inner_value);
 		if (!result_value.DefaultTryCastAs(constant_type)) {
-			return ExpressionRewriter::ConstantOrNull(std::move(arithmetic.children[arithmetic_child_index]),
-			                                          Value::BOOLEAN(false));
+			return ExpressionRewriter::ConstantOrNull(
+			    std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]), Value::BOOLEAN(false));
 		}
-		outer_constant.value = std::move(result_value);
+		outer_constant.GetValueMutable() = std::move(result_value);
 	}
 	// replace left side with x
 	// first extract x from the arithmetic expression
-	auto arithmetic_child = std::move(arithmetic.children[arithmetic_child_index]);
+	auto arithmetic_child = std::move(arithmetic.GetChildrenMutable()[arithmetic_child_index]);
 	// then place in the comparison
-	if (comparison.left.get() == &outer_constant) {
-		comparison.right = std::move(arithmetic_child);
+	if (RefersToSameObject(BoundComparisonExpression::Left(comparison), outer_constant)) {
+		BoundComparisonExpression::RightMutable(comparison) = std::move(arithmetic_child);
 	} else {
-		comparison.left = std::move(arithmetic_child);
+		BoundComparisonExpression::LeftMutable(comparison) = std::move(arithmetic_child);
 	}
 	changes_made = true;
 	return nullptr;

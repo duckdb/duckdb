@@ -3,9 +3,6 @@
 # group: [plan]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE strings AS select i FROM (VALUES('pedro'), ('peter'), ('mark')) t1(i), range(0, 100000) t2(j) order by j
 
 query I

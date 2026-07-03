@@ -6,24 +6,25 @@ namespace duckdb {
 
 static const char alphabet[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-static unique_ptr<FunctionData> ToBaseBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ToBaseBind(BindScalarFunctionInput &input) {
+	auto &arguments = input.GetArguments();
 	// If no min_length is specified, default to 0
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments.size() == 2) {
 		arguments.push_back(make_uniq_base<Expression, BoundConstantExpression>(Value::INTEGER(0)));
+		input.GetBoundFunction().GetArguments().push_back(LogicalType::INTEGER);
 	}
 	return nullptr;
 }
 
 static void ToBaseFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input = args.data[0];
-	auto &radix = args.data[1];
-	auto &min_length = args.data[2];
-	auto count = args.size();
+	const auto &input = args.data[0];
+	const auto &radix = args.data[1];
+	const auto &min_length = args.data[2];
 
+	auto &heap = StringVector::GetStringHeap(result);
 	TernaryExecutor::Execute<int64_t, int32_t, int32_t, string_t>(
-	    input, radix, min_length, result, count, [&](int64_t input, int32_t radix, int32_t min_length) {
+	    input, radix, min_length, result, [&](int64_t input, int32_t radix, int32_t min_length) {
 		    if (input < 0) {
 			    throw InvalidInputException("'to_base' number must be greater than or equal to 0");
 		    }
@@ -48,7 +49,7 @@ static void ToBaseFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			    length++;
 		    }
 
-		    return StringVector::AddString(result, ptr, UnsafeNumericCast<idx_t>(end - ptr));
+		    return heap.AddString(ptr, UnsafeNumericCast<idx_t>(end - ptr));
 	    });
 }
 

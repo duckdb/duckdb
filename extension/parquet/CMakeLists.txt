@@ -20,6 +20,7 @@ set(PARQUET_EXTENSION_FILES
     parquet_float16.cpp
     parquet_multi_file_info.cpp
     parquet_metadata.cpp
+    parquet_prefetch_cost_model.cpp
     parquet_reader.cpp
     parquet_field_id.cpp
     parquet_statistics.cpp

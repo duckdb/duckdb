@@ -19,7 +19,7 @@ duckdb_logical_type duckdb_expression_return_type(duckdb_expression expr) {
 		return nullptr;
 	}
 	auto wrapper = reinterpret_cast<ExpressionWrapper *>(expr);
-	auto logical_type = new duckdb::LogicalType(wrapper->expr->return_type);
+	auto logical_type = new duckdb::LogicalType(wrapper->expr->GetReturnType());
 	return reinterpret_cast<duckdb_logical_type>(logical_type);
 }
 

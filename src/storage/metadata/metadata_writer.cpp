@@ -88,7 +88,7 @@ void MetadataWriter::Flush() {
 }
 
 data_ptr_t MetadataWriter::BasePtr() {
-	return block.handle.Ptr() + current_pointer.index * GetManager().GetMetadataBlockSize();
+	return block.handle.GetDataMutable() + current_pointer.index * GetManager().GetMetadataBlockSize();
 }
 
 data_ptr_t MetadataWriter::Ptr() {

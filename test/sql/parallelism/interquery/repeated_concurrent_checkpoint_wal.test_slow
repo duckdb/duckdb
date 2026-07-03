@@ -12,7 +12,7 @@ statement ok
 SET debug_checkpoint_sleep_ms=100
 
 statement ok
-ATTACH '__TEST_DIR__/repeated_concurrent_checkpoint.db' AS concurrent_checkpoint_wal (STORAGE_VERSION 'v1.5.0')
+ATTACH '{TEST_DIR}/repeated_concurrent_checkpoint.db' AS concurrent_checkpoint_wal (STORAGE_VERSION 'v1.5.0')
 
 statement ok
 CREATE TABLE concurrent_checkpoint_wal.integers(i INTEGER)
@@ -25,7 +25,7 @@ loop x 0 10
 
 onlyif threadid<>10
 statement ok
-INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range(${threadid} * 100, (${threadid} + 1) * 100);
+INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range({threadid} * 100, ({threadid} + 1) * 100);
 
 endloop
 
@@ -46,7 +46,7 @@ statement ok
 DETACH concurrent_checkpoint_wal
 
 statement ok
-ATTACH '__TEST_DIR__/repeated_concurrent_checkpoint.db' AS concurrent_checkpoint_wal
+ATTACH '{TEST_DIR}/repeated_concurrent_checkpoint.db' AS concurrent_checkpoint_wal
 
 query II
 SELECT COUNT(*), SUM(i) FROM concurrent_checkpoint_wal.integers

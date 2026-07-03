@@ -79,6 +79,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["rejects_table"] = LogicalType::VARCHAR;
 	table_function.named_parameters["rejects_scan"] = LogicalType::VARCHAR;
 	table_function.named_parameters["rejects_limit"] = LogicalType::BIGINT;
+	table_function.named_parameters["rejects_line_size_limit"] = LogicalType::BIGINT;
 	table_function.named_parameters["force_not_null"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
@@ -140,18 +141,43 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 	// return bind_data;
 }
 
+static bool PushdownProjectionExpression(ClientContext &context, const TableFunctionProjectionExpressionInput &input) {
+	if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
+		return false;
+	}
+	const auto &cast = input.expr.Cast<BoundCastExpression>();
+	const auto &target_type = cast.GetReturnType();
+	auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
+	// Hive-partition and filename columns are produced from the file path by
+	// separate finalize expressions, not parsed from the file. Retyping them
+	// here would desync those expressions, so leave the cast in place.
+	// See test/sql/copy/csv/csv_hive.test
+	for (const auto &partition : bind_data.reader_bind.hive_partitioning_indexes) {
+		if (partition.index == input.proj_index) {
+			return false;
+		}
+	}
+	if (bind_data.reader_bind.filename_idx.IsValid() &&
+	    bind_data.reader_bind.filename_idx.GetIndex() == input.proj_index) {
+		return false;
+	}
+	bind_data.types[input.proj_index] = target_type;
+	bind_data.columns[input.proj_index].type = target_type;
+	return true;
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
 	MultiFileFunction<CSVMultiFileInfo> read_csv("read_csv");
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.type_pushdown = MultiFileFunction<CSVMultiFileInfo>::PushdownType;
+	read_csv.projection_expression_pushdown = PushdownProjectionExpression;
 	ReadCSVAddNamedParameters(read_csv);
 	return static_cast<TableFunction>(read_csv);
 }
 
 TableFunction ReadCSVTableFunction::GetAutoFunction() {
 	auto read_csv_auto = ReadCSVTableFunction::GetFunction();
-	read_csv_auto.name = "read_csv_auto";
+	read_csv_auto.SetName("read_csv_auto");
 	return read_csv_auto;
 }
 
@@ -184,7 +210,7 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, ReplacementScanI
 
 	if (!FileSystem::HasGlob(table_name)) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		table_function->alias = fs.ExtractBaseName(table_name);
+		table_function->alias = Identifier(fs.ExtractBaseName(table_name));
 	}
 
 	return std::move(table_function);

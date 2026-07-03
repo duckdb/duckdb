@@ -2,7 +2,7 @@
 # description: Interleaved buffered replays that cross chunk boundaries with delete ranges that must remain separate
 # group: [storage]
 
-load __TEST_DIR__/test_interleaved_replays_chunk_edges.db
+load {TEST_DIR}/test_interleaved_replays_chunk_edges.db
 
 statement ok
 SET wal_autocheckpoint = '1TB';

@@ -6,8 +6,8 @@
 
 namespace duckdb {
 
-DatabasePathInfo::DatabasePathInfo(DatabaseManager &manager, string name_p, AccessMode access_mode)
-    : name(std::move(name_p)), access_mode(access_mode) {
+DatabasePathInfo::DatabasePathInfo(DatabaseManager &manager, const Identifier &name_p, AccessMode access_mode)
+    : name(name_p.GetIdentifierName()), access_mode(access_mode) {
 	attached_databases.insert(manager);
 }
 
@@ -17,7 +17,8 @@ idx_t DatabaseFilePathManager::ApproxDatabaseCount() const {
 }
 
 InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(DatabaseManager &manager, const string &path,
-                                                                     const string &name, OnCreateConflict on_conflict,
+                                                                     const Identifier &name,
+                                                                     OnCreateConflict on_conflict,
                                                                      AttachOptions &options) {
 	if (path.empty() || path == IN_MEMORY_PATH) {
 		throw InternalException("DatabaseFilePathManager::InsertDatabasePath - cannot insert in-memory database");

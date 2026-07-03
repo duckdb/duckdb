@@ -3,10 +3,7 @@
 # group: [list]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
-CREATE TABLE t1 AS SELECT [] i FROM range(10000)
+CREATE TABLE t1 AS SELECT []::INT[] i FROM range(10000)
 
 statement ok
 INSERT INTO t1 SELECT [range] i FROM range(10)

@@ -1,101 +1,101 @@
 i_category|i_brand|s_store_name|s_company_name|d_year|d_moy|avg_monthly_sales|sum_sales|psum|nsum
-Men|edu packimporto #1|ought|Unknown|1999|5|894.0016666666666667|214.31|357.90|562.90
-Shoes|exportiedu pack #1|ought|Unknown|1999|5|780.1891666666666667|163.18|823.83|245.55
-Shoes|edu packedu pack #1|ought|Unknown|1999|5|599.8350000000000000|54.02|199.22|646.45
-Men|edu packimporto #1|ought|Unknown|1999|4|894.0016666666666667|357.90|592.99|214.31
-Shoes|exportiedu pack #1|ought|Unknown|1999|6|780.1891666666666667|245.55|163.18|612.27
-Children|amalgexporti #1|ought|Unknown|1999|2|537.5966666666666667|68.95|269.45|279.66
-Shoes|edu packedu pack #1|ought|Unknown|1999|4|599.8350000000000000|199.22|472.58|54.02
-Men|edu packimporto #1|ought|Unknown|1999|2|894.0016666666666667|495.81|958.15|592.99
-Children|amalgexporti #1|ought|Unknown|1999|6|537.5966666666666667|153.48|279.03|262.85
-Women|amalgamalg #1|ought|Unknown|1999|6|390.0891666666666667|7.23|191.09|236.55
-Women|importoamalg #1|ought|Unknown|1999|3|420.8183333333333333|43.68|466.04|276.89
-Books|scholarunivamalg #8|ought|Unknown|1999|5|383.8533333333333333|7.95|190.87|232.19
-Children|exportiexporti #1|ought|Unknown|1999|4|406.4308333333333333|33.30|328.96|206.68
-Children|exportiexporti #1|ought|Unknown|1999|6|406.4308333333333333|47.16|206.68|417.50
-Men|edu packimporto #1|ought|Unknown|1999|6|894.0016666666666667|562.90|214.31|620.73
-Women|edu packamalg #2|ought|Unknown|1999|5|360.8658333333333333|31.70|162.25|86.64
-Shoes|exportiedu pack #1|ought|Unknown|1999|2|780.1891666666666667|457.69|649.87|526.15
-Men|amalgimporto #2|ought|Unknown|1999|4|429.6091666666666667|114.18|190.98|150.52
-Children|importoexporti #1|ought|Unknown|1999|6|335.7791666666666667|24.31|170.03|61.74
-Children|exportiexporti #1|ought|Unknown|1999|2|406.4308333333333333|100.95|394.65|328.96
-Men|edu packimporto #1|ought|Unknown|1999|3|894.0016666666666667|592.99|495.81|357.90
-Men|edu packimporto #2|ought|Unknown|1999|6|352.0241666666666667|53.76|213.67|82.19
-Books|exportiunivamalg #2|ought|Unknown|1999|6|336.4550000000000000|43.07|107.07|229.95
-Men|edu packimporto #2|ought|Unknown|1999|2|352.0241666666666667|60.25|247.49|259.94
-Books|exportiunivamalg #2|ought|Unknown|1999|2|336.4550000000000000|47.26|334.99|124.85
-Men|amalgimporto #2|ought|Unknown|1999|5|429.6091666666666667|150.52|114.18|345.39
-Children|amalgexporti #1|ought|Unknown|1999|7|537.5966666666666667|262.85|153.48|813.09
-Music|amalgscholar #1|ought|Unknown|1999|2|353.5233333333333333|79.13|225.48|154.66
-Women|edu packamalg #2|ought|Unknown|1999|6|360.8658333333333333|86.64|31.70|426.42
-Children|importoexporti #1|ought|Unknown|1999|7|335.7791666666666667|61.74|24.31|287.41
-Men|edu packimporto #1|ought|Unknown|1999|7|894.0016666666666667|620.73|562.90|1149.11
-Men|edu packimporto #2|ought|Unknown|1999|7|352.0241666666666667|82.19|53.76|551.23
-Children|amalgexporti #1|ought|Unknown|1999|1|537.5966666666666667|269.45|1228.72|68.95
-Children|edu packexporti #2|ought|Unknown|1999|4|402.3009090909090909|136.04|249.07|212.15
-Children|amalgexporti #1|ought|Unknown|1999|5|537.5966666666666667|279.03|532.39|153.48
-Children|edu packexporti #2|ought|Unknown|1999|7|402.3009090909090909|144.07|212.15|179.49
-Children|amalgexporti #1|ought|Unknown|1999|3|537.5966666666666667|279.66|68.95|532.39
-Shoes|exportiedu pack #1|ought|Unknown|1999|3|780.1891666666666667|526.15|457.69|823.83
-Books|scholarunivamalg #8|ought|Unknown|1999|2|383.8533333333333333|140.99|561.90|160.05
-Jewelry|importocorp #7|ought|Unknown|1999|5|290.0654545454545455|50.14|288.32|242.33
-Men|amalgimporto #2|ought|Unknown|1999|3|429.6091666666666667|190.98|263.18|114.18
-Women|edu packamalg #1|ought|Unknown|1999|2|233.2563636363636364|1.66|257.88|19.52
-Books|exportiunivamalg #2|ought|Unknown|1999|5|336.4550000000000000|107.07|388.34|43.07
-Women|edu packamalg #2|ought|Unknown|1999|3|360.8658333333333333|136.72|234.52|162.25
-Home|corpbrand #10|ought|Unknown|1999|1|234.8454545454545455|10.77|233.18|380.65
-Books|scholarunivamalg #8|ought|Unknown|1999|3|383.8533333333333333|160.05|140.99|190.87
-Children|edu packexporti #2|ought|Unknown|1999|8|402.3009090909090909|179.49|144.07|473.57
-Men|amalgimporto #2|ought|Unknown|1999|1|429.6091666666666667|211.03|611.58|263.18
-Music|amalgscholar #1|ought|Unknown|1999|4|353.5233333333333333|136.90|154.66|174.54
-Jewelry|importobrand #6|ought|Unknown|1999|4|221.9683333333333333|5.60|100.34|9.71
-Women|edu packamalg #1|ought|Unknown|1999|3|233.2563636363636364|19.52|1.66|144.69
-Music|exportischolar #2|ought|Unknown|1999|6|398.8700000000000000|185.66|188.36|248.30
-Women|amalgamalg #1|ought|Unknown|1999|1|390.0891666666666667|176.88|757.54|232.97
-Music|exportischolar #2|ought|Unknown|1999|4|398.8700000000000000|185.68|222.77|188.36
-Jewelry|importobrand #6|ought|Unknown|1999|5|221.9683333333333333|9.71|5.60|79.70
-Books|exportiunivamalg #2|ought|Unknown|1999|3|336.4550000000000000|124.85|47.26|388.34
-Music|exportischolar #2|ought|Unknown|1999|5|398.8700000000000000|188.36|185.68|185.66
-Children|exportiexporti #1|ought|Unknown|1999|9|406.4308333333333333|205.50|443.05|811.52
-Children|exportiexporti #1|ought|Unknown|1999|5|406.4308333333333333|206.68|33.30|47.16
-Women|importoamalg #1|ought|Unknown|1999|6|420.8183333333333333|221.36|274.09|330.26
-Women|amalgamalg #1|ought|Unknown|1999|5|390.0891666666666667|191.09|386.48|7.23
-Music|amalgscholar #1|ought|Unknown|1999|3|353.5233333333333333|154.66|79.13|136.90
-Women|edu packamalg #2|ought|Unknown|1999|4|360.8658333333333333|162.25|136.72|31.70
-Electronics|brandunivamalg #1|ought|Unknown|1999|5|251.1658333333333333|55.86|97.39|181.07
-Books|univunivamalg #8|ought|Unknown|1999|2|199.9972727272727273|4.78|230.21|201.85
-Books|corpunivamalg #9|ought|Unknown|1999|6|202.2450000000000000|8.02|127.28|131.03
-Jewelry|edu packcorp #7|ought|Unknown|1999|4|193.5741666666666667|0.53|63.03|183.70
-Books|scholarunivamalg #8|ought|Unknown|1999|4|383.8533333333333333|190.87|160.05|7.95
-Jewelry|importobrand #6|ought|Unknown|1999|9|221.9683333333333333|29.97|61.84|435.44
-Sports|exportimaxi #1|ought|Unknown|1999|3|230.9854545454545455|39.32|135.81|196.27
-Sports|maxinameless #3|ought|Unknown|1999|7|225.1308333333333333|34.68|119.62|217.50
-Children|edu packexporti #2|ought|Unknown|1999|6|402.3009090909090909|212.15|136.04|144.07
-Electronics|corpamalgamalg #12|ought|Unknown|1999|2|193.8550000000000000|4.69|129.91|127.90
-Women|importoamalg #1|ought|Unknown|1999|1|420.8183333333333333|231.77|1008.38|466.04
-Sports|exportimaxi #1|ought|Unknown|1999|6|230.9854545454545455|42.46|196.27|103.28
-Sports|scholarmaxi #1|ought|Unknown|1999|5|188.1841666666666667|0.19|160.15|155.47
-Shoes|edu packedu pack #1|ought|Unknown|1999|1|599.8350000000000000|413.31|1216.77|442.25
-Jewelry|brandcorp #5|ought|Unknown|1999|4|189.6163636363636364|4.33|139.85|90.70
-Shoes|edu packedu pack #1|ought|Unknown|1999|7|599.8350000000000000|415.05|646.45|668.13
-Jewelry|importocorp #7|ought|Unknown|1999|1|290.0654545454545455|105.93|643.46|248.19
-Books|corpunivamalg #9|ought|Unknown|1999|4|202.2450000000000000|18.61|229.14|127.28
-Home|corpnameless #6|ought|Unknown|1999|6|196.0066666666666667|13.16|198.16|270.35
-Music|amalgscholar #1|ought|Unknown|1999|5|353.5233333333333333|174.54|136.90|180.25
-Home|edu packbrand #3|ought|Unknown|1999|1|197.3933333333333333|20.83|739.15|65.73
-Music|exportischolar #2|ought|Unknown|1999|3|398.8700000000000000|222.77|369.30|185.68
-Music|amalgscholar #1|ought|Unknown|1999|6|353.5233333333333333|180.25|174.54|241.10
-Shoes|importoedu pack #1|ought|Unknown|1999|2|177.1975000000000000|4.51|216.44|84.30
-Electronics|scholarunivamalg #6|ought|Unknown|1999|6|192.8427272727272727|20.31|164.25|128.36
-Electronics|corpunivamalg #11|ought|Unknown|1999|8|208.7175000000000000|36.27|156.22|163.72
-Children|importoexporti #1|ought|Unknown|1999|2|335.7791666666666667|163.57|189.20|166.74
-Home|edu packbrand #3|ought|Unknown|1999|6|197.3933333333333333|25.99|64.80|211.20
-Sports|scholarmaxi #2|ought|Unknown|1999|7|189.2272727272727273|18.07|22.69|202.72
-Sports|maxinameless #5|ought|Unknown|1999|2|179.1645454545454545|8.84|180.87|179.40
-Books|scholarunivamalg #8|ought|Unknown|1999|7|383.8533333333333333|213.62|232.19|256.80
-Children|importoexporti #1|ought|Unknown|1999|3|335.7791666666666667|166.74|163.57|274.51
-Sports|brandnameless #5|ought|Unknown|1999|6|171.6925000000000000|3.51|99.13|79.58
-Shoes|exportiedu pack #1|ought|Unknown|1999|7|780.1891666666666667|612.27|245.55|1125.36
-Sports|brandnameless #5|ought|Unknown|1999|2|171.6925000000000000|4.91|297.68|19.78
-Sports|scholarmaxi #2|ought|Unknown|1999|6|189.2272727272727273|22.69|23.64|18.07
-Men|amalgimporto #2|ought|Unknown|1999|2|429.6091666666666667|263.18|211.03|190.98
+Men|edu packimporto #1|ought|Unknown|1999|5|917.8575|181.58|495.71|546.02
+Shoes|exportiedu pack #1|ought|Unknown|1999|6|714.1825|196.20|212.92|488.92
+Shoes|edu packedu pack #1|ought|Unknown|1999|5|626.2616666666667|123.75|241.69|370.42
+Shoes|exportiedu pack #1|ought|Unknown|1999|5|714.1825|212.92|444.62|196.20
+Men|edu packimporto #1|ought|Unknown|1999|3|917.8575|470.99|507.86|495.71
+Music|amalgscholar #1|ought|Unknown|1999|2|468.9508333333333|35.84|370.61|297.25
+Men|edu packimporto #1|ought|Unknown|1999|4|917.8575|495.71|470.99|181.58
+Women|importoamalg #1|ought|Unknown|1999|6|491.335|76.63|422.47|245.94
+Men|amalgimporto #2|ought|Unknown|1999|5|489.0341666666667|77.22|156.81|374.49
+Men|edu packimporto #1|ought|Unknown|1999|2|917.8575|507.86|750.18|470.99
+Women|importoamalg #1|ought|Unknown|1999|3|491.335|100.24|284.17|244.37
+Shoes|edu packedu pack #1|ought|Unknown|1999|4|626.2616666666667|241.69|605.19|123.75
+Books|scholarunivamalg #8|ought|Unknown|1999|5|381.0416666666667|2.80|116.33|267.26
+Children|amalgexporti #1|ought|Unknown|1999|2|564.1291666666667|187.06|233.47|251.52
+Men|edu packimporto #1|ought|Unknown|1999|6|917.8575|546.02|181.58|610.71
+Children|amalgexporti #1|ought|Unknown|1999|6|564.1291666666667|200.38|270.68|468.71
+Men|amalgimporto #2|ought|Unknown|1999|1|489.0341666666667|127.35|596.76|161.88
+Shoes|edu packedu pack #1|ought|Unknown|1999|2|626.2616666666667|267.32|486.42|605.19
+Music|amalgscholar #1|ought|Unknown|1999|4|468.9508333333333|119.58|297.25|241.54
+Men|edu packimporto #2|ought|Unknown|1999|4|378.8233333333333|29.84|51.72|184.86
+Men|amalgimporto #2|ought|Unknown|1999|4|489.0341666666667|156.81|308.82|77.22
+Children|amalgexporti #1|ought|Unknown|1999|1|564.1291666666667|233.47|1212.27|187.06
+Men|amalgimporto #2|ought|Unknown|1999|2|489.0341666666667|161.88|127.35|308.82
+Men|edu packimporto #2|ought|Unknown|1999|3|378.8233333333333|51.72|152.40|29.84
+Children|importoexporti #1|ought|Unknown|1999|6|329.38666666666666|15.22|83.55|82.19
+Children|exportiexporti #1|ought|Unknown|1999|6|347.465|34.20|179.80|486.86
+Children|amalgexporti #1|ought|Unknown|1999|3|564.1291666666667|251.52|187.06|447.27
+Women|edu packamalg #2|ought|Unknown|1999|6|326.19416666666666|14.33|20.02|195.94
+Children|importoexporti #1|ought|Unknown|1999|2|329.38666666666666|17.79|53.65|69.80
+Men|edu packimporto #1|ought|Unknown|1999|7|917.8575|610.71|546.02|1149.99
+Women|edu packamalg #2|ought|Unknown|1999|5|326.19416666666666|20.02|327.27|14.33
+Men|amalgimporto #2|ought|Unknown|1999|7|489.0341666666667|184.70|374.49|408.98
+Men|edu packimporto #2|ought|Unknown|1999|7|378.8233333333333|80.11|246.51|584.03
+Children|amalgexporti #1|ought|Unknown|1999|5|564.1291666666667|270.68|447.27|200.38
+Music|exportischolar #2|ought|Unknown|1999|5|332.9483333333333|51.17|68.78|148.53
+Children|importoexporti #1|ought|Unknown|1999|1|329.38666666666666|53.65|883.08|17.79
+Books|exportiunivamalg #2|ought|Unknown|1999|6|345.6191666666667|70.47|112.06|153.66
+Women|edu packamalg #1|ought|Unknown|1999|2|283.17454545454547|10.58|367.13|119.10
+Children|edu packexporti #2|ought|Unknown|1999|4|368.17454545454547|97.47|260.83|265.37
+Shoes|exportiedu pack #1|ought|Unknown|1999|4|714.1825|444.62|519.07|212.92
+Books|scholarunivamalg #8|ought|Unknown|1999|4|381.0416666666667|116.33|126.79|2.80
+Music|exportischolar #2|ought|Unknown|1999|4|332.9483333333333|68.78|151.39|51.17
+Children|importoexporti #1|ought|Unknown|1999|3|329.38666666666666|69.80|17.79|381.19
+Books|univunivamalg #8|ought|Unknown|1999|2|265.0072727272727|6.02|391.93|118.04
+Shoes|edu packedu pack #1|ought|Unknown|1999|6|626.2616666666667|370.42|123.75|434.11
+Books|scholarunivamalg #8|ought|Unknown|1999|3|381.0416666666667|126.79|495.89|116.33
+Women|amalgamalg #1|ought|Unknown|1999|6|282.1741666666667|30.42|97.51|141.34
+Children|exportiexporti #1|ought|Unknown|1999|4|347.465|97.44|264.48|179.80
+Children|importoexporti #1|ought|Unknown|1999|7|329.38666666666666|82.19|15.22|332.97
+Women|importoamalg #1|ought|Unknown|1999|4|491.335|244.37|100.24|422.47
+Children|importoexporti #1|ought|Unknown|1999|5|329.38666666666666|83.55|381.19|15.22
+Women|importoamalg #1|ought|Unknown|1999|7|491.335|245.94|76.63|404.15
+Books|scholarunivamalg #8|ought|Unknown|1999|7|381.0416666666667|137.93|267.26|328.36
+Electronics|brandunivamalg #1|ought|Unknown|1999|3|255.6175|15.58|136.34|98.92
+Shoes|exportiedu pack #1|ought|Unknown|1999|1|714.1825|477.83|1426.34|601.52
+Books|exportiunivamalg #2|ought|Unknown|1999|5|345.6191666666667|112.06|240.97|70.47
+Children|edu packexporti #2|ought|Unknown|1999|2|368.17454545454547|136.83|314.78|260.83
+Music|amalgscholar #1|ought|Unknown|1999|5|468.9508333333333|241.54|119.58|369.81
+Men|edu packimporto #2|ought|Unknown|1999|2|378.8233333333333|152.40|186.77|51.72
+Shoes|exportiedu pack #1|ought|Unknown|1999|7|714.1825|488.92|196.20|692.70
+Sports|maxinameless #5|ought|Unknown|1999|2|226.62636363636364|2.65|256.51|100.38
+Home|edu packbrand #9|ought|Unknown|1999|2|246.70583333333335|23.29|250.86|177.35
+Books|exportiunivamalg #2|ought|Unknown|1999|2|345.6191666666667|128.30|170.74|296.95
+Electronics|brandunivamalg #1|ought|Unknown|1999|5|255.6175|42.09|98.92|139.24
+Home|edu packbrand #9|ought|Unknown|1999|9|246.70583333333335|33.79|425.26|142.35
+Women|importoamalg #1|ought|Unknown|1999|2|491.335|284.17|513.33|100.24
+Jewelry|importocorp #7|ought|Unknown|1999|5|220.27454545454546|14.61|179.52|118.15
+Home|corpbrand #10|ought|Unknown|1999|4|239.71727272727273|43.82|273.04|124.96
+Shoes|exportiedu pack #1|ought|Unknown|1999|3|714.1825|519.07|601.52|444.62
+Men|edu packimporto #2|ought|Unknown|1999|5|378.8233333333333|184.86|29.84|246.51
+Home|namelessbrand #1|ought|Unknown|1999|3|213.1090909090909|19.48|91.28|277.31
+Electronics|corpamalgamalg #12|ought|Unknown|1999|3|215.32916666666668|21.97|25.91|190.45
+Sports|exportimaxi #1|ought|Unknown|1999|2|205.1990909090909|12.48|101.70|23.87
+Shoes|edu packedu pack #1|ought|Unknown|1999|7|626.2616666666667|434.11|370.42|657.32
+Men|edu packimporto #2|ought|Unknown|1999|1|378.8233333333333|186.77|1029.88|152.40
+Books|exportiunivamalg #2|ought|Unknown|1999|7|345.6191666666667|153.66|70.47|159.45
+Electronics|corpamalgamalg #12|ought|Unknown|1999|2|215.32916666666668|25.91|63.61|21.97
+Sports|maxinameless #3|ought|Unknown|1999|2|206.67|20.08|125.06|90.63
+Books|exportiunivamalg #2|ought|Unknown|1999|8|345.6191666666667|159.45|153.66|462.89
+Books|brandmaxi #2|ought|Unknown|1999|6|190.05666666666667|4.25|58.13|114.09
+Women|amalgamalg #1|ought|Unknown|1999|5|282.1741666666667|97.51|251.10|30.42
+Music|exportischolar #2|ought|Unknown|1999|6|332.9483333333333|148.53|51.17|191.10
+Sports|maxinameless #3|ought|Unknown|1999|6|206.67|22.49|129.44|94.63
+Electronics|corpunivamalg #11|ought|Unknown|1999|6|183.4225|0.14|52.93|143.95
+Music|exportischolar #2|ought|Unknown|1999|3|332.9483333333333|151.39|174.60|68.78
+Sports|exportimaxi #1|ought|Unknown|1999|3|205.1990909090909|23.87|12.48|98.13
+Jewelry|importobrand #6|ought|Unknown|1999|9|181.69083333333333|0.53|13.65|452.63
+Shoes|importoedu pack #1|ought|Unknown|1999|6|196.15916666666666|15.54|196.75|43.47
+Shoes|amalgedu pack #1|ought|Unknown|1999|5|201.62|21.32|141.82|187.17
+Men|amalgimporto #2|ought|Unknown|1999|3|489.0341666666667|308.82|161.88|156.81
+Electronics|corpunivamalg #7|ought|Unknown|1999|5|198.3790909090909|18.95|60.36|48.76
+Home|corpbrand #10|ought|Unknown|1999|8|239.71727272727273|60.78|115.54|244.14
+Electronics|brandunivamalg #1|ought|Unknown|1999|1|255.6175|77.41|244.03|136.34
+Sports|maxinameless #3|ought|Unknown|1999|4|206.67|30.22|90.63|129.44
+Jewelry|importobrand #6|ought|Unknown|1999|5|181.69083333333333|6.37|12.17|164.08
+Books|exportiunivamalg #2|ought|Unknown|1999|1|345.6191666666667|170.74|992.31|128.30
+Shoes|amalgedu pack #2|ought|Unknown|1999|2|187.556|13.38|67.85|105.14
+Electronics|corpunivamalg #11|ought|Unknown|1999|3|183.4225|9.87|240.64|147.61
+Jewelry|edu packcorp #7|ought|Unknown|1999|2|174.96916666666667|1.90|267.20|62.16
+Music|amalgscholar #1|ought|Unknown|1999|3|468.9508333333333|297.25|35.84|119.58

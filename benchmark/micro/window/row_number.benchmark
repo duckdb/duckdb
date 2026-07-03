@@ -1,0 +1,9 @@
+# name: benchmark/micro/window/row_number.benchmark
+# description: Check performance of row_number() OVER ()
+# group: [window]
+
+load
+CREATE OR REPLACE TABLE foo AS SELECT range a FROM range(1_000_000_000);
+
+run
+SELECT AVG(r) FROM (SELECT row_number() over() r from foo);

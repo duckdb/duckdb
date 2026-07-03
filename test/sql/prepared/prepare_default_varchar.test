@@ -2,9 +2,6 @@
 # description: Prepared parameters default to VARCHAR if the type could not be deduced
 # group: [prepared]
 
-statement ok
-PRAGMA enable_verification
-
 # single unbound parameter
 statement ok
 PREPARE v1 AS SELECT ?

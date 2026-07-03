@@ -1,8 +1,10 @@
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 
@@ -103,6 +105,45 @@ bool CSVSniffer::EmptyOrOnlyHeader() const {
 	return (single_row_file && best_candidate->state_machine->dialect_options.header.GetValue()) || lines_sniffed == 0;
 }
 
+bool CSVSniffer::CanYouCastBignum(const char *value_ptr, idx_t value_size) {
+	while (value_size > 0 && StringUtil::CharacterIsSpace(*value_ptr)) {
+		value_ptr++;
+		value_size--;
+	}
+	if (value_size == 0 || *value_ptr == '+') {
+		return false;
+	}
+	auto trimmed_size = value_size;
+	while (trimmed_size > 0 && StringUtil::CharacterIsSpace(value_ptr[trimmed_size - 1])) {
+		trimmed_size--;
+	}
+	if (trimmed_size == 0) {
+		return false;
+	}
+	idx_t digit_pos = value_ptr[0] == '-' ? 1 : 0;
+	if (digit_pos == trimmed_size) {
+		return false;
+	}
+	if (!StringUtil::CharacterIsDigit(value_ptr[digit_pos])) {
+		return false;
+	}
+	if (digit_pos + 1 < trimmed_size && value_ptr[digit_pos] == '0' &&
+	    StringUtil::CharacterIsDigit(value_ptr[digit_pos + 1])) {
+		return false;
+	}
+	for (idx_t pos = digit_pos + 1; pos < trimmed_size; pos++) {
+		if (!StringUtil::CharacterIsDigit(value_ptr[pos])) {
+			return false;
+		}
+	}
+	try {
+		Bignum::VarcharToBignum(string_t(value_ptr, NumericCast<uint32_t>(trimmed_size)));
+		return true;
+	} catch (const ConversionException &) {
+		return false;
+	}
+}
+
 bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
                               const DialectOptions &dialect_options, const bool is_null, const char decimal_separator,
                               const char thousands_separator) {
@@ -112,7 +153,7 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 	auto value_ptr = value.GetData();
 	auto value_size = value.GetSize();
 	string strip_thousands;
-	if (type.IsNumeric() && thousands_separator != '\0') {
+	if ((type.IsNumeric() || type.id() == LogicalTypeId::BIGNUM) && thousands_separator != '\0') {
 		// If we have a thousands separator we should try to use that
 		strip_thousands = BaseScanner::RemoveSeparator(value_ptr, value_size, thousands_separator);
 		value_ptr = strip_thousands.c_str();
@@ -139,6 +180,11 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 		int64_t dummy_value;
 		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, true);
 	}
+	case LogicalTypeId::HUGEINT: {
+		hugeint_t dummy_value;
+		return TryCast::Operation<string_t, hugeint_t>(string_t(value_ptr, NumericCast<uint32_t>(value_size)),
+		                                               dummy_value, true);
+	}
 	case LogicalTypeId::UTINYINT: {
 		uint8_t dummy_value;
 		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, true);
@@ -155,6 +201,13 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 		uint64_t dummy_value;
 		return TrySimpleIntegerCast(value_ptr, value_size, dummy_value, true);
 	}
+	case LogicalTypeId::UHUGEINT: {
+		uhugeint_t dummy_value;
+		return TryCast::Operation<string_t, uhugeint_t>(string_t(value_ptr, NumericCast<uint32_t>(value_size)),
+		                                                dummy_value, true);
+	}
+	case LogicalTypeId::BIGNUM:
+		return CanYouCastBignum(value_ptr, value_size);
 	case LogicalTypeId::DOUBLE: {
 		double dummy_value;
 		return TryDoubleCast<double>(value_ptr, value_size, dummy_value, true, decimal_separator);
@@ -355,7 +408,7 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
 		D_ASSERT(cur_vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		D_ASSERT(cur_vector.GetType() == LogicalType::VARCHAR);
 		auto vector_data = FlatVector::GetData<string_t>(cur_vector);
-		auto null_mask = FlatVector::Validity(cur_vector);
+		auto null_mask = FlatVector::ValidityMutable(cur_vector);
 		auto &col_type_candidates = info_sql_types_candidates[col_idx];
 		for (idx_t row_idx = start_idx_detection; row_idx < chunk_size; row_idx++) {
 			// col_type_candidates can't be empty since anything in a CSV file should at least be a string
@@ -495,7 +548,7 @@ void CSVSniffer::DetectTypes() {
 				for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
 					auto &cur_vector = data_chunk.data[col_idx];
 					auto vector_data = FlatVector::GetData<string_t>(cur_vector);
-					auto null_mask = FlatVector::Validity(cur_vector);
+					auto null_mask = FlatVector::ValidityMutable(cur_vector);
 					if (null_mask.RowIsValid(0)) {
 						auto value = HeaderValue(vector_data[0]);
 						best_header_row.push_back(value);

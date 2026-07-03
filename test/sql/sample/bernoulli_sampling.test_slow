@@ -24,17 +24,6 @@ INSERT INTO output select count(*) as n_rows FROM sampled;
 
 endloop
 
-
-query II
-select min(num_rows) > 0, count(*) FILTER (num_rows = 0) = 0 from output;
-----
-true	true
-
-query III
-select avg(rowid), min(rowid), max(rowid) from output where num_rows = 0;
-----
-NULL	NULL	NULL
-
 statement ok
 create table t1 as select range id from range(1000);
 

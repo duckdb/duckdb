@@ -1,0 +1,25 @@
+# name: test/sql/order/limit_percent_view.test
+# description: Test LIMIT % in a view
+# group: [order]
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (13, 22), (14, 32), (15, 52)
+
+statement ok
+CREATE VIEW test_view AS SELECT a FROM test LIMIT 20 %
+
+query I
+FROM test_view
+----
+11
+
+statement ok
+CREATE VIEW test_view2 AS SELECT a FROM test LIMIT 20 % OFFSET 1
+
+query I
+FROM test_view2
+----
+12

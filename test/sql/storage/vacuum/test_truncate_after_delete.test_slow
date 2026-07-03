@@ -2,7 +2,7 @@
 # description: Test truncating of the database file after data is deleted
 # group: [vacuum]
 
-load __TEST_DIR__/truncate_after_delete.db
+load {TEST_DIR}/truncate_after_delete.db
 
 statement ok
 CREATE TABLE uuids (i VARCHAR);
@@ -45,7 +45,7 @@ CHECKPOINT;
 # Ensure that the current block count does not exceed the maximum block count by more than 1.2.
 
 query I
-SELECT CASE WHEN ${i} < 10 THEN True
+SELECT CASE WHEN {i} < 10 THEN True
 	WHEN c.total_blocks <= blocks.b * 1.2 THEN True
 	ELSE False END
 FROM pragma_database_size() AS c, blocks;
@@ -56,7 +56,7 @@ FROM pragma_database_size() AS c, blocks;
 
 statement ok
 UPDATE blocks SET b = (
- 	SELECT CASE WHEN ${i} < 10 THEN
+ 	SELECT CASE WHEN {i} < 10 THEN
  		(SELECT list_max(list_value(c.total_blocks, b)) FROM pragma_database_size() AS c)
  		ELSE (b) END);
 

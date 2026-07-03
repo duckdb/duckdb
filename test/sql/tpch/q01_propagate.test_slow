@@ -2,10 +2,9 @@
 # description: Test statistics propagation in Q01
 # group: [tpch]
 
-require tpch
+set variable sf 0.01
 
-statement ok
-CALL dbgen(sf=0.01);
+include test/sql/tpch/tpch_setup.test_template
 
 query II
 select s.min, s.max from (SELECT stats(1 - l_discount) s FROM lineitem LIMIT 1);

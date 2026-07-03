@@ -3,9 +3,6 @@
 # group: [rigger]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t0(c0 DATE, c1 SMALLINT);
 
 statement ok

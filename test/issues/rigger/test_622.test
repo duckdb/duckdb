@@ -2,9 +2,6 @@
 # description: Issue 622
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # UPDATE on altered table results in an error 'Could not find node in column segment tree'
 statement ok
 CREATE TABLE t0(c0 TIMESTAMP);

@@ -2,7 +2,7 @@
 # description: Test TPC-H Bignum Sum
 # group: [bignum]
 
-mode skip
+mode skip unsupported
 
 require parquet
 

@@ -1,0 +1,88 @@
+# name: test/sql/subquery/exists/test_issue_22267.test
+# description: Correlated EXISTS with derived table should preserve correlation through optimization
+# group: [exists]
+
+statement ok
+CREATE TABLE posts (
+	id INTEGER,
+	user_id INTEGER,
+	title VARCHAR,
+	content VARCHAR,
+	views INTEGER,
+	likes INTEGER,
+	created_at TIMESTAMP,
+	rating DOUBLE
+);
+
+statement ok
+INSERT INTO posts VALUES
+	(1, 1, 'Hello World', 'First post', 100, 10, '2022-01-10 10:00:00', 4.5),
+	(2, 1, 'Another Post', NULL,        150, 20, '2022-01-11 11:00:00', 3.0),
+	(3, 2, 'Bob Post',     'Content',   NULL,  5, '2022-01-12 12:00:00', NULL),
+	(4, 3, NULL,           'Empty',      50,  2, '2022-01-13 13:00:00', 5.0),
+	(5, 4, 'Last Post',    'Last',      300, 30, '2022-01-14 14:00:00', 4.9);
+
+# Exact issue repro from #22267
+query I
+SELECT count(*)
+FROM posts AS ref_0
+WHERE EXISTS (
+	SELECT 1
+	FROM (
+		SELECT
+			ref_0.id AS c0,
+			ref_1.views AS c1,
+			ref_1.views AS c2
+		FROM posts AS ref_1
+		WHERE ref_0.likes > ref_1.likes
+	) AS subq_0
+	WHERE subq_0.c1 != ref_0.likes
+);
+----
+4
+
+# Sanity check with optimizer disabled should match
+statement ok
+PRAGMA disable_optimizer
+
+query I
+SELECT count(*)
+FROM posts AS ref_0
+WHERE EXISTS (
+	SELECT 1
+	FROM (
+		SELECT
+			ref_0.id AS c0,
+			ref_1.views AS c1,
+			ref_1.views AS c2
+		FROM posts AS ref_1
+		WHERE ref_0.likes > ref_1.likes
+	) AS subq_0
+	WHERE subq_0.c1 != ref_0.likes
+);
+----
+4
+
+statement ok
+PRAGMA enable_optimizer
+
+# Nearby variant without duplicate projected view column
+query I
+SELECT count(*)
+FROM posts AS ref_0
+WHERE EXISTS (
+	SELECT 1
+	FROM (
+		SELECT
+			ref_0.id AS c0,
+			ref_1.views AS c1
+		FROM posts AS ref_1
+		WHERE ref_0.likes > ref_1.likes
+	) AS subq_0
+	WHERE subq_0.c1 != ref_0.likes
+);
+----
+4
+
+statement ok
+DROP TABLE posts;

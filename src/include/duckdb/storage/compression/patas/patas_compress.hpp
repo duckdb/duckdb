@@ -29,7 +29,7 @@ unique_ptr<CompressionState> PatasInitCompression(ColumnDataCheckpointData &chec
 }
 
 template <class T>
-void PatasCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void PatasCompress(CompressionState &state_p, const Vector &scan_vector) {
 	throw InternalException("Patas has been deprecated, can no longer be used to compress data");
 }
 

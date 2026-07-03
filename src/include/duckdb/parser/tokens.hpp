@@ -18,9 +18,11 @@ class SQLStatement;
 class AlterStatement;
 class AttachStatement;
 class CallStatement;
+class ConnectStatement;
 class CopyStatement;
 class CreateStatement;
 class DetachStatement;
+class DisconnectStatement;
 class DeleteStatement;
 class DropStatement;
 class ExtensionStatement;
@@ -57,6 +59,7 @@ class StatementNode;
 class UpdateQueryNode;
 class DeleteQueryNode;
 class InsertQueryNode;
+class MergeQueryNode;
 
 //===--------------------------------------------------------------------===//
 // Expressions
@@ -79,6 +82,7 @@ class ParameterExpression;
 class PositionalReferenceExpression;
 class StarExpression;
 class SubqueryExpression;
+class TypeExpression;
 class WindowExpression;
 
 //===--------------------------------------------------------------------===//

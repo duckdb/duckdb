@@ -2,13 +2,10 @@
 # description: Test basics of bignum type
 # group: [bignum]
 
-statement ok
-PRAGMA enable_verification
-
 foreach int_type tinyint utinyint smallint usmallint integer uinteger bigint ubigint hugeint uhugeint double float
 
 query I
-select distinct i::${int_type}::bignum = i::bignum from range(0, 100) t(i);
+select distinct i::{int_type}::bignum = i::bignum from range(0, 100) t(i);
 ----
 true
 
@@ -17,7 +14,7 @@ endloop
 foreach int_type tinyint smallint integer bigint double float hugeint
 
 query I
-select distinct i::${int_type}::bignum = i::bignum from range(-100, 0) t(i);
+select distinct i::{int_type}::bignum = i::bignum from range(-100, 0) t(i);
 ----
 true
 

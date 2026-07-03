@@ -5,20 +5,20 @@
 foreach i 2 3
 
 statement ok
-ATTACH '__TEST_DIR__/version_1_${i}_0.db' (STORAGE_VERSION 'v1.${i}.0');
+ATTACH '{TEST_DIR}/version_1_{i}_0.db' (STORAGE_VERSION 'v1.{i}.0');
 
 statement ok
-CREATE TABLE version_1_${i}_0.lists(l integer[], initial integer);
+CREATE TABLE version_1_{i}_0.lists(l integer[], initial integer);
 
 statement ok
-INSERT INTO version_1_${i}_0.lists VALUES ([1], -1), ([1, 2, 3], -2), (NULL, -3), ([-1, NULL, 2], -3);
+INSERT INTO version_1_{i}_0.lists VALUES ([1], -1), ([1, 2, 3], -2), (NULL, -3), ([-1, NULL, 2], -3);
 
 statement ok
-CREATE VIEW version_1_${i}_0.reduced_lists AS
-	SELECT list_reduce(l, LAMBDA x, y : x + y, initial) AS r FROM version_1_${i}_0.lists;
+CREATE VIEW version_1_{i}_0.reduced_lists AS
+	SELECT list_reduce(l, LAMBDA x, y : x + y, initial) AS r FROM version_1_{i}_0.lists;
 
 query I
-FROM version_1_${i}_0.reduced_lists;
+FROM version_1_{i}_0.reduced_lists;
 ----
 0
 4
@@ -26,13 +26,13 @@ NULL
 NULL
 
 statement ok
-DETACH version_1_${i}_0
+DETACH version_1_{i}_0
 
 statement ok
-ATTACH '__TEST_DIR__/version_1_${i}_0.db'
+ATTACH '{TEST_DIR}/version_1_{i}_0.db'
 
 query I
-FROM version_1_${i}_0.reduced_lists;
+FROM version_1_{i}_0.reduced_lists;
 ----
 0
 4

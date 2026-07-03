@@ -2,17 +2,14 @@
 # description: Test negation limits
 # group: [expression]
 
-statement ok
-PRAGMA enable_verification
-
 # tinyint
 foreach type,min,max tinyint,-128,127 smallint,-32768,32767 integer,-2147483648,2147483647 bigint,-9223372036854775808,9223372036854775807
 
 statement ok
-CREATE OR REPLACE TABLE vals(id INTEGER, v ${type});
+CREATE OR REPLACE TABLE vals(id INTEGER, v {type});
 
 statement ok
-INSERT INTO vals VALUES (0, ${min}), (1, ${max}), (2, 0), (3, -2), (4, 2);
+INSERT INTO vals VALUES (0, {min}), (1, {max}), (2, 0), (3, -2), (4, 2);
 
 # cannot negate the min value
 statement error

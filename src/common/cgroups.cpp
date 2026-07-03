@@ -251,7 +251,7 @@ idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
 		for (auto &controller : controller_list) {
 			if (controller == "cpu") {
 				cpu_entry = i;
-				continue;
+				break;
 			}
 		}
 	}

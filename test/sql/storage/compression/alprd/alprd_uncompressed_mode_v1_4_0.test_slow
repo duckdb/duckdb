@@ -9,7 +9,7 @@ require vector_size 2048
 require block_size 262144
 
 # load the DB from disk
-load __TEST_DIR__/test_alp.db readwrite v1.4.0
+load {TEST_DIR}/test_alp.db readwrite v1.4.0
 
 statement ok
 PRAGMA force_compression='uncompressed'
@@ -58,12 +58,11 @@ CREATE TYPE test_result AS UNION (
     )
 );
 
-# Differs from alp_uncompressed_mode_v1_5_0.test, as here the compression factor is equal to 1, and not
-# greater.
+# Differs from alp_uncompressed_mode_v1_5_0.test, as here the compression factor is equal to 1, and not greater.
 query I
 SELECT
     CASE
-        WHEN (uncompressed::FLOAT / compressed::FLOAT) < 1
+        WHEN (uncompressed::FLOAT / compressed::FLOAT) <= 1
             THEN True::test_result
         ELSE {
             'uncompressed': uncompressed,

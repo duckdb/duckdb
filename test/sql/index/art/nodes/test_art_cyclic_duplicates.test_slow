@@ -3,9 +3,6 @@
 # group: [nodes]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers (i INTEGER);
 
 statement ok
@@ -21,7 +18,7 @@ INSERT INTO integers SELECT range FROM range(100);
 loop j 0 40
 
 query I
-SELECT COUNT(*) = ${i} + 1 FROM integers WHERE i = ${j};
+SELECT COUNT(*) = {i} + 1 FROM integers WHERE i = {j};
 ----
 1
 

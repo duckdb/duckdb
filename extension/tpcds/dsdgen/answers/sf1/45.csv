@@ -1,20 +1,20 @@
-ca_zip|ca_city|sum
-10150|Bunker Hill|101.73
-16098|Five Points|90.64
-28048|Salem|9.26
-29584|Oakdale|34.55
-31289|Lincoln|41.97
-34975|Kingston|11.43
-36971|Wilson|74.09
-38354|Sulphur Springs|102.77
-44975|Kingston|51.21
-62808|Hamilton|2.48
-62812|Shady Grove|28.07
-66557|Arlington|172.95
-68252|Maple Grove|23.26
-69583|Jackson|14.52
-73003|Hillcrest|142.64
-78222|Clinton|11.62
-83683|Plainview|114.33
-84536|Friendship|11.65
-88370|Oak Grove|8.97
+ca_zip|ca_city|sum(ws_sales_price)
+10150|Bunker Hill|20.25
+16098|Five Points|18.05
+28048|Salem|9.81
+29584|Oakdale|41.21
+31289|Lincoln|1.26
+34975|Kingston|56.67
+36971|Wilson|202.63
+38354|Sulphur Springs|25.68
+44975|Kingston|12.62
+62808|Hamilton|85.39
+62812|Shady Grove|48.77
+66557|Arlington|2.68
+68252|Maple Grove|11.37
+69583|Jackson|54.42
+73003|Hillcrest|36.03
+78222|Clinton|85.87
+83683|Plainview|43.82
+84536|Friendship|64.44
+88370|Oak Grove|52.42

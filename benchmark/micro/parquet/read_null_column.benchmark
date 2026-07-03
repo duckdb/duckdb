@@ -1,0 +1,18 @@
+# name: benchmark/micro/parquet/read_null_column.benchmark
+# description: Read a Parquet column that is entirely NULL (served from statistics as a constant NULL vector)
+# group: [parquet]
+
+name Read NULL Column
+group micro
+subgroup parquet
+
+require parquet
+
+load
+COPY (SELECT range AS i, NULL::BIGINT AS n FROM range(50000000)) TO '${BENCHMARK_DIR}/read_null_column.parquet';
+
+run
+SELECT count(n) FROM '${BENCHMARK_DIR}/read_null_column.parquet';
+
+result I
+0

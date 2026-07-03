@@ -2,9 +2,6 @@
 # description: Issue 591
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Subtracting a large integer from a DATE results in a 'double free or corruption'
 query T
 SELECT (- 41756167 + '1969-12-11 032657' ::DATE)::VARCHAR;

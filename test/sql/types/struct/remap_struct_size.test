@@ -1,0 +1,36 @@
+# name: test/sql/types/struct/remap_struct_size.test
+# description: remap_struct must produce a correct LIST<STRUCT>
+# group: [struct]
+
+statement ok
+CREATE TABLE src(col1 STRUCT(i INT, j INT)[]);
+
+statement ok
+INSERT INTO src VALUES ([{'i': 1, 'j': 2}]);
+
+statement ok
+CREATE TABLE t AS
+SELECT remap_struct(col1, NULL::STRUCT(k INTEGER)[], NULL,
+                    struct_pack(list := struct_pack(k := NULL::INTEGER))) AS col1
+FROM src;
+
+query I
+FROM t ORDER BY ALL
+----
+[{'k': NULL}]
+
+statement ok
+INSERT INTO src VALUES ([{'i': 3, 'j': 4}]), ([{'i': 5, 'j': 6}]);
+
+statement ok
+CREATE TABLE t2 AS
+SELECT remap_struct(col1, NULL::STRUCT(k INTEGER)[], NULL,
+                    struct_pack(list := struct_pack(k := NULL::INTEGER))) AS col1
+FROM src;
+
+query I
+FROM t2 ORDER BY ALL
+----
+[{'k': NULL}]
+[{'k': NULL}]
+[{'k': NULL}]

@@ -64,7 +64,6 @@ enum class RenderMode : uint32_t {
 	EXPLAIN,   /* Like RenderMode::Column, but do not truncate data */
 	DESCRIBE,  /* Special DESCRIBE Renderer */
 	ASCII,     /* Use ASCII unit and record separators (0x1F/0x1E) */
-	PRETTY,    /* Pretty-print schemas */
 	EQP,       /* Converts EXPLAIN QUERY PLAN output into a graph */
 	JSON,      /* Output JSON */
 	MARKDOWN,  /* Markdown formatting */
@@ -151,6 +150,7 @@ struct ShellTableInfo {
 };
 
 enum class BailOnError { AUTOMATIC, BAIL_ON_ERROR, DONT_BAIL_ON_ERROR };
+enum class AutoFormatMode { NO_AUTO_FORMAT, AUTO_FORMAT_COMPLETE_STATEMENTS };
 
 /*
 ** State information about the database connection is contained in an
@@ -205,8 +205,15 @@ public:
 	string initFile;
 	bool run_init = true;
 	unique_ptr<duckdb::MaterializedQueryResult> last_result;
+	bool last_result_referenced = false;
+	//! Whether the last EXPLAIN ANALYZE tree folded any operators (so ".last" has a fuller tree to show)
+	bool last_explain_hid_content = false;
+	//! The widest rendered line of the last EXPLAIN tree, in display columns (used for the pager-width decision)
+	idx_t last_explain_width = 0;
 	//! If the following flag is set, then command execution stops at an error
 	BailOnError bail = BailOnError::AUTOMATIC;
+	//! Controls automatic SQL formatting before execution
+	AutoFormatMode auto_format = AutoFormatMode::NO_AUTO_FORMAT;
 	//! Table name when rendering a DESCRIBE statement
 	string describe_table_name;
 
@@ -338,6 +345,8 @@ public:
 	vector<string> TableColumnList(const char *zTab);
 	SuccessState ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement);
 	static bool UseDescribeRenderMode(const duckdb::SQLStatement &stmt, string &describe_table_name);
+	//! Route EXPLAIN ANALYZE output through the shell's direct-printing renderer when on an interactive console
+	void SetupPrettyExplain(duckdb::SQLStatement &statement);
 	void RenderTableMetadata(vector<ShellTableInfo> &result);
 
 	void PrintDatabaseError(const string &zErr);
@@ -365,6 +374,11 @@ public:
 	bool ShouldUsePager(ShellRenderer &renderer, RenderingQueryResult &result);
 	bool ShouldUsePager();
 	bool ShouldUsePager(idx_t line_count);
+	//! Whether to page a block of output based on whether it fits on the screen - either too tall (line_count vs the
+	//! terminal height) or too wide (render_width vs the max render width). Used for tree output.
+	bool ShouldUsePagerForSize(idx_t line_count, idx_t render_width);
+	//! The terminal height in rows, or 0 when it cannot be determined
+	idx_t GetScreenHeight();
 	idx_t GetMaxRenderWidth() const;
 	string GetSystemPager();
 	unique_ptr<PagerState> SetupPager();
@@ -434,6 +448,12 @@ public:
 	FILE *OpenOutputFile(const char *zFile, int bTextMode);
 	static void SetPrompt(char prompt[], const string &new_value);
 	static string ModeToString(RenderMode mode);
+	MetadataResult FormatSQL(string &sql);
+	void HighlightSQL(string &sql);
+	// Print a complete SQL statement directly to the output, applying syntax highlighting when appropriate
+	void PrintSQL(const string &sql);
+	string ReadFileContents(FILE *f);
+	string ReadFileContents(const string &filename);
 };
 
 struct PagerState {

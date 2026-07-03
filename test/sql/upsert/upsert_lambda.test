@@ -2,9 +2,6 @@
 # group: [upsert]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE OR REPLACE TABLE foo (
 	pk_col INT PRIMARY KEY,
 	str VARCHAR,

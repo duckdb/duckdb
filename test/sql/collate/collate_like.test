@@ -2,9 +2,6 @@
 # description: Test collations in the LIKE clause
 # group: [collate]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT 'a' LIKE 'A' COLLATE NOCASE
 ----

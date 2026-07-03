@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
@@ -31,6 +32,7 @@ void FileBuffer::Init() {
 	size = 0;
 	internal_buffer = nullptr;
 	internal_size = 0;
+	owns_internal_buffer = true;
 }
 
 FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p, idx_t block_header_size)
@@ -40,18 +42,23 @@ FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p, idx_t block_he
 	size = source.internal_size - block_header_size;
 	internal_buffer = source.internal_buffer;
 	internal_size = source.internal_size;
+	owns_internal_buffer = source.owns_internal_buffer;
 
 	source.Init();
 }
 
 FileBuffer::~FileBuffer() {
-	if (!internal_buffer) {
+	if (!internal_buffer || !owns_internal_buffer) {
 		return;
 	}
 	allocator.FreeData(internal_buffer, internal_size);
 }
 
 void FileBuffer::ReallocBuffer(idx_t new_size) {
+	if (internal_buffer && !owns_internal_buffer) {
+		throw InternalException(
+		    "Cannot resize a FileBuffer that does not own its internal buffer (it points into a memory-mapped region)");
+	}
 	data_ptr_t new_buffer;
 	if (internal_buffer) {
 		new_buffer = allocator.ReallocateData(internal_buffer, internal_size, new_size);
@@ -66,6 +73,7 @@ void FileBuffer::ReallocBuffer(idx_t new_size) {
 
 	internal_buffer = new_buffer;
 	internal_size = new_size;
+	owns_internal_buffer = true;
 
 	// The caller must update these.
 	buffer = nullptr;
@@ -108,9 +116,28 @@ void FileBuffer::Read(QueryContext context, FileHandle &handle, uint64_t locatio
 	handle.Read(context, internal_buffer, internal_size, location);
 }
 
+void FileBuffer::Read(QueryContext context, MemoryMappedFile &handle, uint64_t location) {
+	D_ASSERT(type != FileBufferType::TINY_BUFFER);
+	// Zero-copy: adopt a pointer into the mapping.
+	auto src = handle.GetDataMutable(location, internal_size);
+	const idx_t header_size = internal_size - size;
+	if (internal_buffer && owns_internal_buffer) {
+		allocator.FreeData(internal_buffer, internal_size);
+	}
+	internal_buffer = src;
+	buffer = internal_buffer + header_size;
+	owns_internal_buffer = false;
+}
+
 void FileBuffer::Write(QueryContext context, FileHandle &handle, const uint64_t location) {
 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
 	handle.Write(context, internal_buffer, internal_size, location);
+}
+
+void FileBuffer::Write(QueryContext context, MemoryMappedFile &handle, uint64_t location) {
+	D_ASSERT(type != FileBufferType::TINY_BUFFER);
+	auto dst = handle.GetDataMutable(location, internal_size);
+	memcpy(dst, internal_buffer, internal_size);
 }
 
 void FileBuffer::Clear() {

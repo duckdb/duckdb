@@ -1,10 +1,40 @@
-#include "duckdb/common/vector/map_vector.hpp"
+#include <stdint.h>
+#include <algorithm>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/variant_column_reader.hpp"
-#include "reader/variant/variant_binary_decoder.hpp"
-#include "reader/variant/variant_shredded_conversion.hpp"
+#include "reader/variant/parquet_variant_iterator.hpp"
+#include "column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "parquet_column_schema.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
+namespace duckdb_parquet {
+class ColumnChunk;
+} // namespace duckdb_parquet
 
 namespace duckdb {
+class ClientContext;
+class ParquetReader;
+class ThriftFileTransport;
 
 //===--------------------------------------------------------------------===//
 // Variant Column Reader
@@ -14,6 +44,12 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
                                          vector<unique_ptr<ColumnReader>> child_readers_p)
     : ColumnReader(reader, schema), context(context), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
+
+	for (auto &child : child_readers) {
+		if (child) {
+			child->SetParent(*this);
+		}
+	}
 
 	if (child_readers[0]->Schema().name == "metadata" && child_readers[1]->Schema().name == "value") {
 		metadata_reader_idx = 0;
@@ -53,26 +89,47 @@ static LogicalType GetIntermediateGroupType(optional_ptr<ColumnReader> typed_val
 	return LogicalType::STRUCT(std::move(children));
 }
 
-idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
+void VariantColumnReader::PrepareChunk(DataChunk &chunk, idx_t &capacity, const vector<LogicalType> &types,
+                                       idx_t count) {
+	bool needs_init = chunk.ColumnCount() != types.size() || count > capacity;
+	for (idx_t i = 0; !needs_init && i < types.size(); i++) {
+		needs_init = chunk.data[i].GetType() != types[i];
+	}
+	if (needs_init) {
+		chunk.Destroy();
+		chunk.Initialize(context, types, count);
+		capacity = count;
+	} else {
+		chunk.Reset();
+	}
+}
+
+idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	if (pending_skips > 0) {
 		throw InternalException("VariantColumnReader cannot have pending skips");
 	}
 	optional_ptr<ColumnReader> typed_value_reader = child_readers.size() == 3 ? child_readers[2].get() : nullptr;
 
+	auto &num_values = input.num_values;
+	auto &define_out = input.define_out;
+	auto &repeat_out = input.repeat_out;
+
 	// If the child reader values are all valid, "define_out" may not be initialized at all
 	// So, we just initialize them to all be valid beforehand
 	std::fill_n(define_out, num_values, MaxDefine());
 
-	optional_idx read_count;
-
-	Vector metadata_intermediate(LogicalType::BLOB, num_values);
-	Vector intermediate_group(GetIntermediateGroupType(typed_value_reader), num_values);
+	auto group_type = GetIntermediateGroupType(typed_value_reader);
+	PrepareChunk(intermediate_chunk, intermediate_capacity, {LogicalType::BLOB, group_type}, num_values);
+	auto &metadata_intermediate = intermediate_chunk.data[0];
+	auto &intermediate_group = intermediate_chunk.data[1];
 	auto &group_entries = StructVector::GetEntries(intermediate_group);
 	auto &value_intermediate = group_entries[0];
 
-	auto metadata_values =
-	    child_readers[metadata_reader_idx]->Read(num_values, define_out, repeat_out, metadata_intermediate);
-	auto value_values = child_readers[value_reader_idx]->Read(num_values, define_out, repeat_out, value_intermediate);
+	ColumnReaderInput metadata_reader_input(num_values, define_out, repeat_out);
+	auto metadata_values = child_readers[metadata_reader_idx]->Read(metadata_reader_input, metadata_intermediate);
+
+	ColumnReaderInput value_reader_input(num_values, define_out, repeat_out);
+	auto value_values = child_readers[value_reader_idx]->Read(value_reader_input, value_intermediate);
 
 	D_ASSERT(child_readers[metadata_reader_idx]->Schema().name == "metadata");
 	D_ASSERT(child_readers[value_reader_idx]->Schema().name == "value");
@@ -82,20 +139,18 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 		    "The Variant column did not contain the same amount of values for 'metadata' and 'value'");
 	}
 
-	vector<VariantValue> intermediate;
 	if (typed_value_reader) {
-		auto typed_values = typed_value_reader->Read(num_values, define_out, repeat_out, group_entries[1]);
+		ColumnReaderInput child_input(num_values, define_out, repeat_out);
+		auto typed_values = typed_value_reader->Read(child_input, group_entries[1]);
 		if (typed_values != value_values) {
 			throw InvalidInputException(
 			    "The shredded Variant column did not contain the same amount of values for 'typed_value' and 'value'");
 		}
 	}
-	intermediate =
-	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values, false);
-	VariantValue::ToVARIANT(intermediate, result);
+	// convert the actual columns
+	Convert(metadata_intermediate, intermediate_group, result, num_values);
 
-	read_count = value_values;
-	return read_count.GetIndex();
+	return value_values;
 }
 
 void VariantColumnReader::Skip(idx_t num_values) {

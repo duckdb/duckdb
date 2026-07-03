@@ -29,8 +29,7 @@ namespace duckdb {
 class ArrowBatchTask : public ExecutorTask {
 public:
 	ArrowBatchTask(ArrowQueryResult &result, vector<idx_t> record_batch_indices, Executor &executor,
-	               shared_ptr<Event> event_p, BatchCollectionChunkScanState scan_state, vector<string> names,
-	               idx_t batch_size);
+	               shared_ptr<Event> event_p, BatchCollectionChunkScanState scan_state, idx_t batch_size);
 	void ProduceRecordBatches();
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
@@ -41,9 +40,7 @@ public:
 private:
 	ArrowQueryResult &result;
 	vector<idx_t> record_batch_indices;
-	shared_ptr<Event> event;
 	idx_t batch_size;
-	vector<string> names;
 	BatchCollectionChunkScanState scan_state;
 };
 

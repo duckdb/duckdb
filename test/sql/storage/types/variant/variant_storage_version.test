@@ -2,7 +2,7 @@
 # group: [variant]
 
 statement ok
-attach '__TEST_DIR__/variant.db' (STORAGE_VERSION 'v1.4.4');
+attach '{TEST_DIR}/variant.db' (STORAGE_VERSION 'v1.4.4');
 
 statement ok
 use variant;

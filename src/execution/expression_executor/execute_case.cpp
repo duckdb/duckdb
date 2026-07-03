@@ -21,11 +21,11 @@ struct CaseExpressionState : public ExpressionState {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<CaseExpressionState>(expr, root);
-	for (auto &case_check : expr.case_checks) {
+	for (auto &case_check : expr.CaseChecks()) {
 		result->AddChild(*case_check.when_expr);
 		result->AddChild(*case_check.then_expr);
 	}
-	result->AddChild(*expr.else_expr);
+	result->AddChild(expr.Else());
 
 	result->Finalize();
 	return std::move(result);
@@ -42,8 +42,8 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 	auto current_false_sel = &state.false_sel;
 	auto current_sel = sel;
 	idx_t current_count = count;
-	for (idx_t i = 0; i < expr.case_checks.size(); i++) {
-		auto &case_check = expr.case_checks[i];
+	for (idx_t i = 0; i < expr.CaseChecks().size(); i++) {
+		auto &case_check = expr.CaseChecks()[i];
 		auto &intermediate_result = state.intermediate_chunk.data[i * 2 + 1];
 		auto check_state = state.child_states[i * 2].get();
 		auto then_state = state.child_states[i * 2 + 1].get();
@@ -77,13 +77,13 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 		auto else_state = state.child_states.back().get();
 		if (current_count == count) {
 			// everything was false, we can just evaluate the else expression directly
-			Execute(*expr.else_expr, else_state, sel, count, result);
+			Execute(expr.Else(), else_state, sel, count, result);
 			return;
 		} else {
-			auto &intermediate_result = state.intermediate_chunk.data[expr.case_checks.size() * 2];
+			auto &intermediate_result = state.intermediate_chunk.data[expr.CaseChecks().size() * 2];
 
 			D_ASSERT(current_sel);
-			Execute(*expr.else_expr, else_state, current_sel, current_count, intermediate_result);
+			Execute(expr.Else(), else_state, current_sel, current_count, intermediate_result);
 			FillSwitch(intermediate_result, result, *current_sel, NumericCast<sel_t>(current_count));
 		}
 	}
@@ -93,10 +93,10 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 }
 
 template <class T>
-void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
+void TemplatedFillLoop(const Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto res = FlatVector::GetData<T>(result);
-	auto &result_mask = FlatVector::Validity(result);
+	auto res = FlatVector::GetDataMutable<T>(result);
+	auto &result_mask = FlatVector::ValidityMutable(result);
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto data = ConstantVector::GetData<T>(vector);
 		if (ConstantVector::IsNull(vector)) {
@@ -109,12 +109,12 @@ void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &se
 			}
 		}
 	} else {
-		auto entries = vector.Values<T>(count);
+		auto entries = vector.Values<T>();
 		for (idx_t i = 0; i < count; i++) {
 			auto entry = entries[i];
 			auto res_idx = sel.get_index(i);
 			if (entry.IsValid()) {
-				res[res_idx] = entry.value;
+				res[res_idx] = entry.GetValue();
 			} else {
 				result_mask.SetInvalid(res_idx);
 			}
@@ -122,9 +122,9 @@ void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &se
 	}
 }
 
-void ValidityFillLoop(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
+void ValidityFillLoop(const Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto &result_mask = FlatVector::Validity(result);
+	auto &result_mask = FlatVector::ValidityMutable(result);
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(vector)) {
 			for (idx_t i = 0; i < count; i++) {
@@ -132,7 +132,7 @@ void ValidityFillLoop(Vector &vector, Vector &result, const SelectionVector &sel
 			}
 		}
 	} else {
-		auto entries = vector.Validity(count);
+		auto entries = vector.Validity();
 		if (!entries.CanHaveNull()) {
 			return;
 		}
@@ -144,7 +144,7 @@ void ValidityFillLoop(Vector &vector, Vector &result, const SelectionVector &sel
 	}
 }
 
-void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
+void ExpressionExecutor::FillSwitch(const Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -193,7 +193,7 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 	case PhysicalType::STRUCT: {
 		if (vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			// below code needs constant or flat structs
-			vector.Flatten(count);
+			vector.Flatten();
 		}
 		auto &vector_entries = StructVector::GetEntries(vector);
 		auto &result_entries = StructVector::GetEntries(result);
@@ -206,7 +206,7 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 	}
 	case PhysicalType::LIST: {
 		idx_t offset = ListVector::GetListSize(result);
-		auto &list_child = ListVector::GetEntry(vector);
+		auto &list_child = ListVector::GetChild(vector);
 		ListVector::Append(result, list_child, ListVector::GetListSize(vector));
 
 		// all the false offsets need to be incremented by true_child.count
@@ -215,13 +215,13 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 			break;
 		}
 
-		auto result_data = FlatVector::GetData<list_entry_t>(result);
+		auto result_data = FlatVector::ScatterWriter<list_entry_t>(result);
 		for (idx_t i = 0; i < count; i++) {
 			auto result_idx = sel.get_index(i);
 			result_data[result_idx].offset += offset;
 		}
 
-		Vector::Verify(result, sel, count);
+		result.Verify();
 		break;
 	}
 	default:

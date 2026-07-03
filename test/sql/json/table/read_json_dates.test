@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # issue #6774
 query I
 select * from read_json_auto('{DATA_DIR}/json/simple_timestamp.json', columns={"ts": "TIMESTAMP[]"});
@@ -45,7 +42,7 @@ Binder Error
 foreach date_format '%m-%d-%Y' '%m-%d-%y' '%d-%m-%Y' '%d-%m-%y' '%Y-%m-%d' '%y-%m-%d'
 
 statement ok
-copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat ${date_format})
+copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat {date_format})
 
 # auto-detect
 query II
@@ -55,7 +52,7 @@ DATE	1996-03-27
 
 # forced format read_ndjson
 query II
-select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat=${date_format})
+select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat={date_format})
 ----
 DATE	1996-03-27
 
@@ -73,7 +70,7 @@ statement ok
 create table date_copy_test (d date)
 
 statement ok
-copy date_copy_test from '{TEMP_DIR}/my_file.json' (dateformat ${date_format})
+copy date_copy_test from '{TEMP_DIR}/my_file.json' (dateformat {date_format})
 
 query II
 select typeof(d), d from date_copy_test
@@ -86,7 +83,7 @@ endloop
 foreach a,b,c '%Y-%m-%d,%H:%M:%S.%f,' '%m-%d-%Y,%I:%M:%S,%p' '%m-%d-%y,%I:%M:%S,%p' '%d-%m-%Y,%H:%M:%S,' '%d-%m-%y,%H:%M:%S,' '%Y-%m-%d,%H:%M:%S,' '%y-%m-%d,%H:%M:%S,'
 
 statement ok
-copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat ${a} ${b} ${c})
+copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat {a} {b} {c})
 
 # auto-detect
 query II
@@ -96,7 +93,7 @@ TIMESTAMP	1996-03-27 07:42:33
 
 # forced format read_ndjson
 query II
-select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format=${a} ${b} ${c})
+select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format={a} {b} {c})
 ----
 TIMESTAMP	1996-03-27 07:42:33
 
@@ -114,7 +111,7 @@ statement ok
 create table timestamp_copy_test (t timestamp)
 
 statement ok
-copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat ${a} ${b} ${c})
+copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat {a} {b} {c})
 
 query II
 select typeof(t), t from timestamp_copy_test
@@ -128,3 +125,295 @@ query II
 select typeof(createdAt), createdAt from '{DATA_DIR}/json/timestamp_example.json'
 ----
 TIMESTAMP	2023-02-07 19:12:28
+
+# ISO 8601 timestamps with fractional seconds and/or timezone offsets should also be inferred as TIMESTAMP
+# These are all valid ISO 8601 representations that read_json_auto currently fails to detect
+
+# ISO 8601 with fractional seconds + Z suffix: "2023-02-07T19:12:28.123Z"
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28.123Z"}'))) to '{TEMP_DIR}/iso8601_frac_z.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_frac_z.json')
+----
+TIMESTAMP	2023-02-07 19:12:28.123
+
+# ISO 8601 with UTC timezone offset (+00:00): "2023-02-07T19:12:28+00:00"
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28+00:00"}'))) to '{TEMP_DIR}/iso8601_tz.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_tz.json')
+----
+TIMESTAMP	2023-02-07 19:12:28
+
+# ISO 8601 with fractional seconds + UTC timezone offset: "2023-02-07T19:12:28.456+00:00"
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28.456+00:00"}'))) to '{TEMP_DIR}/iso8601_frac_tz.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_frac_tz.json')
+----
+TIMESTAMP	2023-02-07 19:12:28.456
+
+# ISO 8601 with positive offset: "2023-02-07T14:12:28+05:00" -> UTC 09:12:28
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T14:12:28+05:00"}'))) to '{TEMP_DIR}/iso8601_pos_offset.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_pos_offset.json')
+----
+TIMESTAMP	2023-02-07 09:12:28
+
+# ISO 8601 with negative offset + fractional seconds: "2023-02-07T19:12:28.789-07:00" -> UTC 2023-02-08 02:12:28.789
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28.789-07:00"}'))) to '{TEMP_DIR}/iso8601_neg_offset.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_neg_offset.json')
+----
+TIMESTAMP	2023-02-08 02:12:28.789
+
+# Multiple timestamp formats in single JSON (issue 22103)
+statement ok
+copy (select * from (values ('{"ts1":"2026-04-01T06:01:00.010000+00:00", "ts2":"2026-04-02T06:03:00+00:01", "ts3":"2026-04-03T06:03:00Z", "ts4":"2026-04-04T06:04:00"}'))) to '{TEMP_DIR}/issue_22103.json' (format csv, quote '', header 0)
+
+query IIIIIIII
+SELECT typeof(ts1), ts1, typeof(ts2), ts2, typeof(ts3), ts3, typeof(ts4), ts4
+FROM read_json_auto('{TEMP_DIR}/issue_22103.json')
+----
+TIMESTAMP	2026-04-01 06:01:00.01	TIMESTAMP	2026-04-02 06:02:00	TIMESTAMP	2026-04-03 06:03:00	TIMESTAMP	2026-04-04 06:04:00
+
+# -----------------------------------------------------------------------------
+# Named timestamp_format produces a single-format list: only matching values
+# are typed as TIMESTAMP; others remain VARCHAR, confirming that default list
+# is ignored.
+#
+
+statement ok
+copy (select * from (values ('{"ts": "2026-04-04T06:04:00", "ts_tz": "2026-04-04T06:04:00Z"}'))) to '{TEMP_DIR}/ts_explicit_fmt.json' (format csv, quote '', header 0)
+
+query IIII
+SELECT typeof(ts), ts, typeof(ts_tz), ts_tz
+FROM read_json_auto('{TEMP_DIR}/ts_explicit_fmt.json', timestamp_format='%Y-%m-%dT%H:%M:%S')
+----
+TIMESTAMP	2026-04-04 06:04:00	VARCHAR	2026-04-04T06:04:00Z
+
+# -----------------------------------------------------------------------------
+# Safety: %Y-%m-%dT%H:%M:%S must reject trailing TZ content
+# The format fallback chain in TransformFromStringWithFormat relies on this —
+# if strptime ever accepts trailing characters, TZ offsets would be silently
+# dropped instead of being parsed by a TZ-aware format.
+#
+
+statement error
+SELECT strptime('2026-04-01T06:03:00+00:01', '%Y-%m-%dT%H:%M:%S');
+----
+trailing
+
+statement error
+SELECT strptime('2026-04-01T06:03:00Z', '%Y-%m-%dT%H:%M:%S');
+----
+trailing
+
+# test that TIMESTAMPFORMAT also applies to TIMESTAMPTZ columns
+statement ok
+create table timestamptz_test as select '1996-03-27 07:42:33+00'::TIMESTAMPTZ t
+
+statement ok
+copy (select t from timestamptz_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%Y-%m-%d')
+
+query I
+select t from '{TEMP_DIR}/my_file.json'
+----
+1996-03-27
+
+statement ok
+copy (
+    select
+        '2026-01-01T12:00:00Z'::TIMESTAMP as ts,
+        '2026-01-01T12:00:00Z'::TIMESTAMPTZ as tstz
+) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%a')
+
+query II
+select ts, tstz from read_json('{TEMP_DIR}/my_file.json')
+----
+Thu	Thu
+
+statement ok
+copy (select '2026-01-01 12:00:00+05:00'::TIMESTAMPTZ as ts) to '{TEMP_DIR}/my_file.json' (timestampformat '%Y-%m-%d %z', format json);
+
+query I
+select ts from '{TEMP_DIR}/my_file.json';
+----
+2026-01-01 +00
+
+# issue #23152: COPY JSON dateformat/timestampformat should apply inside nested JSON values
+statement ok
+COPY (
+    SELECT
+        DATE '2026-01-02' AS d,
+        {'d': DATE '2026-01-02'} AS payload,
+        [DATE '2026-01-02'] AS date_list
+) TO '{TEMP_DIR}/nested_dateformat.json' (FORMAT JSON, dateformat '%d/%m/%Y');
+
+query III
+SELECT
+    json_extract_string(json, '$.d') AS top_level,
+    json_extract_string(json, '$.payload.d') AS nested_struct,
+    json_extract_string(json, '$.date_list[0]') AS nested_list
+FROM read_json_objects('{TEMP_DIR}/nested_dateformat.json');
+----
+02/01/2026	02/01/2026	02/01/2026
+
+statement ok
+COPY (
+    SELECT
+        TIMESTAMP '2026-01-02 03:04:05' AS ts,
+        {'ts': TIMESTAMP '2026-01-02 03:04:05'} AS payload,
+        TIMESTAMPTZ '2026-01-02 03:04:05+00' AS tstz,
+        {'tstz': TIMESTAMPTZ '2026-01-02 03:04:05+00'} AS payload_tz
+) TO '{TEMP_DIR}/nested_timestampformat.json' (FORMAT JSON, timestampformat '%Y/%m/%d %H:%M');
+
+query II
+SELECT
+    json_extract_string(json, '$.ts') AS top_level_ts,
+    json_extract_string(json, '$.payload.ts') AS nested_ts
+FROM read_json_objects('{TEMP_DIR}/nested_timestampformat.json');
+----
+2026/01/02 03:04	2026/01/02 03:04
+
+query II
+WITH copied AS (
+    SELECT json FROM read_json_objects('{TEMP_DIR}/nested_timestampformat.json')
+),
+expected AS (
+    SELECT strftime(TIMESTAMPTZ '2026-01-02 03:04:05+00', '%Y/%m/%d %H:%M') AS formatted
+)
+SELECT
+    json_extract_string(json, '$.tstz') = formatted AS top_level_tstz_matches,
+    json_extract_string(json, '$.payload_tz.tstz') = formatted AS nested_tstz_matches
+FROM copied, expected;
+----
+true	true
+
+statement ok
+COPY (
+    SELECT
+        TIMESTAMP_NS '2026-01-02 03:04:05.123456789' AS ts_ns,
+        TIMESTAMP_MS '2026-01-02 03:04:05.123' AS ts_ms,
+        TIMESTAMP_S '2026-01-02 03:04:05' AS ts_s,
+        TIME '03:04:05' AS t
+) TO '{TEMP_DIR}/timestampformat_timestamp_variants.json' (FORMAT JSON, timestampformat '%Y/%m/%d %H:%M');
+
+query IIII
+SELECT
+    json_extract_string(json, '$.ts_ns') AS ts_ns,
+    json_extract_string(json, '$.ts_ms') AS ts_ms,
+    json_extract_string(json, '$.ts_s') AS ts_s,
+    json_extract_string(json, '$.t') AS t
+FROM read_json_objects('{TEMP_DIR}/timestampformat_timestamp_variants.json');
+----
+2026/01/02 03:04	2026/01/02 03:04	2026/01/02 03:04	03:04:05
+
+statement ok
+COPY (
+    SELECT
+        '2026-01-02 03:04:05.123456789+00'::TIMESTAMPTZ_NS AS tstz_ns,
+        {'tstz_ns': '2026-01-02 03:04:05.123456789+00'::TIMESTAMPTZ_NS} AS payload_tz_ns,
+        ['2026-01-02 03:04:05.123456789+00'::TIMESTAMPTZ_NS] AS tstz_ns_list
+) TO '{TEMP_DIR}/timestampformat_timestamptz_ns.json'
+  (FORMAT JSON, timestampformat '%Y/%m/%d %H:%M:%S.%n');
+
+query III
+SELECT
+    json_extract_string(json, '$.tstz_ns') AS top_level_tstz_ns,
+    json_extract_string(json, '$.payload_tz_ns.tstz_ns') AS nested_tstz_ns,
+    json_extract_string(json, '$.tstz_ns_list[0]') AS list_tstz_ns
+FROM read_json_objects('{TEMP_DIR}/timestampformat_timestamptz_ns.json');
+----
+2026/01/02 03:04:05.123456789	2026/01/02 03:04:05.123456789	2026/01/02 03:04:05.123456789
+
+statement ok
+COPY (
+    SELECT map([DATE '2026-01-02'], [DATE '2026-01-03']) AS m
+) TO '{TEMP_DIR}/map_key_dateformat.json' (FORMAT JSON, dateformat '%d/%m/%Y');
+
+query I
+SELECT trim(content, chr(10))
+FROM read_text('{TEMP_DIR}/map_key_dateformat.json');
+----
+{"m":{"02/01/2026":"03/01/2026"}}
+
+statement ok
+COPY (
+    SELECT map([TIMESTAMP_NS '2026-01-02 03:04:05.123456789'], [1]) AS m
+) TO '{TEMP_DIR}/map_key_timestamp_ns_format.json' (FORMAT JSON, timestampformat '%Y/%m/%d %H:%M:%S.%n');
+
+query I
+SELECT trim(content, chr(10))
+FROM read_text('{TEMP_DIR}/map_key_timestamp_ns_format.json');
+----
+{"m":{"2026/01/02 03:04:05.123456789":1}}
+
+statement ok
+COPY (
+    SELECT DATE '2026-01-02' AS d, {'d': DATE '2026-01-02'} AS payload, 42 AS v
+) TO '{TEMP_DIR}/nested_dateformat_partition'
+  (FORMAT JSON, PARTITION_BY (d), WRITE_PARTITION_COLUMNS, dateformat '%d/%m/%Y');
+
+query II
+SELECT filename, trim(content, chr(10))
+FROM read_text('{TEMP_DIR}/nested_dateformat_partition/*/*.json') ORDER BY filename;
+----
+{TEMP_DIR}/nested_dateformat_partition/d=02%2F01%2F2026/data_0.json	{"d":"02/01/2026","payload":{"d":"02/01/2026"},"v":42}
+
+statement ok
+COPY (
+    SELECT DATE '2026-01-02' AS d, {'d': DATE '2026-01-02'} AS payload, 42 AS v
+) TO '{TEMP_DIR}/nested_dateformat_partition_excluded'
+  (FORMAT JSON, PARTITION_BY (d), dateformat '%d/%m/%Y');
+
+query II
+SELECT filename, trim(content, chr(10))
+FROM read_text('{TEMP_DIR}/nested_dateformat_partition_excluded/*/*.json') ORDER BY filename;
+----
+{TEMP_DIR}/nested_dateformat_partition_excluded/d=02%2F01%2F2026/data_0.json	{"payload":{"d":"02/01/2026"},"v":42}
+
+statement ok
+COPY (
+    SELECT '2026-01-02 03:04:05.123456789+00'::TIMESTAMPTZ_NS AS ts, 42 AS v
+) TO '{TEMP_DIR}/timestamptz_ns_partition'
+  (FORMAT JSON, PARTITION_BY (ts), WRITE_PARTITION_COLUMNS, timestampformat '%Y/%m/%d %H:%M:%S.%n');
+
+query II
+SELECT filename, trim(content, chr(10))
+FROM read_text('{TEMP_DIR}/timestamptz_ns_partition/*/*.json') ORDER BY filename;
+----
+{TEMP_DIR}/timestamptz_ns_partition/ts=2026%2F01%2F02%2003%3A04%3A05.123456789/data_0.json	{"ts":"2026/01/02 03:04:05.123456789","v":42}
+
+statement ok
+COPY (
+    SELECT TIMESTAMP_NS '2026-01-02 03:04:05.123456789' AS ts, 42 AS v
+) TO '{TEMP_DIR}/timestamp_ns_partition'
+  (FORMAT JSON, PARTITION_BY (ts), WRITE_PARTITION_COLUMNS, timestampformat '%Y/%m/%d %H:%M:%S.%n');
+
+query II
+SELECT filename, trim(content, chr(10))
+FROM read_text('{TEMP_DIR}/timestamp_ns_partition/*/*.json') ORDER BY filename;
+----
+{TEMP_DIR}/timestamp_ns_partition/ts=2026%2F01%2F02%2003%3A04%3A05.123456789/data_0.json	{"ts":"2026/01/02 03:04:05.123456789","v":42}
+
+# invalid timestampformat must produce a clear error
+statement ok
+CREATE TABLE t (ts TIMESTAMP[])
+
+statement error
+COPY t FROM '{DATA_DIR}/json/simple_timestamp.json' (FORMAT JSON, TIMESTAMPFORMAT '%Q')
+----
+Unrecognized format for strftime/strptime: %Q
+
+statement error
+SELECT * FROM read_json('{DATA_DIR}/json/simple_timestamp.json', timestampformat='%Q')
+----
+Unrecognized format for strftime/strptime: %Q

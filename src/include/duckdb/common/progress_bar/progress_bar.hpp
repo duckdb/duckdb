@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb.h"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/profiler.hpp"
@@ -27,7 +26,7 @@ public:
 	void Initialize();
 	void Restart();
 	double GetPercentage();
-	uint64_t GetRowsProcesseed();
+	uint64_t GetRowsProcessed();
 	uint64_t GetTotalRowsToProcess();
 	QueryProgress &operator=(const QueryProgress &other);
 	QueryProgress(const QueryProgress &other);

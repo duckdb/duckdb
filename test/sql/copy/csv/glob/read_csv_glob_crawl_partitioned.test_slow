@@ -4,9 +4,6 @@
 
 # files from: '{DATA_DIR}/csv/glob/crawl/'
 
-statement ok
-PRAGMA enable_verification
-
 # simple crawling
 # example from:	https://stackoverflow.com/a/66744400
 query II

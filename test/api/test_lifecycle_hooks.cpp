@@ -41,6 +41,7 @@ TEST_CASE("Test ClientContextState", "[api]") {
 	Connection conn(db);
 	conn.Query("CREATE TABLE my_table(i INT)");
 	auto state = WithLifecycleState(conn);
+	REQUIRE_NO_FAIL(conn.Query("SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE'"));
 
 	const TableFunction table_fun(
 	    "raise_exception_tf", {},
@@ -55,7 +56,7 @@ TEST_CASE("Test ClientContextState", "[api]") {
 	    });
 
 	ExtensionInfo extension_info {};
-	ExtensionActiveLoad load_info {*db.instance, extension_info, "test_extension"};
+	ExtensionActiveLoad load_info {*db.instance, extension_info, "test_extension", ""};
 	ExtensionLoader loader {load_info};
 	loader.RegisterFunction(table_fun);
 

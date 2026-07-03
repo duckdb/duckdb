@@ -23,7 +23,7 @@ UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo 
 	}
 }
 
-void UnboundIndex::CommitDrop() {
+void UnboundIndex::ResetStorage() {
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
 	for (auto &info : storage_info.allocator_infos) {
 		for (auto &block : info.block_pointers) {
@@ -56,7 +56,6 @@ void UnboundIndex::BufferChunk(DataChunk &index_column_chunk, Vector &row_ids,
 		combined_chunk.data[i].Reference(index_column_chunk.data[i]);
 	}
 	combined_chunk.data.back().Reference(row_ids);
-	combined_chunk.SetCardinality(index_column_chunk.size());
 
 	auto &buffer = buffered_replays.GetBuffer(replay_type);
 	if (buffer == nullptr) {

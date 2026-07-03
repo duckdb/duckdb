@@ -15,8 +15,8 @@ struct DSDGenFunctionData : public TableFunctionData {
 
 	bool finished = false;
 	double sf = 0;
-	string catalog = INVALID_CATALOG;
-	string schema = DEFAULT_SCHEMA;
+	Identifier catalog = INVALID_CATALOG;
+	Identifier schema = DEFAULT_SCHEMA;
 	string suffix;
 	bool overwrite = false;
 	bool keys = false;
@@ -27,7 +27,7 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunction
 	auto result = make_uniq<DSDGenFunctionData>();
 
 	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
-	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
+	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().GetSchema();
 	result->catalog = current_catalog;
 	result->schema = current_schema;
 
@@ -38,9 +38,9 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunction
 		if (kv.first == "sf") {
 			result->sf = kv.second.GetValue<double>();
 		} else if (kv.first == "catalog") {
-			result->catalog = StringValue::Get(kv.second);
+			result->catalog = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "schema") {
-			result->schema = StringValue::Get(kv.second);
+			result->schema = Identifier(StringValue::Get(kv.second));
 		} else if (kv.first == "suffix") {
 			result->suffix = StringValue::Get(kv.second);
 		} else if (kv.first == "overwrite") {
@@ -103,16 +103,19 @@ static void TPCDSQueryFunction(ClientContext &context, TableFunctionInput &data_
 		return;
 	}
 	idx_t chunk_count = 0;
+
+	// query_nr, INTEGER
+	auto &query_nr = output.data[0];
+	// query, VARCHAR
+	auto &query_col = output.data[1];
+
 	while (data.offset < tpcds_queries && chunk_count < STANDARD_VECTOR_SIZE) {
 		auto query = TpcdsExtension::GetQuery(data.offset + 1);
-		// "query_nr", PhysicalType::INT32
-		output.SetValue(0, chunk_count, Value::INTEGER((int32_t)data.offset + 1));
-		// "query", PhysicalType::VARCHAR
-		output.SetValue(1, chunk_count, Value(query));
+		query_nr.Append(Value::INTEGER((int32_t)data.offset + 1));
+		query_col.Append(Value(query));
 		data.offset++;
 		chunk_count++;
 	}
-	output.SetCardinality(chunk_count);
 }
 
 static duckdb::unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
@@ -139,20 +142,24 @@ static void TPCDSQueryAnswerFunction(ClientContext &context, TableFunctionInput 
 		return;
 	}
 	idx_t chunk_count = 0;
+
+	// query_nr, INTEGER
+	auto &query_nr = output.data[0];
+	// scale_factor, DOUBLE
+	auto &scale_factor = output.data[1];
+	// answer, VARCHAR
+	auto &answer_col = output.data[2];
+
 	while (data.offset < total_answers && chunk_count < STANDARD_VECTOR_SIZE) {
 		idx_t cur_query = data.offset % tpcds_queries;
 		idx_t cur_sf = data.offset / tpcds_queries;
 		auto answer = TpcdsExtension::GetAnswer(scale_factors[cur_sf], cur_query + 1);
-		// "query_nr", PhysicalType::INT32
-		output.SetValue(0, chunk_count, Value::INTEGER((int32_t)cur_query + 1));
-		// "scale_factor", PhysicalType::DOUBLE
-		output.SetValue(1, chunk_count, Value::DOUBLE(scale_factors[cur_sf]));
-		// "query", PhysicalType::VARCHAR
-		output.SetValue(2, chunk_count, Value(answer));
+		query_nr.Append(Value::INTEGER((int32_t)cur_query + 1));
+		scale_factor.Append(Value::DOUBLE(scale_factors[cur_sf]));
+		answer_col.Append(Value(answer));
 		data.offset++;
 		chunk_count++;
 	}
-	output.SetCardinality(chunk_count);
 }
 
 static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters &parameters) {
@@ -168,6 +175,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	dsdgen_func.named_parameters["catalog"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
+	dsdgen_func.call_return_type = StatementReturnType::NOTHING;
 
 	loader.RegisterFunction(dsdgen_func);
 

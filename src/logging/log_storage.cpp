@@ -83,8 +83,8 @@ void LogStorage::Truncate() {
 }
 
 void LogStorage::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
-	if (config.size() > 1) {
-		throw InvalidInputException("LogStorage does not support passing configuration");
+	if (!config.empty()) {
+		throw InvalidInputException("Log storage '%s' does not support passing configuration", GetStorageName());
 	}
 }
 
@@ -141,7 +141,6 @@ void CSVLogStorage::ExecuteCast(LoggingTargetTable table, DataChunk &chunk) {
 	for (idx_t i = 0; i < chunk.data.size(); i++) {
 		VectorOperations::DefaultCast(chunk.data[i], cast_buffer.data[i], count, false);
 	}
-	cast_buffer.SetCardinality(count);
 }
 
 void CSVLogStorage::ResetAllBuffers() {
@@ -356,8 +355,11 @@ void FileLogStorage::Truncate() {
 		}
 		// Truncate the file writer
 		file_writer->Truncate(0);
-		// Re-initialize the corresponding CSVWriter
-		GetWriter(it.first).Initialize(true);
+		auto &writer = GetWriter(it.first);
+		// Reset writer and header option, then re-initialize
+		writer.Reset(nullptr);
+		writer.options.dialect_options.header = CSVOption<bool>(true);
+		writer.Initialize(true);
 	}
 }
 
@@ -476,11 +478,8 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 unique_ptr<TableRef> FileLogStorage::BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input,
                                                          const string &path, const string &select_clause,
                                                          const string &csv_columns) {
-	string sub_query_string;
-
-	string escaped_path = KeywordHelper::WriteOptionallyQuoted(path);
-	sub_query_string =
-	    StringUtil::Format("%s FROM read_csv_auto(%s, columns={%s})", select_clause, escaped_path, csv_columns);
+	string sub_query_string =
+	    StringUtil::Format("%s FROM read_csv_auto(%s, columns={%s})", select_clause, SQLString(path), csv_columns);
 
 	Parser parser(context.GetParserOptions());
 	parser.ParseQuery(sub_query_string);
@@ -553,6 +552,7 @@ void BufferingLogStorage::ResetLogBuffers() {
 		buffers[LoggingTargetTable::ALL_LOGS]->Initialize(Allocator::DefaultAllocator(),
 		                                                  GetSchema(LoggingTargetTable::ALL_LOGS), buffer_size);
 	}
+	registered_contexts.clear();
 }
 
 void BufferingLogStorage::ResetAllBuffers() {
@@ -596,39 +596,39 @@ BufferingLogStorage::~BufferingLogStorage() {
 static void WriteLoggingContextsToChunk(DataChunk &chunk, const RegisteredLoggingContext &context, idx_t &col) {
 	auto size = chunk.size();
 
-	auto context_id_data = FlatVector::GetData<idx_t>(chunk.data[col++]);
+	auto context_id_data = FlatVector::GetDataMutable<idx_t>(chunk.data[col++]);
 	context_id_data[size] = context.context_id;
 
-	auto context_scope_data = FlatVector::GetData<string_t>(chunk.data[col]);
+	auto context_scope_data = FlatVector::GetDataMutable<string_t>(chunk.data[col]);
 	context_scope_data[size] = StringVector::AddString(chunk.data[col++], EnumUtil::ToString(context.context.scope));
 
 	if (context.context.connection_id.IsValid()) {
-		auto client_context_data = FlatVector::GetData<idx_t>(chunk.data[col++]);
+		auto client_context_data = FlatVector::GetDataMutable<idx_t>(chunk.data[col++]);
 		client_context_data[size] = context.context.connection_id.GetIndex();
 	} else {
-		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 	if (context.context.transaction_id.IsValid()) {
-		auto client_context_data = FlatVector::GetData<idx_t>(chunk.data[col++]);
+		auto client_context_data = FlatVector::GetDataMutable<idx_t>(chunk.data[col++]);
 		client_context_data[size] = context.context.transaction_id.GetIndex();
 	} else {
-		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 	if (context.context.query_id.IsValid()) {
-		auto client_context_data = FlatVector::GetData<idx_t>(chunk.data[col++]);
+		auto client_context_data = FlatVector::GetDataMutable<idx_t>(chunk.data[col++]);
 		client_context_data[size] = context.context.query_id.GetIndex();
 	} else {
-		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 
 	if (context.context.thread_id.IsValid()) {
-		auto thread_data = FlatVector::GetData<idx_t>(chunk.data[col++]);
+		auto thread_data = FlatVector::GetDataMutable<idx_t>(chunk.data[col++]);
 		thread_data[size] = context.context.thread_id.GetIndex();
 	} else {
-		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 
-	chunk.SetCardinality(size + 1);
+	chunk.SetChildCardinality(size + 1);
 }
 
 void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
@@ -652,26 +652,26 @@ void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, c
 	idx_t col = 0;
 
 	if (normalize_contexts) {
-		auto context_id_data = FlatVector::GetData<idx_t>(log_entries_buffer->data[col++]);
+		auto context_id_data = FlatVector::GetDataMutable<idx_t>(log_entries_buffer->data[col++]);
 		context_id_data[size] = context.context_id;
 	} else {
 		WriteLoggingContextsToChunk(*log_entries_buffer, context, col);
 	}
 
-	auto timestamp_data = FlatVector::GetData<timestamp_t>(log_entries_buffer->data[col++]);
+	auto timestamp_data = FlatVector::GetDataMutable<timestamp_t>(log_entries_buffer->data[col++]);
 	timestamp_data[size] = timestamp;
 
-	auto type_data = FlatVector::GetData<string_t>(log_entries_buffer->data[col]);
+	auto type_data = FlatVector::GetDataMutable<string_t>(log_entries_buffer->data[col]);
 	type_data[size] = StringVector::AddString(log_entries_buffer->data[col++], log_type);
 
-	auto level_data = FlatVector::GetData<string_t>(log_entries_buffer->data[col]);
+	auto level_data = FlatVector::GetDataMutable<string_t>(log_entries_buffer->data[col]);
 	level_data[size] = StringVector::AddString(log_entries_buffer->data[col++],
 	                                           EnumUtil::ToString(level)); // TODO: do cast on write out
 
-	auto message_data = FlatVector::GetData<string_t>(log_entries_buffer->data[col]);
+	auto message_data = FlatVector::GetDataMutable<string_t>(log_entries_buffer->data[col]);
 	message_data[size] = StringVector::AddString(log_entries_buffer->data[col++], log_message);
 
-	log_entries_buffer->SetCardinality(size + 1);
+	log_entries_buffer->SetChildCardinality(size + 1);
 
 	if (size + 1 >= buffer_limit) {
 		if (normalize_contexts) {

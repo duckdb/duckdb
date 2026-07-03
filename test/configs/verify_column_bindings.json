@@ -1,0 +1,13 @@
+{
+  "description": "Run with debug_verify_column_bindings enabled",
+  "on_init": "SET debug_verify_column_bindings=true;",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "FIXME: Internal verification failed after CommonAggregateOptimizer",
+      "paths": [
+        "test/sql/aggregate/having/test_scalar_having.test"
+      ]
+    }
+  ]
+}

@@ -8,10 +8,24 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "resizable_buffer.hpp"
 
 namespace duckdb {
+class ParquetReader;
+class Vector;
+struct ParquetColumnSchema;
+struct SelectionVector;
 
 class StringColumnReader : public ColumnReader {
 public:

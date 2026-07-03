@@ -2,9 +2,6 @@
 # description: Bigint try cast
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 # integer casts
 statement ok
 CREATE TABLE bigints AS SELECT i::BIGINT i FROM (VALUES (-9223372036854775808), (0), (9223372036854775807)) tbl(i)

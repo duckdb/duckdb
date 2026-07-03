@@ -2,9 +2,6 @@
 # group: [upsert]
 
 statement ok
-pragma enable_verification;
-
-statement ok
 create table tbl (
 	i integer,
 	j integer unique
@@ -85,6 +82,6 @@ select * from tbl order by all
 # When we alias to 'excluded' we create an ambiguity error
 
 statement error
-insert into tbl as excluded values (8,3) on conflict (j) do update set i = 5;
+insert into tbl as excluded values (8,3) on conflict (j) do update set i = excluded.i;
 ----
 Ambiguous reference to table "excluded"

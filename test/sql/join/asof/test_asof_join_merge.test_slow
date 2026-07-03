@@ -9,7 +9,7 @@ statement ok
 PRAGMA threads=4
 
 statement ok
-SET temp_directory='__TEST_DIR__/temp.tmp'
+SET temp_directory='{TEST_DIR}/temp.tmp'
 
 # Force PhysicalAsOfJoin
 statement ok

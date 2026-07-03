@@ -2,9 +2,6 @@
 # description: Test the to_hex/from_hex function
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT to_hex('duckdb');
 ----

@@ -2,9 +2,6 @@
 # description: Test parallel read CSV function on ghub bugs
 # group: [parallel]
 
-statement ok
-PRAGMA enable_verification
-
 query IIIIIIIIIIIIIIIIIIIIIIIIII
 FROM read_csv('{DATA_DIR}/csv/14512_og.csv', buffer_size = 473, strict_mode = false, delim = ',', quote = '"', escape = '"')
 ----

@@ -2,9 +2,6 @@
 # description: Test window functions with booleans
 # group: [window]
 
-statement ok
-PRAGMA enable_verification
-
 # bool as group
 statement ok
 create table a as select range%2==0 j, range::integer AS i from range(1, 5, 1)

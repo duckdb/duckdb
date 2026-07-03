@@ -8,12 +8,12 @@ SET default_null_order='nulls_first';
 foreach type FLOAT DOUBLE
 
 query III
-SELECT signbit(3::${type}), signbit(-3::${type}), signbit(NULL::${type})
+SELECT signbit(3::{type}), signbit(-3::{type}), signbit(NULL::{type})
 ----
 false	true	NULL
 
 statement ok
-CREATE TABLE floats(f ${type})
+CREATE TABLE floats(f {type})
 
 statement ok
 INSERT INTO floats VALUES (3), (1.0::float), (-0.0::float), ('inf'), ('-inf'), (NULL)

@@ -7,7 +7,7 @@ foreach statement_type PRAGMA SET
 foreach null_order_type null_order default_null_order
 
 statement ok
-${statement_type} ${null_order_type}='nulls_last'
+{statement_type} {null_order_type}='nulls_last'
 
 query I
 SELECT * FROM range(3) UNION ALL SELECT NULL ORDER BY 1
@@ -18,7 +18,7 @@ SELECT * FROM range(3) UNION ALL SELECT NULL ORDER BY 1
 NULL
 
 statement ok
-${statement_type} ${null_order_type}='nulls_first'
+{statement_type} {null_order_type}='nulls_first'
 
 query I
 SELECT * FROM range(3) UNION ALL SELECT NULL ORDER BY 1
@@ -29,7 +29,7 @@ NULL
 2
 
 statement error
-${statement_type} ${null_order_type}='unknown_null_order'
+{statement_type} {null_order_type}='unknown_null_order'
 ----
 <REGEX>:Parser Error.*Unrecognized parameter for option.*
 

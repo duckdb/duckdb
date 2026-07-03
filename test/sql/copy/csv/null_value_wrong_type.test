@@ -2,9 +2,6 @@
 # description: Issue of not properly detecting a type in combination of null values
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query IIIIII
 describe from '{DATA_DIR}/csv/null_mismatch.csv'
 ----

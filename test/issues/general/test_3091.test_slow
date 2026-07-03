@@ -47,9 +47,9 @@ create table doubles as
     from lineitem
 
 query III nosort q0
-select l_extendedprice::decimal(${i},2) as l_extendedprice,
-       l_discount::decimal(${i},2) as l_discount,
-       l_tax::decimal(${i},2) as l_tax
+select l_extendedprice::decimal({i},2) as l_extendedprice,
+       l_discount::decimal({i},2) as l_discount,
+       l_tax::decimal({i},2) as l_tax
 from doubles
 ----
 

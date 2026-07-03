@@ -1,2 +1,2 @@
-d_year|i_category_id|i_category|sum
-2000|7|Home|43822.54
+d_year|i_category_id|i_category|sum(ss_ext_sales_price)
+2000|7|Home|16663.55

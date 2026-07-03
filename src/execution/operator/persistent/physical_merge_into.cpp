@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 
 namespace duckdb {
 
@@ -86,7 +87,7 @@ public:
 				state.insert_executor = make_uniq<ExpressionExecutor>(context.client, action->expressions);
 				vector<LogicalType> insert_types;
 				for (auto &expr : action->expressions) {
-					insert_types.push_back(expr->return_type);
+					insert_types.push_back(expr->GetReturnType());
 				}
 				state.insert_chunk = make_uniq<DataChunk>();
 				state.insert_chunk->Initialize(context.client, insert_types);
@@ -193,7 +194,7 @@ public:
 				if (action->action_type == MergeActionType::MERGE_ERROR) {
 					// abort - generate an error message
 					string merge_condition;
-					merge_condition += MergeIntoStatement::ActionConditionToString(range.condition);
+					merge_condition += MergeQueryNode::ActionConditionToString(range.condition);
 					if (action->condition) {
 						merge_condition += " AND " + action->condition->ToString();
 					}
@@ -286,10 +287,10 @@ void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChu
 	not_matched.count = 0;
 	not_matched_by_source.count = 0;
 
-	auto row_id_validity = chunk.data[row_id_index].Validity(chunk.size());
+	auto row_id_validity = chunk.data[row_id_index].Validity();
 	if (source_marker.IsValid()) {
 		// source marker - check both row id and source marker
-		auto source_marker_validity = chunk.data[source_marker.GetIndex()].Validity(chunk.size());
+		auto source_marker_validity = chunk.data[source_marker.GetIndex()].Validity();
 		for (idx_t i = 0; i < chunk.size(); i++) {
 			if (!source_marker_validity.IsValid(i)) {
 				// source marker is NULL - no source match
@@ -456,8 +457,7 @@ SourceResultType PhysicalMergeInto::GetDataInternal(ExecutionContext &context, D
                                                     OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<MergeIntoGlobalState>();
 	if (!return_chunk) {
-		chunk.SetCardinality(1);
-		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.merged_count.load())));
+		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.merged_count.load())));
 		return SourceResultType::FINISHED;
 	}
 	auto &gstate = input.global_state.Cast<MergeGlobalSourceState>();
@@ -502,8 +502,7 @@ SourceResultType PhysicalMergeInto::GetDataInternal(ExecutionContext &context, D
 				throw InternalException("Unsupported merge action for RETURNING");
 			}
 			Value merge_action(merge_action_name);
-			chunk.data.back().Reference(merge_action);
-			chunk.SetCardinality(lstate.scan_chunk.size());
+			chunk.data.back().Reference(merge_action, count_t(lstate.scan_chunk.size()));
 		}
 
 		if (result != SourceResultType::FINISHED) {

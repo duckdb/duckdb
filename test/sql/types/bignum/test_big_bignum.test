@@ -3,9 +3,6 @@
 # group: [bignum]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table t as select concat('1', repeat('0', i))::bignum as a from range(0,100) tbl(i)
 
 query I

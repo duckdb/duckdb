@@ -2,6 +2,7 @@
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include <cmath>
 
@@ -136,7 +137,7 @@ bool Bignum::VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &e
 	}
 	idx_t cur_pos = start_pos;
 	// Verify all is numeric
-	while (cur_pos < end_pos && std::isdigit(int_value_char[cur_pos])) {
+	while (cur_pos < end_pos && StringUtil::CharacterIsDigit(int_value_char[cur_pos])) {
 		cur_pos++;
 	}
 	if (cur_pos < end_pos) {
@@ -149,7 +150,7 @@ bool Bignum::VarcharFormatting(const string_t &value, idx_t &start_pos, idx_t &e
 		}
 
 		while (cur_pos < end_pos) {
-			if (std::isdigit(int_value_char[cur_pos])) {
+			if (StringUtil::CharacterIsDigit(int_value_char[cur_pos])) {
 				cur_pos++;
 			} else {
 				// By now we can only have numbers, otherwise this is invalid.
@@ -188,7 +189,7 @@ string Bignum::FromByteArray(uint8_t *data, idx_t size, bool is_negative) {
 	uint8_t *result_data = reinterpret_cast<uint8_t *>(&result[BIGNUM_HEADER_SIZE]);
 	if (is_negative) {
 		for (idx_t i = 0; i < size; i++) {
-			result_data[i] = ~data[i];
+			result_data[i] = static_cast<uint8_t>(~data[i]);
 		}
 	} else {
 		for (idx_t i = 0; i < size; i++) {
@@ -198,6 +199,7 @@ string Bignum::FromByteArray(uint8_t *data, idx_t size, bool is_negative) {
 	return result;
 }
 
+// typos:ignore-next-line
 // Following CPython and Knuth (TAOCP, Volume 2 (3rd edn), section 4.4, Method 1b).
 string Bignum::BignumToVarchar(const bignum_t &blob) {
 	string decimal_string;

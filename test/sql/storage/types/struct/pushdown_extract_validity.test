@@ -2,7 +2,7 @@
 # description: Test correct handling of validity columns in pushdown extract
 # group: [struct]
 
-load __TEST_DIR__/struct_pushdown_extract_null.db
+load {TEST_DIR}/struct_pushdown_extract_null.db
 
 statement ok
 SET threads=1

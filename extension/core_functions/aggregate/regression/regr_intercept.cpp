@@ -8,6 +8,9 @@ namespace duckdb {
 
 namespace {
 struct RegrInterceptState {
+	static constexpr const char *STATE_NAMES[] = {"count", "sum_x", "sum_y", "slope"};
+	using STATE_TYPE = StructStateType<uint64_t, double, double, RegrSlopeState>;
+
 	uint64_t count;
 	double sum_x;
 	double sum_y;
@@ -15,14 +18,6 @@ struct RegrInterceptState {
 };
 
 struct RegrInterceptOperation {
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.count = 0;
-		state.sum_x = 0;
-		state.sum_y = 0;
-		RegrSlopeOperation::Initialize<RegrSlopeState>(state.slope);
-	}
-
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		state.count++;
@@ -60,24 +55,11 @@ struct RegrInterceptOperation {
 	}
 };
 
-LogicalType GetRegrInterceptStateType(const AggregateFunction &) {
-	child_list_t<LogicalType> state_children;
-	state_children.emplace_back("count", LogicalType::UBIGINT);
-	state_children.emplace_back("sum_x", LogicalType::DOUBLE);
-	state_children.emplace_back("sum_y", LogicalType::DOUBLE);
-	child_list_t<LogicalType> slope_children;
-	slope_children.emplace_back("cov_pop", CovarPopFun::GetFunction().GetStateType());
-	slope_children.emplace_back("var_pop", VarPopFun::GetFunction().GetStateType());
-	state_children.emplace_back("slope", LogicalType::STRUCT(std::move(slope_children)));
-	return LogicalType::STRUCT(std::move(state_children));
-}
-
 } // namespace
 
 AggregateFunction RegrInterceptFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrInterceptState, double, double, double, RegrInterceptOperation>(
-	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetRegrInterceptStateType);
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

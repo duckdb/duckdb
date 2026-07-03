@@ -2,11 +2,14 @@
 # description: Test count_star, min, and max execution on row group statistics
 # group: [optimizer]
 
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
 # Alternative verify disables eager aggregate execution
 require no_alternative_verify
 
 statement ok
-ATTACH '__TEST_DIR__/eager_agg.duckdb' AS db (ROW_GROUP_SIZE 2048)
+ATTACH '{TEST_DIR}/eager_agg.duckdb' AS db (ROW_GROUP_SIZE 2048)
 
 statement ok
 USE db
@@ -16,7 +19,7 @@ CREATE TABLE t AS (SELECT * FROM range(8192) _(i), LATERAL (select (i*2) as j));
 
 # Work-around for unsetting version info
 statement ok
-ATTACH '__TEST_DIR__/tmp.duckdb' AS tmp
+ATTACH '{TEST_DIR}/tmp.duckdb' AS tmp
 
 statement ok
 USE tmp
@@ -25,7 +28,7 @@ statement ok
 DETACH db
 
 statement ok
-ATTACH '__TEST_DIR__/eager_agg.duckdb' AS db (ROW_GROUP_SIZE 2048)
+ATTACH '{TEST_DIR}/eager_agg.duckdb' AS db (ROW_GROUP_SIZE 2048)
 
 statement ok
 USE db

@@ -1,9 +1,6 @@
 # name: test/sql/types/nested/map/test_null_map_interaction.test
 # group: [map]
 
-statement ok
-pragma enable_verification
-
 query I
 SELECT TYPEOF(MAP_KEYS(NULL::MAP(TEXT, BIGINT)));
 ----

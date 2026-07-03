@@ -2,9 +2,6 @@
 # description: Suffix test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # Short string (4bytes)
 query T
 SELECT suffix('abcd', 'd')

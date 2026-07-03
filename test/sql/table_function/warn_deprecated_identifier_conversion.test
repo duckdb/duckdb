@@ -1,0 +1,36 @@
+# name: test/sql/table_function/warn_deprecated_identifier_conversion.test
+# description: Test deprecated implicit identifier-to-string conversion setting in table functions
+# group: [table_function]
+
+# Default behavior still converts the identifier to a string.
+query I
+SELECT count(*) FROM glob(no_such_file.csv);
+----
+0
+
+# Explicit string literals should continue to work.
+query I
+SELECT count(*) FROM glob('no_such_file.csv');
+----
+0
+
+# Explicitly enabling the deprecated behavior should not warn.
+statement ok
+SET table_function_identifier_conversion='ENABLE_IMPLICIT_STRING';
+
+query I
+SELECT count(*) FROM glob(no_such_file.csv);
+----
+0
+
+# Disabling the deprecated behavior rejects implicit conversion.
+statement ok
+SET table_function_identifier_conversion='DISABLE_IMPLICIT_STRING';
+
+statement error
+SELECT count(*) FROM glob(no_such_file.csv);
+----
+Deprecated implicit conversion of unbound identifiers to strings in table function arguments detected
+
+statement ok
+RESET table_function_identifier_conversion;

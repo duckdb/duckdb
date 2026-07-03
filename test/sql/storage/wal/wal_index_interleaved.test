@@ -2,7 +2,7 @@
 # description: Test WAL replay with interleaved inserts and deletes on a single column index
 # group: [wal]
 
-load __TEST_DIR__/index_interleaved_test.db
+load {TEST_DIR}/index_interleaved_test.db
 
 statement ok
 SET index_scan_percentage = 1.0;
@@ -25,10 +25,10 @@ CREATE INDEX idx_a ON tbl(a);
 loop i 0 15
 
 statement ok
-INSERT INTO tbl VALUES (${i} * 10);
+INSERT INTO tbl VALUES ({i} * 10);
 
 statement ok
-DELETE FROM tbl WHERE a = ${i} * 10 AND (${i} * 10) % 30 = 0;
+DELETE FROM tbl WHERE a = {i} * 10 AND ({i} * 10) % 30 = 0;
 
 endloop
 
@@ -67,7 +67,7 @@ SELECT COUNT(*) FROM tbl;
 loop i 0 15
 
 query II
-EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = ${i} * 10;
+EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = {i} * 10;
 ----
 analyzed_plan	<REGEX>:.*Type: Index Scan.*
 

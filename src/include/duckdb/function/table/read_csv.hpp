@@ -41,8 +41,8 @@ struct BaseCSVData : public TableFunctionData {
 };
 
 struct WriteCSVData : public BaseCSVData {
-	explicit WriteCSVData(vector<string> names) {
-		options.name_list = std::move(names);
+	explicit WriteCSVData(const vector<Identifier> &names) {
+		options.name_list = IdentifiersToStrings(names);
 		if (options.dialect_options.state_machine_options.escape == '\0') {
 			options.dialect_options.state_machine_options.escape = options.dialect_options.state_machine_options.quote;
 		}

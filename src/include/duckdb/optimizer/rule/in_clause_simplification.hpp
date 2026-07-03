@@ -21,4 +21,13 @@ public:
 	                             bool is_root) override;
 };
 
+// The in enum simplification rule rewrites cases where a left enum::VARCHAR is compared with right string literals
+class InEnumSimplificationRule : public Rule {
+public:
+	explicit InEnumSimplificationRule(ExpressionRewriter &rewriter);
+
+	unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference<Expression>> &bindings, bool &changes_made,
+	                             bool is_root) override;
+};
+
 } // namespace duckdb

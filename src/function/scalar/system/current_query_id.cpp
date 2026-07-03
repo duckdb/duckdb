@@ -22,8 +22,8 @@ struct CurrentQueryIdData : FunctionData {
 	}
 };
 
-unique_ptr<FunctionData> CurrentQueryIdBind(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> CurrentQueryIdBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
 	Value query_id;
 	if (context.transaction.HasActiveTransaction()) {
 		query_id = Value::UBIGINT(context.transaction.GetActiveQuery());
@@ -35,15 +35,15 @@ unique_ptr<FunctionData> CurrentQueryIdBind(ClientContext &context, ScalarFuncti
 
 void CurrentQueryIdFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<CurrentQueryIdData>();
-	result.Reference(info.query_id);
+	const auto &info = func_expr.BindInfo()->Cast<CurrentQueryIdData>();
+	result.Reference(info.query_id, count_t(args.size()));
 }
 
 } // namespace
 
 ScalarFunction CurrentQueryId::GetFunction() {
 	return ScalarFunction({}, LogicalType::UBIGINT, CurrentQueryIdFunction, CurrentQueryIdBind, nullptr, nullptr,
-	                      nullptr, LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
+	                      LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
 }
 
 } // namespace duckdb

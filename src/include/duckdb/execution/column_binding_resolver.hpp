@@ -22,7 +22,7 @@ public:
 	explicit ColumnBindingResolver(bool verify_only = false);
 
 	void VisitOperator(LogicalOperator &op) override;
-	static void Verify(LogicalOperator &op);
+	static void Verify(ClientContext &context, LogicalOperator &op);
 
 protected:
 	vector<ColumnBinding> bindings;

@@ -528,10 +528,10 @@ static void DeserializeNumericStatsValue(const LogicalType &type, NumericValueUn
 
 void NumericStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto &numeric_stats = NumericStats::GetDataUnsafe(stats);
-	serializer.WriteObject(200, "max", [&](Serializer &object) {
+	serializer.WriteObject(200, "min", [&](Serializer &object) {
 		SerializeNumericStatsValue(stats.GetType(), numeric_stats.min, numeric_stats.has_min, object);
 	});
-	serializer.WriteObject(201, "min", [&](Serializer &object) {
+	serializer.WriteObject(201, "max", [&](Serializer &object) {
 		SerializeNumericStatsValue(stats.GetType(), numeric_stats.max, numeric_stats.has_max, object);
 	});
 }
@@ -539,10 +539,10 @@ void NumericStats::Serialize(const BaseStatistics &stats, Serializer &serializer
 void NumericStats::Deserialize(Deserializer &deserializer, BaseStatistics &result) {
 	auto &numeric_stats = NumericStats::GetDataUnsafe(result);
 
-	deserializer.ReadObject(200, "max", [&](Deserializer &object) {
+	deserializer.ReadObject(200, "min", [&](Deserializer &object) {
 		DeserializeNumericStatsValue(result.GetType(), numeric_stats.min, numeric_stats.has_min, object);
 	});
-	deserializer.ReadObject(201, "min", [&](Deserializer &object) {
+	deserializer.ReadObject(201, "max", [&](Deserializer &object) {
 		DeserializeNumericStatsValue(result.GetType(), numeric_stats.max, numeric_stats.has_max, object);
 	});
 }
@@ -557,9 +557,9 @@ child_list_t<Value> NumericStats::ToStruct(const BaseStatistics &stats) {
 }
 
 template <class T>
-void NumericStats::TemplatedVerify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel,
+void NumericStats::TemplatedVerify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel,
                                    idx_t count) {
-	auto entries = vector.Values<T>(count);
+	auto entries = vector.Values<T>();
 	auto min_value = NumericStats::MinOrNull(stats);
 	auto max_value = NumericStats::MaxOrNull(stats);
 	for (idx_t i = 0; i < count; i++) {
@@ -568,18 +568,19 @@ void NumericStats::TemplatedVerify(const BaseStatistics &stats, Vector &vector, 
 		if (!entry.IsValid()) {
 			continue;
 		}
-		if (!min_value.IsNull() && LessThan::Operation(entry.value, min_value.GetValueUnsafe<T>())) { // LCOV_EXCL_START
+		if (!min_value.IsNull() &&
+		    LessThan::Operation(entry.GetValue(), min_value.GetValueUnsafe<T>())) { // LCOV_EXCL_START
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
-			                        stats.ToString(), vector.ToString(count));
+			                        stats.ToString(), vector.ToString());
 		} // LCOV_EXCL_STOP
-		if (!max_value.IsNull() && GreaterThan::Operation(entry.value, max_value.GetValueUnsafe<T>())) {
+		if (!max_value.IsNull() && GreaterThan::Operation(entry.GetValue(), max_value.GetValueUnsafe<T>())) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
-			                        stats.ToString(), vector.ToString(count));
+			                        stats.ToString(), vector.ToString());
 		}
 	}
 }
 
-void NumericStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void NumericStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &type = stats.GetType();
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:

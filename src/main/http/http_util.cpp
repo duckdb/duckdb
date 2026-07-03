@@ -10,11 +10,17 @@
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/settings.hpp"
 
-#ifndef DISABLE_DUCKDB_REMOTE_INSTALL
-#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
+#ifdef DISABLE_DUCKDB_REMOTE_INSTALL
+#define DUCKDB_DISABLE_BUILTIN_HTTPLIB
+#endif
+#ifdef DUCKDB_DISABLE_EXTENSION_LOAD
+#define DUCKDB_DISABLE_BUILTIN_HTTPLIB
+#endif
+
+#ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
 #include "httplib.hpp"
 #endif
-#endif
+
 #ifndef DUCKDB_NO_THREADS
 #include <chrono>
 #include <thread>
@@ -45,6 +51,7 @@ string HTTPHeaders::GetHeaderValue(const string &key) const {
 	return entry->second;
 }
 
+#ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
 unique_ptr<HTTPResponse> TransformResponse(duckdb_httplib::Result &res) {
 	auto status_code = HTTPUtil::ToStatusCode(res ? res->status : 0);
 	auto result = make_uniq<HTTPResponse>(status_code);
@@ -60,6 +67,7 @@ unique_ptr<HTTPResponse> TransformResponse(duckdb_httplib::Result &res) {
 	}
 	return result;
 }
+#endif
 
 HTTPResponse::HTTPResponse(HTTPStatusCode code) : status(code) {
 }
@@ -109,6 +117,7 @@ bool HTTPResponse::ShouldRetry() const {
 	case HTTPStatusCode::ImATeapot_418:
 	case HTTPStatusCode::TooManyRequests_429:
 	case HTTPStatusCode::InternalServerError_500:
+	case HTTPStatusCode::BadGateway_502:
 	case HTTPStatusCode::ServiceUnavailable_503:
 	case HTTPStatusCode::GatewayTimeout_504:
 		return true;
@@ -131,9 +140,10 @@ BaseRequest::BaseRequest(RequestType type, const string &url, const HTTPHeaders 
 	HTTPUtil::DecomposeURL(url, path, proto_host_port);
 }
 
+#ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
 class HTTPLibClient : public HTTPClient {
 public:
-	HTTPLibClient(HTTPParams &http_params, const string &proto_host_port) {
+	HTTPLibClient(HTTPParams &http_params, const string &proto_host_port) : HTTPClient(proto_host_port) {
 		client = make_uniq<duckdb_httplib::Client>(proto_host_port);
 		Initialize(http_params);
 	}
@@ -187,6 +197,10 @@ public:
 		throw NotImplementedException("POST request not implemented");
 	}
 
+	unique_ptr<HTTPResponse> Options(OptionsRequestInfo &info) override {
+		throw NotImplementedException("OPTIONS request not implemented");
+	}
+
 	unique_ptr<duckdb_httplib::Client> client;
 
 private:
@@ -220,14 +234,27 @@ private:
 		}
 	}
 };
+#endif
 
 unique_ptr<HTTPClient> HTTPUtil::InitializeClient(HTTPParams &http_params, const string &proto_host_port) {
+#ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
 	return make_uniq<HTTPLibClient>(http_params, proto_host_port);
+#else
+	return nullptr;
+#endif
+}
+
+void HTTPUtil::CloseClient(unique_ptr<HTTPClient> &&) {
+	// default: no-op, client is destroyed
 }
 
 unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client) {
 	if (!client) {
 		client = InitializeClient(request.params, request.proto_host_port);
+		if (!client) {
+			throw InvalidConfigurationException(
+			    "HTTPClient is not been setup yet (possibly due to configuration), no HTTP request can be performed");
+		}
 	}
 
 	std::function<unique_ptr<HTTPResponse>(void)> on_request([&]() {
@@ -239,20 +266,15 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 		}
 
 		try {
-			if (request.have_request_timing) {
-				request.request_start = Timestamp::GetCurrentTimestamp();
-			}
+			request.request_system_start = Timestamp::GetCurrentTimestamp();
+			request.request_monotonic_start = TimePoint::Tick();
 			response = client->Request(request);
 		} catch (...) {
-			if (request.have_request_timing) {
-				request.request_end = Timestamp::GetCurrentTimestamp();
-			}
+			request.request_monotonic_end = TimePoint::Tick();
 			LogRequest(request, nullptr);
 			throw;
 		}
-		if (request.have_request_timing) {
-			request.request_end = Timestamp::GetCurrentTimestamp();
-		}
+		request.request_monotonic_end = TimePoint::Tick();
 		LogRequest(request, response ? response.get() : nullptr);
 		return response;
 	});
@@ -460,7 +482,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 	auto db = FileOpener::TryGetDatabase(opener);
 	if (db) {
-		auto http_proxy_setting = Settings::Get<HTTPProxySetting>(*db);
+		auto &http_proxy_setting = db->config.options.http_proxy;
 		if (!http_proxy_setting.empty()) {
 			idx_t port;
 			string host;
@@ -474,10 +496,7 @@ void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 
 	auto client_context = FileOpener::TryGetClientContext(opener);
 	if (client_context) {
-		auto &client_config = ClientConfig::GetConfig(*client_context);
-		if (client_config.enable_http_logging) {
-			logger = client_context->logger;
-		}
+		logger = client_context->logger;
 	}
 }
 
@@ -514,6 +533,8 @@ unique_ptr<HTTPResponse> HTTPClient::Request(BaseRequest &request) {
 		return Delete(request.Cast<DeleteRequestInfo>());
 	case RequestType::POST_REQUEST:
 		return Post(request.Cast<PostRequestInfo>());
+	case RequestType::OPTIONS_REQUEST:
+		return Options(request.Cast<OptionsRequestInfo>());
 	default:
 		throw InternalException("Unsupported request type");
 	}

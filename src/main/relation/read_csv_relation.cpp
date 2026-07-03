@@ -48,7 +48,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 
 	if (file_options.union_by_name) {
 		vector<LogicalType> types;
-		vector<string> names;
+		vector<Identifier> names;
 		auto result = make_uniq<MultiFileBindData>();
 		auto csv_data = make_uniq<ReadCSVData>();
 		result->interface = make_uniq<CSVMultiFileInfo>();
@@ -74,7 +74,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 	} else {
 		if (csv_options.auto_detect) {
 			vector<LogicalType> return_types;
-			vector<string> names;
+			vector<Identifier> names;
 			shared_ptr<CSVBufferManager> buffer_manager;
 			CSVSchemaDiscovery::SchemaDiscovery(*context, buffer_manager, csv_options, file_options, return_types,
 			                                    names, multi_file_list);
@@ -84,7 +84,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		} else {
 			for (idx_t i = 0; i < csv_options.sql_type_list.size(); i++) {
 				D_ASSERT(csv_options.name_list.size() == csv_options.sql_type_list.size());
-				columns.emplace_back(csv_options.name_list[i], csv_options.sql_type_list[i]);
+				columns.emplace_back(Identifier(csv_options.name_list[i]), csv_options.sql_type_list[i]);
 			}
 		}
 		// After sniffing we can consider these set, so they are exported as named parameters
@@ -120,7 +120,7 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 
 	child_list_t<Value> column_names;
 	for (idx_t i = 0; i < columns.size(); i++) {
-		column_names.push_back(make_pair(columns[i].Name(), Value(columns[i].Type().ToString())));
+		column_names.emplace_back(make_pair(columns[i].Name(), Value(columns[i].Type().ToString())));
 	}
 
 	if (!file_options.union_by_name) {
@@ -131,8 +131,8 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 	RemoveNamedParameterIfExists("dtypes");
 }
 
-string ReadCSVRelation::GetAlias() {
-	return alias;
+Identifier ReadCSVRelation::GetAlias() {
+	return Identifier(alias);
 }
 
 } // namespace duckdb

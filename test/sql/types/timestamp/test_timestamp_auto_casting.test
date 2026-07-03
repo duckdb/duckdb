@@ -3,9 +3,6 @@
 # group: [timestamp]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE timestamps(ts_SEC TIMESTAMP_S, ts_MS TIMESTAMP_MS, ts TIMESTAMP, ts_NS TIMESTAMP_NS)
 
 # FIXME - we don't actually support nanosecond precision in string parsing

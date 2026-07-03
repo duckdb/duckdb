@@ -136,7 +136,7 @@ public:
 struct JSONScan {
 public:
 	static void AutoDetect(ClientContext &context, MultiFileBindData &bind_data, vector<LogicalType> &return_types,
-	                       vector<string> &names);
+	                       vector<Identifier> &names);
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
 	                      const TableFunction &function);

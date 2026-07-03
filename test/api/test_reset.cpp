@@ -1,5 +1,8 @@
 #include "catch.hpp"
+#include "duckdb/common/enums/allow_parser_override.hpp"
 #include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
+#include "duckdb/common/enums/dialect_compatibility_mode.hpp"
+#include "duckdb/common/enums/table_function_identifier_conversion.hpp"
 #include "test_helpers.hpp"
 
 #include <iostream>
@@ -55,6 +58,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"disabled_compression_methods", {"RLE"}},
 	    {"disabled_optimizers", {"extension"}},
 	    {"debug_force_external", {Value(true)}},
+	    {"debug_order_verification", {"create_sort_key"}},
 	    {"old_implicit_casting", {Value(true)}},
 	    {"prefer_range_joins", {Value(true)}},
 	    {"variant_minimum_shredding_size", {Value::INTEGER(-1)}},
@@ -65,7 +69,10 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"lambda_syntax", {EnumUtil::ToString(LambdaSyntax::DISABLE_SINGLE_ARROW)}},
 	    {"deprecated_using_key_syntax", {EnumUtil::ToString(DeprecatedUsingKeySyntax::UNION_AS_UNION_ALL)}},
-	    {"allow_parser_override_extension", {"fallback"}},
+	    {"table_function_identifier_conversion",
+	     {EnumUtil::ToString(TableFunctionIdentifierConversion::DISABLE_IMPLICIT_STRING)}},
+	    {"dialect_compatibility_mode", {EnumUtil::ToString(DialectCompatibilityMode::SPARK)}},
+	    {"allow_parser_override_extension", {EnumUtil::ToString(AllowParserOverride::FALLBACK_OVERRIDE)}},
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
 #ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
 	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
@@ -82,10 +89,12 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "uncompressed"}},
 	    {"home_directory", {"test"}},
+	    {"default_io_mode", {"MMAP"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
 	    {"extension_directory", {"test"}},
 	    {"extension_directories", {"[test]"}},
 	    {"max_expression_depth", {50}},
+	    {"write_buffer_row_group_memory_limit", {"4.0 GiB"}},
 	    {"max_memory", {"4.0 GiB"}},
 	    {"max_temp_directory_size", {"10.0 GiB"}},
 	    {"merge_join_threshold", {73}},
@@ -103,7 +112,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"preserve_identifier_case", {false}},
 	    {"preserve_insertion_order", {false}},
 	    {"profile_output", {"output.txt"}},
-	    {"profiling_mode", {"detailed"}},
+	    {"profiling_mode", {"standard"}},
 	    {"disabled_log_types", {"blabla"}},
 	    {"enabled_log_types", {"blabla"}},
 	    {"enabled_log_types", {"blabla"}},
@@ -115,10 +124,10 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"scalar_subquery_error_on_multiple_rows", {false}},
 	    {"ieee_floating_point_ops", {false}},
 	    {"progress_bar_time", {0}},
+	    {"regex_match_operator_semantics", {"full"}},
 	    {"temp_directory", {"tmp"}},
 	    {"wal_autocheckpoint", {"4.0 GiB"}},
 	    {"force_bitpacking_mode", {"constant"}},
-	    {"enable_http_logging", {false}},
 	    {"http_proxy", {"localhost:80"}},
 	    {"http_proxy_username", {"john"}},
 	    {"http_proxy_password", {"doe"}},
@@ -126,13 +135,22 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
 	    {"arrow_output_version", {"1.5"}},
 	    {"enable_external_file_cache", {false}},
+	    {"external_file_cache_local_block_size", {Value::UBIGINT(4096)}},
+	    {"external_file_cache_remote_block_size", {Value::UBIGINT(4096)}},
 	    {"validate_external_file_cache", {"NO_VALIDATION"}},
 	    {"experimental_metadata_reuse", {false}},
 	    {"storage_block_prefetch", {"always_prefetch"}},
 	    {"operator_memory_limit", {"4.0 GiB"}},
 	    {"pin_threads", {"off"}},
-	    {"current_transaction_invalidation_policy", {"ALL_ERRORS_INVALIDATE_TRANSACTION"}},
-	    {"checkpoint_on_detach", {"ENABLED"}}};
+	    {"current_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
+	    {"default_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
+	    {"checkpoint_on_detach", {"ENABLED"}},
+	    {"debug_verify_statement", {"copy_statement"}},
+	    {"enable_caching_operators", {false}},
+	    {"enable_optimizer", {false}},
+	    {"parallelize_sequential_sources", {false}},
+	    {"initial_column_segment_size", {4096}},
+	    {"delim_join_as_cte", {false}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {
@@ -157,6 +175,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 
 bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
+	    "__delta_only_variant_encoding_enabled",
 	    "access_mode",
 	    "allowed_configs",
 	    "allowed_directories",
@@ -172,6 +191,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "allow_community_extensions",    // cant change this while db is running
 	    "allow_unredacted_secrets",      // cant change this while db is running
 	    "disable_database_invalidation", // cant change this while db is running
+	    "vacuum_rebuild_indexes",        // cant change this while db is running
 	    "temp_file_encryption",
 	    "enable_object_cache",
 	    "force_variant_shredding",
@@ -180,6 +200,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "password",
 	    "username",
 	    "user",
+	    "max_execution_time",
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",
@@ -190,7 +211,6 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "default_block_size",
 	    "index_scan_percentage",
 	    "scheduler_process_partial",
-	    "http_logging_output",
 	    "enable_profiling",
 	    "enable_progress_bar",
 	    "enable_progress_bar_print",
@@ -198,7 +218,13 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "progress_bar_time",
 	    "index_scan_max_count",
 	    "profiling_mode",
-	    "warnings_as_errors",      // requires logging to be enabled
+	    "profiling_renderer_settings",
+	    "worker_threads",
+	    "tracked_metrics",
+	    "debug_verification_mode",
+	    "standard_vector_size",
+	    "warnings_as_errors", // requires logging to be enabled
+	    "debug_transformer_trampoline_style",
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }

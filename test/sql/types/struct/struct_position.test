@@ -2,9 +2,6 @@
 # description: Test struct_position function
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 # ==========================================================
 # Basic functionality tests
 # ==========================================================

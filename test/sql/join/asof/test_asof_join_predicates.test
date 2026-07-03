@@ -3,7 +3,7 @@
 # group: [asof]
 
 statement ok
-PRAGMA enable_verification;
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
 # Issue 18309
 statement ok

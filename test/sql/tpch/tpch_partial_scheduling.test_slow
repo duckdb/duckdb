@@ -14,14 +14,14 @@ concurrentloop i 1 23
 
 onlyif i<=9
 query I
-PRAGMA tpch(${i})
+PRAGMA tpch({i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf1/q0{i}.csv
 
 onlyif i>=10
 query I
-PRAGMA tpch(${i})
+PRAGMA tpch({i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf1/q{i}.csv
 
 endloop

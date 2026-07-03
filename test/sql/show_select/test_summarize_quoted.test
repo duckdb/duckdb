@@ -1,9 +1,6 @@
 # name: test/sql/show_select/test_summarize_quoted.test
 # group: [show_select]
 
-statement ok
-pragma enable_verification;
-
 # Quoted table name, no schema name
 statement ok
 create table "a.b.c" (x int);

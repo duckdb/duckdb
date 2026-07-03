@@ -21,11 +21,12 @@ idx_t ExtensionHelper::ExtensionAliasCount() {
 	return index;
 }
 
-ExtensionAlias ExtensionHelper::GetExtensionAlias(idx_t index) {
+ExtensionAlias ExtensionHelper::GetInternalExtensionAlias(idx_t index) {
 	D_ASSERT(index < ExtensionAliasCount());
 	return internal_aliases[index];
 }
 
+// todo; we might want to update this
 string ExtensionHelper::ApplyExtensionAlias(const string &extension_name) {
 	auto lname = StringUtil::Lower(extension_name);
 	for (idx_t index = 0; internal_aliases[index].alias; index++) {

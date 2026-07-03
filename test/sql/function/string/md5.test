@@ -2,9 +2,6 @@
 # description: Test the md5 function
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 select md5('hello'), md5(NULL)
 ----

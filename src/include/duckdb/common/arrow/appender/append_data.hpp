@@ -29,7 +29,8 @@ typedef void (*initialize_t)(ArrowAppendData &result, const LogicalType &type, i
 // from: The offset into the input we're scanning
 // to: The last index of the input we're scanning
 // input_size: The total size of the 'input' Vector.
-typedef void (*append_vector_t)(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size);
+typedef void (*append_vector_t)(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to,
+                                idx_t input_size);
 typedef void (*finalize_t)(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result);
 
 // This struct is used to save state for appending a column
@@ -92,6 +93,13 @@ public:
 		null_count++;
 	}
 	void AppendValidity(UnifiedVectorFormat &format, idx_t from, idx_t to);
+
+	//! Append a (child) vector, routing it through the Arrow extension's duckdb_to_arrow
+	//! conversion first when one is set. Container appenders must call this instead of
+	//! append_vector so nested extension types (e.g. arrow.bool8 BOOLEAN) get the same
+	//! conversion the top-level appender applies, keeping the data layout in sync with
+	//! the schema declared by SetArrowFormat.
+	void AppendChild(const Vector &input, idx_t from, idx_t to, idx_t input_size);
 
 public:
 	idx_t row_count = 0;

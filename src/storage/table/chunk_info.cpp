@@ -66,17 +66,7 @@ unique_ptr<ChunkInfo> ChunkInfo::Read(FixedSizeAllocator &allocator, ReadStream 
 	}
 }
 
-idx_t ChunkInfo::GetCommittedDeletedCount(idx_t max_count) const {
-	ScanOptions options(TransactionData(0, TRANSACTION_ID_START));
-	options.insert_type = InsertedScanType::ALL_ROWS;
-	options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
-	idx_t not_deleted_count = GetSelVector(options, nullptr, max_count);
-	return max_count - not_deleted_count;
-}
-
-idx_t ChunkInfo::GetCheckpointRowCount(TransactionData transaction, idx_t max_count) {
-	ScanOptions options(transaction);
-	options.delete_type = DeletedScanType::INCLUDE_ALL_DELETED;
+idx_t ChunkInfo::GetRowCount(ScanOptions options, idx_t max_count) {
 	return GetSelVector(options, nullptr, max_count);
 }
 
