@@ -173,7 +173,6 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	vector<LogicalType> scanned_types;
 	vector<ColumnIndex> column_indexes;
 	optional_ptr<TableFilterSet> filters;
-	atomic<bool> finished {false};
 
 	unique_ptr<GlobalTableFunctionState> global_state;
 
@@ -211,12 +210,6 @@ enum class MultiFileAcquireResult : uint8_t {
 	ACQUIRED,  //! a ready-to-decode job is now current
 	EXHAUSTED, //! the scan is exhausted, we have no more jobs
 	PARKED     //! the operator parked on schedule-time async I/O,  return from the scan
-};
-
-//! Outcome of finishing the just-decoded scan job
-enum class MultiFileFinishResult : uint8_t {
-	CONTINUE, //! a fresh job/slot is ready, we can keep scanning
-	EXHAUSTED //! the scan is finished
 };
 
 //! A single, independently schedulable unit of scan work (e.g. one Parquet row group of one file)

@@ -806,15 +806,6 @@ public:
 		return MultiFileAcquireResult::ACQUIRED;
 	}
 
-	static MultiFileFinishResult FinishPerThread(ClientContext &context, MultiFileLocalState &lstate,
-	                                             MultiFileGlobalState &gstate, MultiFileBindData &bind_data) {
-		if (!ClaimNextJob(context, bind_data, gstate, lstate.job)) {
-			return MultiFileFinishResult::EXHAUSTED;
-		}
-		lstate.job_state = MultiFileJobState::SCHEDULE;
-		return MultiFileFinishResult::CONTINUE;
-	}
-
 	static MultiFileAcquireResult AcquireNextReadAhead(ClientContext &context, TableFunctionInput &data_p,
 	                                                   MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
 	                                                   MultiFileBindData &bind_data) {
@@ -852,13 +843,6 @@ public:
 		}
 	}
 
-	static MultiFileFinishResult FinishReadAhead(MultiFileLocalState &lstate, MultiFileGlobalState &gstate) {
-		// hand the scan state back for reuse
-		gstate.read_ahead->PushState(std::move(lstate.job.reader_scan_state));
-		lstate.job_state = MultiFileJobState::NONE;
-		return MultiFileFinishResult::CONTINUE;
-	}
-
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
 			data_p.async_result = SourceResultType::FINISHED;
@@ -867,11 +851,6 @@ public:
 		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
-
-		if (gstate.finished) {
-			data_p.async_result = SourceResultType::FINISHED;
-			return;
-		}
 
 		if (data.job_state == MultiFileJobState::WAIT_IO) {
 			gstate.read_ahead->WaitForJob(data.job);
@@ -899,18 +878,12 @@ public:
 			case MultiFileDecodeResult::RETURN_TO_CALLER:
 				return;
 			case MultiFileDecodeResult::JOB_FINISHED: {
-				auto finished = gstate.read_ahead ? FinishReadAhead(data, gstate)
-				                                  : FinishPerThread(context, data, gstate, bind_data);
-				if (finished == MultiFileFinishResult::EXHAUSTED) {
-					if (output.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
-						gstate.finished = true;
-						data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
-					} else {
-						data_p.async_result = SourceResultType::FINISHED;
-					}
-					return;
+				if (gstate.read_ahead) {
+					// hand the scan state back so learned reader state carries over to jobs created later
+					gstate.read_ahead->PushState(std::move(data.job.reader_scan_state));
 				}
-				// emit any trailing chunk, then loop to decode the next job (or acquire one from the queue)
+				data.job_state = MultiFileJobState::NONE;
+				// emit any trailing chunk, then loop to acquire the next job
 				if (EmitOutput(data_p, output)) {
 					return;
 				}

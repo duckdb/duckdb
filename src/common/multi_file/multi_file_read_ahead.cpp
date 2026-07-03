@@ -37,7 +37,7 @@ void ReadAheadJobCompletion::FinishIOTask() {
 		// I/O tasks still outstanding, nothing to wake yet
 		return;
 	}
-	// this was the last I/O task: wake the parked scan task, if any
+	// wake the parked scan task, if any
 	const annotated_lock_guard<annotated_mutex> guard {parked_scan.lock};
 	parked_scan.UnblockTasks();
 }

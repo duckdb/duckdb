@@ -3562,24 +3562,6 @@ MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value) {
 	return static_cast<MultiFileFileState>(StringUtil::StringToEnum(GetMultiFileFileStateValues(), 5, "MultiFileFileState", value));
 }
 
-const StringUtil::EnumStringLiteral *GetMultiFileFinishResultValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(MultiFileFinishResult::CONTINUE), "CONTINUE" },
-		{ static_cast<uint32_t>(MultiFileFinishResult::EXHAUSTED), "EXHAUSTED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<MultiFileFinishResult>(MultiFileFinishResult value) {
-	return StringUtil::EnumToString(GetMultiFileFinishResultValues(), 2, "MultiFileFinishResult", static_cast<uint32_t>(value));
-}
-
-template<>
-MultiFileFinishResult EnumUtil::FromString<MultiFileFinishResult>(const char *value) {
-	return static_cast<MultiFileFinishResult>(StringUtil::StringToEnum(GetMultiFileFinishResultValues(), 2, "MultiFileFinishResult", value));
-}
-
 const StringUtil::EnumStringLiteral *GetMultiFileJobStateValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MultiFileJobState::NONE), "NONE" },
