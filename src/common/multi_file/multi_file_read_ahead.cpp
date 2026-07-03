@@ -158,13 +158,10 @@ bool MultiFileReadAhead::TryCompleteJobIO(MultiFileScanJob &job) {
 		return true;
 	}
 	while (job.io_completion->PendingIOTasks() > 0) {
-		shared_ptr<Task> task;
-		if (!executor->GetTask(task)) {
+		// pull a queued I/O task off the executor and run it on this thread
+		if (!executor->TryExecuteTask()) {
 			return false;
 		}
-		// pull a queued I/O task off the executor and run it on this thread
-		task->Execute(TaskExecutionMode::PROCESS_ALL);
-		task.reset();
 	}
 	return true;
 }

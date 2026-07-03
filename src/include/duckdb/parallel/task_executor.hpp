@@ -40,6 +40,8 @@ public:
 	//! Work on tasks until all tasks are finished. Throws an exception if any error occurred while executing the tasks.
 	void WorkOnTasks();
 
+	//! Pull one queued task off the scheduler and execute it - returns false when no task was queued
+	bool TryExecuteTask();
 	//! Get a task - returns true if a task was found
 	bool GetTask(shared_ptr<Task> &task);
 
