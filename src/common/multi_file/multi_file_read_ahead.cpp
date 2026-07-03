@@ -31,29 +31,24 @@ private:
 };
 
 void ReadAheadJobCompletion::FinishIOTask() {
-	--pending_io_tasks;
-	if (pending_io_tasks != 0) {
+	const auto previous = pending_io_tasks.fetch_sub(1);
+	D_ASSERT(previous > 0);
+	if (previous > 1) {
 		// I/O tasks still outstanding, nothing to wake yet
 		return;
 	}
-	unique_ptr<InterruptState> to_wake;
-	{
-		lock_guard<mutex> guard(lock);
-		to_wake = std::move(parked_scan);
-	}
-	if (to_wake) {
-		to_wake->Callback();
-	}
+	// this was the last I/O task: wake the parked scan task, if any
+	const annotated_lock_guard<annotated_mutex> guard {parked_scan.lock};
+	parked_scan.UnblockTasks();
 }
 
 bool ReadAheadJobCompletion::TryPark(const InterruptState &interrupt_state) {
 	// checking the pending count under the same lock FinishIOTask takes before waking prevents lost wake-ups
-	lock_guard<mutex> guard(lock);
+	const annotated_lock_guard<annotated_mutex> guard {parked_scan.lock};
 	if (pending_io_tasks.load() == 0) {
 		return false;
 	}
-	parked_scan = make_uniq<InterruptState>(interrupt_state);
-	return true;
+	return parked_scan.BlockTask(interrupt_state);
 }
 
 MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p)

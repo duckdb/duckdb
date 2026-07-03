@@ -41,9 +41,8 @@ public:
 
 private:
 	atomic<idx_t> pending_io_tasks;
-	mutex lock;
-	//! The scan task parked on this job's I/O
-	unique_ptr<InterruptState> parked_scan;
+	//! Holds the scan task parked on this job's I/O
+	StateWithBlockableTasks parked_scan;
 };
 
 //! Drives read-ahead for the multi-file scan, it's purpose is to keep several scan jobs scheduled ahead of decoding
