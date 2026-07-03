@@ -163,6 +163,9 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 	auto &l_state = input.local_state.Cast<TableScanLocalSourceState>();
 
 	TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get());
+	if (input.interrupt_state.CanCallback()) {
+		data.interrupt_state = &input.interrupt_state;
+	}
 
 	if (function.function) {
 		data.async_result = AsyncResultType::IMPLICIT;
@@ -185,7 +188,10 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 		// Handle results
 		switch (output_async_result) {
 		case AsyncResultType::BLOCKED: {
-			D_ASSERT(data.async_result.HasTasks());
+			if (!data.async_result.HasTasks()) {
+				// the function parked
+				return SourceResultType::BLOCKED;
+			}
 			{
 				annotated_lock_guard<annotated_mutex> guard(g_state.lock);
 				if (g_state.CanBlock()) {

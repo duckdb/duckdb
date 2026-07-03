@@ -195,6 +195,7 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 enum class MultiFileJobState : uint8_t {
 	NONE,     //! no job claimed
 	SCHEDULE, //! I/O still needs scheduling
+	WAIT_IO,  //! parked until the job's scheduled I/O completes
 	DECODE    //! job ready to decode
 };
 
@@ -230,8 +231,8 @@ struct MultiFileScanJob {
 	idx_t batch_index = 0;
 	//! Index of the file this job belongs to
 	idx_t file_index = DConstants::INVALID_INDEX;
-	//! Number of read-ahead I/O tasks for this job that have not completed yet.
-	shared_ptr<atomic<idx_t>> io_tasks_pending;
+	//! Completion state of the read-ahead I/O tasks for this job.
+	shared_ptr<ReadAheadJobCompletion> io_completion;
 	//! Total bytes of scheduled read-ahead I/O for this job
 	idx_t io_bytes = 0;
 };
@@ -240,6 +241,7 @@ struct MultiFileLocalState : public LocalTableFunctionState {
 public:
 	explicit MultiFileLocalState(ClientContext &context) : executor(context) {
 	}
+	~MultiFileLocalState() override;
 
 public:
 	//! The job currently being scanned by this thread

@@ -431,12 +431,15 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 
 void Executor::CancelTasks() {
 	task.reset();
+	unordered_map<Task *, shared_ptr<Task>> to_destroy;
 	{
 		lock_guard<mutex> elock(executor_lock);
 		// mark the query as cancelled so tasks will early-out
 		cancelled = true;
+		to_destroy = std::move(to_be_rescheduled_tasks);
 		to_be_rescheduled_tasks.clear();
 	}
+	to_destroy.clear();
 	// Drain all tasks first — they hold references to pipelines/events/states,
 	// so those must stay alive until all tasks have completed
 	while (executor_tasks > 0) {

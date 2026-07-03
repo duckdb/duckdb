@@ -3584,6 +3584,7 @@ const StringUtil::EnumStringLiteral *GetMultiFileJobStateValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MultiFileJobState::NONE), "NONE" },
 		{ static_cast<uint32_t>(MultiFileJobState::SCHEDULE), "SCHEDULE" },
+		{ static_cast<uint32_t>(MultiFileJobState::WAIT_IO), "WAIT_IO" },
 		{ static_cast<uint32_t>(MultiFileJobState::DECODE), "DECODE" }
 	};
 	return values;
@@ -3591,12 +3592,12 @@ const StringUtil::EnumStringLiteral *GetMultiFileJobStateValues() {
 
 template<>
 const char* EnumUtil::ToChars<MultiFileJobState>(MultiFileJobState value) {
-	return StringUtil::EnumToString(GetMultiFileJobStateValues(), 3, "MultiFileJobState", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMultiFileJobStateValues(), 4, "MultiFileJobState", static_cast<uint32_t>(value));
 }
 
 template<>
 MultiFileJobState EnumUtil::FromString<MultiFileJobState>(const char *value) {
-	return static_cast<MultiFileJobState>(StringUtil::StringToEnum(GetMultiFileJobStateValues(), 3, "MultiFileJobState", value));
+	return static_cast<MultiFileJobState>(StringUtil::StringToEnum(GetMultiFileJobStateValues(), 4, "MultiFileJobState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetNTypeValues() {

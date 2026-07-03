@@ -14,6 +14,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/parallel/interrupt.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -21,6 +22,29 @@ class TaskExecutor;
 class AsyncTask;
 struct MultiFileScanJob;
 struct LocalTableFunctionState;
+
+class ReadAheadJobCompletion {
+public:
+	explicit ReadAheadJobCompletion(idx_t io_task_count) : pending_io_tasks(io_task_count) {
+	}
+
+public:
+	//! Number of I/O tasks that have not completed yet
+	idx_t PendingIOTasks() const {
+		return pending_io_tasks.load();
+	}
+	//! Mark one I/O task as completed, waking the scan task when it was the last one
+	void FinishIOTask();
+	//! Register the calling scan task to be woken once all I/O tasks have completed.
+	//! Returns false when they already have, the caller should proceed instead of parking.
+	bool TryPark(const InterruptState &interrupt_state);
+
+private:
+	atomic<idx_t> pending_io_tasks;
+	mutex lock;
+	//! The scan task parked on this job's I/O
+	unique_ptr<InterruptState> parked_scan;
+};
 
 //! Drives read-ahead for the multi-file scan, it's purpose is to keep several scan jobs scheduled ahead of decoding
 class MultiFileReadAhead {
@@ -55,6 +79,8 @@ public:
 	//! Pop a recycled scan state, returns null when none is available
 	unique_ptr<LocalTableFunctionState> TryPopState();
 
+	//! Make our pipeline worker do IO work
+	bool TryCompleteJobIO(MultiFileScanJob &job);
 	//! Block until the claimed job's scheduled I/O has completed
 	void WaitForJob(MultiFileScanJob &job);
 

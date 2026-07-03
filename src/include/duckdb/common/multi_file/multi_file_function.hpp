@@ -815,8 +815,9 @@ public:
 		return MultiFileFinishResult::CONTINUE;
 	}
 
-	static MultiFileAcquireResult AcquireNextReadAhead(ClientContext &context, MultiFileLocalState &lstate,
-	                                                   MultiFileGlobalState &gstate, MultiFileBindData &bind_data) {
+	static MultiFileAcquireResult AcquireNextReadAhead(ClientContext &context, TableFunctionInput &data_p,
+	                                                   MultiFileLocalState &lstate, MultiFileGlobalState &gstate,
+	                                                   MultiFileBindData &bind_data) {
 		auto &read_ahead = *gstate.read_ahead;
 		while (true) {
 			while (TryProduceJob(context, bind_data, gstate)) {
@@ -829,9 +830,17 @@ public:
 				}
 			}
 			if (job) {
-				// block until the job's prefetched I/O has completed
-				read_ahead.WaitForJob(*job);
 				lstate.job = std::move(*job);
+				// run queued I/O inline
+				if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR &&
+				    data_p.interrupt_state && !read_ahead.TryCompleteJobIO(lstate.job) &&
+				    lstate.job.io_completion->TryPark(*data_p.interrupt_state)) {
+					lstate.job_state = MultiFileJobState::WAIT_IO;
+					data_p.async_result = AsyncResultType::BLOCKED;
+					return MultiFileAcquireResult::PARKED;
+				}
+				// parking is not available to this caller or the I/O has already completed
+				read_ahead.WaitForJob(lstate.job);
 				lstate.job_state = MultiFileJobState::DECODE;
 				return MultiFileAcquireResult::ACQUIRED;
 			}
@@ -864,10 +873,15 @@ public:
 			return;
 		}
 
+		if (data.job_state == MultiFileJobState::WAIT_IO) {
+			gstate.read_ahead->WaitForJob(data.job);
+			data.job_state = MultiFileJobState::DECODE;
+		}
+
 		do {
 			// Acquire a job whenever we don't hold one ready to decode
 			if (data.job_state != MultiFileJobState::DECODE) {
-				auto acquired = gstate.read_ahead ? AcquireNextReadAhead(context, data, gstate, bind_data)
+				auto acquired = gstate.read_ahead ? AcquireNextReadAhead(context, data_p, data, gstate, bind_data)
 				                                  : AcquireNextPerThread(context, data_p, data, gstate, bind_data);
 				switch (acquired) {
 				case MultiFileAcquireResult::PARKED:

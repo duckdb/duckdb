@@ -12,12 +12,12 @@ namespace duckdb {
 // Async task that runs one scan job's I/O and releases the job's pending count when done.
 class ReadAheadIOTask : public BaseExecutorTask {
 public:
-	ReadAheadIOTask(TaskExecutor &executor, unique_ptr<AsyncTask> task_p, shared_ptr<atomic<idx_t>> pending_p)
-	    : BaseExecutorTask(executor), task(std::move(task_p)), pending(std::move(pending_p)) {
+	ReadAheadIOTask(TaskExecutor &executor, unique_ptr<AsyncTask> task_p, shared_ptr<ReadAheadJobCompletion> completion_p)
+	    : BaseExecutorTask(executor), task(std::move(task_p)), completion(std::move(completion_p)) {
 	}
 	~ReadAheadIOTask() override {
 		// If we are done we decrement the pending
-		--(*pending);
+		completion->FinishIOTask();
 	}
 
 	void ExecuteTask() override {
@@ -27,8 +27,34 @@ public:
 
 private:
 	unique_ptr<AsyncTask> task;
-	shared_ptr<atomic<idx_t>> pending;
+	shared_ptr<ReadAheadJobCompletion> completion;
 };
+
+void ReadAheadJobCompletion::FinishIOTask() {
+	--pending_io_tasks;
+	if (pending_io_tasks != 0) {
+		// I/O tasks still outstanding, nothing to wake yet
+		return;
+	}
+	unique_ptr<InterruptState> to_wake;
+	{
+		lock_guard<mutex> guard(lock);
+		to_wake = std::move(parked_scan);
+	}
+	if (to_wake) {
+		to_wake->Callback();
+	}
+}
+
+bool ReadAheadJobCompletion::TryPark(const InterruptState &interrupt_state) {
+	// checking the pending count under the same lock FinishIOTask takes before waking prevents lost wake-ups
+	lock_guard<mutex> guard(lock);
+	if (pending_io_tasks.load() == 0) {
+		return false;
+	}
+	parked_scan = make_uniq<InterruptState>(interrupt_state);
+	return true;
+}
 
 MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p)
     : read_ahead_depth(read_ahead_depth_p),
@@ -40,7 +66,7 @@ MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_
 }
 
 idx_t MultiFileReadAhead::ResolveDepth(ClientContext &context, idx_t max_threads) {
-	auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
+	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
 	if (configured_depth == -1) {
 		return MaxValue<idx_t>(max_threads / 4, 4);
 	}
@@ -64,16 +90,16 @@ bool MultiFileReadAhead::TryReserveSlot() {
 		return false;
 	}
 	if (active_jobs.fetch_add(1) >= read_ahead_depth) {
-		active_jobs--;
+		--active_jobs;
 		return false;
 	}
-	active_producers++;
+	++active_producers;
 	return true;
 }
 
 void MultiFileReadAhead::AbortProduce() {
 	ReleaseSlot();
-	active_producers--;
+	--active_producers;
 }
 
 bool MultiFileReadAhead::HasActiveProducers() const {
@@ -81,15 +107,15 @@ bool MultiFileReadAhead::HasActiveProducers() const {
 }
 
 void MultiFileReadAhead::PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks) {
-	auto pending = make_shared_ptr<atomic<idx_t>>(io_tasks.size());
-	job->io_tasks_pending = pending;
+	auto completion = make_shared_ptr<ReadAheadJobCompletion>(io_tasks.size());
+	job->io_completion = completion;
 	for (auto &task : io_tasks) {
 		job->io_bytes += task->GetIOSize();
 	}
 	pending_io_bytes += job->io_bytes;
 	// schedule the reads detached on the async pool right away
 	for (auto &task : io_tasks) {
-		executor->ScheduleTask(make_uniq<ReadAheadIOTask>(*executor, std::move(task), pending));
+		executor->ScheduleTask(make_uniq<ReadAheadIOTask>(*executor, std::move(task), completion));
 	}
 	{
 		lock_guard<mutex> guard(lock);
@@ -101,7 +127,7 @@ void MultiFileReadAhead::PushJob(unique_ptr<MultiFileScanJob> job, vector<unique
 			next_batch_index++;
 		}
 	}
-	active_producers--;
+	--active_producers;
 }
 
 unique_ptr<MultiFileScanJob> MultiFileReadAhead::ClaimJob() {
@@ -132,19 +158,25 @@ unique_ptr<LocalTableFunctionState> MultiFileReadAhead::TryPopState() {
 	return state;
 }
 
-void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
-	if (job.io_tasks_pending) {
-		auto &pending = *job.io_tasks_pending;
-		while (pending.load() > 0) {
-			shared_ptr<Task> task;
-			if (executor->GetTask(task)) {
-				// pull a queued I/O task off the executor and run it on this thread
-				task->Execute(TaskExecutionMode::PROCESS_ALL);
-				task.reset();
-			} else {
-				TaskScheduler::YieldThread();
-			}
+bool MultiFileReadAhead::TryCompleteJobIO(MultiFileScanJob &job) {
+	if (!job.io_completion) {
+		return true;
+	}
+	while (job.io_completion->PendingIOTasks() > 0) {
+		shared_ptr<Task> task;
+		if (!executor->GetTask(task)) {
+			return false;
 		}
+		// pull a queued I/O task off the executor and run it on this thread
+		task->Execute(TaskExecutionMode::PROCESS_ALL);
+		task.reset();
+	}
+	return true;
+}
+
+void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
+	while (!TryCompleteJobIO(job)) {
+		TaskScheduler::YieldThread();
 	}
 	if (executor->HasError()) {
 		executor->ThrowError();
@@ -166,5 +198,14 @@ void MultiFileReadAhead::Drain() noexcept {
 }
 
 MultiFileGlobalState::~MultiFileGlobalState() = default;
+
+MultiFileLocalState::~MultiFileLocalState() {
+	// job reads might still be going,  wait for them before destroying ze job
+	if (job_state == MultiFileJobState::WAIT_IO && job.io_completion) {
+		while (job.io_completion->PendingIOTasks() > 0) {
+			TaskScheduler::YieldThread();
+		}
+	}
+}
 
 } // namespace duckdb
