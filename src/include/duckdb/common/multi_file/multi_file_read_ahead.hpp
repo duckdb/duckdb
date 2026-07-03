@@ -88,6 +88,8 @@ public:
 	void PushError(ErrorData error);
 	//! Throw if any read-ahead thread or task pushed an error
 	void ThrowIfError();
+	//! Run one queued I/O task inline - returns false when none was queued
+	bool TryHelpIO();
 
 private:
 	//! Release a look-ahead slot

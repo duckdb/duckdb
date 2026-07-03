@@ -193,6 +193,10 @@ void MultiFileReadAhead::ThrowIfError() {
 	}
 }
 
+bool MultiFileReadAhead::TryHelpIO() {
+	return executor->TryExecuteTask();
+}
+
 void MultiFileReadAhead::ReleaseSlot() {
 	D_ASSERT(active_jobs.load() > 0);
 	active_jobs--;

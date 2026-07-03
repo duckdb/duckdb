@@ -856,6 +856,10 @@ public:
 			if (context.IsInterrupted()) {
 				throw InterruptException();
 			}
+			// execute a queued I/O task inline instead of idling
+			if (read_ahead.TryHelpIO()) {
+				continue;
+			}
 			TaskScheduler::YieldThread();
 		}
 	}
