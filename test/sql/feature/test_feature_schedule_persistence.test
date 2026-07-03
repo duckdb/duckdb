@@ -39,8 +39,10 @@ SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_
 # ============================================================
 # Force a checkpoint, then restart again
 # ============================================================
+# The enabled schedule may fire a background refresh, so its write transaction can
+# be active here; FORCE CHECKPOINT waits for it instead of erroring out.
 statement ok
-CHECKPOINT;
+FORCE CHECKPOINT;
 
 restart
 
