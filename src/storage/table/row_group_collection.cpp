@@ -26,6 +26,8 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -585,9 +587,10 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	if (!needs_new_row_group) {
 		auto last_row_group = state.row_groups->GetLastSegment(l);
 		D_ASSERT(last_row_group->GetRowEnd() == state.row_groups->GetBaseRowId() + next_row_id);
-		if (info->GetIndexes().Empty() || CanRebuildExistingIndexesAfterVacuum(*info, GetAttached(), GetTotalRows())) {
+		if (info->GetIndexes().Empty() || CanRebuildExistingIndexesAfterVacuum(*info, GetAttached(), GetTotalRows()) ||
+		    ART::CanVacuumRemapTable(*info, GetAttached())) {
 			// Honor SUGGEST_NEW if vacuum can compact the table later, either because there are no indexes or because
-			// the existing indexes can be rebuilt after vacuuming.
+			// the existing indexes can be rebuilt or remapped after vacuuming.
 			needs_new_row_group = row_group_append_mode == RowGroupAppendMode::SUGGEST_NEW;
 		} else {
 			// If the table has indexes that vacuum cannot rebuild, ignore row_group_append_mode and try to append,
@@ -1295,6 +1298,11 @@ struct VacuumState {
 	//! Whether we are allowed to rebuild indexes after a vacuum (only true when vacuum_rebuild_indexes
 	//! threshold is set, the table's row count is within the threshold, and all indexes are bound ART's).
 	bool can_rebuild_indexes = false;
+	bool can_incremental_remap = false;
+	vector<reference<ART>> remap_indexes;
+	vector<column_t> remap_column_ids;
+	vector<optional_idx> remap_column_buffer_indexes;
+	vector<LogicalType> remap_buffer_types;
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
 	vector<optional_idx> row_group_counts;
@@ -1318,6 +1326,17 @@ public:
 		auto &collection = checkpoint_state.collection;
 		const idx_t row_group_size = collection.GetRowGroupSize();
 		auto &types = collection.GetTypes();
+		const bool apply_index_remap = vacuum_state.can_incremental_remap && !vacuum_state.remap_indexes.empty();
+
+		unique_ptr<ColumnDataCollection> remap_buffer;
+		ColumnDataAppendState remap_append_state;
+		DataChunk remap_append_chunk;
+		if (apply_index_remap) {
+			auto &buffer_manager = BufferManager::GetBufferManager(collection.GetAttached());
+			remap_buffer = make_uniq<ColumnDataCollection>(buffer_manager, vacuum_state.remap_buffer_types);
+			remap_buffer->InitializeAppend(remap_append_state);
+			remap_append_chunk.InitializeEmpty(vacuum_state.remap_buffer_types);
+		}
 
 		// create the new set of target row groups (initially empty)
 		vector<unique_ptr<SegmentNode<RowGroup>>> new_row_groups;
@@ -1332,13 +1351,25 @@ public:
 			row_group_rows -= current_row_group_rows;
 		}
 
-		DataChunk scan_chunk;
-		scan_chunk.Initialize(Allocator::DefaultAllocator(), types);
-
+		vector<LogicalType> scan_types(types.begin(), types.end());
 		vector<StorageIndex> column_ids;
 		for (idx_t c = 0; c < types.size(); c++) {
 			column_ids.emplace_back(c);
 		}
+		if (apply_index_remap) {
+			column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+			scan_types.push_back(LogicalType::ROW_TYPE);
+		}
+
+		DataChunk scan_chunk;
+		scan_chunk.Initialize(Allocator::DefaultAllocator(), scan_types);
+
+		vector<column_t> append_column_ids;
+		for (idx_t c = 0; c < types.size(); c++) {
+			append_column_ids.emplace_back(c);
+		}
+		DataChunk append_chunk;
+		append_chunk.InitializeEmpty(types);
 
 		idx_t current_append_idx = 0;
 
@@ -1354,6 +1385,7 @@ public:
 		idx_t merged_groups = 0;
 		idx_t total_row_groups = vacuum_state.row_group_counts.size();
 		optional_idx row_start;
+		idx_t live_row_offset = 0;
 		for (idx_t c_idx = segment_idx; merged_groups < merge_count && c_idx < total_row_groups; c_idx++) {
 			if (vacuum_state.row_group_counts[c_idx] == 0) {
 				continue;
@@ -1375,11 +1407,17 @@ public:
 					break;
 				}
 				scan_chunk.Flatten();
-				idx_t remaining = scan_chunk.size();
+				const auto chunk_count = scan_chunk.size();
+				if (apply_index_remap) {
+					BufferIndexRemapRows(*remap_buffer, remap_append_state, remap_append_chunk, scan_chunk,
+					                     row_start.GetIndex() + live_row_offset, types.size());
+				}
+				append_chunk.ReferenceColumns(scan_chunk, append_column_ids);
+				idx_t remaining = append_chunk.size();
 				while (remaining > 0) {
 					auto &current_append_row_group = new_row_groups[current_append_idx]->GetNode();
 					idx_t append_count = MinValue<idx_t>(remaining, row_group_size - append_counts[current_append_idx]);
-					current_append_row_group.Append(append_state.row_group_append_state, scan_chunk, append_count);
+					current_append_row_group.Append(append_state.row_group_append_state, append_chunk, append_count);
 					append_counts[current_append_idx] += append_count;
 					remaining -= append_count;
 					const bool row_group_full = append_counts[current_append_idx] == row_group_size;
@@ -1394,9 +1432,10 @@ public:
 						RowGroup::InitializeAppend(*new_row_groups[current_append_idx],
 						                           append_state.row_group_append_state);
 						// slice chunk for the next append
-						scan_chunk.Slice(append_count, remaining);
+						append_chunk.Slice(append_count, remaining);
 					}
 				}
+				live_row_offset += chunk_count;
 			}
 			// drop the row group after merging
 			current_row_group.CommitDrop();
@@ -1420,6 +1459,9 @@ public:
 			    "Mismatch in row group count %d vs verify count %d in RowGroupCollection::Checkpoint", merge_rows,
 			    total_append_count);
 		}
+		if (remap_buffer && remap_buffer->Count() > 0) {
+			ApplyIndexRemap(*remap_buffer);
+		}
 
 		// Explicitly end the timer for the vacuum tasks here.
 		timer.EndTimer();
@@ -1439,6 +1481,131 @@ public:
 	}
 
 private:
+	void BufferIndexRemapRows(ColumnDataCollection &remap_buffer, ColumnDataAppendState &append_state,
+	                          DataChunk &remap_chunk, DataChunk &scan_chunk, idx_t new_rowid_start,
+	                          idx_t rowid_column_index) {
+		const auto count = scan_chunk.size();
+
+		UnifiedVectorFormat old_rowid_data;
+		scan_chunk.data[rowid_column_index].ToUnifiedFormat(old_rowid_data);
+		auto old_rowids = UnifiedVectorFormat::GetData<row_t>(old_rowid_data);
+
+		SelectionVector moved_sel(STANDARD_VECTOR_SIZE);
+		idx_t moved_count = 0;
+		for (idx_t i = 0; i < count; i++) {
+			auto source_idx = old_rowid_data.sel->get_index(i);
+			auto old_rowid = old_rowids[source_idx];
+			auto new_rowid = UnsafeNumericCast<row_t>(new_rowid_start + i);
+			if (old_rowid == new_rowid) {
+				continue;
+			}
+			moved_sel.set_index(moved_count++, i);
+		}
+		if (moved_count == 0) {
+			return;
+		}
+
+		Vector new_rowids(LogicalType::ROW_TYPE);
+		new_rowids.Sequence(UnsafeNumericCast<int64_t>(new_rowid_start), 1, count);
+
+		remap_chunk.Reset();
+		for (idx_t buffer_idx = 0; buffer_idx < vacuum_state.remap_column_ids.size(); buffer_idx++) {
+			auto column_id = vacuum_state.remap_column_ids[buffer_idx];
+			remap_chunk.data[buffer_idx].Reference(scan_chunk.data[column_id]);
+		}
+		const auto old_rowid_idx = vacuum_state.remap_column_ids.size();
+		const auto new_rowid_idx = old_rowid_idx + 1;
+		remap_chunk.data[old_rowid_idx].Reference(scan_chunk.data[rowid_column_index]);
+		remap_chunk.data[new_rowid_idx].Reference(new_rowids);
+		remap_chunk.Slice(moved_sel, moved_count);
+		remap_buffer.Append(append_state, remap_chunk);
+	}
+
+	struct RemapRowIdHandler {
+		RemapRowIdHandler(ART &art, ArenaAllocator &allocator, unsafe_vector<ARTKey> &old_row_id_keys,
+		                  unsafe_vector<ARTKey> &new_row_id_keys)
+		    : art(art), allocator(allocator), old_row_id_keys(old_row_id_keys), new_row_id_keys(new_row_id_keys) {
+		}
+
+		ARTVisitResult OnEmpty(idx_t) {
+			return ARTVisitResult::CONTINUE;
+		}
+
+		ARTVisitResult OnMissing(idx_t, ARTKey &) {
+			throw InternalException("Failed to remap ART index '%s': indexed key not found", art.name);
+		}
+
+		ARTVisitResult OnMatch(idx_t index, ARTKey &, Node &slot) {
+			art.RemapRowIdInLeaf(allocator, slot, old_row_id_keys[index], new_row_id_keys[index]);
+			return ARTVisitResult::CONTINUE;
+		}
+
+		ART &art;
+		ArenaAllocator &allocator;
+		unsafe_vector<ARTKey> &old_row_id_keys;
+		unsafe_vector<ARTKey> &new_row_id_keys;
+	};
+
+	void ApplyIndexRemapChunk(ART &art, DataChunk &buffer_chunk) {
+		auto &collection = checkpoint_state.collection;
+		auto &types = collection.GetTypes();
+		const auto old_rowid_idx = vacuum_state.remap_column_ids.size();
+		const auto new_rowid_idx = old_rowid_idx + 1;
+
+		DataChunk table_chunk;
+		table_chunk.InitializeEmpty(types);
+		vector<bool> referenced_columns(types.size(), false);
+		for (auto column_id : art.GetColumnIds()) {
+			auto buffer_idx = vacuum_state.remap_column_buffer_indexes[column_id];
+			if (!buffer_idx.IsValid()) {
+				throw InternalException("Indexed column id %d missing from vacuum remap buffer", column_id);
+			}
+			table_chunk.data[column_id].Reference(buffer_chunk.data[buffer_idx.GetIndex()]);
+			referenced_columns[column_id] = true;
+		}
+		for (idx_t column_id = 0; column_id < types.size(); column_id++) {
+			if (referenced_columns[column_id]) {
+				continue;
+			}
+			table_chunk.data[column_id].Reference(Value(types[column_id]), count_t(buffer_chunk.size()));
+		}
+
+		IndexLock index_lock;
+		art.InitializeLock(index_lock);
+
+		DataChunk expr_chunk;
+		expr_chunk.Initialize(collection.GetAllocator(), art.logical_types);
+		art.ExecuteExpressions(table_chunk, expr_chunk);
+
+		ArenaAllocator allocator(BufferAllocator::Get(art.db));
+		const auto row_count = buffer_chunk.size();
+		unsafe_vector<ARTKey> keys(row_count);
+		unsafe_vector<ARTKey> old_row_id_keys(row_count);
+		unsafe_vector<ARTKey> new_row_id_keys(row_count);
+		art.GenerateKeyVectors(allocator, expr_chunk, buffer_chunk.data[old_rowid_idx], keys, old_row_id_keys);
+
+		DataChunk new_row_id_chunk;
+		new_row_id_chunk.Initialize(collection.GetAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE}, row_count);
+		new_row_id_chunk.data[0].Reference(buffer_chunk.data[new_rowid_idx]);
+		art.GenerateKeys<>(allocator, new_row_id_chunk, new_row_id_keys);
+
+		RemapRowIdHandler handler(art, allocator, old_row_id_keys, new_row_id_keys);
+		art.VisitEqualKeysLocked(index_lock, keys, row_count, handler);
+	}
+
+	void ApplyIndexRemap(ColumnDataCollection &remap_buffer) {
+		ColumnDataScanState scan_state;
+		remap_buffer.InitializeScan(scan_state);
+
+		DataChunk buffer_chunk;
+		remap_buffer.InitializeScanChunk(buffer_chunk);
+		while (remap_buffer.Scan(scan_state, buffer_chunk)) {
+			for (auto &art_ref : vacuum_state.remap_indexes) {
+				ApplyIndexRemapChunk(art_ref.get(), buffer_chunk);
+			}
+		}
+	}
+
 	VacuumState &vacuum_state;
 	idx_t segment_idx;
 	idx_t merge_count;
@@ -1464,11 +1631,36 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 
 	// vacuum_rebuild_indexes allows rowid-changing vacuum for indexed tables when the table's row count is within
 	// the threshold and all indexes are bound ART indexes.
-	state.can_rebuild_indexes =
-	    CanRebuildExistingIndexesAfterVacuum(*info, checkpoint_state.writer.GetAttached(), GetTotalRows());
+	auto &attached = checkpoint_state.writer.GetAttached();
+	state.can_incremental_remap = ART::CanVacuumRemapTable(*info, attached, &state.remap_indexes);
+	state.can_rebuild_indexes = CanRebuildExistingIndexesAfterVacuum(*info, attached, GetTotalRows());
+	if (state.can_incremental_remap) {
+		state.can_rebuild_indexes = false;
+
+		auto required_columns = info->GetIndexes().GetRequiredColumns();
+		state.remap_column_ids.assign(required_columns.begin(), required_columns.end());
+		sort(state.remap_column_ids.begin(), state.remap_column_ids.end());
+
+		state.remap_column_buffer_indexes.clear();
+		state.remap_column_buffer_indexes.resize(types.size());
+		state.remap_buffer_types.clear();
+		state.remap_buffer_types.reserve(state.remap_column_ids.size() + 2);
+		for (idx_t buffer_idx = 0; buffer_idx < state.remap_column_ids.size(); buffer_idx++) {
+			auto column_id = state.remap_column_ids[buffer_idx];
+			if (column_id >= types.size()) {
+				throw InternalException("Indexed column id %d out of bounds during vacuum remap initialization",
+				                        column_id);
+			}
+			state.remap_column_buffer_indexes[column_id] = buffer_idx;
+			state.remap_buffer_types.push_back(types[column_id]);
+		}
+		state.remap_buffer_types.push_back(LogicalType::ROW_TYPE);
+		state.remap_buffer_types.push_back(LogicalType::ROW_TYPE);
+	}
+	D_ASSERT(!(state.can_incremental_remap && state.can_rebuild_indexes));
 
 	// can_change_row_ids only answers whether index state allows changing row_ids.
-	state.can_change_row_ids = !has_indexes || state.can_rebuild_indexes;
+	state.can_change_row_ids = !has_indexes || state.can_rebuild_indexes || state.can_incremental_remap;
 
 	// obtain the set of committed row counts for each row group
 	auto num_row_groups = checkpoint_state.SegmentCount();

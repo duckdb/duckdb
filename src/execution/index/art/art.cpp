@@ -22,9 +22,11 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -52,7 +54,7 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
          const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &info)
     : BoundIndex(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
-      allocators(allocators_ptr), owns_data(false) {
+      allocators(allocators_ptr), owns_data(false), storage_version(StorageVersion::INVALID) {
 	// FIXME: Use the new byte representation function to support nested types.
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
@@ -679,6 +681,106 @@ idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id
 	}
 #endif
 	return delete_count;
+}
+
+void ART::AssertIndexLockHeld(IndexLock &state) const {
+	D_ASSERT(state.index_lock.owns_lock());
+}
+
+unsafe_optional_ptr<Node> ART::LookupEqualKey(ARTKey &key) {
+	return ARTOperator::LookupMutable(*this, tree, key, 0);
+}
+
+void ART::RemapRowIdInLeaf(ArenaAllocator &allocator, Node &slot, const ARTKey &old_row_id, const ARTKey &new_row_id) {
+	if (old_row_id.GetRowId() == new_row_id.GetRowId()) {
+		return;
+	}
+
+	if (!slot.HasMetadata()) {
+		throw InternalException("Failed to remap ART index '%s': empty key slot", name);
+	}
+
+	if (slot.GetType() == NType::LEAF) {
+		Leaf::TransformToNested(*this, slot);
+	}
+
+	if (slot.GetType() == NType::LEAF_INLINED) {
+		if (slot.GetRowId() != old_row_id.GetRowId()) {
+			throw InternalException("Failed to remap ART index '%s': old rowid not found", name);
+		}
+		slot.SetRowId(new_row_id.GetRowId());
+		return;
+	}
+
+	if (slot.GetGateStatus() != GateStatus::GATE_SET) {
+		throw InternalException("Failed to remap ART index '%s': expected ART leaf slot", name);
+	}
+
+	if (!ARTOperator::Delete(*this, slot, old_row_id, old_row_id)) {
+		throw InternalException("Failed to remap ART index '%s': old rowid not found", name);
+	}
+
+	if (!slot.HasMetadata()) {
+		throw InternalException("Failed to remap ART index '%s': rowid remap removed the key slot", name);
+	}
+	if (slot.GetType() == NType::LEAF) {
+		Leaf::TransformToNested(*this, slot);
+	}
+	if (ARTOperator::LookupInLeaf(*this, slot, new_row_id)) {
+		throw InternalException("Failed to remap ART index '%s': unexpected rowid collision", name);
+	}
+	auto status = slot.GetGateStatus() == GateStatus::GATE_SET ? GateStatus::GATE_SET : GateStatus::GATE_NOT_SET;
+	auto conflict_type = ARTOperator::Insert(allocator, *this, slot, new_row_id, 0, new_row_id, status,
+	                                         DeleteIndexInfo(), IndexAppendMode::INSERT_DUPLICATES);
+	if (conflict_type != ARTConflictType::NO_CONFLICT) {
+		throw InternalException("Failed to remap ART index '%s': unexpected rowid collision", name);
+	}
+}
+
+bool ART::CanVacuumRemap() const {
+	if (storage_version != StorageVersion::INVALID && storage_version >= StorageVersion::V1_5_0) {
+		return true;
+	}
+	for (auto &type : logical_types) {
+		if (type.id() == LogicalTypeId::GEOMETRY) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ART::CanVacuumRemapTable(DataTableInfo &table_info, AttachedDatabase &attached,
+                              optional_ptr<vector<reference<ART>>> remap_indexes) {
+	if (remap_indexes) {
+		remap_indexes->clear();
+	}
+	if (StorageCompatibility::FromDatabase(attached).storage_version < StorageVersion::V2_0_0) {
+		return false;
+	}
+	auto &indexes = table_info.GetIndexes();
+	if (indexes.Empty() || indexes.HasUnbound()) {
+		return false;
+	}
+	for (auto &entry : indexes.IndexEntries()) {
+		auto &index = *entry.index;
+		if (!index.IsBound() || index.GetIndexType() != ART::TYPE_NAME) {
+			if (remap_indexes) {
+				remap_indexes->clear();
+			}
+			return false;
+		}
+		auto &art = index.Cast<ART>();
+		if (!art.CanVacuumRemap()) {
+			if (remap_indexes) {
+				remap_indexes->clear();
+			}
+			return false;
+		}
+		if (remap_indexes) {
+			remap_indexes->push_back(art);
+		}
+	}
+	return true;
 }
 
 //===--------------------------------------------------------------------===//

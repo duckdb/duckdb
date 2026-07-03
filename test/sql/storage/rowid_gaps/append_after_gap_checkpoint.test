@@ -31,6 +31,11 @@ SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_append_latest.t;
 ----
 0	6143	4096
 
+# Disable vacuum so an automatic checkpoint cannot remap the gap away before we
+# observe the append frontier (indexed tables now vacuum by default).
+statement ok
+SET max_vacuum_tasks = 0;
+
 statement ok
 INSERT INTO rowid_gap_append_latest.t VALUES (999999);
 
@@ -52,6 +57,9 @@ query II
 SELECT rowid, i FROM rowid_gap_append_latest.t WHERE i = 999999;
 ----
 6144	999999
+
+statement ok
+SET max_vacuum_tasks = 100;
 
 statement ok
 DROP INDEX rowid_gap_append_latest.idx_i;

@@ -1,10 +1,9 @@
 # name: test/sql/storage/rowid_gaps/indexed_no_merge_across_gap.test
-# description: stable-rowid vacuum does not merge fully-live row groups across a rowid gap
+# description: indexed vacuum remaps rowids when merging fully-live row groups across a rowid gap
 # group: [rowid_gaps]
 
-# Fully-live row groups may be merged while rowids must remain stable, but only
-# if they already form a dense rowid interval. If a dropped row group leaves a
-# gap between them, merging would collapse the gap and remap later rowids.
+# On latest storage, indexed ART rowids can be remapped after vacuum. A dropped
+# row group can therefore be skipped while merging the live groups around it.
 
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_no_merge_across_gap.db' AS rowid_gap_no_merge (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 4096);
@@ -56,20 +55,25 @@ FORCE CHECKPOINT rowid_gap_no_merge;
 query I
 SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('rowid_gap_no_merge.t');
 ----
-2
+1
 
 query III
 SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_no_merge.t;
 ----
-0	2999	2000
+0	1999	2000
 
 query I
 SELECT count(*) FROM rowid_gap_no_merge.t WHERE rowid >= 1000 AND rowid < 2000;
 ----
-0
+1000
 
 query II
 SELECT rowid, i FROM rowid_gap_no_merge.t WHERE i IN (999, 2000) ORDER BY i;
 ----
 999	999
-2000	2000
+1000	2000
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM rowid_gap_no_merge.t WHERE i = 2000;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*

@@ -35,6 +35,11 @@ SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_bulk_append.t;
 ----
 0	6143	4096
 
+# Disable vacuum so an automatic checkpoint cannot remap the gap away before we
+# observe the bulk-append frontier (indexed tables now vacuum by default).
+statement ok
+SET max_vacuum_tasks = 0;
+
 statement ok
 INSERT INTO rowid_gap_bulk_append.t SELECT 1000000 + i FROM range(4096) tbl(i);
 
