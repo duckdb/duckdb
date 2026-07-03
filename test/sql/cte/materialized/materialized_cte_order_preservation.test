@@ -48,3 +48,27 @@ SELECT (SELECT i FROM t LIMIT 1), (SELECT i FROM t LIMIT 1);
 
 statement ok
 SET preserve_insertion_order=true;
+
+query I
+WITH t(i, j) AS MATERIALIZED (
+	SELECT i, i + 1
+	FROM range(10000) tbl(i)
+	ORDER BY i DESC
+)
+SELECT j FROM t LIMIT 5;
+----
+10000
+9999
+9998
+9997
+9996
+
+query I
+WITH t(i, j) AS MATERIALIZED (
+	SELECT i, i + 1
+	FROM range(10000) tbl(i)
+	ORDER BY i DESC
+)
+SELECT count(*) FROM t;
+----
+10000
