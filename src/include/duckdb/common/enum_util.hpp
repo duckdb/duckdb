@@ -40,6 +40,8 @@ enum class ARTScanHandling : uint8_t;
 
 enum class ARTScanResult : uint8_t;
 
+enum class ARTVisitResult : uint8_t;
+
 enum class AccessMode : uint8_t;
 
 enum class AdaptiveFilterSource : uint8_t;
@@ -584,6 +586,9 @@ const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value);
 
 template<>
 const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
+
+template<>
+const char* EnumUtil::ToChars<ARTVisitResult>(ARTVisitResult value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
@@ -1395,6 +1400,9 @@ ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value);
 
 template<>
 ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
+
+template<>
+ARTVisitResult EnumUtil::FromString<ARTVisitResult>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
