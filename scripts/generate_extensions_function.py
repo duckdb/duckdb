@@ -46,13 +46,6 @@ EXTENSIONS_PATH = os.path.join("build", "extension_configuration", "extensions.c
 DUCKDB_PATH = os.path.join(*args.shell.split('/'))
 HEADER_PATH = os.path.join("src", "include", "duckdb", "main", "extension_entries.hpp")
 
-EXTENSION_DEPENDENCIES = {
-    'iceberg': [
-        'avro',
-        'parquet',
-    ]
-}
-
 from enum import Enum
 
 
@@ -441,6 +434,21 @@ def get_secret_types(load="") -> Set[str]:
     return res
 
 
+def get_loaded_extensions(load="") -> Set[str]:
+    GET_LOADED_EXTENSIONS_QUERY = """
+        select distinct
+            extension_name
+        from duckdb_extensions()
+        where loaded;
+    """
+    extensions = get_query(GET_LOADED_EXTENSIONS_QUERY, load)
+    res = set()
+    for extension in extensions:
+        extension_name = extension['extension_name']
+        res.add(extension_name.lower())
+    return res
+
+
 class ExtensionData:
     def __init__(self):
         # Map of extension -> ExtensionFunction
@@ -457,12 +465,15 @@ class ExtensionData:
         self.base_settings: Set[str] = set()
         self.base_secret_types: Set[str] = set()
         self.base_functions: Set[Function] = set()
+        self.base_loaded_extensions: Set[str] = set()
 
         self.extension_settings: Dict[str, Set[str]] = {}
         self.extension_secret_types: Dict[str, Set[str]] = {}
         self.extension_functions: Dict[str, Set[Function]] = {}
+        self.extension_dependencies: Dict[str, Set[str]] = {}
 
         self.added_extensions: Set[str] = set()
+        self.loading_extensions: Set[str] = set()
 
         # Map of extension -> extension_path
         self.extensions: Dict[str, str] = get_extension_path_map()
@@ -472,12 +483,14 @@ class ExtensionData:
             'spatial': [],
         }
         self.stored_settings: Dict[str, List[str]] = {'arrow': [], 'spatial': []}
+        self.stored_secret_types: Dict[str, List[str]] = {'arrow': [], 'spatial': []}
 
     def set_base(self):
         (functions, function_overloads) = get_functions()
         self.base_functions: Set[Function] = functions
         self.base_settings: Set[str] = get_settings()
         self.base_secret_types: Set[str] = get_secret_types()
+        self.base_loaded_extensions: Set[str] = get_loaded_extensions()
 
     def add_entries(self, entries: ParsedEntries):
         self.function_map.update(entries.functions)
@@ -485,43 +498,56 @@ class ExtensionData:
         self.settings_map.update(entries.settings)
         self.secret_types_map.update(entries.secret_types)
 
-    def load_dependencies(self, extension_name: str) -> str:
-        if extension_name not in EXTENSION_DEPENDENCIES:
-            return ''
+    def is_known_extension(self, extension_name: str) -> bool:
+        return (
+            extension_name in self.extensions
+            or extension_name in self.stored_functions
+            or extension_name in self.stored_settings
+            or extension_name in self.stored_secret_types
+        )
 
-        res = ''
-        dependencies = EXTENSION_DEPENDENCIES[extension_name]
-        for item in dependencies:
-            if item not in self.extensions:
-                log(f"Could not load extension '{extension_name}', dependency '{item}' is missing")
-                exit(1)
-            extension_path = self.extensions[item]
-            log(f"Load {item} at {extension_path}")
-            res += f"LOAD '{extension_path}';"
-        return res
+    def get_dependencies(self, extension_name: str, loaded_extensions: Set[str]) -> Set[str]:
+        dependencies = loaded_extensions - self.base_loaded_extensions - {extension_name}
+        known_dependencies = set()
+        for dependency in sorted(dependencies):
+            if self.is_known_extension(dependency):
+                known_dependencies.add(dependency)
+            else:
+                log(f"Detected dependency '{dependency}' for extension '{extension_name}', but it is unavailable")
+        return known_dependencies
 
     def add_extension(self, extension_name: str):
-        if extension_name in EXTENSION_DEPENDENCIES:
-            for item in EXTENSION_DEPENDENCIES[extension_name]:
-                if item not in self.added_extensions:
-                    self.add_extension(item)
+        extension_name = extension_name.lower()
+        if extension_name in self.added_extensions:
+            return
+        if extension_name in self.loading_extensions:
+            log(f"Skipping recursive dependency load for '{extension_name}'")
+            return
 
         if extension_name in self.extensions:
+            self.loading_extensions.add(extension_name)
             # Perform a LOAD and add the added settings/functions/secret_types
             extension_path = self.extensions[extension_name]
 
             log(f"Load {extension_name} at {extension_path}")
-            load = self.load_dependencies(extension_name)
-            load += f"LOAD '{extension_path}';"
+            load = f"LOAD '{extension_path}';"
 
             (functions, function_overloads) = get_functions(load)
             extension_functions = list(functions)
             extension_settings = list(get_settings(load))
             extension_secret_types = list(get_secret_types(load))
+            loaded_extensions = get_loaded_extensions(load)
+
+            dependencies = self.get_dependencies(extension_name, loaded_extensions)
+            self.extension_dependencies[extension_name] = dependencies
+            for dependency in sorted(dependencies):
+                if dependency not in self.added_extensions:
+                    self.add_extension(dependency)
 
             self.add_settings(extension_name, extension_settings)
             self.add_secret_types(extension_name, extension_secret_types)
             self.add_functions(extension_name, extension_functions, function_overloads)
+            self.loading_extensions.remove(extension_name)
         elif extension_name in self.stored_functions or extension_name in self.stored_settings:
             # Retrieve the list of settings/functions from our hardcoded list
             extension_functions = self.stored_functions[extension_name]
@@ -529,9 +555,10 @@ class ExtensionData:
             extension_secret_types = self.stored_secret_types[extension_name]
 
             log(f"Loading {extension_name} from stored functions: {extension_functions}")
+            self.extension_dependencies[extension_name] = set()
             self.add_settings(extension_name, extension_settings)
             self.add_secret_types(extension_name, extension_secret_types)
-            self.add_functions(extension_name, extension_functions)
+            self.add_functions(extension_name, extension_functions, {})
         else:
             error = f"""Missing extension {extension_name} and not found in stored_functions/stored_settings/stored_secret_types
 Please double check if '{args.extension_repository}' is the right location to look for ./**/*.duckdb_extension files"""
@@ -544,11 +571,9 @@ Please double check if '{args.extension_repository}' is the right location to lo
 
         base_settings = set()
         base_settings.update(self.base_settings)
-        if extension_name in EXTENSION_DEPENDENCIES:
-            dependencies = EXTENSION_DEPENDENCIES[extension_name]
-            for item in dependencies:
-                assert item in self.extension_settings
-                base_settings.update(self.extension_settings[item])
+        for dependency in self.extension_dependencies.get(extension_name, set()):
+            assert dependency in self.extension_settings
+            base_settings.update(self.extension_settings[dependency])
 
         added_settings: Set[str] = set(settings_list) - base_settings
 
@@ -566,11 +591,9 @@ Please double check if '{args.extension_repository}' is the right location to lo
 
         base_secret_types = set()
         base_secret_types.update(self.base_secret_types)
-        if extension_name in EXTENSION_DEPENDENCIES:
-            dependencies = EXTENSION_DEPENDENCIES[extension_name]
-            for item in dependencies:
-                assert item in self.extension_secret_types
-                base_secret_types.update(self.extension_secret_types[item])
+        for dependency in self.extension_dependencies.get(extension_name, set()):
+            assert dependency in self.extension_secret_types
+            base_secret_types.update(self.extension_secret_types[dependency])
 
         added_secret_types: Set[str] = set(secret_types_list) - base_secret_types
 
@@ -605,11 +628,9 @@ Please double check if '{args.extension_repository}' is the right location to lo
 
         base_functions = set()
         base_functions.update(self.base_functions)
-        if extension_name in EXTENSION_DEPENDENCIES:
-            dependencies = EXTENSION_DEPENDENCIES[extension_name]
-            for item in dependencies:
-                assert item in self.extension_functions
-                base_functions.update(self.extension_functions[item])
+        for dependency in self.extension_dependencies.get(extension_name, set()):
+            assert dependency in self.extension_functions
+            base_functions.update(self.extension_functions[dependency])
 
         overloads = self.get_extension_overloads(extension_name, overloads)
         added_functions: Set[Function] = set(function_list) - base_functions
