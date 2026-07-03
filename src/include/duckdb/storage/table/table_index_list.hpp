@@ -26,9 +26,23 @@ enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND };
 
 //! IndexEntry contains an atomic in addition to the index to ensure correct binding.
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
-struct IndexEntry {
+class IndexEntry {
+public:
 	explicit IndexEntry(unique_ptr<Index> index);
 
+public:
+	atomic<IndexBindState> bind_state;
+	//! lock that should be used if access to "owned_index" and "deleted_rows_in_use" at the same time is necessary
+	mutex lock;
+	unique_ptr<BoundIndex> deleted_rows_in_use;
+	//! Data that was added to the index during the last checkpoint
+	unique_ptr<BoundIndex> added_data_during_checkpoint;
+	//! Data that was removed from the index during the last checkpoint
+	unique_ptr<BoundIndex> removed_data_during_checkpoint;
+	//! The last checkpoint index that was written with this index
+	optional_idx last_written_checkpoint;
+
+public:
 	//! Give the caller a stable snapshot of the current Index
 	shared_ptr<Index> PinIndex() const {
 		lock_guard<mutex> lock(index_pointer_lock);
@@ -40,17 +54,6 @@ struct IndexEntry {
 		lock_guard<mutex> lock(index_pointer_lock);
 		owned_index = std::move(index);
 	}
-
-	atomic<IndexBindState> bind_state;
-	//! lock that should be used if access to "owned_index" and "deleted_rows_in_use" at the same time is necessary
-	mutex lock;
-	unique_ptr<BoundIndex> deleted_rows_in_use;
-	//! Data that was added to the index during the last checkpoint
-	unique_ptr<BoundIndex> added_data_during_checkpoint;
-	//! Data that was removed from the index during the last checkpoint
-	unique_ptr<BoundIndex> removed_data_during_checkpoint;
-	//! The last checkpoint index that was written with this index
-	optional_idx last_written_checkpoint;
 
 private:
 	//! The owning pointer of the index
