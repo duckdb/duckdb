@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/expression.hpp"
