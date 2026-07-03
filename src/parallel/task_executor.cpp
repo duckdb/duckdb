@@ -54,19 +54,29 @@ bool TaskExecutor::TryExecuteTask() {
 	return true;
 }
 
-void TaskExecutor::WorkOnTasks() {
+void TaskExecutor::DrainTasks() {
 	// wait for all active tasks to finish, executing queued tasks on this thread where possible
 	while (completed_tasks != total_tasks) {
 		if (!TryExecuteTask()) {
 			std::this_thread::yield();
 		}
 	}
+}
+
+void TaskExecutor::WorkOnTasks() {
+	DrainTasks();
 
 	// check if we ran into any errors while executing the tasks
 	if (HasError()) {
 		// throw the error
 		ThrowError();
 	}
+}
+
+void TaskExecutor::CancelAndDrain() {
+	// make tasks that have not started yet bail out instead of executing their work
+	cancelled = true;
+	DrainTasks();
 }
 
 bool TaskExecutor::GetTask(shared_ptr<Task> &task) {
@@ -77,8 +87,8 @@ BaseExecutorTask::BaseExecutorTask(TaskExecutor &executor) : executor(executor) 
 }
 
 TaskExecutionResult BaseExecutorTask::Execute(TaskExecutionMode mode) {
-	if (executor.HasError()) {
-		// another task encountered an error - bailout
+	if (executor.HasError() || executor.cancelled) {
+		// another task encountered an error or the executor was cancelled - bailout
 		executor.FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}

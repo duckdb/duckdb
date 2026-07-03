@@ -39,11 +39,17 @@ public:
 
 	//! Work on tasks until all tasks are finished. Throws an exception if any error occurred while executing the tasks.
 	void WorkOnTasks();
+	//! Cancel tasks that have not started yet and work on tasks until all tasks are finished. Does not throw.
+	void CancelAndDrain();
 
 	//! Pull one queued task off the scheduler and execute it - returns false when no task was queued
 	bool TryExecuteTask();
 	//! Get a task - returns true if a task was found
 	bool GetTask(shared_ptr<Task> &task);
+
+private:
+	//! Work on tasks until all tasks are finished
+	void DrainTasks();
 
 private:
 	TaskScheduler &scheduler;
@@ -52,6 +58,8 @@ private:
 	unique_ptr<ProducerToken> token;
 	atomic<idx_t> completed_tasks;
 	atomic<idx_t> total_tasks;
+	//! Set by CancelAndDrain - tasks that have not started yet bail out instead of executing their work
+	atomic<bool> cancelled {false};
 	friend class BaseExecutorTask;
 	optional_ptr<ClientContext> context;
 };
