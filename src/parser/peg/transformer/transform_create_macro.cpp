@@ -11,13 +11,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 
-	if (qualified_name.schema.empty()) {
-		info->schema = qualified_name.catalog;
-	} else {
-		info->catalog = qualified_name.catalog;
-		info->schema = qualified_name.schema;
-	}
-	info->name = qualified_name.name;
+	info->SetQualifiedName(qualified_name);
 
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	for (auto &macro_function : macro_definition) {

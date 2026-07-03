@@ -1,5 +1,7 @@
 #include "duckdb/execution/executor.hpp"
 
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/time_point.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
@@ -475,22 +477,21 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 void Executor::WaitForTask() {
 #ifndef DUCKDB_NO_THREADS
 	static constexpr std::chrono::microseconds WAIT_TIME_MS = std::chrono::microseconds(WAIT_TIME * 1000);
-	auto begin = std::chrono::high_resolution_clock::now();
+	auto begin = TimePoint::Tick();
 	std::unique_lock<mutex> l(executor_lock);
-	auto end = std::chrono::high_resolution_clock::now();
-	auto dur = end - begin;
-	auto ms = NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(dur).count());
+	auto end = TimePoint::Tick();
+	auto blocked_micros = NumericCast<idx_t>(TimePoint::ElapsedMicros(begin, end));
 	if (to_be_rescheduled_tasks.empty()) {
-		blocked_thread_time += ms;
+		blocked_thread_time += blocked_micros;
 		return;
 	}
 	if (ResultCollectorIsBlocked()) {
 		// If the result collector is blocked, it won't get unblocked until the connection calls Fetch
-		blocked_thread_time += ms;
+		blocked_thread_time += blocked_micros;
 		return;
 	}
 
-	blocked_thread_time += ms + WAIT_TIME_MS.count();
+	blocked_thread_time += blocked_micros + WAIT_TIME_MS.count();
 	task_reschedule.wait_for(l, WAIT_TIME_MS);
 #endif
 }

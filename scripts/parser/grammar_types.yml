@@ -334,6 +334,8 @@ ResultModifier:
     - LimitOffset
     - OffsetLimitClause
     - LimitOffsetClause
+    - OffsetFetchClause
+    - FetchOnlyClause
 
 AtClause:
   type: "unique_ptr<AtClause>"
@@ -491,6 +493,7 @@ Expression:
     - CharacterSimpleType
     - QualifiedSimpleType
     - MapType
+    - TupleType
     - RowType
     - GeometryType
     - VariantType
@@ -731,11 +734,8 @@ QualifiedName:
     - SchemaReservedTypeName
     - CatalogReservedSchemaTypeName
     - QualifiedName
-    - QualifiedSchemaName
     - QualifiedIndexName
-    - QualifiedSchemaNameString
     - QualifiedIndexNameString
-    - CatalogReservedSchema
     - SchemaReservedIndex
     - CatalogReservedSchemaIndex
     - FunctionIdentifier
@@ -773,6 +773,8 @@ LimitPercentResult:
     - LimitAll
     - LimitLiteralPercent
     - LimitExpression
+    - FetchClause
+    - FetchValue
     - OffsetClause
     - OffsetValue
 
@@ -985,8 +987,11 @@ String:
     - ILikeToken
     - GlobToken
     - SimilarToToken
+    - RegexMatchToken
+    - RegexInsensitiveMatchToken
     - NotILikeOp
     - NotLikeOp
+    - NotRegexInsensitiveMatchOp
     - NotSimilarToOp
     - QualifiedOperator
     - QualifiedOperatorContents
@@ -1737,6 +1742,7 @@ excluded_rules:
   - ColLabel
   - ColLabelOrString
   - RowOrRows
+  - FirstOrNext
   - Recursive
   - StarSymbol
   - PlainIdentifier

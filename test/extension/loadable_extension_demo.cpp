@@ -825,7 +825,11 @@ static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector 
 
 static FilterPropagateResult RowIdFilterPropagate(const FunctionStatisticsPruneInput &input) {
 	auto &allowed = input.bind_data->Cast<RowIdFilterBindData>().allowed_ids;
-	auto &stats = input.stats;
+	auto column_stats = input.ChildStats(0);
+	if (!column_stats) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto &stats = *column_stats;
 
 	if (!NumericStats::HasMinMax(stats)) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -1132,7 +1136,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	child_types.emplace_back(make_pair("y", LogicalType::INTEGER));
 	auto alias_info = make_uniq<CreateTypeInfo>();
 	alias_info->internal = true;
-	alias_info->name = Identifier(alias_name);
+	alias_info->SetTypeName(Identifier(alias_name));
 	LogicalType target_type = LogicalType::STRUCT(child_types);
 	target_type.SetAlias(alias_name);
 	alias_info->type = target_type;
@@ -1170,8 +1174,8 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	// Table with tagged columns
 	{
 		auto tagged_table_info = make_uniq<CreateTableInfo>();
-		tagged_table_info->schema = Identifier::DefaultSchema();
-		tagged_table_info->table = "tagged_table";
+		tagged_table_info->SetQualifiedName(
+		    QualifiedName(INVALID_CATALOG, Identifier::DefaultSchema(), "tagged_table"));
 		tagged_table_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		tagged_table_info->temporary = false;
 		tagged_table_info->internal = true;

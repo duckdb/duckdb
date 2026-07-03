@@ -21,7 +21,7 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 	auto type_catalog = type_expr.GetCatalog();
 
 	QueryErrorContext error_context(type_expr);
-	EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, type_name, error_context);
+	EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, QualifiedName(type_name), error_context);
 
 	optional_ptr<CatalogEntry> entry = nullptr;
 
@@ -30,29 +30,40 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 	// Required for WAL lookup to work
 	if (type_catalog.empty() && !DatabaseManager::Get(context).HasDefaultDatabase()) {
 		// Look in the system catalog if no catalog was specified
-		entry = binder.entry_retriever.GetEntry(Identifier::SystemCatalog(), type_schema, type_lookup);
+		entry = binder.entry_retriever.GetEntry(EntryLookupInfo(
+		    type_lookup, QualifiedName(Identifier::SystemCatalog(), type_schema, type_lookup.GetEntryIdentifier())));
 	} else {
 		// Try to search from most specific to least specific
 		// The search path should already have been set to the correct catalog/schema,
 		// in case we are looking for a type in the same schema as a table we are creating
 
-		entry = binder.entry_retriever.GetEntry(type_catalog, type_schema, type_lookup, OnEntryNotFound::RETURN_NULL);
+		entry = binder.entry_retriever.GetEntry(
+		    EntryLookupInfo(type_lookup, QualifiedName(type_catalog, type_schema, type_lookup.GetEntryIdentifier())),
+		    OnEntryNotFound::RETURN_NULL);
 
 		if (!IsValidTypeLookup(entry)) {
 			if (!type_catalog.empty() || !type_schema.empty()) {
-				entry = binder.entry_retriever.GetEntry(type_catalog, type_schema, type_lookup,
-				                                        OnEntryNotFound::THROW_EXCEPTION);
+				entry = binder.entry_retriever.GetEntry(
+				    EntryLookupInfo(type_lookup,
+				                    QualifiedName(type_catalog, type_schema, type_lookup.GetEntryIdentifier())),
+				    OnEntryNotFound::THROW_EXCEPTION);
 			}
-			entry = binder.entry_retriever.GetEntry(type_catalog, Identifier::InvalidSchema(), type_lookup,
-			                                        OnEntryNotFound::RETURN_NULL);
+			entry = binder.entry_retriever.GetEntry(
+			    EntryLookupInfo(type_lookup, QualifiedName(type_catalog, Identifier::InvalidSchema(),
+			                                               type_lookup.GetEntryIdentifier())),
+			    OnEntryNotFound::RETURN_NULL);
 		}
 		if (!IsValidTypeLookup(entry)) {
-			entry = binder.entry_retriever.GetEntry(Identifier::InvalidCatalog(), Identifier::InvalidSchema(),
-			                                        type_lookup, OnEntryNotFound::RETURN_NULL);
+			entry = binder.entry_retriever.GetEntry(
+			    EntryLookupInfo(type_lookup, QualifiedName(Identifier::InvalidCatalog(), Identifier::InvalidSchema(),
+			                                               type_lookup.GetEntryIdentifier())),
+			    OnEntryNotFound::RETURN_NULL);
 		}
 		if (!IsValidTypeLookup(entry)) {
-			entry = binder.entry_retriever.GetEntry(Identifier::SystemCatalog(), Identifier::DefaultSchema(),
-			                                        type_lookup, OnEntryNotFound::THROW_EXCEPTION);
+			entry = binder.entry_retriever.GetEntry(
+			    EntryLookupInfo(type_lookup, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(),
+			                                               type_lookup.GetEntryIdentifier())),
+			    OnEntryNotFound::THROW_EXCEPTION);
 		}
 	}
 

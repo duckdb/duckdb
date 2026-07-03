@@ -6,7 +6,7 @@ require vacuum_rebuild_indexes
 
 # set threshold at 0
 statement ok
-ATTACH '__TEST_DIR__/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 0)
+ATTACH '{TEST_DIR}/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 0)
 
 statement ok
 CREATE TABLE db1.t(i INTEGER);

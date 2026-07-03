@@ -32,13 +32,13 @@ bool ShellState::UseDescribeRenderMode(const duckdb::SQLStatement &statement, st
 		return false;
 	}
 	describe_table_name = "Describe";
-	if (!showref.table_name.empty()) {
-		describe_table_name = showref.table_name.GetIdentifierName();
+	if (!showref.GetTableName().empty()) {
+		describe_table_name = showref.GetTableName().GetIdentifierName();
 	} else if (showref.query && showref.query->type == duckdb::QueryNodeType::SELECT_NODE) {
 		auto &show_select = showref.query->Cast<duckdb::SelectNode>();
 		if (show_select.from_table->type == duckdb::TableReferenceType::BASE_TABLE) {
 			auto &base_table = show_select.from_table->Cast<duckdb::BaseTableRef>();
-			describe_table_name = base_table.table_name.GetIdentifierName();
+			describe_table_name = base_table.Table().GetIdentifierName();
 		}
 	}
 	return true;

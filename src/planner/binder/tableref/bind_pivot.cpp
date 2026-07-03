@@ -105,8 +105,8 @@ void TemplatedHandlePivotAggregate(ClientContext &context, unique_ptr<ParsedExpr
 		auto &aggr_function = expr->Cast<FunctionExpression>();
 
 		// check if this is an aggregate to ensure it is an aggregate and not a scalar function
-		EntryLookupInfo lookup_info(CatalogType::AGGREGATE_FUNCTION_ENTRY, aggr_function.FunctionName(), *expr);
-		auto &entry = Catalog::GetEntry(context, aggr_function.Catalog(), aggr_function.Schema(), lookup_info);
+		EntryLookupInfo lookup_info(CatalogType::AGGREGATE_FUNCTION_ENTRY, aggr_function.GetQualifiedName(), *expr);
+		auto &entry = Catalog::GetEntry(context, lookup_info);
 		if (entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			// aggregate
 			OP::HandleAggregate(expr, aggr_function, aggregates);
@@ -639,8 +639,8 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	idx_t total_pivots = 1;
 	for (auto &pivot : ref.pivots) {
 		if (!pivot.pivot_enum.empty()) {
-			auto &type_entry = Catalog::GetEntry<TypeCatalogEntry>(context, Identifier::InvalidCatalog(),
-			                                                       Identifier::InvalidSchema(), pivot.pivot_enum);
+			auto &type_entry = Catalog::GetEntry<TypeCatalogEntry>(
+			    context, QualifiedName(Identifier::InvalidCatalog(), Identifier::InvalidSchema(), pivot.pivot_enum));
 			auto type = type_entry.user_type;
 			if (type.id() != LogicalTypeId::ENUM) {
 				throw BinderException(ref, "Pivot must reference an ENUM type: \"%s\" is of type \"%s\"",

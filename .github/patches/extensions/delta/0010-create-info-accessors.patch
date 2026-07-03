@@ -1,0 +1,43 @@
+diff --git a/src/delta_macros.cpp b/src/delta_macros.cpp
+index a6570c5..42838c3 100644
+--- a/src/delta_macros.cpp
++++ b/src/delta_macros.cpp
+@@ -66,8 +66,8 @@ void DeltaMacros::RegisterTableMacro(ExtensionLoader &loader, const string &name
+ 	}
+ 
+ 	CreateMacroInfo info(CatalogType::TABLE_MACRO_ENTRY);
+-	info.schema = Identifier::DefaultSchema();
+-	info.name = Identifier(name);
++	info.SchemaMutable() = Identifier::DefaultSchema();
++	info.SetFunctionName(Identifier(name));
+ 	info.temporary = true;
+ 	info.internal = true;
+ 	info.macros.push_back(std::move(func));
+diff --git a/src/storage/delta_insert.cpp b/src/storage/delta_insert.cpp
+index 37ab743..ee195e5 100644
+--- a/src/storage/delta_insert.cpp
++++ b/src/storage/delta_insert.cpp
+@@ -269,7 +269,7 @@ string DeltaInsert::GetName() const {
+ 
+ InsertionOrderPreservingMap<string> DeltaInsert::ParamsToString() const {
+ 	InsertionOrderPreservingMap<string> result;
+-	result["Table Name"] = table ? table->name.GetIdentifierName() : info->Base().table.GetIdentifierName();
++	result["Table Name"] = table ? table->name.GetIdentifierName() : info->Base().GetTableName().GetIdentifierName();
+ 	return result;
+ }
+ 
+diff --git a/src/storage/delta_schema_entry.cpp b/src/storage/delta_schema_entry.cpp
+index ac160b4..baee731 100644
+--- a/src/storage/delta_schema_entry.cpp
++++ b/src/storage/delta_schema_entry.cpp
+@@ -119,8 +119,8 @@ unique_ptr<DeltaTableEntry> DeltaSchemaEntry::CreateTableEntry(ClientContext &co
+ 	for (idx_t i = 0; i < return_types.size(); i++) {
+ 		table_info.columns.AddColumn(ColumnDefinition(Identifier(names[i]), return_types[i]));
+ 	}
+-	table_info.table = !delta_catalog.internal_table_name.empty() ? Identifier(delta_catalog.internal_table_name)
+-	                                                               : catalog.GetName();
++	table_info.SetTableName(!delta_catalog.internal_table_name.empty() ? Identifier(delta_catalog.internal_table_name)
++	                                                               : catalog.GetName());
+ 
+ 	// Copy over constraints to table info TODO: these are incompatible currently
+ 	// table_info.constraints = snapshot->not_null_constraints;}

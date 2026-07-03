@@ -32,8 +32,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInstallStatement(
     const optional<ExtensionRepositoryInfo> &from_source, const optional<string> &version_number) {
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
-	info->load_type = LoadType::INSTALL;
-	info->filename = identifier_or_string_literal.name.GetIdentifierName();
+	info->load_type = has_result ? LoadType::FORCE_INSTALL : LoadType::INSTALL;
+	info->filename = identifier_or_string_literal.Name().GetIdentifierName();
 	info->repo_is_alias = false;
 	if (from_source) {
 		info->repository = from_source->name.GetIdentifierName();
@@ -100,7 +100,7 @@ PEGTransformerFactory::FinalizeUpdateExtensionsStatementTrampoline(PEGTransforme
 
 string PEGTransformerFactory::TransformVersionNumber(PEGTransformer &transformer,
                                                      const QualifiedName &identifier_or_string_literal) {
-	return identifier_or_string_literal.name.GetIdentifierName();
+	return identifier_or_string_literal.Name().GetIdentifierName();
 }
 
 } // namespace duckdb

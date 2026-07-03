@@ -199,7 +199,7 @@ statement ok
 CREATE TRIGGER tr_del AFTER DELETE ON del FOR EACH STATEMENT
     INSERT INTO dlog VALUES ('deleted');
 
-query I
+query I rowsort
 DELETE FROM del RETURNING id;
 ----
 10

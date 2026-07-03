@@ -371,6 +371,12 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 
 	result.emplace_back(LogicalType::GEOMETRY(), "geometry", min_geometry, max_geometry);
 
+	// unnamed tuple - added last so existing column positions are unchanged
+	auto tuple_type = LogicalType::TUPLE({LogicalType::INTEGER, LogicalType::VARCHAR});
+	auto min_tuple_val = Value::TUPLE({Value(LogicalType::INTEGER), Value(LogicalType::VARCHAR)});
+	auto max_tuple_val = Value::TUPLE({Value::INTEGER(42), Value("🦆🦆🦆🦆🦆🦆")});
+	result.emplace_back(tuple_type, "tuple", min_tuple_val, max_tuple_val);
+
 	return result;
 }
 

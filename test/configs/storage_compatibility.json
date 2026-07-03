@@ -7,7 +7,10 @@
       "value": "v1.0.0"
     }
   ],
-  "skip_error_messages": ["Aggregate state columns are not supported in storage versions prior to v2.0.0"],
+  "skip_error_messages": [
+    "Aggregate state columns are not supported in storage versions prior to v2.0.0",
+    "TUPLE columns are not supported in storage versions prior to v2.0.0"
+  ],
   "skip_compiled": "true",
   "skip_tests": [
     {

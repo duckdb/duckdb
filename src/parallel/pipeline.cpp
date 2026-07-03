@@ -119,7 +119,7 @@ bool Pipeline::TryGetMaxThreads(idx_t &max_threads) {
 	}
 
 	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-	auto active_threads = NumericCast<idx_t>(scheduler.NumberOfThreads());
+	auto active_threads = scheduler.NumberOfThreads();
 	if (max_threads > active_threads) {
 		max_threads = active_threads;
 	}

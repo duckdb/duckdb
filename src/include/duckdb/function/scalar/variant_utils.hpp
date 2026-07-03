@@ -15,6 +15,7 @@
 #include "duckdb/common/owning_string_map.hpp"
 
 namespace duckdb {
+class VariantIterator;
 
 struct VariantPathBindData : public FunctionData {
 public:
@@ -151,6 +152,10 @@ struct VariantUtils {
 
 	//! Whether or not a type is natively supported in variant
 	DUCKDB_API static bool VariantSupportsType(const LogicalType &type);
+
+	//! Build a canonical (unshredded) VARIANT vector by traversing a variant directly through a
+	//! VariantIterator - avoids materializing the intermediate vector<VariantValue> tree
+	DUCKDB_API static void ToVariant(const VariantIterator &state, idx_t count, Vector &result);
 };
 
 struct VariantBindUtils {

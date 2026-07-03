@@ -20,8 +20,8 @@ unique_ptr<BoundWindowExpression> WindowFunction::Bind(ClientContext &context,
 
 BoundWindowFunction::BoundWindowFunction(const WindowFunction &base) : window_enum(base.window_enum) {
 	name = base.name;
-	schema_name = base.schema_name;
-	catalog_name = base.catalog_name;
+	schema_name = base.GetSchemaName();
+	catalog_name = base.GetCatalogName();
 	extra_info = base.extra_info;
 	return_type = base.GetReturnType();
 	callbacks = base.GetCallbacks();

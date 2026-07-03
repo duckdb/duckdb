@@ -151,7 +151,7 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 }
 
 BoundStatement Binder::BindShowTable(ShowRef &ref) {
-	auto &lname = ref.table_name;
+	auto &lname = ref.GetTableName();
 
 	string sql;
 	if (lname == "\"databases\"") {
@@ -169,8 +169,8 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 	} else if (lname == "\"tables\"") {
 		sql = PragmaShowTables();
 	} else if (ref.show_type == ShowType::SHOW_FROM) {
-		auto catalog_name = ref.catalog_name;
-		auto schema_name = ref.schema_name;
+		auto catalog_name = ref.GetCatalogName();
+		auto schema_name = ref.GetSchemaName();
 
 		// Check for unqualified name, promote schema to catalog if unambiguous, and set schema_name to empty if so
 		Binder::BindSchemaOrCatalog(catalog_name, schema_name);
@@ -186,7 +186,7 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 			// We have a schema name, use default catalog
 			auto &client_data = ClientData::Get(context);
 			auto &default_entry = client_data.catalog_search_path->GetDefault();
-			catalog_name = default_entry.catalog;
+			catalog_name = default_entry.GetCatalog();
 			auto schema_entry = Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::RETURN_NULL);
 			if (!schema_entry) {
 				throw CatalogException("SHOW TABLES FROM: No catalog + schema named \"%s.%s\" found.",
@@ -199,7 +199,7 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 	} else if (lname == "__show_tables_expanded") {
 		sql = PragmaShowTablesExpanded();
 	} else {
-		sql = PragmaShow(ref.table_name.GetIdentifierName());
+		sql = PragmaShow(ref.GetTableName().GetIdentifierName());
 	}
 	auto select = CreateViewInfo::ParseSelect(sql);
 	auto subquery = make_uniq<SubqueryRef>(std::move(select));

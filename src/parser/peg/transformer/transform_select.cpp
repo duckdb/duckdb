@@ -417,7 +417,7 @@ MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &tr
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformUnqualifiedBaseTableName(PEGTransformer &transformer,
                                                                                   const Identifier &table_name) {
-	const auto description = TableDescription(INVALID_CATALOG, INVALID_SCHEMA, table_name);
+	const auto description = TableDescription(QualifiedName(table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 
@@ -439,20 +439,14 @@ Identifier PEGTransformerFactory::TransformCatalogQualification(PEGTransformer &
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIdentifier(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_identifier_or_string_literal) {
-	QualifiedName result;
-	result.catalog = catalog_qualification;
-	result.schema = reserved_schema_qualification;
-	result.name = reserved_identifier_or_string_literal;
+	QualifiedName result(catalog_qualification, reserved_schema_qualification, reserved_identifier_or_string_literal);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedIdentifierOrStringLiteral(
     PEGTransformer &transformer, const Identifier &schema_qualification,
     const Identifier &reserved_identifier_or_string_literal) {
-	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = schema_qualification;
-	result.name = reserved_identifier_or_string_literal;
+	QualifiedName result({schema_qualification}, reserved_identifier_or_string_literal);
 	return result;
 }
 
@@ -827,9 +821,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(
 
 	result->with_ordinality =
 	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
-	result->function =
-	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
-	                                  qualified_table_function.name, std::move(table_function_arguments));
+	result->function = make_uniq<FunctionExpression>(qualified_table_function, std::move(table_function_arguments));
 	if (table_alias) {
 		result->alias = table_alias->name;
 		result->column_name_alias = table_alias->column_name_alias;
@@ -844,9 +836,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(
 	auto result = make_uniq<TableFunctionRef>();
 	result->with_ordinality =
 	    with_ordinality.value_or(false) ? OrdinalityType::WITH_ORDINALITY : OrdinalityType::WITHOUT_ORDINALITY;
-	result->function =
-	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
-	                                  qualified_table_function.name, std::move(table_function_arguments));
+	result->function = make_uniq<FunctionExpression>(qualified_table_function, std::move(table_function_arguments));
 	result->alias = table_alias_colon;
 	if (sample_clause) {
 		result->sample = std::move(*sample_clause);
@@ -1327,6 +1317,18 @@ PEGTransformerFactory::TransformOffsetLimitClause(PEGTransformer &transformer, L
 	return VerifyLimitOffset(limit_clause ? *limit_clause : empty_limit, offset_clause);
 }
 
+unique_ptr<ResultModifier> PEGTransformerFactory::TransformOffsetFetchClause(PEGTransformer &transformer,
+                                                                             LimitPercentResult offset_clause,
+                                                                             LimitPercentResult fetch_clause) {
+	return VerifyLimitOffset(fetch_clause, offset_clause);
+}
+
+unique_ptr<ResultModifier> PEGTransformerFactory::TransformFetchOnlyClause(PEGTransformer &transformer,
+                                                                           LimitPercentResult fetch_clause) {
+	LimitPercentResult empty_offset;
+	return VerifyLimitOffset(fetch_clause, empty_offset);
+}
+
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformTableStatement(PEGTransformer &transformer,
                                                                            unique_ptr<BaseTableRef> base_table_name) {
 	auto result = make_uniq<SelectStatement>();
@@ -1564,7 +1566,7 @@ PEGTransformerFactory::TransformUnpivotTargetList(PEGTransformer &transformer,
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformSchemaReservedTable(PEGTransformer &transformer,
                                                                              const Identifier &schema_qualification,
                                                                              const Identifier &reserved_table_name) {
-	const auto description = TableDescription(INVALID_CATALOG, schema_qualification, reserved_table_name);
+	const auto description = TableDescription(QualifiedName({schema_qualification}, reserved_table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 
@@ -1572,7 +1574,7 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformCatalogReservedSchemaTa
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_table_name) {
 	const auto description =
-	    TableDescription(catalog_qualification, reserved_schema_qualification, reserved_table_name);
+	    TableDescription(QualifiedName(catalog_qualification, reserved_schema_qualification, reserved_table_name));
 	return make_uniq<BaseTableRef>(description);
 }
 
@@ -1580,15 +1582,13 @@ QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransfor
                                                                      const optional<Identifier> &catalog_qualification,
                                                                      const optional<Identifier> &schema_qualification,
                                                                      const Identifier &table_function_name) {
-	QualifiedName result;
-	result.catalog = catalog_qualification ? *catalog_qualification : INVALID_CATALOG;
-	result.schema = schema_qualification ? *schema_qualification : INVALID_SCHEMA;
-	if (!result.catalog.empty() && result.schema.empty()) {
-		result.schema = result.catalog;
-		result.catalog = INVALID_CATALOG;
+	Identifier catalog = catalog_qualification ? *catalog_qualification : Identifier();
+	Identifier schema = schema_qualification ? *schema_qualification : Identifier();
+	if (!catalog.empty() && schema.empty()) {
+		schema = std::move(catalog);
+		catalog = Identifier();
 	}
-	result.name = table_function_name;
-	return result;
+	return QualifiedName(std::move(catalog), std::move(schema), table_function_name);
 }
 
 vector<FunctionArgument>
@@ -1604,7 +1604,7 @@ TableAlias PEGTransformerFactory::TransformTableAliasAs(PEGTransformer &transfor
                                                         const QualifiedName &identifier_or_string_literal,
                                                         const optional<vector<string>> &column_aliases) {
 	TableAlias result;
-	result.name = identifier_or_string_literal.name;
+	result.name = identifier_or_string_literal.Name();
 	if (column_aliases) {
 		result.column_name_alias = StringsToIdentifiers(*column_aliases);
 	}
@@ -1852,6 +1852,13 @@ LimitPercentResult PEGTransformerFactory::TransformLimitLiteralPercent(PEGTransf
 	LimitPercentResult result;
 	result.expression = std::move(number_literal);
 	result.is_percent = true;
+	return result;
+}
+
+LimitPercentResult PEGTransformerFactory::TransformFetchValue(PEGTransformer &transformer,
+                                                              unique_ptr<ParsedExpression> expression) {
+	LimitPercentResult result;
+	result.expression = std::move(expression);
 	return result;
 }
 

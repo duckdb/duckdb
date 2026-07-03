@@ -42,8 +42,8 @@ static vector<string> GetVarcharCollationFunctions(ClientContext &context, const
 			// we already applied this collation
 			continue;
 		}
-		auto &collation_entry =
-		    catalog.GetEntry<CollateCatalogEntry>(context, Identifier::DefaultSchema(), Identifier(collation_argument));
+		auto &collation_entry = catalog.GetEntry<CollateCatalogEntry>(
+		    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier(collation_argument)));
 		if (collation_entry.combinable) {
 			entries.insert(entries.begin(), collation_entry);
 		} else {
@@ -110,8 +110,8 @@ void CollationBinding::RegisterCollation(CollationCallback callback) {
 static unique_ptr<Expression> ApplyCollationFunction(ClientContext &context, const string &function_name,
                                                      unique_ptr<Expression> source) {
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &function_entry =
-	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(), Identifier(function_name));
+	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
+	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier(function_name)));
 	auto source_alias = source->GetAlias();
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(source));
@@ -139,8 +139,9 @@ static bool PushNestedCollation(ClientContext &context, unique_ptr<Expression> &
 	}
 
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto list_transform = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, Identifier::DefaultSchema(),
-	                                                                   "list_transform", OnEntryNotFound::RETURN_NULL);
+	auto list_transform = catalog.GetEntry<ScalarFunctionCatalogEntry>(
+	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), "list_transform"),
+	    OnEntryNotFound::RETURN_NULL);
 	if (!list_transform) {
 		// list_transform is not available - cannot push the collation into the list
 		return false;

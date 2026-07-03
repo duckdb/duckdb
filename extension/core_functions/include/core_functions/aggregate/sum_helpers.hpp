@@ -9,13 +9,61 @@
 #pragma once
 
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include <type_traits>
+#include <utility>
 
 namespace duckdb {
+
+struct RepeatedStateValue {
+	template <class T>
+	static T Multiply(const T &input, idx_t count) {
+		if constexpr (std::is_same<T, double>()) {
+			return input * static_cast<double>(count);
+		} else if constexpr (std::is_same<T, float>()) {
+			return input * static_cast<float>(count);
+		} else if constexpr (std::is_same<T, hugeint_t>()) {
+			return Hugeint::Multiply(input, Hugeint::Convert(count));
+		} else if constexpr (std::is_same<T, interval_t>()) {
+			const auto count64 = Cast::Operation<idx_t, int64_t>(count);
+			return MultiplyOperator::Operation<interval_t, int64_t, interval_t>(input, count64);
+		} else {
+			T result;
+			const auto count_value = Cast::Operation<idx_t, T>(count);
+			if (!TryMultiplyOperator::Operation(input, count_value, result)) {
+				throw OutOfRangeException("Overflow in repeated aggregate state combine");
+			}
+			return result;
+		}
+	}
+
+	template <class T>
+	static void Add(T &target, const T &input) {
+		if constexpr (std::is_same<T, double>() || std::is_same<T, float>()) {
+			target += input;
+		} else if constexpr (std::is_same<T, hugeint_t>()) {
+			if (!Hugeint::TryAddInPlace(target, input)) {
+				throw OutOfRangeException("Overflow in repeated aggregate state combine");
+			}
+		} else if constexpr (std::is_same<T, interval_t>()) {
+			target = AddOperator::Operation<interval_t, interval_t, interval_t>(target, input);
+		} else {
+			if (!TryAddOperator::Operation(target, input, target)) {
+				throw OutOfRangeException("Overflow in repeated aggregate state combine");
+			}
+		}
+	}
+
+	template <class STATE>
+	static void AddRepeated(STATE &state, const decltype(std::declval<STATE>().value) &input, idx_t count) {
+		Add(state.value, Multiply(input, count));
+	}
+};
 
 static inline void KahanAddInternal(double input, double &summed, double &err) {
 	double diff = input - err;
@@ -55,7 +103,7 @@ struct RegularAdd {
 
 	template <class STATE, class T>
 	static void AddConstant(STATE &state, T input, idx_t count) {
-		state.value += input * int64_t(count);
+		RepeatedStateValue::AddRepeated(state, input, count);
 	}
 };
 
@@ -67,7 +115,7 @@ struct HugeintAdd {
 
 	template <class STATE, class T>
 	static void AddConstant(STATE &state, T input, idx_t count) {
-		AddNumber(state, Hugeint::Multiply(input, UnsafeNumericCast<int64_t>(count)));
+		RepeatedStateValue::AddRepeated(state, input, count);
 	}
 };
 
@@ -79,9 +127,7 @@ struct IntervalAdd {
 
 	template <class STATE, class T>
 	static void AddConstant(STATE &state, T input, idx_t count) {
-		const auto count64 = Cast::Operation<idx_t, int64_t>(count);
-		input = MultiplyOperator::Operation<interval_t, int64_t, interval_t>(input, count64);
-		state.value = AddOperator::Operation<interval_t, interval_t, interval_t>(state.value, input);
+		RepeatedStateValue::AddRepeated(state, input, count);
 	}
 };
 
@@ -123,11 +169,13 @@ struct AddToHugeint {
 
 	template <class STATE, class T>
 	static void AddConstant(STATE &state, T input, idx_t count) {
+		if constexpr (std::is_same<T, hugeint_t>()) {
+			RepeatedStateValue::AddRepeated(state, input, count);
+			return;
+		}
 		// add a constant X number of times
 		// fast path: check if value * count fits into a uint64_t
-		// note that we check if value * VECTOR_SIZE fits in a uint64_t to avoid having to actually do a division
-		// this is still a pretty high number (18014398509481984) so most positive numbers will fit
-		if (input >= 0 && uint64_t(input) < (NumericLimits<uint64_t>::Maximum() / STANDARD_VECTOR_SIZE)) {
+		if (input >= 0 && (count == 0 || uint64_t(input) <= (NumericLimits<uint64_t>::Maximum() / count))) {
 			// if it does just multiply it and add the value
 			uint64_t value = uint64_t(input) * count;
 			AddValue(state.value, value, 1);
@@ -147,6 +195,45 @@ struct AddToHugeint {
 				state.value += addition;
 			}
 		}
+	}
+};
+
+struct RepeatedSumState {
+	template <class STATE>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &, idx_t count) {
+		if (!source.is_set) {
+			return;
+		}
+		target.is_set = true;
+		RepeatedStateValue::AddRepeated(target, source.value, count);
+	}
+};
+
+struct RepeatedAverageState {
+	template <class COUNT_TYPE>
+	static COUNT_TYPE MultiplyCount(COUNT_TYPE source_count, idx_t count) {
+		COUNT_TYPE repeated_count;
+		const auto count_value = Cast::Operation<idx_t, COUNT_TYPE>(count);
+		if (!TryMultiplyOperator::Operation(source_count, count_value, repeated_count)) {
+			throw OutOfRangeException("Overflow in repeated aggregate state combine");
+		}
+		return repeated_count;
+	}
+
+	template <class COUNT_TYPE>
+	static void AddCount(COUNT_TYPE &target_count, COUNT_TYPE repeated_count) {
+		if (!TryAddOperator::Operation(target_count, repeated_count, target_count)) {
+			throw OutOfRangeException("Overflow in repeated aggregate state combine");
+		}
+	}
+
+	template <class STATE>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &, idx_t count) {
+		if (source.count == 0) {
+			return;
+		}
+		AddCount(target.count, MultiplyCount(source.count, count));
+		RepeatedStateValue::AddRepeated(target, source.value, count);
 	}
 };
 
