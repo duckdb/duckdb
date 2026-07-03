@@ -80,9 +80,8 @@ unique_ptr<LogicalOperator> LogicalColumnDataGet::Deserialize(Deserializer &dese
 	auto chunk_types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(201, "chunk_types");
 	auto collection =
 	    deserializer.ReadPropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection");
-	auto result =
-	    duckdb::unique_ptr<LogicalColumnDataGet>(new LogicalColumnDataGet(table_index, std::move(chunk_types),
-	                                                                      std::move(collection)));
+	auto result = duckdb::unique_ptr<LogicalColumnDataGet>(
+	    new LogicalColumnDataGet(table_index, std::move(chunk_types), std::move(collection)));
 	if (deserializer.CanDeserializeProperty(203, "column_ids")) {
 		deserializer.ReadProperty(203, "column_ids", result->column_ids);
 	}
