@@ -189,8 +189,8 @@ EXPLAIN select a from parquet_scan('{TEMP_DIR}/hive_filters/*/*.parquet', HIVE_P
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*a<4.*File Filters:.*\(CAST\(c AS.*INTEGER\) = 500\).*
 
-# unsatisfiable file filters also show up
+# unsatisfiable filters are pruned to an empty result
 query II
 EXPLAIN select a from parquet_scan('{TEMP_DIR}/hive_filters_2/*/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where c::INT > 500 and c::INT < 500;
 ----
-physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters:.*\(CAST\(c AS.*INTEGER\).*BETWEEN.*500 AND 500\).*
+physical_plan	<REGEX>:.*EMPTY_RESULT.*

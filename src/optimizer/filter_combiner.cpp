@@ -1204,10 +1204,19 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 		// (1) prune nothing or
 		// (2) return UNSATISFIABLE
 		// the SMALLER THAN constant has to be greater than the BIGGER THAN constant
-		if (left.constant >= right.constant) {
+		if (left.constant > right.constant) {
 			return ValueComparisonResult::PRUNE_NOTHING;
-		} else {
+		} else if (left.constant < right.constant) {
 			return ValueComparisonResult::UNSATISFIABLE_CONDITION;
+		} else {
+			// the constants are equal
+			// This is only satisfiable if both bounds are inclusive
+			if (left.comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO &&
+			    right.comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+				return ValueComparisonResult::PRUNE_NOTHING;
+			} else {
+				return ValueComparisonResult::UNSATISFIABLE_CONDITION;
+			}
 		}
 	} else {
 		// left is [>] and right is [<] or [!=]
