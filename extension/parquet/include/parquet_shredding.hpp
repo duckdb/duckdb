@@ -30,7 +30,7 @@ public:
 	static ChildShreddingTypes Deserialize(Deserializer &source);
 
 public:
-	unique_ptr<map<string, ShreddingType>> types;
+	unique_ptr<unordered_map<string, ShreddingType>> types;
 };
 
 struct ShreddingType {

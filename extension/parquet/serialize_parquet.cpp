@@ -23,12 +23,12 @@ ChildFieldIDs ChildFieldIDs::Deserialize(Deserializer &deserializer) {
 }
 
 void ChildShreddingTypes::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<map<string, ShreddingType>>(100, "types", types.operator*());
+	serializer.WritePropertyWithDefault<unordered_map<string, ShreddingType>>(100, "types", types.operator*());
 }
 
 ChildShreddingTypes ChildShreddingTypes::Deserialize(Deserializer &deserializer) {
 	ChildShreddingTypes result;
-	deserializer.ReadPropertyWithDefault<map<string, ShreddingType>>(100, "types", result.types.operator*());
+	deserializer.ReadPropertyWithDefault<unordered_map<string, ShreddingType>>(100, "types", result.types.operator*());
 	return result;
 }
 
