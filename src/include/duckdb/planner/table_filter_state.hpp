@@ -44,6 +44,11 @@ public:
 	}
 
 	unique_ptr<ExpressionExecutor> executor;
+	//! Statically true for bitmap-eligible expressions; cleared on the first non-bitmap result at runtime
+	bool bitmap_capable;
+	//! Reused per-call input chunk and result selection, so per-vector filter calls allocate nothing
+	DataChunk filter_chunk;
+	SelectionVector scratch;
 };
 
 } // namespace duckdb

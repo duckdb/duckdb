@@ -209,3 +209,40 @@ query I
 SELECT count(*) FROM autovec_distinct_t WHERE a IS DISTINCT FROM NULL
 ----
 13
+
+# Mixed filter chain: a non-bitmap-capable predicate (VARCHAR LIKE) combined with a bitmap-capable comparison.
+# The scan's adaptive reordering can run either first, so the comparison may receive a sel_t input (promoted to
+# a bitmap when dense) or an identity input - the result must be identical either way.
+statement ok
+CREATE TABLE autovec_mixed_t AS SELECT i a, CASE WHEN i % 5 = 0 THEN 'xyz' ELSE 'abc' END b FROM range(10000) tbl(i);
+
+query I
+SELECT count(*) FROM autovec_mixed_t WHERE b LIKE '%b%' AND a < 5000
+----
+4000
+
+query I
+SELECT count(*) FROM autovec_mixed_t WHERE b LIKE '%y%' AND a < 5000
+----
+1000
+
+query I
+SELECT count(*) FROM autovec_mixed_t WHERE b LIKE '%b%' AND a >= 9990
+----
+8
+
+# Mixed executor conjunction: one child produces an index selection, the other can produce a bitmap.
+# Both orders should evaluate each child once and keep the bitmap-capable predicate useful.
+query I
+SELECT count(*) FROM (
+	SELECT i::INTEGER a, CASE WHEN i % 5 = 0 THEN 'xyz' ELSE 'abc' END b FROM range(10000) tbl(i)
+) t WHERE b LIKE '%b%' AND a < 5000
+----
+4000
+
+query I
+SELECT count(*) FROM (
+	SELECT i::INTEGER a, CASE WHEN i % 5 = 0 THEN 'xyz' ELSE 'abc' END b FROM range(10000) tbl(i)
+) t WHERE a < 5000 AND b LIKE '%b%'
+----
+4000

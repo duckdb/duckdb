@@ -1,5 +1,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/expression_executor/bitmap_comparison.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
@@ -8,28 +9,30 @@
 
 namespace duckdb {
 
-// Ready a reused bitmap-fast-path scratch selection to receive up to `count` values from a child Select. A
-// bitmap-backed or empty scratch grows itself on the next write, but a leftover undersized index buffer (from
-// an earlier, smaller vector) would be written out of bounds, so clear it and let the child re-provision.
-static inline void PrepareScratch(SelectionVector &scratch, idx_t count) {
-	if (!scratch.IsBitmap() && scratch.Capacity() < count) {
-		scratch = SelectionVector();
+static bool HasBitmapComparisonChild(const BoundConjunctionExpression &expr) {
+	for (auto &child : expr.GetChildren()) {
+		if (IsBitmapComparisonCandidate(*child)) {
+			return true;
+		}
 	}
+	return false;
 }
 
 struct ConjunctionState : public ExpressionState {
 	ConjunctionState(const Expression &expr, ExpressionExecutorState &root)
-	    : ExpressionState(expr, root), intersect_tmp(STANDARD_VECTOR_SIZE) {
+	    : ExpressionState(expr, root), intersect_tmp(STANDARD_VECTOR_SIZE),
+	      bitmap_capable(HasBitmapComparisonChild(expr.Cast<BoundConjunctionExpression>())) {
 		adaptive_filter = make_uniq<AdaptiveFilter>(expr);
 		if (HasContext()) {
 			adaptive_filter->SetLogger(GetContext().logger);
 		}
 	}
 	unique_ptr<AdaptiveFilter> adaptive_filter;
-	//! Scratch for the AND bitmap-intersect fast path: `intersect_acc` accumulates, `intersect_tmp` holds
-	//! each subsequent child. Kept off `true_sel` so a fall-through leaves it untouched for the normal path.
+	//! Scratches for the AND bitmap-intersect fast path: acc accumulates, tmp holds each subsequent child
 	SelectionVector intersect_acc;
 	SelectionVector intersect_tmp;
+	//! Only enabled when the conjunction has at least one child that can be evaluated densely into a bitmap
+	bool bitmap_capable;
 };
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConjunctionExpression &expr,
@@ -77,36 +80,53 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 	auto &state = state_p->Cast<ConjunctionState>();
 
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-		// Bitmap intersect fast path: over the identity selection, with only the positive selection wanted,
-		// evaluate each child over the full input and AND the resulting bitmaps directly into true_sel. As
-		// long as every child yields a bitmap the result stays a bitmap with no index materialization;
-		// otherwise fall back (the normal path below overwrites true_sel).
-		if (true_sel && !false_sel && (!sel || !sel->IsSet())) {
+		// Bitmap intersect fast path: keep one bitmap accumulator. Non-bitmap children execute once on the
+		// current accumulator (materialized), then their index result is promoted back to a bitmap; bitmap-safe
+		// comparison children can execute over the dense input and be AND-ed into the accumulator.
+		if (state.bitmap_capable && true_sel && !false_sel && (!sel || !sel->IsSet())) {
 			auto &children = expr.GetChildren();
-			// The scratch vectors are pure output targets, but a child may fill one with up to `count` indices
-			// (e.g. an all-pass filter) rather than a bitmap. set_index only auto-grows an empty/bitmap-backed
-			// selection, not an undersized index buffer left over from a smaller vector, so make sure each scratch
-			// can hold `count` before use (a bitmap-producing child re-allocates its own storage regardless).
-			PrepareScratch(state.intersect_acc, count);
-			// Accumulate into scratch, not true_sel, so a fall-through leaves true_sel for the normal path.
-			idx_t intersect_count =
-			    Select(*children[0], state.child_states[0].get(), nullptr, count, &state.intersect_acc, nullptr);
-			if (state.intersect_acc.IsBitmap()) {
-				bool all_bitmap = true;
-				for (idx_t i = 1; i < children.size(); i++) {
-					PrepareScratch(state.intersect_tmp, count);
-					Select(*children[i], state.child_states[i].get(), nullptr, count, &state.intersect_tmp, nullptr);
-					if (!state.intersect_tmp.IsBitmap()) {
-						all_bitmap = false;
-						break;
-					}
-					intersect_count = state.intersect_acc.IntersectBitmap(state.intersect_tmp);
+			idx_t intersect_count = count;
+			bool have_accumulator = false;
+			bool used_dense_bitmap_child = false;
+
+			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+				auto &child = *children[child_idx];
+				auto child_state = state.child_states[child_idx].get();
+				// dense candidates evaluate over the full input and are AND-ed into the accumulator; other
+				// children narrow on the (materialized) accumulator and their result replaces it
+				const bool dense = IsBitmapComparisonCandidate(child);
+				const SelectionVector *current_sel = nullptr;
+				idx_t current_count = count;
+				if (!dense && have_accumulator) {
+					state.intersect_acc.Flatten();
+					current_sel = &state.intersect_acc;
+					current_count = intersect_count;
 				}
-				if (all_bitmap) {
-					*true_sel = std::move(state.intersect_acc);
-					return intersect_count;
+				state.intersect_tmp.EnsureIndexWritable(count);
+				idx_t child_count =
+				    Select(child, child_state, current_sel, current_count, &state.intersect_tmp, nullptr);
+				state.intersect_tmp.ToBitmap(child_count, count);
+				if (dense && have_accumulator) {
+					child_count =
+					    state.intersect_acc.Intersect(state.intersect_tmp, intersect_count, child_count, count);
+				} else {
+					std::swap(state.intersect_acc, state.intersect_tmp);
+					have_accumulator = true;
+				}
+				used_dense_bitmap_child |= dense;
+
+				intersect_count = child_count;
+				if (intersect_count == 0) {
+					break;
 				}
 			}
+
+			if (have_accumulator && (used_dense_bitmap_child || intersect_count == 0)) {
+				// swap, not move: the scratch keeps true_sel's old buffers for reuse on the next vector
+				std::swap(*true_sel, state.intersect_acc);
+				return intersect_count;
+			}
+			state.bitmap_capable = false;
 		}
 
 		// get runtime statistics
@@ -127,6 +147,11 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 		for (idx_t i = 0; i < expr.GetChildren().size(); i++) {
 			idx_t tcount = Select(*expr.GetChildren()[permutation[i]], state.child_states[permutation[i]].get(),
 			                      current_sel, current_count, true_sel, temp_false.get());
+			// a child may have produced a bitmap into true_sel: materialize it before the next child
+			// reads it as input and writes indices into it
+			if (true_sel->IsBitmap()) {
+				true_sel->Flatten();
+			}
 			idx_t fcount = current_count - tcount;
 			if (fcount > 0 && false_sel) {
 				// move failing tuples into the false_sel

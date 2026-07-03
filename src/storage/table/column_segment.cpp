@@ -458,25 +458,47 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 		return approved_tuple_count;
 	}
 
-	// standard case: run the expression once over the whole vector.
-	DataChunk chunk;
-	chunk.data.emplace_back(Vector::Ref(vector));
+	// standard case: run the expression once over the whole vector (the input chunk lives in the filter state)
+	auto &chunk = state.filter_chunk;
+	if (chunk.data.empty()) {
+		chunk.data.emplace_back(Vector::Ref(vector));
+	} else {
+		chunk.data[0].Reference(vector);
+	}
 	chunk.SetChildCardinality(scan_count);
-	if (!sel.IsSet() || sel.IsBitmap()) {
-		// Identity or bitmap running selection: evaluate over the full (flat) vector via the generic executor
-		// (its comparison Select produces a bitmap), then AND that into the running bitmap. This keeps the
-		// per-column selection a bitmap - no cross-column gather - and converts to indices only once, later.
-		SelectionVector new_sel;
+	// nested evaluation slices per child and needs an explicit selection, so nested columns always narrow below
+	const bool nested = vector.GetType().IsNested();
+	const bool identity_all = !sel.IsSet() && approved_tuple_count == scan_count;
+
+	// Bitmap fast path: evaluate the whole flat vector with no selection so the comparison Select can emit a
+	// bitmap, then AND it into the running selection (an index selection on either side is promoted first).
+	// A non-bitmap result is still used - never re-evaluated - but clears bitmap_capable for later vectors.
+	if (!nested && (identity_all || (state.bitmap_capable && sel.IsSet()))) {
+		// results land in the state-owned scratch; `sel` shares it, so its buffers are reused across vectors
+		auto &new_sel = state.scratch;
 		idx_t matched = state.executor->SelectExpression(chunk, new_sel, nullptr, scan_count);
-		if (new_sel.IsBitmap()) {
-			approved_tuple_count = sel.IsBitmap() ? new_sel.IntersectBitmap(sel) : matched;
-			sel = std::move(new_sel);
-			return approved_tuple_count;
+		if (!new_sel.IsBitmap()) {
+			state.bitmap_capable = false;
 		}
-		// executor did not produce a bitmap (non-eligible expression): fall through to narrowing
+		if (identity_all) {
+			approved_tuple_count = matched;
+		} else {
+			approved_tuple_count = new_sel.Intersect(sel, matched, approved_tuple_count, scan_count);
+		}
+		sel.Initialize(new_sel);
+		return approved_tuple_count;
 	}
 	SelectionVector result_sel(approved_tuple_count);
+	// the narrowing path indexes the running selection per row; a bitmap sel (from a prior bitmap-capable
+	// filter) can reach here on a nested/non-eligible filter, so materialize it once before use
+	sel.Flatten();
+	// nullptr == identity over [0, approved_tuple_count) (the prefix of still-candidate rows)
 	optional_ptr<SelectionVector> current_sel = sel.IsSet() ? &sel : nullptr;
+	SelectionVector identity_sel;
+	if (!sel.IsSet() && nested) {
+		identity_sel = SelectionVector::Incremental(approved_tuple_count);
+		current_sel = &identity_sel;
+	}
 	approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, current_sel, approved_tuple_count);
 	sel.Initialize(result_sel);
 	return approved_tuple_count;

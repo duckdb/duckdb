@@ -77,9 +77,6 @@ public:
 
 public:
 	unique_ptr<FunctionLocalState> local_state;
-	//! True when every child is a reference or constant, so each child's Execute replaces the intermediate
-	//! vector's buffer outright and resetting the intermediate chunk beforehand is wasted work.
-	bool children_only_reference = false;
 
 private:
 	//! Non-constant input columns that may be compatible dictionary vectors

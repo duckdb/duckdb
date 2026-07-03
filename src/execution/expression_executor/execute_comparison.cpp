@@ -6,8 +6,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
-#include "duckdb/common/vector_operations/comparison_bitmap.hpp"
-#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/execution/expression_executor/bitmap_comparison.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
@@ -142,48 +141,6 @@ static idx_t ComparatorSelectOperation(const Vector &left, const Vector &right, 
 		}
 	}
 	return true_count;
-}
-
-// Autovec-friendly path: `flat_column <cmp> constant` with no incoming selection produces a bitmap-backed
-// result selection (one branchless pass + popcount) instead of an index array. Returns false to fall back.
-static bool TrySelectComparisonBitmap(ExpressionType op, const Vector &left, const Vector &right,
-                                      optional_ptr<const SelectionVector> sel, idx_t count,
-                                      optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
-                                      optional_ptr<ValidityMask> null_mask, idx_t &result) {
-#ifdef DUCKDB_SMALLER_BINARY
-	return false;
-#else
-	// Only produce a positive selection over [0, count) when the input is the identity selection (an unset
-	// SelectionVector is still passed by the scan) and no false/null outputs are requested.
-	if ((sel && sel->IsSet()) || !true_sel || false_sel || null_mask) {
-		return false;
-	}
-	// One operand flat, the other a same-typed constant. Over identity input a BOUND_REF stays flat (un-sliced).
-	const Vector *flat;
-	const Vector *constant;
-	if (left.GetVectorType() == VectorType::FLAT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		flat = &left;
-		constant = &right;
-	} else if (left.GetVectorType() == VectorType::CONSTANT_VECTOR &&
-	           right.GetVectorType() == VectorType::FLAT_VECTOR) {
-		flat = &right;
-		constant = &left;
-		op = FlipComparisonExpression(op);
-	} else {
-		return false;
-	}
-	const auto pt = flat->GetType().InternalType();
-	if (!BitmapCmpTypeSupported(pt) || ConstantVector::IsNull(*constant)) {
-		return false;
-	}
-	auto &validity = FlatVector::Validity(*flat);
-	const validity_t *validity_data = validity.CanHaveNull() ? validity.GetData() : nullptr;
-	auto bitmap = reinterpret_cast<validity_t *>(true_sel->PrepareBitmap(count));
-	DispatchFlatCmpToBitmap(pt, op, *flat, count, validity_data, bitmap,
-	                        [&](auto tag) { return *ConstantVector::GetData<decltype(tag)>(*constant); });
-	result = BitmapPopcount(bitmap, count);
-	return true;
-#endif
 }
 
 idx_t VectorOperations::Equals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,

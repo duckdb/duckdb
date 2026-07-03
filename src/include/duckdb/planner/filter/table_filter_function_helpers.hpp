@@ -75,6 +75,8 @@ inline idx_t FillSelectionInversion(idx_t count, const SelectionVector &true_sel
 inline idx_t TranslateSelection(idx_t count, optional_ptr<const SelectionVector> input_sel,
                                 const SelectionVector &local_true_sel, idx_t local_true_count,
                                 optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
+	// local_true_sel may be bitmap-backed and may alias true_sel: materialize it for the writes below
+	local_true_sel.Flatten();
 	if (local_true_count == count) {
 		return SetAllTrueSelection(count, input_sel, true_sel, false_sel);
 	}

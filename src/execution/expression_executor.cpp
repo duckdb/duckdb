@@ -113,6 +113,13 @@ idx_t ExpressionExecutor::SelectExpression(DataChunk &input, optional_ptr<Select
                                            optional_ptr<SelectionVector> current_sel, idx_t current_count) {
 	D_ASSERT(expressions.size() == 1);
 	D_ASSERT(current_count <= input.size());
+	// set_index is a plain store: make the output targets index-writable once per call
+	if (true_sel && true_sel.get() != current_sel.get()) {
+		true_sel->EnsureIndexWritable(current_count);
+	}
+	if (false_sel && false_sel.get() != current_sel.get()) {
+		false_sel->EnsureIndexWritable(current_count);
+	}
 	SetChunk(&input);
 	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), current_sel.get(), current_count,
 	                               true_sel.get(), false_sel.get());

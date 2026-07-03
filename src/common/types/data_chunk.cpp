@@ -340,6 +340,8 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 }
 
 void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
+	// materialize a bitmap selection once so all column slices share one index array
+	sel_vector.Flatten();
 	SelCache merge_cache;
 	for (idx_t c = 0; c < ColumnCount(); c++) {
 		data[c].Slice(sel_vector, count_p, merge_cache);
@@ -359,6 +361,8 @@ void DataChunk::Slice(const DataChunk &other, idx_t offset, idx_t end) {
 
 void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
 	D_ASSERT(other.ColumnCount() <= col_offset + ColumnCount());
+	// materialize a bitmap selection once so all column slices share one index array
+	sel.Flatten();
 	SelCache merge_cache;
 	for (idx_t c = 0; c < other.ColumnCount(); c++) {
 		if (other.data[c].GetVectorType() == VectorType::DICTIONARY_VECTOR) {

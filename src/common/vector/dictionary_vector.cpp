@@ -9,6 +9,8 @@ namespace duckdb {
 DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t sel_count_p, buffer_ptr<DictionaryEntry> entry_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
       sel_vector(sel), entry(std::move(entry_p)) {
+	// A dictionary selection is a random-access position map; a bitmap only encodes a row subset - materialize it.
+	sel_vector.Flatten();
 }
 DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count_p,
                                    buffer_ptr<DictionaryEntry> entry_p)
@@ -18,6 +20,8 @@ DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_cou
 DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t sel_count_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
       sel_vector(sel) {
+	// A dictionary selection is a random-access position map; a bitmap only encodes a row subset - materialize it.
+	sel_vector.Flatten();
 }
 DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),

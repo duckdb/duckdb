@@ -1,4 +1,5 @@
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/execution/expression_executor/bitmap_comparison.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
@@ -8,7 +9,8 @@ static void InitializeExecutor(ClientContext &context, const Expression &express
 	state.executor->AddExpression(expression);
 }
 
-ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) {
+ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression)
+    : bitmap_capable(IsBitmapSelectCandidate(expression)) {
 	InitializeExecutor(context, expression, *this);
 }
 

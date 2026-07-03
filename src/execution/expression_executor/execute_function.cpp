@@ -1,13 +1,10 @@
 #include "duckdb/common/enums/debug_verification_mode.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector_operations/comparison_bitmap.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/expression_executor/bitmap_comparison.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 
@@ -29,73 +26,10 @@ bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
 	return true;
 }
 
-//! Fast path for `flat_ref <cmp> const`: evaluate the comparison straight from the input chunk column into
-//! a result bitmap, skipping the intermediate-vector materialization (reset, child Execute, verify) that the
-//! generic select path needs for arbitrary child expressions. Returns false for anything it does not handle.
-bool TrySelectComparisonFromChunk(const BoundFunctionExpression &expr, DataChunk &chunk, idx_t count,
-                                  SelectionVector &true_sel, idx_t &result) {
-	if (!BoundComparisonExpression::IsComparison(expr)) {
-		return false;
-	}
-	// IsComparison() yields the 6 ordered ops (handled by the kernel) plus IS [NOT] DISTINCT FROM. NOT DISTINCT
-	// FROM equals `=` for a non-null constant (NULL constant declined below); DISTINCT FROM must keep NULL rows.
-	auto op = expr.GetExpressionType();
-	if (op == ExpressionType::COMPARE_DISTINCT_FROM) {
-		return false;
-	}
-	if (op == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-		op = ExpressionType::COMPARE_EQUAL;
-	}
-	auto &left = BoundComparisonExpression::Left(expr);
-	auto &right = BoundComparisonExpression::Right(expr);
-	optional_ptr<const BoundReferenceExpression> ref;
-	const Value *constant;
-	if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
-	    right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		ref = &left.Cast<BoundReferenceExpression>();
-		constant = &right.Cast<BoundConstantExpression>().GetValue();
-	} else if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-	           right.GetExpressionClass() == ExpressionClass::BOUND_REF) {
-		ref = &right.Cast<BoundReferenceExpression>();
-		constant = &left.Cast<BoundConstantExpression>().GetValue();
-		op = FlipComparisonExpression(op);
-	} else {
-		return false;
-	}
-	auto &col = chunk.data[ref->Index()];
-	const auto pt = col.GetType().InternalType();
-	// A bound comparison has both sides at the same type, so the constant needs no cast.
-	if (col.GetVectorType() != VectorType::FLAT_VECTOR || !BitmapCmpTypeSupported(pt) || constant->IsNull() ||
-	    constant->type().InternalType() != pt) {
-		return false;
-	}
-	auto &validity = FlatVector::Validity(col);
-	const validity_t *validity_data = validity.CanHaveNull() ? validity.GetData() : nullptr;
-	auto bitmap = reinterpret_cast<validity_t *>(true_sel.PrepareBitmap(count));
-	// Read the scalar straight from the bound Value - no per-vector constant Vector needed.
-	DispatchFlatCmpToBitmap(pt, op, col, count, validity_data, bitmap,
-	                        [&](auto tag) { return constant->GetValueUnsafe<decltype(tag)>(); });
-	result = BitmapPopcount(bitmap, count);
-	return true;
-}
-
 } // namespace
 
 ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root)
     : ExpressionState(expr, root) {
-	// If all children are plain references/constants, each child's Execute replaces its intermediate vector,
-	// so resetting the intermediate chunk before evaluation is pure waste (skip it).
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		children_only_reference = true;
-		for (auto &child : expr.Cast<BoundFunctionExpression>().GetChildren()) {
-			auto child_class = child->GetExpressionClass();
-			if (child_class != ExpressionClass::BOUND_REF && child_class != ExpressionClass::BOUND_CONSTANT) {
-				children_only_reference = false;
-				break;
-			}
-		}
-	}
-
 	// Check if the expression is eligible for dictionary optimization
 	if (!expr.IsConsistent() || expr.IsVolatile() || expr.CanThrow()) {
 		return; // Needs to be consistent, non-volatile, and non-throwing
@@ -323,9 +257,7 @@ static void ExecuteConstantSelectFunction(const BoundFunctionExpression &expr, D
 void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	auto &arguments = state->intermediate_chunk;
-	if (!state->Cast<ExecuteFunctionState>().children_only_reference) {
-		arguments.Reset();
-	}
+	arguments.Reset();
 	// if the input is constant and there function is non-volatile we only need to run it on one value
 	bool all_constant = true;
 	if (expr.Function().GetStability() == FunctionStability::VOLATILE) {
@@ -400,9 +332,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	}
 #endif
 	auto &arguments = state->intermediate_chunk;
-	if (!state->Cast<ExecuteFunctionState>().children_only_reference) {
-		arguments.Reset();
-	}
+	arguments.Reset();
 	bool all_constant = true;
 	if (expr.Function().GetStability() == FunctionStability::VOLATILE) {
 		all_constant = false;
