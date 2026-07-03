@@ -300,7 +300,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDropOrSetIntern
                                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<string>(choice_pr.GetResult());
+	string result;
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		result = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	} else if (choice_pr.GetResult().type == ParseResultType::KEYWORD) {
+		result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	} else if (choice_pr.GetResult().type == ParseResultType::STRING) {
+		result = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+	} else if (choice_pr.GetResult().type == ParseResultType::OPERATOR) {
+		result = choice_pr.GetResult().Cast<OperatorParseResult>().operator_token;
+	} else {
+		result = transformer.Transform<string>(choice_pr.GetResult());
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -1023,6 +1034,8 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSimpleNumericTy
 		child = choice_result.Cast<KeywordParseResult>().keyword;
 	} else if (choice_result.type == ParseResultType::STRING) {
 		child = choice_result.Cast<StringLiteralParseResult>().result;
+	} else if (choice_result.type == ParseResultType::OPERATOR) {
+		child = choice_result.Cast<OperatorParseResult>().operator_token;
 	} else {
 		child = transformer.Transform<string>(choice_result);
 	}
@@ -2056,6 +2069,8 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformRelOptionNameIn
 		child = choice_result.Cast<KeywordParseResult>().keyword;
 	} else if (choice_result.type == ParseResultType::STRING) {
 		child = choice_result.Cast<StringLiteralParseResult>().result;
+	} else if (choice_result.type == ParseResultType::OPERATOR) {
+		child = choice_result.Cast<OperatorParseResult>().operator_token;
 	} else {
 		child = transformer.Transform<string>(choice_result);
 	}
@@ -2395,7 +2410,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqMinOrMaxInte
                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<string>(choice_pr.GetResult());
+	string result;
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		result = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	} else if (choice_pr.GetResult().type == ParseResultType::KEYWORD) {
+		result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	} else if (choice_pr.GetResult().type == ParseResultType::STRING) {
+		result = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+	} else if (choice_pr.GetResult().type == ParseResultType::OPERATOR) {
+		result = choice_pr.GetResult().Cast<OperatorParseResult>().operator_token;
+	} else {
+		result = transformer.Transform<string>(choice_pr.GetResult());
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -2717,6 +2743,8 @@ PEGTransformerFactory::TransformIdentifierOrStringLiteralInternal(PEGTransformer
 		child = choice_result.Cast<KeywordParseResult>().keyword;
 	} else if (choice_result.type == ParseResultType::STRING) {
 		child = choice_result.Cast<StringLiteralParseResult>().result;
+	} else if (choice_result.type == ParseResultType::OPERATOR) {
+		child = choice_result.Cast<OperatorParseResult>().operator_token;
 	} else {
 		child = transformer.Transform<string>(choice_result);
 	}
@@ -2990,7 +3018,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformKeyActionIntern
                                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<string>(choice_pr.GetResult());
+	string result;
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		result = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	} else if (choice_pr.GetResult().type == ParseResultType::KEYWORD) {
+		result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	} else if (choice_pr.GetResult().type == ParseResultType::STRING) {
+		result = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+	} else if (choice_pr.GetResult().type == ParseResultType::OPERATOR) {
+		result = choice_pr.GetResult().Cast<OperatorParseResult>().operator_token;
+	} else {
+		result = transformer.Transform<string>(choice_pr.GetResult());
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -4883,7 +4922,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFramingInternal
                                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<string>(choice_pr.GetResult());
+	string result;
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		result = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	} else if (choice_pr.GetResult().type == ParseResultType::KEYWORD) {
+		result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	} else if (choice_pr.GetResult().type == ParseResultType::STRING) {
+		result = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+	} else if (choice_pr.GetResult().type == ParseResultType::OPERATOR) {
+		result = choice_pr.GetResult().Cast<OperatorParseResult>().operator_token;
+	} else {
+		result = transformer.Transform<string>(choice_pr.GetResult());
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -5861,7 +5911,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformLikeVariationsI
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<string>(choice_pr.GetResult());
+	string result;
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		result = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	} else if (choice_pr.GetResult().type == ParseResultType::KEYWORD) {
+		result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	} else if (choice_pr.GetResult().type == ParseResultType::STRING) {
+		result = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+	} else if (choice_pr.GetResult().type == ParseResultType::OPERATOR) {
+		result = choice_pr.GetResult().Cast<OperatorParseResult>().operator_token;
+	} else {
+		result = transformer.Transform<string>(choice_pr.GetResult());
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -6042,6 +6103,8 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNamedOtherOpera
 		child = choice_result.Cast<KeywordParseResult>().keyword;
 	} else if (choice_result.type == ParseResultType::STRING) {
 		child = choice_result.Cast<StringLiteralParseResult>().result;
+	} else if (choice_result.type == ParseResultType::OPERATOR) {
+		child = choice_result.Cast<OperatorParseResult>().operator_token;
 	} else {
 		child = transformer.Transform<string>(choice_result);
 	}
@@ -6373,7 +6436,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPrefixOperatorI
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<string>(choice_pr.GetResult());
+	string result;
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		result = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	} else if (choice_pr.GetResult().type == ParseResultType::KEYWORD) {
+		result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	} else if (choice_pr.GetResult().type == ParseResultType::STRING) {
+		result = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+	} else if (choice_pr.GetResult().type == ParseResultType::OPERATOR) {
+		result = choice_pr.GetResult().Cast<OperatorParseResult>().operator_token;
+	} else {
+		result = transformer.Transform<string>(choice_pr.GetResult());
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -6858,7 +6932,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTrimDirectionIn
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<string>(choice_pr.GetResult());
+	string result;
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		result = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	} else if (choice_pr.GetResult().type == ParseResultType::KEYWORD) {
+		result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	} else if (choice_pr.GetResult().type == ParseResultType::STRING) {
+		result = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+	} else if (choice_pr.GetResult().type == ParseResultType::OPERATOR) {
+		result = choice_pr.GetResult().Cast<OperatorParseResult>().operator_token;
+	} else {
+		result = transformer.Transform<string>(choice_pr.GetResult());
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -8775,7 +8860,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAtUnitInternal(
                                                                                 ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<string>(choice_pr.GetResult());
+	string result;
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		result = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	} else if (choice_pr.GetResult().type == ParseResultType::KEYWORD) {
+		result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	} else if (choice_pr.GetResult().type == ParseResultType::STRING) {
+		result = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+	} else if (choice_pr.GetResult().type == ParseResultType::OPERATOR) {
+		result = choice_pr.GetResult().Cast<OperatorParseResult>().operator_token;
+	} else {
+		result = transformer.Transform<string>(choice_pr.GetResult());
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -9230,7 +9326,18 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCubeOrRollupInt
                                                                                       ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<string>(choice_pr.GetResult());
+	string result;
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		result = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+	} else if (choice_pr.GetResult().type == ParseResultType::KEYWORD) {
+		result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
+	} else if (choice_pr.GetResult().type == ParseResultType::STRING) {
+		result = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+	} else if (choice_pr.GetResult().type == ParseResultType::OPERATOR) {
+		result = choice_pr.GetResult().Cast<OperatorParseResult>().operator_token;
+	} else {
+		result = transformer.Transform<string>(choice_pr.GetResult());
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -10063,6 +10170,8 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformVacuumOptionInt
 		result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
 	} else if (choice_pr.GetResult().type == ParseResultType::STRING) {
 		result = choice_pr.GetResult().Cast<StringLiteralParseResult>().result;
+	} else if (choice_pr.GetResult().type == ParseResultType::OPERATOR) {
+		result = choice_pr.GetResult().Cast<OperatorParseResult>().operator_token;
 	} else {
 		result = transformer.Transform<string>(choice_pr.GetResult());
 	}

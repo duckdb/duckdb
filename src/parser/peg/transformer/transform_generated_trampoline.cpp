@@ -4320,6 +4320,10 @@ void PEGTransformerFactory::InitializeDropOrSetTrampoline(PEGTransformer &transf
 	frame.ReserveChildSlots(1);
 	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
 	auto ops_entry = ops_map.find(choice_result.name);
+	if (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
+		return;
+	}
 	if (ops_entry == ops_map.end()) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
@@ -4329,7 +4333,24 @@ void PEGTransformerFactory::InitializeDropOrSetTrampoline(PEGTransformer &transf
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDropOrSetTrampoline(PEGTransformer &transformer,
                                                                                     TransformStack &stack,
                                                                                     TransformStackFrame &frame) {
-	auto result = frame.TakeResult<string>(0);
+	string result;
+	if (frame.child_results[0]) {
+		result = frame.TakeResult<string>(0);
+	} else {
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			result = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			result = transformer.Transform<string>(choice_result);
+		}
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -8459,6 +8480,10 @@ void PEGTransformerFactory::InitializeSeqMinOrMaxTrampoline(PEGTransformer &tran
 	frame.ReserveChildSlots(1);
 	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
 	auto ops_entry = ops_map.find(choice_result.name);
+	if (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
+		return;
+	}
 	if (ops_entry == ops_map.end()) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
@@ -8468,7 +8493,24 @@ void PEGTransformerFactory::InitializeSeqMinOrMaxTrampoline(PEGTransformer &tran
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeSeqMinOrMaxTrampoline(PEGTransformer &transformer,
                                                                                       TransformStack &stack,
                                                                                       TransformStackFrame &frame) {
-	auto result = frame.TakeResult<string>(0);
+	string result;
+	if (frame.child_results[0]) {
+		result = frame.TakeResult<string>(0);
+	} else {
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			result = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			result = transformer.Transform<string>(choice_result);
+		}
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -9589,6 +9631,10 @@ void PEGTransformerFactory::InitializeKeyActionTrampoline(PEGTransformer &transf
 	frame.ReserveChildSlots(1);
 	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
 	auto ops_entry = ops_map.find(choice_result.name);
+	if (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
+		return;
+	}
 	if (ops_entry == ops_map.end()) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
@@ -9598,7 +9644,24 @@ void PEGTransformerFactory::InitializeKeyActionTrampoline(PEGTransformer &transf
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeKeyActionTrampoline(PEGTransformer &transformer,
                                                                                     TransformStack &stack,
                                                                                     TransformStackFrame &frame) {
-	auto result = frame.TakeResult<string>(0);
+	string result;
+	if (frame.child_results[0]) {
+		result = frame.TakeResult<string>(0);
+	} else {
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			result = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			result = transformer.Transform<string>(choice_result);
+		}
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -13269,6 +13332,10 @@ void PEGTransformerFactory::InitializeFramingTrampoline(PEGTransformer &transfor
 	frame.ReserveChildSlots(1);
 	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
 	auto ops_entry = ops_map.find(choice_result.name);
+	if (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
+		return;
+	}
 	if (ops_entry == ops_map.end()) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
@@ -13278,7 +13345,24 @@ void PEGTransformerFactory::InitializeFramingTrampoline(PEGTransformer &transfor
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeFramingTrampoline(PEGTransformer &transformer,
                                                                                   TransformStack &stack,
                                                                                   TransformStackFrame &frame) {
-	auto result = frame.TakeResult<string>(0);
+	string result;
+	if (frame.child_results[0]) {
+		result = frame.TakeResult<string>(0);
+	} else {
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			result = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			result = transformer.Transform<string>(choice_result);
+		}
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -15257,6 +15341,10 @@ void PEGTransformerFactory::InitializeLikeVariationsTrampoline(PEGTransformer &t
 	frame.ReserveChildSlots(1);
 	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
 	auto ops_entry = ops_map.find(choice_result.name);
+	if (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
+		return;
+	}
 	if (ops_entry == ops_map.end()) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
@@ -15266,7 +15354,24 @@ void PEGTransformerFactory::InitializeLikeVariationsTrampoline(PEGTransformer &t
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeLikeVariationsTrampoline(PEGTransformer &transformer,
                                                                                          TransformStack &stack,
                                                                                          TransformStackFrame &frame) {
-	auto result = frame.TakeResult<string>(0);
+	string result;
+	if (frame.child_results[0]) {
+		result = frame.TakeResult<string>(0);
+	} else {
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			result = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			result = transformer.Transform<string>(choice_result);
+		}
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -16308,6 +16413,10 @@ void PEGTransformerFactory::InitializePrefixOperatorTrampoline(PEGTransformer &t
 	frame.ReserveChildSlots(1);
 	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
 	auto ops_entry = ops_map.find(choice_result.name);
+	if (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
+		return;
+	}
 	if (ops_entry == ops_map.end()) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
@@ -16317,7 +16426,24 @@ void PEGTransformerFactory::InitializePrefixOperatorTrampoline(PEGTransformer &t
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePrefixOperatorTrampoline(PEGTransformer &transformer,
                                                                                          TransformStack &stack,
                                                                                          TransformStackFrame &frame) {
-	auto result = frame.TakeResult<string>(0);
+	string result;
+	if (frame.child_results[0]) {
+		result = frame.TakeResult<string>(0);
+	} else {
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			result = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			result = transformer.Transform<string>(choice_result);
+		}
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -17238,6 +17364,10 @@ void PEGTransformerFactory::InitializeTrimDirectionTrampoline(PEGTransformer &tr
 	frame.ReserveChildSlots(1);
 	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
 	auto ops_entry = ops_map.find(choice_result.name);
+	if (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
+		return;
+	}
 	if (ops_entry == ops_map.end()) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
@@ -17247,7 +17377,24 @@ void PEGTransformerFactory::InitializeTrimDirectionTrampoline(PEGTransformer &tr
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeTrimDirectionTrampoline(PEGTransformer &transformer,
                                                                                         TransformStack &stack,
                                                                                         TransformStackFrame &frame) {
-	auto result = frame.TakeResult<string>(0);
+	string result;
+	if (frame.child_results[0]) {
+		result = frame.TakeResult<string>(0);
+	} else {
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			result = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			result = transformer.Transform<string>(choice_result);
+		}
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -20861,6 +21008,10 @@ void PEGTransformerFactory::InitializeAtUnitTrampoline(PEGTransformer &transform
 	frame.ReserveChildSlots(1);
 	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
 	auto ops_entry = ops_map.find(choice_result.name);
+	if (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
+		return;
+	}
 	if (ops_entry == ops_map.end()) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
@@ -20870,7 +21021,24 @@ void PEGTransformerFactory::InitializeAtUnitTrampoline(PEGTransformer &transform
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeAtUnitTrampoline(PEGTransformer &transformer,
                                                                                  TransformStack &stack,
                                                                                  TransformStackFrame &frame) {
-	auto result = frame.TakeResult<string>(0);
+	string result;
+	if (frame.child_results[0]) {
+		result = frame.TakeResult<string>(0);
+	} else {
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			result = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			result = transformer.Transform<string>(choice_result);
+		}
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -21755,6 +21923,10 @@ void PEGTransformerFactory::InitializeCubeOrRollupTrampoline(PEGTransformer &tra
 	frame.ReserveChildSlots(1);
 	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
 	auto ops_entry = ops_map.find(choice_result.name);
+	if (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
+		return;
+	}
 	if (ops_entry == ops_map.end()) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
@@ -21764,7 +21936,24 @@ void PEGTransformerFactory::InitializeCubeOrRollupTrampoline(PEGTransformer &tra
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCubeOrRollupTrampoline(PEGTransformer &transformer,
                                                                                        TransformStack &stack,
                                                                                        TransformStackFrame &frame) {
-	auto result = frame.TakeResult<string>(0);
+	string result;
+	if (frame.child_results[0]) {
+		result = frame.TakeResult<string>(0);
+	} else {
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			result = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			result = transformer.Transform<string>(choice_result);
+		}
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -23358,6 +23547,10 @@ void PEGTransformerFactory::InitializeVacuumOptionTrampoline(PEGTransformer &tra
 	frame.ReserveChildSlots(1);
 	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
 	auto ops_entry = ops_map.find(choice_result.name);
+	if (choice_result.type == ParseResultType::IDENTIFIER || choice_result.type == ParseResultType::KEYWORD ||
+	    choice_result.type == ParseResultType::STRING || choice_result.type == ParseResultType::OPERATOR) {
+		return;
+	}
 	if (ops_entry == ops_map.end()) {
 		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
 	}
@@ -23367,7 +23560,24 @@ void PEGTransformerFactory::InitializeVacuumOptionTrampoline(PEGTransformer &tra
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeVacuumOptionTrampoline(PEGTransformer &transformer,
                                                                                        TransformStack &stack,
                                                                                        TransformStackFrame &frame) {
-	auto result = frame.TakeResult<string>(0);
+	string result;
+	if (frame.child_results[0]) {
+		result = frame.TakeResult<string>(0);
+	} else {
+		auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+		auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+		if (choice_result.type == ParseResultType::IDENTIFIER) {
+			result = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();
+		} else if (choice_result.type == ParseResultType::KEYWORD) {
+			result = choice_result.Cast<KeywordParseResult>().keyword;
+		} else if (choice_result.type == ParseResultType::STRING) {
+			result = choice_result.Cast<StringLiteralParseResult>().result;
+		} else if (choice_result.type == ParseResultType::OPERATOR) {
+			result = choice_result.Cast<OperatorParseResult>().operator_token;
+		} else {
+			result = transformer.Transform<string>(choice_result);
+		}
+	}
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 

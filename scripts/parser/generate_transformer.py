@@ -305,6 +305,12 @@ def _emit_string_result_extraction(var_name, source_expr, result_type="string"):
     identifier_value = f"{source_expr}.Cast<IdentifierParseResult>().identifier"
     if result_type != "Identifier":
         identifier_value = f"{identifier_value}.GetIdentifierName()"
+    operator_extraction = (
+        f"\t}} else if ({source_expr}.type == ParseResultType::OPERATOR) {{\n"
+        f"\t\t{var_name} = {source_expr}.Cast<OperatorParseResult>().operator_token;\n"
+        if result_type == "string"
+        else ""
+    )
     return (
         f"\t{result_type} {var_name};\n"
         f"\tif ({source_expr}.type == ParseResultType::IDENTIFIER) {{\n"
@@ -313,7 +319,8 @@ def _emit_string_result_extraction(var_name, source_expr, result_type="string"):
         f"\t\t{var_name} = {as_result(f'{source_expr}.Cast<KeywordParseResult>().keyword')};\n"
         f"\t}} else if ({source_expr}.type == ParseResultType::STRING) {{\n"
         f"\t\t{var_name} = {as_result(f'{source_expr}.Cast<StringLiteralParseResult>().result')};\n"
-        f"\t}} else {{\n"
+        + operator_extraction
+        + f"\t}} else {{\n"
         f"\t\t{var_name} = transformer.Transform<{result_type}>({source_expr});\n"
         f"\t}}\n"
     )
@@ -329,7 +336,11 @@ def generate_choice_internal_full(rule_name, return_type, return_by_value):
         f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
         f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
         f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
-        f"\tauto result = transformer.Transform<{return_type}>(choice_pr.GetResult());\n"
+        + (
+            _emit_string_result_extraction("result", "choice_pr.GetResult()", return_type)
+            if return_type == "string"
+            else f"\tauto result = transformer.Transform<{return_type}>(choice_pr.GetResult());\n"
+        )
         + _box_result(return_type, return_by_value)
         + f"}}\n"
     )

@@ -865,6 +865,25 @@ class UseGramPreviewEmitter:
                 lines.append(f"\tauto child = frame.TakeResult<{child_cpp_type}>(0);")
             child_arg = "std::move(child)" if child_cpp_type.startswith("unique_ptr<") else "child"
             lines.append(f"\tauto result = Transform{rule_name}(transformer, {child_arg});")
+        elif cpp_type == "string":
+            lines.append("\tstring result;")
+            lines.append("\tif (frame.child_results[0]) {")
+            lines.append("\t\tresult = frame.TakeResult<string>(0);")
+            lines.append("\t} else {")
+            lines.append("\t\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
+            lines.append("\t\tauto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();")
+            lines.append("\t\tif (choice_result.type == ParseResultType::IDENTIFIER) {")
+            lines.append("\t\t\tresult = choice_result.Cast<IdentifierParseResult>().identifier.GetIdentifierName();")
+            lines.append("\t\t} else if (choice_result.type == ParseResultType::KEYWORD) {")
+            lines.append("\t\t\tresult = choice_result.Cast<KeywordParseResult>().keyword;")
+            lines.append("\t\t} else if (choice_result.type == ParseResultType::STRING) {")
+            lines.append("\t\t\tresult = choice_result.Cast<StringLiteralParseResult>().result;")
+            lines.append("\t\t} else if (choice_result.type == ParseResultType::OPERATOR) {")
+            lines.append("\t\t\tresult = choice_result.Cast<OperatorParseResult>().operator_token;")
+            lines.append("\t\t} else {")
+            lines.append("\t\t\tresult = transformer.Transform<string>(choice_result);")
+            lines.append("\t\t}")
+            lines.append("\t}")
         elif cpp_type == "Identifier":
             lines.append("\tIdentifier result;")
             lines.append("\tif (frame.child_results[0]) {")
@@ -938,6 +957,16 @@ class UseGramPreviewEmitter:
                 lines.append("\tif (ops_entry == ops_map.end() && (" + " || ".join(direct_string_conditions) + ")) {")
                 lines.append("\t\treturn;")
                 lines.append("\t}")
+        if self.cpp_type(rule_name) == "string":
+            direct_conditions = [
+                "choice_result.type == ParseResultType::IDENTIFIER",
+                "choice_result.type == ParseResultType::KEYWORD",
+                "choice_result.type == ParseResultType::STRING",
+                "choice_result.type == ParseResultType::OPERATOR",
+            ]
+            lines.append("\tif (" + " || ".join(direct_conditions) + ") {")
+            lines.append("\t\treturn;")
+            lines.append("\t}")
         if syntax_only_alternatives:
             syntax_only_conditions = [f'choice_result.name == "{name}"' for name in syntax_only_alternatives]
             lines.append("\tif (ops_entry == ops_map.end() && (" + " || ".join(syntax_only_conditions) + ")) {")
