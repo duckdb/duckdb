@@ -138,7 +138,7 @@ class ManualTransformRegistry:
     def has_parse_result_rule(self, rule_name):
         pattern = re.compile(
             rf"^PEGTransformerFactory::Transform{re.escape(rule_name)}"
-            rf"\(PEGTransformer\s*&\s*\w+,\s*ParseResult\s*&\s*\w+\)$"
+            rf"\(PEGTransformer\s*&\s*\w+,\s*(?:const\s+)?ParseResult\s*&\s*\w+\)$"
         )
         return any(pattern.match(signature) for signature in self.signatures.get(rule_name, ()))
 
@@ -728,12 +728,10 @@ class UseGramPreviewEmitter:
             return None
         return child_arg
 
-    def is_auto_sequence_forward_rule(self, rule_name, plan):
-        return (
-            self.sequence_forward_child(rule_name, plan) is not None
-            and not manual_body_exists(rule_name)
-            and not self.rule_types[rule_name].pass_location
-        )
+    def auto_sequence_forward_child(self, rule_name, plan):
+        if manual_body_exists(rule_name) or self.rule_types[rule_name].pass_location:
+            return None
+        return self.sequence_forward_child(rule_name, plan)
 
     def emit_sequence_forward_finalize_body(self, rule_name, plan, child_arg):
         cpp_type = self.cpp_type(rule_name)
@@ -992,8 +990,8 @@ class UseGramPreviewEmitter:
             f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"TransformStack &stack, TransformStackFrame &frame) {{"
         )
-        if self.is_auto_sequence_forward_rule(rule_name, plan):
-            child_arg = self.sequence_forward_child(rule_name, plan)
+        child_arg = self.auto_sequence_forward_child(rule_name, plan)
+        if child_arg is not None:
             lines.extend(self.emit_sequence_forward_finalize_body(rule_name, plan, child_arg))
             return lines
         needs_list_pr = any(
