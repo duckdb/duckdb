@@ -393,7 +393,9 @@ void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, T
 		options["v1_0_0_storage"] = v1_0_0_storage;
 	}
 
-	for (const auto &index : list.PinIndexes()) {
+	for (auto &entry : list.IndexEntries()) {
+		lock_guard<mutex> guard(entry.lock);
+		const auto index = entry.PinIndex();
 		if (name == index->GetIndexName()) {
 			// We never write an unbound index to the WAL.
 			D_ASSERT(index->IsBound());
