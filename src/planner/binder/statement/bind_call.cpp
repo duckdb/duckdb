@@ -15,9 +15,7 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 	select_node->from_table = std::move(table_function);
 	select_statement.node = std::move(select_node);
 
-	// Bind as `SELECT * FROM func()` - which already propagates the table function's call_return_type
-	// into the statement return type (see Binder::Bind(SelectStatement)) - then force materialization,
-	// the extra behavior CALL requires on top of the shared passthrough handling.
+	// CALL is `SELECT * FROM func()` (which already propagates call_return_type) forced to materialize.
 	auto result = Bind(select_statement);
 	GetStatementProperties().output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	return result;

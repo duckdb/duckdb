@@ -234,9 +234,7 @@ StatementProperties &Binder::GetStatementProperties() {
 }
 
 optional_ptr<LogicalGet> Binder::GetPassthroughTableFunctionGet(LogicalOperator &op) {
-	// Descend through single-child projections (the identity projection above a `SELECT * FROM func()`);
-	// return the get iff we reach exactly one LOGICAL_GET. Any other operator (aggregate, filter, join,
-	// order, limit, ...) or a branch means the statement is not a bare table-function passthrough.
+	// Follow single-child projections down to a lone LOGICAL_GET; anything else is not a passthrough.
 	auto *current = &op;
 	while (true) {
 		if (current->type == LogicalOperatorType::LOGICAL_GET) {

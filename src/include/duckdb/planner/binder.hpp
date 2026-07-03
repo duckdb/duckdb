@@ -242,10 +242,8 @@ public:
 	static unique_ptr<BoundCreateTableInfo> BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
 	                                                                  SchemaCatalogEntry &schema);
 
-	//! If `op` is a pass-through of a single table function - a chain of projections over exactly one
-	//! LOGICAL_GET and nothing else that produces rows - returns that get; otherwise nullptr. Used to
-	//! propagate a table function's call_return_type to the statement return type for the `CALL func()`
-	//! and `SELECT * FROM func()` (CONNECT chokepoint) forms.
+	//! The lone LOGICAL_GET reached through identity projections, or nullptr if `op` is not a bare
+	//! table-function passthrough.
 	static optional_ptr<LogicalGet> GetPassthroughTableFunctionGet(LogicalOperator &op);
 
 	static vector<unique_ptr<BoundConstraint>> BindConstraints(ClientContext &context,
