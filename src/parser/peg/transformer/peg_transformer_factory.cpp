@@ -33,14 +33,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatementTrampoline(PEG
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto &choice_result = choice_pr.GetResult();
-	auto &ops_map = GeneratedTrampolineOps();
-	auto ops_entry = ops_map.find(choice_result.name);
-	if (ops_entry == ops_map.end()) {
-		throw NotImplementedException("No trampoline transformer for statement rule '%s'", choice_result.name);
-	}
 
 	TransformStack stack(transformer);
-	auto result = stack.Execute<unique_ptr<SQLStatement>>(choice_result, *ops_entry->second);
+	auto result = stack.Execute<unique_ptr<SQLStatement>>(choice_result, GetTrampolineOps(choice_result.name));
 	if (!transformer.named_parameter_map.empty()) {
 		result->named_param_map = transformer.named_parameter_map;
 	}
@@ -56,6 +51,15 @@ PEGTransformerFactory::TransformStatementTrampolineInternal(PEGTransformer &tran
 
 void PEGTransformerFactory::RegisterGeneratedTrampoline() {
 	trampoline_transform_functions["Statement"] = &PEGTransformerFactory::TransformStatementTrampolineInternal;
+}
+
+const TransformFrameOps &PEGTransformerFactory::GetTrampolineOps(const string &rule_name) {
+	auto &ops_map = GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(rule_name);
+	if (ops_entry == ops_map.end()) {
+		throw NotImplementedException("No trampoline transformer for rule '%s'", rule_name);
+	}
+	return *ops_entry->second;
 }
 
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,

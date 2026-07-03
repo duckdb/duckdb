@@ -25,15 +25,6 @@
 
 namespace duckdb {
 
-static const TransformFrameOps &GetSelectTrampolineOps(const string &rule_name) {
-	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
-	auto ops_entry = ops_map.find(rule_name);
-	if (ops_entry == ops_map.end()) {
-		throw NotImplementedException("No trampoline transformer for rule '%s'", rule_name);
-	}
-	return *ops_entry->second;
-}
-
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformSelectStatement(PEGTransformer &transformer,
                                                 unique_ptr<SelectStatement> select_statement_internal) {
@@ -81,10 +72,10 @@ static void PushSelectStatementInternalRemainder(TransformStack &stack, Transfor
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto &result_modifiers_opt = list_pr.Child<OptionalParseResult>(2);
 	if (result_modifiers_opt.HasResult()) {
-		stack.PushFrame(result_modifiers_opt.GetResult(), GetSelectTrampolineOps("ResultModifiers"),
+		stack.PushFrame(result_modifiers_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("ResultModifiers"),
 		                TransformFrameResultTarget(frame.frame_index, 2));
 	}
-	stack.PushFrame(list_pr.GetChild(1), GetSelectTrampolineOps("SelectSetOpChain"),
+	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("SelectSetOpChain"),
 	                TransformFrameResultTarget(frame.frame_index, 1));
 }
 
@@ -96,7 +87,7 @@ void PEGTransformerFactory::InitializeSelectStatementInternalTrampoline(PEGTrans
 	auto &with_clause_opt = list_pr.Child<OptionalParseResult>(0);
 	if (with_clause_opt.HasResult()) {
 		frame.manual_state = 0;
-		stack.PushFrame(with_clause_opt.GetResult(), GetSelectTrampolineOps("WithClause"),
+		stack.PushFrame(with_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("WithClause"),
 		                TransformFrameResultTarget(frame.frame_index, 0));
 		return;
 	}
@@ -309,30 +300,30 @@ static void PushSimpleSelectRemainder(TransformStack &stack, TransformStackFrame
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	auto &sample_clause_opt = list_pr.Child<OptionalParseResult>(6);
 	if (sample_clause_opt.HasResult()) {
-		stack.PushFrame(sample_clause_opt.GetResult(), GetSelectTrampolineOps("SampleClause"),
+		stack.PushFrame(sample_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("SampleClause"),
 		                TransformFrameResultTarget(frame.frame_index, 6));
 	}
 	auto &qualify_clause_opt = list_pr.Child<OptionalParseResult>(5);
 	if (qualify_clause_opt.HasResult()) {
-		stack.PushFrame(qualify_clause_opt.GetResult(), GetSelectTrampolineOps("QualifyClause"),
+		stack.PushFrame(qualify_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("QualifyClause"),
 		                TransformFrameResultTarget(frame.frame_index, 5));
 	}
 	auto &having_clause_opt = list_pr.Child<OptionalParseResult>(3);
 	if (having_clause_opt.HasResult()) {
-		stack.PushFrame(having_clause_opt.GetResult(), GetSelectTrampolineOps("HavingClause"),
+		stack.PushFrame(having_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("HavingClause"),
 		                TransformFrameResultTarget(frame.frame_index, 3));
 	}
 	auto &group_by_clause_opt = list_pr.Child<OptionalParseResult>(2);
 	if (group_by_clause_opt.HasResult()) {
-		stack.PushFrame(group_by_clause_opt.GetResult(), GetSelectTrampolineOps("GroupByClause"),
+		stack.PushFrame(group_by_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("GroupByClause"),
 		                TransformFrameResultTarget(frame.frame_index, 2));
 	}
 	auto &where_clause_opt = list_pr.Child<OptionalParseResult>(1);
 	if (where_clause_opt.HasResult()) {
-		stack.PushFrame(where_clause_opt.GetResult(), GetSelectTrampolineOps("WhereClause"),
+		stack.PushFrame(where_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("WhereClause"),
 		                TransformFrameResultTarget(frame.frame_index, 1));
 	}
-	stack.PushFrame(list_pr.GetChild(0), GetSelectTrampolineOps("SelectFrom"),
+	stack.PushFrame(list_pr.GetChild(0), PEGTransformerFactory::GetTrampolineOps("SelectFrom"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 
@@ -343,7 +334,7 @@ void PEGTransformerFactory::InitializeSimpleSelectTrampoline(PEGTransformer &tra
 	auto &window_clause_opt = list_pr.Child<OptionalParseResult>(4);
 	if (window_clause_opt.HasResult()) {
 		frame.manual_state = 0;
-		stack.PushFrame(window_clause_opt.GetResult(), GetSelectTrampolineOps("WindowClause"),
+		stack.PushFrame(window_clause_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("WindowClause"),
 		                TransformFrameResultTarget(frame.frame_index, 4));
 		return;
 	}
@@ -538,11 +529,11 @@ void PEGTransformerFactory::InitializeTableRefTrampoline(PEGTransformer &transfo
 		auto repeat_children = join_or_pivot_opt.GetResult().Cast<RepeatParseResult>().GetChildren();
 		for (idx_t i = repeat_children.size(); i > 0; i--) {
 			auto child_idx = i - 1;
-			stack.PushFrame(repeat_children[child_idx].get(), GetSelectTrampolineOps("JoinOrPivot"),
+			stack.PushFrame(repeat_children[child_idx].get(), PEGTransformerFactory::GetTrampolineOps("JoinOrPivot"),
 			                TransformFrameResultTarget(frame.frame_index, 1 + child_idx));
 		}
 	}
-	stack.PushFrame(list_pr.GetChild(0), GetSelectTrampolineOps("InnerTableRef"),
+	stack.PushFrame(list_pr.GetChild(0), PEGTransformerFactory::GetTrampolineOps("InnerTableRef"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 
@@ -1123,7 +1114,7 @@ void PEGTransformerFactory::InitializeWithClauseTrampoline(PEGTransformer &trans
 	frame.ReserveChildSlots(with_statement_list.size());
 	for (idx_t i = with_statement_list.size(); i > 0; i--) {
 		auto child_idx = i - 1;
-		stack.PushFrame(with_statement_list[child_idx].get(), GetSelectTrampolineOps("WithStatement"),
+		stack.PushFrame(with_statement_list[child_idx].get(), PEGTransformerFactory::GetTrampolineOps("WithStatement"),
 		                TransformFrameResultTarget(frame.frame_index, child_idx));
 	}
 }
@@ -1232,7 +1223,7 @@ void PEGTransformerFactory::InitializeWindowDefinitionTrampoline(PEGTransformer 
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	transformer.in_window_definition = true;
 	frame.ReserveChildSlots(1);
-	stack.PushFrame(list_pr.GetChild(2), GetSelectTrampolineOps("WindowFrameDefinition"),
+	stack.PushFrame(list_pr.GetChild(2), PEGTransformerFactory::GetTrampolineOps("WindowFrameDefinition"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 

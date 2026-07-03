@@ -19,15 +19,6 @@
 
 namespace duckdb {
 
-static const TransformFrameOps &GetExpressionTrampolineOps(const string &rule_name) {
-	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
-	auto ops_entry = ops_map.find(rule_name);
-	if (ops_entry == ops_map.end()) {
-		throw NotImplementedException("No trampoline transformer for rule '%s'", rule_name);
-	}
-	return *ops_entry->second;
-}
-
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
                                                     vector<unique_ptr<ParsedExpression>> expression_alias) {
@@ -1607,13 +1598,13 @@ void PEGTransformerFactory::InitializePrefixExpressionTrampoline(PEGTransformer 
 		frame.ReserveChildSlots(1 + prefix_count);
 		for (idx_t i = prefix_children.size(); i > 0; i--) {
 			auto child_idx = i - 1;
-			stack.PushFrame(prefix_children[child_idx].get(), GetExpressionTrampolineOps("PrefixOperator"),
+			stack.PushFrame(prefix_children[child_idx].get(), PEGTransformerFactory::GetTrampolineOps("PrefixOperator"),
 			                TransformFrameResultTarget(frame.frame_index, 1 + child_idx));
 		}
 	} else {
 		frame.ReserveChildSlots(1);
 	}
-	stack.PushFrame(list_pr.GetChild(1), GetExpressionTrampolineOps("BaseExpression"),
+	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("BaseExpression"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 
@@ -2099,7 +2090,7 @@ void PEGTransformerFactory::InitializeOverClauseTrampoline(PEGTransformer &trans
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	transformer.in_window_definition = true;
 	frame.ReserveChildSlots(1);
-	stack.PushFrame(list_pr.GetChild(1), GetExpressionTrampolineOps("WindowFrame"),
+	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("WindowFrame"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 

@@ -6,15 +6,6 @@
 
 namespace duckdb {
 
-static const TransformFrameOps &GetPivotTrampolineOps(const string &rule_name) {
-	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
-	auto ops_entry = ops_map.find(rule_name);
-	if (ops_entry == ops_map.end()) {
-		throw NotImplementedException("No trampoline transformer for rule '%s'", rule_name);
-	}
-	return *ops_entry->second;
-}
-
 void PEGTransformerFactory::AddPivotEntry(PEGTransformer &transformer, string enum_name, unique_ptr<SelectNode> base,
                                           unique_ptr<ParsedExpression> column, unique_ptr<QueryNode> subquery,
                                           bool has_parameters) {
@@ -164,7 +155,7 @@ void PEGTransformerFactory::InitializePivotStatementTrampoline(PEGTransformer &t
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	frame.manual_state = transformer.ParamCount();
 	frame.ReserveChildSlots(5);
-	stack.PushFrame(list_pr.GetChild(1), GetPivotTrampolineOps("TableRef"),
+	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("TableRef"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 
@@ -180,17 +171,17 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizePivotStatementTr
 		auto &pivot_group = list_pr.Child<OptionalParseResult>(4);
 		bool pushed_child = false;
 		if (pivot_group.HasResult()) {
-			stack.PushFrame(pivot_group.GetResult(), GetPivotTrampolineOps("PivotGroupByList"),
+			stack.PushFrame(pivot_group.GetResult(), PEGTransformerFactory::GetTrampolineOps("PivotGroupByList"),
 			                TransformFrameResultTarget(frame.frame_index, 3));
 			pushed_child = true;
 		}
 		if (pivot_aggregates.HasResult()) {
-			stack.PushFrame(pivot_aggregates.GetResult(), GetPivotTrampolineOps("PivotUsing"),
+			stack.PushFrame(pivot_aggregates.GetResult(), PEGTransformerFactory::GetTrampolineOps("PivotUsing"),
 			                TransformFrameResultTarget(frame.frame_index, 2));
 			pushed_child = true;
 		}
 		if (pivot_columns.HasResult()) {
-			stack.PushFrame(pivot_columns.GetResult(), GetPivotTrampolineOps("PivotOn"),
+			stack.PushFrame(pivot_columns.GetResult(), PEGTransformerFactory::GetTrampolineOps("PivotOn"),
 			                TransformFrameResultTarget(frame.frame_index, 1));
 			pushed_child = true;
 		}
@@ -372,7 +363,7 @@ void PEGTransformerFactory::InitializeUnpivotStatementTrampoline(PEGTransformer 
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
 	frame.manual_state = transformer.ParamCount();
 	frame.ReserveChildSlots(4);
-	stack.PushFrame(list_pr.GetChild(1), GetPivotTrampolineOps("TableRef"),
+	stack.PushFrame(list_pr.GetChild(1), PEGTransformerFactory::GetTrampolineOps("TableRef"),
 	                TransformFrameResultTarget(frame.frame_index, 0));
 }
 
@@ -385,10 +376,10 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeUnpivotStatement
 		frame.SetChildResult(3, make_uniq<TypedTransformResult<bool>>(has_parameters));
 		auto &unpivot_names_opt = list_pr.Child<OptionalParseResult>(4);
 		if (unpivot_names_opt.HasResult()) {
-			stack.PushFrame(unpivot_names_opt.GetResult(), GetPivotTrampolineOps("IntoNameValues"),
+			stack.PushFrame(unpivot_names_opt.GetResult(), PEGTransformerFactory::GetTrampolineOps("IntoNameValues"),
 			                TransformFrameResultTarget(frame.frame_index, 2));
 		}
-		stack.PushFrame(list_pr.GetChild(3), GetPivotTrampolineOps("TargetList"),
+		stack.PushFrame(list_pr.GetChild(3), PEGTransformerFactory::GetTrampolineOps("TargetList"),
 		                TransformFrameResultTarget(frame.frame_index, 1));
 		return nullptr;
 	}

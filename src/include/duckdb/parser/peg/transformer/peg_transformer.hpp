@@ -4630,6 +4630,7 @@ public:
 	static unique_ptr<TransformResultValue> TransformStatementTrampolineInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static const case_insensitive_map_t<const TransformFrameOps *> &GeneratedTrampolineOps();
+	static const TransformFrameOps &GetTrampolineOps(const string &rule_name);
 
 	// comment.gram
 	static Value TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result);
