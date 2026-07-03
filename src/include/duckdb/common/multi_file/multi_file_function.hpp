@@ -294,6 +294,20 @@ public:
 		                                                     table_filters, context, global_state);
 	}
 
+	static bool TrySkipFileFromFilters(ClientContext &context, const MultiFileBindData &bind_data,
+	                                   MultiFileGlobalState &global_state, MultiFileReaderData &reader_data,
+	                                   idx_t file_index) {
+		D_ASSERT(reader_data.file_state == MultiFileFileState::UNOPENED);
+		if (reader_data.union_data ||
+		    !MultiFileReader::CanSkipFileFromFilters(context, reader_data.file_to_be_opened, file_index,
+		                                             bind_data.file_options, bind_data.reader_bind,
+		                                             global_state.column_indexes, global_state.filters)) {
+			return false;
+		}
+		reader_data.file_state = MultiFileFileState::SKIPPED;
+		return true;
+	}
+
 	static bool OpenMarkedFile(ClientContext &context, const MultiFileBindData &bind_data,
 	                           MultiFileGlobalState &global_state, MultiFileReaderData &current_reader_data,
 	                           idx_t current_file_index, unique_lock<mutex> &parallel_lock) {
@@ -357,12 +371,8 @@ public:
 
 			auto &current_reader_data = *global_state.readers[current_file_index];
 			if (current_reader_data.file_state == MultiFileFileState::UNOPENED) {
-				// skip the file if pre-open-knowable filters already rule it out
-				if (!current_reader_data.union_data &&
-				    MultiFileReader::CanSkipFileFromFilters(
-				        context, current_reader_data.file_to_be_opened, current_file_index, bind_data.file_options,
-				        bind_data.reader_bind, global_state.column_indexes, global_state.filters)) {
-					current_reader_data.file_state = MultiFileFileState::SKIPPED;
+				if (TrySkipFileFromFilters(context, bind_data, global_state, current_reader_data,
+				                           current_file_index)) {
 					//! Intentionally do not increase 'i'
 					continue;
 				}
