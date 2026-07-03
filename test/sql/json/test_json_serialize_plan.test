@@ -34,6 +34,18 @@ SELECT json_serialize_plan('SELECT *, 1 + 2 FROM tbl1', skip_null := true, skip_
 ----
 <REGEX>:.*LOGICAL_PROJECTION.*LOGICAL_GET.*
 
+# Optimized IN clauses use LogicalColumnDataGet internally
+query II
+SELECT plan::VARCHAR LIKE '%LOGICAL_CHUNK_GET%', plan::VARCHAR NOT LIKE '%"column_ids"%'
+FROM (
+	SELECT json_serialize_plan(
+		'SELECT i FROM range(20) t(i) WHERE i IN (1, 3, 5, 7, 9, 11)',
+		skip_default := true, optimize := true
+	) plan
+);
+----
+true	true
+
 # Example with syntax error
 query I
 SELECT json_serialize_plan('SELECT AND LAUNCH ROCKETS WHERE 1 = 1');

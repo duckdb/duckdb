@@ -23,6 +23,9 @@ static idx_t GetColumnDataScanBatchSize(ClientContext &context, const OperatorPa
 	if (ClientConfig::GetConfig(context).verify_parallelism) {
 		return STANDARD_VECTOR_SIZE;
 	}
+	if (!partition_info.RequiresBatchIndex()) {
+		return STANDARD_VECTOR_SIZE;
+	}
 	if (partition_info.preferred_batch_size.IsValid() && partition_info.preferred_batch_size.GetIndex() > 0) {
 		return partition_info.preferred_batch_size.GetIndex();
 	}
