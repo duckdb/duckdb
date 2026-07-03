@@ -661,13 +661,9 @@ class UseGramPreviewEmitter:
             if isinstance(ast, ChoiceNode):
                 lines.append("\tauto &list_pr = frame.parse_result.Cast<ListParseResult>();")
                 lines.append("\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);")
-                lines.append(
-                    f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer, choice_pr.GetResult());"
-                )
+                lines.append(f"\tauto result = Transform{rule_name}(transformer, choice_pr.GetResult());")
             else:
-                lines.append(
-                    f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer, frame.parse_result);"
-                )
+                lines.append(f"\tauto result = Transform{rule_name}(transformer, frame.parse_result);")
         elif cpp_type == "string" and literal_values is not None and not manual_body_exists(rule_name):
             if len(literal_values) == 1:
                 lines.append(f'\tstring result = "{literal_values[0]}";')
@@ -676,7 +672,7 @@ class UseGramPreviewEmitter:
                 lines.append("\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);")
                 lines.append("\tauto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;")
         else:
-            lines.append(f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer);")
+            lines.append(f"\tauto result = Transform{rule_name}(transformer);")
         lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', by_value)};")
         lines.append("}")
         return lines
@@ -720,7 +716,7 @@ class UseGramPreviewEmitter:
             lines.append("\tif (frame.child_results[0]) {")
             lines.append(f"\t\tresult = frame.TakeResult<{cpp_type}>(0);")
             lines.append("\t} else {")
-            lines.append(f"\t\tresult = PEGTransformerFactory::Transform{rule_name}(transformer, choice_result);")
+            lines.append(f"\t\tresult = Transform{rule_name}(transformer, choice_result);")
             lines.append("\t}")
         elif len(child_cpp_types) == 1 and cpp_type not in child_cpp_types and manual_body_exists(rule_name):
             child_cpp_type = next(iter(child_cpp_types))
@@ -748,7 +744,7 @@ class UseGramPreviewEmitter:
             else:
                 lines.append(f"\tauto child = frame.TakeResult<{child_cpp_type}>(0);")
             child_arg = "std::move(child)" if child_cpp_type.startswith("unique_ptr<") else "child"
-            lines.append(f"\tauto result = PEGTransformerFactory::Transform{rule_name}(transformer, {child_arg});")
+            lines.append(f"\tauto result = Transform{rule_name}(transformer, {child_arg});")
         elif cpp_type == "Identifier":
             lines.append("\tIdentifier result;")
             lines.append("\tif (frame.child_results[0]) {")
@@ -1024,7 +1020,7 @@ class UseGramPreviewEmitter:
         transform_args = ["transformer"] + arg_names
         if self.rule_types[rule_name].pass_location:
             transform_args.append("frame.parse_result.offset")
-        lines.append(f"\tauto result = PEGTransformerFactory::Transform{rule_name}({', '.join(transform_args)});")
+        lines.append(f"\tauto result = Transform{rule_name}({', '.join(transform_args)});")
         lines.append(f"\treturn {typed_result_expr(cpp_type, 'result', by_value)};")
         lines.append("}")
         return lines
@@ -1176,9 +1172,9 @@ class UseGramPreviewEmitter:
     def matcher_transform_expr(self, rule_name, parse_expr):
         matcher = self.matcher_overrides[rule_name].matcher
         if matcher == "string_literal":
-            return f"PEGTransformerFactory::TransformStringLiteral(transformer, {parse_expr})"
+            return f"TransformStringLiteral(transformer, {parse_expr})"
         if matcher == "number_literal":
-            return f"PEGTransformerFactory::TransformNumberLiteral(transformer, {parse_expr})"
+            return f"TransformNumberLiteral(transformer, {parse_expr})"
         if matcher == "operator":
             return f"{parse_expr}.Cast<OperatorParseResult>().operator_token"
         if matcher == "identifier_string":
