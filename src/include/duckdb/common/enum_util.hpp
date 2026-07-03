@@ -322,6 +322,8 @@ enum class Monotonicity : uint8_t;
 
 enum class MultiFileAcquireResult : uint8_t;
 
+enum class MultiFileClaimResult : uint8_t;
+
 enum class MultiFileColumnMappingMode : uint8_t;
 
 enum class MultiFileDecodeResult : uint8_t;
@@ -1009,6 +1011,9 @@ const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
 
 template<>
 const char* EnumUtil::ToChars<MultiFileAcquireResult>(MultiFileAcquireResult value);
+
+template<>
+const char* EnumUtil::ToChars<MultiFileClaimResult>(MultiFileClaimResult value);
 
 template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
@@ -1823,6 +1828,9 @@ Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
 
 template<>
 MultiFileAcquireResult EnumUtil::FromString<MultiFileAcquireResult>(const char *value);
+
+template<>
+MultiFileClaimResult EnumUtil::FromString<MultiFileClaimResult>(const char *value);
 
 template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);

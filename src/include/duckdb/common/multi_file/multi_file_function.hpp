@@ -474,19 +474,19 @@ public:
 		lstate.scan_chunk_file_index = lstate.job.file_index;
 	}
 
-	static bool ClaimNextJob(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &gstate,
-	                         MultiFileScanJob &job) {
+	static MultiFileClaimResult ClaimNextJobInternal(ClientContext &context, const MultiFileBindData &bind_data,
+	                                                 MultiFileGlobalState &gstate, MultiFileScanJob &job) {
 		unique_lock<mutex> parallel_lock(gstate.lock);
 
 		while (true) {
 			if (gstate.error_opening_file) {
-				return false;
+				return MultiFileClaimResult::EXHAUSTED;
 			}
 
 			//! If we don't have a file to read, and the MultiFileList has no new file for us - end the scan
 			if (!HasFilesToRead(gstate, parallel_lock) && !TryGetNextFile(gstate, parallel_lock)) {
 				bind_data.interface->FinishReading(context, *gstate.global_state, *job.reader_scan_state);
-				return false;
+				return MultiFileClaimResult::EXHAUSTED;
 			}
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
@@ -503,7 +503,7 @@ public:
 					job.file_index = gstate.file_index;
 					parallel_lock.unlock();
 					job.reader->PrepareScan(context, *gstate.global_state, *job.reader_scan_state);
-					return true;
+					return MultiFileClaimResult::CLAIMED;
 				} else {
 					// Set state to the next file
 					++gstate.file_index;
@@ -533,6 +533,11 @@ public:
 				WaitForFile(gstate.file_index, gstate, parallel_lock);
 			}
 		}
+	}
+
+	static bool ClaimNextJob(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &gstate,
+	                         MultiFileScanJob &job) {
+		return ClaimNextJobInternal(context, bind_data, gstate, job) == MultiFileClaimResult::CLAIMED;
 	}
 
 	static unique_ptr<LocalTableFunctionState>

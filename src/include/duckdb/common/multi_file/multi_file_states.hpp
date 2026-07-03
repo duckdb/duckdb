@@ -205,6 +205,13 @@ enum class MultiFileDecodeResult : uint8_t {
 	JOB_FINISHED      //! job is done
 };
 
+//! Outcome of claiming the next scan job from the current file
+enum class MultiFileClaimResult : uint8_t {
+	CLAIMED,   //! the current file's next unit of work (e.g. a parquet row group)
+	EXHAUSTED, //! the scan is exhausted
+	WAIT_OPEN  //! the current file is still being opened
+};
+
 //! Outcome of acquiring the next scan job
 enum class MultiFileAcquireResult : uint8_t {
 	ACQUIRED,  //! a ready-to-decode job is now current
