@@ -1306,7 +1306,29 @@ struct VacuumState {
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
 	vector<optional_idx> row_group_counts;
+
+	//! Compute the remap buffer layout: the sorted indexed key columns, followed by [old_rowid, new_rowid].
+	void InitializeRemapBufferLayout(DataTableInfo &info, const vector<LogicalType> &types);
 };
+
+void VacuumState::InitializeRemapBufferLayout(DataTableInfo &info, const vector<LogicalType> &types) {
+	auto required_columns = info.GetIndexes().GetRequiredColumns();
+	remap_column_ids.assign(required_columns.begin(), required_columns.end());
+	sort(remap_column_ids.begin(), remap_column_ids.end());
+
+	remap_column_buffer_indexes.resize(types.size());
+	remap_buffer_types.reserve(remap_column_ids.size() + 2);
+	for (idx_t buffer_idx = 0; buffer_idx < remap_column_ids.size(); buffer_idx++) {
+		auto column_id = remap_column_ids[buffer_idx];
+		if (column_id >= types.size()) {
+			throw InternalException("Indexed column id %d out of bounds during vacuum remap initialization", column_id);
+		}
+		remap_column_buffer_indexes[column_id] = buffer_idx;
+		remap_buffer_types.push_back(types[column_id]);
+	}
+	remap_buffer_types.push_back(LogicalType::ROW_TYPE);
+	remap_buffer_types.push_back(LogicalType::ROW_TYPE);
+}
 
 class VacuumTask : public BaseCheckpointTask {
 public:
@@ -1635,27 +1657,9 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	state.can_incremental_remap = ART::CanVacuumRemapTable(*info, attached, &state.remap_indexes);
 	state.can_rebuild_indexes = CanRebuildExistingIndexesAfterVacuum(*info, attached, GetTotalRows());
 	if (state.can_incremental_remap) {
+		// Precedence: remap replaces the legacy full rebuild, so the post-checkpoint rebuild gate must not fire.
 		state.can_rebuild_indexes = false;
-
-		auto required_columns = info->GetIndexes().GetRequiredColumns();
-		state.remap_column_ids.assign(required_columns.begin(), required_columns.end());
-		sort(state.remap_column_ids.begin(), state.remap_column_ids.end());
-
-		state.remap_column_buffer_indexes.clear();
-		state.remap_column_buffer_indexes.resize(types.size());
-		state.remap_buffer_types.clear();
-		state.remap_buffer_types.reserve(state.remap_column_ids.size() + 2);
-		for (idx_t buffer_idx = 0; buffer_idx < state.remap_column_ids.size(); buffer_idx++) {
-			auto column_id = state.remap_column_ids[buffer_idx];
-			if (column_id >= types.size()) {
-				throw InternalException("Indexed column id %d out of bounds during vacuum remap initialization",
-				                        column_id);
-			}
-			state.remap_column_buffer_indexes[column_id] = buffer_idx;
-			state.remap_buffer_types.push_back(types[column_id]);
-		}
-		state.remap_buffer_types.push_back(LogicalType::ROW_TYPE);
-		state.remap_buffer_types.push_back(LogicalType::ROW_TYPE);
+		state.InitializeRemapBufferLayout(*info, types);
 	}
 	D_ASSERT(!(state.can_incremental_remap && state.can_rebuild_indexes));
 
