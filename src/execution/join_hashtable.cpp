@@ -121,7 +121,7 @@ void JoinHashTable::FinishInitWithLayout(shared_ptr<TupleDataLayout> published_l
 		needs_chain_matcher = false;
 	}
 
-	chains_longer_than_one = false;
+	chains_longer_than_one.store(false, std::memory_order_relaxed);
 	row_matcher_build.Initialize(true, *layout_ptr, equality_predicates);
 
 	const auto &offsets = layout_ptr->GetOffsets();
@@ -762,13 +762,13 @@ static inline void InsertMatchesAndIncrementMisses(unsafe_optional_ptr<atomic<ht
                                                    const hash_t hash_salts[], const idx_t capacity_mask,
                                                    const idx_t key_match_count, const idx_t key_no_match_count) {
 	if (key_match_count != 0) {
-		ht.chains_longer_than_one = true;
+		ht.chains_longer_than_one.store(true, std::memory_order_relaxed);
 	}
 
 	// Insert the rows that match
 	if (ht.insert_duplicate_keys) {
 		if (key_match_count != 0) {
-			ht.chains_longer_than_one = true;
+			ht.chains_longer_than_one.store(true, std::memory_order_relaxed);
 		}
 		for (idx_t i = 0; i < key_match_count; i++) {
 			const auto need_compare_idx = state.key_match_sel.get_index(i);
@@ -1440,7 +1440,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &probe_data, DataChunk &resu
 		NextLeftJoin(keys, probe_data, result);
 		break;
 	case JoinType::LEFT:
-		if (!ht.chains_longer_than_one) {
+		if (!ht.chains_longer_than_one.load(std::memory_order_relaxed)) {
 			NextUniqueLeftJoin(keys, probe_data, result);
 		} else {
 			NextLeftJoin(keys, probe_data, result);
@@ -1583,7 +1583,7 @@ static void AdvancePointersLoop(JoinHashTable &ht, Vector &pointers, SelectionVe
 }
 
 void ScanStructure::AdvancePointers(const SelectionVector &sel, const idx_t sel_count) {
-	if (!ht.chains_longer_than_one) {
+	if (!ht.chains_longer_than_one.load(std::memory_order_relaxed)) {
 		this->count = 0;
 		return;
 	}
@@ -1706,7 +1706,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 
 			if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
 				// fast path: no chains longer than one
-				if (!ht.chains_longer_than_one) {
+				if (!ht.chains_longer_than_one.load(std::memory_order_relaxed)) {
 					// extract only OUTPUT columns from probe_data
 					for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
 						idx_t probe_col_idx = ht.lhs_output_in_probe[i];
@@ -2095,7 +2095,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataC
 void ScanStructure::NextUniqueLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
 	// Unique left join: RHS has unique keys, so at most one match per LHS row.
 	// Single pass - no state machine needed.
-	D_ASSERT(!ht.chains_longer_than_one);
+	D_ASSERT(!ht.chains_longer_than_one.load(std::memory_order_relaxed));
 
 	// First scan for key matches
 	ScanKeyMatches(keys, probe_data);
@@ -2406,7 +2406,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	bitmask = DConstants::INVALID_INDEX;
 	finalized = false;
 	has_null = false;
-	chains_longer_than_one = false;
+	chains_longer_than_one.store(false, std::memory_order_relaxed);
 	total_probe_matches = 0;
 	load_factor = DEFAULT_LOAD_FACTOR;
 	should_build_bloom_filter = false;
@@ -2708,7 +2708,8 @@ void JoinHashTable::BuildDictionaryArrays(const PhysicalHashJoin &op) {
 	}
 
 	// save chain pointers before overwriting NEXT_PTR; GetNextPointer reads them back
-	if (chains_longer_than_one) {
+	const auto has_chains = chains_longer_than_one.load(std::memory_order_relaxed);
+	if (has_chains) {
 		aux_next_ptrs = buffer_manager.GetBufferAllocator().Allocate(build_count * sizeof(data_ptr_t));
 		aux_next_ptrs_data = reinterpret_cast<data_ptr_t *>(aux_next_ptrs.get());
 	}
@@ -2716,7 +2717,7 @@ void JoinHashTable::BuildDictionaryArrays(const PhysicalHashJoin &op) {
 	// save the original NEXT_PTR into aux_next_ptrs (if chains exist) and embed the dict index
 	for (idx_t i = 0; i < build_count; i++) {
 		const auto next_ptr_location = row_ptrs[i] + pointer_offset;
-		if (chains_longer_than_one) {
+		if (has_chains) {
 			aux_next_ptrs_data[i] = LoadPointer(next_ptr_location);
 		}
 		Store<uint32_t>(static_cast<uint32_t>(i), next_ptr_location);
