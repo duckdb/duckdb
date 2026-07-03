@@ -436,10 +436,6 @@ public:
 	                                                               const string &column_name,
 	                                                               unique_ptr<ParsedExpression> expression);
 
-	static void InitializeCommentValueTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                             TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue>
-	FinalizeCommentValueTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
 	static void InitializePivotStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -737,6 +733,15 @@ public:
 	                                              TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeCommentColumnTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeCommentValueTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                             TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue>
+	FinalizeCommentValueTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeStringLiteralValueTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                   TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeStringLiteralValueTrampoline(PEGTransformer &transformer,
+	                                                                             TransformStack &stack,
+	                                                                             TransformStackFrame &frame);
 	static void InitializeExpressionStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                    TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue> FinalizeExpressionStatementTrampoline(PEGTransformer &transformer,
@@ -4644,9 +4649,6 @@ public:
 	static const case_insensitive_map_t<const TransformFrameOps *> &GeneratedTrampolineOps();
 	static const TransformFrameOps &GetTrampolineOps(const string &rule_name);
 
-	// comment.gram
-	static Value TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result);
-
 	// common.gram
 	static unique_ptr<ParsedExpression> TransformNumberLiteral(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformStringLiteral(PEGTransformer &transformer, ParseResult &parse_result);
@@ -4915,6 +4917,11 @@ public:
 	static unique_ptr<TransformResultValue> TransformCommentColumnInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static CatalogType TransformCommentColumn(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCommentValueInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformStringLiteralValueInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static Value TransformStringLiteralValue(PEGTransformer &transformer, const string &string_literal);
 	static unique_ptr<TransformResultValue> TransformExpressionStatementInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformExpressionStatement(PEGTransformer &transformer,

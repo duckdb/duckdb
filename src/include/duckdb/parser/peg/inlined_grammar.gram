@@ -1843,7 +1843,9 @@ CommentSchema <- 'SCHEMA'
 CommentType <- 'TYPE'
 CommentColumn <- 'COLUMN'
 
-CommentValue <- NullLiteral / StringLiteral
+CommentValue <- NullLiteral / StringLiteralValue
+StringLiteralValue <- StringLiteral
+
 CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ReferencingClause? ForEachClause? TriggerBody
 
 TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement / MergeIntoStatement

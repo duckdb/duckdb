@@ -24,7 +24,7 @@
 # the type entry takes precedence and their value IS extracted. Keep this list
 # for syntax-only rules and temporary manual exceptions; matcher-provided rules
 # belong in matcher_rule_overrides instead.
-# Note: some entries (e.g. SingleArrowPair, CommentValue,
+# Note: some entries (e.g. SingleArrowPair,
 # IntervalNumber, Program) also appear in type categories because
 # they are manually implemented and referenced as children by auto-generated
 # rules. The excluded status only suppresses Internal auto-generation.
@@ -1221,6 +1221,7 @@ Value:
   by_value: false
   rules:
     - CommentValue
+    - StringLiteralValue
     - NullLiteral
     - UnknownLiteral
     - TrueLiteral
@@ -1726,7 +1727,6 @@ matcher_rule_overrides:
 excluded_rules:
   - PivotStatement
   - UnpivotStatement
-  - CommentValue
   - Program
   - TopLevelStatement
   - Statement

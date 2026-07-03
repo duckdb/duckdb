@@ -152,11 +152,6 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 
 #define REGISTER_TRANSFORM(FUNCTION) Register(string(#FUNCTION).substr(9), &FUNCTION)
 
-void PEGTransformerFactory::RegisterComment() {
-	// comment.gram
-	REGISTER_TRANSFORM(TransformCommentValue);
-}
-
 void PEGTransformerFactory::RegisterCommon() {
 	// common.gram
 	REGISTER_TRANSFORM(TransformNumberLiteral);

@@ -13,11 +13,6 @@ rules:
   Statement:
     mode: excluded
 
-  CommentValue:
-    mode: manual
-    init: InitializeCommentValueTrampoline
-    finalize: FinalizeCommentValueTrampoline
-
   PivotStatement:
     mode: manual
     init: InitializePivotStatementTrampoline

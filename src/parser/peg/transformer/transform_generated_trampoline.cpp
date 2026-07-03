@@ -180,6 +180,9 @@ static const TransformFrameOps COMMENT_COLUMN_OPS = {"CommentColumn",
 static const TransformFrameOps COMMENT_VALUE_OPS = {"CommentValue",
                                                     &PEGTransformerFactory::InitializeCommentValueTrampoline,
                                                     &PEGTransformerFactory::FinalizeCommentValueTrampoline};
+static const TransformFrameOps STRING_LITERAL_VALUE_OPS = {
+    "StringLiteralValue", &PEGTransformerFactory::InitializeStringLiteralValueTrampoline,
+    &PEGTransformerFactory::FinalizeStringLiteralValueTrampoline};
 static const TransformFrameOps EXPRESSION_STATEMENT_OPS = {
     "ExpressionStatement", &PEGTransformerFactory::InitializeExpressionStatementTrampoline,
     &PEGTransformerFactory::FinalizeExpressionStatementTrampoline};
@@ -2834,6 +2837,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"CommentType", &COMMENT_TYPE_OPS},
 	    {"CommentColumn", &COMMENT_COLUMN_OPS},
 	    {"CommentValue", &COMMENT_VALUE_OPS},
+	    {"StringLiteralValue", &STRING_LITERAL_VALUE_OPS},
 	    {"ExpressionStatement", &EXPRESSION_STATEMENT_OPS},
 	    {"ExpressionAlias", &EXPRESSION_ALIAS_OPS},
 	    {"IndexName", &INDEX_NAME_OPS},
@@ -5000,6 +5004,41 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentColumnTra
                                                                                         TransformStackFrame &frame) {
 	auto result = TransformCommentColumn(transformer);
 	return make_uniq<TypedTransformResult<CatalogType>>(result);
+}
+
+void PEGTransformerFactory::InitializeCommentValueTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                             TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	frame.ReserveChildSlots(1);
+	auto &ops_map = PEGTransformerFactory::GeneratedTrampolineOps();
+	auto ops_entry = ops_map.find(choice_result.name);
+	if (ops_entry == ops_map.end()) {
+		throw InternalException("No trampoline ops registered for rule '%s'", choice_result.name);
+	}
+	stack.PushFrame(choice_result, *ops_entry->second, TransformFrameResultTarget(frame.frame_index, 0));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCommentValueTrampoline(PEGTransformer &transformer,
+                                                                                       TransformStack &stack,
+                                                                                       TransformStackFrame &frame) {
+	auto result = frame.TakeResult<Value>(0);
+	return make_uniq<TypedTransformResult<Value>>(result);
+}
+
+void PEGTransformerFactory::InitializeStringLiteralValueTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeStringLiteralValueTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                            TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(0));
+	auto result = TransformStringLiteralValue(transformer, string_literal);
+	return make_uniq<TypedTransformResult<Value>>(result);
 }
 
 void PEGTransformerFactory::InitializeExpressionStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,

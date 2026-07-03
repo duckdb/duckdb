@@ -664,6 +664,22 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCommentColumnIn
 	return make_uniq<TypedTransformResult<CatalogType>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCommentValueInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<Value>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<Value>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformStringLiteralValueInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto string_literal = transformer.Transform<string>(list_pr.GetChild(0));
+	auto result = TransformStringLiteralValue(transformer, string_literal);
+	return make_uniq<TypedTransformResult<Value>>(result);
+}
+
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformExpressionStatementInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -10276,6 +10292,8 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CommentSchema", &PEGTransformerFactory::TransformCommentSchemaInternal},
 	    {"CommentType", &PEGTransformerFactory::TransformCommentTypeInternal},
 	    {"CommentColumn", &PEGTransformerFactory::TransformCommentColumnInternal},
+	    {"CommentValue", &PEGTransformerFactory::TransformCommentValueInternal},
+	    {"StringLiteralValue", &PEGTransformerFactory::TransformStringLiteralValueInternal},
 	    {"ExpressionStatement", &PEGTransformerFactory::TransformExpressionStatementInternal},
 	    {"ExpressionAlias", &PEGTransformerFactory::TransformExpressionAliasInternal},
 	    {"ConstraintName", &PEGTransformerFactory::TransformConstraintNameInternal},
