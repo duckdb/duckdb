@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from inline_grammar import parse_peg_grammar
 from grammar_types import load_grammar_types, load_matcher_rule_overrides
 from generate_transformer import (
-    _check_implementations,
+    _norm_ws,
     load_identifier_override_rules,
     process_gram_file,
 )
@@ -89,27 +89,89 @@ def finalize_name(rule_name):
     return f"Finalize{rule_name}Trampoline"
 
 
+class ManualTransformRegistry:
+    def __init__(self, paths):
+        self.signatures = {}
+        self._load(paths)
+
+    def _load(self, paths):
+        pattern = re.compile(r"\bPEGTransformerFactory::Transform([A-Za-z0-9_]+)\s*\(")
+        for path in paths:
+            text = path.read_text()
+            for match in pattern.finditer(text):
+                paren_start = text.index("(", match.start())
+                depth = 0
+                paren_end = None
+                for offset, char in enumerate(text[paren_start:]):
+                    if char == "(":
+                        depth += 1
+                    elif char == ")":
+                        depth -= 1
+                        if depth == 0:
+                            paren_end = paren_start + offset
+                            break
+                if paren_end is None:
+                    continue
+                next_token = text[paren_end + 1 :].lstrip()
+                if not next_token.startswith("{"):
+                    continue
+                line_start = text.rfind("\n", 0, match.start()) + 1
+                signature = text[line_start : paren_end + 1]
+                rule_name = match.group(1)
+                self.signatures.setdefault(rule_name, set()).add(self._signature_key(signature))
+
+    @staticmethod
+    def _signature_key(signature):
+        prefix = "PEGTransformerFactory::"
+        signature = _norm_ws(signature)
+        if prefix in signature:
+            return signature[signature.find(prefix) :]
+        return signature
+
+    def has_rule(self, rule_name):
+        return rule_name in self.signatures
+
+    def has_no_arg_rule(self, rule_name):
+        pattern = re.compile(rf"^PEGTransformerFactory::Transform{re.escape(rule_name)}\(PEGTransformer\s*&\s*\w+\)$")
+        return any(pattern.match(signature) for signature in self.signatures.get(rule_name, ()))
+
+    def has_parse_result_rule(self, rule_name):
+        pattern = re.compile(
+            rf"^PEGTransformerFactory::Transform{re.escape(rule_name)}"
+            rf"\(PEGTransformer\s*&\s*\w+,\s*ParseResult\s*&\s*\w+\)$"
+        )
+        return any(pattern.match(signature) for signature in self.signatures.get(rule_name, ()))
+
+    def signature_status(self, rule_name, expected_signature):
+        expected = self._signature_key(expected_signature)
+        signatures = self.signatures.get(rule_name)
+        if not signatures:
+            return "missing"
+        if expected in signatures:
+            return "implemented"
+        return "mismatched"
+
+
+_manual_transform_registry = None
+
+
+def manual_transform_registry():
+    global _manual_transform_registry
+    if _manual_transform_registry is None:
+        _manual_transform_registry = ManualTransformRegistry(transformer_dir.glob("transform_*.cpp"))
+    return _manual_transform_registry
+
+
 def manual_body_exists(rule_name):
-    pattern = re.compile(rf"\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*\([^;]*\)\s*\{{", re.S)
-    return any(pattern.search(path.read_text()) for path in transformer_dir.glob("transform_*.cpp"))
+    return manual_transform_registry().has_rule(rule_name)
 
 
 def no_arg_manual_body_exists(rule_name):
-    pattern = re.compile(
-        rf"\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*"
-        rf"\(\s*PEGTransformer\s*&\s*transformer\s*\)\s*\{{",
-        re.S,
-    )
-    return any(pattern.search(path.read_text()) for path in transformer_dir.glob("transform_*.cpp"))
+    return manual_transform_registry().has_no_arg_rule(rule_name)
 
 
 def parse_result_manual_body_exists(rule_name):
-    pattern = re.compile(
-        rf"\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*"
-        rf"\(\s*PEGTransformer\s*&\s*transformer\s*,\s*ParseResult\s*&\s*\w+\s*\)\s*\{{",
-        re.S,
-    )
-    return any(pattern.search(path.read_text()) for path in transformer_dir.glob("transform_*.cpp"))
+    return manual_transform_registry().has_parse_result_rule(rule_name)
 
 
 def discover_grammar_files():
@@ -141,15 +203,16 @@ def validate_manual_transform_signatures(gram_files, grammar_types_file, rule_ty
 
     pending_stubs = []
     sig_mismatches = []
+    registry = manual_transform_registry()
     for result in results:
         if not result.body_stubs:
             continue
-        implemented, mismatched = _check_implementations(result.gram_stem, result.body_stubs)
         for rule_name, stub in result.body_stubs:
             expected_sig = stub.split("\n")[0].rstrip("{").rstrip()
-            if rule_name in implemented:
+            status = registry.signature_status(rule_name, expected_sig)
+            if status == "implemented":
                 continue
-            if rule_name in mismatched:
+            if status == "mismatched":
                 sig_mismatches.append((result.gram_stem, rule_name, expected_sig))
             else:
                 pending_stubs.append((result.gram_stem, rule_name, expected_sig))
