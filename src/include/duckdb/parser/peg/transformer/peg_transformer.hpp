@@ -688,6 +688,11 @@ public:
 	                                                                       ParseResult &parse_result);
 	static vector<GenericCopyOption> TransformAttachOptions(PEGTransformer &transformer,
 	                                                        const vector<GenericCopyOption> &generic_copy_option_list);
+	//! Split a generic option list into bound (key, value) options and parsed (key, expression) options.
+	//! Shared by ATTACH and CONNECT; `statement_name` labels the NULL-option error message.
+	static void SplitGenericOptions(const vector<GenericCopyOption> &options_in,
+	                                case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_options,
+	                                unordered_map<string, Value> &options, const char *statement_name);
 	static unique_ptr<TransformResultValue> TransformCallStatementInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformCallStatement(PEGTransformer &transformer,
@@ -1011,8 +1016,9 @@ public:
 	static unique_ptr<ConnectInfo> TransformLocalSessionTarget(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformStringSessionTargetInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
-	static unique_ptr<ConnectInfo> TransformStringSessionTarget(PEGTransformer &transformer,
-	                                                            const string &string_literal);
+	static unique_ptr<ConnectInfo>
+	TransformStringSessionTarget(PEGTransformer &transformer, const string &string_literal,
+	                             const optional<vector<GenericCopyOption>> &generic_copy_option_list);
 	static unique_ptr<TransformResultValue> TransformCatalogSessionTargetInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
 	static unique_ptr<ConnectInfo> TransformCatalogSessionTarget(PEGTransformer &transformer,
