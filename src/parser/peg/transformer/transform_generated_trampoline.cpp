@@ -10667,6 +10667,31 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeEnumSelectTypeTr
 	return make_uniq<TypedTransformResult<unique_ptr<CreateTypeInfo>>>(std::move(result));
 }
 
+void PEGTransformerFactory::InitializeEnumStringLiteralListTrampoline(PEGTransformer &transformer,
+                                                                      TransformStack &stack,
+                                                                      TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeEnumStringLiteralListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                               TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	optional<vector<string>> string_literal {};
+	auto &string_literal_opt = ExtractResultFromParens(list_pr.GetChild(1)).Cast<OptionalParseResult>();
+	if (string_literal_opt.HasResult()) {
+		vector<string> string_literal_value;
+		auto string_literal_items = ExtractParseResultsFromList(string_literal_opt.GetResult());
+		for (auto &string_literal_item : string_literal_items) {
+			auto string_literal_item_value = TransformStringLiteral(transformer, string_literal_item.get());
+			string_literal_value.push_back(string_literal_item_value);
+		}
+		string_literal = std::move(string_literal_value);
+	}
+	auto result = TransformEnumStringLiteralList(transformer, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<CreateTypeInfo>>>(std::move(result));
+}
+
 void PEGTransformerFactory::InitializeCreateViewStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                TransformStackFrame &frame) {
 	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
@@ -18264,6 +18289,31 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeInstallStatement
 	}
 	auto result =
 	    TransformInstallStatement(transformer, has_result, identifier_or_string_literal, from_source, version_number);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeUpdateExtensionsStatementTrampoline(PEGTransformer &transformer,
+                                                                          TransformStack &stack,
+                                                                          TransformStackFrame &frame) {
+	frame.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeUpdateExtensionsStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+                                                                   TransformStackFrame &frame) {
+	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
+	optional<vector<Identifier>> identifier {};
+	auto &identifier_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
+	if (identifier_opt.HasResult()) {
+		vector<Identifier> identifier_value;
+		auto identifier_items = ExtractParseResultsFromList(ExtractResultFromParens(identifier_opt.GetResult()));
+		for (auto &identifier_item : identifier_items) {
+			auto identifier_item_value = identifier_item.get().Cast<IdentifierParseResult>().identifier;
+			identifier_value.push_back(identifier_item_value);
+		}
+		identifier = std::move(identifier_value);
+	}
+	auto result = TransformUpdateExtensionsStatement(transformer, identifier);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 

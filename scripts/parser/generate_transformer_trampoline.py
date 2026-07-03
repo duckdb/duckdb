@@ -17,6 +17,7 @@ from transformer_trampoline_config import TrampolineRuleMode, load_transformer_t
 from transformer_plan import (
     ChoiceNode,
     DirectOptionalArg,
+    DirectOptionalListArg,
     DirectOptionalMatcherArg,
     DirectListArg,
     DirectMatcherArg,
@@ -654,6 +655,28 @@ class UseGramPreviewEmitter:
             return f"std::move({var_name})"
         return var_name
 
+    def direct_matcher_cpp_type(self, rule_name):
+        matcher = self.matcher_overrides[rule_name].matcher
+        if matcher in ("identifier", "reserved_identifier"):
+            return "Identifier"
+        return self.cpp_type(rule_name)
+
+    def direct_matcher_value_expr(self, rule_name, parse_expr):
+        matcher = self.matcher_overrides[rule_name].matcher
+        if matcher in ("identifier", "reserved_identifier"):
+            return f"{parse_expr}.Cast<IdentifierParseResult>().identifier"
+        return self.matcher_transform_expr(rule_name, parse_expr)
+
+    def is_identifier_matcher(self, rule_name):
+        return self.matcher_overrides[rule_name].matcher in ("identifier", "reserved_identifier")
+
+    def direct_matcher_vector_push_expr(self, rule_name, var_name):
+        if self.is_identifier_matcher(rule_name):
+            return var_name
+        if self.by_value(rule_name):
+            return f"std::move({var_name})"
+        return var_name
+
     def dynamic_child(self, plan):
         return plan.repeat_child or plan.optional_list_child or plan.required_repeat_child or plan.list_child
 
@@ -1034,6 +1057,7 @@ class UseGramPreviewEmitter:
                     DirectOptionalPresenceArg,
                     DirectRepeatArg,
                     DirectListArg,
+                    DirectOptionalListArg,
                     RepeatStackChild,
                     RequiredRepeatStackChild,
                     ListStackChild,
@@ -1095,12 +1119,45 @@ class UseGramPreviewEmitter:
                 lines.append("\t}")
                 arg_names.append(arg.var_name)
             elif isinstance(arg, DirectListArg):
-                lines.append(f"\tvector<Identifier> {arg.var_name};")
+                element_cpp_type = self.direct_matcher_cpp_type(arg.rule_name)
+                lines.append(f"\tvector<{element_cpp_type}> {arg.var_name};")
                 lines.append(f"\tauto {arg.var_name}_items = ExtractParseResultsFromList({arg.parse_expr});")
                 lines.append(f"\tfor (auto &{arg.var_name}_item : {arg.var_name}_items) {{")
+                if self.is_identifier_matcher(arg.rule_name):
+                    lines.append(
+                        f"\t\t{arg.var_name}.push_back("
+                        f"{arg.var_name}_item.get().Cast<IdentifierParseResult>().identifier);"
+                    )
+                else:
+                    lines.append(
+                        f"\t\tauto {arg.var_name}_value = "
+                        f"{self.direct_matcher_value_expr(arg.rule_name, f'{arg.var_name}_item.get()')};"
+                    )
+                    lines.append(
+                        f"\t\t{arg.var_name}.push_back("
+                        f"{self.direct_matcher_vector_push_expr(arg.rule_name, f'{arg.var_name}_value')});"
+                    )
+                lines.append("\t}")
+                arg_names.append(arg.var_name)
+            elif isinstance(arg, DirectOptionalListArg):
+                element_cpp_type = self.direct_matcher_cpp_type(arg.rule_name)
+                lines.append(f"\toptional<vector<{element_cpp_type}>> {arg.var_name} {{}};")
+                lines.append(f"\tauto &{arg.var_name}_opt = {arg.parse_expr}.Cast<OptionalParseResult>();")
+                lines.append(f"\tif ({arg.var_name}_opt.HasResult()) {{")
+                child_expr = arg.result_expr_template.format(opt=f"{arg.var_name}_opt")
+                lines.append(f"\t\tvector<{element_cpp_type}> {arg.var_name}_value;")
+                lines.append(f"\t\tauto {arg.var_name}_items = ExtractParseResultsFromList({child_expr});")
+                lines.append(f"\t\tfor (auto &{arg.var_name}_item : {arg.var_name}_items) {{")
                 lines.append(
-                    f"\t\t{arg.var_name}.push_back({arg.var_name}_item.get().Cast<IdentifierParseResult>().identifier);"
+                    f"\t\t\tauto {arg.var_name}_item_value = "
+                    f"{self.direct_matcher_value_expr(arg.rule_name, f'{arg.var_name}_item.get()')};"
                 )
+                lines.append(
+                    f"\t\t\t{arg.var_name}_value.push_back("
+                    f"{self.direct_matcher_vector_push_expr(arg.rule_name, f'{arg.var_name}_item_value')});"
+                )
+                lines.append("\t\t}")
+                lines.append(f"\t\t{arg.var_name} = std::move({arg.var_name}_value);")
                 lines.append("\t}")
                 arg_names.append(arg.var_name)
             elif isinstance(arg, StackChild):

@@ -28,16 +28,6 @@ rules:
     init: InitializeUnpivotStatementTrampoline
     finalize: FinalizeUnpivotStatementTrampoline
 
-  EnumStringLiteralList:
-    mode: manual
-    init: InitializeEnumStringLiteralListTrampoline
-    finalize: FinalizeEnumStringLiteralListTrampoline
-
-  UpdateExtensionsStatement:
-    mode: manual
-    init: InitializeUpdateExtensionsStatementTrampoline
-    finalize: FinalizeUpdateExtensionsStatementTrampoline
-
   ColLabel:
     mode: manual
     init: InitializeColLabelTrampoline

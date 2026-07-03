@@ -440,16 +440,6 @@ public:
 	                                             TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeCommentValueTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
-	static void InitializeUpdateExtensionsStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                          TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue> FinalizeUpdateExtensionsStatementTrampoline(PEGTransformer &transformer,
-	                                                                                    TransformStack &stack,
-	                                                                                    TransformStackFrame &frame);
-	static void InitializeEnumStringLiteralListTrampoline(PEGTransformer &transformer, TransformStack &stack,
-	                                                      TransformStackFrame &frame);
-	static unique_ptr<TransformResultValue> FinalizeEnumStringLiteralListTrampoline(PEGTransformer &transformer,
-	                                                                                TransformStack &stack,
-	                                                                                TransformStackFrame &frame);
 	static void InitializePivotStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -1966,6 +1956,11 @@ public:
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeEnumSelectTypeTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeEnumStringLiteralListTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeEnumStringLiteralListTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
 	static void InitializeCreateViewStmtTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                               TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -3500,6 +3495,11 @@ public:
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeInstallStatementTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeUpdateExtensionsStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                          TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeUpdateExtensionsStatementTrampoline(PEGTransformer &transformer,
+	                                                                                    TransformStack &stack,
+	                                                                                    TransformStackFrame &frame);
 	static void InitializeFromSourceTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                           TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>

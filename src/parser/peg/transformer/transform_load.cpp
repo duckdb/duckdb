@@ -74,30 +74,6 @@ PEGTransformerFactory::TransformUpdateExtensionsStatement(PEGTransformer &transf
 	return std::move(result);
 }
 
-void PEGTransformerFactory::InitializeUpdateExtensionsStatementTrampoline(PEGTransformer &transformer,
-                                                                          TransformStack &stack,
-                                                                          TransformStackFrame &frame) {
-	frame.ReserveChildSlots(0);
-}
-
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeUpdateExtensionsStatementTrampoline(PEGTransformer &transformer, TransformStack &stack,
-                                                                   TransformStackFrame &frame) {
-	auto &list_pr = frame.parse_result.Cast<ListParseResult>();
-	optional<vector<Identifier>> identifier {};
-	auto &identifier_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
-	if (identifier_opt.HasResult()) {
-		vector<Identifier> identifier_value;
-		auto identifier_items = ExtractParseResultsFromList(ExtractResultFromParens(identifier_opt.GetResult()));
-		for (auto &identifier_item : identifier_items) {
-			identifier_value.push_back(identifier_item.get().Cast<IdentifierParseResult>().identifier);
-		}
-		identifier = identifier_value;
-	}
-	auto result = TransformUpdateExtensionsStatement(transformer, identifier);
-	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
-}
-
 string PEGTransformerFactory::TransformVersionNumber(PEGTransformer &transformer,
                                                      const QualifiedName &identifier_or_string_literal) {
 	return identifier_or_string_literal.Name().GetIdentifierName();

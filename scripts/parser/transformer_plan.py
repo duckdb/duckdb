@@ -261,6 +261,14 @@ class DirectListArg:
 
 
 @dataclass
+class DirectOptionalListArg:
+    parse_expr: str
+    rule_name: str
+    var_name: str
+    result_expr_template: str = "{opt}.GetResult()"
+
+
+@dataclass
 class DirectOptionalArg:
     parse_expr: str
     rule_name: str
@@ -346,6 +354,7 @@ class SequenceRulePlan:
     direct_optional_presence_args: List[DirectOptionalPresenceArg]
     direct_repeat_args: List[DirectRepeatArg]
     direct_list_args: List[DirectListArg]
+    direct_optional_list_args: List[DirectOptionalListArg]
     stack_children: List[StackChild]
     optional_stack_children: List[OptionalStackChild]
     repeat_child: "RepeatStackChild | None"
@@ -457,6 +466,7 @@ def plan_trampoline_sequence_rule_with_terminals(
     direct_optional_presence_args = []
     direct_repeat_args = []
     direct_list_args = []
+    direct_optional_list_args = []
     stack_children = []
     optional_stack_children = []
     repeat_child = None
@@ -605,9 +615,19 @@ def plan_trampoline_sequence_rule_with_terminals(
                 result_expr_template = "ExtractResultFromParens({opt}.GetResult())"
             if isinstance(list_node, ReferenceNode):
                 if _is_identifier_override(list_node.name, matcher_overrides):
-                    raise NotImplementedError("optional identifier list is currently unsupported")
+                    arg = DirectOptionalListArg(
+                        parse_expr, list_node.name, to_snake_case(list_node.name), result_expr_template
+                    )
+                    direct_optional_list_args.append(arg)
+                    finalize_args.append(arg)
+                    continue
                 if _is_terminal_override(list_node.name, matcher_overrides):
-                    raise NotImplementedError("optional terminal override list is currently unsupported")
+                    arg = DirectOptionalListArg(
+                        parse_expr, list_node.name, to_snake_case(list_node.name), result_expr_template
+                    )
+                    direct_optional_list_args.append(arg)
+                    finalize_args.append(arg)
+                    continue
                 if (
                     list_child is not None
                     or repeat_child is not None
@@ -626,9 +646,19 @@ def plan_trampoline_sequence_rule_with_terminals(
             if isinstance(list_container, ListMacroNode) and isinstance(list_container.inner, ReferenceNode):
                 list_node = list_container.inner
                 if _is_identifier_override(list_node.name, matcher_overrides):
-                    raise NotImplementedError("optional identifier list is currently unsupported")
+                    arg = DirectOptionalListArg(
+                        parse_expr, list_node.name, to_snake_case(list_node.name), result_expr_template
+                    )
+                    direct_optional_list_args.append(arg)
+                    finalize_args.append(arg)
+                    continue
                 if _is_terminal_override(list_node.name, matcher_overrides):
-                    raise NotImplementedError("optional terminal override list is currently unsupported")
+                    arg = DirectOptionalListArg(
+                        parse_expr, list_node.name, to_snake_case(list_node.name), result_expr_template
+                    )
+                    direct_optional_list_args.append(arg)
+                    finalize_args.append(arg)
+                    continue
                 if (
                     list_child is not None
                     or repeat_child is not None
@@ -669,7 +699,10 @@ def plan_trampoline_sequence_rule_with_terminals(
                 finalize_args.append(arg)
                 continue
             if _is_terminal_override(child.inner.name, matcher_overrides):
-                raise NotImplementedError("terminal override list is currently unsupported")
+                arg = DirectListArg(parse_expr, child.inner.name, to_snake_case(child.inner.name))
+                direct_list_args.append(arg)
+                finalize_args.append(arg)
+                continue
             if (
                 list_child is not None
                 or repeat_child is not None
@@ -698,6 +731,7 @@ def plan_trampoline_sequence_rule_with_terminals(
         direct_optional_presence_args,
         direct_repeat_args,
         direct_list_args,
+        direct_optional_list_args,
         stack_children,
         optional_stack_children,
         repeat_child,
