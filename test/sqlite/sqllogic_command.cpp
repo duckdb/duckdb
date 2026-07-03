@@ -185,7 +185,7 @@ void Command::RestartDatabase(ExecuteContext &context, reference<Connection> &co
 	}
 	bool query_fail = false;
 	try {
-		connection.get().context->ParseStatements(sql_query);
+		connection.get().ExtractStatements(sql_query);
 	} catch (...) {
 		query_fail = true;
 	}

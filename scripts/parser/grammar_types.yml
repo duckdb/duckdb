@@ -333,6 +333,8 @@ ResultModifier:
     - LimitOffset
     - OffsetLimitClause
     - LimitOffsetClause
+    - OffsetFetchClause
+    - FetchOnlyClause
 
 AtClause:
   type: "unique_ptr<AtClause>"
@@ -770,6 +772,8 @@ LimitPercentResult:
     - LimitAll
     - LimitLiteralPercent
     - LimitExpression
+    - FetchClause
+    - FetchValue
     - OffsetClause
     - OffsetValue
 
@@ -1716,6 +1720,7 @@ excluded_rules:
   - ColLabel
   - ColLabelOrString
   - RowOrRows
+  - FirstOrNext
   - Recursive
   - StarSymbol
   - PlainIdentifier

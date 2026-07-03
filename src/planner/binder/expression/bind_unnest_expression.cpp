@@ -69,7 +69,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 
 	ErrorData error;
 	if (function.GetArguments().empty()) {
-		return BindResult(BinderException(function, "UNNEST() requires at lease one argument"));
+		return BindResult(BinderException(function, "UNNEST() requires at least one argument"));
 	}
 	if (inside_window || inside_aggregate || inside_try) {
 		return BindResult(BinderException(function, UnsupportedUnnestMessage()));

@@ -2405,11 +2405,11 @@ PEGTransformerFactory::TransformPositionExpression(PEGTransformer &transformer,
 
 vector<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformPositionArguments(PEGTransformer &transformer,
-                                                  unique_ptr<ParsedExpression> single_expression,
-                                                  unique_ptr<ParsedExpression> single_expression_1) {
+                                                  unique_ptr<ParsedExpression> other_operator_expression,
+                                                  unique_ptr<ParsedExpression> expression) {
 	vector<unique_ptr<ParsedExpression>> result;
-	result.push_back(std::move(single_expression_1));
-	result.push_back(std::move(single_expression));
+	result.push_back(std::move(expression));
+	result.push_back(std::move(other_operator_expression));
 	return result;
 }
 

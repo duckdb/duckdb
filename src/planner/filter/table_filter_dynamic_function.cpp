@@ -146,7 +146,11 @@ FilterPropagateResult DynamicFilterScalarFun::FilterPrune(const FunctionStatisti
 	if (!data.filter_data->initialized) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	return DynamicFilterData::CheckStatistics(input.stats, data.filter_data->comparison_type,
+	auto column_stats = input.ChildStats(0);
+	if (!column_stats) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	return DynamicFilterData::CheckStatistics(*column_stats, data.filter_data->comparison_type,
 	                                          data.filter_data->constant);
 }
 

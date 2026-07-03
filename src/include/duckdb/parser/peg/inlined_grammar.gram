@@ -1042,7 +1042,7 @@ LambdaExpression <- 'LAMBDA' List(ColIdOrString) ':' Expression
 NullIfExpression <- 'NULLIF' Parens(NullIfArguments)
 NullIfArguments <- Expression ',' Expression
 PositionExpression <- 'POSITION' Parens(PositionArguments)
-PositionArguments <- SingleExpression 'IN' SingleExpression
+PositionArguments <- OtherOperatorExpression 'IN' Expression
 RowExpression <- 'ROW' Parens(List(Expression)?)
 SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)
 SubstringArguments <- SubstringParameters / SubstringExpressionList
@@ -1393,9 +1393,11 @@ ByName <- 'BY' 'NAME'
 
 SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
 ResultModifiers <- OrderByClause? LimitOffset?
-LimitOffset <- LimitOffsetClause / OffsetLimitClause
+LimitOffset <- LimitOffsetClause / OffsetFetchClause / OffsetLimitClause / FetchOnlyClause
 LimitOffsetClause <- LimitClause OffsetClause?
 OffsetLimitClause <- OffsetClause LimitClause?
+OffsetFetchClause <- OffsetClause FetchClause
+FetchOnlyClause <- FetchClause
 TableStatement <- 'TABLE' BaseTableName
 OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
 SimpleSelectParens <- Parens(SimpleSelect)
@@ -1555,6 +1557,9 @@ LimitValue <- LimitAll / LimitLiteralPercent / LimitExpression
 LimitAll <- 'ALL'
 LimitLiteralPercent <- NumberLiteral 'PERCENT'
 LimitExpression <- Expression '%'?
+FetchClause <- 'FETCH' FirstOrNext FetchValue RowOrRows 'ONLY'
+FirstOrNext <- 'FIRST' / 'NEXT'
+FetchValue <- Expression
 
 AliasedExpression <- ColIdExpression / ExpressionAsCollabel / ExpressionOptIdentifier
 ColIdExpression <- ColId ':' Expression
@@ -1587,7 +1592,7 @@ ConnectStatement <- 'CONNECT' SessionTarget?
 DisconnectStatement <- 'DISCONNECT'
 SessionTarget <- LocalSessionTarget / StringSessionTarget / CatalogSessionTarget
 LocalSessionTarget <- 'LOCAL'
-StringSessionTarget <- StringLiteral
+StringSessionTarget <- StringLiteral GenericCopyOptionList?
 CatalogSessionTarget <- CatalogName
 
 CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType

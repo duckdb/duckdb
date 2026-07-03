@@ -4,6 +4,8 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 
@@ -136,9 +138,61 @@ static void IntersectsExtentFunction(DataChunk &input, ExpressionState &state, V
 	    });
 }
 
+// Prune row groups for `geom1 && geom2` (a.k.a. ST_Intersects_Extent), which is true iff the two bounding
+// boxes intersect. One argument must be a constant geometry; the other is the column we prune against. Both
+// operands' statistics are derived for us (the constant's geometry stats already carry its bounding box, and
+// the column's look through any CRS-only cast), so this works regardless of which side the constant is on.
+static FilterPropagateResult IntersectsExtentFilterPrune(const FunctionStatisticsPruneInput &input) {
+	auto &children = input.function.GetChildren();
+	if (children.size() != 2) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	// Constants are folded by the time we get here, so the constant operand is a plain BoundConstantExpression.
+	const auto lhs_is_const = children[0]->GetExpressionType() == ExpressionType::VALUE_CONSTANT;
+	const auto rhs_is_const = children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT;
+	if (lhs_is_const == rhs_is_const) {
+		// Need exactly one constant operand and one column operand.
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	const idx_t constant_idx = lhs_is_const ? 0 : 1;
+
+	auto column_stats = input.ChildStats(1 - constant_idx);
+	auto constant_stats = input.ChildStats(constant_idx);
+	if (!column_stats || column_stats->GetStatsType() != StatisticsType::GEOMETRY_STATS || !constant_stats ||
+	    constant_stats->GetStatsType() != StatisticsType::GEOMETRY_STATS) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!column_stats->CanHaveNoNull()) {
+		// no non-null values are possible: always false
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	const auto &col_extent = GeometryStats::GetExtent(*column_stats);
+	if (!col_extent.CanPruneXY()) {
+		// If neither axis is set (the extent is empty or fully unknown), we cannot prune.
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	const auto &const_extent = GeometryStats::GetExtent(*constant_stats);
+	if (!const_extent.CanPruneXY()) {
+		// An empty constant geometry never intersects anything.
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (!const_extent.IntersectsXY(col_extent)) {
+		// The column zonemap does not intersect the constant: no row can match.
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (const_extent.ContainsXY(col_extent)) {
+		// The constant fully covers the column zonemap, so every non-null row's bbox intersects it.
+		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	}
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
 ScalarFunction StIntersectsExtentFun::GetFunction() {
 	ScalarFunction function({LogicalType::GEOMETRY(), LogicalType::GEOMETRY()}, LogicalType::BOOLEAN,
 	                        IntersectsExtentFunction);
+	function.SetFilterPruneCallback(IntersectsExtentFilterPrune);
 	return function;
 }
 
