@@ -86,8 +86,13 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 		if (widening_signed_cast || widening_unsigned_to_signed_cast) {
 			filter.runtime_filter_type = expr.GetReturnType();
 		} else {
-			filter.mode = JoinFilterPushdownMode::STORAGE_ONLY;
-			filter.runtime_filter_type = LogicalType::INVALID;
+			if (bound_cast.IsLosslessCast()) {
+				filter.runtime_filter_type = expr.GetReturnType();
+				filter.uses_lossless_cast = true;
+			} else {
+				filter.mode = JoinFilterPushdownMode::STORAGE_ONLY;
+				filter.runtime_filter_type = LogicalType::INVALID;
+			}
 		}
 		return true;
 	}
@@ -100,6 +105,17 @@ static bool PushdownJoinFilterExpressionInternal(const Expression &expr, JoinFil
 	}
 	default:
 		return false;
+	}
+}
+
+static void DisableRuntimeFiltersThroughLosslessCasts(vector<JoinFilterPushdownColumn> &columns) {
+	for (auto &column : columns) {
+		if (!column.uses_lossless_cast) {
+			continue;
+		}
+		column.mode = JoinFilterPushdownMode::STORAGE_ONLY;
+		column.runtime_filter_type = LogicalType::INVALID;
+		column.uses_lossless_cast = false;
 	}
 }
 
@@ -150,13 +166,16 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		// LIMIT/TOP_N determines which rows are part of the probe side before the join.
 		// Pushing a join filter below it can change which rows survive the limit/offset.
 		break;
-	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 	case LogicalOperatorType::LOGICAL_DISTINCT:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		// does not affect probe side - recurse into left child
 		// FIXME: we can probably recurse into more operators here (e.g. window, unnest)
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
+		break;
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		DisableRuntimeFiltersThroughLosslessCasts(columns);
 		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
 		break;
 	case LogicalOperatorType::LOGICAL_UNNEST: {

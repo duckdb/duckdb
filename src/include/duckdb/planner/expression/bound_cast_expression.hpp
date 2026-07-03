@@ -34,6 +34,12 @@ public:
 	bool IsTryCast() const {
 		return try_cast;
 	}
+	bool IsLosslessCast() const {
+		return lossless_cast;
+	}
+	void SetLosslessCast() {
+		lossless_cast = true;
+	}
 	const BoundCastInfo &GetBoundCast() const {
 		return bound_cast;
 	}
@@ -78,6 +84,8 @@ private:
 	unique_ptr<Expression> child;
 	//! Whether to use try_cast or not. try_cast converts cast failures into NULLs instead of throwing an error.
 	bool try_cast;
+	//! Whether an optimizer has proven this cast is value-preserving for the input domain.
+	bool lossless_cast = false;
 	//! The bound cast info
 	BoundCastInfo bound_cast;
 };

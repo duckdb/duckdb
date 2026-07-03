@@ -45,6 +45,8 @@ struct JoinFilterPushdownColumn {
 	//! The original type of the pushed probe expression before rewriting to the LogicalGet storage column. Only used
 	//! when the mode allows reconstruction of the probe expression for BF/PRF runtime filters.
 	LogicalType runtime_filter_type;
+	//! Whether reconstruction depends on a compressed-materialization cast proven lossless for its direct input.
+	bool uses_lossless_cast = false;
 };
 
 enum class DeferredRuntimeFilterType : uint8_t { BLOOM_FILTER, PREFIX_RANGE };
