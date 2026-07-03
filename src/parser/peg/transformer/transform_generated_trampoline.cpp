@@ -14299,8 +14299,8 @@ void PEGTransformerFactory::InitializeExpressionTrampoline(PEGTransformer &trans
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeExpressionTrampoline(PEGTransformer &transformer,
                                                                                      TransformStack &stack,
                                                                                      TransformStackFrame &frame) {
-	auto lambda_arrow_expression = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
-	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(lambda_arrow_expression));
+	auto result = frame.TakeResult<unique_ptr<ParsedExpression>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeColumnDefaultExprTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -17667,8 +17667,8 @@ void PEGTransformerFactory::InitializeInsertByNameOrderTrampoline(PEGTransformer
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeInsertByNameOrderTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                            TransformStackFrame &frame) {
-	auto insert_by_name = frame.TakeResult<InsertColumnOrder>(0);
-	return make_uniq<TypedTransformResult<InsertColumnOrder>>(insert_by_name);
+	auto result = frame.TakeResult<InsertColumnOrder>(0);
+	return make_uniq<TypedTransformResult<InsertColumnOrder>>(result);
 }
 
 void PEGTransformerFactory::InitializeInsertByPositionOrderTrampoline(PEGTransformer &transformer,
@@ -17682,8 +17682,8 @@ void PEGTransformerFactory::InitializeInsertByPositionOrderTrampoline(PEGTransfo
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeInsertByPositionOrderTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                                TransformStackFrame &frame) {
-	auto insert_by_position = frame.TakeResult<InsertColumnOrder>(0);
-	return make_uniq<TypedTransformResult<InsertColumnOrder>>(insert_by_position);
+	auto result = frame.TakeResult<InsertColumnOrder>(0);
+	return make_uniq<TypedTransformResult<InsertColumnOrder>>(result);
 }
 
 void PEGTransformerFactory::InitializeInsertByNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -18521,8 +18521,8 @@ void PEGTransformerFactory::InitializeUpdateMatchSetClauseTrampoline(PEGTransfor
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeUpdateMatchSetClauseTrampoline(PEGTransformer &transformer, TransformStack &stack,
                                                               TransformStackFrame &frame) {
-	auto update_match_set_info = frame.TakeResult<unique_ptr<UpdateSetInfo>>(0);
-	return make_uniq<TypedTransformResult<unique_ptr<UpdateSetInfo>>>(std::move(update_match_set_info));
+	auto result = frame.TakeResult<unique_ptr<UpdateSetInfo>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<UpdateSetInfo>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeUpdateMatchSetInfoTrampoline(PEGTransformer &transformer, TransformStack &stack,
@@ -22176,8 +22176,7 @@ void PEGTransformerFactory::InitializeFetchClauseTrampoline(PEGTransformer &tran
 unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeFetchClauseTrampoline(PEGTransformer &transformer,
                                                                                       TransformStack &stack,
                                                                                       TransformStackFrame &frame) {
-	auto fetch_value = frame.TakeResult<LimitPercentResult>(0);
-	auto result = TransformFetchClause(transformer, std::move(fetch_value));
+	auto result = frame.TakeResult<LimitPercentResult>(0);
 	return make_uniq<TypedTransformResult<LimitPercentResult>>(std::move(result));
 }
 

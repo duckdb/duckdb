@@ -717,6 +717,34 @@ class UseGramPreviewEmitter:
             lines.append("\t}")
         return lines
 
+    def sequence_forward_child(self, rule_name, plan):
+        semantic_args = [arg for arg in plan.finalize_args if isinstance(arg, StackChild)]
+        if len(plan.finalize_args) != 1 or len(semantic_args) != 1:
+            return None
+        child_arg = semantic_args[0]
+        if child_arg.rule_name not in self.rule_types:
+            return None
+        if self.cpp_type(child_arg.rule_name) != self.cpp_type(rule_name):
+            return None
+        return child_arg
+
+    def is_auto_sequence_forward_rule(self, rule_name, plan):
+        return (
+            self.sequence_forward_child(rule_name, plan) is not None
+            and not manual_body_exists(rule_name)
+            and not self.rule_types[rule_name].pass_location
+        )
+
+    def emit_sequence_forward_finalize_body(self, rule_name, plan, child_arg):
+        cpp_type = self.cpp_type(rule_name)
+        by_value = self.by_value(rule_name)
+        slot_expr = self.adjusted_slot_expr(plan, child_arg.slot_idx)
+        return [
+            f"\tauto result = frame.TakeResult<{cpp_type}>({slot_expr});",
+            f"\treturn {typed_result_expr(cpp_type, 'result', by_value)};",
+            "}",
+        ]
+
     def emit_forward_rule(self, rule_name, ast):
         sequence_ast = ast if isinstance(ast, SequenceNode) else SequenceNode([ast])
         plan = plan_trampoline_sequence_rule_with_terminals(
@@ -726,18 +754,9 @@ class UseGramPreviewEmitter:
             allow_dynamic_stack_followers=True,
             allow_top_level_repeat=True,
         )
-        semantic_args = [arg for arg in plan.finalize_args if isinstance(arg, StackChild)]
-        if len(semantic_args) != 1 or len(semantic_args) != len(plan.finalize_args):
+        child_arg = self.sequence_forward_child(rule_name, plan)
+        if child_arg is None:
             raise NotImplementedError("forward rules must have exactly one stack child")
-        child_arg = semantic_args[0]
-        if child_arg.rule_name not in self.rule_types:
-            raise NotImplementedError(f"forward child '{child_arg.rule_name}' is missing from grammar_types.yml")
-        cpp_type = self.cpp_type(rule_name)
-        child_cpp_type = self.cpp_type(child_arg.rule_name)
-        if child_cpp_type != cpp_type:
-            raise NotImplementedError(
-                f"forward child '{child_arg.rule_name}' has type '{child_cpp_type}', expected '{cpp_type}'"
-            )
 
         lines = self.emit_sequence_initialize(rule_name, sequence_ast)
         lines.append("")
@@ -745,10 +764,7 @@ class UseGramPreviewEmitter:
             f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"TransformStack &stack, TransformStackFrame &frame) {{"
         )
-        var_name = child_arg.var_name
-        lines.append(f"\tauto {var_name} = frame.TakeResult<{child_cpp_type}>({child_arg.slot_idx});")
-        lines.append(f"\treturn {typed_result_expr(cpp_type, var_name, self.by_value(rule_name))};")
-        lines.append("}")
+        lines.extend(self.emit_sequence_forward_finalize_body(rule_name, plan, child_arg))
         return lines
 
     def emit_syntax_only_rule(self, rule_name, ast):
@@ -976,6 +992,10 @@ class UseGramPreviewEmitter:
             f"unique_ptr<TransformResultValue> PEGTransformerFactory::{finalize_name(rule_name)}(PEGTransformer &transformer, "
             f"TransformStack &stack, TransformStackFrame &frame) {{"
         )
+        if self.is_auto_sequence_forward_rule(rule_name, plan):
+            child_arg = self.sequence_forward_child(rule_name, plan)
+            lines.extend(self.emit_sequence_forward_finalize_body(rule_name, plan, child_arg))
+            return lines
         needs_list_pr = any(
             isinstance(
                 arg,

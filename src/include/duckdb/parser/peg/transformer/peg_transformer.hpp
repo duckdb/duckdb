@@ -423,6 +423,9 @@ public:
 	static void AddPivotEntry(PEGTransformer &transformer, string enum_name, unique_ptr<SelectNode> base,
 	                          unique_ptr<ParsedExpression> column, unique_ptr<QueryNode> subquery, bool has_parameters);
 	static Value GetConstantExpressionValue(unique_ptr<ParsedExpression> &expr);
+	static void SplitGenericOptions(const vector<GenericCopyOption> &options_in,
+	                                case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_options,
+	                                unordered_map<string, Value> &options, const char *statement_name);
 	static void AddToMultiStatement(const unique_ptr<MultiStatement> &multi_statement,
 	                                unique_ptr<AlterInfo> alter_info);
 	static void AddUpdateToMultiStatement(const unique_ptr<MultiStatement> &multi_statement, const string &column_name,
