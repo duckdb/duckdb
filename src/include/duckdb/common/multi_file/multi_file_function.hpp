@@ -294,6 +294,48 @@ public:
 		                                                     table_filters, context, global_state);
 	}
 
+	static bool OpenMarkedFile(ClientContext &context, const MultiFileBindData &bind_data,
+	                           MultiFileGlobalState &global_state, MultiFileReaderData &current_reader_data,
+	                           idx_t current_file_index, unique_lock<mutex> &parallel_lock) {
+		D_ASSERT(!parallel_lock.owns_lock());
+		D_ASSERT(current_reader_data.file_state == MultiFileFileState::OPENING);
+		// hold the lock on the file we are opening, so other threads can wait for the file to be opened
+		unique_lock<mutex> file_lock(*current_reader_data.file_mutex);
+
+		bool can_skip_file = false;
+		if (current_reader_data.union_data) {
+			auto &union_data = *current_reader_data.union_data;
+			current_reader_data.reader =
+			    bind_data.multi_file_reader->CreateReader(context, *global_state.global_state, union_data, bind_data);
+		} else {
+			current_reader_data.reader =
+			    bind_data.multi_file_reader->CreateReader(context, *global_state.global_state,
+			                                              current_reader_data.file_to_be_opened, current_file_index,
+			                                              bind_data);
+		}
+		auto init_result = InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
+		                                    global_state.filters, context, current_file_index, global_state);
+		if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
+			//! File can be skipped entirely, close it and move on
+			can_skip_file = true;
+		} else {
+			current_reader_data.reader->PrepareReader(context, *global_state.global_state);
+		}
+
+		// Now re-lock the state and add the reader
+		parallel_lock.lock();
+		global_state.files_opened++;
+		if (can_skip_file) {
+			current_reader_data.file_state = MultiFileFileState::SKIPPED;
+			// release the reader so its file handle is closed; skipped files are
+			// never scanned, so nothing else needs the reader
+			current_reader_data.reader = nullptr;
+			return false;
+		}
+		current_reader_data.file_state = MultiFileFileState::OPEN;
+		return true;
+	}
+
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
 	static bool TryOpenNextFile(ClientContext &context, const MultiFileBindData &bind_data,
 	                            MultiFileGlobalState &global_state, unique_lock<mutex> &parallel_lock) {
@@ -326,52 +368,21 @@ public:
 				}
 
 				current_reader_data.file_state = MultiFileFileState::OPENING;
-				// Get pointer to file mutex before unlocking
-				auto &current_file_lock = *current_reader_data.file_mutex;
-
-				// Now we switch which lock we are holding, instead of locking the global state, we grab the lock on
-				// the file we are opening. This file lock allows threads to wait for a file to be opened.
 				parallel_lock.unlock();
-				unique_lock<mutex> file_lock(current_file_lock);
 
-				bool can_skip_file = false;
+				bool opened;
 				try {
-					if (current_reader_data.union_data) {
-						auto &union_data = *current_reader_data.union_data;
-						current_reader_data.reader = bind_data.multi_file_reader->CreateReader(
-						    context, *global_state.global_state, union_data, bind_data);
-					} else {
-						current_reader_data.reader = bind_data.multi_file_reader->CreateReader(
-						    context, *global_state.global_state, current_reader_data.file_to_be_opened,
-						    current_file_index, bind_data);
-					}
-					auto init_result =
-					    InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
-					                     global_state.filters, context, current_file_index, global_state);
-					if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
-						//! File can be skipped entirely, close it and move on
-						can_skip_file = true;
-					} else {
-						current_reader_data.reader->PrepareReader(context, *global_state.global_state);
-					}
+					opened = OpenMarkedFile(context, bind_data, global_state, current_reader_data,
+					                        current_file_index, parallel_lock);
 				} catch (...) {
 					parallel_lock.lock();
 					global_state.error_opening_file = true;
 					throw;
 				}
-
-				// Now re-lock the state and add the reader
-				parallel_lock.lock();
-				global_state.files_opened++;
-				if (can_skip_file) {
-					current_reader_data.file_state = MultiFileFileState::SKIPPED;
-					// release the reader so its file handle is closed; skipped files are
-					// never scanned, so nothing else needs the reader
-					current_reader_data.reader = nullptr;
+				if (!opened) {
 					//! Intentionally do not increase 'i'
 					continue;
 				}
-				current_reader_data.file_state = MultiFileFileState::OPEN;
 				return true;
 			}
 			i++;
