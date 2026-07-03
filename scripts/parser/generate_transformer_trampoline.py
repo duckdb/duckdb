@@ -8,6 +8,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from inline_grammar import parse_peg_grammar
 from grammar_types import load_grammar_types, load_matcher_rule_overrides
+from generate_transformer import (
+    _check_implementations,
+    load_identifier_override_rules,
+    process_gram_file,
+)
 from transformer_trampoline_config import TrampolineRuleMode, load_transformer_trampoline_config
 from transformer_plan import (
     ChoiceNode,
@@ -124,6 +129,44 @@ def load_grammar_rules(gram_files):
                 raise Exception(f"duplicate grammar rule '{rule_name}' in {gram_file}")
             rules[rule_name] = rule
     return rules
+
+
+def validate_manual_transform_signatures(gram_files, grammar_types_file, rule_types, excluded_rules):
+    matcher_rule_names = set(load_matcher_rule_overrides(grammar_types_file).keys())
+    identifier_override_rules = load_identifier_override_rules(grammar_types_file)
+    results = [
+        process_gram_file(gram_file, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules)
+        for gram_file in gram_files
+    ]
+
+    pending_stubs = []
+    sig_mismatches = []
+    for result in results:
+        if not result.body_stubs:
+            continue
+        implemented, mismatched = _check_implementations(result.gram_stem, result.body_stubs)
+        for rule_name, stub in result.body_stubs:
+            expected_sig = stub.split("\n")[0].rstrip("{").rstrip()
+            if rule_name in implemented:
+                continue
+            if rule_name in mismatched:
+                sig_mismatches.append((result.gram_stem, rule_name, expected_sig))
+            else:
+                pending_stubs.append((result.gram_stem, rule_name, expected_sig))
+
+    if not pending_stubs and not sig_mismatches:
+        return
+
+    print("Error: manual transformer function signatures do not match generated grammar metadata:", file=sys.stderr)
+    if sig_mismatches:
+        print("  Signature mismatches:", file=sys.stderr)
+        for gram_stem, rule_name, expected_sig in sig_mismatches:
+            print(f"    transform_{gram_stem}.cpp: Transform{rule_name} -- expected: {expected_sig}", file=sys.stderr)
+    if pending_stubs:
+        print("  Missing manual transform functions:", file=sys.stderr)
+        for gram_stem, rule_name, expected_sig in pending_stubs:
+            print(f"    transform_{gram_stem}.cpp: Transform{rule_name} -- expected: {expected_sig}", file=sys.stderr)
+    sys.exit(1)
 
 
 def load_matcher_overrides(grammar_types_file):
@@ -1203,6 +1246,7 @@ def main():
     grammar_types_file = type_dir / "grammar_types.yml"
     rule_types, excluded_rules = load_grammar_types(grammar_types_file)
     matcher_overrides = load_matcher_overrides(grammar_types_file)
+    validate_manual_transform_signatures(all_grammar_files, grammar_types_file, rule_types, excluded_rules)
 
     emitter = UseGramPreviewEmitter(rules, rule_types, excluded_rules, matcher_overrides, rule_config)
     emitter.validate_grammar_types()
