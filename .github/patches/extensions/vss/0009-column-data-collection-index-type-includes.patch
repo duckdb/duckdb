@@ -1,0 +1,21 @@
+--- a/src/include/hnsw/hnsw_index.hpp
++++ b/src/include/hnsw/hnsw_index.hpp
+@@ -16,6 +16,8 @@
+ #include "duckdb/storage/table/scan_state.hpp"
+ 
+ #include "usearch/index_dense.hpp"
++#include "duckdb/execution/index/index_type.hpp"
++#include "duckdb/common/types/column/column_data_collection.hpp"
+ 
+ namespace duckdb {
+ 
+--- a/src/hnsw/hnsw_index_physical_create.cpp
++++ b/src/hnsw/hnsw_index_physical_create.cpp
+@@ -15,6 +15,7 @@
+ #include "hnsw/hnsw_index.hpp"
+ 
+ #include "duckdb/parallel/base_pipeline_event.hpp"
++#include "duckdb/common/types/column/column_data_collection.hpp"
+ 
+ namespace duckdb {
+ 

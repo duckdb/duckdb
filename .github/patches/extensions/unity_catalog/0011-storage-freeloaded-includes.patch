@@ -1,0 +1,51 @@
+--- a/src/storage/uc_transaction.cpp
++++ b/src/storage/uc_transaction.cpp
+@@ -1,4 +1,5 @@
+ #include "storage/uc_transaction.hpp"
++#include "duckdb/transaction/transaction_manager.hpp"
+ #include "storage/unity_catalog.hpp"
+ #include "duckdb/parser/parsed_data/create_view_info.hpp"
+ #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+--- a/src/storage/unity_catalog.cpp
++++ b/src/storage/unity_catalog.cpp
+@@ -1,4 +1,6 @@
+ #include "storage/unity_catalog.hpp"
++#include "duckdb/planner/logical_operator.hpp"
++#include "duckdb/execution/physical_plan_generator.hpp"
+ #include "duckdb/main/attached_database.hpp"
+ #include "duckdb/main/database.hpp"
+ #include "duckdb/parser/parsed_data/attach_info.hpp"
+--- a/src/storage/uc_transaction_manager.cpp
++++ b/src/storage/uc_transaction_manager.cpp
+@@ -1,4 +1,5 @@
+ #include "storage/uc_transaction_manager.hpp"
++#include "duckdb/transaction/transaction_manager.hpp"
+ #include "duckdb/common/exception.hpp"
+ #include "storage/uc_schema_entry.hpp"
+ #include "duckdb/main/attached_database.hpp"
+--- a/src/storage/uc_table_entry.cpp
++++ b/src/storage/uc_table_entry.cpp
+@@ -1,4 +1,5 @@
+ #include "storage/unity_catalog.hpp"
++#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+ #include "storage/uc_schema_entry.hpp"
+ #include "storage/uc_table_entry.hpp"
+ #include "storage/uc_table_set.hpp"
+--- a/src/storage/uc_table_set.cpp
++++ b/src/storage/uc_table_set.cpp
+@@ -1,4 +1,7 @@
+ #include "uc_api.hpp"
++#include "duckdb/main/database_manager.hpp"
++#include "duckdb/parser/parsed_data/attach_info.hpp"
++#include "duckdb/transaction/transaction_manager.hpp"
+ #include "uc_utils.hpp"
+ 
+ #include "storage/unity_catalog.hpp"
+--- a/src/unity_catalog_extension.cpp
++++ b/src/unity_catalog_extension.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/common/exception.hpp"
++#include "duckdb/transaction/transaction_manager.hpp"
+ #include "duckdb/common/string_util.hpp"
+ #include "duckdb/function/scalar_function.hpp"
+ #include "duckdb/main/extension/extension_loader.hpp"
