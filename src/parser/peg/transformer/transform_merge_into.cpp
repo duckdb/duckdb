@@ -6,13 +6,15 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(
-    PEGTransformer &transformer, CommonTableExpressionMap with_clause, unique_ptr<BaseTableRef> target_opt_alias,
-    unique_ptr<TableRef> merge_into_using_clause, JoinQualifier join_qualifier,
-    vector<pair<MergeActionCondition, unique_ptr<MergeIntoAction>>> merge_match,
-    vector<unique_ptr<ParsedExpression>> returning_clause) {
+    PEGTransformer &transformer, optional<CommonTableExpressionMap> with_clause,
+    unique_ptr<BaseTableRef> target_opt_alias, unique_ptr<TableRef> merge_into_using_clause,
+    JoinQualifier join_qualifier, vector<pair<MergeActionCondition, unique_ptr<MergeIntoAction>>> merge_match,
+    optional<vector<unique_ptr<ParsedExpression>>> returning_clause) {
 	auto result = make_uniq<MergeIntoStatement>();
 	auto &node = *result->node;
-	node.cte_map = std::move(with_clause);
+	if (with_clause) {
+		node.cte_map = std::move(*with_clause);
+	}
 	node.target = std::move(target_opt_alias);
 	node.source = std::move(merge_into_using_clause);
 	if (join_qualifier.on_clause) {
@@ -38,7 +40,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(
 		}
 		node.actions[action_condition].push_back(std::move(action));
 	}
-	node.returning_list = std::move(returning_clause);
+	if (returning_clause) {
+		node.returning_list = std::move(*returning_clause);
+	}
 	return std::move(result);
 }
 
@@ -48,17 +52,20 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformMergeIntoUsingClause(PEGTra
 }
 
 pair<MergeActionCondition, unique_ptr<MergeIntoAction>>
-PEGTransformerFactory::TransformMatchedClause(PEGTransformer &transformer, unique_ptr<ParsedExpression> and_expression,
+PEGTransformerFactory::TransformMatchedClause(PEGTransformer &transformer,
+                                              optional<unique_ptr<ParsedExpression>> and_expression,
                                               unique_ptr<MergeIntoAction> matched_clause_action) {
-	matched_clause_action->condition = std::move(and_expression);
+	if (and_expression) {
+		matched_clause_action->condition = std::move(*and_expression);
+	}
 	return pair<MergeActionCondition, unique_ptr<MergeIntoAction>>(MergeActionCondition::WHEN_MATCHED,
 	                                                               std::move(matched_clause_action));
 }
 
 unique_ptr<MergeIntoAction>
 PEGTransformerFactory::TransformUpdateMatchClause(PEGTransformer &transformer,
-                                                  unique_ptr<MergeIntoAction> update_match_info) {
-	auto result = std::move(update_match_info);
+                                                  optional<unique_ptr<MergeIntoAction>> update_match_info) {
+	auto result = update_match_info ? std::move(*update_match_info) : nullptr;
 	if (!result) {
 		result = make_uniq<MergeIntoAction>();
 	}
@@ -90,8 +97,8 @@ unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformDeleteMatchClause(PE
 
 unique_ptr<MergeIntoAction>
 PEGTransformerFactory::TransformInsertMatchClause(PEGTransformer &transformer,
-                                                  unique_ptr<MergeIntoAction> insert_match_info) {
-	auto result = std::move(insert_match_info);
+                                                  optional<unique_ptr<MergeIntoAction>> insert_match_info) {
+	auto result = insert_match_info ? std::move(*insert_match_info) : nullptr;
 	if (!result) {
 		result = make_uniq<MergeIntoAction>();
 	}
@@ -105,19 +112,23 @@ unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformInsertDefaultValues(
 	return result;
 }
 
-unique_ptr<MergeIntoAction>
-PEGTransformerFactory::TransformInsertByNameOrPosition(PEGTransformer &transformer,
-                                                       const InsertColumnOrder &by_name_or_position) {
+unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformInsertByNameOrPosition(
+    PEGTransformer &transformer, const optional<InsertColumnOrder> &by_name_or_position, const bool &has_result) {
 	auto result = make_uniq<MergeIntoAction>();
-	result->column_order = by_name_or_position;
+	if (by_name_or_position) {
+		result->column_order = *by_name_or_position;
+	}
 	return result;
 }
 
 unique_ptr<MergeIntoAction>
-PEGTransformerFactory::TransformInsertValuesList(PEGTransformer &transformer, const vector<string> &insert_column_list,
+PEGTransformerFactory::TransformInsertValuesList(PEGTransformer &transformer,
+                                                 const optional<vector<string>> &insert_column_list,
                                                  vector<unique_ptr<ParsedExpression>> expression) {
 	auto result = make_uniq<MergeIntoAction>();
-	result->insert_columns = StringsToIdentifiers(insert_column_list);
+	if (insert_column_list) {
+		result->insert_columns = StringsToIdentifiers(*insert_column_list);
+	}
 	result->expressions = std::move(expression);
 	return result;
 }
@@ -128,12 +139,13 @@ unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformDoNothingMatchClause
 	return result;
 }
 
-unique_ptr<MergeIntoAction> PEGTransformerFactory::TransformErrorMatchClause(PEGTransformer &transformer,
-                                                                             unique_ptr<ParsedExpression> expression) {
+unique_ptr<MergeIntoAction>
+PEGTransformerFactory::TransformErrorMatchClause(PEGTransformer &transformer,
+                                                 optional<unique_ptr<ParsedExpression>> expression) {
 	auto result = make_uniq<MergeIntoAction>();
 	result->action_type = MergeActionType::MERGE_ERROR;
 	if (expression) {
-		result->expressions.push_back(std::move(expression));
+		result->expressions.push_back(std::move(*expression));
 	}
 	return result;
 }
@@ -144,10 +156,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAndExpression(PEGTr
 }
 
 pair<MergeActionCondition, unique_ptr<MergeIntoAction>> PEGTransformerFactory::TransformNotMatchedClause(
-    PEGTransformer &transformer, const MergeActionCondition &by_source_or_target,
-    unique_ptr<ParsedExpression> and_expression, unique_ptr<MergeIntoAction> matched_clause_action) {
-	matched_clause_action->condition = std::move(and_expression);
-	auto action_condition = by_source_or_target;
+    PEGTransformer &transformer, const optional<MergeActionCondition> &by_source_or_target,
+    optional<unique_ptr<ParsedExpression>> and_expression, unique_ptr<MergeIntoAction> matched_clause_action) {
+	if (and_expression) {
+		matched_clause_action->condition = std::move(*and_expression);
+	}
+	auto action_condition = by_source_or_target.value_or(MergeActionCondition::WHEN_MATCHED);
 	if (action_condition == MergeActionCondition::WHEN_MATCHED) {
 		action_condition = MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET;
 	}

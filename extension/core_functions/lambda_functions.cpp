@@ -7,7 +7,8 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
-
+#include "duckdb/common/enums/dialect_compatibility_mode.hpp"
+#include "duckdb/main/settings.hpp"
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -38,6 +39,11 @@ struct LambdaExecuteInfo {
 		// initialize the data chunks
 		input_chunk.InitializeEmpty(input_types);
 		lambda_chunk.Initialize(Allocator::DefaultAllocator(), result_types);
+		// Spark Compatibility Mode: zero-based index for lambdas
+		if (Settings::Get<DialectCompatibilityModeSetting>(context) == DialectCompatibilityMode::SPARK) {
+			// Spark's lambda index parameter is 0-based; default SQL is 1-based
+			index_offset = 0;
+		}
 	};
 
 	//! The expression executor that executes the lambda expression
@@ -48,6 +54,8 @@ struct LambdaExecuteInfo {
 	DataChunk lambda_chunk;
 	//! True, if this lambda expression expects an index vector in the input chunk
 	bool has_index;
+	//! Added to child_idx to form the value the lambda sees in its index parameter (1 by default).
+	idx_t index_offset = 1;
 };
 
 //! A helper struct with information that is specific to the list_filter function
@@ -323,7 +331,8 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 
 			// set the index vector
 			if (info.has_index) {
-				index_vector.SetValue(elem_cnt, Value::BIGINT(NumericCast<int64_t>(child_idx + 1)));
+				index_vector.SetValue(elem_cnt,
+				                      Value::BIGINT(NumericCast<int64_t>(child_idx + execute_info.index_offset)));
 			}
 
 			elem_cnt++;

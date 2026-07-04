@@ -31,8 +31,7 @@ void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &optio
 				for (const auto &partition : option.children) {
 					func_children.push_back(make_uniq<ColumnRefExpression>(Identifier(partition.GetValue<string>())));
 				}
-				auto row_func =
-				    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(func_children));
+				auto row_func = make_uniq<FunctionExpression>("row", std::move(func_children));
 				info->parsed_options[option.name.GetIdentifierName()] = std::move(row_func);
 			}
 		} else if (option.name == "HEADER" || option.name == "ESCAPE") {
@@ -70,7 +69,7 @@ void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &optio
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(
     PEGTransformer &transformer, unique_ptr<SelectStatement> select_statement_internal,
-    unique_ptr<ParsedExpression> copy_file_name, const vector<GenericCopyOption> &copy_options) {
+    unique_ptr<ParsedExpression> copy_file_name, const optional<vector<GenericCopyOption>> &copy_options) {
 	auto result = make_uniq<CopyStatement>();
 	auto info = make_uniq<CopyInfo>();
 	info->is_from = false;
@@ -80,8 +79,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(
 	} else {
 		info->file_path_expression = std::move(copy_file_name);
 	}
-	auto options = copy_options;
-	SetCopyOptions(info, options);
+	if (copy_options) {
+		auto options = *copy_options;
+		SetCopyOptions(info, options);
+	}
 	info->select_statement = std::move(select_statement_internal->node);
 	result->info = std::move(info);
 	return std::move(result);
@@ -124,19 +125,18 @@ string PEGTransformerFactory::ExtractFormat(const string &file_path) {
 	return format.substr(dot_pos + 1);
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransformer &transformer,
-                                                                   unique_ptr<BaseTableRef> base_table_name,
-                                                                   const vector<string> &insert_column_list,
-                                                                   const bool &from_or_to,
-                                                                   unique_ptr<ParsedExpression> copy_file_name,
-                                                                   const vector<GenericCopyOption> &copy_options) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformCopyTable(PEGTransformer &transformer, unique_ptr<BaseTableRef> base_table_name,
+                                          const optional<vector<string>> &insert_column_list, const bool &from_or_to,
+                                          unique_ptr<ParsedExpression> copy_file_name,
+                                          const optional<vector<GenericCopyOption>> &copy_options) {
 	auto result = make_uniq<CopyStatement>();
 	auto info = make_uniq<CopyInfo>();
 
-	info->table = base_table_name->table_name;
-	info->schema = base_table_name->schema_name;
-	info->catalog = base_table_name->catalog_name;
-	info->select_list = StringsToIdentifiers(insert_column_list);
+	info->SetQualifiedName(base_table_name->GetQualifiedName());
+	if (insert_column_list) {
+		info->select_list = StringsToIdentifiers(*insert_column_list);
+	}
 	info->is_from = from_or_to;
 	if (copy_file_name->GetExpressionClass() == ExpressionClass::CONSTANT) {
 		auto &const_expr = copy_file_name->Cast<ConstantExpression>();
@@ -146,8 +146,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 	}
 	info->format = ExtractFormat(info->file_path);
 
-	auto generic_options = copy_options;
-	SetCopyOptions(info, generic_options);
+	if (copy_options) {
+		auto generic_options = *copy_options;
+		SetCopyOptions(info, generic_options);
+	}
 
 	result->info = std::move(info);
 	return std::move(result);
@@ -188,15 +190,18 @@ Identifier PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &trans
 }
 
 vector<GenericCopyOption>
-PEGTransformerFactory::TransformCopyOptions(PEGTransformer &transformer,
+PEGTransformerFactory::TransformCopyOptions(PEGTransformer &transformer, const bool &has_result,
                                             const vector<GenericCopyOption> &copy_option_list) {
 	return copy_option_list;
 }
 
 vector<GenericCopyOption>
 PEGTransformerFactory::TransformSpecializedOptionList(PEGTransformer &transformer,
-                                                      const vector<GenericCopyOption> &specialized_option) {
-	return specialized_option;
+                                                      const optional<vector<GenericCopyOption>> &specialized_option) {
+	if (!specialized_option) {
+		return {};
+	}
+	return *specialized_option;
 }
 
 GenericCopyOption PEGTransformerFactory::TransformEncodingOption(PEGTransformer &transformer,
@@ -204,7 +209,8 @@ GenericCopyOption PEGTransformerFactory::TransformEncodingOption(PEGTransformer 
 	return GenericCopyOption("encoding", string_literal);
 }
 
-GenericCopyOption PEGTransformerFactory::TransformForceQuoteOption(PEGTransformer &transformer, const bool &force_quote,
+GenericCopyOption PEGTransformerFactory::TransformForceQuoteOption(PEGTransformer &transformer,
+                                                                   const optional<bool> &force_quote,
                                                                    const vector<string> &star_symbol_column_list) {
 	string func_name = force_quote ? "force_quote" : "quote";
 	auto result = GenericCopyOption();
@@ -219,13 +225,13 @@ GenericCopyOption PEGTransformerFactory::TransformForceQuoteOption(PEGTransforme
 	return result;
 }
 
-GenericCopyOption PEGTransformerFactory::TransformQuoteAsOption(PEGTransformer &transformer,
+GenericCopyOption PEGTransformerFactory::TransformQuoteAsOption(PEGTransformer &transformer, const bool &has_result,
                                                                 const string &string_literal) {
 	return GenericCopyOption("quote", string_literal);
 }
 
 GenericCopyOption PEGTransformerFactory::TransformForceNullOption(PEGTransformer &transformer,
-                                                                  const bool &force_not_null,
+                                                                  const optional<bool> &force_not_null,
                                                                   const vector<string> &column_list) {
 	auto result = GenericCopyOption();
 	result.name = force_not_null ? "force_not_null" : "force_null";
@@ -249,17 +255,17 @@ GenericCopyOption PEGTransformerFactory::TransformPartitionByOption(PEGTransform
 	return result;
 }
 
-GenericCopyOption PEGTransformerFactory::TransformNullAsOption(PEGTransformer &transformer,
+GenericCopyOption PEGTransformerFactory::TransformNullAsOption(PEGTransformer &transformer, const bool &has_result,
                                                                const string &string_literal) {
 	return GenericCopyOption("null", string_literal);
 }
 
-GenericCopyOption PEGTransformerFactory::TransformDelimiterAsOption(PEGTransformer &transformer,
+GenericCopyOption PEGTransformerFactory::TransformDelimiterAsOption(PEGTransformer &transformer, const bool &has_result,
                                                                     const string &string_literal) {
 	return GenericCopyOption("delimiter", string_literal);
 }
 
-GenericCopyOption PEGTransformerFactory::TransformEscapeAsOption(PEGTransformer &transformer,
+GenericCopyOption PEGTransformerFactory::TransformEscapeAsOption(PEGTransformer &transformer, const bool &has_result,
                                                                  const string &string_literal) {
 	return GenericCopyOption("escape", string_literal);
 }

@@ -62,7 +62,9 @@ class AtClause;
 class BoundAtClause;
 
 struct CreateInfo;
+struct CreateSchemaInfo;
 struct CreateTriggerInfo;
+struct QualifiedName;
 struct BoundCreateTableInfo;
 struct BoundOnConflictInfo;
 struct CommonTableExpressionInfo;
@@ -82,6 +84,7 @@ class IndexVector;
 
 enum class BindingMode : uint8_t {
 	STANDARD_BINDING,
+	PREPARE,
 	EXTRACT_NAMES,
 	EXTRACT_REPLACEMENT_SCANS,
 	EXTRACT_QUALIFIED_NAMES
@@ -261,6 +264,12 @@ public:
 	                     vector<Identifier> &result_names);
 
 	void SearchSchema(CreateInfo &info);
+	//! Resolve the leading component of a (possibly qualified) name into a catalog: if it names an attached database
+	//! it becomes the catalog, otherwise the default catalog is prepended. The result has the catalog as the first
+	//! schema-path element.
+	QualifiedName ResolveCatalog(ClientContext &context, const QualifiedName &name);
+	//! Resolve the (possibly nested) name of a CREATE SCHEMA statement into a canonical [catalog, parents..., schema]
+	void BindCreateSchema(CreateSchemaInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateTriggerInfo(CreateTriggerInfo &info);
@@ -310,6 +319,7 @@ public:
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, Identifier &catalog, Identifier &schema);
+	static void BindSchemaOrCatalog(ClientContext &context, QualifiedName &qualified_name);
 
 	void BindLogicalType(LogicalType &type);
 
@@ -472,6 +482,20 @@ private:
 	BoundStatement ExpandTriggers(QueryNode &node, TableCatalogEntry &table,
 	                              const vector<const_reference<TriggerCatalogEntry>> &before_triggers,
 	                              const vector<const_reference<TriggerCatalogEntry>> &after_triggers);
+	unique_ptr<BoundStatement> TryExpandRowTriggers(QueryNode &node,
+	                                                vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                                TableCatalogEntry &table, TriggerEventType event_type);
+	BoundStatement ExpandRowTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                 const TableCatalogEntry &table,
+	                                 const vector<const_reference<TriggerCatalogEntry>> &triggers,
+	                                 TriggerEventType event_type);
+	//! Registers a row scope binding (named "new" for INSERT, "old" for DELETE) so child binders resolve
+	//! NEW.col / OLD.col at depth=1. The returned binder is pushed onto GetActiveBinders().
+	//! The caller must keep it alive until the matching pop_back().
+	unique_ptr<ExpressionBinder> SetupRowScope(TableIndex table_index, const vector<Identifier> &col_names,
+	                                           const vector<LogicalType> &col_types, const string &scope_name);
+	//! Returns the correlated-column scope name for a given event type ("new" for INSERT, "old" for DELETE).
+	static string RowScopeName(TriggerEventType event_type);
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 	BoundStatement BindNode(MergeQueryNode &node);
@@ -565,6 +589,9 @@ private:
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(Identifier &catalog_name, Identifier &schema_name);
 	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, Identifier &catalog, Identifier &schema);
+	//! Resolve the (optional) schema/catalog of a qualified name in-place, overwriting it with the resolved name
+	void BindSchemaOrCatalog(QualifiedName &qualified_name);
+	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &qualified_name);
 	Identifier BindCatalog(const Identifier &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 

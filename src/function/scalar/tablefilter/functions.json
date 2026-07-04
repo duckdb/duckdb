@@ -24,14 +24,6 @@
         "type": "scalar_function"
     },
     {
-        "name": "__internal_tablefilter_perfect_hash_join",
-        "struct": "TableFilterPerfectHashJoinFun",
-        "parameters": "",
-        "description": "",
-        "example": "",
-        "type": "scalar_function"
-    },
-    {
         "name": "__internal_tablefilter_prefix_range",
         "struct": "TableFilterPrefixRangeFun",
         "parameters": "",

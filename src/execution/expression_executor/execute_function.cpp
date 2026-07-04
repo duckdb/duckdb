@@ -1,6 +1,8 @@
 #include "duckdb/common/enums/debug_verification_mode.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/expression_executor/bitmap_comparison.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -8,40 +10,20 @@ namespace duckdb {
 
 namespace {
 
-bool IsThinIntegerType(const LogicalType &type) {
-	switch (type.InternalType()) {
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::UINT64:
-		return true;
-	default:
-		return false;
-	}
-}
-
-bool IsSafeThinIntegerArithmetic(const BoundFunctionExpression &expr) {
+bool IsSafeAutoVecArithmetic(const BoundFunctionExpression &expr) {
 	auto name = expr.Function().GetName();
 	if (name != "+" && name != "-" && name != "*") {
 		return false;
 	}
-	if (!IsThinIntegerType(expr.GetReturnType())) {
+	if (!BitmapCmpTypeSupported(expr.GetReturnType().InternalType())) {
 		return false;
 	}
 	for (auto &child : expr.GetChildren()) {
-		if (!IsThinIntegerType(child->GetReturnType())) {
+		if (!BitmapCmpTypeSupported(child->GetReturnType().InternalType())) {
 			return false;
 		}
 	}
 	return true;
-}
-
-bool SameSelectionVector(const SelectionVector &left, const SelectionVector &right) {
-	return left.data() == right.data() && left.Capacity() == right.Capacity();
 }
 
 } // namespace
@@ -74,7 +56,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 			}
 			dictionary_input_indices.push_back(child_idx);
 		}
-		if (!eligible || (dictionary_input_indices.size() > 1 && !IsSafeThinIntegerArithmetic(bound_function))) {
+		if (!eligible || (dictionary_input_indices.size() > 1 && !IsSafeAutoVecArithmetic(bound_function))) {
 			dictionary_input_indices.clear();
 		}
 		break;
@@ -85,6 +67,11 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 }
 
 ExecuteFunctionState::~ExecuteFunctionState() {
+}
+
+bool ExecuteFunctionState::DictionaryExecutionPossible(DataChunk &args) const {
+	return !dictionary_input_indices.empty() &&
+	       args.data[dictionary_input_indices[0]].GetVectorType() == VectorType::DICTIONARY_VECTOR;
 }
 
 bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args,
@@ -129,7 +116,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 		if (dictionary_id.empty()) {
 			return false;
 		}
-		if (!SameSelectionVector(input_sel, DictionaryVector::SelVector(input))) {
+		if (!SelectionVector::SameSelection(input_sel, DictionaryVector::SelVector(input))) {
 			return false;
 		}
 		input_dictionary_id += "\n";
@@ -269,8 +256,8 @@ static void ExecuteConstantSelectFunction(const BoundFunctionExpression &expr, D
 
 void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, Vector &result) {
-	state->intermediate_chunk.Reset();
 	auto &arguments = state->intermediate_chunk;
+	arguments.Reset();
 	// if the input is constant and there function is non-volatile we only need to run it on one value
 	bool all_constant = true;
 	if (expr.Function().GetStability() == FunctionStability::VOLATILE) {
@@ -301,6 +288,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
 	auto dictionary_executed = expr.Function().HasFunctionCallback() && !all_constant &&
+	                           execute_function_state.DictionaryExecutionPossible(arguments) &&
 	                           execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
 	if (!dictionary_executed) {
 		if (expr.Function().HasFunctionCallback()) {
@@ -328,12 +316,23 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 
 idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
-                                 SelectionVector *false_sel) {
+                                 SelectionVector *false_sel, SelectionResult *bitmap_sel) {
 	if (!expr.Function().HasSelectCallback()) {
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
-	state->intermediate_chunk.Reset();
+#ifndef DUCKDB_SMALLER_BINARY
+	// Fast path: a `flat_ref <cmp> const` comparison over the identity selection produces a bitmap straight
+	// from the input chunk, skipping the per-node intermediate-vector machinery below. Any select caller
+	// (scan filters, PhysicalFilter, joins) benefits; non-matching shapes fall through.
+	if (bitmap_sel && chunk && !false_sel && (!sel || !sel->IsSet())) {
+		idx_t result;
+		if (TrySelectComparisonFromChunk(expr, *chunk, count, *bitmap_sel, result)) {
+			return result;
+		}
+	}
+#endif
 	auto &arguments = state->intermediate_chunk;
+	arguments.Reset();
 	bool all_constant = true;
 	if (expr.Function().GetStability() == FunctionStability::VOLATILE) {
 		all_constant = false;
@@ -373,11 +372,11 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 		return SelectBooleanResult(result, sel, count, true_sel, false_sel);
 	}
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
-	if (expr.Function().HasFunctionCallback()) {
+	// Only take the dictionary fast path when an input is actually a dictionary; otherwise we would allocate
+	// a throwaway boolean result and probe per vector for nothing (the common flat-column filter case).
+	if (expr.Function().HasFunctionCallback() && execute_function_state.DictionaryExecutionPossible(arguments)) {
 		Vector result(LogicalType::BOOLEAN);
-		auto dictionary_executed =
-		    execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
-		if (dictionary_executed) {
+		if (execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result)) {
 			return SelectBooleanResult(result, sel, count, true_sel, false_sel);
 		}
 	}

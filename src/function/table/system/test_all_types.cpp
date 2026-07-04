@@ -201,6 +201,13 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 
 	result.emplace_back(struct_type, "struct", min_struct_val, max_struct_val);
 
+	// Empty struct
+	child_list_t<Value> empty_struct_values;
+	child_list_t<LogicalType> empty_struct_types;
+	auto empty_struct_type = LogicalType::STRUCT(empty_struct_types);
+	auto empty_struct_val = Value::STRUCT(empty_struct_values);
+	result.emplace_back(empty_struct_type, "empty_struct", empty_struct_val, empty_struct_val);
+
 	// structs with lists
 	child_list_t<LogicalType> struct_list_type_list;
 	struct_list_type_list.emplace_back(make_pair("a", int_list_type));
@@ -363,6 +370,12 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	auto max_geometry = Value(big_geom_wkt).DefaultCastAs(LogicalType::GEOMETRY());
 
 	result.emplace_back(LogicalType::GEOMETRY(), "geometry", min_geometry, max_geometry);
+
+	// unnamed tuple - added last so existing column positions are unchanged
+	auto tuple_type = LogicalType::TUPLE({LogicalType::INTEGER, LogicalType::VARCHAR});
+	auto min_tuple_val = Value::TUPLE({Value(LogicalType::INTEGER), Value(LogicalType::VARCHAR)});
+	auto max_tuple_val = Value::TUPLE({Value::INTEGER(42), Value("🦆🦆🦆🦆🦆🦆")});
+	result.emplace_back(tuple_type, "tuple", min_tuple_val, max_tuple_val);
 
 	return result;
 }

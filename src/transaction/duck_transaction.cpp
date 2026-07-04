@@ -2,6 +2,8 @@
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/main/valid_checker.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
@@ -261,12 +263,14 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	}
 	CommitDropState drop_state(block_manager);
 	commit_info.drop_state = &drop_state;
+
+	ErrorData error_data;
 	try {
 		storage->Commit(commit_state.get());
 		undo_buffer.Commit(iterator_state, commit_info);
-		// if (DebugForceAbortCommit()) {
-		// 	throw InvalidInputException("Force revert");
-		// }
+		if (!db.IsSystem() && !db.IsTemporary() && Settings::Get<DebugForceCommitFailureSetting>(db.GetDatabase())) {
+			throw InvalidInputException("Forced commit failure (debug_force_commit_failure)");
+		}
 		if (commit_state) {
 			// if we have written to the WAL - flush after the commit has been successful
 			commit_state->FlushCommit();
@@ -274,13 +278,37 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 		drop_state.FinalizeCommit();
 		return ErrorData();
 	} catch (std::exception &ex) {
+		// Record the error and run RevertCommit() outside this try-catch: RevertCommit() iterates the
+		// undo buffer and may itself throw (e.g. Pin() failing under memory pressure), which would
+		// escape this noexcept function and trigger std::terminate.
+		error_data = ErrorData(ex);
+	}
+
+	try {
 		undo_buffer.RevertCommit(iterator_state, this->transaction_id);
+		if (!db.IsSystem() && !db.IsTemporary() &&
+		    Settings::Get<DebugForceCommitRevertFailureSetting>(db.GetDatabase())) {
+			throw IOException("Forced RevertCommit failure (debug_force_commit_revert_failure)");
+		}
 		if (commit_state) {
 			// if we have written to the WAL - truncate the WAL on failure
 			commit_state->RevertCommit();
 		}
-		return ErrorData(ex);
+	} catch (std::exception &ex) {
+		// If we fail to revert the commit, the database is left in an undefined state - invalidate it.
+		// Record both the original commit error and the revert error so the root cause stays visible.
+		ValidChecker::Invalidate(db.GetDatabase(),
+		                         "Failed to revert transaction commit, database is in an undefined state. "
+		                         "Original commit error: " +
+		                             error_data.RawMessage() + ". RevertCommit error: " + ErrorData(ex).RawMessage());
+	} catch (...) {
+		// last line of defense: this is a noexcept function, nothing may escape
+		ValidChecker::Invalidate(db.GetDatabase(),
+		                         "Failed to revert transaction commit (unknown error), database is in an "
+		                         "undefined state. Original commit error: " +
+		                             error_data.RawMessage());
 	}
+	return error_data;
 }
 
 ErrorData DuckTransaction::Rollback() {

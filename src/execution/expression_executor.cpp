@@ -1,5 +1,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 
+#include "duckdb/common/types/selection_result.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/execution_context.hpp"
@@ -8,6 +9,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/storage/table/variant_column_data.hpp"
 
 namespace duckdb {
 
@@ -107,6 +109,17 @@ idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &re
 	return SelectExpression(input, result_sel, nullptr, current_sel, current_count);
 }
 
+idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionResult &result_sel,
+                                           optional_ptr<SelectionVector> current_sel, idx_t current_count) {
+	D_ASSERT(expressions.size() == 1);
+	D_ASSERT(current_count <= input.size());
+	// the reused result may still hold last vector's bitmap: make it a valid set_index target once per call
+	result_sel.EnsureIndexWritable(current_count);
+	SetChunk(&input);
+	return Select(*expressions[0], states[0]->root_state.get(), current_sel.get(), current_count, nullptr, nullptr,
+	              &result_sel);
+}
+
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, optional_ptr<SelectionVector> true_sel,
                                            optional_ptr<SelectionVector> false_sel,
                                            optional_ptr<SelectionVector> current_sel, idx_t current_count) {
@@ -114,7 +127,7 @@ idx_t ExpressionExecutor::SelectExpression(DataChunk &input, optional_ptr<Select
 	D_ASSERT(current_count <= input.size());
 	SetChunk(&input);
 	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), current_sel.get(), current_count,
-	                               true_sel.get(), false_sel.get());
+	                               true_sel.get(), false_sel.get(), nullptr);
 	return selected_tuples;
 }
 
@@ -167,10 +180,8 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 	if (debug_vector_verification == DebugVectorVerification::VARIANT_VECTOR) {
 		if (TypeVisitor::Contains(vector.GetType(), [](const LogicalType &type) {
 			    if (type.IsJSONType() || type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::UNION ||
-			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::TYPE) {
-				    return true;
-			    }
-			    if (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type)) {
+			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::TYPE ||
+			        type.id() == LogicalTypeId::TUPLE) {
 				    return true;
 			    }
 			    return false;
@@ -207,6 +218,16 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		}
 		vector.Reference(result);
 		vector.Verify();
+	}
+	if (debug_vector_verification == DebugVectorVerification::SHREDDED_VECTOR) {
+		//! Shred (top-level) VARIANT vectors based on the schema of their first value, so downstream
+		//! operators are exercised against shredded (and partially-shredded) variant vectors.
+		//! A SHREDDED_VECTOR is never a constant vector - skip constant vectors so we don't break callers
+		//! that require a constant result (e.g. scalar expression folding in EvaluateScalar).
+		if (vector.GetType().id() == LogicalTypeId::VARIANT && vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			VariantColumnData::DebugShred(vector, count);
+			vector.Verify();
+		}
 	}
 }
 
@@ -294,18 +315,24 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 }
 
 idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
-                                 idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+                                 idx_t count, SelectionVector *true_sel, SelectionVector *false_sel,
+                                 SelectionResult *bitmap_sel) {
 	if (count == 0) {
 		return 0;
+	}
+	// a bitmap-capable output is passed only as bitmap_sel; generic writers use its flat index view
+	D_ASSERT(!bitmap_sel || (!true_sel && !false_sel));
+	if (bitmap_sel) {
+		true_sel = &bitmap_sel->Flattened();
 	}
 	D_ASSERT(true_sel || false_sel);
 	D_ASSERT(expr.GetReturnType().id() == LogicalTypeId::BOOLEAN);
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_CONJUNCTION:
-		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel);
+		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel, bitmap_sel);
 	case ExpressionClass::BOUND_FUNCTION:
-		return Select(expr.Cast<BoundFunctionExpression>(), state, sel, count, true_sel,
-		              false_sel); // NOLINT: c-style cast
+		return Select(expr.Cast<BoundFunctionExpression>(), state, sel, count, true_sel, false_sel,
+		              bitmap_sel); // NOLINT: c-style cast
 	default:
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}

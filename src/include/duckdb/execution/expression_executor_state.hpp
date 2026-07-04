@@ -69,6 +69,9 @@ public:
 
 	bool TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
 	                                    Vector &result);
+	//! Cheap pre-check: the dictionary fast path can only fire when a tracked input is actually a dictionary
+	//! vector. Lets callers skip allocating a result and entering the slow check on the common flat path.
+	bool DictionaryExecutionPossible(DataChunk &args) const;
 
 	void ResetDictionaryStates() override;
 

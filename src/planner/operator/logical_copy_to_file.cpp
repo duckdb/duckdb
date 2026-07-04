@@ -95,7 +95,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto name = deserializer.ReadProperty<string>(210, "function_name");
 
 	auto &func_catalog_entry = Catalog::GetEntry<CopyFunctionCatalogEntry>(
-	    context, Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier(name));
+	    context, QualifiedName(Identifier::SystemCatalog(), Identifier::DefaultSchema(), Identifier(name)));
 	if (func_catalog_entry.type != CatalogType::COPY_FUNCTION_ENTRY) {
 		throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
 	}

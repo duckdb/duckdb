@@ -12,10 +12,17 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
 namespace duckdb {
 
 template <class T>
 struct CountZeros {};
+
+template <class T>
+struct CountOnes {};
 
 template <>
 struct CountZeros<uint64_t> {
@@ -72,6 +79,33 @@ struct CountZeros<uint32_t> {
 	}
 	inline static idx_t Trailing(uint32_t value) {
 		return CountZeros<uint64_t>::Trailing(static_cast<uint64_t>(value));
+	}
+};
+
+template <>
+struct CountOnes<uint64_t> {
+	inline static idx_t Count(uint64_t value) {
+#if defined(_MSC_VER)
+#if defined(_M_X64)
+		return idx_t(__popcnt64(value));
+#else
+		return idx_t(__popcnt(static_cast<unsigned int>(value)) +
+		             __popcnt(static_cast<unsigned int>(value >> 32)));
+#endif
+#else
+		return idx_t(__builtin_popcountll(static_cast<unsigned long long>(value)));
+#endif
+	}
+};
+
+template <>
+struct CountOnes<uint32_t> {
+	inline static idx_t Count(uint32_t value) {
+#if defined(_MSC_VER)
+		return idx_t(__popcnt(value));
+#else
+		return idx_t(__builtin_popcount(value));
+#endif
 	}
 };
 

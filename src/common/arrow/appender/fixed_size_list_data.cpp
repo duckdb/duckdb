@@ -24,7 +24,7 @@ void ArrowFixedSizeListData::Append(ArrowAppendData &append_data, const Vector &
 	auto array_size = ArrayType::GetSize(input.GetType());
 	auto &child_vector = ArrayVector::GetChild(input);
 	auto &child_data = *append_data.child_data[0];
-	child_data.append_vector(child_data, child_vector, from * array_size, to * array_size, size * array_size);
+	child_data.AppendChild(child_vector, from * array_size, to * array_size, size * array_size);
 	append_data.row_count += size;
 }
 

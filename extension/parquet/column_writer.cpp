@@ -354,7 +354,10 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		                                      std::move(child_writers));
 	}
 
-	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
+	if (StructType::IsStruct(type.id()) || type.id() == LogicalTypeId::UNION) {
+		if (StructType::IsStruct(type.id()) && StructType::GetChildTypes(type).empty()) {
+			throw InvalidInputException("Empty STRUCT columns are not supported in the Parquet format");
+		}
 		auto struct_column =
 		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
 		if (field_id && field_id->set) {
@@ -362,12 +365,13 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		}
 
 		// construct the child schemas recursively
-		auto &child_types = StructType::GetChildTypes(type);
+		// TUPLE children have empty names - NamedChildren synthesizes positional ones for a valid Parquet schema
+		auto child_types = TupleType::NamedChildren(type);
 		vector<unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(child_types.size());
-		for (auto &entry : child_types) {
-			auto &child_type = entry.second;
-			auto &child_name = entry.first;
+		for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
+			auto &child_name = child_types[child_idx].first;
+			auto &child_type = child_types[child_idx].second;
 			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name,
 			                                              allow_geometry, child_field_ids, shredding_type, max_repeat,
 			                                              max_define + 1, true));

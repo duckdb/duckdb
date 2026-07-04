@@ -156,17 +156,6 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 		}
 		return TryExpressionFiltersNullValues(*data.child_filter_expr, filters_nulls, filters_valid_values);
 	}
-	if (function_name == PerfectHashJoinScalarFun::NAME) {
-		if (!func_expr->BindInfo()) {
-			return true;
-		}
-		auto &data = func_expr->BindInfo()->Cast<PerfectHashJoinFunctionData>();
-		if (!data.executor) {
-			return true;
-		}
-		filters_nulls = true;
-		return true;
-	}
 	if (function_name == PrefixRangeScalarFun::NAME) {
 		if (!func_expr->BindInfo()) {
 			return true;

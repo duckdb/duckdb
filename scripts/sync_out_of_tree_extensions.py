@@ -204,7 +204,8 @@ def export_commits_as_patches(name, ext_dir, resolved_git_tag, patch_dir):
     status = run_cmd(['git', 'status', '--porcelain'], cwd=ext_dir)
     if status.stdout.strip():
         raise ExtensionNotCleanError(
-            f"Extension '{name}' has uncommitted changes; cannot export patches:\n" f"{status.stdout.rstrip()}"
+            f"Extension '{name}' has uncommitted changes; cannot export patches, please commit or discard and try again:\n"
+            f"{status.stdout.rstrip()}"
         )
 
     log = run_cmd(['git', 'log', '--format=%H %s', f'{resolved_git_tag}..HEAD'], cwd=ext_dir)

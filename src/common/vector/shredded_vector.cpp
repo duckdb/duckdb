@@ -35,6 +35,10 @@ string ShreddedVectorBuffer::ToString(const LogicalType &type, idx_t count) cons
 	return "Shredded: " + shredded.ToString() + ", Unshredded: " + unshredded.ToString();
 }
 
+void ShreddedVectorBuffer::SetVectorType(VectorType new_vector_type) {
+	throw InternalException("ShreddedVectorBuffer::SetVectorType is not implemented and shouldn't be reached");
+}
+
 Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	// FIXME: this is extremely inefficient
 	auto &shredded = StructVector::GetEntries(*shredded_data)[1];
@@ -53,6 +57,20 @@ Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 	Vector result_vec(LogicalType::VARIANT(), 1);
 	VariantUtils::UnshredVariantData(new_shredded, result_vec, 1);
 	return result_vec.GetValue(0);
+}
+
+buffer_ptr<VectorBuffer> ShreddedVectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
+	// propagate the slice into the shredded data and emit a new shredded vector
+	auto count = count_t(end - offset);
+	Vector sliced(*shredded_data, offset, end);
+	return make_buffer<ShreddedVectorBuffer>(sliced, count);
+}
+
+buffer_ptr<VectorBuffer> ShreddedVectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                             idx_t count) {
+	// propagate the slice into the shredded data and emit a new shredded vector
+	Vector sliced(*shredded_data, sel, count);
+	return make_buffer<ShreddedVectorBuffer>(sliced, count_t(count));
 }
 
 buffer_ptr<VectorBuffer> ShreddedVectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,

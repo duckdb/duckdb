@@ -18,6 +18,12 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 	// this should never happen if the binder below is sane
 	D_ASSERT(args.ColumnCount() == StructType::GetChildTypes(info.stype).size());
 #endif
+	if (args.ColumnCount() == 0) {
+		// empty struct: no children to reference, the value is a single non-null constant
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, false);
+		return;
+	}
 	bool all_const = true;
 	auto &child_entries = StructVector::GetEntries(result);
 	idx_t children_size = 0;
@@ -45,9 +51,7 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 	identifier_set_t name_collision_set;
 
 	// collect names and deconflict, construct return type
-	if (arguments.empty()) {
-		throw InvalidInputException("Can't pack nothing into a struct");
-	}
+	// note: zero arguments is allowed, producing an empty struct
 	child_list_t<LogicalType> struct_children;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &child = arguments[i];
@@ -66,7 +70,12 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 	}
 
 	// this is more for completeness reasons
-	bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
+	// row() produces an unnamed TUPLE, struct_pack() produces a named STRUCT
+	if (IS_STRUCT_PACK) {
+		bound_function.SetReturnType(LogicalType::STRUCT(std::move(struct_children)));
+	} else {
+		bound_function.SetReturnType(LogicalType::TUPLE(std::move(struct_children)));
+	}
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
@@ -82,7 +91,8 @@ static unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, Functi
 
 template <bool IS_STRUCT_PACK>
 static ScalarFunction GetStructPackFunction() {
-	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {}, LogicalTypeId::STRUCT, StructPackFunction,
+	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {},
+	                   IS_STRUCT_PACK ? LogicalTypeId::STRUCT : LogicalTypeId::TUPLE, StructPackFunction,
 	                   StructPackBind<IS_STRUCT_PACK>, StructPackStats);
 	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);

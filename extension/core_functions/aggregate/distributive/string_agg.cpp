@@ -13,6 +13,8 @@ namespace duckdb {
 namespace {
 
 struct StringAggState {
+	using STATE_TYPE = OptionalStateType<StateString<StateReturnType>>;
+
 	string_t value;
 	bool is_set;
 	uint32_t alloc_size;
@@ -158,6 +160,20 @@ unique_ptr<FunctionData> StringAggDeserialize(Deserializer &deserializer, BoundA
 	return make_uniq<StringAggBindData>(std::move(sep));
 }
 
+AggregateStateLayout StringAggStateType(AggregateLayoutInput &input) {
+	auto &function = input.function;
+	using ST = StringAggState::STATE_TYPE;
+	AggregateStateLayout layout;
+	layout.type = AggregateFunction::BuildStateLogical<ST, StringAggState>(function);
+	layout.total_state_size = AlignValue<idx_t>(sizeof(StringAggState));
+	layout.field = BuildStateField<ST>();
+	if (function.GetOriginalArguments().size() == 2) {
+		// record the value of the separator if explicitly provided
+		layout.constant_parameters.emplace(1, Value(input.bind_data->Cast<StringAggBindData>().sep));
+	}
+	return layout;
+}
+
 } // namespace
 
 AggregateFunctionSet StringAggFun::GetFunctions() {
@@ -172,6 +188,7 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), StringAggBind);
 	string_agg_param.SetSerializeCallback(StringAggSerialize);
 	string_agg_param.SetDeserializeCallback(StringAggDeserialize);
+	string_agg_param.SetStructStateExport(StringAggStateType);
 	string_agg.AddFunction(string_agg_param);
 	string_agg_param.GetSignature().AddParameter(LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);

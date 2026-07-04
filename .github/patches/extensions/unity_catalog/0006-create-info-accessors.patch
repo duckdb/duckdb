@@ -1,0 +1,65 @@
+diff --git a/src/include/storage/uc_table_entry.hpp b/src/include/storage/uc_table_entry.hpp
+index 7332a88..bf78745 100644
+--- a/src/include/storage/uc_table_entry.hpp
++++ b/src/include/storage/uc_table_entry.hpp
+@@ -29,7 +29,7 @@ struct UCTableInfo {
+ 	}
+ 
+ 	const string &GetTableName() const {
+-		return create_info->table.GetIdentifierName();
++		return create_info->GetTableName().GetIdentifierName();
+ 	}
+ 
+ 	unique_ptr<CreateTableInfo> create_info;
+diff --git a/src/storage/uc_schema_entry.cpp b/src/storage/uc_schema_entry.cpp
+index 2a1e54a..6f6fbd9 100644
+--- a/src/storage/uc_schema_entry.cpp
++++ b/src/storage/uc_schema_entry.cpp
+@@ -41,7 +41,7 @@ UCTransaction &GetUCTransaction(CatalogTransaction transaction) {
+ 
+ optional_ptr<CatalogEntry> UCSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
+ 	auto &base_info = info.Base();
+-	auto table_name = base_info.table;
++	auto table_name = base_info.GetTableName();
+ 	if (base_info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+ 		throw NotImplementedException("REPLACE ON CONFLICT in CreateTable");
+ 	}
+diff --git a/src/storage/uc_schema_set.cpp b/src/storage/uc_schema_set.cpp
+index e67d5a1..70bb408 100644
+--- a/src/storage/uc_schema_set.cpp
++++ b/src/storage/uc_schema_set.cpp
+@@ -22,7 +22,7 @@ void UCSchemaSet::LoadEntries(ClientContext &context) {
+ 
+ 	for (const auto &schema : tables) {
+ 		CreateSchemaInfo info;
+-		info.schema = Identifier(schema.schema_name);
++		info.SchemaMutable() = Identifier(schema.schema_name);
+ 		info.internal = IsInternalTable(schema.catalog_name, schema.schema_name);
+ 		auto schema_entry = make_uniq<UCSchemaEntry>(catalog, info);
+ 		schema_entry->schema_data = make_uniq<UCAPISchema>(schema);
+diff --git a/src/storage/uc_table_set.cpp b/src/storage/uc_table_set.cpp
+index 911261f..328c9ba 100644
+--- a/src/storage/uc_table_set.cpp
++++ b/src/storage/uc_table_set.cpp
+@@ -269,7 +269,7 @@ void UCTableSet::LoadEntries(ClientContext &context, const lock_guard<mutex> &_e
+ 		                          std::forward_as_tuple(catalog, schema));
+ 		auto &table_info = res.first->second;
+ 
+-		info.table = Identifier(table.name);
++		info.SetTableName(Identifier(table.name));
+ 		auto table_entry = make_uniq<UCTableEntry>(catalog, schema, table_info, info);
+ 
+ 		table_info.table_data = make_uniq<UCAPITable>(table);
+diff --git a/src/storage/unity_catalog.cpp b/src/storage/unity_catalog.cpp
+index f4929ee..df29575 100644
+--- a/src/storage/unity_catalog.cpp
++++ b/src/storage/unity_catalog.cpp
+@@ -28,7 +28,7 @@ optional_ptr<CatalogEntry> UnityCatalog::CreateSchema(CatalogTransaction transac
+ 	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+ 		DropInfo try_drop;
+ 		try_drop.type = CatalogType::SCHEMA_ENTRY;
+-		try_drop.NameMutable() = info.schema;
++		try_drop.NameMutable() = info.Schema();
+ 		try_drop.if_not_found = OnEntryNotFound::RETURN_NULL;
+ 		try_drop.cascade = false;
+ 		schemas.DropEntry(transaction.GetContext(), try_drop);

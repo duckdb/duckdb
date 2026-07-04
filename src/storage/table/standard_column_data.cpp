@@ -74,7 +74,8 @@ idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_
 }
 
 void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                                ScanFilterResult &acc, const TableFilter &filter, TableFilterState &filter_state) {
+                                SelectionResult &sel, idx_t &count, const TableFilter &filter,
+                                TableFilterState &filter_state) {
 	// check if we can do a specialized select
 	// the compression functions need to support this
 	auto compression = GetCompressionFunction();
@@ -87,11 +88,13 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	bool verify_fetch_row = state.scan_options && state.scan_options->force_fetch_row;
 	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row) {
 		// we are not scanning an entire vector - this can have several causes (updates, etc)
-		ColumnData::Filter(transaction, vector_index, state, result, acc, filter, filter_state);
+		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
 		return;
 	}
-	FilterVector(state, result, target_count, acc, filter, filter_state);
-	validity->FilterVector(state.child_states[0], result, target_count, acc, filter, filter_state);
+	// the compression filter callbacks index the running selection per row: use the materialized view
+	auto &flat_sel = sel.Flattened();
+	FilterVector(state, result, target_count, flat_sel, count, filter, filter_state);
+	validity->FilterVector(state.child_states[0], result, target_count, flat_sel, count, filter, filter_state);
 }
 
 void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

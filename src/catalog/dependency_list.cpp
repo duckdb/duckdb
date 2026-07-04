@@ -5,17 +5,19 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 namespace duckdb {
 
 uint64_t LogicalDependencyHashFunction::operator()(const LogicalDependency &a) const {
 	auto &name = a.entry.name;
-	auto &schema = a.entry.schema;
 	auto &type = a.entry.type;
 	auto &catalog = a.catalog;
 
 	hash_t hash = duckdb::Hash(name.c_str());
-	hash = CombineHash(hash, duckdb::Hash(schema.c_str()));
+	for (auto &schema : a.entry.schema_path) {
+		hash = CombineHash(hash, duckdb::Hash(schema.c_str()));
+	}
 	hash = CombineHash(hash, duckdb::Hash(catalog.c_str()));
 	hash = CombineHash(hash, duckdb::Hash<uint8_t>(static_cast<uint8_t>(type)));
 	return hash;
@@ -28,7 +30,7 @@ bool LogicalDependencyEquality::operator()(const LogicalDependency &a, const Log
 	if (a.entry.name != b.entry.name) {
 		return false;
 	}
-	if (a.entry.schema != b.entry.schema) {
+	if (a.entry.schema_path != b.entry.schema_path) {
 		return false;
 	}
 	if (a.catalog != b.catalog) {
@@ -40,13 +42,6 @@ bool LogicalDependencyEquality::operator()(const LogicalDependency &a, const Log
 LogicalDependency::LogicalDependency() : entry(), catalog() {
 }
 
-static string GetSchema(CatalogEntry &entry) {
-	if (entry.type == CatalogType::SCHEMA_ENTRY) {
-		return entry.name.GetIdentifierName();
-	}
-	return entry.ParentSchema().name.GetIdentifierName();
-}
-
 LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 	catalog = Identifier::InvalidCatalog();
 	if (entry.type == CatalogType::DEPENDENCY_ENTRY) {
@@ -54,7 +49,9 @@ LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 
 		this->entry = dependency_entry.EntryInfo();
 	} else {
-		this->entry.schema = Identifier(GetSchema(entry));
+		// use the same schema path as the dependency manager (the containing schema chain) so subjects and dependents
+		// resolve to the same mangled name
+		this->entry.schema_path = DependencyManager::GetSchemaPath(entry);
 		this->entry.name = entry.name;
 		this->entry.type = entry.type;
 		catalog = entry.ParentCatalog().GetName();
@@ -69,7 +66,8 @@ LogicalDependency::LogicalDependency(optional_ptr<Catalog> catalog_p, CatalogEnt
 }
 
 bool LogicalDependency::operator==(const LogicalDependency &other) const {
-	return other.entry.name == entry.name && other.entry.schema == entry.schema && other.entry.type == entry.type;
+	return other.entry.name == entry.name && other.entry.schema_path == entry.schema_path &&
+	       other.entry.type == entry.type;
 }
 
 void LogicalDependencyList::AddDependency(CatalogEntry &entry) {

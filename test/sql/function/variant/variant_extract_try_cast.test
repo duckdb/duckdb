@@ -22,11 +22,11 @@ restart
 query I
 from tbl order by all
 ----
-{'a_number': NULL, 'almost_a_number': 24c}
-{'a_number': NULL, 'almost_a_number': 25a6}
 {'a_number': 12, 'almost_a_number': 12}
 {'a_number': 16, 'almost_a_number': 16}
 {'a_number': 24, 'almost_a_number': 24}
+{'a_number': NULL, 'almost_a_number': 24c}
+{'a_number': NULL, 'almost_a_number': 25a6}
 
 query I
 select col.almost_a_number from tbl order by all

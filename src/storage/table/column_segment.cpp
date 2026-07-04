@@ -406,14 +406,14 @@ static idx_t TemplatedNullSelection(UnifiedVectorFormat &vdata, SelectionVector 
 	}
 }
 
-static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vector, ExpressionFilterState &state,
+static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vector, ExpressionFilterState &state,
                                               idx_t scan_count, idx_t &approved_tuple_count) {
 	if (approved_tuple_count == 0) {
 		return 0;
 	}
 	D_ASSERT(state.executor);
-	SelectionVector result_sel(approved_tuple_count);
 	if (scan_count > STANDARD_VECTOR_SIZE) {
+		SelectionVector result_sel(approved_tuple_count);
 		// scan count is > vector size - split up the vector into multiple chunks
 		idx_t offset = 0;
 		idx_t result_offset = 0;
@@ -427,8 +427,9 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 
 			// construct the relevant selection vector for the current chunk (offset ... offset + chunk_count)
 			idx_t current_count = 0;
+			auto &flat_sel = sel.Flattened();
 			for (; current_sel_offset < approved_tuple_count; current_sel_offset++) {
-				auto sel_index = sel.get_index(current_sel_offset);
+				auto sel_index = flat_sel.get_index(current_sel_offset);
 				if (sel_index >= chunk_end) {
 					// exhausted the chunk
 					break;
@@ -454,19 +455,50 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 			offset += chunk_count;
 		}
 		approved_tuple_count = result_offset;
-	} else {
-		// standard case: we can handle everything at once - run the expression once
-		DataChunk chunk;
-		chunk.data.emplace_back(Vector::Ref(vector));
-		chunk.SetChildCardinality(scan_count);
-		SelectionVector identity_sel;
-		optional_ptr<SelectionVector> current_sel = &sel;
-		if (!sel.IsSet()) {
-			identity_sel = SelectionVector::Incremental(approved_tuple_count);
-			current_sel = &identity_sel;
-		}
-		approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, current_sel, approved_tuple_count);
+		sel.Initialize(result_sel);
+		return approved_tuple_count;
 	}
+
+	// standard case: run the expression once over the whole vector (the input chunk lives in the filter state)
+	auto &chunk = state.filter_chunk;
+	if (chunk.data.empty()) {
+		chunk.data.emplace_back(Vector::Ref(vector));
+	} else {
+		chunk.data[0].Reference(vector);
+	}
+	chunk.SetChildCardinality(scan_count);
+	// nested evaluation slices per child and needs an explicit selection, so nested columns always narrow below
+	const bool nested = vector.GetType().IsNested();
+	const bool identity_all = !sel.IsSet() && approved_tuple_count == scan_count;
+
+	// Bitmap fast path: evaluate the whole flat vector with no selection so the comparison Select can emit a
+	// bitmap, then AND it into the running selection (an index selection on either side is promoted first).
+	// A non-bitmap result is still used - never re-evaluated - but clears bitmap_capable for later vectors.
+	if (!nested && (identity_all || (state.bitmap_capable && sel.IsSet()))) {
+		// results land in the state-owned scratch; `sel` shares it, so its buffers are reused across vectors
+		auto &new_sel = state.scratch;
+		idx_t matched = state.executor->SelectExpression(chunk, new_sel, nullptr, scan_count);
+		if (!new_sel.IsBitmap()) {
+			state.bitmap_capable = false;
+		}
+		if (identity_all) {
+			approved_tuple_count = matched;
+		} else {
+			approved_tuple_count = new_sel.Intersect(sel, matched, approved_tuple_count, scan_count);
+		}
+		sel.Initialize(new_sel);
+		return approved_tuple_count;
+	}
+	SelectionVector result_sel(approved_tuple_count);
+	// the narrowing path indexes the running selection per row: use the materialized view
+	// (nullptr == identity, only valid when the candidate rows span the whole scanned vector)
+	optional_ptr<SelectionVector> current_sel = sel.IsSet() ? &sel.Flattened() : nullptr;
+	SelectionVector identity_sel;
+	if (!sel.IsSet() && (nested || approved_tuple_count != scan_count)) {
+		identity_sel = SelectionVector::Incremental(approved_tuple_count);
+		current_sel = &identity_sel;
+	}
+	approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, current_sel, approved_tuple_count);
 	sel.Initialize(result_sel);
 	return approved_tuple_count;
 }
@@ -475,8 +507,23 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
                                      const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
                                      idx_t &approved_tuple_count) {
 	(void)vdata;
+	(void)filter;
+	return FilterSelection(sel, vector, filter_state, scan_count, approved_tuple_count);
+}
+
+idx_t ColumnSegment::FilterSelection(SelectionResult &sel, Vector &vector, TableFilterState &filter_state,
+                                     idx_t scan_count, idx_t &approved_tuple_count) {
 	auto &state = filter_state.Cast<ExpressionFilterState>();
 	return ExecuteExpressionFilterSelection(sel, vector, state, scan_count, approved_tuple_count);
+}
+
+idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, TableFilterState &filter_state,
+                                     idx_t scan_count, idx_t &approved_tuple_count) {
+	SelectionResult result_sel;
+	result_sel.Initialize(sel);
+	auto result = FilterSelection(result_sel, vector, filter_state, scan_count, approved_tuple_count);
+	sel.Initialize(result_sel.Flattened());
+	return result;
 }
 
 const CompressionFunction &ColumnSegment::GetCompressionFunction() {

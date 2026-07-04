@@ -41,3 +41,8 @@ statement error
 PRAGMA debug_checkpoint_abort='unknown'
 ----
 <REGEX>:.*Not implemented Error.*unrecognized value.*
+
+statement error
+pragma explain_output =null;
+----
+Invalid Input Error: explain_output setting cannot be NULL

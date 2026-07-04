@@ -172,7 +172,7 @@ interval_t ICUCalendarSub::Operation(timestamp_tz_t end_date, timestamp_tz_t sta
 	auto sec_diff = SubtractField(calendar, UCAL_SECOND, end_date);
 	auto ms_diff = SubtractField(calendar, UCAL_MILLISECOND, end_date);
 	auto micros_diff = UnsafeNumericCast<int32_t>(ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros));
-	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).micros;
+	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).value;
 
 	return result;
 }
@@ -211,7 +211,7 @@ interval_t ICUCalendarAge::Operation(timestamp_tz_t end_date, timestamp_tz_t sta
 	auto sec_diff = SubtractField(calendar, UCAL_SECOND, end_date);
 	auto ms_diff = SubtractField(calendar, UCAL_MILLISECOND, end_date);
 	auto micros_diff = UnsafeNumericCast<int32_t>(ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros));
-	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).micros;
+	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).value;
 
 	return result;
 }

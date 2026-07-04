@@ -169,7 +169,7 @@ static unique_ptr<FunctionData> ListZipBind(BindScalarFunctionInput &input) {
 			throw BinderException("Parameter type needs to be List");
 		}
 	}
-	bound_function.SetReturnType(LogicalType::LIST(LogicalType::STRUCT(struct_children)));
+	bound_function.SetReturnType(LogicalType::LIST(LogicalType::TUPLE(struct_children)));
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 

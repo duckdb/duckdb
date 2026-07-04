@@ -688,6 +688,24 @@ void SQLLogicTestRunner::ConfigureDefaultInMemoryTemporaryDirectory(const string
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
+	SQLLogicParser parser;
+	bool success = parser.OpenFile(script);
+	if (!success) {
+		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
+	}
+	ExecuteInternal(parser, script);
+}
+
+void SQLLogicTestRunner::ExecuteStream(std::istream &input, const string &source_name) {
+	SQLLogicParser parser;
+	bool success = parser.OpenStream(input, source_name);
+	if (!success) {
+		FAIL("Could not read sqllogictest stream '" + source_name + "'");
+	}
+	ExecuteInternal(parser, source_name);
+}
+
+void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &script) {
 	auto &test_config = TestConfiguration::Get();
 	if (test_config.ShouldSkipTest(script)) {
 		SkipTest("config skip_tests");
@@ -695,7 +713,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	}
 
 	file_name = script;
-	SQLLogicParser parser;
 	idx_t skip_level = 0;
 	bool test_expr_executed = false;
 	bool file_tags_expr_seen = false;
@@ -726,12 +743,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 	// initialize the database with the default dbpath
 	LoadDatabase(dbpath, true);
-
-	// open the file and parse it
-	bool success = parser.OpenFile(script);
-	if (!success) {
-		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
-	}
 
 	if (StringUtil::EndsWith(script, ".test_slow")) {
 		file_tags.emplace_back("slow");
@@ -1090,10 +1101,12 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			auto &test_config = TestConfiguration::Get();
 			auto env_var = token.parameters[0];
-			auto test_env_result = test_config.GetTestEnv(env_var, "");
+			auto test_env_defined = test_config.HasTestEnv(env_var);
+			string env_actual_value;
 			const char *env_actual = nullptr;
-			if (!test_env_result.empty()) {
-				env_actual = test_env_result.c_str();
+			if (test_env_defined) {
+				env_actual_value = test_config.GetTestEnv(env_var, "");
+				env_actual = env_actual_value.c_str();
 			} else {
 				env_actual = std::getenv(env_var.c_str());
 			}
@@ -1123,7 +1136,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				file_tags.emplace_back(StringUtil::Format("env[%s]=%s", token.parameters[0], token.parameters[1]));
 			}
 
-			if (environment_variables.count(env_var)) {
+			if (!test_env_defined && environment_variables.count(env_var)) {
 				parser.Fail(StringUtil::Format("Environment variable '%s' has already been defined", env_var));
 			}
 			environment_variables[env_var] = env_actual;

@@ -289,7 +289,8 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	}
 
 	// Update the state and finalize it one row at a time.
-	AggregateInputData aggr_input_data(*wexpr.AggregateFunction(), wexpr.BindInfo().get(), aggr_state.arena_allocator);
+	AggregateFinalizeInputData aggr_input_data(*wexpr.AggregateFunction(), wexpr.BindInfo().get(),
+	                                           aggr_state.arena_allocator);
 	for (idx_t i = 0; i < count; ++i) {
 		sel.set_index(0, i);
 		for (const auto struct_idx : structs) {

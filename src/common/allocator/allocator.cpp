@@ -10,6 +10,10 @@
 
 #include <cstdint>
 
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
+
 #ifdef DUCKDB_DEBUG_ALLOCATION
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
@@ -173,6 +177,28 @@ shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {
 
 Allocator &Allocator::DefaultAllocator() {
 	return *DefaultAllocatorReference();
+}
+
+void Allocator::MallocTrim(idx_t pad) {
+#ifdef __GLIBC__
+	static constexpr int64_t TRIM_INTERVAL_MS = 100;
+	static atomic<int64_t> LAST_TRIM_TIMESTAMP_MS {0};
+
+	int64_t last_trim_timestamp_ms = LAST_TRIM_TIMESTAMP_MS.load();
+	auto current_ts = Timestamp::GetCurrentTimestamp();
+	auto current_timestamp_ms = Cast::Operation<timestamp_t, timestamp_ms_t>(current_ts).value;
+
+	if (current_timestamp_ms - last_trim_timestamp_ms < TRIM_INTERVAL_MS) {
+		return; // We trimmed less than TRIM_INTERVAL_MS ago
+	}
+	if (!LAST_TRIM_TIMESTAMP_MS.compare_exchange_strong(last_trim_timestamp_ms, current_timestamp_ms,
+	                                                    std::memory_order_acquire, std::memory_order_relaxed)) {
+		return; // Another thread has updated LAST_TRIM_TIMESTAMP_MS since we loaded it
+	}
+
+	// We successfully updated LAST_TRIM_TIMESTAMP_MS, we can trim
+	malloc_trim(pad);
+#endif
 }
 
 //===--------------------------------------------------------------------===//

@@ -2,6 +2,8 @@ add_library_unity(
   test_common
   OBJECT
   caching_test_utils.cpp
+  test_async_file_writer.cpp
+  test_managed_async_task_queue.cpp
   test_cast.cpp
   test_checked_integer.cpp
   test_checksum.cpp
@@ -14,6 +16,7 @@ add_library_unity(
   test_lru_cache.cpp
   test_numeric_cast.cpp
   test_parse_expression.cpp
+  test_parse_load_statement.cpp
   test_parse_logical_type.cpp
   test_utf.cpp
   test_allocator_debug_info.cpp
@@ -21,6 +24,9 @@ add_library_unity(
   test_storage_fuzz.cpp
   test_strftime.cpp
   test_string_util.cpp
+  test_substring_oob.cpp
+  test_utf8_codepoint_oob.cpp
+  test_temporary_memory_manager.cpp
   test_value_to_sql_string.cpp)
 
 set(UNITTEST_OBJECT_FILES

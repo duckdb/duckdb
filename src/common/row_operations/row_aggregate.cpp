@@ -161,11 +161,23 @@ void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &l
 	VectorOperations::AddInPlace(addresses_copy, UnsafeNumericCast<int64_t>(layout.GetAggrOffset()));
 
 	auto &aggregates = layout.GetAggregates();
+	// initialize the finalize local states once - they are re-used across all finalize calls of this state
+	if (state.local_states.size() < aggregates.size()) {
+		state.local_states.resize(aggregates.size());
+		for (idx_t i = 0; i < aggregates.size(); i++) {
+			auto &callbacks = aggregates[i].function.GetCallbacks();
+			if (callbacks.HasInitLocalStateFinalizeCallback()) {
+				AggregateInputData aggr_input_data(aggregates[i], state.allocator);
+				state.local_states[i] =
+				    callbacks.GetInitLocalStateFinalizeCallback()(aggr_input_data.function, aggr_input_data.bind_data);
+			}
+		}
+	}
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
-		AggregateInputData aggr_input_data(aggr, state.allocator);
-		aggr.function.GetStateFinalizeCallback()(addresses_copy, aggr_input_data, target, result.size(), 0);
+		AggregateFinalizeInputData finalize_input_data(aggr, state.allocator, state.local_states[i].get());
+		aggr.function.GetStateFinalizeCallback()(addresses_copy, finalize_input_data, target, result.size(), 0);
 		FlatVector::SetSize(target, count_t(result.size()));
 
 		// Move to the next aggregate state

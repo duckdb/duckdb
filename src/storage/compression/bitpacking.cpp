@@ -542,7 +542,6 @@ void BitpackingFinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-// Based on https://github.com/lemire/FastPFor (Apache License 2.0)
 template <class T>
 static T DeltaDecode(T *data, T previous_value, const size_t size) {
 	D_ASSERT(size >= 1);

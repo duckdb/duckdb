@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/types/selection_result.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -44,6 +45,11 @@ public:
 	}
 
 	unique_ptr<ExpressionExecutor> executor;
+	//! Statically true for bitmap-eligible expressions; cleared on the first non-bitmap result at runtime
+	bool bitmap_capable;
+	//! Reused per-call input chunk and result selection, so per-vector filter calls allocate nothing
+	DataChunk filter_chunk;
+	SelectionResult scratch;
 };
 
 } // namespace duckdb

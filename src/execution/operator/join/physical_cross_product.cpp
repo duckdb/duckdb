@@ -135,6 +135,14 @@ OperatorResultType CrossProductExecutor::Execute(const DataChunk &input, DataChu
 	auto &constant_chunk = scan_input_chunk ? scan_chunk : input;
 	auto col_count = constant_chunk.ColumnCount();
 	auto col_offset = scan_input_chunk ? input.ColumnCount() : 0;
+	// SetChildCardinality cannot resize a non-flat vector, and a reused output chunk may still hold a stale
+	// DICTIONARY_VECTOR (e.g. a recursive-CTE dict flush Reset cannot flatten), so reset to flat before resizing.
+	for (auto &v : output.data) {
+		auto vtype = v.GetVectorType();
+		if (vtype != VectorType::FLAT_VECTOR && vtype != VectorType::CONSTANT_VECTOR) {
+			v.Initialize();
+		}
+	}
 	output.SetChildCardinality(constant_chunk.size());
 	for (idx_t i = 0; i < col_count; i++) {
 		output.data[col_offset + i].Reference(constant_chunk.data[i]);

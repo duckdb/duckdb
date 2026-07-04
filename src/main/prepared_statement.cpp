@@ -76,7 +76,9 @@ unique_ptr<QueryResult> PreparedStatement::Execute(identifier_map_t<BoundParamet
 	}
 
 	try {
-		VerifyParameters(named_values, named_param_map);
+		if (!named_param_map.empty()) {
+			VerifyParameters(named_values, named_param_map, context.get());
+		}
 	} catch (const std::exception &ex) {
 		return make_uniq<MaterializedQueryResult>(ErrorData(ex));
 	}
@@ -119,7 +121,9 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(identifier_map_t<
 	parameters.parameters = &named_values;
 
 	try {
-		VerifyParameters(named_values, named_param_map);
+		if (!named_param_map.empty()) {
+			VerifyParameters(named_values, named_param_map, context.get());
+		}
 	} catch (const std::exception &ex) {
 		return make_uniq<PendingQueryResult>(ErrorData(ex));
 	}

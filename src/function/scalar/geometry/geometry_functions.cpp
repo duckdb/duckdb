@@ -4,6 +4,10 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 namespace duckdb {
 
@@ -11,8 +15,82 @@ static void FromWKBFunction(DataChunk &input, ExpressionState &state, Vector &re
 	Geometry::FromBinary(input.data[0], result, input.size(), true);
 }
 
+static auto FromWKBStats(ClientContext &context, FunctionStatisticsInput &input) -> unique_ptr<BaseStatistics> {
+	const auto &child_stats = input.child_stats[0];
+
+	// Start from fully unknown geometry stats and copy over the validity (null-ness) of the input.
+	auto result = GeometryStats::CreateUnknown(input.expr.GetReturnType());
+	result.CopyValidity(child_stats);
+
+	if (!StringStats::HasMinMax(child_stats)) {
+		// No min/max available, we can't say anything about the types
+		return result.ToUnique();
+	}
+
+	// The lexicographically smallest and largest WKB blobs. Any prefix shared by both is shared by every row,
+	// so if the first 5 bytes (byte order + type meta) match, all rows have the exact same geometry type and ZM flags.
+	const auto min_blob = StringStats::Min(child_stats);
+	const auto max_blob = StringStats::Max(child_stats);
+
+	constexpr idx_t WKB_HEADER_SIZE = sizeof(uint8_t) + sizeof(uint32_t);
+	if (min_blob.size() < WKB_HEADER_SIZE || max_blob.size() < WKB_HEADER_SIZE) {
+		return result.ToUnique();
+	}
+	if (memcmp(min_blob.data(), max_blob.data(), WKB_HEADER_SIZE) != 0) {
+		// The headers differ, so multiple geometry types may be present
+		return result.ToUnique();
+	}
+
+	// Now parse the 5-byte WKB header (byte order + type meta) into a geometry/vertex type.
+	const auto header = const_data_ptr_cast(min_blob.data());
+	const auto le = Load<uint8_t>(header);
+
+	auto meta = Load<uint32_t>(header + sizeof(uint8_t));
+	if (!le) {
+		meta = BSwap(meta);
+	}
+
+	const auto type_id = (meta & 0x0000FFFF) % 1000;
+	const auto flag_id = (meta & 0x0000FFFF) / 1000;
+	if (type_id < 1 || type_id > 7 || flag_id > 3) {
+		// Unsupported or invalid geometry type, we can't say anything about the types
+		return result.ToUnique();
+	}
+
+	// Z/M may also be signalled through the Extended-WKB high bits (matching Geometry::FromBinary)
+	const auto has_z = ((flag_id & 0x01) != 0) || ((meta & 0x80000000) != 0);
+	const auto has_m = ((flag_id & 0x02) != 0) || ((meta & 0x40000000) != 0);
+
+	const auto geom_type = static_cast<GeometryType>(type_id);
+	const auto vert_type = static_cast<VertexType>((has_z ? 1 : 0) | (has_m ? 2 : 0));
+
+	// The single inferred type implies a minimum body length: a POINT serializes all of its ordinates inline
+	// (even when empty, encoded as NaNs); every other type serializes at least a 4-byte element count. If the
+	// shortest row (the exact minimum over all rows) can't hold that, the column has a truncated blob, so bail.
+	const idx_t vert_dims = 2 + (has_z ? 1 : 0) + (has_m ? 1 : 0);
+	const auto min_valid_size = geom_type == GeometryType::POINT ? WKB_HEADER_SIZE + vert_dims * sizeof(double)
+	                                                             : WKB_HEADER_SIZE + sizeof(uint32_t);
+
+	const auto min_len = StringStats::MinStringLength(child_stats);
+	if (!min_len.IsValid() || min_len.GetIndex() < min_valid_size) {
+		// Only bounds the byte envelope, not that a declared element count matches the body.
+		// In general, we cant guarantee that the WKB is valid without parsing every row.
+		// But we're generally OK with optimizing assuming valid input - anything else is essentially UB.
+		return result.ToUnique();
+	}
+
+	// All rows share this single geometry type. The extent and emptiness can't be inferred
+	// from the truncated string stats, so those remain unknown.
+	auto &types = GeometryStats::GetTypes(result);
+	types = GeometryTypeSet::Empty();
+	types.Add(geom_type, vert_type);
+
+	return result.ToUnique();
+}
+
 ScalarFunction StGeomfromwkbFun::GetFunction() {
 	ScalarFunction function({LogicalType::BLOB}, LogicalType::GEOMETRY(), FromWKBFunction);
+	function.SetStatisticsCallback(FromWKBStats);
 	return function;
 }
 
@@ -60,9 +138,61 @@ static void IntersectsExtentFunction(DataChunk &input, ExpressionState &state, V
 	    });
 }
 
+// Prune row groups for `geom1 && geom2` (a.k.a. ST_Intersects_Extent), which is true iff the two bounding
+// boxes intersect. One argument must be a constant geometry; the other is the column we prune against. Both
+// operands' statistics are derived for us (the constant's geometry stats already carry its bounding box, and
+// the column's look through any CRS-only cast), so this works regardless of which side the constant is on.
+static FilterPropagateResult IntersectsExtentFilterPrune(const FunctionStatisticsPruneInput &input) {
+	auto &children = input.function.GetChildren();
+	if (children.size() != 2) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	// Constants are folded by the time we get here, so the constant operand is a plain BoundConstantExpression.
+	const auto lhs_is_const = children[0]->GetExpressionType() == ExpressionType::VALUE_CONSTANT;
+	const auto rhs_is_const = children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT;
+	if (lhs_is_const == rhs_is_const) {
+		// Need exactly one constant operand and one column operand.
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	const idx_t constant_idx = lhs_is_const ? 0 : 1;
+
+	auto column_stats = input.ChildStats(1 - constant_idx);
+	auto constant_stats = input.ChildStats(constant_idx);
+	if (!column_stats || column_stats->GetStatsType() != StatisticsType::GEOMETRY_STATS || !constant_stats ||
+	    constant_stats->GetStatsType() != StatisticsType::GEOMETRY_STATS) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!column_stats->CanHaveNoNull()) {
+		// no non-null values are possible: always false
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	const auto &col_extent = GeometryStats::GetExtent(*column_stats);
+	if (!col_extent.CanPruneXY()) {
+		// If neither axis is set (the extent is empty or fully unknown), we cannot prune.
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+
+	const auto &const_extent = GeometryStats::GetExtent(*constant_stats);
+	if (!const_extent.CanPruneXY()) {
+		// An empty constant geometry never intersects anything.
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (!const_extent.IntersectsXY(col_extent)) {
+		// The column zonemap does not intersect the constant: no row can match.
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (const_extent.ContainsXY(col_extent)) {
+		// The constant fully covers the column zonemap, so every non-null row's bbox intersects it.
+		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+	}
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
 ScalarFunction StIntersectsExtentFun::GetFunction() {
 	ScalarFunction function({LogicalType::GEOMETRY(), LogicalType::GEOMETRY()}, LogicalType::BOOLEAN,
 	                        IntersectsExtentFunction);
+	function.SetFilterPruneCallback(IntersectsExtentFilterPrune);
 	return function;
 }
 

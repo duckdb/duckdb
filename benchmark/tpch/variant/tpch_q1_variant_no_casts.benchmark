@@ -1,0 +1,43 @@
+# name: benchmark/tpch/variant/tpch_q1_variant_no_casts.benchmark
+# description: Run Q01 over lineitem stored in variants (without castS)
+# group: [variant]
+
+name Q01 variants (no casts)
+group tpch
+subgroup sf1
+storage persistent v1.5.0
+
+require tpch
+
+cache tpch_variant_sf1_no_cast.duckdb
+
+load
+CALL dbgen(sf=1, suffix='_normalized');
+SET variant_minimum_shredding_size = 0;
+create table lineitem_variant as select
+	struct_pack(*COLUMNS(lineitem_normalized.*))::VARIANT lineitem
+from lineitem_normalized;
+checkpoint;
+CREATE VIEW lineitem AS SELECT
+	lineitem.l_orderkey::DECIMAL(15,2) l_orderkey,
+	lineitem.l_partkey::DECIMAL(15,2) l_partkey,
+	lineitem.l_suppkey::DECIMAL(15,2) l_suppkey,
+	lineitem.l_linenumber::DECIMAL(15,2) l_linenumber,
+	lineitem.l_quantity::DECIMAL(15,2) l_quantity,
+	lineitem.l_extendedprice::DECIMAL(15,2) l_extendedprice,
+	lineitem.l_discount::DECIMAL(15,2) l_discount,
+	lineitem.l_tax::DECIMAL(15,2) l_tax,
+	lineitem.l_returnflag l_returnflag,
+	lineitem.l_linestatus l_linestatus,
+	lineitem.l_shipdate l_shipdate,
+	lineitem.l_commitdate::DATE l_commitdate,
+	lineitem.l_receiptdate::DATE l_receiptdate,
+	lineitem.l_shipinstruct::VARCHAR l_shipinstruct,
+	lineitem.l_shipmode::VARCHAR l_shipmode,
+	lineitem.l_comment::VARCHAR l_comment
+FROM
+	lineitem_variant
+
+run extension/tpch/dbgen/queries/q01.sql
+
+result extension/tpch/dbgen/answers/sf1/q01.csv

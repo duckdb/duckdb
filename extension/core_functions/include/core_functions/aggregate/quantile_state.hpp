@@ -9,8 +9,10 @@
 #pragma once
 
 #include "core_functions/aggregate/quantile_sort_tree.hpp"
+#include "duckdb/common/operator/negate.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/list_segment.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/aggregate/list_aggregate.hpp"
 #include "SkipList.h"
 
@@ -18,24 +20,26 @@ namespace duckdb {
 
 //! Flattens the values of a linked list into a contiguous array for interpolation.
 //! The flattened values are mutable - the interpolators partially sort them in place.
-//! The flattened chunk is cached in the finalize data's local state, so that it is allocated (at most) once per
-//! result chunk instead of once per finalized group.
+//! The flattened chunk lives in the finalize's local state, so that it is allocated (at most) once per
+//! finalize call instead of once per finalized group - callers that keep the local state alive re-use it
+//! across finalize calls.
 template <class INPUT_TYPE>
 struct FlattenedQuantileValues : FunctionLocalState {
-	FlattenedQuantileValues(const LogicalType &type, idx_t capacity_p) : capacity(capacity_p) {
-		chunk.Initialize(Allocator::DefaultAllocator(), {type}, capacity_p);
+	FlattenedQuantileValues() : capacity(0) {
 	}
 
-	//! Flatten the values of the given linked list into the chunk cached in the finalize data
+	static unique_ptr<FunctionLocalState> Init(const BoundAggregateFunction &, optional_ptr<FunctionData>) {
+		return make_uniq<FlattenedQuantileValues>();
+	}
+
+	//! Flatten the values of the given linked list into the chunk cached in the finalize local state
 	static FlattenedQuantileValues &Flatten(AggregateFinalizeData &finalize_data, const LinkedList &linked_list) {
 		const auto type = PrimitiveToLogicalType<INPUT_TYPE>();
 		const auto required_capacity = MaxValue<idx_t>(linked_list.total_capacity, 1);
-		if (!finalize_data.local_state) {
-			finalize_data.local_state = make_uniq<FlattenedQuantileValues>(type, NextPowerOfTwo(required_capacity));
-		}
-		auto &values = finalize_data.local_state->Cast<FlattenedQuantileValues>();
+		D_ASSERT(finalize_data.input.local_state);
+		auto &values = finalize_data.input.local_state->Cast<FlattenedQuantileValues>();
 		if (values.capacity < required_capacity) {
-			// grow the cached chunk
+			// (re-)allocate the cached chunk
 			values.capacity = NextPowerOfTwo(required_capacity);
 			values.chunk.Destroy();
 			values.chunk.Initialize(Allocator::DefaultAllocator(), {type}, values.capacity);
@@ -125,12 +129,14 @@ struct QuantileOperation {
 //! Quantiles ignore NULL values, so they are filtered out while appending.
 template <class STATE, class RESULT_TYPE, class OP>
 AggregateFunction QuantileBufferingAggregate(const LogicalType &input_type, const LogicalType &result_type) {
-	return AggregateFunction({input_type}, result_type, AggregateFunction::StateSize<STATE>,
-	                         AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
-	                         ListUpdateFunction<true>, ListCombineFunction<OP>,
-	                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
-	                         FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
-	                         AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
+	AggregateFunction fun({input_type}, result_type, AggregateFunction::StateSize<STATE>,
+	                      AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
+	                      ListUpdateFunction<true>, ListCombineFunction<OP>,
+	                      AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
+	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
+	                      AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
+	fun.SetInitLocalStateFinalizeCallback(FlattenedQuantileValues<typename STATE::InputType>::Init);
+	return fun;
 }
 
 template <class T>
@@ -321,5 +327,83 @@ struct QuantileState : ListAggState {
 		return *window_cursor;
 	}
 };
+
+//===--------------------------------------------------------------------===//
+// Quantile State Export
+//===--------------------------------------------------------------------===//
+template <typename T>
+inline T QuantileNeg(const T &t) {
+	return NegateOperator::Operation<T, T>(t);
+}
+
+//! Restores the sign of a normalized quantile parameter (see QuantileAbs)
+template <>
+inline Value QuantileNeg(const Value &v) {
+	const auto &type = v.type();
+	switch (type.id()) {
+	case LogicalTypeId::DECIMAL: {
+		const auto integral = IntegralValue::Get(v);
+		const auto width = DecimalType::GetWidth(type);
+		const auto scale = DecimalType::GetScale(type);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return Value::DECIMAL(QuantileNeg<int16_t>(Cast::Operation<hugeint_t, int16_t>(integral)), width, scale);
+		case PhysicalType::INT32:
+			return Value::DECIMAL(QuantileNeg<int32_t>(Cast::Operation<hugeint_t, int32_t>(integral)), width, scale);
+		case PhysicalType::INT64:
+			return Value::DECIMAL(QuantileNeg<int64_t>(Cast::Operation<hugeint_t, int64_t>(integral)), width, scale);
+		case PhysicalType::INT128:
+			return Value::DECIMAL(QuantileNeg<hugeint_t>(integral), width, scale);
+		default:
+			throw InternalException("Unknown DECIMAL type");
+		}
+	}
+	default:
+		return Value::DOUBLE(QuantileNeg<double>(v.GetValue<double>()));
+	}
+}
+
+//! Reconstructs the quantile parameter (e.g. 0.5 or [0.25, 0.75]) from the bind data, so that it can be recorded
+//! in the AGGREGATE_STATE type - param_type is the declared type of the (erased) parameter argument
+inline Value QuantileParameterValue(const QuantileBindData &bind_data, const LogicalType &param_type) {
+	vector<Value> quantiles;
+	for (auto &q : bind_data.quantiles) {
+		// the bind data holds the normalized (absolute) quantiles - restore the sign of descending quantiles
+		quantiles.push_back(bind_data.desc ? QuantileNeg(q.val) : q.val);
+	}
+	if (param_type.id() != LogicalTypeId::LIST && param_type.id() != LogicalTypeId::ARRAY) {
+		D_ASSERT(quantiles.size() == 1);
+		return quantiles[0];
+	}
+	if (quantiles.empty()) {
+		return Value::LIST(LogicalType::DOUBLE, std::move(quantiles));
+	}
+	auto child_type = quantiles[0].type();
+	return Value::LIST(child_type, std::move(quantiles));
+}
+
+template <class STATE, class STATE_FIELD = StateListType<StateInputType<0>>>
+AggregateStateLayout QuantileStateLayout(AggregateLayoutInput &input) {
+	auto &function = input.function;
+	AggregateStateLayout layout;
+	if (function.GetReturnType().IsAggregateState()) {
+		// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
+		// its return type IS the state type already
+		layout.type = function.GetReturnType();
+	} else {
+		layout.type = LogicalType::LIST(function.GetArguments()[0]);
+	}
+	layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
+	layout.field = BuildStateField<STATE_FIELD>();
+	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
+	if (function.GetOriginalArguments().size() == 2) {
+		// the quantile parameter must be a constant at bind time (its argument is erased by BindQuantile) -
+		// record its value so that re-binding the exported state can supply it
+		// median and mad have no parameter argument (their binds create the quantile themselves) and skip this
+		auto &bind_data = input.bind_data->Cast<QuantileBindData>();
+		layout.constant_parameters.emplace(1, QuantileParameterValue(bind_data, function.GetOriginalArguments()[1]));
+	}
+	return layout;
+}
 
 } // namespace duckdb

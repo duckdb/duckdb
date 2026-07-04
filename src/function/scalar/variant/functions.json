@@ -143,6 +143,16 @@
 		"type": "scalar_function"
 	},
 	{
+		"name": "variant_comparator",
+		"parameters": "input_variant",
+		"description": "Returns a binary sort key that orders `input_variant` according to the logical ordering of VARIANT values (used internally for comparison and ordering).",
+		"example": "variant_comparator({'a': 1, 'b': 2}::VARIANT)",
+		"categories": [
+			"variant"
+		],
+		"type": "scalar_function"
+	},
+	{
 		"name": "variant_typeof",
 		"parameters": "input_variant",
 		"description": "Returns the internal type of the `input_variant`.",

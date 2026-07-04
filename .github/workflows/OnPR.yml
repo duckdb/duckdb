@@ -1,50 +1,92 @@
-# Handles PR metadata signaling for trusted apply workflow
 name: OnPR
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, synchronize]
 
 concurrency:
-  group: onpr-${{ github.event.number }}
+  group: onpr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 jobs:
-  prepare:
-    name: Prepare PR actions
+  apply:
+    name: Apply PR actions
     runs-on: namespace-profile-linux-slim
+    timeout-minutes: 10
+
+    env:
+      MOVE_PR_TO_DRAFT_TOKEN: ${{ secrets.MOVE_PR_TO_DRAFT_TOKEN }}
+
+    # WARNING: This workflow runs with base-repository privileges.
+    # Do not check out PR code, execute PR scripts, or read PR files as trusted input.
+    # Keep this workflow metadata/API-only.
+
     steps:
-      - name: Build action payload
+      - name: Prepare
+        id: prepare
+        shell: bash
         env:
           EVENT_ACTION: ${{ github.event.action }}
-          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
           PR_DRAFT: ${{ github.event.pull_request.draft }}
-          PR_NODE_ID: ${{ github.event.pull_request.node_id }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
         run: |
-          mkdir -p ./onpr
+          add_member_label=false
+          move_to_draft=false
 
-          DRAFT_PR_NODE_ID=""
-          MEMBER_PR_NUMBER=""
+          case "$AUTHOR_ASSOCIATION" in
+            OWNER|MEMBER|COLLABORATOR)
+              is_trusted_author=true
+              ;;
+            *)
+              is_trusted_author=false
+              ;;
+          esac
 
-          if [ "$PR_DRAFT" = "false" ] && [ "$AUTHOR_ASSOCIATION" != "OWNER" ] && [ "$AUTHOR_ASSOCIATION" != "MEMBER" ] && [ "$AUTHOR_ASSOCIATION" != "COLLABORATOR" ]; then
-            DRAFT_PR_NODE_ID="$PR_NODE_ID"
+          if [ "$EVENT_ACTION" = "opened" ] && [ "$is_trusted_author" = "true" ]; then
+            add_member_label=true
           fi
 
-          if [ "$EVENT_ACTION" = "opened" ] && { [ "$AUTHOR_ASSOCIATION" = "OWNER" ] || [ "$AUTHOR_ASSOCIATION" = "MEMBER" ] || [ "$AUTHOR_ASSOCIATION" = "COLLABORATOR" ]; }; then
-            MEMBER_PR_NUMBER="$PR_NUMBER"
+          if [ "$PR_DRAFT" = "false" ] && [ "$is_trusted_author" = "false" ]; then
+            move_to_draft=true
           fi
 
-          cat > ./onpr/pr_actions.json <<EOF
-          {
-            "draft_pr_node_id": "$DRAFT_PR_NODE_ID",
-            "member_pr_number": "$MEMBER_PR_NUMBER"
-          }
-          EOF
+          echo "add_member_label=$add_member_label" >> "$GITHUB_OUTPUT"
+          echo "move_to_draft=$move_to_draft" >> "$GITHUB_OUTPUT"
 
-          echo "Prepared payload:"
-          cat ./onpr/pr_actions.json
-
-      - uses: actions/upload-artifact@v7
+      - name: Move PR to draft
+        if: ${{ steps.prepare.outputs.move_to_draft == 'true' && env.MOVE_PR_TO_DRAFT_TOKEN != '' }}
+        uses: actions/github-script@v7
         with:
-          name: pr_actions
-          path: onpr/pr_actions.json
+          github-token: ${{ env.MOVE_PR_TO_DRAFT_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            await github.graphql(`
+              mutation($id: ID!) {
+                convertPullRequestToDraft(input: { pullRequestId: $id }) {
+                  pullRequest {
+                    id
+                    number
+                    isDraft
+                  }
+                }
+              }
+            `, {id: pr.node_id});
+            core.info(`Converted PR #${pr.number} to draft`);
+
+      - name: Add Member label
+        if: ${{ steps.prepare.outputs.add_member_label == 'true' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: ['Member']
+            });
+            core.info(`Added Member label to PR #${pr.number}`);

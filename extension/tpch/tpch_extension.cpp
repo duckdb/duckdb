@@ -30,7 +30,7 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 
 	// Set the current catalog and schema.
 	const auto current_catalog = DatabaseManager::GetDefaultDatabase(context);
-	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
+	const auto current_schema = ClientData::Get(context).catalog_search_path->GetDefault().GetSchema();
 	result->catalog = current_catalog;
 	result->schema = current_schema;
 
@@ -185,6 +185,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
 	dbgen_func.named_parameters["children"] = LogicalType::UINTEGER;
 	dbgen_func.named_parameters["step"] = LogicalType::UINTEGER;
+	dbgen_func.call_return_type = StatementReturnType::NOTHING;
 	loader.RegisterFunction(dbgen_func);
 
 	// create the TPCH pragma that allows us to run the query
