@@ -8,14 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 
 #include <cstring>
-
-#if defined(_MSC_VER)
-#include <intrin.h>
-#endif
 
 namespace duckdb {
 
@@ -137,11 +134,7 @@ private:
 		idx_t total = 0;
 		for (idx_t w = 0; w < nwords; w++) {
 			a[w] &= other_bitmap[w];
-#if defined(_MSC_VER)
-			total += idx_t(__popcnt64(a[w]));
-#else
-			total += idx_t(__builtin_popcountll(a[w]));
-#endif
+			total += CountOnes<validity_t>::Count(a[w]);
 		}
 		return total;
 	}

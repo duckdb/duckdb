@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
@@ -15,10 +16,6 @@
 #include "duckdb/common/vector_size.hpp"
 
 #include <type_traits>
-
-#if defined(_MSC_VER)
-#include <intrin.h>
-#endif
 
 namespace duckdb {
 
@@ -193,11 +190,7 @@ inline idx_t BitmapPopcount(const validity_t *bitmap, idx_t count) {
 	const idx_t nwords = (count + 63) / 64;
 	idx_t total = 0;
 	for (idx_t w = 0; w < nwords; w++) {
-#if defined(_MSC_VER)
-		total += idx_t(__popcnt64(bitmap[w]));
-#else
-		total += idx_t(__builtin_popcountll(bitmap[w]));
-#endif
+		total += CountOnes<validity_t>::Count(bitmap[w]);
 	}
 	return total;
 }
