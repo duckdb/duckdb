@@ -5,6 +5,7 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
+#include "duckdb/execution/index/art/const_prefix_handle.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/prefix_handle.hpp"
@@ -34,8 +35,8 @@ Prefix::Prefix(FixedSizeAllocator &allocator, const NodePtr ptr_p, const idx_t c
 
 uint8_t Prefix::GetByte(const ART &art, const NodePtr &node, const uint8_t pos) {
 	D_ASSERT(node.GetType() == PREFIX);
-	Prefix prefix(art, node);
-	return prefix.data[pos];
+	ConstPrefixHandle prefix(art, node);
+	return prefix.GetByte(pos);
 }
 
 Prefix Prefix::NewInternal(ART &art, NodePtr &node, const data_ptr_t data, const uint8_t count, const idx_t offset) {
@@ -52,18 +53,35 @@ Prefix Prefix::NewInternal(ART &art, NodePtr &node, const data_ptr_t data, const
 	return prefix;
 }
 
-void Prefix::New(ART &art, reference<NodePtr> &ref, const ARTKey &key, const idx_t depth, idx_t count) {
+void Prefix::New(ART &art, SlotHandle &slot, const ARTKey &key, const idx_t depth, idx_t count) {
 	idx_t offset = 0;
 
 	while (count) {
 		auto min = MinValue(UnsafeNumericCast<idx_t>(art.PrefixCount()), count);
 		auto this_count = UnsafeNumericCast<uint8_t>(min);
-		auto prefix = NewInternal(art, ref, key.data, this_count, offset + depth);
 
-		ref = *prefix.ptr;
+		slot.Ref() = NodePtr::GetAllocator(art, PREFIX).New();
+		slot.Ref().SetMetadata(static_cast<uint8_t>(PREFIX));
+
+		PrefixHandle prefix(NodeHandle(art, slot.Ref()));
+		prefix.SetCount(art, this_count);
+		memcpy(prefix.Data(), key.data + offset + depth, this_count);
+
+		auto &child = prefix.Child(art);
+		child.Clear();
+
+		auto pin = std::move(prefix).TakeHandle();
+		slot.Rebind(child, std::move(pin));
+
 		offset += this_count;
 		count -= this_count;
 	}
+}
+
+void Prefix::New(ART &art, reference<NodePtr> &ref, const ARTKey &key, const idx_t depth, idx_t count) {
+	SlotHandle slot(ref.get());
+	New(art, slot, key, depth, count);
+	ref = slot.Ref();
 }
 
 void Prefix::Concat(ART &art, NodePtr &parent, NodePtr &node4, const NodePtr child, uint8_t byte,
