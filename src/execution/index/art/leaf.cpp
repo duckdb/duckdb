@@ -227,16 +227,18 @@ void Leaf::DeprecatedVerify(ART &art, const Node &node) {
 	}
 }
 
-void Leaf::DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
-	auto idx = Node::GetAllocatorIdx(LEAF);
-	node_counts[idx]++;
+void Leaf::DeprecatedVerifyAllocations(ART &art, const Node &node, unordered_map<uint8_t, idx_t> &node_counts) {
+	D_ASSERT(node.GetType() == LEAF);
 
-	reference<const Node> ref(ptr);
-	while (ref.get().HasMetadata()) {
-		ConstNodeHandle handle(art, ref.get());
-		auto &leaf = handle.Get<Leaf>();
+	auto idx = Node::GetAllocatorIdx(LEAF);
+
+	Node current = node;
+	while (current.HasMetadata()) {
 		node_counts[idx]++;
-		ref = leaf.ptr;
+
+		ConstNodeHandle handle(art, current);
+		auto &leaf = handle.Get<Leaf>();
+		current = leaf.ptr;
 	}
 }
 

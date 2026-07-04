@@ -61,7 +61,7 @@ public:
 	//! Traverses and verifies the linked list of leaves.
 	static void DeprecatedVerify(ART &art, const Node &node);
 	//! Count the number of leaves.
-	void DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const;
+	static void DeprecatedVerifyAllocations(ART &art, const Node &node, unordered_map<uint8_t, idx_t> &node_counts);
 
 	//! Return string representation of the linked list of leaves.
 	//! If print_deprecated_leaves is false, returns "[deprecated leaves]" with proper indentation.

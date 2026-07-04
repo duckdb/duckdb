@@ -495,8 +495,7 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 		case NType::LEAF_INLINED:
 			return ARTScanStep::Skip();
 		case NType::LEAF: {
-			auto &leaf = Ref<Leaf>(art, child, type);
-			leaf.DeprecatedVerifyAllocations(art, node_counts);
+			Leaf::DeprecatedVerifyAllocations(art, child, node_counts);
 			return ARTScanStep::Skip();
 		}
 		case NType::NODE_7_LEAF:
