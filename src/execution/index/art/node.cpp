@@ -234,6 +234,21 @@ unsafe_optional_ptr<NodePtr> NodePtr::GetChildMutable(ART &art, const uint8_t by
 	return GetChildInternal(art, *this, byte, unsafe);
 }
 
+unsafe_optional_ptr<NodePtr> NodePtr::GetChildFromHandle(NodeHandle &handle, const uint8_t byte, const bool unsafe) {
+	switch (handle.GetType()) {
+	case NType::NODE_4:
+		return Node4::GetChild(handle.Get<Node4>(), byte, unsafe);
+	case NType::NODE_16:
+		return Node16::GetChild(handle.Get<Node16>(), byte, unsafe);
+	case NType::NODE_48:
+		return Node48::GetChild(handle.Get<Node48>(), byte, unsafe);
+	case NType::NODE_256:
+		return Node256::GetChild(handle.Get<Node256>(), byte, unsafe);
+	default:
+		throw InternalException("Invalid node type for GetChildFromHandle: %d.", handle.GetType());
+	}
+}
+
 NodePtr NodePtr::GetChildNode(const ART &art, const uint8_t byte) const {
 	D_ASSERT(HasMetadata());
 	auto type = GetType();

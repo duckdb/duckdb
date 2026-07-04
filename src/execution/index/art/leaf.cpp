@@ -7,6 +7,7 @@
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/node_handle.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/art_operator.hpp"
 
@@ -43,7 +44,7 @@ void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, NodePtr &left, NodePtr 
 	auto pos = left_key.GetMismatchPos(right_key, depth);
 
 	left.Clear();
-	reference<NodePtr> node(left);
+	SlotHandle node(left);
 	if (pos != depth) {
 		// The row IDs share a prefix.
 		Prefix::New(art, node, left_key, depth, pos - depth);
@@ -54,9 +55,9 @@ void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, NodePtr &left, NodePtr 
 
 	if (pos == Prefix::ROW_ID_COUNT) {
 		// The row IDs differ on the last byte.
-		Node7Leaf::New(art, node);
-		Node7Leaf::InsertByte(art, node, left_byte);
-		Node7Leaf::InsertByte(art, node, right_byte);
+		Node7Leaf::New(art, node.Ref());
+		Node7Leaf::InsertByte(art, node.Ref(), left_byte);
+		Node7Leaf::InsertByte(art, node.Ref(), right_byte);
 		left.SetGateStatus(status);
 		return;
 	}
@@ -64,15 +65,15 @@ void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, NodePtr &left, NodePtr 
 	// Create and insert the (compressed) children.
 	// We inline directly into the node, instead of creating prefixes
 	// with a single inlined leaf as their child.
-	Node4::New(art, node);
+	Node4::New(art, node.Ref());
 
 	NodePtr left_child;
 	Leaf::New(left_child, left_row_id);
-	Node4::InsertChild(art, node, left_byte, left_child);
+	Node4::InsertChild(art, node.Ref(), left_byte, left_child);
 
 	NodePtr right_child;
 	Leaf::New(right_child, right_row_id);
-	Node4::InsertChild(art, node, right_byte, right_child);
+	Node4::InsertChild(art, node.Ref(), right_byte, right_child);
 
 	left.SetGateStatus(status);
 }
