@@ -21,14 +21,14 @@ namespace duckdb {
 
 enum class ScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
 
-enum class ARTScanAction : uint8_t { PUSH, SKIP };
+enum class ARTScanAction : uint8_t { PUSH_NODE, SKIP };
 
 struct ARTScanStep {
 	ARTScanStep(ARTScanAction action_p, Node node_p = Node()) : action(action_p), node(node_p) {
 	}
 
 	static ARTScanStep Push(Node node) {
-		return ARTScanStep(ARTScanAction::PUSH, node);
+		return ARTScanStep(ARTScanAction::PUSH_NODE, node);
 	}
 
 	static ARTScanStep Skip() {
@@ -47,7 +47,7 @@ static void ScanChildren(ART &art, Node node, PRE_HANDLER &&pre_handler, vector<
 	auto &n = handle.Get<NODE>();
 	NODE::Iterator(n, [&](Node &child) {
 		auto step = pre_handler(child);
-		if (step.action == ARTScanAction::PUSH) {
+		if (step.action == ARTScanAction::PUSH_NODE) {
 			stack.push_back(step.node);
 		}
 	});
@@ -64,7 +64,7 @@ void ARTScanPreorder(ART &art, Node &root, SCAN_STRATEGY &&scan_strategy, PRE_HA
 
 	// The root node pointer lives in the ART object, not inside a fixed-size buffer.
 	auto step = preorder_handler(root);
-	if (step.action == ARTScanAction::PUSH) {
+	if (step.action == ARTScanAction::PUSH_NODE) {
 		stack.push_back(step.node);
 	}
 
@@ -87,7 +87,7 @@ void ARTScanPreorder(ART &art, Node &root, SCAN_STRATEGY &&scan_strategy, PRE_HA
 			NodeHandle handle(art, current);
 			auto &child = PrefixHandle::ChildRef(art, handle);
 			step = preorder_handler(child);
-			if (step.action == ARTScanAction::PUSH) {
+			if (step.action == ARTScanAction::PUSH_NODE) {
 				stack.push_back(step.node);
 			}
 			break;
@@ -130,7 +130,7 @@ static void ScanChildren(ART &art, Node node, FILTER &&filter, vector<ScanEntry>
 	auto &n = handle.Get<NODE>();
 	NODE::Iterator(n, [&](Node &child) {
 		auto step = filter(child);
-		if (step.action == ARTScanAction::PUSH) {
+		if (step.action == ARTScanAction::PUSH_NODE) {
 			stack.push_back(ScanEntry {step.node, false});
 		}
 	});
@@ -171,7 +171,7 @@ void ARTScanPostorder(ART &art, Node &root, FILTER &&filter, POST_HANDLER &&post
 			NodeHandle handle(art, current);
 			auto &child = PrefixHandle::ChildRef(art, handle);
 			auto step = filter(child);
-			if (step.action == ARTScanAction::PUSH) {
+			if (step.action == ARTScanAction::PUSH_NODE) {
 				stack.push_back(ScanEntry {step.node, false});
 			}
 			break;
