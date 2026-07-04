@@ -1794,8 +1794,9 @@ struct ProgressBarTimeSetting {
 struct ReadAheadDepthSetting {
 	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "read_ahead_depth";
-	static constexpr const char *Description = "Number of scan jobs the multi-file reader prefetches ahead of "
-	                                           "decoding. -1 = automatic (based on thread count), 0 = disabled.";
+	static constexpr const char *Description =
+	    "Number of scan jobs the multi-file reader prefetches ahead of decoding. -1 = automatic (based on the async "
+	    "I/O thread pool size), 0 = disabled.";
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr const char *DefaultValue = "-1";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;

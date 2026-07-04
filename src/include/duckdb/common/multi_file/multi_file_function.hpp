@@ -298,10 +298,9 @@ public:
 	                                   MultiFileGlobalState &global_state, MultiFileReaderData &reader_data,
 	                                   idx_t file_index) {
 		D_ASSERT(reader_data.file_state == MultiFileFileState::UNOPENED);
-		if (reader_data.union_data ||
-		    !MultiFileReader::CanSkipFileFromFilters(context, reader_data.file_to_be_opened, file_index,
-		                                             bind_data.file_options, bind_data.reader_bind,
-		                                             global_state.column_indexes, global_state.filters)) {
+		if (reader_data.union_data || !MultiFileReader::CanSkipFileFromFilters(
+		                                  context, reader_data.file_to_be_opened, file_index, bind_data.file_options,
+		                                  bind_data.reader_bind, global_state.column_indexes, global_state.filters)) {
 			return false;
 		}
 		reader_data.file_state = MultiFileFileState::SKIPPED;
@@ -322,10 +321,9 @@ public:
 			current_reader_data.reader =
 			    bind_data.multi_file_reader->CreateReader(context, *global_state.global_state, union_data, bind_data);
 		} else {
-			current_reader_data.reader =
-			    bind_data.multi_file_reader->CreateReader(context, *global_state.global_state,
-			                                              current_reader_data.file_to_be_opened, current_file_index,
-			                                              bind_data);
+			current_reader_data.reader = bind_data.multi_file_reader->CreateReader(
+			    context, *global_state.global_state, current_reader_data.file_to_be_opened, current_file_index,
+			    bind_data);
 		}
 		auto init_result = InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
 		                                    global_state.filters, context, current_file_index, global_state);
@@ -350,6 +348,67 @@ public:
 		return true;
 	}
 
+	//! Open a file on the read-ahead async pool. Runs off the operator thread; records errors instead of throwing.
+	static void OpenMarkedFileAsync(ClientContext &context, const MultiFileBindData &bind_data,
+	                                MultiFileGlobalState &gstate, MultiFileReaderData &reader_data, idx_t file_index) {
+		// OpenMarkedFile expects the parallel lock unlocked on entry and locks it before it returns
+		unique_lock<mutex> parallel_lock(gstate.lock, std::defer_lock);
+		try {
+			OpenMarkedFile(context, bind_data, gstate, reader_data, file_index, parallel_lock);
+		} catch (std::exception &ex) {
+			if (!parallel_lock.owns_lock()) {
+				parallel_lock.lock();
+			}
+			gstate.read_ahead->PushError(ErrorData(ex));
+			gstate.error_opening_file = true;
+		} catch (...) { // LCOV_EXCL_START
+			if (!parallel_lock.owns_lock()) {
+				parallel_lock.lock();
+			}
+			gstate.read_ahead->PushError(ErrorData("Unknown exception while opening a file"));
+			gstate.error_opening_file = true;
+		} // LCOV_EXCL_STOP
+	}
+
+	//! Schedule async opens for upcoming unopened files on the async pool, ahead of decoding. Lock held on entry.
+	//! Always schedules the front unopened file (forward progress), then fills up to the open-ahead window.
+	static void ScheduleFileOpens(ClientContext &context, const MultiFileBindData &bind_data,
+	                              MultiFileGlobalState &gstate, unique_lock<mutex> &parallel_lock) {
+		auto &read_ahead = *gstate.read_ahead;
+		idx_t file_index = gstate.file_index;
+		bool progress_guaranteed = false;
+		while (!progress_guaranteed || read_ahead.CanScheduleOpen()) {
+			const bool has_file_to_read = file_index < gstate.readers.size();
+			if (!has_file_to_read && !TryGetNextFile(gstate, parallel_lock)) {
+				return;
+			}
+			auto current_file_index = file_index++;
+			auto &reader_data = *gstate.readers[current_file_index];
+			switch (reader_data.file_state) {
+			case MultiFileFileState::UNOPENED:
+				if (TrySkipFileFromFilters(context, bind_data, gstate, reader_data, current_file_index)) {
+					break; // skipped file - keep scanning for a real file to guarantee progress
+				}
+				reader_data.file_state = MultiFileFileState::OPENING;
+				{
+					MultiFileReaderData *reader_ptr = &reader_data;
+					read_ahead.ScheduleFileOpen([&context, &bind_data, &gstate, reader_ptr, current_file_index]() {
+						OpenMarkedFileAsync(context, bind_data, gstate, *reader_ptr, current_file_index);
+					});
+				}
+				progress_guaranteed = true;
+				break;
+			case MultiFileFileState::OPENING:
+			case MultiFileFileState::OPEN:
+				// the front file is already being/been opened - forward progress is guaranteed
+				progress_guaranteed = true;
+				break;
+			default:
+				break; // SKIPPED / CLOSED - keep scanning ahead
+			}
+		}
+	}
+
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
 	static bool TryOpenNextFile(ClientContext &context, const MultiFileBindData &bind_data,
 	                            MultiFileGlobalState &global_state, unique_lock<mutex> &parallel_lock) {
@@ -371,8 +430,7 @@ public:
 
 			auto &current_reader_data = *global_state.readers[current_file_index];
 			if (current_reader_data.file_state == MultiFileFileState::UNOPENED) {
-				if (TrySkipFileFromFilters(context, bind_data, global_state, current_reader_data,
-				                           current_file_index)) {
+				if (TrySkipFileFromFilters(context, bind_data, global_state, current_reader_data, current_file_index)) {
 					//! Intentionally do not increase 'i'
 					continue;
 				}
@@ -382,8 +440,8 @@ public:
 
 				bool opened;
 				try {
-					opened = OpenMarkedFile(context, bind_data, global_state, current_reader_data,
-					                        current_file_index, parallel_lock);
+					opened = OpenMarkedFile(context, bind_data, global_state, current_reader_data, current_file_index,
+					                        parallel_lock);
 				} catch (...) {
 					parallel_lock.lock();
 					global_state.error_opening_file = true;
@@ -524,7 +582,10 @@ public:
 				continue;
 			}
 
-			if (TryOpenNextFile(context, bind_data, gstate, parallel_lock)) {
+			if (gstate.read_ahead) {
+				// read-ahead: open files on the async pool ahead of decoding, then wait for the front one
+				ScheduleFileOpens(context, bind_data, gstate, parallel_lock);
+			} else if (TryOpenNextFile(context, bind_data, gstate, parallel_lock)) {
 				continue;
 			}
 
@@ -572,7 +633,7 @@ public:
 		    TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
 			return;
 		}
-		auto depth = MultiFileReadAhead::ResolveDepth(context, gstate.max_threads);
+		auto depth = MultiFileReadAhead::ResolveDepth(context);
 		if (depth > 0) {
 			gstate.read_ahead = make_uniq<MultiFileReadAhead>(context, depth);
 		}

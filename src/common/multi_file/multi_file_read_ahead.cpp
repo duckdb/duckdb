@@ -31,6 +31,25 @@ private:
 	shared_ptr<ReadAheadJobCompletion> completion;
 };
 
+// Async task that opens one file ahead of decoding and releases the pending-open count when destroyed.
+class FileOpenTask : public BaseExecutorTask {
+public:
+	FileOpenTask(TaskExecutor &executor, MultiFileReadAhead &read_ahead_p, std::function<void()> open_fn_p)
+	    : BaseExecutorTask(executor), read_ahead(read_ahead_p), open_fn(std::move(open_fn_p)) {
+	}
+	~FileOpenTask() override {
+		read_ahead.FinishFileOpen();
+	}
+
+	void ExecuteTask() override {
+		open_fn();
+	}
+
+private:
+	MultiFileReadAhead &read_ahead;
+	std::function<void()> open_fn;
+};
+
 void ReadAheadJobCompletion::FinishIOTask() {
 	const auto previous = pending_io_tasks.fetch_sub(1);
 	D_ASSERT(previous > 0);
@@ -55,17 +74,22 @@ bool ReadAheadJobCompletion::TryPark(const InterruptState &interrupt_state) {
 MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p)
     : read_ahead_depth(read_ahead_depth_p), auto_depth(Settings::Get<ReadAheadDepthSetting>(context) == -1),
       io_byte_budget(auto_depth ? BufferManager::GetBufferManager(context).GetMaxMemory() / 4
-                                : NumericLimits<idx_t>::Maximum()) {
+                                : NumericLimits<idx_t>::Maximum()),
+      open_window(
+          MaxValue<idx_t>(TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() * 2, read_ahead_depth_p)) {
 	D_ASSERT(read_ahead_depth_p > 0);
 	executor = make_uniq<TaskExecutor>(context, TaskSchedulerType::ASYNC);
 }
 
-idx_t MultiFileReadAhead::ResolveDepth(ClientContext &context, idx_t max_threads) {
+idx_t MultiFileReadAhead::ResolveDepth(ClientContext &context) {
 	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
-	if (configured_depth == -1) {
-		return MaxValue<idx_t>(max_threads / 4, 4);
+	if (configured_depth != -1) {
+		return NumericCast<idx_t>(configured_depth);
 	}
-	return NumericCast<idx_t>(configured_depth);
+	// auto: size the depth to the async I/O pool so enough scan jobs stay in flight to keep it fed without
+	// over-scheduling; the io_byte_budget (also enabled in auto mode) bounds the memory this costs for large files
+	const auto async_threads = TaskScheduler::GetScheduler(context).NumberOfAsyncThreads();
+	return MaxValue<idx_t>(async_threads, 4);
 }
 
 MultiFileReadAhead::~MultiFileReadAhead() {
@@ -183,6 +207,22 @@ void MultiFileReadAhead::ThrowIfError() {
 	if (executor->HasError()) {
 		executor->ThrowError();
 	}
+}
+
+void MultiFileReadAhead::ScheduleFileOpen(std::function<void()> open_fn) {
+	++pending_opens;
+	// the task decrements pending_opens in its destructor, so the count stays balanced even if scheduling throws
+	executor->ScheduleTask(make_uniq<FileOpenTask>(*executor, *this, std::move(open_fn)));
+}
+
+void MultiFileReadAhead::FinishFileOpen() {
+	const auto previous = pending_opens.fetch_sub(1);
+	D_ASSERT(previous > 0);
+	(void)previous;
+}
+
+bool MultiFileReadAhead::CanScheduleOpen() const {
+	return pending_opens.load() < open_window;
 }
 
 void MultiFileReadAhead::ReleaseSlot() {

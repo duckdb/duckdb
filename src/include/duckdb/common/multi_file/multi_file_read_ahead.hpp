@@ -16,6 +16,7 @@
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/interrupt.hpp"
+#include <functional>
 
 namespace duckdb {
 class ClientContext;
@@ -53,9 +54,9 @@ public:
 	~MultiFileReadAhead();
 
 public:
-	//! Resolve the effective read-ahead depth from the read_ahead_depth setting (-1 = auto from thread count).
+	//! Resolve the effective read-ahead depth from the read_ahead_depth setting (-1 = auto from the async pool size).
 	//! Returns 0 when read-ahead is disabled.
-	static idx_t ResolveDepth(ClientContext &context, idx_t max_threads);
+	static idx_t ResolveDepth(ClientContext &context);
 
 	//! Set/Check if scan is done, i.e., no more jobs to do
 	void SetDone();
@@ -87,6 +88,13 @@ public:
 	//! Throw if any read-ahead thread or task pushed an error
 	void ThrowIfError();
 
+	//! Schedule a file-open closure on the async pool (opens files ahead of decoding)
+	void ScheduleFileOpen(std::function<void()> open_fn);
+	//! Mark one scheduled file-open as completed
+	void FinishFileOpen();
+	//! Whether another file-open may be scheduled without exceeding the open-ahead window
+	bool CanScheduleOpen() const;
+
 private:
 	//! Release a look-ahead slot
 	void ReleaseSlot();
@@ -98,6 +106,8 @@ private:
 	const bool auto_depth;
 	//! Maximum bytes of I/O scheduled ahead of decoding, additional jobs wait until claims free up bytes.
 	const idx_t io_byte_budget;
+	//! Maximum file-opens scheduled ahead of decoding on the async pool
+	const idx_t open_window;
 
 	mutable mutex lock;
 	deque<unique_ptr<MultiFileScanJob>> ready_queue;
@@ -115,6 +125,8 @@ private:
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet
 	atomic<idx_t> active_producers {0};
+	//! File-opens scheduled on the async pool that have not completed yet
+	atomic<idx_t> pending_opens {0};
 	//! Async I/O executor (async pool).
 	unique_ptr<TaskExecutor> executor;
 };

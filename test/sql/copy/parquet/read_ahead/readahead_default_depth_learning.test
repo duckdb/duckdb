@@ -6,11 +6,14 @@ require parquet
 
 require vector_size 2048
 
-# at threads=1 the automatic read-ahead depth resolves to 4, so the first 4 row groups are scheduled with
-# fresh scan states before anything decodes; every later row group is scheduled with a recycled state that
-# has seen a fully-selective filter, and must switch from whole_group to prefetch_filters
+# at read-ahead depth 4 the first 4 row groups are scheduled with fresh scan states before anything decodes;
+# every later row group is scheduled with a recycled state that has seen a fully-selective filter, and must
+# switch from whole_group to prefetch_filters. depth is pinned so the strategy sequence is machine-independent.
 statement ok
 SET threads=1
+
+statement ok
+SET read_ahead_depth=4
 
 statement ok
 SET parquet_prefetch_column_gap=16384
