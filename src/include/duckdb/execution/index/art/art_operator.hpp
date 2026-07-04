@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
@@ -19,9 +20,8 @@ namespace duckdb {
 //! ARTOperator provides functionality for different ART operations.
 class ARTOperator {
 public:
-	//! Lookup returns a Node by value matching the key,
-	//! or an empty Node, if no such leaf exists.
-	static Node Lookup(ART &art, const Node &node, const ARTKey &key, idx_t depth) {
+	//! Lookup returns a Node Pointer by value matching the key, or empty optional if no such leaf exists.
+	static optional<Node> Lookup(ART &art, const Node &node, const ARTKey &key, idx_t depth) {
 		Node current(node);
 
 		while (current.HasMetadata()) {
@@ -35,7 +35,7 @@ public:
 				auto &child = *reinterpret_cast<const Node *>(data + art.PrefixCount() + 1);
 				for (idx_t i = 0; i < data[art.PrefixCount()]; i++) {
 					if (data[i] != key[depth]) {
-						return Node();
+						return nullopt;
 					}
 					depth++;
 				}
@@ -46,7 +46,7 @@ public:
 			D_ASSERT(depth < key.len);
 			auto child = current.GetChildNode(art, key[depth]);
 			if (!child.HasMetadata()) {
-				return Node();
+				return nullopt;
 			}
 
 			current = child;
@@ -54,7 +54,7 @@ public:
 			depth++;
 		}
 
-		return Node();
+		return nullopt;
 	}
 
 	//! LookupInLeaf returns true if the rowid is in the leaf:
@@ -347,14 +347,14 @@ private:
 			for (auto &delete_index : *delete_index_info.delete_indexes) {
 				auto &delete_art = delete_index.get().Cast<ART>();
 				auto delete_leaf = Lookup(delete_art, delete_art.tree, key, 0);
-				if (!delete_leaf.HasMetadata()) {
+				if (!delete_leaf) {
 					continue;
 				}
 
 				// The row ID has changed.
 				// Thus, the local index has a newer (local) row ID, and this is a constraint violation.
-				D_ASSERT(delete_leaf.GetType() == NType::LEAF_INLINED);
-				auto deleted_row_id = delete_leaf.GetRowId();
+				D_ASSERT(delete_leaf->GetType() == NType::LEAF_INLINED);
+				auto deleted_row_id = delete_leaf->GetRowId();
 				auto this_row_id = node.GetRowId();
 				if (deleted_row_id != this_row_id) {
 					continue;
