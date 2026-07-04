@@ -491,10 +491,10 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 	}
 	SelectionVector result_sel(approved_tuple_count);
 	// the narrowing path indexes the running selection per row: use the materialized view
-	// (nullptr == identity over [0, approved_tuple_count), the prefix of still-candidate rows)
+	// (nullptr == identity, only valid when the candidate rows span the whole scanned vector)
 	optional_ptr<SelectionVector> current_sel = sel.IsSet() ? &sel.Flattened() : nullptr;
 	SelectionVector identity_sel;
-	if (!sel.IsSet() && nested) {
+	if (!sel.IsSet() && (nested || approved_tuple_count != scan_count)) {
 		identity_sel = SelectionVector::Incremental(approved_tuple_count);
 		current_sel = &identity_sel;
 	}
