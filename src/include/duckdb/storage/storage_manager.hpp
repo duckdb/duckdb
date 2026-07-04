@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/prefetched_file_data.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
@@ -185,6 +186,9 @@ protected:
 	atomic<idx_t> wal_entries_count;
 	//! Storage options passed in through configuration
 	StorageOptions storage_options;
+	//! Header bytes prefetched during file-type detection, consumed by LoadDatabase so the header reads hit
+	//! memory instead of re-reading. Empty unless this is a DuckDB file opened via ATTACH.
+	PrefetchedFileData prefetched_file;
 
 public:
 	template <class TARGET>
