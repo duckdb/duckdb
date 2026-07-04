@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-NodeHandle PrefixHandle::NewDeprecated(FixedSizeAllocator &allocator, Node &node) {
+NodeHandle PrefixHandle::NewDeprecated(FixedSizeAllocator &allocator, NodePtr &node) {
 	node = allocator.New();
 	node.SetMetadata(static_cast<uint8_t>(PREFIX));
 
@@ -16,11 +16,11 @@ NodeHandle PrefixHandle::NewDeprecated(FixedSizeAllocator &allocator, Node &node
 	return handle;
 }
 
-OptionalNode PrefixHandle::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state) {
+OptionalNode PrefixHandle::TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state) {
 	// Early-out, if we do not need any transformations.
 	if (!state.HasAllocator()) {
-		Node current = node;
-		auto &allocator = Node::GetAllocator(art, PREFIX);
+		NodePtr current = node;
+		auto &allocator = NodePtr::GetAllocator(art, PREFIX);
 		while (current.GetType() == PREFIX && current.GetGateStatus() == GateStatus::GATE_NOT_SET) {
 			if (!allocator.LoadedFromStorage(current)) {
 				return OptionalNode();
@@ -39,11 +39,11 @@ OptionalNode PrefixHandle::TransformToDeprecated(ART &art, Node &node, Transform
 
 	// We need to create a new prefix (chain) in the deprecated format.
 	auto &deprecated_allocator = state.GetAllocator();
-	Node new_node;
+	NodePtr new_node;
 	auto new_handle = NewDeprecated(deprecated_allocator, new_node);
 
-	auto &allocator = Node::GetAllocator(art, PREFIX);
-	Node current_node = node;
+	auto &allocator = NodePtr::GetAllocator(art, PREFIX);
+	NodePtr current_node = node;
 	while (current_node.GetType() == PREFIX && current_node.GetGateStatus() == GateStatus::GATE_NOT_SET) {
 		if (!allocator.LoadedFromStorage(current_node)) {
 			return OptionalNode();
@@ -64,7 +64,7 @@ OptionalNode PrefixHandle::TransformToDeprecated(ART &art, Node &node, Transform
 
 		// Freeing the node here can trigger a buffer removal (last segment on the buffer).
 		// In that case, there cannot be any readers left on the buffer.
-		Node::FreeNode(art, current_node);
+		NodePtr::FreeNode(art, current_node);
 		auto &new_child = ChildRefWithCount(new_handle, DEPRECATED_COUNT);
 		current_node = new_child;
 	}
@@ -72,7 +72,7 @@ OptionalNode PrefixHandle::TransformToDeprecated(ART &art, Node &node, Transform
 	node = new_node;
 	auto &new_child = ChildRefWithCount(new_handle, DEPRECATED_COUNT);
 	// Handle gated endpoints while the new prefix is still pinned.
-	Node endpoint = new_child;
+	NodePtr endpoint = new_child;
 	if (endpoint.HasMetadata() && endpoint.GetGateStatus() == GateStatus::GATE_SET) {
 		Leaf::TransformToDeprecated(art, new_child);
 		return OptionalNode();

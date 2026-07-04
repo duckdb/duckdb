@@ -4,12 +4,12 @@
 
 namespace duckdb {
 
-NodeHandle::NodeHandle(ART &art, const Node node)
-    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), type(node.GetType()) {
+NodeHandle::NodeHandle(ART &art, const NodePtr node)
+    : handle(NodePtr::GetAllocator(art, node.GetType()).GetHandle(node)), type(node.GetType()) {
 	handle.MarkModified();
 }
 
-NodeHandle::NodeHandle(FixedSizeAllocator &allocator, const Node node, NType type)
+NodeHandle::NodeHandle(FixedSizeAllocator &allocator, const NodePtr node, NType type)
     : handle(allocator.GetHandle(node)), type(type) {
 	D_ASSERT(node.GetType() == type);
 	handle.MarkModified();
@@ -26,8 +26,8 @@ NodeHandle &NodeHandle::operator=(NodeHandle &&other) noexcept {
 	return *this;
 }
 
-ConstNodeHandle::ConstNodeHandle(const ART &art, const Node node)
-    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), type(node.GetType()) {
+ConstNodeHandle::ConstNodeHandle(const ART &art, const NodePtr node)
+    : handle(NodePtr::GetAllocator(art, node.GetType()).GetHandle(node)), type(node.GetType()) {
 }
 
 } // namespace duckdb
