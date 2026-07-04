@@ -107,3 +107,46 @@ SELECT count(*) FROM (
 );
 ----
 0
+
+# ---------------------------------------------------------------------------
+# TIMESTAMP columns (int64 domain) rewrite too, via the overflow-safe bisection
+# ---------------------------------------------------------------------------
+statement ok
+CREATE TABLE ts AS SELECT ('2020-01-01'::TIMESTAMP + INTERVAL (range) MINUTE) AS t FROM range(1000000);
+
+query II
+EXPLAIN SELECT count(*) FROM ts WHERE year(t) = 2020;
+----
+logical_opt	<REGEX>:.*t <= '2020-12-31 23:59:59.999999'.*
+
+query II
+EXPLAIN SELECT count(*) FROM ts WHERE year(t) = 2020;
+----
+logical_opt	<!REGEX>:.*year.*
+
+# correctness on TIMESTAMP with ±infinity and NULL, differential vs a pushdown barrier
+statement ok
+CREATE TABLE ets AS
+  SELECT ('2000-01-01'::TIMESTAMP + INTERVAL (range) HOUR) AS t FROM range(200000)
+  UNION ALL SELECT 'infinity'::TIMESTAMP UNION ALL SELECT '-infinity'::TIMESTAMP UNION ALL SELECT NULL::TIMESTAMP;
+
+query I
+SELECT count(*) FROM (
+  SELECT 1 FROM ets WHERE year(t) > 2010
+  EXCEPT ALL SELECT 1 FROM (SELECT t FROM ets OFFSET 0) WHERE year(t) > 2010
+);
+----
+0
+
+query I
+SELECT count(*) FROM (
+  SELECT 1 FROM (SELECT t FROM ets OFFSET 0) WHERE year(t) > 2010
+  EXCEPT ALL SELECT 1 FROM ets WHERE year(t) > 2010
+);
+----
+0
+
+query I
+SELECT count(*) FROM ets WHERE year(t) = 2005;
+----
+8760

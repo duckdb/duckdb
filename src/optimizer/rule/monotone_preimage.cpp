@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/rule/monotone_preimage.hpp"
 
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/arg_properties.hpp"
@@ -48,9 +49,18 @@ static bool GetFiniteDomain(const LogicalType &type, int64_t &lo, int64_t &hi, b
 		hi = int64_t(date_t::infinity().days) - 1;
 		has_infinity = true;
 		return true;
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+		// the ±infinity sentinels keep the finite domain bounded away from INT64_MIN/MAX, so the
+		// never-true sentinels (hi+1 / lo-1) in the bisection can't overflow
+		lo = timestamp_t::ninfinity().value + 1;
+		hi = timestamp_t::infinity().value - 1;
+		has_infinity = true;
+		return true;
 	default:
-		// BIGINT/TIMESTAMP have a full int64 domain (midpoint would overflow) and floating types are
-		// only monotone up to rounding: both are left to a later extension.
+		// BIGINT's full int64 domain would overflow the never-true bisection sentinels, other timestamp
+		// resolutions and HUGEINT need a wider midpoint, and floating types are only monotone up to
+		// rounding: all left to a later extension.
 		return false;
 	}
 }
@@ -63,6 +73,12 @@ static bool EvalFunc(ClientContext &context, const BoundFunctionExpression &func
 	auto &clone_func = clone->Cast<BoundFunctionExpression>();
 	clone_func.GetChildrenMutable()[0] = make_uniq<BoundConstantExpression>(Value::Numeric(col_type, i));
 	return ExpressionExecutor::TryEvaluateScalar(context, clone_func, out) && !out.IsNull();
+}
+
+//! Midpoint of [l, h] (l <= h) that never overflows, even on the full int64 domain where l + h or
+//! h - l would.
+static int64_t SafeMidpoint(int64_t l, int64_t h) {
+	return l + static_cast<int64_t>((static_cast<uint64_t>(h) - static_cast<uint64_t>(l)) / 2);
 }
 
 //! First index in [lo, hi] where `pred` becomes true, assuming pred is false on a prefix and true on
@@ -83,8 +99,8 @@ static int64_t FirstTrueSuffix(PRED pred, int64_t lo, int64_t hi, bool &ok) {
 		return lo;
 	}
 	int64_t l = lo, h = hi; // pred(l) false, pred(h) true
-	while (h - l > 1) {
-		int64_t mid = l + (h - l) / 2;
+	while (static_cast<uint64_t>(h) - static_cast<uint64_t>(l) > 1) {
+		int64_t mid = SafeMidpoint(l, h);
 		if (!pred(mid, v, ok) || !ok) {
 			return 0;
 		}
@@ -115,8 +131,8 @@ static int64_t LastTruePrefix(PRED pred, int64_t lo, int64_t hi, bool &ok) {
 		return hi;
 	}
 	int64_t l = lo, h = hi; // pred(l) true, pred(h) false
-	while (h - l > 1) {
-		int64_t mid = l + (h - l) / 2;
+	while (static_cast<uint64_t>(h) - static_cast<uint64_t>(l) > 1) {
+		int64_t mid = SafeMidpoint(l, h);
 		if (!pred(mid, v, ok) || !ok) {
 			return 0;
 		}
