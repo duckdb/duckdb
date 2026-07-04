@@ -121,7 +121,8 @@ void ARTConstScanPreorder(const ART &art, const NodePtr &root, CHILD_HANDLER &&c
 //===--------------------------------------------------------------------===//
 
 struct ARTPostOrderScanEntry {
-	ARTPostOrderScanEntry(NodePtr node_p, bool children_visited_p) : node(node_p), children_visited(children_visited_p) {
+	ARTPostOrderScanEntry(NodePtr node_p, bool children_visited_p)
+	    : node(node_p), children_visited(children_visited_p) {
 	}
 
 	NodePtr node;

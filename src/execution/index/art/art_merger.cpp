@@ -207,8 +207,8 @@ void ARTMerger::MergeNodes(NodeEntry &entry) {
 	}
 }
 
-void ARTMerger::MergeNodeAndPrefix(NodePtr &node, NodePtr &prefix, const GateStatus parent_status, const idx_t parent_depth,
-                                   const uint8_t pos) {
+void ARTMerger::MergeNodeAndPrefix(NodePtr &node, NodePtr &prefix, const GateStatus parent_status,
+                                   const idx_t parent_depth, const uint8_t pos) {
 	D_ASSERT(node.IsNode());
 	D_ASSERT(prefix.GetType() == NType::PREFIX);
 
@@ -231,7 +231,8 @@ void ARTMerger::MergeNodeAndPrefix(NodePtr &node, NodePtr &prefix, const GateSta
 	prefix.Clear();
 }
 
-void ARTMerger::MergeNodeAndPrefix(NodePtr &node, NodePtr &prefix, const GateStatus parent_status, const idx_t parent_depth) {
+void ARTMerger::MergeNodeAndPrefix(NodePtr &node, NodePtr &prefix, const GateStatus parent_status,
+                                   const idx_t parent_depth) {
 	D_ASSERT(node.IsNode());
 	D_ASSERT(prefix.GetType() == NType::PREFIX);
 
