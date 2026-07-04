@@ -24,11 +24,11 @@ enum class ScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
 //! Pins the parent node and calls preorder_handler on all the children, which can perform in-place updates within
 //! the parent while it is pinned, as well as defines the return Node value that should be pushed onto the
 //! stack for further traversal.
-template <class NODE_TYPE, class PRE_HANDLER>
+template <class NODE, class PRE_HANDLER>
 static void ScanChildren(ART &art, Node node, PRE_HANDLER &&pre_handler, vector<Node> &stack) {
 	NodeHandle handle(art, node);
-	auto &n = handle.Get<NODE_TYPE>();
-	NODE_TYPE::Iterator(n, [&](Node &child) {
+	auto &n = handle.Get<NODE>();
+	NODE::Iterator(n, [&](Node &child) {
 		auto push = pre_handler(child);
 		if (push.HasMetadata()) {
 			stack.push_back(push);
@@ -107,11 +107,11 @@ struct ScanEntry {
 
 //! Pins the parent node and iterates over all the children. The filter receives each child by reference
 //! and returns the Node value that should be pushed onto the stack for further traversal.
-template <class NODE_TYPE, class FILTER>
+template <class NODE, class FILTER>
 static void ScanChildren(ART &art, Node node, FILTER &&filter, vector<ScanEntry> &stack) {
 	NodeHandle handle(art, node);
-	auto &n = handle.Get<NODE_TYPE>();
-	NODE_TYPE::Iterator(n, [&](Node &child) {
+	auto &n = handle.Get<NODE>();
+	NODE::Iterator(n, [&](Node &child) {
 		auto push_node = filter(child);
 		if (push_node.HasMetadata()) {
 			stack.push_back(ScanEntry {push_node, false});
