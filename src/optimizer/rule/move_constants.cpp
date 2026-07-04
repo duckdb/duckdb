@@ -187,10 +187,13 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &outer_constant = bindings[1].get().Cast<BoundConstantExpression>();
 	auto &negation = bindings[2].get().Cast<BoundFunctionExpression>();
+
+	// Unsigned values cannot be negated
 	if (negation.GetReturnType().IsUnsigned()) {
-		// negating an unsigned value is only valid for 0 - don't try to rewrite
 		return nullptr;
 	}
+
+	// Handle NULL values
 	if (outer_constant.GetValue().IsNull()) {
 		if (comparison.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
 		    comparison.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
@@ -198,6 +201,7 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 		}
 		return make_uniq<BoundConstantExpression>(Value(comparison.GetReturnType()));
 	}
+
 	auto &constant_type = outer_constant.GetReturnType();
 	if (constant_type.IsFloating()) {
 		double val = 0.0;
