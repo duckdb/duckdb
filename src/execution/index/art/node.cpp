@@ -488,7 +488,7 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 		return ScanNodeResult::SCAN_CHILDREN;
 	};
 
-	auto pre_handler = [&](Node &child) -> ARTScanStep {
+	auto pre_handler = [&](const Node &child) -> ARTScanStep {
 		D_ASSERT(child.HasMetadata());
 		auto type = child.GetType();
 		switch (type) {
@@ -515,8 +515,7 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 		}
 	};
 
-	Node root = *this;
-	ARTScanPreorder(art, root, filter, pre_handler);
+	ARTConstScanPreorder(art, *this, filter, pre_handler);
 }
 
 //===--------------------------------------------------------------------===//

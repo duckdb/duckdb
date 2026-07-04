@@ -136,6 +136,13 @@ public:
 		}
 	}
 
+	template <class F>
+	static void Iterator(const BaseNode<CAPACITY, TYPE> &n, F &&lambda) {
+		for (uint8_t i = 0; i < n.count; i++) {
+			lambda(n.children[i]);
+		}
+	}
+
 private:
 	static void InsertChildInternal(BaseNode &n, const uint8_t byte, const Node child);
 	static NodeHandle DeleteChildInternal(ART &art, Node &node, const uint8_t byte);

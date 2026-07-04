@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/execution/index/art/const_prefix_handle.hpp"
 #include "duckdb/execution/index/art/prefix_handle.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
@@ -106,6 +107,70 @@ void ARTScanPreorder(ART &art, Node &root, SCAN_STRATEGY &&scan_strategy, PRE_HA
 			break;
 		default:
 			throw InternalException("invalid node type for ARTScanPreOrder: %d", current.GetType());
+		}
+	}
+}
+
+template <class NODE, class PRE_HANDLER>
+static void ConstScanChildren(const ART &art, Node node, PRE_HANDLER &&preorder_handler, vector<Node> &stack) {
+	ConstNodeHandle handle(art, node);
+	auto &n = handle.Get<NODE>();
+	NODE::Iterator(n, [&](const Node &child) {
+		auto step = preorder_handler(child);
+		if (step.action == ARTScanAction::PUSH_NODE) {
+			stack.push_back(step.node);
+		}
+	});
+}
+
+template <class SCAN_STRATEGY, class PRE_HANDLER>
+void ARTConstScanPreorder(const ART &art, const Node &root, SCAN_STRATEGY &&scan_strategy,
+                          PRE_HANDLER &&preorder_handler) {
+	vector<Node> stack;
+
+	auto step = preorder_handler(root);
+	if (step.action == ARTScanAction::PUSH_NODE) {
+		stack.push_back(step.node);
+	}
+
+	while (!stack.empty()) {
+		Node current = stack.back();
+		stack.pop_back();
+
+		if (scan_strategy(current) == ScanNodeResult::SKIP) {
+			continue;
+		}
+
+		switch (current.GetType()) {
+		case NType::LEAF_INLINED:
+		case NType::LEAF:
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
+			break;
+		case NType::PREFIX: {
+			ConstNodeHandle handle(art, current);
+			auto child = ConstPrefixHandle::ChildRef(art, handle);
+			step = preorder_handler(child);
+			if (step.action == ARTScanAction::PUSH_NODE) {
+				stack.push_back(step.node);
+			}
+			break;
+		}
+		case NType::NODE_4:
+			ConstScanChildren<Node4>(art, current, preorder_handler, stack);
+			break;
+		case NType::NODE_16:
+			ConstScanChildren<Node16>(art, current, preorder_handler, stack);
+			break;
+		case NType::NODE_48:
+			ConstScanChildren<Node48>(art, current, preorder_handler, stack);
+			break;
+		case NType::NODE_256:
+			ConstScanChildren<Node256>(art, current, preorder_handler, stack);
+			break;
+		default:
+			throw InternalException("invalid node type for ARTConstScanPreOrder: %d", current.GetType());
 		}
 	}
 }
