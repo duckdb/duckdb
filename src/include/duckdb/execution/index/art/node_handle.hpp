@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 
@@ -44,6 +46,49 @@ public:
 private:
 	SegmentHandle handle;
 	NType type;
+};
+
+//! SlotHandle wraps a mutable reference to a NodePtr slot.
+//! Ref() is valid for the lifetime of this object.
+//! If constructed with a pin, SlotHandle owns the NodeHandle keeping the slot valid.
+//! If constructed without a pin, the caller must guarantee the slot remains valid
+class SlotHandle {
+public:
+	//! Create a slot handle for memory that is valid without this object owning a pin.
+	explicit SlotHandle(NodePtr &slot_p) : slot(&slot_p) {
+	}
+
+	//! Create a slot handle that owns the pin keeping slot_p valid.
+	SlotHandle(NodePtr &slot_p, NodeHandle &&pin_p) : slot(&slot_p), pin(std::move(pin_p)) {
+	}
+
+	SlotHandle(const SlotHandle &) = delete;
+	SlotHandle &operator=(const SlotHandle &) = delete;
+	SlotHandle(SlotHandle &&) = default;
+	SlotHandle &operator=(SlotHandle &&) = default;
+
+public:
+	//! Returns the mutable slot.
+	NodePtr &Ref() {
+		D_ASSERT(slot);
+		return *slot;
+	}
+
+	//! Rebind to memory valid without this object owning a pin, dropping the previous pin if there was one.
+	void Rebind(NodePtr &slot_p) {
+		slot = &slot_p;
+		pin.reset();
+	}
+
+	//! Rebind to a slot protected by pin_p, dropping the previous pin if there was one.
+	void Rebind(NodePtr &slot_p, NodeHandle &&pin_p) {
+		slot = &slot_p;
+		pin.emplace(std::move(pin_p));
+	}
+
+private:
+	NodePtr *slot;
+	optional<NodeHandle> pin;
 };
 
 class ConstNodeHandle {
