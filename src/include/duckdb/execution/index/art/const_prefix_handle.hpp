@@ -10,14 +10,43 @@
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/node_handle.hpp"
 
 namespace duckdb {
 
-//! ConstPrefixHandle provides static methods for read-only prefix operations.
+//! ConstPrefixHandle owns the pin for a read-only prefix node.
 class ConstPrefixHandle {
 public:
 	static constexpr NType PREFIX = NType::PREFIX;
 
+public:
+	explicit ConstPrefixHandle(const ART &art, const NodePtr node) : handle(art, node) {
+	}
+
+	ConstPrefixHandle(const ConstPrefixHandle &) = delete;
+	ConstPrefixHandle &operator=(const ConstPrefixHandle &) = delete;
+	ConstPrefixHandle(ConstPrefixHandle &&) = delete;
+	ConstPrefixHandle &operator=(ConstPrefixHandle &&) = delete;
+
+public:
+	const_data_ptr_t Data() {
+		return handle.GetPtr();
+	}
+
+	uint8_t GetCount(const ART &art) {
+		return Data()[art.PrefixCount()];
+	}
+
+	uint8_t GetByte(const idx_t pos) {
+		return Data()[pos];
+	}
+
+	//! Returns the child slot. The reference is valid while this ConstPrefixHandle is alive.
+	const NodePtr &Child(const ART &art) {
+		return ChildRef(art, handle);
+	}
+
+public:
 	//! Get a const reference to the child slot of the prefix.
 	static const NodePtr &ChildRef(const ART &art, ConstNodeHandle &handle) {
 		return *reinterpret_cast<const NodePtr *>(handle.GetPtr() + art.PrefixCount() + 1);
@@ -46,6 +75,9 @@ private:
 		}
 		return node;
 	}
+
+private:
+	ConstNodeHandle handle;
 };
 
 } // namespace duckdb
