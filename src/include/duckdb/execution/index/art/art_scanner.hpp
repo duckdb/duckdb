@@ -214,16 +214,15 @@ void ARTScanPostorder(ART &art, Node &root, CHILD_SELECTOR &&child_selector, POS
 	stack.push_back(ScanEntry {root, false});
 
 	while (!stack.empty()) {
-		auto &entry = stack.back();
-
-		if (entry.children_visited) {
-			postorder_handler(entry.node);
+		if (stack.back().children_visited) {
+			auto current = stack.back().node;
+			postorder_handler(current);
 			stack.pop_back();
 			continue;
 		}
 
-		entry.children_visited = true;
-		auto current = entry.node;
+		auto current = stack.back().node;
+		stack.back().children_visited = true;
 
 		switch (current.GetType()) {
 		case NType::LEAF_INLINED:
