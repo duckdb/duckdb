@@ -37,12 +37,12 @@ static void ScanChildren(ART &art, Node node, PRE_HANDLER &&pre_handler, vector<
 }
 
 //! Pre-order scanner: each child pointer in the parent node is processed by pre_handler before being pushed onto the
-//! stack (either in its original or processed form). When a node is popped, the filter decides whether to scan its
-//! children or skip it. If the children need to be scanned, the parent is pinned in ScanChildren and any updates are
-//! performed in place within the pinned parent node using preorder_handler (which also defines what Node to push onto
-//! the stack for further traversal).
-template <class FILTER, class PRE_HANDLER>
-void ARTScanPreorder(ART &art, Node &root, FILTER &&filter, PRE_HANDLER &&preorder_handler) {
+//! stack (either in its original or processed form). When a node is popped, scan_strategy decides whether to scan
+//! its children or skip it. If the children need to be scanned, the parent is pinned in ScanChildren and any updates
+//! are performed in place within the pinned parent node using preorder_handler (which also defines what Node to push
+//! onto the stack for further traversal).
+template <class SCAN_STRATEGY, class PRE_HANDLER>
+void ARTScanPreorder(ART &art, Node &root, SCAN_STRATEGY &&scan_strategy, PRE_HANDLER &&preorder_handler) {
 	vector<Node> stack;
 
 	// root node is always pinned, handle it first.
@@ -55,7 +55,7 @@ void ARTScanPreorder(ART &art, Node &root, FILTER &&filter, PRE_HANDLER &&preord
 		Node current = stack.back();
 		stack.pop_back();
 
-		if (filter(current) == ScanNodeResult::SKIP) {
+		if (scan_strategy(current) == ScanNodeResult::SKIP) {
 			continue;
 		}
 
