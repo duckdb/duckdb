@@ -31,19 +31,20 @@ public:
 
 private:
 	template <class F>
-	static void Iterator(ART &art, reference<const Node> &ref, const bool exit_gate, F &&lambda) {
-		while (ref.get().HasMetadata() && ref.get().GetType() == PREFIX) {
-			ConstNodeHandle handle(art, ref);
+	static Node Iterator(ART &art, Node node, const bool exit_gate, F &&lambda) {
+		while (node.HasMetadata() && node.GetType() == PREFIX) {
+			ConstNodeHandle handle(art, node);
 			auto data = handle.GetPtr();
-			auto &child = ChildRef(art, handle);
+			auto child = ChildRef(art, handle);
 
 			lambda(handle, data, child);
 
-			ref = child;
-			if (exit_gate && ref.get().GetGateStatus() == GateStatus::GATE_SET) {
+			node = child;
+			if (exit_gate && node.GetGateStatus() == GateStatus::GATE_SET) {
 				break;
 			}
 		}
+		return node;
 	}
 };
 
