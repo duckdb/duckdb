@@ -23,12 +23,12 @@ namespace duckdb {
 //! per-value index access on a possibly-bitmap selection is a compile error; Flattened() is the explicit,
 //! once-per-vector conversion. The safe (non-indexing) part of the base API is re-exposed below.
 struct SelectionResult : private SelectionVector {
-	using SelectionVector::SelectionVector;
-	using SelectionVector::Initialize;
-	using SelectionVector::IsSet;
-	using SelectionVector::IsBitmap;
-	using SelectionVector::RowSpan;
 	using SelectionVector::Capacity;
+	using SelectionVector::Initialize;
+	using SelectionVector::IsBitmap;
+	using SelectionVector::IsSet;
+	using SelectionVector::RowSpan;
+	using SelectionVector::SelectionVector;
 
 	//! Materialize a bitmap (no-op if flat) and view as a plain, index-only SelectionVector.
 	SelectionVector &Flattened() {
