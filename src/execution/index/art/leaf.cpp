@@ -161,9 +161,9 @@ void Leaf::DeprecatedFree(ART &art, Node &node) {
 bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, set<row_t> &row_ids, const idx_t max_count) {
 	D_ASSERT(node.GetType() == LEAF);
 
-	reference<const Node> ref(node);
-	while (ref.get().HasMetadata()) {
-		ConstNodeHandle handle(art, ref.get());
+	Node current = node;
+	while (current.HasMetadata()) {
+		ConstNodeHandle handle(art, current);
 		auto &leaf = handle.Get<Leaf>();
 		if (row_ids.size() + leaf.count > max_count) {
 			return false;
@@ -171,7 +171,7 @@ bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, set<row_t> &row_ids, 
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			row_ids.insert(leaf.row_ids[i]);
 		}
-		ref = leaf.ptr;
+		current = leaf.ptr;
 	}
 	return true;
 }
@@ -218,13 +218,12 @@ string Leaf::DeprecatedToString(ART &art, const Node &node, const ToStringOption
 void Leaf::DeprecatedVerify(ART &art, const Node &node) {
 	D_ASSERT(node.GetType() == LEAF);
 
-	reference<const Node> ref(node);
-
-	while (ref.get().HasMetadata()) {
-		ConstNodeHandle handle(art, ref.get());
+	Node current = node;
+	while (current.HasMetadata()) {
+		ConstNodeHandle handle(art, current);
 		auto &leaf = handle.Get<Leaf>();
 		D_ASSERT(leaf.count <= LEAF_SIZE);
-		ref = leaf.ptr;
+		current = leaf.ptr;
 	}
 }
 
