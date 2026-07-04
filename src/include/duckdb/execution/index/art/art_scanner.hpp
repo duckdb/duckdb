@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/prefix_handle.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
@@ -68,7 +68,7 @@ void ARTScanPreorder(ART &art, Node &root, FILTER &&filter, PRE_HANDLER &&preord
 			break;
 		case NType::PREFIX: {
 			NodeHandle handle(art, current);
-			auto &child = *reinterpret_cast<Node *>(handle.GetPtr() + art.PrefixCount() + 1);
+			auto &child = PrefixHandle::ChildRef(art, handle);
 			push_node = preorder_handler(child);
 			if (push_node.HasMetadata()) {
 				stack.push_back(push_node);
@@ -153,7 +153,7 @@ void ARTScanPostorder(ART &art, Node &root, FILTER &&filter, POST_HANDLER &&post
 			break;
 		case NType::PREFIX: {
 			NodeHandle handle(art, current);
-			auto &child = *reinterpret_cast<Node *>(handle.GetPtr() + art.PrefixCount() + 1);
+			auto &child = PrefixHandle::ChildRef(art, handle);
 			auto push_node = filter(child);
 			if (push_node.HasMetadata()) {
 				stack.push_back(ScanEntry {push_node, false});

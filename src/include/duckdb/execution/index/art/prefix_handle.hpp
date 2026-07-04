@@ -23,6 +23,21 @@ public:
 	//! Create a new deprecated prefix node and return a handle to it.
 	static NodeHandle NewDeprecated(FixedSizeAllocator &allocator, Node &node);
 
+	//! Get a mutable reference to the child slot of the prefix.
+	static Node &ChildRef(const ART &art, NodeHandle &handle) {
+		return *reinterpret_cast<Node *>(handle.GetPtr() + art.PrefixCount() + 1);
+	}
+
+	//! Get a mutable reference to the child slot using an explicit prefix byte count.
+	static Node &ChildRefWithCount(NodeHandle &handle, const idx_t count) {
+		return ChildRefWithCount(handle.GetPtr(), count);
+	}
+
+	//! Get a mutable reference to the child slot using an explicit prefix byte count.
+	static Node &ChildRefWithCount(const data_ptr_t data, const idx_t count) {
+		return *reinterpret_cast<Node *>(data + count + 1);
+	}
+
 	//! Transform prefix chain to deprecated format.
 	//! Returns an empty Node if the prefix was not loaded from storage (early out) or if the endpoint
 	//! was a gated node (handled internally). Otherwise, returns a copy of the child pointer at the tail of

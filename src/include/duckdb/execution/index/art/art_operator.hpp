@@ -11,6 +11,7 @@
 #include "duckdb/common/optional.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/const_prefix_handle.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
@@ -32,7 +33,7 @@ public:
 			if (current.GetType() == NType::PREFIX) {
 				ConstNodeHandle handle(art, current);
 				auto data = handle.GetPtr();
-				auto &child = *reinterpret_cast<const Node *>(data + art.PrefixCount() + 1);
+				auto child = ConstPrefixHandle::ChildRef(art, handle);
 				for (idx_t i = 0; i < data[art.PrefixCount()]; i++) {
 					if (data[i] != key[depth]) {
 						return nullopt;

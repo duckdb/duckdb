@@ -2,6 +2,7 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/const_prefix_handle.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/node_handle.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
@@ -153,7 +154,7 @@ void Iterator::FindMinimum(Node node) {
 				ConstNodeHandle handle(art, node);
 				auto data = handle.GetPtr();
 				auto count = data[art.PrefixCount()];
-				auto child_ptr = reinterpret_cast<const Node *>(data + art.PrefixCount() + 1);
+				auto prefix_child = ConstPrefixHandle::ChildRef(art, handle);
 
 				for (idx_t i = 0; i < count; i++) {
 					current_key.Push(data[i]);
@@ -163,7 +164,7 @@ void Iterator::FindMinimum(Node node) {
 						D_ASSERT(nested_depth < Prefix::ROW_ID_SIZE);
 					}
 				}
-				child = *child_ptr;
+				child = prefix_child;
 			}
 			nodes.emplace(node, 0);
 			node = child;
@@ -241,7 +242,7 @@ bool Iterator::LowerBound(Node node, const ARTKey &key, const bool equal) {
 			ConstNodeHandle handle(art, node);
 			auto data = handle.GetPtr();
 			prefix_count = data[art.PrefixCount()];
-			auto child_ptr = reinterpret_cast<const Node *>(data + art.PrefixCount() + 1);
+			auto child = ConstPrefixHandle::ChildRef(art, handle);
 
 			for (idx_t i = 0; i < prefix_count; i++) {
 				current_key.Push(data[i]);
@@ -261,14 +262,14 @@ bool Iterator::LowerBound(Node node, const ARTKey &key, const bool equal) {
 				// I.e., the subsequent node is greater than the key. Thus, the minimum is
 				// the lower bound.
 				if (data[i] > key[depth + i]) {
-					prefix_child = *child_ptr;
+					prefix_child = child;
 					FindMinimum(prefix_child);
 					return true;
 				}
 			}
 
 			// The prefix matches the key.
-			prefix_child = *child_ptr;
+			prefix_child = child;
 		}
 		depth += prefix_count;
 		node = prefix_child;

@@ -26,7 +26,7 @@ Node PrefixHandle::TransformToDeprecated(ART &art, Node &node, TransformToDeprec
 				return Node();
 			}
 			NodeHandle handle(art, current);
-			auto &child = *reinterpret_cast<Node *>(handle.GetPtr() + art.PrefixCount() + 1);
+			auto &child = ChildRef(art, handle);
 			current = child;
 			// Handle gated endpoints while the parent of the prefix chain is still pinned.
 			if (current.HasMetadata() && current.GetGateStatus() == GateStatus::GATE_SET) {
@@ -52,25 +52,25 @@ Node PrefixHandle::TransformToDeprecated(ART &art, Node &node, TransformToDeprec
 			// Decrease the readers on current_handle after moving all data over.
 			NodeHandle current_handle(art, current_node);
 			auto current_data = current_handle.GetPtr();
-			auto &current_child = *reinterpret_cast<Node *>(current_data + art.PrefixCount() + 1);
+			auto &current_child = ChildRef(art, current_handle);
 
 			for (idx_t i = 0; i < current_data[art.PrefixCount()]; i++) {
 				new_handle =
 				    TransformToDeprecatedAppend(std::move(new_handle), art, deprecated_allocator, current_data[i]);
 			}
-			auto &new_child = *reinterpret_cast<Node *>(new_handle.GetPtr() + DEPRECATED_COUNT + 1);
+			auto &new_child = ChildRefWithCount(new_handle, DEPRECATED_COUNT);
 			new_child = current_child;
 		}
 
 		// Freeing the node here can trigger a buffer removal (last segment on the buffer).
 		// In that case, there cannot be any readers left on the buffer.
 		Node::FreeNode(art, current_node);
-		auto &new_child = *reinterpret_cast<Node *>(new_handle.GetPtr() + DEPRECATED_COUNT + 1);
+		auto &new_child = ChildRefWithCount(new_handle, DEPRECATED_COUNT);
 		current_node = new_child;
 	}
 
 	node = new_node;
-	auto &new_child = *reinterpret_cast<Node *>(new_handle.GetPtr() + DEPRECATED_COUNT + 1);
+	auto &new_child = ChildRefWithCount(new_handle, DEPRECATED_COUNT);
 	// Handle gated endpoints while the new prefix is still pinned.
 	Node endpoint = new_child;
 	if (endpoint.HasMetadata() && endpoint.GetGateStatus() == GateStatus::GATE_SET) {
@@ -89,7 +89,7 @@ NodeHandle PrefixHandle::TransformToDeprecatedAppend(NodeHandle handle, ART &art
 		return handle;
 	}
 
-	auto &child = *reinterpret_cast<Node *>(data + DEPRECATED_COUNT + 1);
+	auto &child = ChildRefWithCount(data, DEPRECATED_COUNT);
 	auto new_prefix = NewDeprecated(allocator, child);
 	return TransformToDeprecatedAppend(std::move(new_prefix), art, allocator, byte);
 }

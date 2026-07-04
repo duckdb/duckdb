@@ -18,6 +18,11 @@ class ConstPrefixHandle {
 public:
 	static constexpr NType PREFIX = NType::PREFIX;
 
+	//! Get a const reference to the child slot of the prefix.
+	static const Node &ChildRef(const ART &art, ConstNodeHandle &handle) {
+		return *reinterpret_cast<const Node *>(handle.GetPtr() + art.PrefixCount() + 1);
+	}
+
 	//! Traverses and verifies the node and its subtree.
 	static void Verify(ART &art, const Node &node);
 
@@ -30,7 +35,7 @@ private:
 		while (ref.get().HasMetadata() && ref.get().GetType() == PREFIX) {
 			ConstNodeHandle handle(art, ref);
 			auto data = handle.GetPtr();
-			auto &child = *reinterpret_cast<const Node *>(data + art.PrefixCount() + 1);
+			auto &child = ChildRef(art, handle);
 
 			lambda(handle, data, child);
 
