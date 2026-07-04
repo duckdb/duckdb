@@ -60,12 +60,10 @@ idx_t RowIdColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 	return count;
 }
 
-void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             SelectionVector &sel, idx_t &count, const TableFilter &filter,
-                             TableFilterState &filter_state) {
-	auto row_start = GetRowStart(state);
+template <class SEL>
+static void RowIdFilter(row_t row_start, idx_t max_count, ColumnScanState &state, Vector &result, SEL &sel,
+                        idx_t &count, const TableFilter &filter, TableFilterState &filter_state) {
 	auto current_row = row_start + state.offset_in_column;
-	auto max_count = GetVectorCount(vector_index);
 	state.offset_in_column += max_count;
 	// We do another quick statistics scan for row ids here
 	const auto rowid_start = current_row;
@@ -96,6 +94,18 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 
 	// Now apply the filter
 	ColumnSegment::FilterSelection(sel, result, filter_state, count, count);
+}
+
+void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                             SelectionVector &sel, idx_t &count, const TableFilter &filter,
+                             TableFilterState &filter_state) {
+	RowIdFilter(GetRowStart(state), GetVectorCount(vector_index), state, result, sel, count, filter, filter_state);
+}
+
+void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                             SelectionResult &sel, idx_t &count, const TableFilter &filter,
+                             TableFilterState &filter_state) {
+	RowIdFilter(GetRowStart(state), GetVectorCount(vector_index), state, result, sel, count, filter, filter_state);
 }
 
 void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

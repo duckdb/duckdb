@@ -316,7 +316,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 
 idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
-                                 SelectionVector *false_sel) {
+                                 SelectionVector *false_sel, SelectionResult *bitmap_sel) {
 	if (!expr.Function().HasSelectCallback()) {
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
@@ -324,9 +324,9 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	// Fast path: a `flat_ref <cmp> const` comparison over the identity selection produces a bitmap straight
 	// from the input chunk, skipping the per-node intermediate-vector machinery below. Any select caller
 	// (scan filters, PhysicalFilter, joins) benefits; non-matching shapes fall through.
-	if (chunk && true_sel && !false_sel && (!sel || !sel->IsSet())) {
+	if (bitmap_sel && bitmap_sel == true_sel && chunk && !false_sel && (!sel || !sel->IsSet())) {
 		idx_t result;
-		if (TrySelectComparisonFromChunk(expr, *chunk, count, *true_sel, result)) {
+		if (TrySelectComparisonFromChunk(expr, *chunk, count, *bitmap_sel, result)) {
 			return result;
 		}
 	}

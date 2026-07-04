@@ -9,15 +9,6 @@
 
 namespace duckdb {
 
-static bool HasBitmapComparisonChild(const BoundConjunctionExpression &expr) {
-	for (auto &child : expr.GetChildren()) {
-		if (IsBitmapComparisonCandidate(*child)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 struct ConjunctionState : public ExpressionState {
 	ConjunctionState(const Expression &expr, ExpressionExecutorState &root)
 	    : ExpressionState(expr, root), intersect_tmp(STANDARD_VECTOR_SIZE),
@@ -29,8 +20,8 @@ struct ConjunctionState : public ExpressionState {
 	}
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 	//! Scratches for the AND bitmap-intersect fast path: acc accumulates, tmp holds each subsequent child
-	SelectionVector intersect_acc;
-	SelectionVector intersect_tmp;
+	SelectionResult intersect_acc;
+	SelectionResult intersect_tmp;
 	//! Only enabled when the conjunction has at least one child that can be evaluated densely into a bitmap
 	bool bitmap_capable;
 };
@@ -76,7 +67,7 @@ void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, Express
 
 idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, ExpressionState *state_p,
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
-                                 SelectionVector *false_sel) {
+                                 SelectionVector *false_sel, SelectionResult *bitmap_sel) {
 	auto &state = state_p->Cast<ConjunctionState>();
 
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
@@ -103,8 +94,8 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 					current_count = intersect_count;
 				}
 				state.intersect_tmp.EnsureIndexWritable(count);
-				idx_t child_count =
-				    Select(child, child_state, current_sel, current_count, &state.intersect_tmp, nullptr);
+				idx_t child_count = Select(child, child_state, current_sel, current_count, &state.intersect_tmp,
+				                           nullptr, &state.intersect_tmp);
 				state.intersect_tmp.ToBitmap(child_count, count);
 				if (dense && have_accumulator) {
 					child_count =
@@ -123,7 +114,11 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 
 			if (have_accumulator && (used_dense_bitmap_child || intersect_count == 0)) {
 				// swap, not move: the scratch keeps true_sel's old buffers for reuse on the next vector
-				std::swap(*true_sel, state.intersect_acc);
+				std::swap(*true_sel, static_cast<SelectionVector &>(state.intersect_acc));
+				if (bitmap_sel != true_sel) {
+					// the caller's output is a plain SelectionVector: materialize the bitmap once
+					true_sel->Flatten();
+				}
 				return intersect_count;
 			}
 			state.bitmap_capable = false;
@@ -146,12 +141,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 		}
 		for (idx_t i = 0; i < expr.GetChildren().size(); i++) {
 			idx_t tcount = Select(*expr.GetChildren()[permutation[i]], state.child_states[permutation[i]].get(),
-			                      current_sel, current_count, true_sel, temp_false.get());
-			// a child may have produced a bitmap into true_sel: materialize it before the next child
-			// reads it as input and writes indices into it
-			if (true_sel->IsBitmap()) {
-				true_sel->Flatten();
-			}
+			                      current_sel, current_count, true_sel, temp_false.get(), nullptr);
 			idx_t fcount = current_count - tcount;
 			if (fcount > 0 && false_sel) {
 				// move failing tuples into the false_sel
@@ -192,7 +182,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 		}
 		for (idx_t i = 0; i < expr.GetChildren().size(); i++) {
 			idx_t tcount = Select(*expr.GetChildren()[permutation[i]], state.child_states[permutation[i]].get(),
-			                      current_sel, current_count, temp_true.get(), false_sel);
+			                      current_sel, current_count, temp_true.get(), false_sel, nullptr);
 			if (tcount > 0) {
 				if (true_sel) {
 					// tuples passed, move them into the actual result vector

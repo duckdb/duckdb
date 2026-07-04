@@ -95,6 +95,12 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	validity->FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
 }
 
+void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state,
+                                Vector &result, SelectionResult &sel, idx_t &count, const TableFilter &filter,
+                                TableFilterState &filter_state) {
+	ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
+}
+
 void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                                 SelectionVector &sel, idx_t sel_count) {
 	// check if we can do a specialized select

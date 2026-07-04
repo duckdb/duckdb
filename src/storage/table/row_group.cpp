@@ -8,6 +8,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/selection_result.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
@@ -877,7 +878,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		} else {
 			// partial scan: we have deletions or table filters
 			idx_t approved_tuple_count = count;
-			SelectionVector sel;
+			SelectionResult sel;
 			SelectionVector intersect_sel(STANDARD_VECTOR_SIZE);
 			if (has_sample_selection && count != max_count) {
 				approved_tuple_count =

@@ -6,10 +6,8 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
-#include "duckdb/execution/expression_executor/bitmap_comparison.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/vector_iterator.hpp"
-#include "duckdb/common/enums/expression_type.hpp"
 
 namespace duckdb {
 
@@ -147,10 +145,6 @@ idx_t VectorOperations::Equals(const Vector &left, const Vector &right, optional
                                idx_t count, optional_ptr<SelectionVector> true_sel,
                                optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	idx_t result;
-	if (TrySelectComparisonBitmap(ExpressionType::COMPARE_EQUAL, left, right, sel, count, true_sel, false_sel,
-	                              null_mask, result)) {
-		return result;
-	}
 	if (TryPrimitiveSelectOperation<duckdb::Equals>(left, right, sel, count, true_sel, false_sel, null_mask, result)) {
 		return result;
 	}
@@ -162,10 +156,6 @@ idx_t VectorOperations::NotEquals(const Vector &left, const Vector &right, optio
                                   idx_t count, optional_ptr<SelectionVector> true_sel,
                                   optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	idx_t result;
-	if (TrySelectComparisonBitmap(ExpressionType::COMPARE_NOTEQUAL, left, right, sel, count, true_sel, false_sel,
-	                              null_mask, result)) {
-		return result;
-	}
 	if (TryPrimitiveSelectOperation<duckdb::NotEquals>(left, right, sel, count, true_sel, false_sel, null_mask,
 	                                                   result)) {
 		return result;
@@ -178,10 +168,6 @@ idx_t VectorOperations::GreaterThan(const Vector &left, const Vector &right, opt
                                     idx_t count, optional_ptr<SelectionVector> true_sel,
                                     optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	idx_t result;
-	if (TrySelectComparisonBitmap(ExpressionType::COMPARE_GREATERTHAN, left, right, sel, count, true_sel, false_sel,
-	                              null_mask, result)) {
-		return result;
-	}
 	if (TryPrimitiveSelectOperation<duckdb::GreaterThan>(left, right, sel, count, true_sel, false_sel, null_mask,
 	                                                     result)) {
 		return result;
@@ -196,10 +182,6 @@ idx_t VectorOperations::GreaterThanEquals(const Vector &left, const Vector &righ
                                           optional_ptr<SelectionVector> false_sel,
                                           optional_ptr<ValidityMask> null_mask) {
 	idx_t result;
-	if (TrySelectComparisonBitmap(ExpressionType::COMPARE_GREATERTHANOREQUALTO, left, right, sel, count, true_sel,
-	                              false_sel, null_mask, result)) {
-		return result;
-	}
 	if (TryPrimitiveSelectOperation<duckdb::GreaterThanEquals>(left, right, sel, count, true_sel, false_sel, null_mask,
 	                                                           result)) {
 		return result;
@@ -212,10 +194,6 @@ idx_t VectorOperations::LessThan(const Vector &left, const Vector &right, option
                                  idx_t count, optional_ptr<SelectionVector> true_sel,
                                  optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	idx_t result;
-	if (TrySelectComparisonBitmap(ExpressionType::COMPARE_LESSTHAN, left, right, sel, count, true_sel, false_sel,
-	                              null_mask, result)) {
-		return result;
-	}
 	if (TryPrimitiveSelectOperation<duckdb::GreaterThan>(right, left, sel, count, true_sel, false_sel, null_mask,
 	                                                     result)) {
 		return result;
@@ -228,10 +206,6 @@ idx_t VectorOperations::LessThanEquals(const Vector &left, const Vector &right, 
                                        idx_t count, optional_ptr<SelectionVector> true_sel,
                                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	idx_t result;
-	if (TrySelectComparisonBitmap(ExpressionType::COMPARE_LESSTHANOREQUALTO, left, right, sel, count, true_sel,
-	                              false_sel, null_mask, result)) {
-		return result;
-	}
 	if (TryPrimitiveSelectOperation<duckdb::GreaterThanEquals>(right, left, sel, count, true_sel, false_sel, null_mask,
 	                                                           result)) {
 		return result;

@@ -9,8 +9,6 @@ namespace duckdb {
 DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t sel_count_p, buffer_ptr<DictionaryEntry> entry_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
       sel_vector(sel), entry(std::move(entry_p)) {
-	// A dictionary selection is a random-access position map; a bitmap only encodes a row subset - materialize it.
-	sel_vector.Flatten();
 }
 DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count_p,
                                    buffer_ptr<DictionaryEntry> entry_p)
@@ -20,8 +18,6 @@ DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_cou
 DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t sel_count_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
       sel_vector(sel) {
-	// A dictionary selection is a random-access position map; a bitmap only encodes a row subset - materialize it.
-	sel_vector.Flatten();
 }
 DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count_p)
     : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
@@ -64,9 +60,6 @@ void DictionaryBuffer::VerifyInternal(const LogicalType &type, const SelectionVe
 }
 
 void DictionaryBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
-	// UnifiedVectorFormat consumers read the sel via get_index_unsafe (no lazy flatten), so a bitmap-backed
-	// selection must be materialized to an index array first.
-	sel_vector.Flatten();
 	format.owned_sel.Initialize(sel_vector);
 	format.sel = &format.owned_sel;
 

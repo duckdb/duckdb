@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/types/selection_result.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -48,7 +49,7 @@ public:
 	bool bitmap_capable;
 	//! Reused per-call input chunk and result selection, so per-vector filter calls allocate nothing
 	DataChunk filter_chunk;
-	SelectionVector scratch;
+	SelectionResult scratch;
 };
 
 } // namespace duckdb

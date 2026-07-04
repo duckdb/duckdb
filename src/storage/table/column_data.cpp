@@ -380,6 +380,15 @@ void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnS
 	ColumnSegment::FilterSelection(sel, result, filter_state, scan_count, s_count);
 }
 
+void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                        SelectionResult &sel, idx_t &s_count, const TableFilter &filter,
+                        TableFilterState &filter_state) {
+	idx_t scan_count = Scan(transaction, vector_index, state, result);
+	FlatVector::SetSize(result, count_t(scan_count));
+
+	ColumnSegment::FilterSelection(sel, result, filter_state, scan_count, s_count);
+}
+
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                         SelectionVector &sel, idx_t s_count) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);

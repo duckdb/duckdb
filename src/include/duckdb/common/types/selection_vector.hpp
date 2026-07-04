@@ -17,11 +17,10 @@
 
 namespace duckdb {
 class VectorBuffer;
+struct SelectionResult;
 
 struct SelectionData {
 	DUCKDB_API explicit SelectionData(idx_t count);
-	//! Empty SelectionData, used as the backing store for a bitmap-backed SelectionVector
-	//! (the index array in owned_data is allocated lazily on Flatten()).
 	SelectionData() = default;
 	// Out-of-line destructor: prevents GCC IPA-ICF from folding
 	// _Sp_counted_ptr_inplace<SelectionData>::_M_dispose with the
@@ -29,17 +28,15 @@ struct SelectionData {
 	// a spurious -Warray-bounds with g++ >= 14.
 	DUCKDB_API ~SelectionData();
 
-	//! The materialized index array (sel_t[]); for bitmap-backed data this is filled lazily by Flatten().
 	AllocatedData owned_data;
-	//! Optional bitmap representation: one bit per row over [0, row_span).
-	AllocatedData bitmap_data; // 64-bit words (validity_t layout)
+	AllocatedData bitmap_data;
 	idx_t row_span = 0;
-	//! Start of the materialized bitmap indices within owned_data (set by Flatten, INVALID = not filled).
-	idx_t index_cache_offset = DConstants::INVALID_INDEX;
 	bool is_bitmap = false;
 };
 
 struct SelectionVector {
+	friend struct SelectionResult;
+
 	SelectionVector() : sel_vector(nullptr), capacity(0) {
 	}
 	explicit SelectionVector(sel_t *sel, idx_t capacity) {
@@ -144,16 +141,12 @@ public:
 		sel_vector[idx] = UnsafeNumericCast<sel_t>(loc);
 	}
 	inline void swap(idx_t i, idx_t j) { // NOLINT: allow casing for legacy reasons
-		if (DUCKDB_UNLIKELY(!sel_vector && IsBitmap())) {
-			Flatten();
-		}
 		D_ASSERT(i < capacity && j < capacity);
 		sel_t tmp = sel_vector[i];
 		sel_vector[i] = sel_vector[j];
 		sel_vector[j] = tmp;
 	}
 	inline idx_t get_index(idx_t idx) const { // NOLINT: allow casing for legacy reasons
-		// bitmap-free: bitmaps must be Flatten()ed before index access (trapped here in debug)
 		D_ASSERT(sel_vector || !IsBitmap());
 		return sel_vector ? get_index_unsafe(idx) : idx;
 	}
@@ -180,81 +173,20 @@ public:
 		return capacity;
 	}
 
-	//! Whether this selection is currently backed by a bitmap (and not yet materialized to indices).
 	inline bool IsBitmap() const {
 		return selection_data && selection_data->is_bitmap && !sel_vector;
 	}
-	//! Domain of the bitmap: bits cover rows [0, RowSpan()).
 	idx_t RowSpan() const {
 		return selection_data ? selection_data->row_span : 0;
 	}
-	//! Materialize a bitmap-backed selection into an index array (no-op otherwise). const because it
-	//! only fills the lazy cache; mutates mutable members.
 	void Flatten() const;
 
-	//! Make this a valid set_index target for `count` writes (existing content is discarded).
-	//! set_index is a plain store, so bulk writers call this once per batch instead of checking per row.
-	void EnsureIndexWritable(idx_t count) {
-		if (sel_vector && capacity >= count) {
-			return;
-		}
-		// an exclusively-owned selection flips back to its spare index buffer in place (no reallocation)
-		if (selection_data && selection_data.use_count() == 1 &&
-		    selection_data->owned_data.GetSize() >= count * sizeof(sel_t)) {
-			selection_data->is_bitmap = false;
-			sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
-			capacity = selection_data->owned_data.GetSize() / sizeof(sel_t);
-			return;
-		}
-		Initialize(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
-	}
-
-	//! Prepare this selection to be bitmap-backed over [0, row_span): ensures a fixed
-	//! STANDARD_VECTOR_SIZE-bit buffer (allocated once, reused across calls), marks it bitmap, and
-	//! returns the writable 64-bit words for the producer to fill. Caller must fill all NWORDS words.
-	uint64_t *PrepareBitmap(idx_t row_span) {
-		static constexpr idx_t NWORDS = (STANDARD_VECTOR_SIZE + 63) / 64;
-		// only mutate exclusively-owned backing; keep the spare index buffer for representation ping-pong
-		if (!selection_data || selection_data.use_count() > 1) {
-			selection_data = make_shared_ptr<SelectionData>();
-		}
-		if (!selection_data->bitmap_data.get()) {
-			selection_data->bitmap_data = Allocator::DefaultAllocator().Allocate(NWORDS * sizeof(uint64_t));
-		}
-		selection_data->index_cache_offset = DConstants::INVALID_INDEX;
-		selection_data->is_bitmap = true;
-		selection_data->row_span = row_span;
-		sel_vector = nullptr; // the bitmap is now the source of truth
-		capacity = row_span;
-		return reinterpret_cast<uint64_t *>(selection_data->bitmap_data.get());
-	}
-
-	//! Ensure the bitmap representation over [0, row_span): an ascending index selection (`count` valid
-	//! entries) is converted in place (zero-init, set bits); a bitmap-backed selection is left as-is.
-	void ToBitmap(idx_t count, idx_t row_span) {
-		if (!IsBitmap()) {
-			IndexToBitmap(count, row_span);
-		}
-	}
-
-	//! AND `other` into this selection over [0, row_span), promoting either side to a bitmap first.
-	//! Returns the surviving count; both selections end up bitmap-backed.
-	idx_t Intersect(SelectionVector &other, idx_t count, idx_t other_count, idx_t row_span) {
-		ToBitmap(count, row_span);
-		other.ToBitmap(other_count, row_span);
-		return IntersectBitmap(other);
-	}
-
-	//! Cheap identity token for "same selection" comparisons WITHOUT materializing: the index-array
-	//! pointer for index reps, or the bitmap buffer pointer for bitmap reps (nullptr for flat).
-	//! Not meant to be dereferenced.
 	const void *RepresentationHandle() const {
 		if (sel_vector) {
 			return sel_vector;
 		}
 		return selection_data && selection_data->is_bitmap ? selection_data->bitmap_data.get() : nullptr;
 	}
-	//! Two selections are the same if they share the same backing (index array or bitmap) and span.
 	static bool SameSelection(const SelectionVector &a, const SelectionVector &b) {
 		return a.RepresentationHandle() == b.RepresentationHandle() && a.RowSpan() == b.RowSpan() &&
 		       a.capacity == b.capacity;
@@ -295,13 +227,7 @@ public:
 	void Sort(idx_t count);
 	idx_t GetAllocationSize() const;
 
-private:
-	//! Raw transition primitives; callers combine representations through ToBitmap/Intersect/Flatten.
-	void IndexToBitmap(idx_t count, idx_t row_span);
-	idx_t IntersectBitmap(const SelectionVector &other);
-
-private:
-	// mutable: Flatten() lazily materializes a bitmap into an index array under const access
+protected:
 	mutable sel_t *sel_vector;
 	mutable buffer_ptr<SelectionData> selection_data;
 	mutable idx_t capacity;

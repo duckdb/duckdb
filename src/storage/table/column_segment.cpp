@@ -406,7 +406,7 @@ static idx_t TemplatedNullSelection(UnifiedVectorFormat &vdata, SelectionVector 
 	}
 }
 
-static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vector, ExpressionFilterState &state,
+static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vector, ExpressionFilterState &state,
                                               idx_t scan_count, idx_t &approved_tuple_count) {
 	if (approved_tuple_count == 0) {
 		return 0;
@@ -504,17 +504,21 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 	return approved_tuple_count;
 }
 
-idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
-                                     const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
-                                     idx_t &approved_tuple_count) {
-	(void)vdata;
-	return FilterSelection(sel, vector, filter_state, scan_count, approved_tuple_count);
+idx_t ColumnSegment::FilterSelection(SelectionResult &sel, Vector &vector, TableFilterState &filter_state,
+                                     idx_t scan_count, idx_t &approved_tuple_count) {
+	auto &state = filter_state.Cast<ExpressionFilterState>();
+	return ExecuteExpressionFilterSelection(sel, vector, state, scan_count, approved_tuple_count);
 }
 
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, TableFilterState &filter_state,
                                      idx_t scan_count, idx_t &approved_tuple_count) {
-	auto &state = filter_state.Cast<ExpressionFilterState>();
-	return ExecuteExpressionFilterSelection(sel, vector, state, scan_count, approved_tuple_count);
+	SelectionResult result_sel;
+	result_sel.Initialize(sel);
+	auto result = FilterSelection(result_sel, vector, filter_state, scan_count, approved_tuple_count);
+	result_sel.Flatten();
+	sel.Initialize(result_sel);
+	D_ASSERT(!sel.IsBitmap());
+	return result;
 }
 
 const CompressionFunction &ColumnSegment::GetCompressionFunction() {

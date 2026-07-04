@@ -1,5 +1,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 
+#include "duckdb/common/types/selection_result.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/execution_context.hpp"
@@ -108,21 +109,25 @@ idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &re
 	return SelectExpression(input, result_sel, nullptr, current_sel, current_count);
 }
 
+idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionResult &result_sel,
+                                           optional_ptr<SelectionVector> current_sel, idx_t current_count) {
+	D_ASSERT(expressions.size() == 1);
+	D_ASSERT(current_count <= input.size());
+	// the reused result may still hold last vector's bitmap: make it a valid set_index target once per call
+	result_sel.EnsureIndexWritable(current_count);
+	SetChunk(&input);
+	return Select(*expressions[0], states[0]->root_state.get(), current_sel.get(), current_count, &result_sel, nullptr,
+	              &result_sel);
+}
+
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, optional_ptr<SelectionVector> true_sel,
                                            optional_ptr<SelectionVector> false_sel,
                                            optional_ptr<SelectionVector> current_sel, idx_t current_count) {
 	D_ASSERT(expressions.size() == 1);
 	D_ASSERT(current_count <= input.size());
-	// set_index is a plain store: make the output targets index-writable once per call
-	if (true_sel && true_sel.get() != current_sel.get()) {
-		true_sel->EnsureIndexWritable(current_count);
-	}
-	if (false_sel && false_sel.get() != current_sel.get()) {
-		false_sel->EnsureIndexWritable(current_count);
-	}
 	SetChunk(&input);
 	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), current_sel.get(), current_count,
-	                               true_sel.get(), false_sel.get());
+	                               true_sel.get(), false_sel.get(), nullptr);
 	return selected_tuples;
 }
 
@@ -310,7 +315,8 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 }
 
 idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
-                                 idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+                                 idx_t count, SelectionVector *true_sel, SelectionVector *false_sel,
+                                 SelectionResult *bitmap_sel) {
 	if (count == 0) {
 		return 0;
 	}
@@ -318,10 +324,10 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 	D_ASSERT(expr.GetReturnType().id() == LogicalTypeId::BOOLEAN);
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_CONJUNCTION:
-		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel);
+		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel, bitmap_sel);
 	case ExpressionClass::BOUND_FUNCTION:
 		return Select(expr.Cast<BoundFunctionExpression>(), state, sel, count, true_sel,
-		              false_sel); // NOLINT: c-style cast
+		              false_sel, bitmap_sel); // NOLINT: c-style cast
 	default:
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}

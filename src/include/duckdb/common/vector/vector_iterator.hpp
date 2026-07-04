@@ -525,8 +525,7 @@ private:
 	class VectorScanIterator {
 	public:
 		explicit VectorScanIterator(UnifiedVectorFormat &format, const T *data, idx_t index, idx_t count)
-		    : format(format), data(data), sel_data(format.sel->data()), count(count),
-		      can_have_null(format.validity.CanHaveNull()) {
+		    : format(format), data(data), count(count), can_have_null(format.validity.CanHaveNull()) {
 			r.index = index;
 			AdvanceToValid();
 		}
@@ -551,17 +550,15 @@ private:
 
 	private:
 		void AdvanceToValid() {
-			// sel_data is the raw hoisted view of format.sel (null == identity), cached at construction:
-			// per-row get_index would re-derive the pointer through the selection each call
 			if (!can_have_null) {
 				if (r.index < count) {
 					// we know this value is valid
-					r.value = data[sel_data ? sel_data[r.index] : r.index];
+					r.value = data[format.sel->get_index(r.index)];
 				}
 				return;
 			}
 			for (; r.index < count; r.index++) {
-				auto idx = sel_data ? sel_data[r.index] : r.index;
+				auto idx = format.sel->get_index(r.index);
 				if (format.validity.RowIsValid(idx)) {
 					// found a valid value - stop
 					r.value = data[idx];
@@ -573,7 +570,6 @@ private:
 	private:
 		UnifiedVectorFormat &format;
 		const T *data;
-		const sel_t *sel_data;
 		VectorValueEntry r;
 		idx_t count;
 		bool can_have_null;

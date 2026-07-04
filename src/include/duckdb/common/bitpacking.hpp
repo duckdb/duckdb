@@ -40,25 +40,14 @@ public:
 			count -= misaligned_count;
 		}
 		const auto groups = static_cast<std::size_t>(count / BITPACKING_ALGORITHM_GROUP_SIZE);
-		if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
-			duckdb_bitpacking::fastpack(reinterpret_cast<const uint8_t *>(src), reinterpret_cast<uint8_t *>(dst),
-			                            static_cast<uint32_t>(width), groups);
-		} else if (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
-			duckdb_bitpacking::fastpack(reinterpret_cast<const uint16_t *>(src), reinterpret_cast<uint16_t *>(dst),
-			                            static_cast<uint32_t>(width), groups);
-		} else if (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
-			duckdb_bitpacking::fastpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint32_t *>(dst),
-			                            static_cast<uint32_t>(width), groups);
-		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
-			duckdb_bitpacking::fastpack(reinterpret_cast<const uint64_t *>(src), reinterpret_cast<uint32_t *>(dst),
-			                            static_cast<uint32_t>(width), groups);
-		} else if (std::is_same<T, hugeint_t>::value || std::is_same<T, uhugeint_t>::value) {
+		if (!duckdb_bitpacking::TryFastPack<T>(src, dst, static_cast<uint32_t>(width), groups)) {
+			if (!std::is_same<T, hugeint_t>::value && !std::is_same<T, uhugeint_t>::value) {
+				throw InternalException("Unsupported type for bitpacking");
+			}
 			for (std::size_t group = 0; group < groups; group++) {
 				HugeIntPacker::Pack(reinterpret_cast<const uhugeint_t *>(src) + group * BITPACKING_ALGORITHM_GROUP_SIZE,
 				                    reinterpret_cast<uint32_t *>(dst) + group * width, width);
 			}
-		} else {
-			throw InternalException("Unsupported type for bitpacking");
 		}
 
 		// If the input was not aligned, pack the leftover values via a zero-padded group.
@@ -76,26 +65,16 @@ public:
 	                                bool skip_sign_extension = false) {
 		const auto rounded_count = RoundUpToAlgorithmGroupSize(count);
 		const auto groups = static_cast<std::size_t>(rounded_count / BITPACKING_ALGORITHM_GROUP_SIZE);
-		if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
-			duckdb_bitpacking::fastunpack(reinterpret_cast<const uint8_t *>(src), reinterpret_cast<uint8_t *>(dst),
-			                              static_cast<uint32_t>(width), groups);
-		} else if (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
-			duckdb_bitpacking::fastunpack(reinterpret_cast<const uint16_t *>(src), reinterpret_cast<uint16_t *>(dst),
-			                              static_cast<uint32_t>(width), groups);
-		} else if (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
-			duckdb_bitpacking::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint32_t *>(dst),
-			                              static_cast<uint32_t>(width), groups);
-		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
-			duckdb_bitpacking::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
-			                              static_cast<uint32_t>(width), groups);
-		} else if (std::is_same<T, hugeint_t>::value || std::is_same<T, uhugeint_t>::value) {
+		if (!duckdb_bitpacking::TryFastUnpack<T>(src, reinterpret_cast<T *>(dst), static_cast<uint32_t>(width),
+		                                         groups)) {
+			if (!std::is_same<T, hugeint_t>::value && !std::is_same<T, uhugeint_t>::value) {
+				throw InternalException("Unsupported type for bitpacking");
+			}
 			for (std::size_t group = 0; group < groups; group++) {
 				HugeIntPacker::Unpack(reinterpret_cast<const uint32_t *>(src) + group * width,
 				                      reinterpret_cast<uhugeint_t *>(dst) + group * BITPACKING_ALGORITHM_GROUP_SIZE,
 				                      width);
 			}
-		} else {
-			throw InternalException("Unsupported type for bitpacking");
 		}
 
 		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
