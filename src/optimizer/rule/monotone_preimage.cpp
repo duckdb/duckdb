@@ -225,11 +225,18 @@ unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<r
 		return true;
 	};
 
+	// only search for the boundary/boundaries this operator actually uses: >= and < need the f>=c
+	// crossover, > and <= need the f>c crossover, and = needs both.
+	const bool need_ge = cmp == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+	                     cmp == ExpressionType::COMPARE_LESSTHAN || cmp == ExpressionType::COMPARE_EQUAL;
+	const bool need_gt = cmp == ExpressionType::COMPARE_GREATERTHAN ||
+	                     cmp == ExpressionType::COMPARE_LESSTHANOREQUALTO || cmp == ExpressionType::COMPARE_EQUAL;
+
 	// [a, b] is the inclusive internal-integer preimage interval (clamped to the finite domain)
 	int64_t a, b;
 	if (IsMonotonicIncreasing(m)) {
-		int64_t x_ge = FirstTrueSuffix(ge, dom_lo, dom_hi, ok);
-		int64_t x_gt = FirstTrueSuffix(gt, dom_lo, dom_hi, ok);
+		int64_t x_ge = need_ge ? FirstTrueSuffix(ge, dom_lo, dom_hi, ok) : 0;
+		int64_t x_gt = need_gt ? FirstTrueSuffix(gt, dom_lo, dom_hi, ok) : 0;
 		if (!ok) {
 			return nullptr;
 		}
@@ -256,8 +263,8 @@ unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<r
 			break;
 		}
 	} else {
-		int64_t y_ge = LastTruePrefix(ge, dom_lo, dom_hi, ok);
-		int64_t y_gt = LastTruePrefix(gt, dom_lo, dom_hi, ok);
+		int64_t y_ge = need_ge ? LastTruePrefix(ge, dom_lo, dom_hi, ok) : 0;
+		int64_t y_gt = need_gt ? LastTruePrefix(gt, dom_lo, dom_hi, ok) : 0;
 		if (!ok) {
 			return nullptr;
 		}
