@@ -13,11 +13,24 @@ void SelectionVector::Flatten() const {
 	}
 	auto keep = selection_data;
 	auto bm = reinterpret_cast<const validity_t *>(keep->bitmap_data.get());
-	SelectionVector materialized;
-	BitmapToSelectionVector(bm, keep->row_span, materialized);
-	selection_data = std::move(materialized.selection_data);
-	sel_vector = materialized.sel_vector;
-	capacity = materialized.capacity;
+	if (keep->index_cache_offset == DConstants::INVALID_INDEX) {
+		// materialize into the spare index buffer next to the bitmap: sharers of this bitmap then flatten
+		// for free, and reused scratches ping-pong between the representations with no allocation
+		auto shared = keep;
+		SelectionVector target(std::move(shared));
+		BitmapToSelectionVector(bm, keep->row_span, target);
+		if (target.selection_data.get() != keep.get()) {
+			// the spare buffer was missing/too small: adopt the freshly allocated index array instead
+			selection_data = std::move(target.selection_data);
+			sel_vector = target.sel_vector;
+			capacity = target.capacity;
+			return;
+		}
+		// the result does not start at owned_data[0] (two-cursor middle-out layout): record its offset
+		keep->index_cache_offset = idx_t(target.sel_vector - reinterpret_cast<sel_t *>(keep->owned_data.get()));
+	}
+	sel_vector = reinterpret_cast<sel_t *>(keep->owned_data.get()) + keep->index_cache_offset;
+	capacity = keep->owned_data.GetSize() / sizeof(sel_t) - keep->index_cache_offset;
 }
 
 SelectionData::SelectionData(idx_t count) {

@@ -67,6 +67,7 @@ struct SelectionResult : public SelectionVector {
 		if (!selection_data->bitmap_data.get()) {
 			selection_data->bitmap_data = Allocator::DefaultAllocator().Allocate(NWORDS * sizeof(uint64_t));
 		}
+		selection_data->index_cache_offset = DConstants::INVALID_INDEX;
 		selection_data->is_bitmap = true;
 		selection_data->row_span = row_span;
 		sel_vector = nullptr;

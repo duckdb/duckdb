@@ -67,7 +67,7 @@ void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, Express
 
 idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, ExpressionState *state_p,
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
-                                 SelectionVector *false_sel, SelectionResult *bitmap_sel) {
+                                 SelectionVector *false_sel, SelectionResult *bitmap_sel = nullptr) {
 	auto &state = state_p->Cast<ConjunctionState>();
 
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
@@ -141,7 +141,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 		}
 		for (idx_t i = 0; i < expr.GetChildren().size(); i++) {
 			idx_t tcount = Select(*expr.GetChildren()[permutation[i]], state.child_states[permutation[i]].get(),
-			                      current_sel, current_count, true_sel, temp_false.get(), nullptr);
+			                      current_sel, current_count, true_sel, temp_false.get());
 			idx_t fcount = current_count - tcount;
 			if (fcount > 0 && false_sel) {
 				// move failing tuples into the false_sel
@@ -182,7 +182,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 		}
 		for (idx_t i = 0; i < expr.GetChildren().size(); i++) {
 			idx_t tcount = Select(*expr.GetChildren()[permutation[i]], state.child_states[permutation[i]].get(),
-			                      current_sel, current_count, temp_true.get(), false_sel, nullptr);
+			                      current_sel, current_count, temp_true.get(), false_sel);
 			if (tcount > 0) {
 				if (true_sel) {
 					// tuples passed, move them into the actual result vector

@@ -356,8 +356,7 @@ inline bool TryFastPack(const T *__restrict in, void *__restrict out, const uint
 }
 
 template <class T>
-inline bool TryFastUnpack(const void *__restrict in, T *__restrict out, const uint32_t bit,
-                          const std::size_t groups) {
+inline bool TryFastUnpack(const void *__restrict in, T *__restrict out, const uint32_t bit, const std::size_t groups) {
 	if constexpr (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
 		fastunpack(reinterpret_cast<const uint8_t *>(in), reinterpret_cast<uint8_t *>(out), bit, groups);
 	} else if constexpr (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {

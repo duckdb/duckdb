@@ -74,7 +74,7 @@ idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_
 }
 
 void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                                SelectionVector &sel, idx_t &count, const TableFilter &filter,
+                                SelectionResult &sel, idx_t &count, const TableFilter &filter,
                                 TableFilterState &filter_state) {
 	// check if we can do a specialized select
 	// the compression functions need to support this
@@ -93,12 +93,6 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	}
 	FilterVector(state, result, target_count, sel, count, filter, filter_state);
 	validity->FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
-}
-
-void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state,
-                                Vector &result, SelectionResult &sel, idx_t &count, const TableFilter &filter,
-                                TableFilterState &filter_state) {
-	ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
 }
 
 void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
