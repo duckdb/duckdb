@@ -25,7 +25,7 @@ enum class ScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
 enum class ARTScanAction : uint8_t { PUSH_NODE, SKIP };
 
 struct ARTScanStep {
-	ARTScanStep(ARTScanAction action_p, Node node_p = Node()) : action(action_p), node(node_p) {
+	explicit ARTScanStep(ARTScanAction action_p, Node node_p = Node()) : action(action_p), node(node_p) {
 	}
 
 	static ARTScanStep Push(Node node) {
