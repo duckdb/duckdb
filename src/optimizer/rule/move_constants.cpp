@@ -177,7 +177,6 @@ MoveUnaryMinusRule::MoveUnaryMinusRule(ExpressionRewriter &rewriter) : Rule(rewr
 	negation->function = make_uniq<SpecificFunctionMatcher>("-");
 	negation->type = make_uniq<NumericTypeMatcher>();
 	negation->matchers.push_back(make_uniq<ExpressionMatcher>());
-	// ORDERED policy requires an exact child count: this only matches the unary minus
 	negation->policy = SetMatcher::Policy::ORDERED;
 	op->matchers.push_back(std::move(negation));
 	root = std::move(op);
@@ -201,8 +200,12 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 	}
 	auto &constant_type = outer_constant.GetReturnType();
 	if (constant_type.IsFloating()) {
-		// IEEE 754 negation is exact (sign-bit flip), safe for FLOAT and DOUBLE
-		double val = DoubleValue::Get(outer_constant.GetValue());
+		double val = 0.0;
+		if (constant_type.id() == LogicalTypeId::FLOAT) {
+			val = static_cast<double>(FloatValue::Get(outer_constant.GetValue()));
+		} else {
+			val = DoubleValue::Get(outer_constant.GetValue());
+		}
 		auto result_value = Value::DOUBLE(-val);
 		if (!result_value.DefaultTryCastAs(constant_type)) {
 			return nullptr;
