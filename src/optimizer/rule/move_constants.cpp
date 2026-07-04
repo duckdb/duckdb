@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/rule/move_constants.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -223,7 +224,25 @@ unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<ref
 		}
 		auto width = DecimalType::GetWidth(constant_type);
 		auto scale = DecimalType::GetScale(constant_type);
-		outer_constant.GetValueMutable() = Value::DECIMAL(negated_value, width, scale);
+		switch (constant_type.InternalType()) {
+		case PhysicalType::INT16:
+			outer_constant.GetValueMutable() =
+			    Value::DECIMAL(Cast::Operation<hugeint_t, int16_t>(negated_value), width, scale);
+			break;
+		case PhysicalType::INT32:
+			outer_constant.GetValueMutable() =
+			    Value::DECIMAL(Cast::Operation<hugeint_t, int32_t>(negated_value), width, scale);
+			break;
+		case PhysicalType::INT64:
+			outer_constant.GetValueMutable() =
+			    Value::DECIMAL(Cast::Operation<hugeint_t, int64_t>(negated_value), width, scale);
+			break;
+		case PhysicalType::INT128:
+			outer_constant.GetValueMutable() = Value::DECIMAL(negated_value, width, scale);
+			break;
+		default:
+			throw InternalException("Unknown DECIMAL physical type");
+		}
 	} else {
 		// integer path
 		hugeint_t negated_value;
