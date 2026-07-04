@@ -1232,11 +1232,11 @@ void ART::Vacuum(IndexLock &state) {
 		}
 		return ScanNodeResult::SCAN_CHILDREN;
 	};
-	auto preorder_handler = [&](Node &child) -> Node {
+	auto preorder_handler = [&](Node &child) -> ARTScanStep {
 		// Vacuums the pointer if needed and updates in place within the parent.
 		VacuumPointerIfNeeded(art, indexes, child);
-		// We want to return the new pointer to be pushed onto the stack to do a vacuum traversel on the subtree.
-		return child;
+		// Push the updated pointer onto the stack to continue vacuum traversal on the subtree.
+		return ARTScanStep::Push(child);
 	};
 	ARTScanPreorder(art, tree, filter, preorder_handler);
 
@@ -1263,12 +1263,12 @@ void ART::InitializeMerge(Node &other_tree, unsafe_vector<idx_t> &upper_bounds) 
 		return ScanNodeResult::SCAN_CHILDREN;
 	};
 
-	auto pre_handler = [&](Node &child) -> Node {
+	auto pre_handler = [&](Node &child) -> ARTScanStep {
 		D_ASSERT(child.HasMetadata());
 		auto type = child.GetType();
 		// no-op
 		if (type == NType::LEAF_INLINED) {
-			return Node();
+			return ARTScanStep::Skip();
 		}
 		// FIXME: Implement merging for deprecated leaves.
 		if (type == NType::LEAF) {
@@ -1284,14 +1284,14 @@ void ART::InitializeMerge(Node &other_tree, unsafe_vector<idx_t> &upper_bounds) 
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF:
 			// no-op
-			return Node();
+			return ARTScanStep::Skip();
 		case NType::PREFIX:
 		case NType::NODE_4:
 		case NType::NODE_16:
 		case NType::NODE_48:
 		case NType::NODE_256:
 			// Original pointer is pushed onto the stack.
-			return original;
+			return ARTScanStep::Push(original);
 		default:
 			throw InternalException("invalid node type for InitializeMerge: %d", type);
 		}

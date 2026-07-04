@@ -21,17 +21,34 @@ namespace duckdb {
 
 enum class ScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
 
-//! Pins the parent node and calls preorder_handler on all the children, which can perform in-place updates within
-//! the parent while it is pinned, as well as defines the return Node value that should be pushed onto the
-//! stack for further traversal.
+enum class ARTScanAction : uint8_t { PUSH, SKIP };
+
+struct ARTScanStep {
+	ARTScanStep(ARTScanAction action_p, Node node_p = Node()) : action(action_p), node(node_p) {
+	}
+
+	static ARTScanStep Push(Node node) {
+		return ARTScanStep(ARTScanAction::PUSH, node);
+	}
+
+	static ARTScanStep Skip() {
+		return ARTScanStep(ARTScanAction::SKIP);
+	}
+
+	ARTScanAction action;
+	Node node;
+};
+
+//! Pins the parent node and calls preorder_handler on all its children. The handler can update each child pointer
+//! in place and returns whether a child should be pushed onto the stack for further traversal.
 template <class NODE, class PRE_HANDLER>
 static void ScanChildren(ART &art, Node node, PRE_HANDLER &&pre_handler, vector<Node> &stack) {
 	NodeHandle handle(art, node);
 	auto &n = handle.Get<NODE>();
 	NODE::Iterator(n, [&](Node &child) {
-		auto push = pre_handler(child);
-		if (push.HasMetadata()) {
-			stack.push_back(push);
+		auto step = pre_handler(child);
+		if (step.action == ARTScanAction::PUSH) {
+			stack.push_back(step.node);
 		}
 	});
 }
@@ -45,10 +62,10 @@ template <class SCAN_STRATEGY, class PRE_HANDLER>
 void ARTScanPreorder(ART &art, Node &root, SCAN_STRATEGY &&scan_strategy, PRE_HANDLER &&preorder_handler) {
 	vector<Node> stack;
 
-	// root node is always pinned, handle it first.
-	auto push_node = preorder_handler(root);
-	if (push_node.HasMetadata()) {
-		stack.push_back(push_node);
+	// The root node pointer lives in the ART object, not inside a fixed-size buffer.
+	auto step = preorder_handler(root);
+	if (step.action == ARTScanAction::PUSH) {
+		stack.push_back(step.node);
 	}
 
 	while (!stack.empty()) {
@@ -69,9 +86,9 @@ void ARTScanPreorder(ART &art, Node &root, SCAN_STRATEGY &&scan_strategy, PRE_HA
 		case NType::PREFIX: {
 			NodeHandle handle(art, current);
 			auto &child = PrefixHandle::ChildRef(art, handle);
-			push_node = preorder_handler(child);
-			if (push_node.HasMetadata()) {
-				stack.push_back(push_node);
+			step = preorder_handler(child);
+			if (step.action == ARTScanAction::PUSH) {
+				stack.push_back(step.node);
 			}
 			break;
 		}
@@ -105,24 +122,23 @@ struct ScanEntry {
 	bool children_visited;
 };
 
-//! Pins the parent node and iterates over all the children. The filter receives each child by reference
-//! and returns the Node value that should be pushed onto the stack for further traversal.
+//! Pins the parent node and iterates over all its children. The filter receives each child by reference
+//! and returns whether a child should be pushed onto the stack for further traversal.
 template <class NODE, class FILTER>
 static void ScanChildren(ART &art, Node node, FILTER &&filter, vector<ScanEntry> &stack) {
 	NodeHandle handle(art, node);
 	auto &n = handle.Get<NODE>();
 	NODE::Iterator(n, [&](Node &child) {
-		auto push_node = filter(child);
-		if (push_node.HasMetadata()) {
-			stack.push_back(ScanEntry {push_node, false});
+		auto step = filter(child);
+		if (step.action == ARTScanAction::PUSH) {
+			stack.push_back(ScanEntry {step.node, false});
 		}
 	});
 }
 
 //! Post-order scanner: each node is visited twice via the children_visited flag in ScanEntry.
 //! On the first visit (children_visited = false), the node is marked as visited and the filter decides which
-//! children to push onto the stack. The filter receives each child by reference and returns the Node
-//! to push for further traversal.
+//! children to push onto the stack.
 //! On the second visit (children_visited = true, after all descendants have been processed),
 //! post_handler fires on the node and then we pop it from the stack.
 template <class FILTER, class POST_HANDLER>
@@ -154,9 +170,9 @@ void ARTScanPostorder(ART &art, Node &root, FILTER &&filter, POST_HANDLER &&post
 		case NType::PREFIX: {
 			NodeHandle handle(art, current);
 			auto &child = PrefixHandle::ChildRef(art, handle);
-			auto push_node = filter(child);
-			if (push_node.HasMetadata()) {
-				stack.push_back(ScanEntry {push_node, false});
+			auto step = filter(child);
+			if (step.action == ARTScanAction::PUSH) {
+				stack.push_back(ScanEntry {step.node, false});
 			}
 			break;
 		}

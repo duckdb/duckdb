@@ -62,9 +62,9 @@ void Node::FreeTree(ART &art, Node &tree) {
 		return;
 	}
 	// All nodes should be pushed onto the stack.
-	auto filter = [](Node &child) -> Node {
+	auto filter = [](Node &child) -> ARTScanStep {
 		D_ASSERT(child.HasMetadata());
-		return child;
+		return ARTScanStep::Push(child);
 	};
 	// We freed the subtree pointed to by the current node. Free the node.
 	auto post_handler = [&](Node current) {
@@ -414,19 +414,21 @@ void Node::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedStat
 		return ScanNodeResult::SCAN_CHILDREN;
 	};
 
-	auto pre_handler = [&](Node &child) -> Node {
+	auto pre_handler = [&](Node &child) -> ARTScanStep {
 		D_ASSERT(child.HasMetadata());
 		if (child.GetGateStatus() == GateStatus::GATE_SET) {
 			Leaf::TransformToDeprecated(art, child);
-			return Node();
+			return ARTScanStep::Skip();
 		}
 		auto type = child.GetType();
 		switch (type) {
-		case NType::PREFIX:
-			return PrefixHandle::TransformToDeprecated(art, child, state);
+		case NType::PREFIX: {
+			auto node = PrefixHandle::TransformToDeprecated(art, child, state);
+			return node.HasMetadata() ? ARTScanStep::Push(node) : ARTScanStep::Skip();
+		}
 		case NType::LEAF_INLINED:
 		case NType::LEAF:
-			return Node();
+			return ARTScanStep::Skip();
 		case NType::NODE_4:
 		case NType::NODE_16:
 		case NType::NODE_48:
@@ -434,7 +436,7 @@ void Node::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedStat
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF:
-			return child;
+			return ARTScanStep::Push(child);
 		default:
 			throw InternalException("invalid node type for TransformToDeprecated: %d", type);
 		}
@@ -486,29 +488,29 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 		return ScanNodeResult::SCAN_CHILDREN;
 	};
 
-	auto pre_handler = [&](Node &child) -> Node {
+	auto pre_handler = [&](Node &child) -> ARTScanStep {
 		D_ASSERT(child.HasMetadata());
 		auto type = child.GetType();
 		switch (type) {
 		case NType::LEAF_INLINED:
-			return Node();
+			return ARTScanStep::Skip();
 		case NType::LEAF: {
 			auto &leaf = Ref<Leaf>(art, child, type);
 			leaf.DeprecatedVerifyAllocations(art, node_counts);
-			return Node();
+			return ARTScanStep::Skip();
 		}
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF:
 			node_counts[GetAllocatorIdx(type)]++;
-			return Node();
+			return ARTScanStep::Skip();
 		case NType::PREFIX:
 		case NType::NODE_4:
 		case NType::NODE_16:
 		case NType::NODE_48:
 		case NType::NODE_256:
 			node_counts[GetAllocatorIdx(type)]++;
-			return child;
+			return ARTScanStep::Push(child);
 		default:
 			throw InternalException("invalid node type for VerifyAllocations: %d", type);
 		}
