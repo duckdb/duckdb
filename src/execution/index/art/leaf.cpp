@@ -19,7 +19,8 @@ void Leaf::New(NodePtr &node, const row_t row_id) {
 	node.SetRowId(row_id);
 }
 
-void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, NodePtr &left, NodePtr &right, GateStatus status, idx_t depth) {
+void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, NodePtr &left, NodePtr &right, GateStatus status,
+                        idx_t depth) {
 	D_ASSERT(left.GetType() == NType::LEAF_INLINED);
 	D_ASSERT(right.GetType() == NType::LEAF_INLINED);
 

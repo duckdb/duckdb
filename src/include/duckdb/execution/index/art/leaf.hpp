@@ -35,14 +35,15 @@ public:
 private:
 	uint8_t count;            // Deprecated.
 	row_t row_ids[LEAF_SIZE]; // Deprecated.
-	NodePtr ptr;                 // Deprecated.
+	NodePtr ptr;              // Deprecated.
 
 public:
 	//! Inline a row ID into a node pointer.
 	static void New(NodePtr &node, const row_t row_id);
 
 	//! Merge two inlined leaf nodes.
-	static void MergeInlined(ArenaAllocator &arena, ART &art, NodePtr &left, NodePtr &right, GateStatus status, idx_t depth);
+	static void MergeInlined(ArenaAllocator &arena, ART &art, NodePtr &left, NodePtr &right, GateStatus status,
+	                         idx_t depth);
 
 	//! Transforms a deprecated leaf to a nested leaf.
 	static void TransformToNested(ART &art, NodePtr &node);

@@ -28,14 +28,15 @@ string ConstPrefixHandle::ToString(ART &art, const NodePtr &node, const ToString
 	// Print prefix bytes (single branch, child follows on next line)
 	auto str = StringUtil::Format("%s%sPrefix: |", options.tree_prefix, PREFIX_BRANCH_END);
 	auto child_options = options;
-	auto tail = Iterator(art, node, true, [&](const ConstNodeHandle &handle, const_data_ptr_t data, const NodePtr &child) {
-		for (idx_t i = 0; i < data[art.PrefixCount()]; i++) {
-			str += StringUtil::Format("%s|", format_byte(data[i]));
-			if (options.key_path) {
-				child_options.key_depth++;
-			}
-		}
-	});
+	auto tail =
+	    Iterator(art, node, true, [&](const ConstNodeHandle &handle, const_data_ptr_t data, const NodePtr &child) {
+		    for (idx_t i = 0; i < data[art.PrefixCount()]; i++) {
+			    str += StringUtil::Format("%s|", format_byte(data[i]));
+			    if (options.key_path) {
+				    child_options.key_depth++;
+			    }
+		    }
+	    });
 	str += "\n";
 
 	// Child is printed indented under the prefix (not as a sibling)
@@ -45,10 +46,11 @@ string ConstPrefixHandle::ToString(ART &art, const NodePtr &node, const ToString
 }
 
 void ConstPrefixHandle::Verify(ART &art, const NodePtr &node) {
-	auto tail = Iterator(art, node, true, [&](const ConstNodeHandle &handle, const_data_ptr_t data, const NodePtr &child) {
-		D_ASSERT(data[art.PrefixCount()] != 0);
-		D_ASSERT(data[art.PrefixCount()] <= art.PrefixCount());
-	});
+	auto tail =
+	    Iterator(art, node, true, [&](const ConstNodeHandle &handle, const_data_ptr_t data, const NodePtr &child) {
+		    D_ASSERT(data[art.PrefixCount()] != 0);
+		    D_ASSERT(data[art.PrefixCount()] <= art.PrefixCount());
+	    });
 
 	tail.Verify(art);
 }

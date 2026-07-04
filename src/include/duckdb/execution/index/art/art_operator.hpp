@@ -260,8 +260,8 @@ public:
 					// PREFIX (greatgrandparent) - Node4 (grandparent) - PREFIX - INLINED_LEAF.
 					// The parent does not have to be passed in, as it is a child of the possibly being compressed N4.
 					// Then, when we delete that child, we also free it.
-					NodePtr::DeleteChild(art, grandparent, greatgrandparent, current_key.get()[grandparent_depth], status,
-					                  row_id);
+					NodePtr::DeleteChild(art, grandparent, greatgrandparent, current_key.get()[grandparent_depth],
+					                     status, row_id);
 					return true;
 				}
 				NodePtr::DeleteChild(art, parent, grandparent, current_key.get()[parent_depth], status, row_id);

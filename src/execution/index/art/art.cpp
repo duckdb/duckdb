@@ -850,8 +850,8 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	}
 }
 
-void ART::VerifyLeaf(const NodePtr &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
-                     optional_idx &conflict_idx, idx_t i) {
+void ART::VerifyLeaf(const NodePtr &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info,
+                     ConflictManager &manager, optional_idx &conflict_idx, idx_t i) {
 	// Get the set of deleted row ids for this value if we have any delete indexes
 	vector<row_t> deleted_row_ids;
 	if (delete_index_info.delete_indexes) {

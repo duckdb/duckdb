@@ -66,8 +66,8 @@ void Prefix::New(ART &art, reference<NodePtr> &ref, const ARTKey &key, const idx
 	}
 }
 
-void Prefix::Concat(ART &art, NodePtr &parent, NodePtr &node4, const NodePtr child, uint8_t byte, const GateStatus node4_status,
-                    const GateStatus status) {
+void Prefix::Concat(ART &art, NodePtr &parent, NodePtr &node4, const NodePtr child, uint8_t byte,
+                    const GateStatus node4_status, const GateStatus status) {
 	// We have four situations from which we enter here:
 	// 1: PREFIX (parent) - Node4 (prev_node4) - PREFIX (child) - INLINED_LEAF, or
 	// 2: PREFIX (parent) - Node4 (prev_node4) - INLINED_LEAF (child), or

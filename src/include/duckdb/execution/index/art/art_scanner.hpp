@@ -57,8 +57,8 @@ static void ScanChildren(ART &art, NodePtr node, PRE_HANDLER &&pre_handler, vect
 //! Pre-order scanner: each child pointer in the parent node is processed by pre_handler before being pushed onto the
 //! stack (either in its original or processed form). When a node is popped, scan_strategy decides whether to scan
 //! its children or skip it. If the child pointers need to be scanned, the popped node is pinned in ScanChildren and
-//! any updates are performed in place within that pinned node using preorder_handler (which also defines what NodePtr to
-//! push onto the stack for further traversal).
+//! any updates are performed in place within that pinned node using preorder_handler (which also defines what NodePtr
+//! to push onto the stack for further traversal).
 template <class SCAN_STRATEGY, class PRE_HANDLER>
 void ARTScanPreorder(ART &art, NodePtr &root, SCAN_STRATEGY &&scan_strategy, PRE_HANDLER &&preorder_handler) {
 	vector<NodePtr> stack;
