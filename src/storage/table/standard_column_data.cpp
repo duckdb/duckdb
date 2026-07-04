@@ -91,8 +91,10 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
 		return;
 	}
-	FilterVector(state, result, target_count, sel, count, filter, filter_state);
-	validity->FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
+	// the compression filter callbacks index the running selection per row: use the materialized view
+	auto &flat_sel = sel.Flattened();
+	FilterVector(state, result, target_count, flat_sel, count, filter, filter_state);
+	validity->FilterVector(state.child_states[0], result, target_count, flat_sel, count, filter, filter_state);
 }
 
 void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

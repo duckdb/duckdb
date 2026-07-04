@@ -15,6 +15,13 @@
 #include <type_traits>
 #include <utility>
 
+// MSVC cannot parse __restrict on template-dependent pointer types
+#if defined(_MSC_VER)
+#define DUCKDB_BITPACKING_RESTRICT
+#else
+#define DUCKDB_BITPACKING_RESTRICT __restrict
+#endif
+
 namespace duckdb_bitpacking {
 namespace internal {
 
@@ -23,13 +30,13 @@ static constexpr const uint32_t BITPACKING_GROUP_SIZE = 32;
 // The packed buffer is 32-bit words at an arbitrary byte offset, so access it via memcpy - a raw load/store
 // would be UB on a misaligned address. A fixed-size memcpy compiles to one (un)aligned move.
 template <class T>
-static inline T LoadWord(const T *__restrict p) {
+static inline T LoadWord(const T *DUCKDB_BITPACKING_RESTRICT p) {
 	T v;
 	std::memcpy(&v, static_cast<const void *>(p), sizeof(T));
 	return v;
 }
 template <class T>
-static inline void StoreWord(T *__restrict p, T v) {
+static inline void StoreWord(T *DUCKDB_BITPACKING_RESTRICT p, T v) {
 	std::memcpy(static_cast<void *>(p), &v, sizeof(T));
 }
 
@@ -51,7 +58,7 @@ static inline void ForEachIndex(F &&f, std::index_sequence<I...>) {
 }
 
 template <uint32_t WIDTH, class OUT, std::size_t INDEX>
-static inline void UnpackValue(const uint32_t *__restrict in, OUT *__restrict out) {
+static inline void UnpackValue(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OUT *DUCKDB_BITPACKING_RESTRICT out) {
 	static_assert(WIDTH <= sizeof(OUT) * 8, "Bitpacking width exceeds output type width");
 	constexpr std::size_t bit_position = INDEX * WIDTH;
 	constexpr std::size_t word_index = bit_position / 32;
@@ -102,7 +109,7 @@ constexpr std::size_t BitpackingGcd(std::size_t a, std::size_t b) {
 // auto-vectorizes better than the generic uint32-read extraction. Little-endian; WIDTH < bits so a value
 // spans at most two read units.
 template <uint32_t WIDTH, class OUT, std::size_t INDEX>
-static inline OUT NarrowValue(const OUT *__restrict r) {
+static inline OUT NarrowValue(const OUT *DUCKDB_BITPACKING_RESTRICT r) {
 	constexpr std::size_t bits = 8 * sizeof(OUT);
 	constexpr std::size_t bit_position = INDEX * WIDTH;
 	constexpr std::size_t word_index = bit_position / bits;
@@ -118,17 +125,17 @@ static inline OUT NarrowValue(const OUT *__restrict r) {
 }
 
 template <uint32_t WIDTH, class OUT>
-static inline void NarrowUnpack(const uint32_t *__restrict in, OUT *__restrict out, std::size_t groups) {
+static inline void NarrowUnpack(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OUT *DUCKDB_BITPACKING_RESTRICT out, std::size_t groups) {
 	constexpr std::size_t bits = 8 * sizeof(OUT);
 	constexpr std::size_t g = BitpackingGcd(WIDTH, bits);
 	constexpr std::size_t K = WIDTH / g; // read units per sub-group
 	constexpr std::size_t M = bits / g;  // values per sub-group
-	const OUT *__restrict r = reinterpret_cast<const OUT *>(in);
+	const OUT *DUCKDB_BITPACKING_RESTRICT r = reinterpret_cast<const OUT *>(in);
 	const std::size_t subgroups = groups * (BITPACKING_GROUP_SIZE / M);
 	DUCKDB_BITPACKING_VECTORIZE
 	for (std::size_t s = 0; s < subgroups; s++) {
-		const OUT *__restrict rr = r + s * K;
-		OUT *__restrict oo = out + s * M;
+		const OUT *DUCKDB_BITPACKING_RESTRICT rr = r + s * K;
+		OUT *DUCKDB_BITPACKING_RESTRICT oo = out + s * M;
 		ForEachIndex([&](auto i) { oo[decltype(i)::value] = NarrowValue<WIDTH, OUT, decltype(i)::value>(rr); },
 		             std::make_index_sequence<M> {});
 	}
@@ -153,7 +160,7 @@ static constexpr bool UseNarrowUnpack() {
 }
 
 template <uint32_t WIDTH, class OUT>
-static inline void UnpackBlock(const uint32_t *__restrict in, OUT *__restrict out) {
+static inline void UnpackBlock(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OUT *DUCKDB_BITPACKING_RESTRICT out) {
 	if constexpr (WIDTH == 0) {
 		std::memset(out, 0, BITPACKING_GROUP_SIZE * sizeof(OUT));
 	} else if constexpr (WIDTH == 8 * sizeof(OUT)) {
@@ -186,7 +193,7 @@ static inline duckdb_bp_u32x4 ShuffleShift(std::index_sequence<L...>) {
 }
 
 template <uint32_t WIDTH, class OUT>
-static inline void ShuffleUnpackIter(const uint8_t *__restrict base, OUT *__restrict out) {
+static inline void ShuffleUnpackIter(const uint8_t *DUCKDB_BITPACKING_RESTRICT base, OUT *DUCKDB_BITPACKING_RESTRICT out) {
 	const duckdb_bp_u32x4 mask = duckdb_bp_u32x4 {} + static_cast<uint32_t>((uint64_t(1) << WIDTH) - 1);
 	const auto seq16 = std::make_index_sequence<16> {};
 	const duckdb_bp_u32x4 s0 = ShuffleShift<WIDTH, 0>(std::make_index_sequence<4> {});
@@ -227,11 +234,11 @@ static constexpr bool UseShuffleUnpack() {
 }
 
 template <uint32_t WIDTH, class OUT>
-static inline void ShuffleUnpack(const uint32_t *__restrict in, OUT *__restrict out, std::size_t groups) {
+static inline void ShuffleUnpack(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OUT *DUCKDB_BITPACKING_RESTRICT out, std::size_t groups) {
 	// Reserve trailing groups (done via the generic path) so the windowed 16-byte loads never read past the buffer.
 	constexpr std::size_t reserve = ((4 * WIDTH) / 8 + 16 + 4 * WIDTH - 1) / (4 * WIDTH);
 	const std::size_t shuffle_groups = groups > reserve ? groups - reserve : 0;
-	const uint8_t *__restrict base = reinterpret_cast<const uint8_t *>(in);
+	const uint8_t *DUCKDB_BITPACKING_RESTRICT base = reinterpret_cast<const uint8_t *>(in);
 	for (std::size_t s = 0; s < shuffle_groups * 4; s++) { // 8 values/iteration, 4 iterations/block
 		ShuffleUnpackIter<WIDTH, OUT>(base + s * WIDTH, out + s * 8);
 	}
@@ -242,7 +249,7 @@ static inline void ShuffleUnpack(const uint32_t *__restrict in, OUT *__restrict 
 #endif
 
 template <uint32_t WIDTH, class OUT>
-static inline void UnpackBuffer(const uint32_t *__restrict in, OUT *__restrict out, std::size_t groups) {
+static inline void UnpackBuffer(const uint32_t *DUCKDB_BITPACKING_RESTRICT in, OUT *DUCKDB_BITPACKING_RESTRICT out, std::size_t groups) {
 #if DUCKDB_BITPACKING_SHUFFLE
 	if constexpr (UseShuffleUnpack<WIDTH, OUT>()) {
 		ShuffleUnpack<WIDTH, OUT>(in, out, groups);
@@ -259,7 +266,7 @@ static inline void UnpackBuffer(const uint32_t *__restrict in, OUT *__restrict o
 }
 
 template <uint32_t WIDTH, class IN, std::size_t INDEX>
-static inline void PackValue(const IN *__restrict in, uint32_t *__restrict out) {
+static inline void PackValue(const IN *DUCKDB_BITPACKING_RESTRICT in, uint32_t *DUCKDB_BITPACKING_RESTRICT out) {
 	static_assert(WIDTH <= sizeof(IN) * 8, "Bitpacking width exceeds input type width");
 	if constexpr (WIDTH > 0) {
 		constexpr std::size_t bit_position = INDEX * WIDTH;
@@ -277,7 +284,7 @@ static inline void PackValue(const IN *__restrict in, uint32_t *__restrict out) 
 }
 
 template <uint32_t WIDTH, class IN>
-static inline void PackBlock(const IN *__restrict in, uint32_t *__restrict out) {
+static inline void PackBlock(const IN *DUCKDB_BITPACKING_RESTRICT in, uint32_t *DUCKDB_BITPACKING_RESTRICT out) {
 	if constexpr (WIDTH == 0) {
 		return;
 	} else if constexpr (WIDTH == 8 * sizeof(IN)) {
@@ -290,7 +297,7 @@ static inline void PackBlock(const IN *__restrict in, uint32_t *__restrict out) 
 }
 
 template <uint32_t WIDTH, class IN>
-static inline void PackBuffer(const IN *__restrict in, uint32_t *__restrict out, std::size_t groups) {
+static inline void PackBuffer(const IN *DUCKDB_BITPACKING_RESTRICT in, uint32_t *DUCKDB_BITPACKING_RESTRICT out, std::size_t groups) {
 	for (std::size_t group = 0; group < groups; group++) {
 		PackBlock<WIDTH, IN>(in + group * BITPACKING_GROUP_SIZE, out + group * WIDTH);
 	}
@@ -313,14 +320,14 @@ static inline void DispatchWidth(uint32_t width, FUNC &&func) {
 
 // fastunpack: IN is the packed buffer (32-bit words), OUT the destination values. fastpack is the inverse.
 #define DUCKDB_BITPACKING_FASTUNPACK(IN_T, OUT_T, MAX_WIDTH)                                                           \
-	inline void fastunpack(const IN_T *__restrict in, OUT_T *__restrict out, const uint32_t bit,                       \
+	inline void fastunpack(const IN_T *DUCKDB_BITPACKING_RESTRICT in, OUT_T *DUCKDB_BITPACKING_RESTRICT out, const uint32_t bit,                       \
 	                       const std::size_t groups = 1) {                                                             \
 		internal::DispatchWidth<MAX_WIDTH>(bit, [&](auto width) {                                                      \
 			internal::UnpackBuffer<decltype(width)::value>(reinterpret_cast<const uint32_t *>(in), out, groups);       \
 		});                                                                                                            \
 	}
 #define DUCKDB_BITPACKING_FASTPACK(IN_T, OUT_T, MAX_WIDTH)                                                             \
-	inline void fastpack(const IN_T *__restrict in, OUT_T *__restrict out, const uint32_t bit,                         \
+	inline void fastpack(const IN_T *DUCKDB_BITPACKING_RESTRICT in, OUT_T *DUCKDB_BITPACKING_RESTRICT out, const uint32_t bit,                         \
 	                     const std::size_t groups = 1) {                                                               \
 		internal::DispatchWidth<MAX_WIDTH>(bit, [&](auto width) {                                                      \
 			internal::PackBuffer<decltype(width)::value>(in, reinterpret_cast<uint32_t *>(out), groups);               \
@@ -340,7 +347,7 @@ DUCKDB_BITPACKING_FASTPACK(uint64_t, uint32_t, 64)
 #undef DUCKDB_BITPACKING_FASTPACK
 
 template <class T>
-inline bool TryFastPack(const T *__restrict in, void *__restrict out, const uint32_t bit, const std::size_t groups) {
+inline bool TryFastPack(const T *DUCKDB_BITPACKING_RESTRICT in, void *DUCKDB_BITPACKING_RESTRICT out, const uint32_t bit, const std::size_t groups) {
 	if constexpr (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
 		fastpack(reinterpret_cast<const uint8_t *>(in), reinterpret_cast<uint8_t *>(out), bit, groups);
 	} else if constexpr (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
@@ -356,7 +363,7 @@ inline bool TryFastPack(const T *__restrict in, void *__restrict out, const uint
 }
 
 template <class T>
-inline bool TryFastUnpack(const void *__restrict in, T *__restrict out, const uint32_t bit, const std::size_t groups) {
+inline bool TryFastUnpack(const void *DUCKDB_BITPACKING_RESTRICT in, T *DUCKDB_BITPACKING_RESTRICT out, const uint32_t bit, const std::size_t groups) {
 	if constexpr (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
 		fastunpack(reinterpret_cast<const uint8_t *>(in), reinterpret_cast<uint8_t *>(out), bit, groups);
 	} else if constexpr (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {

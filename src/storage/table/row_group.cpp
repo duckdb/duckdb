@@ -926,12 +926,12 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 					                approved_tuple_count, filter.filter, table_filter_state);
 				}
 				// materialize a bitmap selection once here so all column slices share one index array
-				sel.Flatten();
+				auto &flat_sel = sel.Flattened();
 				for (auto &table_filter : filter_list) {
 					if (table_filter.IsAlwaysTrue()) {
 						continue;
 					}
-					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
+					result.data[table_filter.scan_column_index].Slice(flat_sel, approved_tuple_count);
 				}
 			}
 			if (approved_tuple_count == 0) {
@@ -960,7 +960,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				auto &column = column_ids[i];
 				auto &col_data = GetColumn(column);
 				state.column_scans[i].update_scan_type = options.update_type;
-				col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
+				col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel.Flattened(),
 				                approved_tuple_count);
 			}
 			filter_info.EndFilter(filter_state);

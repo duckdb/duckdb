@@ -427,8 +427,9 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 
 			// construct the relevant selection vector for the current chunk (offset ... offset + chunk_count)
 			idx_t current_count = 0;
+			auto &flat_sel = sel.Flattened();
 			for (; current_sel_offset < approved_tuple_count; current_sel_offset++) {
-				auto sel_index = sel.get_index(current_sel_offset);
+				auto sel_index = flat_sel.get_index(current_sel_offset);
 				if (sel_index >= chunk_end) {
 					// exhausted the chunk
 					break;
@@ -489,11 +490,9 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 		return approved_tuple_count;
 	}
 	SelectionVector result_sel(approved_tuple_count);
-	// the narrowing path indexes the running selection per row; a bitmap sel (from a prior bitmap-capable
-	// filter) can reach here on a nested/non-eligible filter, so materialize it once before use
-	sel.Flatten();
-	// nullptr == identity over [0, approved_tuple_count) (the prefix of still-candidate rows)
-	optional_ptr<SelectionVector> current_sel = sel.IsSet() ? &sel : nullptr;
+	// the narrowing path indexes the running selection per row: use the materialized view
+	// (nullptr == identity over [0, approved_tuple_count), the prefix of still-candidate rows)
+	optional_ptr<SelectionVector> current_sel = sel.IsSet() ? &sel.Flattened() : nullptr;
 	SelectionVector identity_sel;
 	if (!sel.IsSet() && nested) {
 		identity_sel = SelectionVector::Incremental(approved_tuple_count);
@@ -502,6 +501,14 @@ static idx_t ExecuteExpressionFilterSelection(SelectionResult &sel, Vector &vect
 	approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, current_sel, approved_tuple_count);
 	sel.Initialize(result_sel);
 	return approved_tuple_count;
+}
+
+idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
+                                     const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
+                                     idx_t &approved_tuple_count) {
+	(void)vdata;
+	(void)filter;
+	return FilterSelection(sel, vector, filter_state, scan_count, approved_tuple_count);
 }
 
 idx_t ColumnSegment::FilterSelection(SelectionResult &sel, Vector &vector, TableFilterState &filter_state,
@@ -515,9 +522,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Table
 	SelectionResult result_sel;
 	result_sel.Initialize(sel);
 	auto result = FilterSelection(result_sel, vector, filter_state, scan_count, approved_tuple_count);
-	result_sel.Flatten();
-	sel.Initialize(result_sel);
-	D_ASSERT(!sel.IsBitmap());
+	sel.Initialize(result_sel.Flattened());
 	return result;
 }
 

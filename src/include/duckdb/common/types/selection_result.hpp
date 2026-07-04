@@ -19,16 +19,43 @@
 
 namespace duckdb {
 
-struct SelectionResult : public SelectionVector {
+//! Private inheritance: a SelectionResult cannot be passed where a plain SelectionVector is expected, so
+//! per-value index access on a possibly-bitmap selection is a compile error; Flattened() is the explicit,
+//! once-per-vector conversion. The safe (non-indexing) part of the base API is re-exposed below.
+struct SelectionResult : private SelectionVector {
 	using SelectionVector::SelectionVector;
+	using SelectionVector::Initialize;
+	using SelectionVector::IsSet;
+	using SelectionVector::IsBitmap;
+	using SelectionVector::RowSpan;
+	using SelectionVector::Capacity;
+
+	//! Materialize a bitmap (no-op if flat) and view as a plain, index-only SelectionVector.
+	SelectionVector &Flattened() {
+		Flatten();
+		return *this;
+	}
+	//! Share another result's representation (the base overload cannot accept a SelectionResult from outside).
+	void Initialize(const SelectionResult &other) {
+		SelectionVector::Initialize(static_cast<const SelectionVector &>(other));
+	}
+	//! Swap representations with a plain selection (used to hand a result over to a caller-owned output).
+	void SwapInto(SelectionVector &out) {
+		std::swap(out, static_cast<SelectionVector &>(*this));
+	}
 
 	void EnsureIndexWritable(idx_t count) {
 		if (sel_vector && capacity >= count) {
+			if (selection_data) {
+				selection_data->is_bitmap = false;
+				selection_data->index_cache_offset = DConstants::INVALID_INDEX;
+			}
 			return;
 		}
 		if (selection_data && selection_data.use_count() == 1 &&
 		    selection_data->owned_data.GetSize() >= count * sizeof(sel_t)) {
 			selection_data->is_bitmap = false;
+			selection_data->index_cache_offset = DConstants::INVALID_INDEX;
 			sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
 			capacity = selection_data->owned_data.GetSize() / sizeof(sel_t);
 			return;
@@ -42,7 +69,7 @@ struct SelectionResult : public SelectionVector {
 		}
 	}
 
-	idx_t Intersect(SelectionVector &other, idx_t count, idx_t other_count, idx_t row_span) {
+	idx_t Intersect(SelectionResult &other, idx_t count, idx_t other_count, idx_t row_span) {
 		ToBitmap(count, row_span);
 		if (!other.IsSet()) {
 			D_ASSERT(other_count == row_span);
@@ -104,6 +131,7 @@ private:
 
 	idx_t IntersectBitmap(const validity_t *other_bitmap) {
 		D_ASSERT(IsBitmap());
+		selection_data->index_cache_offset = DConstants::INVALID_INDEX;
 		auto a = reinterpret_cast<validity_t *>(selection_data->bitmap_data.get());
 		const idx_t nwords = (selection_data->row_span + 63) / 64;
 		idx_t total = 0;

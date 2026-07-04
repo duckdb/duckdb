@@ -116,7 +116,7 @@ idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionResult &re
 	// the reused result may still hold last vector's bitmap: make it a valid set_index target once per call
 	result_sel.EnsureIndexWritable(current_count);
 	SetChunk(&input);
-	return Select(*expressions[0], states[0]->root_state.get(), current_sel.get(), current_count, &result_sel, nullptr,
+	return Select(*expressions[0], states[0]->root_state.get(), current_sel.get(), current_count, nullptr, nullptr,
 	              &result_sel);
 }
 
@@ -319,6 +319,11 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
                                  SelectionResult *bitmap_sel) {
 	if (count == 0) {
 		return 0;
+	}
+	// a bitmap-capable output is passed only as bitmap_sel; generic writers use its flat index view
+	D_ASSERT(!bitmap_sel || (!true_sel && !false_sel));
+	if (bitmap_sel) {
+		true_sel = &bitmap_sel->Flattened();
 	}
 	D_ASSERT(true_sel || false_sel);
 	D_ASSERT(expr.GetReturnType().id() == LogicalTypeId::BOOLEAN);

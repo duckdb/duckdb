@@ -246,3 +246,28 @@ SELECT count(*) FROM (
 ) t WHERE a < 5000 AND b LIKE '%b%'
 ----
 4000
+
+# Mixed scan filters should also slice nullable payload columns with the same selected rows.
+load {TEST_DIR}/autovec_payload_null.db
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+statement ok
+CREATE TABLE autovec_payload_null_t AS
+SELECT i::INTEGER a,
+       CASE WHEN i % 5 = 0 THEN 'xyz' ELSE 'abc' END b,
+       CASE WHEN i % 7 = 0 THEN NULL ELSE 'name_' || i::VARCHAR END name
+FROM range(5000) tbl(i);
+
+statement ok
+CHECKPOINT
+
+restart
+
+query III
+SELECT count(*), sum(a), count(*) FILTER (WHERE name IS NULL)
+FROM autovec_payload_null_t
+WHERE b LIKE '%b%' AND a < 5000
+----
+4000	10000000	572

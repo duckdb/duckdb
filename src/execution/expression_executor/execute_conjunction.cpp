@@ -89,13 +89,12 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 				const SelectionVector *current_sel = nullptr;
 				idx_t current_count = count;
 				if (!dense && have_accumulator) {
-					state.intersect_acc.Flatten();
-					current_sel = &state.intersect_acc;
+					current_sel = &state.intersect_acc.Flattened();
 					current_count = intersect_count;
 				}
 				state.intersect_tmp.EnsureIndexWritable(count);
-				idx_t child_count = Select(child, child_state, current_sel, current_count, &state.intersect_tmp,
-				                           nullptr, &state.intersect_tmp);
+				idx_t child_count =
+				    Select(child, child_state, current_sel, current_count, nullptr, nullptr, &state.intersect_tmp);
 				state.intersect_tmp.ToBitmap(child_count, count);
 				if (dense && have_accumulator) {
 					child_count =
@@ -113,10 +112,12 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			}
 
 			if (have_accumulator && (used_dense_bitmap_child || intersect_count == 0)) {
-				// swap, not move: the scratch keeps true_sel's old buffers for reuse on the next vector
-				std::swap(*true_sel, static_cast<SelectionVector &>(state.intersect_acc));
-				if (bitmap_sel != true_sel) {
+				// swap, not move: the scratch keeps the caller's old buffers for reuse on the next vector
+				if (bitmap_sel) {
+					std::swap(*bitmap_sel, state.intersect_acc);
+				} else {
 					// the caller's output is a plain SelectionVector: materialize the bitmap once
+					state.intersect_acc.SwapInto(*true_sel);
 					true_sel->Flatten();
 				}
 				return intersect_count;

@@ -324,7 +324,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	// Fast path: a `flat_ref <cmp> const` comparison over the identity selection produces a bitmap straight
 	// from the input chunk, skipping the per-node intermediate-vector machinery below. Any select caller
 	// (scan filters, PhysicalFilter, joins) benefits; non-matching shapes fall through.
-	if (bitmap_sel && bitmap_sel == true_sel && chunk && !false_sel && (!sel || !sel->IsSet())) {
+	if (bitmap_sel && chunk && !false_sel && (!sel || !sel->IsSet())) {
 		idx_t result;
 		if (TrySelectComparisonFromChunk(expr, *chunk, count, *bitmap_sel, result)) {
 			return result;
