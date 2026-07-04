@@ -122,14 +122,14 @@ struct ScanEntry {
 	bool children_visited;
 };
 
-//! Pins the parent node and iterates over all its children. The filter receives each child by reference
+//! Pins the parent node and iterates over all its children. The child_selector receives each child by reference
 //! and returns whether a child should be pushed onto the stack for further traversal.
-template <class NODE, class FILTER>
-static void ScanChildren(ART &art, Node node, FILTER &&filter, vector<ScanEntry> &stack) {
+template <class NODE, class CHILD_SELECTOR>
+static void ScanChildren(ART &art, Node node, CHILD_SELECTOR &&child_selector, vector<ScanEntry> &stack) {
 	NodeHandle handle(art, node);
 	auto &n = handle.Get<NODE>();
 	NODE::Iterator(n, [&](Node &child) {
-		auto step = filter(child);
+		auto step = child_selector(child);
 		if (step.action == ARTScanAction::PUSH_NODE) {
 			stack.push_back(ScanEntry {step.node, false});
 		}
@@ -137,12 +137,12 @@ static void ScanChildren(ART &art, Node node, FILTER &&filter, vector<ScanEntry>
 }
 
 //! Post-order scanner: each node is visited twice via the children_visited flag in ScanEntry.
-//! On the first visit (children_visited = false), the node is marked as visited and the filter decides which
+//! On the first visit (children_visited = false), the node is marked as visited and the child_selector decides which
 //! children to push onto the stack.
 //! On the second visit (children_visited = true, after all descendants have been processed),
 //! post_handler fires on the node and then we pop it from the stack.
-template <class FILTER, class POST_HANDLER>
-void ARTScanPostorder(ART &art, Node &root, FILTER &&filter, POST_HANDLER &&postorder_handler) {
+template <class CHILD_SELECTOR, class POST_HANDLER>
+void ARTScanPostorder(ART &art, Node &root, CHILD_SELECTOR &&child_selector, POST_HANDLER &&postorder_handler) {
 	vector<ScanEntry> stack;
 
 	D_ASSERT(root.HasMetadata());
@@ -170,23 +170,23 @@ void ARTScanPostorder(ART &art, Node &root, FILTER &&filter, POST_HANDLER &&post
 		case NType::PREFIX: {
 			NodeHandle handle(art, current);
 			auto &child = PrefixHandle::ChildRef(art, handle);
-			auto step = filter(child);
+			auto step = child_selector(child);
 			if (step.action == ARTScanAction::PUSH_NODE) {
 				stack.push_back(ScanEntry {step.node, false});
 			}
 			break;
 		}
 		case NType::NODE_4:
-			ScanChildren<Node4>(art, current, filter, stack);
+			ScanChildren<Node4>(art, current, child_selector, stack);
 			break;
 		case NType::NODE_16:
-			ScanChildren<Node16>(art, current, filter, stack);
+			ScanChildren<Node16>(art, current, child_selector, stack);
 			break;
 		case NType::NODE_48:
-			ScanChildren<Node48>(art, current, filter, stack);
+			ScanChildren<Node48>(art, current, child_selector, stack);
 			break;
 		case NType::NODE_256:
-			ScanChildren<Node256>(art, current, filter, stack);
+			ScanChildren<Node256>(art, current, child_selector, stack);
 			break;
 		default:
 			throw InternalException("invalid node type for ARTScanPostOrder: %d", current.GetType());
