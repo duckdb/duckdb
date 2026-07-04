@@ -1,0 +1,12 @@
+diff --git a/src/aws_secret.cpp b/src/aws_secret.cpp
+index 17e66bf..5e2dc14 100644
+--- a/src/aws_secret.cpp
++++ b/src/aws_secret.cpp
+@@ -1,6 +1,7 @@
+ #include "aws_secret.hpp"
+ 
+ #include "duckdb/common/case_insensitive_map.hpp"
++#include "duckdb/logging/logger.hpp"
+ #include "duckdb/common/exception.hpp"
+ #include "duckdb/main/extension/extension_loader.hpp"
+ 
