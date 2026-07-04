@@ -79,17 +79,13 @@ public:
 	//! Pop a recycled scan state, returns null when none is available
 	unique_ptr<LocalTableFunctionState> TryPopState();
 
-	//! Make our pipeline worker do IO work
-	bool TryCompleteJobIO(MultiFileScanJob &job);
-	//! Block until the claimed job's scheduled I/O has completed
+	//! Complete the claimed job's scheduled I/O on the calling thread (synchronous fallback / residual drain)
 	void WaitForJob(MultiFileScanJob &job);
 
 	//! Push an error onto the async executor
 	void PushError(ErrorData error);
 	//! Throw if any read-ahead thread or task pushed an error
 	void ThrowIfError();
-	//! Run one queued I/O task inline - returns false when none was queued
-	bool TryHelpIO();
 
 private:
 	//! Release a look-ahead slot

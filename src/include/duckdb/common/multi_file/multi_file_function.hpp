@@ -854,9 +854,10 @@ public:
 			}
 			if (job) {
 				lstate.job = std::move(*job);
-				// run queued I/O inline
+				// If we can park, register a wake-up on the job's I/O completion and block. The async pool
+				// (and idle scheduler threads) run the scheduled reads and wake us when the last one finishes.
 				if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR &&
-				    data_p.interrupt_state && !read_ahead.TryCompleteJobIO(lstate.job) &&
+				    data_p.interrupt_state && lstate.job.io_completion &&
 				    lstate.job.io_completion->TryPark(*data_p.interrupt_state)) {
 					lstate.job_state = MultiFileJobState::WAIT_IO;
 					data_p.async_result = AsyncResultType::BLOCKED;
@@ -870,10 +871,6 @@ public:
 			// stop spinning if the query was interrupted
 			if (context.IsInterrupted()) {
 				throw InterruptException();
-			}
-			// execute a queued I/O task inline instead of idling
-			if (read_ahead.TryHelpIO()) {
-				continue;
 			}
 			TaskScheduler::YieldThread();
 		}

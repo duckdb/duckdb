@@ -163,22 +163,14 @@ unique_ptr<LocalTableFunctionState> MultiFileReadAhead::TryPopState() {
 	return state;
 }
 
-bool MultiFileReadAhead::TryCompleteJobIO(MultiFileScanJob &job) {
-	if (!job.io_completion) {
-		return true;
-	}
-	while (job.io_completion->PendingIOTasks() > 0) {
-		// pull a queued I/O task off the executor and run it on this thread
-		if (!executor->TryExecuteTask()) {
-			return false;
-		}
-	}
-	return true;
-}
-
 void MultiFileReadAhead::WaitForJob(MultiFileScanJob &job) {
-	while (!TryCompleteJobIO(job)) {
-		TaskScheduler::YieldThread();
+	if (job.io_completion) {
+		while (job.io_completion->PendingIOTasks() > 0) {
+			// pull a queued I/O task off the executor and run it here; yield if it is already in flight
+			if (!executor->TryExecuteTask()) {
+				TaskScheduler::YieldThread();
+			}
+		}
 	}
 	ThrowIfError();
 }
@@ -191,10 +183,6 @@ void MultiFileReadAhead::ThrowIfError() {
 	if (executor->HasError()) {
 		executor->ThrowError();
 	}
-}
-
-bool MultiFileReadAhead::TryHelpIO() {
-	return executor->TryExecuteTask();
 }
 
 void MultiFileReadAhead::ReleaseSlot() {
