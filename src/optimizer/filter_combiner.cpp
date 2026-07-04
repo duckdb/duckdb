@@ -421,7 +421,8 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &func = expr.Cast<BoundFunctionExpression>();
-	if (func.Function().GetName() != "prefix") {
+	auto &function_name = func.Function().GetName();
+	if (function_name != "prefix" && function_name != "starts_with" && function_name != "^@") {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	if (func.GetChildren()[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
