@@ -167,4 +167,83 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 	return nullptr;
 }
 
+MoveUnaryMinusRule::MoveUnaryMinusRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto op = make_uniq<ComparisonExpressionMatcher>();
+	op->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+	op->policy = SetMatcher::Policy::UNORDERED;
+
+	// match a unary minus over a numeric expression, e.g. [-x = -5] or [-x < -3.14]
+	auto negation = make_uniq<FunctionExpressionMatcher>();
+	negation->function = make_uniq<SpecificFunctionMatcher>("-");
+	negation->type = make_uniq<NumericTypeMatcher>();
+	negation->matchers.push_back(make_uniq<ExpressionMatcher>());
+	// ORDERED policy requires an exact child count: this only matches the unary minus
+	negation->policy = SetMatcher::Policy::ORDERED;
+	op->matchers.push_back(std::move(negation));
+	root = std::move(op);
+}
+
+unique_ptr<Expression> MoveUnaryMinusRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
+                                                 bool &changes_made, bool is_root) {
+	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
+	auto &outer_constant = bindings[1].get().Cast<BoundConstantExpression>();
+	auto &negation = bindings[2].get().Cast<BoundFunctionExpression>();
+	if (negation.GetReturnType().IsUnsigned()) {
+		// negating an unsigned value is only valid for 0 - don't try to rewrite
+		return nullptr;
+	}
+	if (outer_constant.GetValue().IsNull()) {
+		if (comparison.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+		    comparison.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			return nullptr;
+		}
+		return make_uniq<BoundConstantExpression>(Value(comparison.GetReturnType()));
+	}
+	auto &constant_type = outer_constant.GetReturnType();
+	if (constant_type.IsFloating()) {
+		// IEEE 754 negation is exact (sign-bit flip), safe for FLOAT and DOUBLE
+		double val = DoubleValue::Get(outer_constant.GetValue());
+		auto result_value = Value::DOUBLE(-val);
+		if (!result_value.DefaultTryCastAs(constant_type)) {
+			return nullptr;
+		}
+		outer_constant.GetValueMutable() = std::move(result_value);
+	} else if (constant_type.id() == LogicalTypeId::DECIMAL) {
+		// negate the unscaled integer and reconstruct with the same width/scale
+		hugeint_t negated_value;
+		if (!Hugeint::TryNegate(IntegralValue::Get(outer_constant.GetValue()), negated_value)) {
+			return nullptr;
+		}
+		auto width = DecimalType::GetWidth(constant_type);
+		auto scale = DecimalType::GetScale(constant_type);
+		outer_constant.GetValueMutable() = Value::DECIMAL(negated_value, width, scale);
+	} else {
+		// integer path
+		hugeint_t negated_value;
+		if (!Hugeint::TryNegate(IntegralValue::Get(outer_constant.GetValue()), negated_value)) {
+			return nullptr;
+		}
+		auto result_value = Value::HUGEINT(negated_value);
+		if (!result_value.DefaultTryCastAs(constant_type)) {
+			if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+				return nullptr;
+			}
+			// the negated constant is out of range, e.g. [-x = -128] for TINYINT: the comparison can never be true
+			return ExpressionRewriter::ConstantOrNull(std::move(negation.GetChildrenMutable()[0]),
+			                                          Value::BOOLEAN(false));
+		}
+		outer_constant.GetValueMutable() = std::move(result_value);
+	}
+	// [-x COMP c] => [x FLIPPED_COMP -c]
+	auto inner_expr = std::move(negation.GetChildrenMutable()[0]);
+	if (RefersToSameObject(BoundComparisonExpression::Left(comparison), negation)) {
+		BoundComparisonExpression::LeftMutable(comparison) = std::move(inner_expr);
+	} else {
+		BoundComparisonExpression::RightMutable(comparison) = std::move(inner_expr);
+	}
+	BoundComparisonExpression::FlipType(comparison);
+	changes_made = true;
+	return nullptr;
+}
+
 } // namespace duckdb
