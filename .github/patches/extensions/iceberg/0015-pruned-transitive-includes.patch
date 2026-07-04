@@ -1,0 +1,84 @@
+diff --git a/src/common/iceberg_utils.cpp b/src/common/iceberg_utils.cpp
+index c9147e7..14e123f 100644
+--- a/src/common/iceberg_utils.cpp
++++ b/src/common/iceberg_utils.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include "duckdb.hpp"
+ #include "duckdb/common/gzip_file_system.hpp"
++#include "duckdb/main/database_manager.hpp"
+ #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+ #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+ #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+diff --git a/src/execution/helpers/equality_delete_helpers.cpp b/src/execution/helpers/equality_delete_helpers.cpp
+index 049666c..55ac111 100644
+--- a/src/execution/helpers/equality_delete_helpers.cpp
++++ b/src/execution/helpers/equality_delete_helpers.cpp
+@@ -1,6 +1,8 @@
+ #include "execution/operator/iceberg_delete.hpp"
+ 
+ #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
++#include "duckdb/planner/filter/expression_filter.hpp"
++#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+ #include "duckdb/common/types/uuid.hpp"
+ #include "duckdb/execution/execution_context.hpp"
+ #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
+diff --git a/src/function/metadata/iceberg_snapshots.cpp b/src/function/metadata/iceberg_snapshots.cpp
+index 547799a..a0115e8 100644
+--- a/src/function/metadata/iceberg_snapshots.cpp
++++ b/src/function/metadata/iceberg_snapshots.cpp
+@@ -1,4 +1,5 @@
+ #include "duckdb/common/file_opener.hpp"
++#include "duckdb/main/client_context.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
+ 
+diff --git a/src/iceberg_extension.cpp b/src/iceberg_extension.cpp
+index a8b222d..056f2c6 100644
+--- a/src/iceberg_extension.cpp
++++ b/src/iceberg_extension.cpp
+@@ -1,6 +1,7 @@
+ #include "iceberg_extension.hpp"
+ 
+ #include "duckdb/main/secret/secret_manager.hpp"
++#include "duckdb/logging/log_manager.hpp"
+ #include "duckdb/common/exception.hpp"
+ #include "duckdb/common/exception/http_exception.hpp"
+ #include "duckdb/common/string_util.hpp"
+diff --git a/src/planning/iceberg_multi_file_list.cpp b/src/planning/iceberg_multi_file_list.cpp
+index bda7f3f..5026ba1 100644
+--- a/src/planning/iceberg_multi_file_list.cpp
++++ b/src/planning/iceberg_multi_file_list.cpp
+@@ -1,6 +1,7 @@
+ #include "planning/iceberg_multi_file_list.hpp"
+ 
+ #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
++#include "duckdb/function/partition_stats.hpp"
+ #include "duckdb/logging/logger.hpp"
+ #include "duckdb/common/exception.hpp"
+ #include "duckdb/common/file_system.hpp"
+diff --git a/src/planning/iceberg_multi_file_reader.cpp b/src/planning/iceberg_multi_file_reader.cpp
+index 37aa5c7..5c16b27 100644
+--- a/src/planning/iceberg_multi_file_reader.cpp
++++ b/src/planning/iceberg_multi_file_reader.cpp
+@@ -1,6 +1,7 @@
+ #include "planning/iceberg_multi_file_reader.hpp"
+ 
+ #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
++#include "duckdb/function/partition_stats.hpp"
+ #include "duckdb/logging/logger.hpp"
+ #include "duckdb/common/exception.hpp"
+ #include "duckdb/function/function_binder.hpp"
+diff --git a/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp b/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp
+index 758a73d..49c1d28 100644
+--- a/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp
++++ b/src/planning/metadata_io/deletes/iceberg_deletes_file_reader.cpp
+@@ -1,6 +1,8 @@
+ #include "planning/metadata_io/deletes/iceberg_deletes_file_reader.hpp"
+ 
+ #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
++#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/main/database.hpp"
+ 
+ #include "function/iceberg_functions.hpp"
