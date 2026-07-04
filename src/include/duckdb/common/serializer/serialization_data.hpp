@@ -15,12 +15,12 @@
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/function/compression_info.hpp"
 
 namespace duckdb {
 class ClientContext;
 class Catalog;
 class DatabaseInstance;
-class CompressionInfo;
 enum class ExpressionType : uint8_t;
 
 struct SerializationData {
