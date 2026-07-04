@@ -21,28 +21,28 @@ public:
 
 public:
 	//! Create a new deprecated prefix node and return a handle to it.
-	static NodeHandle NewDeprecated(FixedSizeAllocator &allocator, Node &node);
+	static NodeHandle NewDeprecated(FixedSizeAllocator &allocator, NodePtr &node);
 
 	//! Get a mutable reference to the child slot of the prefix.
-	static Node &ChildRef(const ART &art, NodeHandle &handle) {
-		return *reinterpret_cast<Node *>(handle.GetPtr() + art.PrefixCount() + 1);
+	static NodePtr &ChildRef(const ART &art, NodeHandle &handle) {
+		return *reinterpret_cast<NodePtr *>(handle.GetPtr() + art.PrefixCount() + 1);
 	}
 
 	//! Get a mutable reference to the child slot using an explicit prefix byte count.
-	static Node &ChildRefWithCount(NodeHandle &handle, const idx_t count) {
+	static NodePtr &ChildRefWithCount(NodeHandle &handle, const idx_t count) {
 		return ChildRefWithCount(handle.GetPtr(), count);
 	}
 
 	//! Get a mutable reference to the child slot using an explicit prefix byte count.
-	static Node &ChildRefWithCount(const data_ptr_t data, const idx_t count) {
-		return *reinterpret_cast<Node *>(data + count + 1);
+	static NodePtr &ChildRefWithCount(const data_ptr_t data, const idx_t count) {
+		return *reinterpret_cast<NodePtr *>(data + count + 1);
 	}
 
 	//! Transform prefix chain to deprecated format.
-	//! Returns an empty Node if the prefix was not loaded from storage (early out) or if the endpoint
+	//! Returns an empty NodePtr if the prefix was not loaded from storage (early out) or if the endpoint
 	//! was a gated node (handled internally). Otherwise, returns a copy of the child pointer at the tail of
 	//! the prefix chain for further traversal.
-	static Node TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
+	static NodePtr TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state);
 
 private:
 	static NodeHandle TransformToDeprecatedAppend(NodeHandle handle, ART &art, FixedSizeAllocator &allocator,

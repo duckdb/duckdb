@@ -25,10 +25,10 @@ enum class ScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
 enum class ARTScanAction : uint8_t { PUSH_NODE, SKIP };
 
 struct ARTScanStep {
-	explicit ARTScanStep(ARTScanAction action_p, Node node_p = Node()) : action(action_p), node(node_p) {
+	explicit ARTScanStep(ARTScanAction action_p, NodePtr node_p = NodePtr()) : action(action_p), node(node_p) {
 	}
 
-	static ARTScanStep Push(Node node) {
+	static ARTScanStep Push(NodePtr node) {
 		return ARTScanStep(ARTScanAction::PUSH_NODE, node);
 	}
 
@@ -37,16 +37,16 @@ struct ARTScanStep {
 	}
 
 	ARTScanAction action;
-	Node node;
+	NodePtr node;
 };
 
 //! Pins the parent node and calls preorder_handler on all its children. The handler can update each child pointer
 //! in place and returns whether a child should be pushed onto the stack for further traversal.
 template <class NODE, class PRE_HANDLER>
-static void ScanChildren(ART &art, Node node, PRE_HANDLER &&pre_handler, vector<Node> &stack) {
+static void ScanChildren(ART &art, NodePtr node, PRE_HANDLER &&pre_handler, vector<NodePtr> &stack) {
 	NodeHandle handle(art, node);
 	auto &n = handle.Get<NODE>();
-	NODE::Iterator(n, [&](Node &child) {
+	NODE::Iterator(n, [&](NodePtr &child) {
 		auto step = pre_handler(child);
 		if (step.action == ARTScanAction::PUSH_NODE) {
 			stack.push_back(step.node);
@@ -57,11 +57,11 @@ static void ScanChildren(ART &art, Node node, PRE_HANDLER &&pre_handler, vector<
 //! Pre-order scanner: each child pointer in the parent node is processed by pre_handler before being pushed onto the
 //! stack (either in its original or processed form). When a node is popped, scan_strategy decides whether to scan
 //! its children or skip it. If the child pointers need to be scanned, the popped node is pinned in ScanChildren and
-//! any updates are performed in place within that pinned node using preorder_handler (which also defines what Node to
+//! any updates are performed in place within that pinned node using preorder_handler (which also defines what NodePtr to
 //! push onto the stack for further traversal).
 template <class SCAN_STRATEGY, class PRE_HANDLER>
-void ARTScanPreorder(ART &art, Node &root, SCAN_STRATEGY &&scan_strategy, PRE_HANDLER &&preorder_handler) {
-	vector<Node> stack;
+void ARTScanPreorder(ART &art, NodePtr &root, SCAN_STRATEGY &&scan_strategy, PRE_HANDLER &&preorder_handler) {
+	vector<NodePtr> stack;
 
 	// The root node pointer lives in the ART object, not inside a fixed-size buffer.
 	auto step = preorder_handler(root);
@@ -70,7 +70,7 @@ void ARTScanPreorder(ART &art, Node &root, SCAN_STRATEGY &&scan_strategy, PRE_HA
 	}
 
 	while (!stack.empty()) {
-		Node current = stack.back();
+		NodePtr current = stack.back();
 		stack.pop_back();
 
 		if (scan_strategy(current) == ScanNodeResult::SKIP) {
@@ -112,10 +112,10 @@ void ARTScanPreorder(ART &art, Node &root, SCAN_STRATEGY &&scan_strategy, PRE_HA
 }
 
 template <class NODE, class PRE_HANDLER>
-static void ConstScanChildren(const ART &art, Node node, PRE_HANDLER &&preorder_handler, vector<Node> &stack) {
+static void ConstScanChildren(const ART &art, NodePtr node, PRE_HANDLER &&preorder_handler, vector<NodePtr> &stack) {
 	ConstNodeHandle handle(art, node);
 	auto &n = handle.Get<NODE>();
-	NODE::Iterator(n, [&](const Node &child) {
+	NODE::Iterator(n, [&](const NodePtr &child) {
 		auto step = preorder_handler(child);
 		if (step.action == ARTScanAction::PUSH_NODE) {
 			stack.push_back(step.node);
@@ -124,9 +124,9 @@ static void ConstScanChildren(const ART &art, Node node, PRE_HANDLER &&preorder_
 }
 
 template <class SCAN_STRATEGY, class PRE_HANDLER>
-void ARTConstScanPreorder(const ART &art, const Node &root, SCAN_STRATEGY &&scan_strategy,
+void ARTConstScanPreorder(const ART &art, const NodePtr &root, SCAN_STRATEGY &&scan_strategy,
                           PRE_HANDLER &&preorder_handler) {
-	vector<Node> stack;
+	vector<NodePtr> stack;
 
 	auto step = preorder_handler(root);
 	if (step.action == ARTScanAction::PUSH_NODE) {
@@ -134,7 +134,7 @@ void ARTConstScanPreorder(const ART &art, const Node &root, SCAN_STRATEGY &&scan
 	}
 
 	while (!stack.empty()) {
-		Node current = stack.back();
+		NodePtr current = stack.back();
 		stack.pop_back();
 
 		if (scan_strategy(current) == ScanNodeResult::SKIP) {
@@ -180,20 +180,20 @@ void ARTConstScanPreorder(const ART &art, const Node &root, SCAN_STRATEGY &&scan
 //===--------------------------------------------------------------------===//
 
 struct ScanEntry {
-	ScanEntry(Node node_p, bool children_scanned_p) : node(node_p), children_visited(children_scanned_p) {
+	ScanEntry(NodePtr node_p, bool children_scanned_p) : node(node_p), children_visited(children_scanned_p) {
 	}
 
-	Node node;
+	NodePtr node;
 	bool children_visited;
 };
 
 //! Pins the parent node and iterates over all its children. The child_selector receives each child by reference
 //! and returns whether a child should be pushed onto the stack for further traversal.
 template <class NODE, class CHILD_SELECTOR>
-static void ScanChildren(ART &art, Node node, CHILD_SELECTOR &&child_selector, vector<ScanEntry> &stack) {
+static void ScanChildren(ART &art, NodePtr node, CHILD_SELECTOR &&child_selector, vector<ScanEntry> &stack) {
 	NodeHandle handle(art, node);
 	auto &n = handle.Get<NODE>();
-	NODE::Iterator(n, [&](Node &child) {
+	NODE::Iterator(n, [&](NodePtr &child) {
 		auto step = child_selector(child);
 		if (step.action == ARTScanAction::PUSH_NODE) {
 			stack.push_back(ScanEntry {step.node, false});
@@ -207,7 +207,7 @@ static void ScanChildren(ART &art, Node node, CHILD_SELECTOR &&child_selector, v
 //! On the second visit (children_visited = true, after all descendants have been processed),
 //! post_handler fires on the node and then we pop it from the stack.
 template <class CHILD_SELECTOR, class POST_HANDLER>
-void ARTScanPostorder(ART &art, Node &root, CHILD_SELECTOR &&child_selector, POST_HANDLER &&postorder_handler) {
+void ARTScanPostorder(ART &art, NodePtr &root, CHILD_SELECTOR &&child_selector, POST_HANDLER &&postorder_handler) {
 	vector<ScanEntry> stack;
 
 	D_ASSERT(root.HasMetadata());

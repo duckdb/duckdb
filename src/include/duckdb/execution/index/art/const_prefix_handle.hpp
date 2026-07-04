@@ -19,19 +19,19 @@ public:
 	static constexpr NType PREFIX = NType::PREFIX;
 
 	//! Get a const reference to the child slot of the prefix.
-	static const Node &ChildRef(const ART &art, ConstNodeHandle &handle) {
-		return *reinterpret_cast<const Node *>(handle.GetPtr() + art.PrefixCount() + 1);
+	static const NodePtr &ChildRef(const ART &art, ConstNodeHandle &handle) {
+		return *reinterpret_cast<const NodePtr *>(handle.GetPtr() + art.PrefixCount() + 1);
 	}
 
 	//! Traverses and verifies the node and its subtree.
-	static void Verify(ART &art, const Node &node);
+	static void Verify(ART &art, const NodePtr &node);
 
 	//! Returns the string representation of the node using ToStringOptions.
-	static string ToString(ART &art, const Node &node, const ToStringOptions &options);
+	static string ToString(ART &art, const NodePtr &node, const ToStringOptions &options);
 
 private:
 	template <class F>
-	static Node Iterator(ART &art, Node node, const bool exit_gate, F &&lambda) {
+	static NodePtr Iterator(ART &art, NodePtr node, const bool exit_gate, F &&lambda) {
 		while (node.HasMetadata() && node.GetType() == PREFIX) {
 			ConstNodeHandle handle(art, node);
 			auto data = handle.GetPtr();
