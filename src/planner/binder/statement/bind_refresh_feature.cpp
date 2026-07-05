@@ -36,10 +36,10 @@ BoundStatement Binder::Bind(RefreshFeatureStatement &stmt) {
 	timestamp_t feature_ts = stmt.at_timestamp.empty() ? Timestamp::GetCurrentTimestamp()
 	                                                    : Timestamp::FromString(stmt.at_timestamp, false);
 
-	// Build and bind the query that produces the full contents of the next feature version: one snapshot
-	// row per entity. Its result schema defines the new version table; the plan becomes the child of the
-	// refresh operator.
-	auto refresh_query = BuildFeatureRefreshQuery(feat, feature_ts);
+	// Build and bind the query that produces the full contents of the next denormalized store table: the
+	// new snapshot UNION ALL the still-retained rows from the previous store. Its result schema defines the
+	// new store table; the plan becomes the child of the refresh operator.
+	auto refresh_query = BuildFeatureRefreshQuery(feat, feature_ts, feat.current_version + 1);
 	auto query_binder = Binder::CreateBinder(context, this);
 	auto query_obj = query_binder->Bind(*refresh_query);
 	D_ASSERT(query_obj.names.size() >= 1);

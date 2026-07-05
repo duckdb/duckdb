@@ -911,8 +911,14 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// Store result schema in feature info as metadata. CREATE FEATURE registers metadata only; it does
 		// not materialize a version table (and thus takes no child plan) — the first REFRESH FEATURE builds
 		// feature_name__v1. Binding the snapshot query above still validates the query and captures its schema.
+		// The denormalized store also carries two internal columns identifying the refresh that produced each
+		// row; they are appended here so REFRESH creates the store table with the matching schema.
 		feature_info.result_names = query_obj.names;
 		feature_info.result_types = query_obj.types;
+		feature_info.result_names.emplace_back(FEATURE_VERSION_COLUMN);
+		feature_info.result_types.emplace_back(LogicalType::BIGINT);
+		feature_info.result_names.emplace_back(FEATURE_TIMESTAMP_COLUMN);
+		feature_info.result_types.emplace_back(LogicalType::TIMESTAMP);
 
 		// CREATE FEATURE returns the created feature's name.
 		result.names = {"feature_name"};

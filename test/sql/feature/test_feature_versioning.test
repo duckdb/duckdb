@@ -1,5 +1,5 @@
 # name: test/sql/feature/test_feature_versioning.test
-# description: Test feature versioning — each refresh creates a new version table, RETAIN controls GC
+# description: Test feature versioning — each refresh appends a version to the store; RETAIN controls GC
 # group: [feature]
 
 require noforcestorage
@@ -32,401 +32,138 @@ INSERT INTO events VALUES
     ('z',  5, '2024-01-01 06:00:00');
 
 # ============================================================
-# FULL refresh with RETAIN 3: version increments each refresh
+# RETAIN 2: each refresh appends a version; the store carries retained versions forward
 # ============================================================
 statement ok
-CREATE FEATURE versioned_full
-    ENTITY customers
-    TIMESTAMP event_time
-    WINDOW 7 DAYS
-    RETAIN 3
-    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
-
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
-statement ok
-REFRESH FEATURE versioned_full;
-
-# Initial materialization creates version table __v1 with one row per source event timestamp.
-query I
-SELECT COUNT(*) FROM versioned_full;
-----
-5
-
-query I
-SELECT COUNT(*) FROM versioned_full__v1;
-----
-5
-
-# Verify initial event-time values per entity (view resolves to current version v1)
-query II rowsort
-SELECT customer, total_value FROM versioned_full WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP);
-----
-x	10
-y	30
-z	5
-
-query II rowsort
-SELECT customer, total_value FROM versioned_full WHERE feature_timestamp IN ('2024-01-02 08:00:00'::TIMESTAMP, '2024-01-02 16:00:00'::TIMESTAMP);
-----
-x	30
-y	45
-
-# First refresh -> version 2
-query I
-REFRESH FEATURE versioned_full;
-----
-5
-
-# Both v1 and v2 tables exist
-query I
-SELECT COUNT(*) FROM versioned_full__v1;
-----
-5
-
-query I
-SELECT COUNT(*) FROM versioned_full__v2;
-----
-5
-
-# A FULL refresh with no source changes creates the same version table contents.
-query I
-WITH lhs AS (SELECT * FROM versioned_full__v1 EXCEPT SELECT * FROM versioned_full__v2),
-     rhs AS (SELECT * FROM versioned_full__v2 EXCEPT SELECT * FROM versioned_full__v1)
-SELECT (SELECT COUNT(*) FROM lhs) + (SELECT COUNT(*) FROM rhs);
-----
-0
-
-query I
-SELECT current_version FROM duckdb_features() WHERE feature_name = 'versioned_full';
-----
-2
-
-# View shows current (v2) data
-query II rowsort
-SELECT customer, total_value FROM versioned_full WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP);
-----
-x	10
-y	30
-z	5
-
-# Second refresh -> version 3 (now we have 3 versions, at RETAIN limit)
-query I
-REFRESH FEATURE versioned_full;
-----
-5
-
-query I
-SELECT COUNT(*) FROM versioned_full__v3;
-----
-5
-
-# Third refresh -> version 4, GC removes version 1 (retain 3 means keep 2,3,4)
-query I
-REFRESH FEATURE versioned_full;
-----
-5
-
-query I
-SELECT COUNT(*) FROM versioned_full__v4;
-----
-5
-
-# Version 1 table is gone (GC'd)
-statement error
-SELECT COUNT(*) FROM versioned_full__v1;
-----
-<REGEX>:.*does not exist.*
-
-# Version 2 still exists (within retain window)
-query I
-SELECT COUNT(*) FROM versioned_full__v2;
-----
-5
-
-# Latest version has correct data
-query II rowsort
-SELECT customer, total_value FROM versioned_full__v4 WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP);
-----
-x	10
-y	30
-z	5
-
-query II rowsort
-SELECT customer, total_value FROM versioned_full__v4 WHERE feature_timestamp IN ('2024-01-02 08:00:00'::TIMESTAMP, '2024-01-02 16:00:00'::TIMESTAMP);
-----
-x	30
-y	45
-
-statement ok
-DROP FEATURE versioned_full;
-
-# ============================================================
-# RETAIN 1: only latest version kept (default behavior)
-# ============================================================
-statement ok
-CREATE FEATURE versioned_retain1
-    ENTITY customers
-    TIMESTAMP event_time
-    WINDOW 7 DAYS
-    RETAIN 1
-    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
-
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
-statement ok
-REFRESH FEATURE versioned_retain1;
-
-# Version 1 table exists initially — 5 rows
-query I
-SELECT COUNT(*) FROM versioned_retain1__v1;
-----
-5
-
-query I
-SELECT COUNT(*) FROM versioned_retain1;
-----
-5
-
-# Refresh -> version 2, GC removes version 1
-query I
-REFRESH FEATURE versioned_retain1;
-----
-5
-
-query I
-SELECT COUNT(*) FROM versioned_retain1__v2;
-----
-5
-
-# Version 1 is gone
-statement error
-SELECT COUNT(*) FROM versioned_retain1__v1;
-----
-<REGEX>:.*does not exist.*
-
-# Data is correct in version 2
-query II rowsort
-SELECT customer, total_value FROM versioned_retain1 WHERE feature_timestamp IN ('2024-01-02 08:00:00'::TIMESTAMP, '2024-01-02 16:00:00'::TIMESTAMP);
-----
-x	30
-y	45
-
-statement ok
-DROP FEATURE versioned_retain1;
-
-# ============================================================
-# Refresh with new data: version increments, old versions GC'd
-# ============================================================
-statement ok
-CREATE FEATURE versioned_incr
+CREATE FEATURE versioned
     ENTITY customers
     TIMESTAMP event_time
     WINDOW 7 DAYS
     RETAIN 2
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
+# Version 1 AT Jan 3: x=30, y=45, z=5 (one snapshot row per entity)
 statement ok
-REFRESH FEATURE versioned_incr;
-
-# Initial: version 1 — 5 rows
-query I
-SELECT COUNT(*) FROM versioned_incr__v1;
-----
-5
+REFRESH FEATURE versioned AT '2024-01-03 00:00:00';
 
 query I
-SELECT COUNT(*) FROM versioned_incr;
+SELECT COUNT(*) FROM versioned__v1;
 ----
-5
+3
 
-# Add new data beyond the current max timestamp
-statement ok
-INSERT INTO events VALUES
-    ('x', 40, '2024-01-03 09:00:00'),
-    ('y', 50, '2024-01-03 10:00:00'),
-    ('z', 20, '2024-01-03 11:00:00');
-
-# Refresh -> version 2 (full recompute of every event-time anchor)
-query I
-REFRESH FEATURE versioned_incr;
-----
-8
-
-# Both v1 and v2 exist (RETAIN 2)
-query I
-SELECT COUNT(*) FROM versioned_incr__v1;
-----
-5
-
-query I
-SELECT COUNT(*) FROM versioned_incr__v2;
-----
-8
-
-# Version 2 has the new Jan 3 event-time rows plus copied-forward old rows.
-# The view resolves to the current version (v2).
 query II rowsort
-SELECT customer, total_value FROM versioned_incr WHERE feature_timestamp IN ('2024-01-03 09:00:00'::TIMESTAMP, '2024-01-03 10:00:00'::TIMESTAMP, '2024-01-03 11:00:00'::TIMESTAMP);
+SELECT customer, total_value FROM versioned;
 ----
-x	70
-y	95
-z	25
-
-# Old earliest timestamps correctly copied into version 2
-query II rowsort
-SELECT customer, total_value FROM versioned_incr WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP);
-----
-x	10
-y	30
+x	30
+y	45
 z	5
 
-# Add more data and refresh again -> version 3, GC removes version 1
+# Version 2 (same AT) -> store carries version 1 forward, now 6 rows across 2 versions
 statement ok
-INSERT INTO events VALUES
-    ('x', 100, '2024-01-05 12:00:00'),
-    ('z',  50, '2024-01-05 14:00:00');
+REFRESH FEATURE versioned AT '2024-01-03 00:00:00';
 
 query I
-REFRESH FEATURE versioned_incr;
+SELECT current_version FROM duckdb_features() WHERE feature_name = 'versioned';
 ----
-10
+2
 
-# Version 1 is gone (GC'd, only retain 2)
-statement error
-SELECT COUNT(*) FROM versioned_incr__v1;
-----
-<REGEX>:.*does not exist.*
-
-# Version 2 still exists
-query I
-SELECT COUNT(*) FROM versioned_incr__v2;
-----
-8
-
-# Version 3 exists with new data
-query I
-SELECT COUNT(*) FROM versioned_incr__v3;
-----
-10
-
-# Version 3 has Jan 5 event-time rows for x and z
 query II rowsort
-SELECT customer, total_value FROM versioned_incr__v3 WHERE feature_timestamp IN ('2024-01-05 12:00:00'::TIMESTAMP, '2024-01-05 14:00:00'::TIMESTAMP);
+SELECT __feature_version, COUNT(*) FROM versioned__v2 GROUP BY __feature_version;
 ----
-x	170
-z	75
+1	3
+2	3
 
-statement ok
-DROP FEATURE versioned_incr;
+# The previous store table is gone (only the latest survives)
+query I
+SELECT COUNT(*) FROM duckdb_tables WHERE table_name = 'versioned__v1';
+----
+0
 
 # ============================================================
-# Refresh always increments the version (even with no source changes)
+# New data + RETAIN 2 GC: version 3 keeps versions 2 and 3, evicts version 1
 # ============================================================
 statement ok
-CREATE TABLE stable_ents (eid VARCHAR PRIMARY KEY);
+INSERT INTO events VALUES ('x', 40, '2024-01-03 09:00:00');
+
+# Version 3 AT Jan 4: window [Dec 29, Jan 4). x = 10+20+40 = 70
+statement ok
+REFRESH FEATURE versioned AT '2024-01-04 00:00:00';
+
+query I
+SELECT COUNT(*) FROM versioned__v3;
+----
+6
+
+query II rowsort
+SELECT __feature_version, COUNT(*) FROM versioned__v3 GROUP BY __feature_version;
+----
+2	3
+3	3
+
+# The view resolves to the current snapshot (version 3): x now 70
+query II rowsort
+SELECT customer, total_value FROM versioned;
+----
+x	70
+y	45
+z	5
+
+# Each retained version preserves its own snapshot
+query I
+SELECT total_value FROM feature_at_version('versioned', 2) WHERE customer = 'x';
+----
+30
+
+query I
+SELECT total_value FROM feature_at_version('versioned', 3) WHERE customer = 'x';
+----
+70
+
+# Version 1 has been evicted from the retain window
+query I
+SELECT COUNT(*) FROM feature_at_version('versioned', 1);
+----
+0
 
 statement ok
-INSERT INTO stable_ents VALUES ('a'), ('b'), ('c');
+DROP FEATURE versioned;
 
+# ============================================================
+# RETAIN 1: only the latest version is ever kept
+# ============================================================
 statement ok
-CREATE TABLE stable_src (
-    eid VARCHAR,
-    val INTEGER,
-    ts TIMESTAMP,
-    FOREIGN KEY (eid) REFERENCES stable_ents(eid)
-);
-
-statement ok
-INSERT INTO stable_src VALUES
-    ('a', 10, '2024-01-01 08:00:00'),
-    ('b', 20, '2024-01-01 09:00:00'),
-    ('c', 30, '2024-01-02 10:00:00');
-
-statement ok
-CREATE FEATURE stable_feat
-    ENTITY stable_ents
-    TIMESTAMP ts
+CREATE FEATURE latest_only
+    ENTITY customers
+    TIMESTAMP event_time
     WINDOW 7 DAYS
-    RETAIN 3
-    AS (SELECT eid, SUM(val) AS total FROM stable_src GROUP BY eid);
-
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
-statement ok
-REFRESH FEATURE stable_feat;
-
-# Version 1 after creation — 3 rows, one per source event timestamp
-query I
-SELECT COUNT(*) FROM stable_feat__v1;
-----
-3
-
-query I
-SELECT COUNT(*) FROM stable_feat;
-----
-3
-
-# No new data, but a refresh fully recomputes every anchor and bumps the version.
-query I
-REFRESH FEATURE stable_feat;
-----
-3
-
-# Version 2 table now exists alongside version 1
-query I
-SELECT COUNT(*) FROM stable_feat__v2;
-----
-3
-
-# Data is identical across the version bump (view resolves to current version v2)
-query II rowsort
-SELECT eid, total FROM stable_feat;
-----
-a	10
-b	20
-c	30
-
-# Add data, refresh -> version 3 (a@01-03 08:00 appears)
-statement ok
-INSERT INTO stable_src VALUES ('a', 20, '2024-01-03 08:00:00');
-
-query I
-REFRESH FEATURE stable_feat;
-----
-4
-
-query I
-SELECT COUNT(*) FROM stable_feat__v3;
-----
-4
-
-# New timestamp correct: a@01-03 08:00 = 10+20=30
-query II
-SELECT eid, total FROM stable_feat__v3 WHERE feature_timestamp = '2024-01-03 08:00:00'::TIMESTAMP;
-----
-a	30
-
-# Refresh again with no new data -> version 4, version 1 GC'd (RETAIN 3)
-query I
-REFRESH FEATURE stable_feat;
-----
-4
-
-query I
-SELECT COUNT(*) FROM stable_feat__v2;
-----
-3
-
-# Version 1 has been garbage-collected (RETAIN 3 keeps v2, v3, v4)
-statement error
-SELECT COUNT(*) FROM stable_feat__v1;
-----
-<REGEX>:.*does not exist.*
+    RETAIN 1
+    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
 statement ok
-DROP FEATURE stable_feat;
+REFRESH FEATURE latest_only AT '2024-01-03 00:00:00';
 
 statement ok
-DROP TABLE stable_src;
+REFRESH FEATURE latest_only AT '2024-01-04 00:00:00';
+
+# The store holds only the current version's rows
+query I
+SELECT COUNT(*) FROM latest_only__v2;
+----
+3
+
+query I
+SELECT DISTINCT __feature_version FROM latest_only__v2;
+----
+2
+
+# The previous version is no longer retrievable
+query I
+SELECT COUNT(*) FROM feature_at_version('latest_only', 1);
+----
+0
+
+statement ok
+DROP FEATURE latest_only;
 
 statement ok
 DROP TABLE events;

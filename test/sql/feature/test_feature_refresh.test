@@ -1,5 +1,5 @@
 # name: test/sql/feature/test_feature_refresh.test
-# description: Test REFRESH FEATURE statement — FULL and INCREMENTAL (watermark + window)
+# description: Test REFRESH FEATURE — entity snapshots, REFRESH AT, carry-forward store, retention
 # group: [feature]
 
 require noforcestorage
@@ -7,13 +7,13 @@ require noforcestorage
 require skip_reload
 
 # ============================================================
-# FULL refresh: delete everything, recompute from scratch
+# Setup: entity table + event table with a foreign key into it
 # ============================================================
 statement ok
 CREATE TABLE users (user_id VARCHAR PRIMARY KEY);
 
 statement ok
-INSERT INTO users VALUES ('alice'), ('bob'), ('carol'), ('charlie');
+INSERT INTO users VALUES ('alice'), ('bob'), ('carol');
 
 statement ok
 CREATE TABLE transactions (
@@ -23,557 +23,170 @@ CREATE TABLE transactions (
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 
+# carol has no events: she must still appear in every snapshot with default values.
 statement ok
 INSERT INTO transactions VALUES
     ('alice', 100.00, '2024-01-01 10:00:00'),
     ('alice', 200.00, '2024-01-01 14:00:00'),
+    ('alice', 300.00, '2024-01-03 08:00:00'),
     ('bob',   50.00,  '2024-01-01 09:00:00'),
-    ('bob',   75.00,  '2024-01-02 11:00:00'),
-    ('carol', 400.00, '2024-01-02 08:00:00'),
-    ('carol', 150.00, '2024-01-03 10:00:00');
+    ('bob',   75.00,  '2024-01-02 11:00:00');
 
 statement ok
 CREATE FEATURE total_spend
     ENTITY users
     TIMESTAMP ts
     WINDOW 7 DAYS
-    RETAIN 1
-    AS (SELECT user_id, SUM(amount) AS total_amount, COUNT(*) AS tx_count FROM transactions GROUP BY user_id);
+    RETAIN 2
+    AS (SELECT user_id, SUM(amount) AS total, COUNT(*) AS tx_count FROM transactions GROUP BY user_id);
 
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
-statement ok
-REFRESH FEATURE total_spend;
+# ============================================================
+# First snapshot AT Jan 2: window [Dec 26, Jan 2)
+# alice = 100+200 (tx 2), bob = 50 (tx 1), carol = 0 (tx 0)
+# ============================================================
+query I
+REFRESH FEATURE total_spend AT '2024-01-02 00:00:00';
+----
+3
 
-# Initial state: one feature row per source event timestamp
+# One snapshot row per entity in the store
 query I
 SELECT COUNT(*) FROM total_spend;
+----
+3
+
+query IRI rowsort
+SELECT user_id, total, tx_count FROM total_spend;
+----
+alice	300.00	2
+bob	50.00	1
+carol	0.00	0
+
+# ============================================================
+# Second snapshot AT Jan 4: window [Dec 28, Jan 4)
+# alice = 100+200+300 (tx 3), bob = 50+75 (tx 2), carol = 0
+# The store carries version 1 forward, so it now holds 6 rows (2 versions x 3 entities).
+# ============================================================
+query I
+REFRESH FEATURE total_spend AT '2024-01-04 00:00:00';
 ----
 6
 
-# Verify initial values for each entity
-query RT rowsort
-SELECT total_amount, feature_timestamp FROM total_spend WHERE user_id = 'alice';
-----
-100.00	2024-01-01 10:00:00
-300.00	2024-01-01 14:00:00
-
-query RT rowsort
-SELECT total_amount, feature_timestamp FROM total_spend WHERE user_id = 'bob';
-----
-125.00	2024-01-02 11:00:00
-50.00	2024-01-01 09:00:00
-
-query RT rowsort
-SELECT total_amount, feature_timestamp FROM total_spend WHERE user_id = 'carol';
-----
-400.00	2024-01-02 08:00:00
-550.00	2024-01-03 10:00:00
-
-# Add new data to source
-statement ok
-INSERT INTO transactions VALUES
-    ('alice',   300.00, '2024-01-03 08:00:00'),
-    ('alice',    50.00, '2024-01-04 12:00:00'),
-    ('charlie',  25.00, '2024-01-01 12:00:00'),
-    ('charlie',  75.00, '2024-01-03 15:00:00');
-
-# FULL refresh picks up everything
-# alice: 4 timestamps; bob: 2; carol: 2; charlie: 2
 query I
-REFRESH FEATURE total_spend;
-----
-10
-
-query I
-SELECT COUNT(*) FROM total_spend;
-----
-10
-
-# New entity charlie exists with 2 event-time feature rows
-query I
-SELECT COUNT(*) FROM total_spend WHERE user_id = 'charlie';
+SELECT current_version FROM duckdb_features() WHERE feature_name = 'total_spend';
 ----
 2
 
-# Alice's Jan 3 event timestamp: 100+200+300 = 600 (all within 7-day window)
-query R
-SELECT total_amount FROM total_spend WHERE user_id = 'alice' AND feature_timestamp = '2024-01-03 08:00:00'::TIMESTAMP;
+# View resolves to the current snapshot (version 2)
+query IRI rowsort
+SELECT user_id, total, tx_count FROM total_spend;
 ----
-600.00
+alice	600.00	3
+bob	125.00	2
+carol	0.00	0
 
-# Alice's Jan 4 event timestamp: all 4 events = 650.00
-query R
-SELECT total_amount FROM total_spend WHERE user_id = 'alice' AND feature_timestamp = '2024-01-04 12:00:00'::TIMESTAMP;
-----
-650.00
-
-# Charlie: 25.00 at first event timestamp, then 25+75=100.00 at second event timestamp
-query RT rowsort
-SELECT total_amount, feature_timestamp FROM total_spend WHERE user_id = 'charlie';
-----
-100.00	2024-01-03 15:00:00
-25.00	2024-01-01 12:00:00
-
-# tx_count is correct: alice @ 01-01 14:00 has 2 events (both on Jan 1)
+# The store table holds both versions, tagged with the refresh version
 query I
-SELECT tx_count FROM total_spend WHERE user_id = 'alice' AND feature_timestamp = '2024-01-01 14:00:00'::TIMESTAMP;
+SELECT COUNT(*) FROM total_spend__v2;
 ----
-2
-
-# Idempotent: running FULL refresh again gives same results
-query I
-REFRESH FEATURE total_spend;
-----
-10
-
-statement ok
-DROP FEATURE total_spend;
-
-statement ok
-DROP TABLE transactions;
-
-# ============================================================
-# Refresh recomputes the full windowed history each time
-# ============================================================
-statement ok
-CREATE TABLE customers (customer VARCHAR PRIMARY KEY);
-
-statement ok
-INSERT INTO customers VALUES ('x'), ('y'), ('z'), ('w');
-
-statement ok
-CREATE TABLE events (
-    customer VARCHAR,
-    value INTEGER,
-    event_time TIMESTAMP,
-    FOREIGN KEY (customer) REFERENCES customers(customer)
-);
-
-statement ok
-INSERT INTO events VALUES
-    ('x', 10, '2024-01-01 08:00:00'),
-    ('x', 20, '2024-01-02 08:00:00'),
-    ('y', 30, '2024-01-01 12:00:00'),
-    ('y', 15, '2024-01-02 15:00:00'),
-    ('z',  5, '2024-01-01 06:00:00');
-
-statement ok
-CREATE FEATURE event_sum
-    ENTITY customers
-    TIMESTAMP event_time
-    WINDOW 7 DAYS
-    RETAIN 1
-    AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
-
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
-statement ok
-REFRESH FEATURE event_sum;
-
-# Initial: 5 rows
-# x has two event-time rows, y has two, z has one.
-query I
-SELECT COUNT(*) FROM event_sum;
-----
-5
+6
 
 query II rowsort
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP);
+SELECT __feature_version, COUNT(*) FROM total_spend__v2 GROUP BY __feature_version;
 ----
-x	10
-y	30
-z	5
+1	3
+2	3
 
-query II rowsort
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp IN ('2024-01-02 08:00:00'::TIMESTAMP, '2024-01-02 15:00:00'::TIMESTAMP);
+# feature_at_version reads a specific retained version out of the store
+query IR rowsort
+SELECT user_id, total FROM feature_at_version('total_spend', 1);
 ----
-x	30
-y	45
+alice	300.00
+bob	50.00
+carol	0.00
 
-# ---- Scenario 1: Append new data beyond watermark ----
-statement ok
-INSERT INTO events VALUES
-    ('x', 40, '2024-01-03 09:00:00'),
-    ('y', 50, '2024-01-03 10:00:00'),
-    ('z', 60, '2024-01-03 14:00:00');
-
-# A refresh fully recomputes every event-time anchor across all entities.
-query I
-REFRESH FEATURE event_sum;
+query IR rowsort
+SELECT user_id, total FROM feature_at_version('total_spend', 2);
 ----
-8
-
-query II rowsort
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP) ORDER BY customer;
-----
-x	10
-y	30
-z	5
-
-# Jan 2 timestamps are unchanged by Jan 3 data.
-query II rowsort
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp IN ('2024-01-02 08:00:00'::TIMESTAMP, '2024-01-02 15:00:00'::TIMESTAMP) ORDER BY customer;
-----
-x	30
-y	45
-
-# Jan 3 event timestamps: x=10+20+40=70, y=30+15+50=95, z=5+60=65 (7-day window lookback)
-query II rowsort
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp IN ('2024-01-03 09:00:00'::TIMESTAMP, '2024-01-03 10:00:00'::TIMESTAMP, '2024-01-03 14:00:00'::TIMESTAMP) ORDER BY customer;
-----
-x	70
-y	95
-z	65
-
-# ---- Scenario 2: No new data — refresh still recomputes everything ----
-# A refresh always recomputes every anchor and bumps the version, even
-# when no source rows changed. The recomputed values are identical.
-query I
-REFRESH FEATURE event_sum;
-----
-8
-
-# ---- Scenario 3: Add more data, verify watermark advances ----
-statement ok
-INSERT INTO events VALUES
-    ('x', 100, '2024-01-05 12:00:00'),
-    ('y',  80, '2024-01-06 09:00:00');
-
-# All anchors are recomputed, including the new Jan 5 / Jan 6 event timestamps.
-query I
-REFRESH FEATURE event_sum;
-----
-10
-
-# Jan 5 timestamp: x sees 10+20+40+100=170
-query II rowsort
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-05 12:00:00'::TIMESTAMP ORDER BY customer;
-----
-x	170
-
-# Jan 6 timestamp: y sees 30+15+50+80=175
-query II rowsort
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-06 09:00:00'::TIMESTAMP ORDER BY customer;
-----
-y	175
-
-# Earliest timestamps are still untouched from original
-query II
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-01 08:00:00'::TIMESTAMP AND customer = 'x';
-----
-x	10
-
-query II
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-02 15:00:00'::TIMESTAMP AND customer = 'y';
-----
-y	45
-
-# ---- Scenario 4: Add a new entity after initial materialization ----
-statement ok
-INSERT INTO events VALUES
-    ('w', 200, '2024-01-07 10:00:00');
-
-# New entity w arrives on Jan 7; every anchor is recomputed.
-query I
-REFRESH FEATURE event_sum;
-----
-11
-
-query II
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-07 10:00:00'::TIMESTAMP;
-----
-w	200
+alice	600.00
+bob	125.00
+carol	0.00
 
 # ============================================================
-# INCREMENTAL refresh: late-arriving data inside the watermark interval
+# Third snapshot AT Jan 6 -> version 3; RETAIN 2 evicts version 1
 # ============================================================
-# After initial materialization, a new row arrives before the current max timestamp.
-# The explicit watermark interval makes refresh recompute far enough back to pick it up.
-
-statement ok
-CREATE TABLE late_ents (entity VARCHAR PRIMARY KEY);
-
-statement ok
-INSERT INTO late_ents VALUES ('a');
-
-statement ok
-CREATE TABLE late_events (
-    entity VARCHAR,
-    val INTEGER,
-    ts TIMESTAMP,
-    FOREIGN KEY (entity) REFERENCES late_ents(entity)
-);
-
-statement ok
-INSERT INTO late_events VALUES
-    ('a', 10, '2024-01-01 08:00:00'),
-    ('a', 20, '2024-01-02 08:00:00');
-
-statement ok
-CREATE FEATURE late_test
-    ENTITY late_ents
-    TIMESTAMP ts
-    WINDOW 7 DAYS
-    WATERMARK 1 DAY
-    RETAIN 1
-    AS (SELECT entity, SUM(val) AS total FROM late_events GROUP BY entity);
-
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
-statement ok
-REFRESH FEATURE late_test;
-
-# Initial materialization: one row per source timestamp.
 query I
-SELECT COUNT(*) FROM late_test;
+REFRESH FEATURE total_spend AT '2024-01-06 00:00:00';
 ----
-2
+6
 
-query RT rowsort
-SELECT total, feature_timestamp FROM late_test WHERE entity = 'a';
-----
-10	2024-01-01 08:00:00
-30	2024-01-02 08:00:00
-
-# Insert a late row before the current max timestamp, but inside the watermark interval.
-statement ok
-INSERT INTO late_events VALUES ('a', 5, '2024-01-02 06:00:00');
-
-# Refresh recomputes from max(feature_timestamp) - watermark_interval, picking up the late arrival.
+# Only the latest store table survives; the previous one is dropped
 query I
-REFRESH FEATURE late_test;
+SELECT table_name FROM duckdb_tables WHERE table_name LIKE 'total\_spend\_\_v%' ESCAPE '\' ORDER BY table_name;
 ----
-3
+total_spend__v3
 
-# First timestamp unchanged: only the Jan 1 event (10) is in its lookback window.
-query R
-SELECT total FROM late_test WHERE entity = 'a' AND feature_timestamp = '2024-01-01 08:00:00'::TIMESTAMP;
+# The store now retains versions 2 and 3 only
+query II rowsort
+SELECT __feature_version, COUNT(*) FROM total_spend__v3 GROUP BY __feature_version;
 ----
-10
+2	3
+3	3
 
-# Late timestamp has Jan 1 (10) + Jan 2 late (5) = 15.
-query R
-SELECT total FROM late_test WHERE entity = 'a' AND feature_timestamp = '2024-01-02 06:00:00'::TIMESTAMP;
-----
-15
-
-# The original Jan 2 timestamp sees the late row too.
-query R
-SELECT total FROM late_test WHERE entity = 'a' AND feature_timestamp = '2024-01-02 08:00:00'::TIMESTAMP;
-----
-35
-
-# Another refresh with no new data still recomputes the watermark tail and bumps the version.
+# Version 1 has been evicted from the retain window
 query I
-REFRESH FEATURE late_test;
-----
-3
-
-statement ok
-DROP FEATURE late_test;
-
-statement ok
-DROP TABLE late_events;
-
-# ============================================================
-# WATERMARK is accepted but inert: every refresh fully recomputes the history,
-# so a late-arriving row is always picked up regardless of the watermark.
-# ============================================================
-statement ok
-CREATE TABLE wm_ents (entity VARCHAR PRIMARY KEY);
-
-statement ok
-INSERT INTO wm_ents VALUES ('a');
-
-statement ok
-CREATE TABLE watermark_events (
-    entity VARCHAR,
-    val INTEGER,
-    ts TIMESTAMP,
-    FOREIGN KEY (entity) REFERENCES wm_ents(entity)
-);
-
-statement ok
-INSERT INTO watermark_events VALUES
-    ('a', 10, '2024-01-01 08:00:00'),
-    ('a', 20, '2024-01-03 08:00:00');
-
-statement ok
-CREATE FEATURE wm_zero
-    ENTITY wm_ents
-    TIMESTAMP ts
-    WINDOW 7 DAYS
-    RETAIN 1
-    AS (SELECT entity, SUM(val) AS total FROM watermark_events GROUP BY entity);
-
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
-statement ok
-REFRESH FEATURE wm_zero;
-
-statement ok
-CREATE FEATURE wm_two_days
-    ENTITY wm_ents
-    TIMESTAMP ts
-    WINDOW 7 DAYS
-    WATERMARK 2 DAYS
-    RETAIN 1
-    AS (SELECT entity, SUM(val) AS total FROM watermark_events GROUP BY entity);
-
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
-statement ok
-REFRESH FEATURE wm_two_days;
-
-# A late row arrives before the current max timestamp.
-statement ok
-INSERT INTO watermark_events VALUES ('a', 5, '2024-01-02 08:00:00');
-
-# Both features fully recompute — the WATERMARK clause makes no difference.
-query I
-REFRESH FEATURE wm_zero;
-----
-3
-
-query I
-REFRESH FEATURE wm_two_days;
-----
-3
-
-# Both materialize the late Jan 2 anchor: Jan 1 (10) + Jan 2 (5) = 15.
-query I
-SELECT COUNT(*) FROM wm_zero;
-----
-3
-
-query R
-SELECT total FROM wm_zero WHERE feature_timestamp = '2024-01-02 08:00:00'::TIMESTAMP;
-----
-15
-
-query R
-SELECT total FROM wm_zero WHERE feature_timestamp = '2024-01-03 08:00:00'::TIMESTAMP;
-----
-35
-
-query I
-SELECT COUNT(*) FROM wm_two_days;
-----
-3
-
-query R
-SELECT total FROM wm_two_days WHERE feature_timestamp = '2024-01-02 08:00:00'::TIMESTAMP;
-----
-15
-
-query R
-SELECT total FROM wm_two_days WHERE feature_timestamp = '2024-01-03 08:00:00'::TIMESTAMP;
-----
-35
-
-statement ok
-DROP FEATURE wm_zero;
-
-statement ok
-DROP FEATURE wm_two_days;
-
-statement ok
-DROP TABLE watermark_events;
-
-# ============================================================
-# INCREMENTAL refresh: empty initial version falls back to full materialization
-# ============================================================
-
-statement ok
-CREATE TABLE empty_ents (entity VARCHAR PRIMARY KEY);
-
-statement ok
-INSERT INTO empty_ents VALUES ('a');
-
-statement ok
-CREATE TABLE empty_initial_events (
-    entity VARCHAR,
-    val INTEGER,
-    ts TIMESTAMP,
-    FOREIGN KEY (entity) REFERENCES empty_ents(entity)
-);
-
-statement ok
-CREATE FEATURE empty_initial
-    ENTITY empty_ents
-    TIMESTAMP ts
-    WINDOW 7 DAYS
-    RETAIN 1
-    AS (SELECT entity, SUM(val) AS total FROM empty_initial_events GROUP BY entity);
-
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
-statement ok
-REFRESH FEATURE empty_initial;
-
-# Initial materialization created an empty v1 table.
-query I
-SELECT COUNT(*) FROM empty_initial;
+SELECT COUNT(*) FROM feature_at_version('total_spend', 1);
 ----
 0
 
+# ============================================================
+# SERVE resolves each spine row to the entity's latest snapshot at or before its timestamp
+# ============================================================
 statement ok
-INSERT INTO empty_initial_events VALUES
-    ('a', 10, '2024-01-01 08:00:00'),
-    ('a', 20, '2024-01-02 08:00:00');
-
-# With no existing max feature timestamp, incremental refresh materializes all rows.
-query I
-REFRESH FEATURE empty_initial;
-----
-2
-
-query I
-SELECT current_version FROM duckdb_features() WHERE feature_name = 'empty_initial';
-----
-2
-
-query I
-SELECT COUNT(*) FROM empty_initial;
-----
-2
-
-query RT rowsort
-SELECT total, feature_timestamp FROM empty_initial WHERE entity = 'a';
-----
-10	2024-01-01 08:00:00
-30	2024-01-02 08:00:00
-
-statement error
-SELECT COUNT(*) FROM empty_initial__v1;
-----
-<REGEX>:.*does not exist.*
+CREATE TABLE spine (user_id VARCHAR, ts TIMESTAMP);
 
 statement ok
-DROP FEATURE empty_initial;
+INSERT INTO spine VALUES
+    ('alice', '2024-01-04 12:00:00'),
+    ('alice', '2024-01-07 00:00:00'),
+    ('bob',   '2024-01-03 00:00:00'),
+    ('dave',  '2024-01-07 00:00:00');
+
+# alice @ Jan 4 -> version 2 (600); alice @ Jan 7 -> version 3 (600);
+# bob @ Jan 3 -> no retained version at or before Jan 3 (v2=Jan 4, v3=Jan 6) -> NULL;
+# dave is not an entity -> NULL.
+query IIRI rowsort
+SERVE FEATURE total_spend FOR spine;
+----
+alice	2024-01-04 12:00:00	600.00	3
+alice	2024-01-07 00:00:00	600.00	3
+bob	2024-01-03 00:00:00	NULL	NULL
+dave	2024-01-07 00:00:00	NULL	NULL
 
 statement ok
-DROP TABLE empty_initial_events;
+DROP TABLE spine;
 
 # ============================================================
 # Error cases
 # ============================================================
-
-# Non-existent feature
 statement error
 REFRESH FEATURE nonexistent;
 ----
 Feature "nonexistent" does not exist
 
-# Dropping the source table with CASCADE removes the dependent feature, so a later
-# refresh reports the feature as missing instead of failing deeper in materialization.
+# Dropping the source table with CASCADE removes the dependent feature.
 statement ok
-CREATE TABLE err_ents (entity VARCHAR PRIMARY KEY);
+CREATE TABLE err_users (entity VARCHAR PRIMARY KEY);
 
 statement ok
-INSERT INTO err_ents VALUES ('a');
+INSERT INTO err_users VALUES ('a');
 
 statement ok
 CREATE TABLE refresh_error_src (
     entity VARCHAR,
     val INTEGER,
     ts TIMESTAMP,
-    FOREIGN KEY (entity) REFERENCES err_ents(entity)
+    FOREIGN KEY (entity) REFERENCES err_users(entity)
 );
 
 statement ok
@@ -581,21 +194,20 @@ INSERT INTO refresh_error_src VALUES ('a', 10, '2024-01-01 08:00:00');
 
 statement ok
 CREATE FEATURE refresh_error_feature
-    ENTITY err_ents
+    ENTITY err_users
     TIMESTAMP ts
     WINDOW 7 DAYS
     RETAIN 1
     AS (SELECT entity, SUM(val) AS total FROM refresh_error_src GROUP BY entity);
 
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
 statement ok
-REFRESH FEATURE refresh_error_feature;
+REFRESH FEATURE refresh_error_feature AT '2024-01-02 00:00:00';
 
 statement ok
 DROP TABLE refresh_error_src CASCADE;
 
 statement error
-REFRESH FEATURE refresh_error_feature;
+REFRESH FEATURE refresh_error_feature AT '2024-01-02 00:00:00';
 ----
 Feature "refresh_error_feature" does not exist
 
@@ -603,7 +215,7 @@ Feature "refresh_error_feature" does not exist
 # Cleanup
 # ============================================================
 statement ok
-DROP FEATURE event_sum;
+DROP FEATURE total_spend;
 
 statement ok
-DROP TABLE events;
+DROP TABLE transactions;

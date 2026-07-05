@@ -4,4 +4,4 @@
 
 template benchmark/feature/feature.benchmark.in
 BENCH_NAME=FeatureRefreshFull
-RUN_QUERY=REFRESH FEATURE user_activity_full;
+RUN_QUERY=REFRESH FEATURE user_activity_full AT '2016-01-01 00:00:00';

@@ -157,11 +157,11 @@ SourceResultType PhysicalRefreshFeature::GetDataInternal(ExecutionContext &conte
 	auto &gstate = sink_state->Cast<RefreshFeatureGlobalState>();
 	auto &catalog = Catalog::GetCatalog(context.client, gstate.catalog_name);
 
-	// Garbage-collect the version table that just fell outside the retain_versions limit. Each refresh
-	// adds one version, so at most one table becomes newly evictable here. This runs after all rows have
-	// been appended (the source phase follows the sink), so dropping the previous version does not race
-	// the child that read from it.
-	int64_t evicted_version = gstate.new_version - gstate.retain_versions;
+	// Garbage-collect the previous store table. Each new store table already carries forward every still-
+	// retained row from the previous one, so only the latest store table needs to survive. This runs after
+	// all rows have been appended (the source phase follows the sink), so dropping the previous store does
+	// not race the child that read from it (the carry-forward branch).
+	int64_t evicted_version = gstate.new_version - 1;
 	if (evicted_version >= 1) {
 		auto old_table_name = feature_name + "__v" + duckdb::to_string(evicted_version);
 		DropInfo drop_info;

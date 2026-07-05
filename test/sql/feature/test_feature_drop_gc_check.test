@@ -1,5 +1,5 @@
 # name: test/sql/feature/test_feature_drop_gc_check.test
-# description: Verify DROP FEATURE removes all version tables and GC drops versions beyond RETAIN
+# description: Verify only the latest store table survives, retention lives in the rows, DROP removes all
 # group: [feature]
 
 require noforcestorage
@@ -27,7 +27,7 @@ INSERT INTO events VALUES
     ('y', 30, '2024-01-01 12:00:00');
 
 # ============================================================
-# RETAIN 2: GC should keep only the latest 2 version tables
+# RETAIN 2: the store carries at most two versions; only the latest store table exists
 # ============================================================
 statement ok
 CREATE FEATURE f ENTITY customers TIMESTAMP event_time
@@ -35,70 +35,65 @@ CREATE FEATURE f ENTITY customers TIMESTAMP event_time
     RETAIN 2
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
-# Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
 statement ok
-REFRESH FEATURE f;
+REFRESH FEATURE f AT '2024-01-03 00:00:00';
 
-# After the bootstrap refresh: only the v1 backing table
+# After the first refresh: exactly one store table (v1), holding version 1 only (2 entity rows)
 query I
 SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
 ----
 1
 
-# refresh -> v2 ; both v1 and v2 present
-statement ok
-REFRESH FEATURE f;
-
 query I
-SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
+SELECT COUNT(*) FROM f__v1;
 ----
 2
 
-# refresh -> v3 ; GC drops v1, keep v2 and v3
+# Second refresh: still exactly one store table (v2), now holding versions 1 and 2
 statement ok
-REFRESH FEATURE f;
+REFRESH FEATURE f AT '2024-01-03 00:00:00';
 
 query I
-SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
-----
-2
-
-query I
-SELECT table_name FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\' ORDER BY table_name;
+SELECT table_name FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
 ----
 f__v2
-f__v3
-
-# refresh -> v4 ; GC drops v2, keep v3 and v4
-statement ok
-REFRESH FEATURE f;
 
 query I
-SELECT table_name FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\' ORDER BY table_name;
+SELECT COUNT(DISTINCT __feature_version) FROM f__v2;
+----
+2
+
+# Third refresh: RETAIN 2 evicts version 1; the store holds versions 2 and 3
+statement ok
+REFRESH FEATURE f AT '2024-01-03 00:00:00';
+
+query I
+SELECT table_name FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
 ----
 f__v3
-f__v4
+
+query II rowsort
+SELECT __feature_version, COUNT(*) FROM f__v3 GROUP BY __feature_version;
+----
+2	2
+3	2
 
 # ============================================================
-# DROP FEATURE: every remaining version table must be gone (no leak)
-# even though current_version=4 but only v3,v4 still exist
+# DROP FEATURE: the store table and the view are both removed
 # ============================================================
 statement ok
 DROP FEATURE f;
 
-# No version tables left at all
 query I
 SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
 ----
 0
 
-# The feature itself is gone
 query I
 SELECT COUNT(*) FROM duckdb_features() WHERE feature_name = 'f';
 ----
 0
 
-# The view is gone too
 query I
 SELECT COUNT(*) FROM duckdb_views WHERE view_name = 'f';
 ----

@@ -143,15 +143,14 @@ CREATE FEATURE bad_shorthand_decimal
 <REGEX>:.*positive integer.*
 
 # ============================================================
-# A scheduled feature still refreshes normally (no scheduler yet)
+# A scheduled feature still refreshes normally (manual refresh here; no scheduler)
 # ============================================================
-# Bootstrap v1 first (CREATE registers metadata only); this full materialization yields
-# one feature row per source event timestamp (a@01-01, a@01-02, b@01-01 = 3 rows).
+# Bootstrap v1: one snapshot row per entity (a, b) at Jan 2 -> 2 rows appended.
 statement ok
-REFRESH FEATURE user_activity;
+REFRESH FEATURE user_activity AT '2024-01-02 00:00:00';
 
-# A refresh fully recomputes every event-time anchor (a@01-01, a@01-02, b@01-01 = 3 rows).
+# Second refresh appends version 2 (2 rows) and carries version 1 forward (2 rows) = 4 rows.
 query I
-REFRESH FEATURE user_activity;
+REFRESH FEATURE user_activity AT '2024-01-02 00:00:00';
 ----
-3
+4

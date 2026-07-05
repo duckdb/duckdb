@@ -6,7 +6,7 @@ require noforcestorage
 
 require skip_reload
 
-# The entity table is the LEFT JOIN anchor; the event table must carry a foreign key into it.
+# The entity table is the snapshot anchor; the event table must carry a foreign key into it.
 statement ok
 CREATE TABLE customers (customer VARCHAR PRIMARY KEY);
 
@@ -36,7 +36,7 @@ SELECT feature_name, current_version FROM duckdb_features() WHERE feature_name =
 ----
 f	0
 
-# No version table has been created yet
+# No store table has been created yet
 query I
 SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
 ----
@@ -52,7 +52,7 @@ SELECT * FROM f;
 statement error
 SELECT * FROM feature_at_version('f', 1);
 ----
-<REGEX>:.*does not exist.*
+<REGEX>:.*has not been refreshed yet.*
 
 # ============================================================
 # SERVE FEATURE on an unrefreshed feature errors the same way
@@ -72,30 +72,31 @@ SERVE FEATURE f FOR spine;
 # After the first REFRESH the feature materializes v1 and becomes queryable
 # ============================================================
 statement ok
-REFRESH FEATURE f;
+REFRESH FEATURE f AT '2024-01-03 00:00:00';
 
 query II
 SELECT feature_name, current_version FROM duckdb_features() WHERE feature_name = 'f';
 ----
 f	1
 
+# The store holds one snapshot row per entity (x, y)
 query I
 SELECT COUNT(*) FROM f__v1;
 ----
-3
+2
 
-query IIT rowsort
-SELECT customer, total, feature_timestamp FROM f;
+# The view resolves to the current snapshot: SUM over [Dec 27, Jan 3)
+query II rowsort
+SELECT customer, total FROM f;
 ----
-x	10	2024-01-01 08:00:00
-x	30	2024-01-02 08:00:00
-y	30	2024-01-01 12:00:00
+x	30
+y	30
 
-# SERVE now works: spine columns, then feature_timestamp, then the aggregate
-query IIII
+# SERVE resolves each spine row to the entity's snapshot at or before the spine time.
+query III
 SERVE FEATURE f FOR spine;
 ----
-x	2024-01-03 00:00:00	2024-01-02 08:00:00	30
+x	2024-01-03 00:00:00	30
 
 # ============================================================
 # A second feature on the same tables also bootstraps v1 on its first refresh
@@ -109,12 +110,12 @@ SELECT * FROM g;
 <REGEX>:.*has not been refreshed yet.*
 
 statement ok
-REFRESH FEATURE g;
+REFRESH FEATURE g AT '2024-01-03 00:00:00';
 
 query I
 SELECT COUNT(*) FROM g;
 ----
-3
+2
 
 query I
 SELECT current_version FROM duckdb_features() WHERE feature_name = 'g';

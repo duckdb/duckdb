@@ -39,34 +39,34 @@ INSERT INTO hits SELECT UserID, EventTime, RegionID, CounterID FROM hits_raw;
 
 DROP TABLE hits_raw;
 
--- Hourly windowed aggregation per user over a 24h window. Exercises the
--- CREATE FEATURE / REFRESH group-by aggregation path.
+-- Windowed aggregation per user. The window is wide enough that a snapshot AT the fixed refresh
+-- time (below) captures the whole dataset, so REFRESH exercises the full group-by aggregation path.
 CREATE FEATURE user_activity_full ENTITY users TIMESTAMP EventTime
-    WINDOW 24 HOURS
+    WINDOW 3650 DAYS
     RETAIN 1
     AS (SELECT UserID, COUNT(*) AS event_count, AVG(RegionID) AS avg_region FROM hits GROUP BY UserID);
 
--- Same shape with a RETAIN window, used by the interleaved refresh/serve benchmark.
+-- Same shape with a wider RETAIN window, used by the interleaved refresh/serve benchmark.
 -- WATERMARK is accepted but no longer changes refresh behavior.
 CREATE FEATURE user_activity_incr ENTITY users TIMESTAMP EventTime
-    WINDOW 24 HOURS
+    WINDOW 3650 DAYS
     WATERMARK 1 HOUR
     RETAIN 5
     AS (SELECT UserID, COUNT(*) AS event_count FROM hits GROUP BY UserID);
 
--- CREATE FEATURE only registers metadata; the first REFRESH materializes version 1. Refresh both
--- features here so the SERVE / REFRESH benchmarks (and the sanity assert in feature.benchmark.in)
--- have a materialized current version to read from.
-REFRESH FEATURE user_activity_full;
+-- CREATE FEATURE only registers metadata; the first REFRESH materializes version 1. Snapshot both
+-- features AT a fixed time so the SERVE / REFRESH benchmarks (and the sanity assert in
+-- feature.benchmark.in) have a materialized current version to read from.
+REFRESH FEATURE user_activity_full AT '2016-01-01 00:00:00';
 
-REFRESH FEATURE user_activity_incr;
+REFRESH FEATURE user_activity_incr AT '2016-01-01 00:00:00';
 
--- Serving spine: a sample of entities with a serving timestamp after all events.
--- SERVE benchmarks consume this table with SERVE FEATURE ... FOR serve_requests.
+-- Serving spine: a sample of entities with a serving timestamp after the snapshot time, so every
+-- spine row resolves to the current version. SERVE benchmarks consume it with SERVE FEATURE ... FOR.
 -- Column names match the feature key and timestamp, so SERVE needs no overrides.
 CREATE TABLE serve_requests AS
 SELECT DISTINCT
     UserID,
-    TIMESTAMP '2015-01-01 00:00:00' AS EventTime
+    TIMESTAMP '2016-01-02 00:00:00' AS EventTime
 FROM hits
 USING SAMPLE 100000 ROWS;

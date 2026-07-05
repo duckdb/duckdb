@@ -17,6 +17,11 @@ namespace duckdb {
 class SelectNode;
 class SelectStatement;
 
+//! Internal columns appended to every denormalized store row: which refresh produced the row and when.
+//! They are excluded from user-facing output (the resolver view, SERVE, feature_at_version).
+static constexpr const char *FEATURE_VERSION_COLUMN = "__feature_version";
+static constexpr const char *FEATURE_TIMESTAMP_COLUMN = "__feature_timestamp";
+
 struct FeatureSnapshotParameters {
 	//! The entity table (LEFT JOIN anchor).
 	string entity_table;

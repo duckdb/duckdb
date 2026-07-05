@@ -1,9 +1,9 @@
 #include "duckdb/function/table/system_functions.hpp"
-
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/feature_query.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -68,10 +68,17 @@ static unique_ptr<FunctionData> FeatureAtVersionBind(ClientContext &context, Tab
 	if (!feature_entry) {
 		throw CatalogException("Feature \"%s\" does not exist", result->feature_name);
 	}
+	if (feature_entry->current_version < 1) {
+		throw CatalogException("Feature \"%s\" has not been refreshed yet — run REFRESH FEATURE %s first",
+		                       result->feature_name, result->feature_name);
+	}
 
-	// Build the versioned table name
-	auto versioned_table = result->feature_name + "__v" + duckdb::to_string(result->version);
-	result->generated_sql = "SELECT * FROM " + SQLIdentifier::ToString(versioned_table);
+	// Read the requested version's rows out of the current denormalized store table, hiding the internal
+	// bookkeeping columns. The version is only available while it is still within the retain window.
+	auto store_table = result->feature_name + "__v" + duckdb::to_string(feature_entry->current_version);
+	result->generated_sql = "SELECT * EXCLUDE (" + string(FEATURE_VERSION_COLUMN) + ", " +
+	                        string(FEATURE_TIMESTAMP_COLUMN) + ") FROM " + SQLIdentifier::ToString(store_table) +
+	                        " WHERE " + string(FEATURE_VERSION_COLUMN) + " = " + duckdb::to_string(result->version);
 
 	// Capture caller's default catalog/schema
 	auto &search_path = ClientData::Get(context).catalog_search_path;
@@ -91,8 +98,8 @@ static unique_ptr<FunctionData> FeatureAtVersionBind(ClientContext &context, Tab
 
 	auto prep = con.Prepare(result->generated_sql);
 	if (prep->HasError()) {
-		throw CatalogException("Version %lld of feature \"%s\" does not exist (table \"%s\" not found)",
-		                       result->version, result->feature_name, versioned_table);
+		throw CatalogException("Version %lld of feature \"%s\" is not available (outside the retain window)",
+		                       result->version, result->feature_name);
 	}
 
 	names = prep->GetNames();
