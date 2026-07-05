@@ -201,6 +201,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::MERGE_INTO_STATEMENT:
 	case StatementType::CONNECT_STATEMENT:
 	case StatementType::DISCONNECT_STATEMENT:
+	case StatementType::PASSTHROUGH_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
