@@ -3,7 +3,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "utf8proc_wrapper.hpp"
 
-#include <algorithm>
 #include <functional>
 
 namespace duckdb_shell {
@@ -146,11 +145,30 @@ public:
 		lines.push_back(width > label_width ? string(width - label_width, ' ') + label : label);
 	}
 
-	//! A horizontally centered line (the banner entry name); widths ignore ANSI codes.
+	//! A horizontally centered line (the banner header lines); widths ignore ANSI codes.
 	void Centered(const string &text) {
 		idx_t text_width = RenderLength(text);
 		idx_t pad = width > text_width ? (width - text_width) / 2 : 0;
 		lines.push_back(string(pad, ' ') + text);
+	}
+
+	//! Try to place `left` flush-left, `center` centered, and `right` flush-right on a single line with
+	//! at least `min_gap` spaces between adjacent segments. Emits the line and returns true when it fits;
+	//! otherwise emits nothing and returns false (so the caller can stack them). Widths ignore ANSI codes.
+	bool TryHeaderRow(const string &left, const string &center, const string &right, idx_t min_gap) {
+		idx_t lw = RenderLength(left), cw = RenderLength(center), rw = RenderLength(right);
+		if (cw >= width || rw >= width) {
+			return false;
+		}
+		idx_t center_start = (width - cw) / 2;
+		idx_t right_start = width - rw;
+		if (center_start < lw + min_gap || right_start < center_start + cw + min_gap) {
+			return false;
+		}
+		string line = left + string(center_start - lw, ' ') + center;
+		line += string(right_start - (center_start + cw), ' ') + right;
+		lines.push_back(std::move(line));
+		return true;
 	}
 
 	//! A signature indented `level` levels, with `number` right-aligned against the margin on the last
@@ -310,17 +328,11 @@ vector<ContentGroup> GroupByExamples(const vector<NumberedOverload> &overloads) 
 	return groups;
 }
 
-//! Human-readable heading for a raw function type, e.g. "scalar" -> "Scalar Functions",
-//! "table_macro" -> "Table Macro Functions".
-string FunctionTypeHeading(const string &function_type) {
-	auto words = StringUtil::Split(function_type, '_');
-	for (auto &word : words) {
-		if (!word.empty()) {
-			word[0] = StringUtil::CharacterToUpper(word[0]);
-		}
-	}
-	string label = StringUtil::Join(words, " ");
-	return label.empty() ? "Functions" : "Functions (" + label + ")";
+//! Banner label for a raw function type, e.g. "scalar" -> "scalar function",
+//! "table_macro" -> "table macro function".
+string EntryTypeLabel(const string &function_type) {
+	string label = StringUtil::Join(StringUtil::Split(function_type, '_'), " ");
+	return label.empty() ? "function" : label + " function";
 }
 
 } // namespace
@@ -347,7 +359,11 @@ string BuildSignature(const string &name, const vector<string> &parameters, cons
 			result += ", ";
 		}
 		string param_name = i < parameters.size() && !parameters[i].empty() ? parameters[i] : "col" + std::to_string(i);
-		result += colorize(param_name, name_color) + " " + colorize(parameter_types[i], type_color);
+		result += colorize(param_name, name_color);
+		// macros have no declared parameter types, so only append a type when one is present
+		if (!parameter_types[i].empty()) {
+			result += " " + colorize(parameter_types[i], type_color);
+		}
 	}
 	if (!varargs.empty()) {
 		if (!parameter_types.empty()) {
@@ -389,59 +405,68 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &n
 		return path_on.empty() ? text : path_on + text + path_off;
 	};
 
-	// top-level banner: the entry name framed by full-width horizontal rules
 	string rule = StringUtil::Repeat("\xE2\x94\x80", content_width); // "─"
-	canvas.Line(0, color_ref(rule));
-	canvas.Centered(title(name));
-	canvas.Line(0, color_ref(rule));
-	canvas.Blank();
 
-	// group overloads by function type (first-appearance order) and number them in that grouped order
-	vector<string> type_order;
-	for (auto &overload : overloads) {
-		if (std::find(type_order.begin(), type_order.end(), overload.function_type) == type_order.end()) {
-			type_order.push_back(overload.function_type);
-		}
-	}
-	vector<NumberedOverload> numbered;
-	for (auto &type : type_order) {
-		for (auto &overload : overloads) {
-			if (overload.function_type == type) {
-				numbered.push_back({numbered.size() + 1, &overload});
-			}
-		}
-	}
-
-	// group descriptions/examples up front so signature numbering can react to them
-	auto description_groups = GroupByDescription(numbered);
-	auto example_groups = GroupByExamples(numbered);
-	// a single group covering every overload applies to all of them, so its reference is redundant
-	auto covers_all = [&](const vector<ContentGroup> &groups) {
-		return groups.size() == 1 && groups[0].numbers.size() == numbered.size();
+	// split the overloads into frames, one per distinct (schema path, function type), in first-
+	// appearance order; each frame is rendered as its own self-contained manual entry
+	struct Frame {
+		string schema_path;
+		string function_type;
+		vector<const ManualOverload *> overloads;
 	};
-	bool description_refs = !description_groups.empty() && !covers_all(description_groups);
-	bool example_refs = !example_groups.empty() && !covers_all(example_groups);
-	// the "(n)" markers only earn their place when a description/example references specific overloads;
-	// with a single overload, or when every overload shares the same content, they are just noise
-	bool show_numbers = numbered.size() > 1 && (description_refs || example_refs);
+	vector<Frame> frames;
+	for (auto &overload : overloads) {
+		Frame *target = nullptr;
+		for (auto &frame : frames) {
+			if (frame.schema_path == overload.schema_path && frame.function_type == overload.function_type) {
+				target = &frame;
+				break;
+			}
+		}
+		if (!target) {
+			frames.push_back({overload.schema_path, overload.function_type, {}});
+			target = &frames.back();
+		}
+		target->overloads.push_back(&overload);
+	}
 
-	// Signatures, under a heading per function type; within a type they are grouped by qualified schema
-	// path (shown once, gray) and the "(n)" marker is right-aligned at the margin
-	for (auto &type : type_order) {
-		canvas.Line(0, heading(FunctionTypeHeading(type)));
+	for (idx_t f = 0; f < frames.size(); f++) {
+		auto &frame = frames[f];
+
+		// frame header, framed by rules: schema path (gray) left, entry name (bold) centered, entry type
+		// (gray) right - on one line when they fit with a 4-space gap, otherwise stacked and centered
+		string header_path = path_label(frame.schema_path);
+		string header_name = title(name);
+		string header_type = color_ref("(" + EntryTypeLabel(frame.function_type) + ")");
+		canvas.Line(0, color_ref(rule));
+		if (!canvas.TryHeaderRow(header_path, header_name, header_type, 4)) {
+			canvas.Centered(header_path);
+			canvas.Centered(header_name);
+			canvas.Centered(header_type);
+		}
+		canvas.Line(0, color_ref(rule));
 		canvas.Blank();
-		bool first = true;
-		string current_path;
+
+		// number this frame's overloads; group descriptions/examples so numbering can react to them
+		vector<NumberedOverload> numbered;
+		for (auto *overload : frame.overloads) {
+			numbered.push_back({numbered.size() + 1, overload});
+		}
+		auto description_groups = GroupByDescription(numbered);
+		auto example_groups = GroupByExamples(numbered);
+		// a single group covering every overload applies to all of them, so its reference is redundant
+		auto covers_all = [&](const vector<ContentGroup> &groups) {
+			return groups.size() == 1 && groups[0].numbers.size() == numbered.size();
+		};
+		bool description_refs = !description_groups.empty() && !covers_all(description_groups);
+		bool example_refs = !example_groups.empty() && !covers_all(example_groups);
+		// the "(n)" markers only earn their place when a description/example references specific overloads
+		bool show_numbers = numbered.size() > 1 && (description_refs || example_refs);
+
+		// Signatures; the "(n)" marker is right-aligned at the margin
+		canvas.Line(0, heading("Signature"));
+		canvas.Blank();
 		for (auto &entry : numbered) {
-			if (entry.overload->function_type != type) {
-				continue;
-			}
-			if (first || entry.overload->schema_path != current_path) {
-				current_path = entry.overload->schema_path;
-				canvas.Line(1, path_label(current_path));
-				canvas.Blank();
-			}
-			first = false;
 			// the signature is already colored structurally by BuildSignature; do not re-highlight it
 			if (show_numbers) {
 				canvas.Numbered(2, entry.overload->signature, color_ref("(" + std::to_string(entry.number) + ")"));
@@ -450,42 +475,50 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &n
 			}
 			canvas.Blank();
 		}
-	}
 
-	// Descriptions: the reference group left-aligned above the body on the line(s) below
-	if (!description_groups.empty()) {
-		canvas.Line(0, heading("Description"));
-		canvas.Blank();
-		for (auto &group : description_groups) {
-			if (description_refs) {
-				canvas.Body(1, FormatRefs(group.numbers, color_ref));
-				canvas.Blank();
-			}
-			canvas.Body(2, group.text);
+		// Descriptions: the reference group left-aligned above the body on the line(s) below
+		if (!description_groups.empty()) {
+			canvas.Line(0, heading("Description"));
 			canvas.Blank();
-		}
-	}
-
-	// Examples: the reference group left-aligned above the (syntax-highlighted) SQL, verbatim and
-	// un-boxed so it can be copy-pasted directly from the terminal
-	if (!example_groups.empty()) {
-		canvas.Line(0, heading("Examples"));
-		canvas.Blank();
-		for (auto &group : example_groups) {
-			if (example_refs) {
-				canvas.Body(1, FormatRefs(group.numbers, color_ref));
-				canvas.Blank();
-			}
-			for (idx_t e = 0; e < group.examples.size(); e++) {
-				if (e > 0) {
+			for (auto &group : description_groups) {
+				if (description_refs) {
+					canvas.Body(1, FormatRefs(group.numbers, color_ref));
 					canvas.Blank();
 				}
-				for (auto &physical : StringUtil::Split(group.examples[e], '\n')) {
-					canvas.Highlighted(2, physical);
-				}
+				canvas.Body(2, group.text);
+				canvas.Blank();
 			}
-			canvas.Blank();
 		}
+
+		// Examples: the reference group left-aligned above the (syntax-highlighted) SQL, verbatim and
+		// un-boxed so it can be copy-pasted directly from the terminal
+		if (!example_groups.empty()) {
+			canvas.Line(0, heading("Examples"));
+			canvas.Blank();
+			for (auto &group : example_groups) {
+				if (example_refs) {
+					canvas.Body(1, FormatRefs(group.numbers, color_ref));
+					canvas.Blank();
+				}
+				for (idx_t e = 0; e < group.examples.size(); e++) {
+					if (e > 0) {
+						canvas.Blank();
+					}
+					for (auto &physical : StringUtil::Split(group.examples[e], '\n')) {
+						canvas.Highlighted(2, physical);
+					}
+				}
+				canvas.Blank();
+			}
+		}
+	}
+
+	// footer: a rule and a summary of how many entries were shown (only when there is more than one)
+	if (frames.size() > 1) {
+		canvas.Blank();
+		canvas.Line(0, color_ref(rule));
+		string summary = "found " + std::to_string(frames.size()) + " entries matching '" + name + "'";
+		canvas.Centered(path_label(summary));
 	}
 
 	return canvas.Render();

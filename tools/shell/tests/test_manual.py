@@ -12,7 +12,7 @@ def test_manual_basic(shell):
     )
     result = test.run()
     result.check_stdout('list_value')
-    result.check_stdout('FUNCTIONS (SCALAR)')
+    result.check_stdout('scalar function')
     result.check_stdout('DESCRIPTION')
     result.check_stdout('EXAMPLES')
     result.check_stdout('->')
@@ -57,7 +57,7 @@ def test_manual_case_insensitive(shell):
         .statement('.manual LIST_VALUE')
     )
     result = test.run()
-    result.check_stdout('FUNCTIONS (SCALAR)')
+    result.check_stdout('scalar function')
 
 
 def test_manual_multiple_function_types(shell):
@@ -67,8 +67,8 @@ def test_manual_multiple_function_types(shell):
         .statement('.manual generate_series')
     )
     result = test.run()
-    result.check_stdout('FUNCTIONS (SCALAR)')
-    result.check_stdout('FUNCTIONS (TABLE)')
+    result.check_stdout('scalar function')
+    result.check_stdout('table function')
 
 
 def test_manual_unknown_function(shell):

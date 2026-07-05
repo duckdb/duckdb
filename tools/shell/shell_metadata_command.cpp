@@ -612,11 +612,11 @@ ORDER BY function_type, database_name, schema_name, length(parameter_types), par
 
 	// coloring is only applied on an interactive console (matching the shell's SQL highlighter)
 	bool use_color = ShellHighlight::IsEnabled() && state.stdin_is_interactive && state.stdout_is_console;
-	// signature coloring: parameter names in gray, parameter/return types in blue
+	// signature styling: parameter names in gray italic, parameter/return types bold
 	string name_color, type_color, color_off;
 	if (use_color) {
-		name_color = ShellHighlight::TerminalCode(PrintColor::GRAY, PrintIntensity::STANDARD);
-		type_color = ShellHighlight::TerminalCode(PrintColor::BLUE, PrintIntensity::STANDARD);
+		name_color = ShellHighlight::TerminalCode(PrintColor::GRAY, PrintIntensity::ITALIC);
+		type_color = ShellHighlight::TerminalCode(PrintColor::STANDARD, PrintIntensity::BOLD);
 		color_off = ShellHighlight::ResetTerminalCode();
 	}
 
@@ -674,8 +674,8 @@ LIMIT 5)");
 	idx_t content_width = state.GetMaxRenderWidth();
 	content_width = duckdb::MaxValue<idx_t>(40, duckdb::MinValue<idx_t>(content_width, 98));
 
-	// color the reference markers like the EXPLAIN layout, section headings in bold white, and the
-	// schema-path labels in de-emphasized gray + italic
+	// color the reference markers like the EXPLAIN layout, section headings (and the banner entry name)
+	// in bold white, and the schema-path labels in de-emphasized gray + italic
 	string layout_on, layout_off, heading_on, heading_off, path_on, path_off;
 	if (use_color) {
 		auto &layout = ShellHighlight::GetHighlightElement(HighlightElementType::EXPLAIN_LAYOUT);
