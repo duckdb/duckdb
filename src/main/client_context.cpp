@@ -252,7 +252,10 @@ shared_ptr<AttachedDatabase> ClientContext::TryGetConnectedCatalog() const {
 //! True if `type` is a CONNECT control statement that must execute against LOCAL even while a
 //! CONNECT binding is active (i.e. the chokepoint must let it fall through, not rewrite it).
 static bool IsConnectControlStatement(StatementType type) {
-	return type == StatementType::CONNECT_STATEMENT || type == StatementType::DISCONNECT_STATEMENT;
+	// PASSTHROUGH carries its own explicit target (from `CONNECT <name> EXECUTE`), so the sticky
+	// chokepoint must not re-route it to the currently-bound catalog — its binder dispatches it.
+	return type == StatementType::CONNECT_STATEMENT || type == StatementType::DISCONNECT_STATEMENT ||
+	       type == StatementType::PASSTHROUGH_STATEMENT;
 }
 
 //! Wrap a TableRef returned from Catalog::RemoteExecute into `SELECT * FROM <ref>` for the chokepoint.
@@ -816,7 +819,9 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 	try {
 		QueryProfiler::Get(*this).StartQuery(query);
 
-		// Drain the lazy iterator into a vector for callers that want the eager shape.
+		// Drain the lazy iterator into a vector for callers that want the eager shape. The Layer-1
+		// connect-mode override (`CONNECT <name> EXECUTE <payload>`) is handled inside ParseIterator,
+		// so it is picked up transparently here too.
 		StatementIterator iterator {ParseIterator(*this, query)};
 		vector<unique_ptr<SQLStatement>> result;
 		while (iterator.Peek()) {

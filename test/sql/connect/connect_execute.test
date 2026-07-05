@@ -1,0 +1,80 @@
+# name: test/sql/connect/connect_execute.test
+# description: Layer-1 connect-mode recognition of `CONNECT <name> EXECUTE <payload>` passthrough.
+# group: [connect]
+
+# `CONNECT <name> EXECUTE <payload>` is recognized by the Layer-1 connect-mode parser and turned
+# into a PassthroughStatement. It carries its own explicit target, so it is dispatched by the
+# passthrough binder rather than the SQL parser. Against a non-existent target the binder reports
+# "not attached" — the fact we reach the binder (instead of a Parser Error) proves recognition.
+statement error
+CONNECT foo EXECUTE SELECT 42;
+----
+<REGEX>:Invalid Input Error:.*Database "foo" is not attached.*
+
+# The payload is forwarded verbatim and is NEVER parsed locally — arbitrary text survives intact.
+statement error
+CONNECT foo EXECUTE some non-sql $$payload$$ text here;
+----
+<REGEX>:Invalid Input Error:.*Database "foo" is not attached.*
+
+# Attached but unsupported backend → the passthrough binder's capability gate fires (same message
+# the CONNECT chokepoint uses).
+statement ok
+ATTACH ':memory:' AS plain_duckdb;
+
+statement error
+CONNECT plain_duckdb EXECUTE SELECT 42;
+----
+<REGEX>:Invalid Input Error:.*does not support CONNECT.*
+
+statement ok
+DETACH plain_duckdb;
+
+# EXECUTE recognition is target-explicit and does NOT require an active CONNECT binding.
+statement error
+CONNECT pg EXECUTE SELECT * FROM remote_table;
+----
+<REGEX>:Invalid Input Error:.*Database "pg" is not attached.*
+
+# ===================== the pre-pass must not hijack ordinary SQL =====================
+
+# The words "connect" / "execute" appearing as identifiers or string literals must not trigger the
+# Layer-1 pass — only the `CONNECT <name> EXECUTE` shape does.
+query I
+SELECT 'connect' || ' ' || 'execute' AS s;
+----
+connect execute
+
+# PREPARE ... / EXECUTE (the ordinary prepared-statement keyword) is untouched.
+statement ok
+PREPARE p AS SELECT 1;
+
+query I
+EXECUTE p;
+----
+1
+
+# A malformed control statement (CONNECT with no target before EXECUTE) is NOT claimed as a
+# passthrough; it falls through to the normal parser, preserving its error message.
+statement error
+CONNECT EXECUTE foo;
+----
+<REGEX>:Parser Error:.*
+
+# ===================== multi-statement inputs =====================
+
+# A passthrough may sit among ordinary statements in a single query string; the ordinary ones run
+# through the normal parser while the EXECUTE chunk becomes a passthrough.
+statement ok
+CREATE TABLE t (i INTEGER);
+
+statement error
+CONNECT foo EXECUTE INSERT INTO remote VALUES (1);
+----
+<REGEX>:Invalid Input Error:.*Database "foo" is not attached.*
+
+# The local table is unaffected by the (failed) passthrough dispatch.
+query I
+SELECT count(*) FROM t;
+----
+0
