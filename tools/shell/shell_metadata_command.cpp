@@ -1,5 +1,6 @@
 #include "shell_state.hpp"
 #include "shell_highlight.hpp"
+#include "shell_manual.hpp"
 #include "shell_prompt.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_renderer.hpp"
@@ -574,6 +575,110 @@ MetadataResult ShowIndexes(ShellState &state, const vector<string> &args) {
 	return state.DisplayEntries(args, 'i');
 }
 
+//! Convert a LIST(VARCHAR) Value into a vector of strings (NULL children become "").
+static vector<string> ManualStringList(const duckdb::Value &value) {
+	vector<string> result;
+	if (value.IsNull()) {
+		return result;
+	}
+	for (auto &child : duckdb::ListValue::GetChildren(value)) {
+		result.push_back(child.IsNull() ? "" : child.ToString());
+	}
+	return result;
+}
+
+MetadataResult ShowManual(ShellState &state, const vector<string> &args) {
+	if (args.size() != 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	auto &con = *state.conn;
+	auto prepared = con.Prepare(R"(
+SELECT function_name, function_type, return_type, parameters, parameter_types, varargs, description, examples
+FROM duckdb_functions()
+WHERE lower(function_name) = lower(?)
+ORDER BY length(parameter_types), parameter_types)");
+	if (prepared->HasError()) {
+		state.PrintDatabaseError(prepared->GetError());
+		return MetadataResult::FAIL;
+	}
+	duckdb::vector<duckdb::Value> bind_values;
+	bind_values.emplace_back(args[1]);
+	auto query_result = prepared->Execute(bind_values);
+	if (query_result->HasError()) {
+		state.PrintDatabaseError(query_result->GetError());
+		return MetadataResult::FAIL;
+	}
+
+	// coloring is only applied on an interactive console (matching the shell's SQL highlighter)
+	bool use_color = ShellHighlight::IsEnabled() && state.stdin_is_interactive && state.stdout_is_console;
+	// signature coloring: parameter names in gray, parameter/return types in blue
+	string name_color, type_color, color_off;
+	if (use_color) {
+		name_color = ShellHighlight::TerminalCode(PrintColor::GRAY, PrintIntensity::STANDARD);
+		type_color = ShellHighlight::TerminalCode(PrintColor::BLUE, PrintIntensity::STANDARD);
+		color_off = ShellHighlight::ResetTerminalCode();
+	}
+
+	vector<ManualOverload> overloads;
+	string function_name;
+	string function_type;
+	idx_t number = 1;
+	for (auto &row : *query_result) {
+		function_name = row.GetValue<string>(0);
+		function_type = row.GetValue<string>(1);
+		string return_type = row.IsNull(2) ? string() : row.GetValue<string>(2);
+		auto parameters = ManualStringList(row.GetBaseValue(3));
+		auto parameter_types = ManualStringList(row.GetBaseValue(4));
+		string varargs = row.IsNull(5) ? string() : row.GetValue<string>(5);
+
+		ManualOverload overload;
+		overload.number = number++;
+		overload.signature = BuildSignature(function_name, parameters, parameter_types, varargs, return_type,
+		                                    name_color, type_color, color_off);
+		overload.description = row.IsNull(6) ? string() : row.GetValue<string>(6);
+		overload.examples = ManualStringList(row.GetBaseValue(7));
+		overloads.push_back(std::move(overload));
+	}
+	if (overloads.empty()) {
+		state.PrintF(PrintOutput::STDERR, "No function named '%s'\n", args[1]);
+		return MetadataResult::SUCCESS;
+	}
+
+	// interior width of the box: terminal width minus the two borders, clamped to a readable range
+	idx_t max_width = state.GetMaxRenderWidth();
+	idx_t content_width = max_width > 2 ? max_width - 2 : 40;
+	content_width = duckdb::MaxValue<idx_t>(40, duckdb::MinValue<idx_t>(content_width, 98));
+
+	// color the box-drawing characters like the EXPLAIN layout
+	string layout_on, layout_off;
+	if (use_color) {
+		auto &layout = ShellHighlight::GetHighlightElement(HighlightElementType::EXPLAIN_LAYOUT);
+		layout_on = ShellHighlight::TerminalCode(layout.color, layout.intensity);
+		if (!layout_on.empty()) {
+			layout_off = ShellHighlight::ResetTerminalCode();
+		}
+	}
+
+	// inline top-border title, EXPLAIN-style: "name (scalar function)" with a bold name and gray type
+	string type_label = "(" + duckdb::StringUtil::Lower(function_type) + " function)";
+	string title;
+	if (use_color) {
+		string bold = ShellHighlight::TerminalCode(PrintColor::STANDARD, PrintIntensity::BOLD);
+		title = bold + function_name + color_off + " " + layout_on + type_label + layout_off;
+	} else {
+		title = function_name + " " + type_label;
+	}
+
+	// syntax-highlight the examples using the shell's SQL highlighter (no-op off-console)
+	ManualHighlighter highlighter = [&state](const string &text) {
+		string highlighted = text;
+		state.HighlightSQL(highlighted);
+		return highlighted;
+	};
+	state.Print(RenderManualPage(title, overloads, content_width, layout_on, layout_off, highlighter));
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ShowTables(ShellState &state, const vector<string> &args) {
 	return state.DisplayTables(args);
 }
@@ -935,6 +1040,8 @@ static const MetadataCommand metadata_commands[] = {
     {"large_number_rendering", 2, SetLargeNumberRendering, "MODE",
      "Toggle readable rendering of large numbers (duckbox only)", 0, "Mode: all|footer|off"},
     {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0, ""},
+    {"manual", 2, ShowManual, "FUNCTION", "Show the manual page for a SQL function", 0,
+     "Displays the signatures, descriptions and examples of all overloads of FUNCTION."},
     {"maxrows", 0, SetMaxRows, "COUNT",
      "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0, ""},
     {"maxwidth", 0, SetMaxWidth, "COUNT",
