@@ -145,41 +145,30 @@ public:
 		lines.push_back(width > label_width ? string(width - label_width, ' ') + label : label);
 	}
 
-	//! A horizontally centered line (the banner header lines); widths ignore ANSI codes.
-	void Centered(const string &text) {
+	//! A line centered within the span [indent, width]; widths ignore ANSI codes.
+	void Centered(idx_t indent, const string &text) {
+		idx_t avail = width > indent ? width - indent : 0;
 		idx_t text_width = RenderLength(text);
-		idx_t pad = width > text_width ? (width - text_width) / 2 : 0;
-		lines.push_back(string(pad, ' ') + text);
+		idx_t pad = avail > text_width ? (avail - text_width) / 2 : 0;
+		lines.push_back(string(indent + pad, ' ') + text);
 	}
 
-	//! A boxed line: `text` centered within the interior (border + space padding on each side) and
-	//! framed by the `border` glyph.
-	void BoxCentered(const string &border, const string &text) {
-		idx_t interior = width > 4 ? width - 4 : 0; // two borders + a space of padding on each side
-		idx_t text_width = RenderLength(text);
-		idx_t pad = interior > text_width ? interior - text_width : 0;
-		idx_t left = pad / 2;
-		lines.push_back(border + " " + string(left, ' ') + text + string(pad - left, ' ') + " " + border);
-	}
-
-	//! A boxed header row: `left` flush-left, `center` centered, `right` flush-right within the interior
-	//! (border + space padding on each side), framed by `border`, requiring at least `min_gap` spaces
-	//! between segments. Returns true and emits the line when it fits; otherwise returns false.
-	bool TryBoxHeaderRow(const string &border, const string &left, const string &center, const string &right,
-	                     idx_t min_gap) {
-		idx_t interior = width > 4 ? width - 4 : 0;
+	//! A header row within [indent, width]: `left` flush-left, `center` centered, `right` flush-right,
+	//! with at least `min_gap` spaces between segments. Emits + returns true when it fits.
+	bool TryHeaderRow(idx_t indent, const string &left, const string &center, const string &right, idx_t min_gap) {
+		idx_t avail = width > indent ? width - indent : 0;
 		idx_t lw = RenderLength(left), cw = RenderLength(center), rw = RenderLength(right);
-		if (cw >= interior || rw >= interior) {
+		if (cw >= avail || rw >= avail) {
 			return false;
 		}
-		idx_t center_start = (interior - cw) / 2;
-		idx_t right_start = interior - rw;
+		idx_t center_start = (avail - cw) / 2;
+		idx_t right_start = avail - rw;
 		if (center_start < lw + min_gap || right_start < center_start + cw + min_gap) {
 			return false;
 		}
-		string inner = left + string(center_start - lw, ' ') + center;
-		inner += string(right_start - (center_start + cw), ' ') + right;
-		lines.push_back(border + " " + inner + " " + border);
+		string line = string(indent, ' ') + left + string(center_start - lw, ' ') + center;
+		line += string(right_start - (center_start + cw), ' ') + right;
+		lines.push_back(std::move(line));
 		return true;
 	}
 
@@ -412,16 +401,14 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 	auto title = [&](const string &text) {
 		return heading_on.empty() ? text : heading_on + text + heading_off;
 	};
-	// schema-path labels are de-emphasized (gray + italic)
+	// header schema path / entry type styling (white)
 	auto path_label = [&](const string &text) {
 		return path_on.empty() ? text : path_on + text + path_off;
 	};
 
-	// header box pieces (rounded corners): ╭ ╮ ╰ ╯ │, with a full-width top/bottom bar
-	string box_bar = StringUtil::Repeat("\xE2\x94\x80", content_width > 2 ? content_width - 2 : 0);
-	string box_top = color_ref(string("\xE2\x95\xAD") + box_bar + "\xE2\x95\xAE");
-	string box_bottom = color_ref(string("\xE2\x95\xB0") + box_bar + "\xE2\x95\xAF");
-	string box_side = color_ref("\xE2\x94\x82");
+	// header rules are inset one level
+	idx_t rule_indent = INDENT;
+	idx_t rule_width = content_width > rule_indent ? content_width - rule_indent : 0;
 
 	// split the overloads into frames, one per distinct (name, schema path, function type), in first-
 	// appearance order; each frame is rendered as its own self-contained manual entry
@@ -448,29 +435,41 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 		target->overloads.push_back(&overload);
 	}
 
-	// Now render
-	string summary = "found " + std::to_string(frames.size()) + " entries matching '" + pattern + "'";
-	if (frames.size() > 1) {
-		canvas.Blank();
-		canvas.Centered(path_label(summary));
-		canvas.Blank();
-	}
+	// each frame opens with a full-width "─" rule that, when several entries are shown, embeds a centered
+	// "n / total" position counter
+	auto frame_rule = [&](idx_t index, bool with_counter) {
+		string counter;
+		if (with_counter) {
+			counter = " " + std::to_string(index + 1) + " / " + std::to_string(frames.size()) + " ";
+		}
+		string bar;
+		if (!counter.empty() && counter.size() + 2 <= rule_width) {
+			idx_t left = (rule_width - counter.size()) / 2;
+			idx_t right = rule_width - counter.size() - left;
+			bar = color_ref(StringUtil::Repeat("\xE2\x94\x80", left) + counter +
+			                StringUtil::Repeat("\xE2\x94\x80", right));
+		} else {
+			bar = color_ref(StringUtil::Repeat("\xE2\x94\x80", rule_width));
+		}
+		return string(rule_indent, ' ') + bar;
+	};
 
 	for (idx_t f = 0; f < frames.size(); f++) {
 		auto &frame = frames[f];
 
-		// frame header, boxed: schema path (gray) left, entry name (bold) centered, entry type (gray)
-		// right - on one line when they fit with a 4-space gap, otherwise stacked and centered
+		// frame header: for multiple entries a rule (with a "n / total" counter) precedes the schema path
+		// (left), entry name (centered), entry type (right); a single entry skips the rule
 		string header_path = path_label(frame.schema_path);
 		string header_name = title(frame.function_name);
-		string header_type = color_ref(EntryTypeLabel(frame.function_type));
-		canvas.Line(0, box_top);
-		if (!canvas.TryBoxHeaderRow(box_side, header_path, header_name, header_type, 4)) {
-			canvas.BoxCentered(box_side, header_path);
-			canvas.BoxCentered(box_side, header_name);
-			canvas.BoxCentered(box_side, header_type);
+		string header_type = path_label(EntryTypeLabel(frame.function_type));
+		canvas.Line(0, frame_rule(f, frames.size() > 1));
+
+		if (!canvas.TryHeaderRow(rule_indent, header_path, header_name, header_type, 4)) {
+			canvas.Centered(rule_indent, header_path);
+			canvas.Centered(rule_indent, header_name);
+			canvas.Centered(rule_indent, header_type);
 		}
-		canvas.Line(0, box_bottom);
+		canvas.Line(0, frame_rule(f, false));
 		canvas.Blank();
 
 		// number this frame's overloads; group descriptions/examples so numbering can react to them
@@ -537,13 +536,6 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 				canvas.Blank();
 			}
 		}
-	}
-
-	// footer: a rule and a summary of how many entries were shown (only when there is more than one)
-	if (frames.size() > 1) {
-		canvas.Blank();
-		canvas.Centered(path_label(summary));
-		canvas.Blank();
 	}
 
 	return canvas.Render();

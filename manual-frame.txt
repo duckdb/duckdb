@@ -319,9 +319,8 @@ EXAMPLES
     
 
 
-
-╭────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ system.main                             list_contains                          scalar function │
+  ────────────────────────────────────────── 1 / 24 ────────────────────────────────────────────
+  system.main                             list_contains                          scalar function
 
   SIGNATURE
 
@@ -335,4 +334,26 @@ EXAMPLES
 
       list_contains([1, 2, NULL], 1)
 
-╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+  ─────────────────────────────────────────[ 2 / 24 ]───────────────────────────────────────────
+  system.main                             list_contains                          scalar function
+
+  SIGNATURE
+
+      list_contains(list T[], element T) -> BOOLEAN
+
+  DESCRIPTION
+
+      Returns true if the list contains the element.
+
+  EXAMPLES
+
+      list_contains([1, 2, NULL], 1)
+
+
+  ──┤2/24├──────────────────────────────────────────────────────────────────────────────────────
+  system.main                             list_contains                          scalar function
+  ──────────────────────────────────────────────────────────────────────────────────────────────
+
+  SIGNATURE
+
+		map_contains_entry(map, key, value)

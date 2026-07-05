@@ -679,7 +679,7 @@ LIMIT 5)");
 	content_width = duckdb::MaxValue<idx_t>(40, duckdb::MinValue<idx_t>(content_width, 98));
 
 	// color the reference markers like the EXPLAIN layout, section headings (and the banner entry name)
-	// in bold white, and the schema-path labels in de-emphasized gray + italic
+	// in bold white, and the header schema path / entry type in white
 	string layout_on, layout_off, heading_on, heading_off, path_on, path_off;
 	if (use_color) {
 		auto &layout = ShellHighlight::GetHighlightElement(HighlightElementType::EXPLAIN_LAYOUT);
@@ -689,7 +689,7 @@ LIMIT 5)");
 		}
 		heading_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::BOLD);
 		heading_off = ShellHighlight::ResetTerminalCode();
-		path_on = ShellHighlight::TerminalCode(PrintColor::GRAY, PrintIntensity::ITALIC);
+		path_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::STANDARD);
 		path_off = ShellHighlight::ResetTerminalCode();
 	}
 
@@ -702,29 +702,14 @@ LIMIT 5)");
 	string page = RenderManualPage(overloads, args[1], content_width, layout_on, layout_off, heading_on, heading_off,
 	                               path_on, path_off, highlighter);
 
-	// whether the pattern resolved to more than one distinct entry (name/schema/type)
-	bool multiple_entries = false;
-	string first_entry;
-	for (auto &overload : overloads) {
-		string key = overload.function_name + "\x1f" + overload.schema_path + "\x1f" + overload.function_type;
-		if (first_entry.empty()) {
-			first_entry = key;
-		} else if (key != first_entry) {
-			multiple_entries = true;
-			break;
-		}
-	}
-
-	// page the output (respecting the user's .pager mode); always page when several entries were returned,
-	// otherwise only when it is long. Off an interactive console this is a no-op.
+	// page the output when it is long (respecting the user's .pager mode); no-op off an interactive console
 	idx_t line_count = 0;
 	for (auto c : page) {
 		if (c == '\n') {
 			line_count++;
 		}
 	}
-	bool use_pager = multiple_entries ? state.ShouldUsePager() : state.ShouldUsePager(line_count);
-	auto pager_setup = use_pager ? state.SetupPager() : nullptr;
+	auto pager_setup = state.ShouldUsePager(line_count) ? state.SetupPager() : nullptr;
 	state.Print(page);
 	return MetadataResult::SUCCESS;
 }

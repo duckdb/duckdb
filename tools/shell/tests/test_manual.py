@@ -93,7 +93,7 @@ def test_manual_exact_match(shell):
 
 
 def test_manual_like_pattern_multiple(shell):
-    # an explicit wildcard pattern matches multiple names and prints a summary footer
+    # an explicit wildcard pattern matches multiple names, each with a "n / total" position counter
     test = (
         ShellTest(shell)
         .statement('.manual list_app%')
@@ -101,18 +101,19 @@ def test_manual_like_pattern_multiple(shell):
     result = test.run()
     result.check_stdout('list_append')
     result.check_stdout('list_apply')
-    result.check_stdout('entries matching')
+    result.check_stdout('1 / ')
 
 
-def test_manual_banner(shell):
-    # the page opens with a banner carrying the entry name, framed by horizontal rules
+def test_manual_single_entry_no_rule(shell):
+    # a single entry shows its header (name, schema, type) but no top rule
     test = (
         ShellTest(shell)
         .statement('.manual list_contains')
     )
     result = test.run()
     result.check_stdout('list_contains')
-    result.check_stdout('───')
+    result.check_stdout('scalar function')
+    result.check_not_exist('───')
 
 
 def test_manual_schema_path(shell):
