@@ -32,7 +32,8 @@ static FeatureSnapshotParameters SnapshotParameters(const FeatureCatalogEntry &f
 //! FROM (<snapshot query>) snap
 static unique_ptr<SelectNode> BuildTaggedSnapshotNode(const FeatureCatalogEntry &feat, timestamp_t feature_ts,
                                                       int64_t new_version) {
-	auto snapshot = BuildFeatureSnapshotQuery(feat.query->node->Cast<SelectNode>(), SnapshotParameters(feat, feature_ts));
+	auto snapshot =
+	    BuildFeatureSnapshotQuery(feat.query->node->Cast<SelectNode>(), SnapshotParameters(feat, feature_ts));
 
 	auto node = make_uniq<SelectNode>();
 	node->select_list.push_back(make_uniq<StarExpression>("snap"));

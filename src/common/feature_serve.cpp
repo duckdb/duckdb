@@ -141,9 +141,9 @@ static unique_ptr<ParsedExpression> ServeJoinCondition(const string &feature_ali
 	}
 	// ASOF inequality: for each spine row pick the entity's most recent snapshot at or before the spine
 	// timestamp, i.e. the greatest __feature_timestamp that does not exceed the spine's as-of time.
-	auto timestamp_condition = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-	                                                           ColumnRef("spine", spine_ts),
-	                                                           ColumnRef(feature_alias, FEATURE_TIMESTAMP_COLUMN));
+	auto timestamp_condition =
+	    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, ColumnRef("spine", spine_ts),
+	                                    ColumnRef(feature_alias, FEATURE_TIMESTAMP_COLUMN));
 	return condition ? Conjoin(std::move(condition), std::move(timestamp_condition)) : std::move(timestamp_condition);
 }
 

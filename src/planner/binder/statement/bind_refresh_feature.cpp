@@ -33,8 +33,8 @@ BoundStatement Binder::Bind(RefreshFeatureStatement &stmt) {
 	auto &feat = *feature_entry;
 
 	// The snapshot timestamp: the AT clause when given, otherwise the current time.
-	timestamp_t feature_ts = stmt.at_timestamp.empty() ? Timestamp::GetCurrentTimestamp()
-	                                                    : Timestamp::FromString(stmt.at_timestamp, false);
+	timestamp_t feature_ts =
+	    stmt.at_timestamp.empty() ? Timestamp::GetCurrentTimestamp() : Timestamp::FromString(stmt.at_timestamp, false);
 
 	// Build and bind the query that produces the full contents of the next denormalized store table: the
 	// new snapshot UNION ALL the still-retained rows from the previous store. Its result schema defines the
