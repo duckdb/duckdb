@@ -30,17 +30,28 @@ CSVWriterState::~CSVWriterState() {
 	}
 }
 
-CSVWriterOptions::CSVWriterOptions(const string &delim, const char &quote, const string &write_newline) {
+CSVWriterOptions::CSVWriterOptions(const string &delim, const char &quote, const string &write_newline,
+                                   char comment_char) {
 	requires_quotes = vector<bool>(256, false);
 	requires_quotes['\n'] = true;
 	requires_quotes['\r'] = true;
-	requires_quotes['#'] = true;
+	// quote values containing the comment char so they are not read back as comments (see #17744)
+	if (comment_char != '\0') {
+		requires_quotes[NumericCast<idx_t>(comment_char)] = true;
+	}
 	requires_quotes[NumericCast<idx_t>(delim[0])] = true;
 	requires_quotes[NumericCast<idx_t>(quote)] = true;
 
 	if (!write_newline.empty()) {
 		newline = TransformNewLine(write_newline);
 	}
+}
+
+// The comment char to protect on write. Defaults to '#' when unset, since the sniffer detects '#'
+// comments by default; an explicit comment (including the empty '\0' from `comment ''`) is honored.
+static char GetWriteCommentChar(CSVReaderOptions &options) {
+	auto &comment = options.dialect_options.state_machine_options.comment;
+	return comment.IsSetByUser() ? comment.GetValue() : '#';
 }
 
 CSVWriterOptions::CSVWriterOptions(CSVReaderOptions &options)
@@ -63,9 +74,9 @@ CSVWriter::CSVWriter(WriteStream &stream, vector<string> name_list, bool shared)
 
 CSVWriter::CSVWriter(CSVReaderOptions &options_p, FileSystem &fs, const string &file_path,
                      FileCompressionType compression, QueryContext context, bool shared)
-    : options(options_p),
-      writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
-                     options.dialect_options.state_machine_options.quote.GetValue(), options.write_newline),
+    : options(options_p), writer_options(options.dialect_options.state_machine_options.delimiter.GetValue(),
+                                         options.dialect_options.state_machine_options.quote.GetValue(),
+                                         options.write_newline, GetWriteCommentChar(options)),
       file_writer(make_uniq<BufferedFileWriter>(fs, file_path,
                                                 FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
                                                     FileLockType::WRITE_LOCK | compression,
