@@ -28,6 +28,8 @@ using ManualHighlighter = std::function<string(const string &)>;
 
 //! A single overload of a function, already formatted into a printable signature.
 struct ManualOverload {
+	//! Function name; overloads are grouped into an entry per (name, schema, type).
+	string function_name;
 	//! Raw function type from duckdb_functions() ("scalar", "aggregate", "table", ...); overloads are
 	//! grouped under a heading per type and numbered sequentially in that grouped order.
 	string function_type;
@@ -51,14 +53,14 @@ string BuildSignature(const string &name, const vector<string> &parameters, cons
                       const string &varargs, const string &return_type, const string &name_color = string(),
                       const string &type_color = string(), const string &color_off = string());
 
-//! Render the full manual page for `name`'s overloads, wrapped to `content_width` columns. The page
-//! opens with a banner carrying `name` (framed by horizontal rules); signatures are grouped under a
-//! heading per function type and numbered sequentially; the Descriptions and Examples sections
-//! reference those numbers and deduplicate shared content. Reference markers and rules are wrapped in
-//! `layout_on` / `layout_off`, headings (and the banner name) in `heading_on` / `heading_off`, and the
-//! schema-path labels in `path_on` / `path_off` (empty to disable coloring). `highlighter`, if set,
-//! syntax-highlights the examples. Returns the page text.
-string RenderManualPage(const vector<ManualOverload> &overloads, const string &name, idx_t content_width,
+//! Render the manual page for `overloads`, wrapped to `content_width` columns. Overloads are split into
+//! entries by (name, schema, type); each entry is framed by horizontal rules with its name, schema, and
+//! type in the banner, followed by its signatures and deduplicated Descriptions/Examples sections. When
+//! more than one entry is shown, a footer summarizes how many matched the search `pattern`. Reference
+//! markers and rules are wrapped in `layout_on` / `layout_off`, headings (and the banner name) in
+//! `heading_on` / `heading_off`, and the schema-path labels in `path_on` / `path_off` (empty to disable
+//! coloring). `highlighter`, if set, syntax-highlights the examples. Returns the page text.
+string RenderManualPage(const vector<ManualOverload> &overloads, const string &pattern, idx_t content_width,
                         const string &layout_on = string(), const string &layout_off = string(),
                         const string &heading_on = string(), const string &heading_off = string(),
                         const string &path_on = string(), const string &path_off = string(),

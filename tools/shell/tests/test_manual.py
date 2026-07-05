@@ -77,7 +77,31 @@ def test_manual_unknown_function(shell):
         .statement('.manual this_function_does_not_exist')
     )
     result = test.run()
-    result.check_stderr('No function named')
+    result.check_stderr('No function matches')
+
+
+def test_manual_exact_match(shell):
+    # a plain argument (no wildcards) matches the function name exactly
+    test = (
+        ShellTest(shell)
+        .statement('.manual list_append')
+    )
+    result = test.run()
+    result.check_stdout('list_append')
+    # a substring-only match must NOT be surfaced without an explicit wildcard
+    result.check_not_exist('list_apply')
+
+
+def test_manual_like_pattern_multiple(shell):
+    # an explicit wildcard pattern matches multiple names and prints a summary footer
+    test = (
+        ShellTest(shell)
+        .statement('.manual list_app%')
+    )
+    result = test.run()
+    result.check_stdout('list_append')
+    result.check_stdout('list_apply')
+    result.check_stdout('entries matching')
 
 
 def test_manual_banner(shell):

@@ -592,12 +592,15 @@ MetadataResult ShowManual(ShellState &state, const vector<string> &args) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	auto &con = *state.conn;
+	// the argument is used directly as a case-insensitive LIKE pattern: a plain word matches exactly,
+	// while wildcards ("%abs") are honored. A pattern may resolve to several distinct functions - each
+	// is rendered as its own manual entry
 	auto prepared = con.Prepare(R"(
 SELECT function_name, function_type, return_type, parameters, parameter_types, varargs, description, examples,
        database_name, schema_name
 FROM duckdb_functions()
-WHERE lower(function_name) = lower(?)
-ORDER BY function_type, database_name, schema_name, length(parameter_types), parameter_types)");
+WHERE function_name ILIKE ?
+ORDER BY function_name, function_type, database_name, schema_name, length(parameter_types), parameter_types)");
 	if (prepared->HasError()) {
 		state.PrintDatabaseError(prepared->GetError());
 		return MetadataResult::FAIL;
@@ -621,16 +624,15 @@ ORDER BY function_type, database_name, schema_name, length(parameter_types), par
 	}
 
 	vector<ManualOverload> overloads;
-	string entry_name;
 	for (auto &row : *query_result) {
 		string function_name = row.GetValue<string>(0);
-		entry_name = function_name; // canonical-cased name (identical across a name's overloads)
 		string return_type = row.IsNull(2) ? string() : row.GetValue<string>(2);
 		auto parameters = ManualStringList(row.GetBaseValue(3));
 		auto parameter_types = ManualStringList(row.GetBaseValue(4));
 		string varargs = row.IsNull(5) ? string() : row.GetValue<string>(5);
 
 		ManualOverload overload;
+		overload.function_name = function_name;
 		overload.function_type = row.GetValue<string>(1);
 		overload.schema_path = row.GetValue<string>(8) + "." + row.GetValue<string>(9);
 		overload.signature = BuildSignature(function_name, parameters, parameter_types, varargs, return_type,
@@ -641,7 +643,7 @@ ORDER BY function_type, database_name, schema_name, length(parameter_types), par
 	}
 
 	if (overloads.empty()) {
-		state.PrintF(PrintOutput::STDERR, "No function named '%s'\n", args[1]);
+		state.PrintF(PrintOutput::STDERR, "No function matches '%s'\n", args[1]);
 		// suggest similarly-named functions (typo tolerance) via Jaro-Winkler similarity
 		auto suggest_prepared = con.Prepare(R"(
 SELECT name FROM (
@@ -653,7 +655,9 @@ WHERE score >= 0.7
 ORDER BY score DESC, name
 LIMIT 5)");
 		if (!suggest_prepared->HasError()) {
-			auto suggest_result = suggest_prepared->Execute(bind_values);
+			duckdb::vector<duckdb::Value> suggest_values;
+			suggest_values.emplace_back(args[1]);
+			auto suggest_result = suggest_prepared->Execute(suggest_values);
 			if (!suggest_result->HasError()) {
 				vector<string> suggestions;
 				for (auto &row : *suggest_result) {
@@ -695,17 +699,32 @@ LIMIT 5)");
 		state.HighlightSQL(highlighted);
 		return highlighted;
 	};
-	string page = RenderManualPage(overloads, entry_name, content_width, layout_on, layout_off, heading_on, heading_off,
+	string page = RenderManualPage(overloads, args[1], content_width, layout_on, layout_off, heading_on, heading_off,
 	                               path_on, path_off, highlighter);
 
-	// page the output when it is long (respecting the user's .pager mode); no-op off an interactive console
+	// whether the pattern resolved to more than one distinct entry (name/schema/type)
+	bool multiple_entries = false;
+	string first_entry;
+	for (auto &overload : overloads) {
+		string key = overload.function_name + "\x1f" + overload.schema_path + "\x1f" + overload.function_type;
+		if (first_entry.empty()) {
+			first_entry = key;
+		} else if (key != first_entry) {
+			multiple_entries = true;
+			break;
+		}
+	}
+
+	// page the output (respecting the user's .pager mode); always page when several entries were returned,
+	// otherwise only when it is long. Off an interactive console this is a no-op.
 	idx_t line_count = 0;
 	for (auto c : page) {
 		if (c == '\n') {
 			line_count++;
 		}
 	}
-	auto pager_setup = state.ShouldUsePager(line_count) ? state.SetupPager() : nullptr;
+	bool use_pager = multiple_entries ? state.ShouldUsePager() : state.ShouldUsePager(line_count);
+	auto pager_setup = use_pager ? state.SetupPager() : nullptr;
 	state.Print(page);
 	return MetadataResult::SUCCESS;
 }

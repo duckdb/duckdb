@@ -152,22 +152,34 @@ public:
 		lines.push_back(string(pad, ' ') + text);
 	}
 
-	//! Try to place `left` flush-left, `center` centered, and `right` flush-right on a single line with
-	//! at least `min_gap` spaces between adjacent segments. Emits the line and returns true when it fits;
-	//! otherwise emits nothing and returns false (so the caller can stack them). Widths ignore ANSI codes.
-	bool TryHeaderRow(const string &left, const string &center, const string &right, idx_t min_gap) {
+	//! A boxed line: `text` centered within the interior (border + space padding on each side) and
+	//! framed by the `border` glyph.
+	void BoxCentered(const string &border, const string &text) {
+		idx_t interior = width > 4 ? width - 4 : 0; // two borders + a space of padding on each side
+		idx_t text_width = RenderLength(text);
+		idx_t pad = interior > text_width ? interior - text_width : 0;
+		idx_t left = pad / 2;
+		lines.push_back(border + " " + string(left, ' ') + text + string(pad - left, ' ') + " " + border);
+	}
+
+	//! A boxed header row: `left` flush-left, `center` centered, `right` flush-right within the interior
+	//! (border + space padding on each side), framed by `border`, requiring at least `min_gap` spaces
+	//! between segments. Returns true and emits the line when it fits; otherwise returns false.
+	bool TryBoxHeaderRow(const string &border, const string &left, const string &center, const string &right,
+	                     idx_t min_gap) {
+		idx_t interior = width > 4 ? width - 4 : 0;
 		idx_t lw = RenderLength(left), cw = RenderLength(center), rw = RenderLength(right);
-		if (cw >= width || rw >= width) {
+		if (cw >= interior || rw >= interior) {
 			return false;
 		}
-		idx_t center_start = (width - cw) / 2;
-		idx_t right_start = width - rw;
+		idx_t center_start = (interior - cw) / 2;
+		idx_t right_start = interior - rw;
 		if (center_start < lw + min_gap || right_start < center_start + cw + min_gap) {
 			return false;
 		}
-		string line = left + string(center_start - lw, ' ') + center;
-		line += string(right_start - (center_start + cw), ' ') + right;
-		lines.push_back(std::move(line));
+		string inner = left + string(center_start - lw, ' ') + center;
+		inner += string(right_start - (center_start + cw), ' ') + right;
+		lines.push_back(border + " " + inner + " " + border);
 		return true;
 	}
 
@@ -378,7 +390,7 @@ string BuildSignature(const string &name, const vector<string> &parameters, cons
 	return result;
 }
 
-string RenderManualPage(const vector<ManualOverload> &overloads, const string &name, idx_t content_width,
+string RenderManualPage(const vector<ManualOverload> &overloads, const string &pattern, idx_t content_width,
                         const string &layout_on, const string &layout_off, const string &heading_on,
                         const string &heading_off, const string &path_on, const string &path_off,
                         const ManualHighlighter &highlighter) {
@@ -405,11 +417,16 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &n
 		return path_on.empty() ? text : path_on + text + path_off;
 	};
 
-	string rule = StringUtil::Repeat("\xE2\x94\x80", content_width); // "─"
+	// header box pieces (rounded corners): ╭ ╮ ╰ ╯ │, with a full-width top/bottom bar
+	string box_bar = StringUtil::Repeat("\xE2\x94\x80", content_width > 2 ? content_width - 2 : 0);
+	string box_top = color_ref(string("\xE2\x95\xAD") + box_bar + "\xE2\x95\xAE");
+	string box_bottom = color_ref(string("\xE2\x95\xB0") + box_bar + "\xE2\x95\xAF");
+	string box_side = color_ref("\xE2\x94\x82");
 
-	// split the overloads into frames, one per distinct (schema path, function type), in first-
+	// split the overloads into frames, one per distinct (name, schema path, function type), in first-
 	// appearance order; each frame is rendered as its own self-contained manual entry
 	struct Frame {
+		string function_name;
 		string schema_path;
 		string function_type;
 		vector<const ManualOverload *> overloads;
@@ -418,33 +435,42 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &n
 	for (auto &overload : overloads) {
 		Frame *target = nullptr;
 		for (auto &frame : frames) {
-			if (frame.schema_path == overload.schema_path && frame.function_type == overload.function_type) {
+			if (frame.function_name == overload.function_name && frame.schema_path == overload.schema_path &&
+			    frame.function_type == overload.function_type) {
 				target = &frame;
 				break;
 			}
 		}
 		if (!target) {
-			frames.push_back({overload.schema_path, overload.function_type, {}});
+			frames.push_back({overload.function_name, overload.schema_path, overload.function_type, {}});
 			target = &frames.back();
 		}
 		target->overloads.push_back(&overload);
 	}
 
+	// Now render
+	string summary = "found " + std::to_string(frames.size()) + " entries matching '" + pattern + "'";
+	if (frames.size() > 1) {
+		canvas.Blank();
+		canvas.Centered(path_label(summary));
+		canvas.Blank();
+	}
+
 	for (idx_t f = 0; f < frames.size(); f++) {
 		auto &frame = frames[f];
 
-		// frame header, framed by rules: schema path (gray) left, entry name (bold) centered, entry type
-		// (gray) right - on one line when they fit with a 4-space gap, otherwise stacked and centered
+		// frame header, boxed: schema path (gray) left, entry name (bold) centered, entry type (gray)
+		// right - on one line when they fit with a 4-space gap, otherwise stacked and centered
 		string header_path = path_label(frame.schema_path);
-		string header_name = title(name);
-		string header_type = color_ref("(" + EntryTypeLabel(frame.function_type) + ")");
-		canvas.Line(0, color_ref(rule));
-		if (!canvas.TryHeaderRow(header_path, header_name, header_type, 4)) {
-			canvas.Centered(header_path);
-			canvas.Centered(header_name);
-			canvas.Centered(header_type);
+		string header_name = title(frame.function_name);
+		string header_type = color_ref(EntryTypeLabel(frame.function_type));
+		canvas.Line(0, box_top);
+		if (!canvas.TryBoxHeaderRow(box_side, header_path, header_name, header_type, 4)) {
+			canvas.BoxCentered(box_side, header_path);
+			canvas.BoxCentered(box_side, header_name);
+			canvas.BoxCentered(box_side, header_type);
 		}
-		canvas.Line(0, color_ref(rule));
+		canvas.Line(0, box_bottom);
 		canvas.Blank();
 
 		// number this frame's overloads; group descriptions/examples so numbering can react to them
@@ -464,28 +490,28 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &n
 		bool show_numbers = numbered.size() > 1 && (description_refs || example_refs);
 
 		// Signatures; the "(n)" marker is right-aligned at the margin
-		canvas.Line(0, heading("Signature"));
+		canvas.Line(1, heading("Signature"));
 		canvas.Blank();
 		for (auto &entry : numbered) {
 			// the signature is already colored structurally by BuildSignature; do not re-highlight it
 			if (show_numbers) {
-				canvas.Numbered(2, entry.overload->signature, color_ref("(" + std::to_string(entry.number) + ")"));
+				canvas.Numbered(3, entry.overload->signature, color_ref("(" + std::to_string(entry.number) + ")"));
 			} else {
-				canvas.Body(2, entry.overload->signature);
+				canvas.Body(3, entry.overload->signature);
 			}
 			canvas.Blank();
 		}
 
 		// Descriptions: the reference group left-aligned above the body on the line(s) below
 		if (!description_groups.empty()) {
-			canvas.Line(0, heading("Description"));
+			canvas.Line(1, heading("Description"));
 			canvas.Blank();
 			for (auto &group : description_groups) {
 				if (description_refs) {
-					canvas.Body(1, FormatRefs(group.numbers, color_ref));
+					canvas.Body(2, FormatRefs(group.numbers, color_ref));
 					canvas.Blank();
 				}
-				canvas.Body(2, group.text);
+				canvas.Body(3, group.text);
 				canvas.Blank();
 			}
 		}
@@ -493,11 +519,11 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &n
 		// Examples: the reference group left-aligned above the (syntax-highlighted) SQL, verbatim and
 		// un-boxed so it can be copy-pasted directly from the terminal
 		if (!example_groups.empty()) {
-			canvas.Line(0, heading("Examples"));
+			canvas.Line(1, heading("Examples"));
 			canvas.Blank();
 			for (auto &group : example_groups) {
 				if (example_refs) {
-					canvas.Body(1, FormatRefs(group.numbers, color_ref));
+					canvas.Body(2, FormatRefs(group.numbers, color_ref));
 					canvas.Blank();
 				}
 				for (idx_t e = 0; e < group.examples.size(); e++) {
@@ -505,7 +531,7 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &n
 						canvas.Blank();
 					}
 					for (auto &physical : StringUtil::Split(group.examples[e], '\n')) {
-						canvas.Highlighted(2, physical);
+						canvas.Highlighted(3, physical);
 					}
 				}
 				canvas.Blank();
@@ -516,9 +542,8 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &n
 	// footer: a rule and a summary of how many entries were shown (only when there is more than one)
 	if (frames.size() > 1) {
 		canvas.Blank();
-		canvas.Line(0, color_ref(rule));
-		string summary = "found " + std::to_string(frames.size()) + " entries matching '" + name + "'";
 		canvas.Centered(path_label(summary));
+		canvas.Blank();
 	}
 
 	return canvas.Render();
