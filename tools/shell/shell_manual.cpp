@@ -3,6 +3,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "utf8proc_wrapper.hpp"
 
+#include <algorithm>
 #include <functional>
 
 namespace duckdb_shell {
@@ -11,31 +12,6 @@ using duckdb::StringUtil;
 using duckdb::Utf8Proc;
 
 namespace {
-
-//===--------------------------------------------------------------------===//
-// Box-drawing glyphs (with ASCII fallback)
-//===--------------------------------------------------------------------===//
-struct Glyphs {
-#ifndef DUCKDB_ASCII_TREE_RENDERER
-	static constexpr auto *LTCORNER = "\342\225\255";  // "╭"
-	static constexpr auto *RTCORNER = "\342\225\256";  // "╮"
-	static constexpr auto *LDCORNER = "\342\225\260";  // "╰"
-	static constexpr auto *RDCORNER = "\342\225\257";  // "╯"
-	static constexpr auto *LMIDDLE = "\342\224\234";   // "├"
-	static constexpr auto *RMIDDLE = "\342\224\244";   // "┤"
-	static constexpr auto *VERTICAL = "\342\224\202";  // "│"
-	static constexpr auto *HORIZONTAL = "\342\224\200"; // "─"
-#else
-	static constexpr const char *LTCORNER = "+";
-	static constexpr const char *RTCORNER = "+";
-	static constexpr const char *LDCORNER = "+";
-	static constexpr const char *RDCORNER = "+";
-	static constexpr const char *LMIDDLE = "+";
-	static constexpr const char *RMIDDLE = "+";
-	static constexpr const char *VERTICAL = "|";
-	static constexpr const char *HORIZONTAL = "-";
-#endif
-};
 
 //===--------------------------------------------------------------------===//
 // Render-width + word-wrap helpers (UTF8-aware, ported from text_tree_renderer)
@@ -142,184 +118,81 @@ vector<string> WordWrap(const string &text, idx_t budget) {
 //! Returns the input unchanged when highlighting is disabled.
 using Highlighter = std::function<string(const string &)>;
 
+// Indentation uses real tab characters so columns line up regardless of number width. TAB_WIDTH is
+// only the tab stop assumed when computing word-wrap budgets; the terminal renders the actual tabs.
+constexpr idx_t TAB_WIDTH = 8;
+// Wrapped bodies (descriptions) and example SQL sit at one tab stop, aligned with entry content.
+constexpr idx_t BODY_TABS = 1;
+
 //===--------------------------------------------------------------------===//
-// Box canvas
+// Canvas
 //===--------------------------------------------------------------------===//
-//! Accumulates the interior content lines of a box (each exactly `width` display columns) and
-//! renders them wrapped in a bordered frame with a centered title/subtitle.
-class BoxCanvas {
+//! Accumulates the tab-indented lines of the manual page (descriptions word-wrapped to `width`).
+class Canvas {
 public:
-	BoxCanvas(idx_t width, string layout_on, string layout_off, Highlighter highlight)
-	    : width(width), layout_on(std::move(layout_on)), layout_off(std::move(layout_off)),
-	      highlight(std::move(highlight)) {
+	Canvas(idx_t width, Highlighter highlight) : width(width), highlight(std::move(highlight)) {
 	}
 
-	//! A blank interior line.
+	//! A blank line.
 	void Blank() {
 		lines.emplace_back();
 	}
 
-	//! A left-aligned interior line indented by `indent` columns; text is padded/truncated to fit.
-	void Line(idx_t indent, const string &text) {
-		string content(indent, ' ');
-		content += text;
-		lines.push_back(std::move(content));
+	//! A verbatim line (headings and reference-group headers, which carry their own indent).
+	void Line(const string &text) {
+		lines.push_back(text);
 	}
 
-	//! Emit `text` wrapped to the interior, with `first_indent` on the first line and `hang_indent`
-	//! on continuation lines. A non-empty `label` is written left-aligned at `first_indent`. `text`
-	//! may already contain ANSI color codes (widths are measured ignoring them).
-	void Wrapped(idx_t first_indent, idx_t hang_indent, const string &label, const string &text) {
-		idx_t body_indent = hang_indent;
-		idx_t budget = width > body_indent + 1 ? width - body_indent : 2;
-		auto wrapped = WordWrap(text, budget);
+	//! A line of syntax-highlighted content at BODY_TABS tab stops, emitted verbatim (no wrapping) so it
+	//! stays copy-pasteable.
+	void Highlighted(const string &text) {
+		lines.push_back(string(BODY_TABS, '\t') + (highlight ? highlight(text) : text));
+	}
+
+	//! A labeled entry " label<tab>text" (one leading space, tab after the label) with `text`
+	//! word-wrapped; continuation lines are indented at BODY_TABS tab stops so they align under the
+	//! first line's text. `label`/`text` may contain ANSI color codes (widths are measured ignoring
+	//! them).
+	void Entry(const string &label, const string &text) {
+		auto wrapped = WordWrap(text, BodyBudget());
+		string prefix = " " + label + "\t";
+		if (wrapped.empty()) {
+			lines.push_back(std::move(prefix));
+			return;
+		}
 		for (idx_t i = 0; i < wrapped.size(); i++) {
-			idx_t indent = i == 0 ? first_indent : hang_indent;
-			string content(indent, ' ');
-			if (i == 0 && !label.empty()) {
-				content += label;
-			}
-			// pad up to the body indent so continuation lines align under the text
-			while (RenderLength(content) < hang_indent) {
-				content += ' ';
-			}
+			string content = i == 0 ? prefix : string(BODY_TABS, '\t');
 			content += wrapped[i];
 			lines.push_back(std::move(content));
 		}
 	}
 
-	//! Draw a nested box at `indent`, containing the given (already newline-split) text lines.
-	//! `top_prefix`, if given, replaces the indent on the top-border row (e.g. a "(1)  " label) and
-	//! must render to exactly `indent` columns so the box stays aligned.
-	void NestedBox(idx_t indent, const vector<string> &body, const string &top_prefix = string()) {
-		idx_t interior = width > indent * 2 + 2 ? width - indent * 2 - 2 : 4;
-		string pad(indent, ' ');
-		string bar = StringUtil::Repeat(Glyphs::HORIZONTAL, interior);
-		lines.push_back((top_prefix.empty() ? pad : top_prefix) + Glyphs::LTCORNER + bar + Glyphs::RTCORNER);
-		auto inner_line = [&](const string &text) {
-			string t = text;
-			idx_t budget = interior > 2 ? interior - 2 : 0;
-			if (RenderLength(t) > budget) {
-				t = TruncateText(t, budget);
-			}
-			idx_t visible = RenderLength(t);
-			// highlight the (plain, already-truncated) fragment; width math uses the plain width
-			string s = pad + Glyphs::VERTICAL + "  " + (highlight ? highlight(t) : t);
-			for (idx_t filled = 2 + visible; filled < interior; filled++) {
-				s += ' ';
-			}
-			s += Glyphs::VERTICAL;
-			lines.push_back(std::move(s));
-		};
-		idx_t budget = interior > 3 ? interior - 3 : 2;
-		inner_line("");
-		for (auto &text : body) {
-			if (text.empty()) {
-				inner_line("");
-				continue;
-			}
-			// word-wrap long example lines to the inner box width instead of truncating
-			for (auto &wrapped : WordWrap(text, budget)) {
-				inner_line(wrapped);
-			}
+	//! A word-wrapped body block, every line indented at BODY_TABS tab stops.
+	void Body(const string &text) {
+		for (auto &chunk : WordWrap(text, BodyBudget())) {
+			lines.push_back(string(BODY_TABS, '\t') + chunk);
 		}
-		inner_line("");
-		lines.push_back(pad + Glyphs::LDCORNER + bar + Glyphs::RDCORNER);
 	}
 
-	//! Render the accumulated lines into the final bordered frame string. `title` is embedded in the
-	//! top border like the EXPLAIN output: "╭─ title ─────╮".
-	string Render(const string &title) const {
+	//! Render the accumulated lines.
+	string Render() const {
 		string out;
-		Emit(out, TopBorder(title));
 		for (auto &line : lines) {
-			Emit(out, Border(line));
+			out += line;
+			out += "\n";
 		}
-		Emit(out, Glyphs::LDCORNER + StringUtil::Repeat(Glyphs::HORIZONTAL, width) + Glyphs::RDCORNER);
 		return out;
 	}
 
 private:
-	//! Build the top border with an inline title: "╭─ title " followed by fill dashes and "╮".
-	string TopBorder(const string &title) const {
-		string t = title;
-		// keep at least three trailing dashes; truncate an over-long title to fit
-		idx_t max_title = width > 6 ? width - 6 : 0;
-		if (RenderLength(t) > max_title) {
-			t = TruncateText(t, max_title);
-		}
-		// interior = "─ " + title + " " + fill dashes  == width columns
-		idx_t used = 3 + RenderLength(t);
-		idx_t fill = width > used ? width - used : 0;
-		return string(Glyphs::LTCORNER) + Glyphs::HORIZONTAL + " " + t + " " +
-		       StringUtil::Repeat(Glyphs::HORIZONTAL, fill) + Glyphs::RTCORNER;
-	}
-
-	//! Colorize the box-drawing glyph runs in `line` and append it (with newline) to `out`.
-	void Emit(string &out, const string &line) const {
-		out += Colorize(line);
-		out += "\n";
-	}
-
-	//! Wrap maximal runs of box-drawing glyphs in the layout terminal codes. Content text does not
-	//! contain these glyphs, so a simple scan is safe.
-	string Colorize(const string &line) const {
-		if (layout_on.empty()) {
-			return line;
-		}
-		static constexpr const char *const box_glyphs[] = {Glyphs::LTCORNER, Glyphs::RTCORNER, Glyphs::LDCORNER,
-		                                                   Glyphs::RDCORNER, Glyphs::LMIDDLE,  Glyphs::RMIDDLE,
-		                                                   Glyphs::VERTICAL, Glyphs::HORIZONTAL};
-		string result;
-		bool in_run = false;
-		for (idx_t i = 0; i < line.size();) {
-			idx_t glyph_len = 0;
-			for (auto *glyph : box_glyphs) {
-				idx_t len = string(glyph).size();
-				if (line.compare(i, len, glyph) == 0) {
-					glyph_len = len;
-					break;
-				}
-			}
-			if (glyph_len > 0) {
-				if (!in_run) {
-					result += layout_on;
-					in_run = true;
-				}
-				result.append(line, i, glyph_len);
-				i += glyph_len;
-			} else {
-				if (in_run) {
-					result += layout_off;
-					in_run = false;
-				}
-				result += line[i];
-				i++;
-			}
-		}
-		if (in_run) {
-			result += layout_off;
-		}
-		return result;
-	}
-
-	//! Wrap an interior line (padding/truncating to exactly `width`) in vertical borders.
-	string Border(const string &content) const {
-		string t = content;
-		if (RenderLength(t) > width) {
-			t = TruncateText(t, width);
-		}
-		string padded = t;
-		while (RenderLength(padded) < width) {
-			padded += ' ';
-		}
-		return string(Glyphs::VERTICAL) + padded + Glyphs::VERTICAL;
+	//! Word-wrap budget for content sitting at BODY_TABS tab stops.
+	idx_t BodyBudget() const {
+		idx_t indent = BODY_TABS * TAB_WIDTH;
+		return width > indent + 4 ? width - indent : 4;
 	}
 
 private:
 	idx_t width;
-	string layout_on;
-	string layout_off;
 	Highlighter highlight;
 	vector<string> lines;
 };
@@ -327,6 +200,12 @@ private:
 //===--------------------------------------------------------------------===//
 // Grouping / dedup
 //===--------------------------------------------------------------------===//
+//! An overload paired with the sequential number assigned to it (after grouping by function type).
+struct NumberedOverload {
+	idx_t number;
+	const ManualOverload *overload;
+};
+
 //! An ordered group of overloads that share identical content.
 struct ContentGroup {
 	//! signature numbers sharing this content, in ascending order
@@ -350,24 +229,24 @@ string FormatRefs(const vector<idx_t> &numbers) {
 }
 
 //! Bucket overloads by a string key, preserving first-appearance order and dropping empty content.
-vector<ContentGroup> GroupByDescription(const vector<ManualOverload> &overloads) {
+vector<ContentGroup> GroupByDescription(const vector<NumberedOverload> &overloads) {
 	vector<ContentGroup> groups;
-	for (auto &overload : overloads) {
-		if (overload.description.empty()) {
+	for (auto &entry : overloads) {
+		if (entry.overload->description.empty()) {
 			continue;
 		}
 		bool found = false;
 		for (auto &group : groups) {
-			if (group.text == overload.description) {
-				group.numbers.push_back(overload.number);
+			if (group.text == entry.overload->description) {
+				group.numbers.push_back(entry.number);
 				found = true;
 				break;
 			}
 		}
 		if (!found) {
 			ContentGroup group;
-			group.numbers.push_back(overload.number);
-			group.text = overload.description;
+			group.numbers.push_back(entry.number);
+			group.text = entry.overload->description;
 			groups.push_back(std::move(group));
 		}
 	}
@@ -375,37 +254,48 @@ vector<ContentGroup> GroupByDescription(const vector<ManualOverload> &overloads)
 }
 
 //! Bucket overloads by their example list, preserving first-appearance order and dropping empties.
-vector<ContentGroup> GroupByExamples(const vector<ManualOverload> &overloads) {
+vector<ContentGroup> GroupByExamples(const vector<NumberedOverload> &overloads) {
 	vector<ContentGroup> groups;
-	for (auto &overload : overloads) {
-		if (overload.examples.empty()) {
+	for (auto &entry : overloads) {
+		if (entry.overload->examples.empty()) {
 			continue;
 		}
 		// join with a separator that cannot appear inside a single example to key the group
-		string key = StringUtil::Join(overload.examples, "\n\x01\n");
+		string key = StringUtil::Join(entry.overload->examples, "\n\x01\n");
 		bool found = false;
 		for (auto &group : groups) {
 			if (group.text == key) {
-				group.numbers.push_back(overload.number);
+				group.numbers.push_back(entry.number);
 				found = true;
 				break;
 			}
 		}
 		if (!found) {
 			ContentGroup group;
-			group.numbers.push_back(overload.number);
+			group.numbers.push_back(entry.number);
 			group.text = key;
-			group.examples = overload.examples;
+			group.examples = entry.overload->examples;
 			groups.push_back(std::move(group));
 		}
 	}
 	return groups;
 }
 
-// Interior layout indents (in display columns)
-constexpr idx_t HEADER_INDENT = 1;
-constexpr idx_t ENTRY_INDENT = 3;
-constexpr idx_t BODY_INDENT = 7;
+//! Human-readable heading for a raw function type, e.g. "scalar" -> "Scalar Functions",
+//! "table_macro" -> "Table Macro Functions". The "type" sentinel (from duckdb_types()) -> "Types".
+string FunctionTypeHeading(const string &function_type) {
+	if (function_type == "type") {
+		return "Logical Types";
+	}
+	auto words = StringUtil::Split(function_type, '_');
+	for (auto &word : words) {
+		if (!word.empty()) {
+			word[0] = StringUtil::CharacterToUpper(word[0]);
+		}
+	}
+	string label = StringUtil::Join(words, " ");
+	return label.empty() ? "Functions" : label + " Functions";
+}
 
 } // namespace
 
@@ -446,76 +336,107 @@ string BuildSignature(const string &name, const vector<string> &parameters, cons
 	return result;
 }
 
-string RenderManualPage(const string &title, const vector<ManualOverload> &overloads, idx_t content_width,
-                        const string &layout_on, const string &layout_off, const ManualHighlighter &highlighter) {
+string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_width, const string &layout_on,
+                        const string &layout_off, const string &heading_on, const string &heading_off,
+                        const ManualHighlighter &highlighter) {
 	if (content_width < 24) {
 		content_width = 24;
 	}
-	BoxCanvas canvas(content_width, layout_on, layout_off, highlighter);
+	Canvas canvas(content_width, highlighter);
 
 	// reference markers like "(1)" are colored with the (gray) layout color
-	auto color_ref = [&](const string &refs) { return layout_on.empty() ? refs : layout_on + refs + layout_off; };
+	auto color_ref = [&](const string &refs) {
+		return layout_on.empty() ? refs : layout_on + refs + layout_off;
+	};
+	// section headings are upper-cased and emphasized (white + bold)
+	auto heading = [&](const string &text) {
+		string upper = StringUtil::Upper(text);
+		return heading_on.empty() ? upper : heading_on + upper + heading_off;
+	};
 
-	// Signatures
-	canvas.Blank();
-	canvas.Line(HEADER_INDENT, "Signatures");
-	canvas.Blank();
+	// group overloads by function type (first-appearance order) and number them in that grouped order
+	vector<string> type_order;
 	for (auto &overload : overloads) {
-		string label = color_ref("(" + std::to_string(overload.number) + ")") + " ";
-		// the signature is already colored structurally by BuildSignature; do not re-highlight it
-		canvas.Wrapped(ENTRY_INDENT, ENTRY_INDENT + RenderLength(label), label, overload.signature);
-		canvas.Blank();
+		if (std::find(type_order.begin(), type_order.end(), overload.function_type) == type_order.end()) {
+			type_order.push_back(overload.function_type);
+		}
+	}
+	vector<NumberedOverload> numbered;
+	for (auto &type : type_order) {
+		for (auto &overload : overloads) {
+			if (overload.function_type == type) {
+				numbered.push_back({numbered.size() + 1, &overload});
+			}
+		}
 	}
 
-	// Description
-	auto description_groups = GroupByDescription(overloads);
+	// with a single entry the "(n)" markers are noise: omit them everywhere
+	bool show_numbers = numbered.size() > 1;
+
+	// Signatures, under a heading per function type
+	for (auto &type : type_order) {
+		canvas.Line(heading(FunctionTypeHeading(type)));
+		canvas.Blank();
+		for (auto &entry : numbered) {
+			if (entry.overload->function_type != type) {
+				continue;
+			}
+			// the signature is already colored structurally by BuildSignature; do not re-highlight it
+			if (show_numbers) {
+				canvas.Entry(color_ref("(" + std::to_string(entry.number) + ")"), entry.overload->signature);
+			} else {
+				canvas.Body(entry.overload->signature);
+			}
+			canvas.Blank();
+		}
+	}
+
+	// Descriptions
+	auto description_groups = GroupByDescription(numbered);
 	if (!description_groups.empty()) {
-		canvas.Line(HEADER_INDENT, "Description");
+		canvas.Line(heading("Descriptions"));
 		canvas.Blank();
 		for (auto &group : description_groups) {
-			if (group.numbers.size() == 1) {
+			if (!show_numbers) {
+				// single entry: the description alone, no reference
+				canvas.Body(group.text);
+			} else if (group.numbers.size() == 1) {
 				// single overload: put the description on the same line as the reference
-				string label = color_ref(FormatRefs(group.numbers)) + " ";
-				canvas.Wrapped(ENTRY_INDENT, ENTRY_INDENT + RenderLength(label), label, group.text);
+				canvas.Entry(color_ref(FormatRefs(group.numbers)), group.text);
 			} else {
-				canvas.Line(ENTRY_INDENT, color_ref(FormatRefs(group.numbers)));
+				// multiple overloads: the reference group on its own line, the body indented below
+				canvas.Line(" " + color_ref(FormatRefs(group.numbers)));
 				canvas.Blank();
-				canvas.Wrapped(BODY_INDENT, BODY_INDENT, "", group.text);
+				canvas.Body(group.text);
 			}
 			canvas.Blank();
 		}
 	}
 
-	// Examples
-	auto example_groups = GroupByExamples(overloads);
+	// Examples: the reference on its own line, then the (syntax-highlighted) SQL indented below,
+	// verbatim and un-boxed so it can be copy-pasted directly from the terminal
+	auto example_groups = GroupByExamples(numbered);
 	if (!example_groups.empty()) {
-		canvas.Line(HEADER_INDENT, "Examples");
+		canvas.Line(heading("Examples"));
 		canvas.Blank();
 		for (auto &group : example_groups) {
-			// split each example on newlines so multi-line SQL renders line-by-line
-			vector<string> body;
+			if (show_numbers) {
+				canvas.Line(" " + color_ref(FormatRefs(group.numbers)));
+				canvas.Blank();
+			}
 			for (idx_t e = 0; e < group.examples.size(); e++) {
 				if (e > 0) {
-					body.emplace_back();
+					canvas.Blank();
 				}
 				for (auto &physical : StringUtil::Split(group.examples[e], '\n')) {
-					body.push_back(physical);
+					canvas.Highlighted(physical);
 				}
-			}
-			if (group.numbers.size() == 1) {
-				// single overload: put the reference on the same line as the box's top border
-				string prefix = string(ENTRY_INDENT, ' ') + color_ref(FormatRefs(group.numbers)) + " ";
-				canvas.NestedBox(RenderLength(prefix), body, prefix);
-			} else {
-				canvas.Line(ENTRY_INDENT, color_ref(FormatRefs(group.numbers)));
-				canvas.Blank();
-				canvas.NestedBox(BODY_INDENT, body);
 			}
 			canvas.Blank();
 		}
 	}
 
-	return canvas.Render(title);
+	return canvas.Render();
 }
 
 } // namespace duckdb_shell

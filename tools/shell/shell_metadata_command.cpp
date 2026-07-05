@@ -596,7 +596,7 @@ MetadataResult ShowManual(ShellState &state, const vector<string> &args) {
 SELECT function_name, function_type, return_type, parameters, parameter_types, varargs, description, examples
 FROM duckdb_functions()
 WHERE lower(function_name) = lower(?)
-ORDER BY length(parameter_types), parameter_types)");
+ORDER BY function_type, length(parameter_types), parameter_types)");
 	if (prepared->HasError()) {
 		state.PrintDatabaseError(prepared->GetError());
 		return MetadataResult::FAIL;
@@ -620,53 +620,97 @@ ORDER BY length(parameter_types), parameter_types)");
 	}
 
 	vector<ManualOverload> overloads;
-	string function_name;
-	string function_type;
-	idx_t number = 1;
 	for (auto &row : *query_result) {
-		function_name = row.GetValue<string>(0);
-		function_type = row.GetValue<string>(1);
+		string function_name = row.GetValue<string>(0);
 		string return_type = row.IsNull(2) ? string() : row.GetValue<string>(2);
 		auto parameters = ManualStringList(row.GetBaseValue(3));
 		auto parameter_types = ManualStringList(row.GetBaseValue(4));
 		string varargs = row.IsNull(5) ? string() : row.GetValue<string>(5);
 
 		ManualOverload overload;
-		overload.number = number++;
+		overload.function_type = row.GetValue<string>(1);
 		overload.signature = BuildSignature(function_name, parameters, parameter_types, varargs, return_type,
 		                                    name_color, type_color, color_off);
 		overload.description = row.IsNull(6) ? string() : row.GetValue<string>(6);
 		overload.examples = ManualStringList(row.GetBaseValue(7));
 		overloads.push_back(std::move(overload));
 	}
+
+	// the same name may also be a type (e.g. "list" is the LIST type and the list() aggregate); types
+	// have no signature yet, so we list the bare name. GROUP BY dedups the row-per-schema duplicates.
+	auto type_prepared = con.Prepare(R"(
+SELECT min(type_name) AS type_name, any_value(comment) AS comment
+FROM duckdb_types()
+WHERE lower(type_name) = lower(?)
+GROUP BY lower(type_name)
+ORDER BY type_name)");
+	if (type_prepared->HasError()) {
+		state.PrintDatabaseError(type_prepared->GetError());
+		return MetadataResult::FAIL;
+	}
+	auto type_result = type_prepared->Execute(bind_values);
+	if (type_result->HasError()) {
+		state.PrintDatabaseError(type_result->GetError());
+		return MetadataResult::FAIL;
+	}
+	for (auto &row : *type_result) {
+		string type_name = duckdb::StringUtil::Upper(row.GetValue<string>(0));
+
+		ManualOverload overload;
+		overload.function_type = "type";
+		overload.signature = use_color ? type_color + type_name + color_off : type_name;
+		overload.description = row.IsNull(1) ? string() : row.GetValue<string>(1);
+		overloads.push_back(std::move(overload));
+	}
+
 	if (overloads.empty()) {
-		state.PrintF(PrintOutput::STDERR, "No function named '%s'\n", args[1]);
+		state.PrintF(PrintOutput::STDERR, "No function or type named '%s'\n", args[1]);
+		// suggest similarly-named functions/types (typo tolerance) via Jaro-Winkler similarity
+		auto suggest_prepared = con.Prepare(R"(
+SELECT name FROM (
+  SELECT min(name) AS name, max(jaro_winkler_similarity(lower(name), lower(?))) AS score
+  FROM (
+    SELECT function_name AS name FROM duckdb_functions()
+    UNION ALL
+    SELECT type_name FROM duckdb_types()
+  )
+  GROUP BY lower(name)
+)
+WHERE score >= 0.7
+ORDER BY score DESC, name
+LIMIT 5)");
+		if (!suggest_prepared->HasError()) {
+			auto suggest_result = suggest_prepared->Execute(bind_values);
+			if (!suggest_result->HasError()) {
+				vector<string> suggestions;
+				for (auto &row : *suggest_result) {
+					suggestions.push_back(row.GetValue<string>(0));
+				}
+				if (!suggestions.empty()) {
+					state.Print(PrintOutput::STDERR, "\nDid you mean:\n");
+					for (auto &suggestion : suggestions) {
+						state.PrintF(PrintOutput::STDERR, "\t%s\n", suggestion.c_str());
+					}
+				}
+			}
+		}
 		return MetadataResult::SUCCESS;
 	}
 
-	// interior width of the box: terminal width minus the two borders, clamped to a readable range
-	idx_t max_width = state.GetMaxRenderWidth();
-	idx_t content_width = max_width > 2 ? max_width - 2 : 40;
+	// page width: terminal width, clamped to a readable range
+	idx_t content_width = state.GetMaxRenderWidth();
 	content_width = duckdb::MaxValue<idx_t>(40, duckdb::MinValue<idx_t>(content_width, 98));
 
-	// color the box-drawing characters like the EXPLAIN layout
-	string layout_on, layout_off;
+	// color the reference markers like the EXPLAIN layout, and section headings in bold white
+	string layout_on, layout_off, heading_on, heading_off;
 	if (use_color) {
 		auto &layout = ShellHighlight::GetHighlightElement(HighlightElementType::EXPLAIN_LAYOUT);
 		layout_on = ShellHighlight::TerminalCode(layout.color, layout.intensity);
 		if (!layout_on.empty()) {
 			layout_off = ShellHighlight::ResetTerminalCode();
 		}
-	}
-
-	// inline top-border title, EXPLAIN-style: "name (scalar function)" with a bold name and gray type
-	string type_label = "(" + duckdb::StringUtil::Lower(function_type) + " function)";
-	string title;
-	if (use_color) {
-		string bold = ShellHighlight::TerminalCode(PrintColor::STANDARD, PrintIntensity::BOLD);
-		title = bold + function_name + color_off + " " + layout_on + type_label + layout_off;
-	} else {
-		title = function_name + " " + type_label;
+		heading_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::BOLD);
+		heading_off = ShellHighlight::ResetTerminalCode();
 	}
 
 	// syntax-highlight the examples using the shell's SQL highlighter (no-op off-console)
@@ -675,7 +719,18 @@ ORDER BY length(parameter_types), parameter_types)");
 		state.HighlightSQL(highlighted);
 		return highlighted;
 	};
-	state.Print(RenderManualPage(title, overloads, content_width, layout_on, layout_off, highlighter));
+	string page =
+	    RenderManualPage(overloads, content_width, layout_on, layout_off, heading_on, heading_off, highlighter);
+
+	// page the output when it is long (respecting the user's .pager mode); no-op off an interactive console
+	idx_t line_count = 0;
+	for (auto c : page) {
+		if (c == '\n') {
+			line_count++;
+		}
+	}
+	auto pager_setup = state.ShouldUsePager(line_count) ? state.SetupPager() : nullptr;
+	state.Print(page);
 	return MetadataResult::SUCCESS;
 }
 

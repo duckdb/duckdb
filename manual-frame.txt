@@ -1,52 +1,162 @@
 
 ```
-╭────────────────────────────────────────────────────────────────────────────────╮
-│                                  list_value                                    │
-│                              (SCALAR_FUNCTION)                                 │
-├────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                │
-│ Signatures                                                                     │
-│                                                                                │
-│   (1) foobar(x VARCHAR) -> VARCHAR                                             │
-│                                                                                │
-│   (2) foobar(x VARCHAR, x INT) -> VARCHAR                                      │
-│                                                                                │
-│   (3) foobar(y INT) -> VARCHAR                                                 │
-│                                                                                │
-│ Description                                                                    │
-│                                                                                │
-│   (1), (2),                                                                    │
-│                                                                                │
-│       Here is some description information, it goes all along the conten       │
-│       t area but it can also wrap around to here just so you know              │
-│       And here, and here too, and also here                                    │
-│                                                                                │
-│   (3),                                                                         │
-│                                                                                │
-│       Each overload can have its own description section, or it gets           │
-│                                                                                │
-│ Examples                                                                       │
-│                                                                                │
-│   (1), (2)                                                                     │
-│                                                                                │
-│       ╭─────────────────────────────────────────────────────────────────╮      │
-│       │                                                                 │      │
-│       │   SELECT 1 + 2                                                  │      │
-│       │                                                                 │      │
-│       ╰─────────────────────────────────────────────────────────────────╯      │
-│                                                                                │
-│   (3),                                                                         │
-│                                                                                │
-│       ╭─────────────────────────────────────────────────────────────────╮      │
-│       │                                                                 │      │
-│       │  CREATE TABLE t1(x INT)                                         │      │
-│       │                                                                 │      │
-│       │  SELECT * FROM t1;                                              │      │
-│       │                                                                 │      │
-│       │                                                                 │      │
-│       │                                                                 │      │
-│       │                                                                 │      │
-│       ╰─────────────────────────────────────────────────────────────────╯      │
-│                                                                                │
-╰────────────────────────────────────────────────────────────────────────────────╯
+Scalar Functions
+
+  (1) foobar(x VARCHAR) -> VARCHAR
+
+  (2) foobar(x VARCHAR, x INT) -> VARCHAR
+
+  (3) foobar(y INT) -> VARCHAR
+
+Table Functions
+
+  (4) foobar(x VARCHAR) -> TABLE (x VARCHAR, y INT)
+
+Descriptions
+
+  (1), (2),
+
+      Here is some description information, it goes all along the conten
+      t area but it can also wrap around to here just so you know
+      And here, and here too, and also here
+
+  (3),
+
+      Each overload can have its own description section, or it gets
+
+Examples
+
+  (1), (2)
+
+      ╭─────────────────────────────────────────────────────────────────╮
+      │                                                                 │
+      │   SELECT 1 + 2                                                  │
+      │                                                                 │
+      ╰─────────────────────────────────────────────────────────────────╯
+
+  (3),
+
+      ╭─────────────────────────────────────────────────────────────────╮
+      │                                                                 │
+      │  CREATE TABLE t1(x INT)                                         │
+      │                                                                 │
+      │  SELECT * FROM t1;                                              │
+      │                                                                 │
+      │                                                                 │
+      │                                                                 │
+      │                                                                 │
+      ╰─────────────────────────────────────────────────────────────────╯
 ```
+
+
+```
+TABLE FUNCTIONS
+
+(6)     range(col0 BIGINT)
+
+(7)     range(col0 BIGINT, col1 BIGINT)
+
+(8)     range(col0 BIGINT, col1 BIGINT, col2 BIGINT)
+
+(9)     range(col0 TIMESTAMP, col1 TIMESTAMP, col2 INTERVAL)
+
+(10)    range(col0 TIMESTAMP WITH TIME ZONE, col1 TIMESTAMP WITH TIME ZONE, col2 INTERVAL)
+
+DESCRIPTIONS
+
+(1), (2), (3), (4), (5)
+
+        Creates a list of values between `start` and `stop` - the stop parameter is
+        exclusive.
+
+Examples
+
+```
+
+
+
+
+
+```
+
+SCALAR FUNCTIONS
+
+	(1) range(col0 BIGINT) -> TABLE (col0 BIGINT)
+
+	(2) range(col0 BIGINT, col1 BIGINT) -> TABLE (col0 BIGINT)
+
+	DESCRIPTIONS:
+
+	(1), (2)
+
+		Creates a list of values between `start` and `stop` - the stop parameter is
+		exclusive.
+
+	EXAMPLES
+
+	(1), (2)
+
+		SELECT * FROM range(1, 10);
+
+MACRO FUNCTIONS
+
+	(1) range(col0 BIGINT) -> TABLE (col0 BIGINT)
+
+	(2) range(col0 BIGINT, col1 BIGINT) -> TABLE (col0 BIGINT)
+
+	DEFINITIONS:
+
+		(1)
+			1 + x
+
+		(2)
+			1 + x + y
+
+	DESCRIPTIONS:
+
+	(1), (2)
+
+		Creates a list of values between `start` and `stop` - the stop parameter is
+		exclusive.
+
+	EXAMPLES
+
+	(1), (2)
+
+		SELECT * FROM range(1, 10);
+
+
+LOGICAL TYPES
+
+	(1) RANGE(INT, INT)
+
+	DESCRIPTIONS:
+
+	(1)
+
+		Creates a list of values between `start` and `stop` - the stop parameter is
+		exclusive.
+
+
+
+
+```
+
+
+
+```
+SCALAR FUNCTIONS
+
+	list_extract(list T[], index BIGINT) -> T						(1)
+
+	list_extract(list VARCHAR, index BIGINT) -> VARCHAR				(2)
+
+	DESCRIPTIONS
+															   (1), (2)
+		Extract the `index`th (1-based) value from the list.
+
+	EXAMPLES
+															   (1), (2)
+		list_extract([4, 5, 6], 3)
+
+

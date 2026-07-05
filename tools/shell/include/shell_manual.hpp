@@ -28,8 +28,9 @@ using ManualHighlighter = std::function<string(const string &)>;
 
 //! A single overload of a function, already formatted into a printable signature.
 struct ManualOverload {
-	//! 1-based signature index, as referenced by the Description/Examples sections
-	idx_t number = 0;
+	//! Raw function type from duckdb_functions() ("scalar", "aggregate", "table", ...); overloads are
+	//! grouped under a heading per type and numbered sequentially in that grouped order.
+	string function_type;
 	//! e.g. "list_value(any ANY, ...) -> LIST"
 	string signature;
 	//! Overload description (may be empty)
@@ -48,13 +49,15 @@ string BuildSignature(const string &name, const vector<string> &parameters, cons
                       const string &varargs, const string &return_type, const string &name_color = string(),
                       const string &type_color = string(), const string &color_off = string());
 
-//! Render the full manual page given the overloads, wrapped to `content_width` columns (the interior
-//! width of the outer box). `title` is embedded in the top border ("╭─ title ────╮") and may already
-//! carry ANSI styling. Box-drawing characters are wrapped in `layout_on` / `layout_off` terminal
-//! codes (empty to disable coloring). `highlighter`, if set, syntax-highlights the examples. Returns
-//! the multi-line box.
-string RenderManualPage(const string &title, const vector<ManualOverload> &overloads, idx_t content_width,
+//! Render the full manual page for the given overloads, wrapped to `content_width` columns. Signatures
+//! are grouped under a heading per function type and numbered sequentially; the Descriptions and
+//! Examples sections reference those numbers and deduplicate shared content. Box-drawing characters
+//! (of the nested example boxes) are wrapped in `layout_on` / `layout_off` terminal codes and section
+//! headings in `heading_on` / `heading_off` (empty to disable coloring). `highlighter`, if set,
+//! syntax-highlights the examples. Returns the page text.
+string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_width,
                         const string &layout_on = string(), const string &layout_off = string(),
+                        const string &heading_on = string(), const string &heading_off = string(),
                         const ManualHighlighter &highlighter = ManualHighlighter());
 
 } // namespace duckdb_shell

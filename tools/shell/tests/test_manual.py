@@ -12,10 +12,9 @@ def test_manual_basic(shell):
     )
     result = test.run()
     result.check_stdout('list_value')
-    result.check_stdout('(SCALAR_FUNCTION)')
-    result.check_stdout('Signatures')
-    result.check_stdout('Description')
-    result.check_stdout('Examples')
+    result.check_stdout('SCALAR FUNCTIONS')
+    result.check_stdout('DESCRIPTIONS')
+    result.check_stdout('EXAMPLES')
     result.check_stdout('->')
 
 
@@ -48,7 +47,41 @@ def test_manual_case_insensitive(shell):
         .statement('.manual LIST_VALUE')
     )
     result = test.run()
-    result.check_stdout('Signatures')
+    result.check_stdout('SCALAR FUNCTIONS')
+
+
+def test_manual_multiple_function_types(shell):
+    # a name with both scalar and table overloads gets a heading per type, numbered continuously
+    test = (
+        ShellTest(shell)
+        .statement('.manual generate_series')
+    )
+    result = test.run()
+    result.check_stdout('SCALAR FUNCTIONS')
+    result.check_stdout('TABLE FUNCTIONS')
+
+
+def test_manual_type(shell):
+    # a type is listed under a TYPES heading; a single entry gets no signature number
+    test = (
+        ShellTest(shell)
+        .statement('.manual VARCHAR')
+    )
+    result = test.run()
+    result.check_stdout('TYPES')
+    result.check_stdout('VARCHAR')
+    result.check_not_exist('(1)')
+
+
+def test_manual_type_and_function(shell):
+    # "list" is both the LIST type and the list() aggregate - show both sections
+    test = (
+        ShellTest(shell)
+        .statement('.manual list')
+    )
+    result = test.run()
+    result.check_stdout('AGGREGATE FUNCTIONS')
+    result.check_stdout('TYPES')
 
 
 def test_manual_unknown_function(shell):
@@ -57,4 +90,15 @@ def test_manual_unknown_function(shell):
         .statement('.manual this_function_does_not_exist')
     )
     result = test.run()
-    result.check_stderr('No function named')
+    result.check_stderr('No function or type named')
+
+
+def test_manual_did_you_mean(shell):
+    # a near-miss name suggests the closest matches
+    test = (
+        ShellTest(shell)
+        .statement('.manual reverze')
+    )
+    result = test.run()
+    result.check_stderr('Did you mean')
+    result.check_stderr('reverse')
