@@ -1,5 +1,5 @@
 # name: benchmark/feature/create_feature.benchmark
-# description: Time CREATE FEATURE (initial materialization + catalog entry creation)
+# description: Time CREATE FEATURE (metadata + resolver view + catalog entry; no materialization)
 # group: [feature]
 
 require parquet load_only
@@ -13,8 +13,8 @@ load benchmark/feature/load.sql
 name FeatureCreate
 group feature
 
-# Each timed run creates the feature (group-by aggregation + backing table +
-# catalog entry); cleanup drops it so the next run starts from a clean slate.
+# Each timed run registers the feature metadata (resolver view + catalog entry); no version table is
+# materialized until the first REFRESH. Cleanup drops it so the next run starts from a clean slate.
 run
 CREATE FEATURE bench_create TIMESTAMP EventTime  WINDOW 24 HOURS REFRESH FULL RETAIN 1 AS (SELECT UserID, COUNT(*) AS event_count, AVG(RegionID) AS avg_region FROM hits GROUP BY UserID);
 

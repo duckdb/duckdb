@@ -118,7 +118,10 @@ static unique_ptr<ParsedExpression> BuildTailAnchorFilter(const string &timestam
 }
 
 unique_ptr<SelectStatement> BuildFeatureRefreshQuery(const FeatureCatalogEntry &feat) {
-	if (feat.refresh_mode == FeatureRefreshMode::FULL) {
+	// current_version == 0 means the feature was created but never refreshed: there is no prior version
+	// table to copy forward from, so the first refresh always fully materializes (regardless of refresh
+	// mode) and produces feature_name__v1.
+	if (feat.refresh_mode == FeatureRefreshMode::FULL || feat.current_version < 1) {
 		// Every row is recomputed, so mark them all.
 		auto full_stmt = BuildPITQueryAST(feat);
 		full_stmt->node->Cast<SelectNode>().select_list.push_back(RecomputedMarker(true));

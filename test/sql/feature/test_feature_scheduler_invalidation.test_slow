@@ -32,7 +32,7 @@ COMMIT;
 sleep 3 seconds
 
 query I
-SELECT current_version > 1 FROM duckdb_features() WHERE feature_name = 'tx_create_sched';
+SELECT current_version > 0 FROM duckdb_features() WHERE feature_name = 'tx_create_sched';
 ----
 true
 
@@ -49,7 +49,7 @@ CREATE FEATURE disable_sched
 sleep 2 seconds
 
 query I
-SELECT current_version > 1 FROM duckdb_features() WHERE feature_name = 'disable_sched';
+SELECT current_version > 0 FROM duckdb_features() WHERE feature_name = 'disable_sched';
 ----
 true
 
@@ -140,6 +140,6 @@ CREATE FEATURE drop_recreate_sched
 sleep 3 seconds
 
 query I
-SELECT current_version > 1 FROM duckdb_features() WHERE feature_name = 'drop_recreate_sched';
+SELECT current_version > 0 FROM duckdb_features() WHERE feature_name = 'drop_recreate_sched';
 ----
 true

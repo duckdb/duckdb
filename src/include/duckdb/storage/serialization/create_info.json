@@ -420,7 +420,7 @@
         "id": 209,
         "name": "current_version",
         "type": "int64_t",
-        "default": "1"
+        "default": "0"
       },
       {
         "id": 210,

@@ -65,11 +65,11 @@ SELECT feature_name, source_table, entity_columns, window_interval FROM duckdb_f
 ----
 daily_txn	transactions	card_no	7 days
 
-# DESCRIBE FEATURE shows metadata
+# DESCRIBE FEATURE shows metadata. current_version is 0 until the first REFRESH materializes v1.
 query IIIIIIIIII
 DESCRIBE FEATURE daily_txn;
 ----
-daily_txn	transactions	card_no	event_time	FULL	1	1	7 days	00:00:00	CREATE FEATURE daily_txn TIMESTAMP event_time WINDOW INTERVAL '7 days' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+daily_txn	transactions	card_no	event_time	FULL	1	0	7 days	00:00:00	CREATE FEATURE daily_txn TIMESTAMP event_time WINDOW INTERVAL '7 days' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 # DESCRIBE non-existent feature returns empty
 query I

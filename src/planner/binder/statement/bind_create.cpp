@@ -848,13 +848,19 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto query_binder = Binder::CreateBinder(context, this);
 		auto query_obj = query_binder->Bind(*pit_select);
 
-		// Store result schema in feature info for table creation
+		// Store result schema in feature info as metadata. CREATE FEATURE registers metadata only; it does
+		// not materialize a version table (and thus takes no child plan) — the first REFRESH FEATURE builds
+		// feature_name__v1. Binding the PIT query above still validates the query and captures its schema.
 		feature_info.result_names = query_obj.names;
 		feature_info.result_types = query_obj.types;
 
+		// CREATE FEATURE returns the created feature's name.
+		result.names = {"feature_name"};
+		result.types = {LogicalType::VARCHAR};
+		return_type = StatementReturnType::QUERY_RESULT;
+
 		auto create_node =
 		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_FEATURE, std::move(stmt.info), &schema);
-		create_node->children.push_back(std::move(query_obj.plan));
 		result.plan = std::move(create_node);
 		break;
 	}

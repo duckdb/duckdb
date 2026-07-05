@@ -12,7 +12,7 @@ static bool IntervalEquals(const interval_t &left, const interval_t &right) {
 CreateFeatureInfo::CreateFeatureInfo()
     : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), window_interval(interval_t {0, 1, 0}),
       watermark_interval(interval_t {0, 0, 0}), refresh_mode(FeatureRefreshMode::FULL), retain_versions(1),
-      current_version(1), has_schedule(false), schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
+      current_version(0), has_schedule(false), schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {

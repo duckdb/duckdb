@@ -1,0 +1,122 @@
+# name: test/sql/feature/test_feature_create_metadata.test
+# description: CREATE FEATURE registers metadata only; the feature is unusable until the first REFRESH
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+CREATE TABLE events (customer VARCHAR, value INTEGER, event_time TIMESTAMP);
+
+statement ok
+INSERT INTO events VALUES
+    ('x', 10, '2024-01-01 08:00:00'),
+    ('x', 20, '2024-01-02 08:00:00'),
+    ('y', 30, '2024-01-01 12:00:00');
+
+# ============================================================
+# CREATE FEATURE returns the created feature's name
+# ============================================================
+query I
+CREATE FEATURE f TIMESTAMP event_time WINDOW 7 DAYS REFRESH FULL RETAIN 2 AS (SELECT customer, SUM(value) AS total FROM events GROUP BY customer);
+----
+f
+
+# The feature exists in the catalog but has not been materialized yet: current_version = 0
+query II
+SELECT feature_name, current_version FROM duckdb_features() WHERE feature_name = 'f';
+----
+f	0
+
+# No version table has been created yet
+query I
+SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
+----
+0
+
+# The resolver view exists, but querying it before any refresh raises a clear error
+statement error
+SELECT * FROM f;
+----
+<REGEX>:.*has not been refreshed yet.*
+
+# feature_at_version for the (non-existent) v1 also fails clearly
+statement error
+SELECT * FROM feature_at_version('f', 1);
+----
+<REGEX>:.*does not exist.*
+
+# ============================================================
+# SERVE FEATURE on an unrefreshed feature errors the same way
+# ============================================================
+statement ok
+CREATE TABLE spine (customer VARCHAR, event_time TIMESTAMP);
+
+statement ok
+INSERT INTO spine VALUES ('x', '2024-01-03 00:00:00');
+
+statement error
+SERVE FEATURE f FOR spine;
+----
+<REGEX>:.*has not been refreshed yet.*
+
+# ============================================================
+# After the first REFRESH the feature materializes v1 and becomes queryable
+# ============================================================
+statement ok
+REFRESH FEATURE f;
+
+query II
+SELECT feature_name, current_version FROM duckdb_features() WHERE feature_name = 'f';
+----
+f	1
+
+query I
+SELECT COUNT(*) FROM f__v1;
+----
+3
+
+query IIT rowsort
+SELECT customer, total, feature_timestamp FROM f;
+----
+x	10	2024-01-01 08:00:00
+x	30	2024-01-02 08:00:00
+y	30	2024-01-01 12:00:00
+
+# SERVE now works: spine columns, then feature_timestamp, then the aggregate
+query IIII
+SERVE FEATURE f FOR spine;
+----
+x	2024-01-03 00:00:00	2024-01-02 08:00:00	30
+
+# ============================================================
+# INCREMENTAL feature's first refresh also bootstraps v1 (full materialization,
+# since there is no prior version to copy forward from)
+# ============================================================
+statement ok
+CREATE FEATURE g TIMESTAMP event_time WINDOW 7 DAYS REFRESH INCREMENTAL RETAIN 1 AS (SELECT customer, SUM(value) AS total FROM events GROUP BY customer);
+
+statement error
+SELECT * FROM g;
+----
+<REGEX>:.*has not been refreshed yet.*
+
+statement ok
+REFRESH FEATURE g;
+
+query I
+SELECT COUNT(*) FROM g;
+----
+3
+
+query I
+SELECT current_version FROM duckdb_features() WHERE feature_name = 'g';
+----
+1
+
+statement ok
+DROP TABLE events CASCADE;
+
+statement ok
+DROP TABLE spine;

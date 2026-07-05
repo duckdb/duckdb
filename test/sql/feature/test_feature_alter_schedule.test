@@ -145,8 +145,10 @@ SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_
 statement ok
 ALTER FEATURE f SET SCHEDULE EVERY INTERVAL 45 MINUTES;
 
+# The enabled schedule may fire a background refresh, so its write transaction can
+# be active here; FORCE CHECKPOINT waits for it instead of erroring out.
 statement ok
-CHECKPOINT;
+FORCE CHECKPOINT;
 
 restart
 
