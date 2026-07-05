@@ -118,16 +118,13 @@ vector<string> WordWrap(const string &text, idx_t budget) {
 //! Returns the input unchanged when highlighting is disabled.
 using Highlighter = std::function<string(const string &)>;
 
-// Indentation uses real tab characters so columns line up regardless of number width. TAB_WIDTH is
-// only the tab stop assumed when computing word-wrap budgets; the terminal renders the actual tabs.
-constexpr idx_t TAB_WIDTH = 8;
-// Wrapped bodies (descriptions) and example SQL sit at one tab stop, aligned with entry content.
-constexpr idx_t BODY_TABS = 1;
+// Each indentation level is two spaces; content sits at one level.
+constexpr idx_t INDENT = 2;
 
 //===--------------------------------------------------------------------===//
 // Canvas
 //===--------------------------------------------------------------------===//
-//! Accumulates the tab-indented lines of the manual page (descriptions word-wrapped to `width`).
+//! Accumulates the space-indented lines of the manual page (bodies word-wrapped to `width`).
 class Canvas {
 public:
 	Canvas(idx_t width, Highlighter highlight) : width(width), highlight(std::move(highlight)) {
@@ -138,40 +135,46 @@ public:
 		lines.emplace_back();
 	}
 
-	//! A verbatim line (headings and reference-group headers, which carry their own indent).
+	//! A verbatim line at column 0 (section headings).
 	void Line(const string &text) {
 		lines.push_back(text);
 	}
 
-	//! A line of syntax-highlighted content at BODY_TABS tab stops, emitted verbatim (no wrapping) so it
-	//! stays copy-pasteable.
-	void Highlighted(const string &text) {
-		lines.push_back(string(BODY_TABS, '\t') + (highlight ? highlight(text) : text));
+	//! A right-aligned label, flush against the right margin (the "(1), (2)" reference groups).
+	void RightAligned(const string &label) {
+		idx_t label_width = RenderLength(label);
+		lines.push_back(width > label_width ? string(width - label_width, ' ') + label : label);
 	}
 
-	//! A labeled entry " label<tab>text" (one leading space, tab after the label) with `text`
-	//! word-wrapped; continuation lines are indented at BODY_TABS tab stops so they align under the
-	//! first line's text. `label`/`text` may contain ANSI color codes (widths are measured ignoring
-	//! them).
-	void Entry(const string &label, const string &text) {
+	//! A signature indented one level, with `number` right-aligned against the margin on the last line
+	//! (or on its own line when there is no room). `text`/`number` may contain ANSI color codes.
+	void Numbered(const string &text, const string &number) {
+		Body(text);
+		idx_t number_width = RenderLength(number);
+		idx_t used = RenderLength(lines.back());
+		if (used + 1 + number_width <= width) {
+			lines.back() += string(width - used - number_width, ' ') + number;
+		} else {
+			RightAligned(number);
+		}
+	}
+
+	//! A word-wrapped body block, every line indented one level.
+	void Body(const string &text) {
 		auto wrapped = WordWrap(text, BodyBudget());
-		string prefix = " " + label + "\t";
 		if (wrapped.empty()) {
-			lines.push_back(std::move(prefix));
+			lines.push_back(string(INDENT, ' '));
 			return;
 		}
-		for (idx_t i = 0; i < wrapped.size(); i++) {
-			string content = i == 0 ? prefix : string(BODY_TABS, '\t');
-			content += wrapped[i];
-			lines.push_back(std::move(content));
+		for (auto &chunk : wrapped) {
+			lines.push_back(string(INDENT, ' ') + chunk);
 		}
 	}
 
-	//! A word-wrapped body block, every line indented at BODY_TABS tab stops.
-	void Body(const string &text) {
-		for (auto &chunk : WordWrap(text, BodyBudget())) {
-			lines.push_back(string(BODY_TABS, '\t') + chunk);
-		}
+	//! A line of syntax-highlighted content indented one level, emitted verbatim (no wrapping) so it
+	//! stays copy-pasteable.
+	void Highlighted(const string &text) {
+		lines.push_back(string(INDENT, ' ') + (highlight ? highlight(text) : text));
 	}
 
 	//! Render the accumulated lines.
@@ -185,10 +188,9 @@ public:
 	}
 
 private:
-	//! Word-wrap budget for content sitting at BODY_TABS tab stops.
+	//! Word-wrap budget for content sitting at one indentation level.
 	idx_t BodyBudget() const {
-		idx_t indent = BODY_TABS * TAB_WIDTH;
-		return width > indent + 4 ? width - indent : 4;
+		return width > INDENT + 4 ? width - INDENT : 4;
 	}
 
 private:
@@ -373,7 +375,7 @@ string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_w
 	// with a single entry the "(n)" markers are noise: omit them everywhere
 	bool show_numbers = numbered.size() > 1;
 
-	// Signatures, under a heading per function type
+	// Signatures, under a heading per function type; the "(n)" marker is right-aligned at the margin
 	for (auto &type : type_order) {
 		canvas.Line(heading(FunctionTypeHeading(type)));
 		canvas.Blank();
@@ -383,7 +385,7 @@ string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_w
 			}
 			// the signature is already colored structurally by BuildSignature; do not re-highlight it
 			if (show_numbers) {
-				canvas.Entry(color_ref("(" + std::to_string(entry.number) + ")"), entry.overload->signature);
+				canvas.Numbered(entry.overload->signature, color_ref("(" + std::to_string(entry.number) + ")"));
 			} else {
 				canvas.Body(entry.overload->signature);
 			}
@@ -391,38 +393,27 @@ string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_w
 		}
 	}
 
-	// Descriptions
+	// Descriptions: the reference group right-aligned, then the body on the line(s) below
 	auto description_groups = GroupByDescription(numbered);
 	if (!description_groups.empty()) {
 		canvas.Line(heading("Descriptions"));
-		canvas.Blank();
 		for (auto &group : description_groups) {
-			if (!show_numbers) {
-				// single entry: the description alone, no reference
-				canvas.Body(group.text);
-			} else if (group.numbers.size() == 1) {
-				// single overload: put the description on the same line as the reference
-				canvas.Entry(color_ref(FormatRefs(group.numbers)), group.text);
-			} else {
-				// multiple overloads: the reference group on its own line, the body indented below
-				canvas.Line(" " + color_ref(FormatRefs(group.numbers)));
-				canvas.Blank();
-				canvas.Body(group.text);
+			if (show_numbers) {
+				canvas.RightAligned(color_ref(FormatRefs(group.numbers)));
 			}
+			canvas.Body(group.text);
 			canvas.Blank();
 		}
 	}
 
-	// Examples: the reference on its own line, then the (syntax-highlighted) SQL indented below,
-	// verbatim and un-boxed so it can be copy-pasted directly from the terminal
+	// Examples: the reference group right-aligned, then the (syntax-highlighted) SQL below, verbatim
+	// and un-boxed so it can be copy-pasted directly from the terminal
 	auto example_groups = GroupByExamples(numbered);
 	if (!example_groups.empty()) {
 		canvas.Line(heading("Examples"));
-		canvas.Blank();
 		for (auto &group : example_groups) {
 			if (show_numbers) {
-				canvas.Line(" " + color_ref(FormatRefs(group.numbers)));
-				canvas.Blank();
+				canvas.RightAligned(color_ref(FormatRefs(group.numbers)));
 			}
 			for (idx_t e = 0; e < group.examples.size(); e++) {
 				if (e > 0) {

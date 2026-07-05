@@ -147,16 +147,16 @@ LOGICAL TYPES
 ```
 SCALAR FUNCTIONS
 
-	list_extract(list T[], index BIGINT) -> T						(1)
+  list_extract(list T[], index BIGINT) -> T						    (1)
 
-	list_extract(list VARCHAR, index BIGINT) -> VARCHAR				(2)
+  list_extract(list VARCHAR, index BIGINT) -> VARCHAR				(2)
 
-	DESCRIPTIONS
-															   (1), (2)
-		Extract the `index`th (1-based) value from the list.
+DESCRIPTIONS
+														   	   (1), (2)
+  Extract the `index`th (1-based) value from the list.
 
-	EXAMPLES
-															   (1), (2)
-		list_extract([4, 5, 6], 3)
+EXAMPLES
+														   	   (1), (2)
+  list_extract([4, 5, 6], 3)
 
 
