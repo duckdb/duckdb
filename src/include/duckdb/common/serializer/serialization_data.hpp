@@ -15,18 +15,22 @@
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
-#include "duckdb/function/compression_info.hpp"
 
 namespace duckdb {
 class ClientContext;
 class Catalog;
 class DatabaseInstance;
+class CompressionInfo;
 enum class ExpressionType : uint8_t;
 
 struct SerializationData {
 	struct CustomData {
 		virtual ~CustomData() = default;
 	};
+
+	// Out-of-line so the stack<const_reference<CompressionInfo>> destructor is only instantiated where the type is
+	// complete (serialization_data.cpp); other TUs may reach this header with CompressionInfo only forward-declared.
+	~SerializationData();
 
 	stack<reference<ClientContext>> contexts;
 	stack<reference<DatabaseInstance>> databases;
