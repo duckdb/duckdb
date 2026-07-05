@@ -51,17 +51,19 @@ string PEGTransformerFactory::TransformIdentifierOrKeyword(PEGTransformer &trans
 
 LogicalType PEGTransformerFactory::TransformType(PEGTransformer &transformer,
                                                  unique_ptr<ParsedExpression> type_variations,
-                                                 const vector<int64_t> &array_bounds) {
+                                                 const optional<vector<int64_t>> &array_bounds) {
 	auto type = std::move(type_variations);
-	for (auto array_size : array_bounds) {
-		vector<unique_ptr<ParsedExpression>> children_types;
-		children_types.push_back(std::move(type));
+	if (array_bounds) {
+		for (auto array_size : *array_bounds) {
+			vector<unique_ptr<ParsedExpression>> children_types;
+			children_types.push_back(std::move(type));
 
-		if (array_size < 0) {
-			type = make_uniq<TypeExpression>(Identifier("list"), std::move(children_types));
-		} else {
-			children_types.push_back(make_uniq<ConstantExpression>(Value::BIGINT(array_size)));
-			type = make_uniq<TypeExpression>(Identifier("array"), std::move(children_types));
+			if (array_size < 0) {
+				type = make_uniq<TypeExpression>(Identifier("list"), std::move(children_types));
+			} else {
+				children_types.push_back(make_uniq<ConstantExpression>(Value::BIGINT(array_size)));
+				type = make_uniq<TypeExpression>(Identifier("array"), std::move(children_types));
+			}
 		}
 	}
 	return LogicalType::UNBOUND(std::move(type));
@@ -72,15 +74,16 @@ int64_t PEGTransformerFactory::TransformArrayKeyword(PEGTransformer &transformer
 }
 
 int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &transformer,
-                                                            unique_ptr<ParsedExpression> expression) {
+                                                            optional<unique_ptr<ParsedExpression>> expression) {
 	if (!expression) {
 		// Empty array so we return -1 to signify it's a list
 		return -1;
 	}
-	if (expression->GetExpressionClass() != ExpressionClass::CONSTANT) {
+	auto &array_size = *expression;
+	if (array_size->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw ParserException("Expected a constant number as array size");
 	}
-	auto &const_number = expression->Cast<ConstantExpression>();
+	auto &const_number = array_size->Cast<ConstantExpression>();
 	if (!const_number.GetValue().type().IsIntegral()) {
 		throw BinderException("Expected an integer as array bound instead of %s", const_number.GetValue().ToString());
 	}
@@ -93,10 +96,14 @@ int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &tran
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformTimeType(PEGTransformer &transformer, const LogicalTypeId &time_or_timestamp,
-                                         vector<unique_ptr<ParsedExpression>> type_modifiers, const bool &time_zone) {
+                                         optional<vector<unique_ptr<ParsedExpression>>> type_modifiers,
+                                         const optional<bool> &time_zone) {
 	auto type = time_or_timestamp;
-	auto modifiers = std::move(type_modifiers);
-	auto with_timezone = time_zone;
+	vector<unique_ptr<ParsedExpression>> modifiers;
+	if (type_modifiers) {
+		modifiers = std::move(*type_modifiers);
+	}
+	auto with_timezone = time_zone && *time_zone;
 	if (type == LogicalTypeId::TIME) {
 		if (!modifiers.empty()) {
 			throw ParserException("Type TIME does not allow any modifiers");
@@ -202,89 +209,87 @@ string PEGTransformerFactory::TransformDoubleType(PEGTransformer &transformer) {
 	return LogicalTypeIdToString(LogicalTypeId::DOUBLE);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFloatType(PEGTransformer &transformer,
-                                                                       unique_ptr<ParsedExpression> number_literal) {
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformFloatType(PEGTransformer &transformer,
+                                          optional<unique_ptr<ParsedExpression>> number_literal) {
 	return make_uniq<TypeExpression>(Identifier("FLOAT"), vector<unique_ptr<ParsedExpression>> {});
 }
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformDecimalType(PEGTransformer &transformer,
-                                            vector<unique_ptr<ParsedExpression>> type_modifiers) {
-	return make_uniq<TypeExpression>(Identifier("DECIMAL"), std::move(type_modifiers));
+                                            optional<vector<unique_ptr<ParsedExpression>>> type_modifiers) {
+	vector<unique_ptr<ParsedExpression>> modifiers;
+	if (type_modifiers) {
+		modifiers = std::move(*type_modifiers);
+	}
+	return make_uniq<TypeExpression>(Identifier("DECIMAL"), std::move(modifiers));
 }
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformDecType(PEGTransformer &transformer,
-                                        vector<unique_ptr<ParsedExpression>> type_modifiers) {
+                                        optional<vector<unique_ptr<ParsedExpression>>> type_modifiers) {
 	return TransformDecimalType(transformer, std::move(type_modifiers));
 }
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformNumericModType(PEGTransformer &transformer,
-                                               vector<unique_ptr<ParsedExpression>> type_modifiers) {
+                                               optional<vector<unique_ptr<ParsedExpression>>> type_modifiers) {
 	return TransformDecimalType(transformer, std::move(type_modifiers));
 }
 
 vector<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformTypeModifiers(PEGTransformer &transformer,
-                                              vector<unique_ptr<ParsedExpression>> expression) {
-	for (auto &expr : expression) {
+                                              optional<vector<unique_ptr<ParsedExpression>>> expression) {
+	if (!expression) {
+		return vector<unique_ptr<ParsedExpression>> {};
+	}
+	for (auto &expr : *expression) {
 		if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw ParserException("Expected a constant as type modifier");
 		}
 	}
-	return expression;
+	return std::move(*expression);
 }
 
 unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformCharacterSimpleType(PEGTransformer &transformer, const string &character_type,
-                                                    vector<unique_ptr<ParsedExpression>> type_modifiers) {
-	return make_uniq<TypeExpression>(character_type, std::move(type_modifiers));
+PEGTransformerFactory::TransformCharacterSimpleType(PEGTransformer &transformer,
+                                                    optional<vector<unique_ptr<ParsedExpression>>> type_modifiers) {
+	vector<unique_ptr<ParsedExpression>> modifiers;
+	if (type_modifiers) {
+		modifiers = std::move(*type_modifiers);
+	}
+	return make_uniq<TypeExpression>(Identifier("VARCHAR"), std::move(modifiers));
 }
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformQualifiedSimpleType(PEGTransformer &transformer,
                                                     const QualifiedName &qualified_type_name,
-                                                    vector<unique_ptr<ParsedExpression>> type_modifiers) {
-	auto result = qualified_type_name;
-	if (result.schema.empty()) {
-		result.schema = result.catalog;
-		result.catalog = INVALID_CATALOG;
+                                                    optional<vector<unique_ptr<ParsedExpression>>> type_modifiers) {
+	vector<unique_ptr<ParsedExpression>> modifiers;
+	if (type_modifiers) {
+		modifiers = std::move(*type_modifiers);
 	}
-	return make_uniq<TypeExpression>(result.catalog, result.schema, result.name, std::move(type_modifiers));
+	return make_uniq<TypeExpression>(qualified_type_name, std::move(modifiers));
 }
 
 QualifiedName PEGTransformerFactory::TransformTypeNameAsQualifiedName(PEGTransformer &transformer,
                                                                       const Identifier &type_name) {
-	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = INVALID_SCHEMA;
-	result.name = type_name;
+	QualifiedName result(type_name);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedTypeName(PEGTransformer &transformer,
                                                                      const Identifier &schema_qualification,
                                                                      const Identifier &reserved_type_name) {
-	QualifiedName result;
-	result.catalog = INVALID_CATALOG;
-	result.schema = schema_qualification;
-	result.name = reserved_type_name;
+	QualifiedName result({schema_qualification}, reserved_type_name);
 	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaTypeName(
     PEGTransformer &transformer, const Identifier &catalog_qualification,
     const Identifier &reserved_schema_qualification, const Identifier &reserved_type_name) {
-	QualifiedName result;
-	result.catalog = catalog_qualification;
-	result.schema = reserved_schema_qualification;
-	result.name = reserved_type_name;
+	QualifiedName result(catalog_qualification, reserved_schema_qualification, reserved_type_name);
 	return result;
-}
-
-string PEGTransformerFactory::TransformCharacterType(PEGTransformer &transformer) {
-	return "VARCHAR";
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapType(PEGTransformer &transformer,
@@ -298,29 +303,42 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapType(PEGTransfor
 	return make_uniq<TypeExpression>(Identifier("MAP"), std::move(map_children));
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTupleType(PEGTransformer &transformer,
+                                                                       const vector<LogicalType> &type) {
+	vector<unique_ptr<ParsedExpression>> tuple_children;
+	for (auto &child : type) {
+		tuple_children.push_back(UnboundType::GetTypeExpression(child)->Copy());
+	}
+	return make_uniq<TypeExpression>(Identifier("TUPLE"), std::move(tuple_children));
+}
+
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformRowType(PEGTransformer &transformer,
-                                        const child_list_t<LogicalType> &col_id_type_list) {
+                                        const optional<child_list_t<LogicalType>> &col_id_type_list) {
 	vector<unique_ptr<ParsedExpression>> struct_children;
-	for (auto &child : col_id_type_list) {
-		auto &type_expr = UnboundType::GetTypeExpression(child.second);
-		auto new_type_expr = type_expr->Copy();
-		new_type_expr->SetAlias(child.first);
-		struct_children.push_back(std::move(new_type_expr));
+	if (col_id_type_list) {
+		for (auto &child : *col_id_type_list) {
+			auto &type_expr = UnboundType::GetTypeExpression(child.second);
+			auto new_type_expr = type_expr->Copy();
+			new_type_expr->SetAlias(child.first);
+			struct_children.push_back(std::move(new_type_expr));
+		}
 	}
 	return make_uniq<TypeExpression>(Identifier("STRUCT"), std::move(struct_children));
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformGeometryType(PEGTransformer &transformer,
-                                                                          unique_ptr<ParsedExpression> expression) {
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformGeometryType(PEGTransformer &transformer,
+                                             optional<unique_ptr<ParsedExpression>> expression) {
 	if (!expression) {
 		return make_uniq<TypeExpression>(Identifier("GEOMETRY"), vector<unique_ptr<ParsedExpression>> {});
 	}
+	auto geo_modifier = std::move(*expression);
 	vector<unique_ptr<ParsedExpression>> geo_children;
-	if (expression->GetExpressionClass() != ExpressionClass::CONSTANT) {
+	if (geo_modifier->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw ParserException("Expected a constant as type modifier");
 	}
-	geo_children.push_back(std::move(expression));
+	geo_children.push_back(std::move(geo_modifier));
 	return make_uniq<TypeExpression>(Identifier("GEOMETRY"), std::move(geo_children));
 }
 
@@ -356,9 +374,8 @@ pair<Identifier, LogicalType> PEGTransformerFactory::TransformColIdType(PEGTrans
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBitType(
-    PEGTransformer &transformer,
-    // NOLINTNEXTLINE(performance-unnecessary-value-param): fixed generated signature; BIT takes no modifiers
-    vector<unique_ptr<ParsedExpression>> expression) {
+    PEGTransformer &transformer, const bool &has_result,
+    optional<vector<unique_ptr<ParsedExpression>>> expression) { // NOLINT(performance-unnecessary-value-param)
 	return make_uniq<TypeExpression>(Identifier("BIT"), vector<unique_ptr<ParsedExpression>> {});
 }
 

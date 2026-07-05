@@ -227,9 +227,8 @@ AggregateFunctionSet BitAndFun::GetFunctions() {
 	for (auto &type : LogicalType::Integral()) {
 		bit_and.AddFunction(GetBitfieldUnaryAggregate<BitAndOperation>(type));
 	}
-	bit_and.AddFunction(
-	    AggregateFunction::UnaryAggregateDestructor<BitStringState, string_t, string_t, BitStringAndOperation>(
-	        LogicalType::BIT, LogicalType::BIT));
+	bit_and.AddFunction(AggregateFunction::UnaryAggregate<BitStringState, string_t, string_t, BitStringAndOperation>(
+	    LogicalType::BIT, LogicalType::BIT));
 	return bit_and;
 }
 
@@ -238,9 +237,8 @@ AggregateFunctionSet BitOrFun::GetFunctions() {
 	for (auto &type : LogicalType::Integral()) {
 		bit_or.AddFunction(GetBitfieldUnaryAggregate<BitOrOperation>(type));
 	}
-	bit_or.AddFunction(
-	    AggregateFunction::UnaryAggregateDestructor<BitStringState, string_t, string_t, BitStringOrOperation>(
-	        LogicalType::BIT, LogicalType::BIT));
+	bit_or.AddFunction(AggregateFunction::UnaryAggregate<BitStringState, string_t, string_t, BitStringOrOperation>(
+	    LogicalType::BIT, LogicalType::BIT));
 	return bit_or;
 }
 
@@ -249,9 +247,8 @@ AggregateFunctionSet BitXorFun::GetFunctions() {
 	for (auto &type : LogicalType::Integral()) {
 		bit_xor.AddFunction(GetBitfieldUnaryAggregate<BitXorOperation>(type));
 	}
-	bit_xor.AddFunction(
-	    AggregateFunction::UnaryAggregateDestructor<BitStringState, string_t, string_t, BitStringXorOperation>(
-	        LogicalType::BIT, LogicalType::BIT));
+	bit_xor.AddFunction(AggregateFunction::UnaryAggregate<BitStringState, string_t, string_t, BitStringXorOperation>(
+	    LogicalType::BIT, LogicalType::BIT));
 	return bit_xor;
 }
 

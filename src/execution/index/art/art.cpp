@@ -563,12 +563,6 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 		VerifyAllocationsInternal();
 	}
 
-	if (conflict_type == ARTConflictType::TRANSACTION) {
-		// chunk is only null when called from MergeCheckpointDeltas.
-		auto msg = chunk ? AppendRowError(*chunk, conflict_idx.GetIndex()) : string("???");
-		return ErrorData(TransactionException("write-write conflict on key: \"%s\"", msg));
-	}
-
 	if (conflict_type == ARTConflictType::CONSTRAINT) {
 		// chunk is only null when called from MergeCheckpointDeltas.
 		auto msg = chunk ? AppendRowError(*chunk, conflict_idx.GetIndex()) : string("???");
@@ -754,6 +748,10 @@ bool ART::SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t
 
 bool ART::SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
                            set<row_t> &row_ids) {
+	if (!tree.HasMetadata()) {
+		return true;
+	}
+
 	// Find the first node that satisfies the left predicate.
 	Iterator it(*this);
 

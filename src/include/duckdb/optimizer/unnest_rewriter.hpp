@@ -63,6 +63,15 @@ private:
 	//! Find delim joins that contain an UNNEST
 	void FindCandidates(unique_ptr<LogicalOperator> &root, unique_ptr<LogicalOperator> &op,
 	                    vector<reference<unique_ptr<LogicalOperator>>> &candidates);
+	//! Rewrite materialized CTEs that encode duplicate eliminated UNNEST joins
+	bool RewriteCTECandidates(unique_ptr<LogicalOperator> &root, unique_ptr<LogicalOperator> &op,
+	                          UnnestRewriterPlanUpdater &updater);
+	//! Rewrite a materialized CTE that encodes one duplicate eliminated UNNEST join
+	bool RewriteCTECandidate(unique_ptr<LogicalOperator> &root, unique_ptr<LogicalOperator> &candidate,
+	                         UnnestRewriterPlanUpdater &updater);
+	//! Rewrite a materialized CTE where the deduplicated input has already been inlined
+	bool RewriteInlineCTEDedupCandidate(unique_ptr<LogicalOperator> &root, unique_ptr<LogicalOperator> &candidate,
+	                                    UnnestRewriterPlanUpdater &updater);
 	//! Rewrite a delim join that contains an UNNEST
 	bool RewriteCandidate(unique_ptr<LogicalOperator> &candidate);
 	//! Update the bindings of the RHS sequence of LOGICAL_PROJECTION(s)

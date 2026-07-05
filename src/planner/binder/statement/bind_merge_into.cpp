@@ -74,8 +74,8 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			}
 		}
 		unique_ptr<LogicalOperator> fake_root;
-		BindUpdateSet(proj_index, fake_root, *action.update_info, table, result->columns, result->expressions,
-		              expressions);
+		BindUpdateSet(proj_index, fake_root, *action.update_info, table, result->columns, merge_into.bound_defaults,
+		              result->expressions, expressions);
 
 		// bind any additional columns that need to be bound for update constraints
 		// FIXME: this is pretty hacky
@@ -111,10 +111,12 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 		}
 		vector<LogicalIndex> named_column_map;
 		vector<LogicalType> expected_types;
+		physical_index_vector_t<idx_t> column_index_map;
 		BindInsertColumnList(table, action.insert_columns, action.default_values, named_column_map, expected_types,
-		                     result->column_index_map);
+		                     column_index_map);
 
-		vector<unique_ptr<Expression>> insert_expressions;
+		vector<ColumnBinding> insert_bindings;
+		vector<LogicalType> insert_types;
 		if (!action.default_values && action.expressions.empty()) {
 			// no expressions: *
 			// expand source bindings
@@ -127,19 +129,26 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			auto &column = table.GetColumns().GetColumn(named_column_map[i]);
 
 			InsertBinder insert_binder(*this, context);
-			insert_binder.target_type = column.Type();
+			insert_binder.target_type = table.GetExpectedTypeForInsert(column);
 
 			TryReplaceDefaultExpression(action.expressions[i], column);
 			auto insert_expr = insert_binder.Bind(action.expressions[i]);
-
-			insert_expressions.push_back(std::move(insert_expr));
-		}
-
-		for (auto &insert_expr : insert_expressions) {
 			auto insert_type = insert_expr->GetReturnType();
 			auto expr_index = ColumnBinding::PushExpression(expressions, std::move(insert_expr));
-			result->expressions.push_back(
-			    make_uniq<BoundColumnRefExpression>(insert_type, ColumnBinding(proj_index, expr_index)));
+			insert_bindings.emplace_back(proj_index, expr_index);
+			insert_types.push_back(std::move(insert_type));
+		}
+
+		for (auto &col : table.GetColumns().Physical()) {
+			auto storage_idx = col.StorageOid();
+			auto mapped_index = column_index_map.empty() ? storage_idx : column_index_map[col.Physical()];
+			if (mapped_index == DConstants::INVALID_INDEX) {
+				result->expressions.push_back(merge_into.bound_defaults[storage_idx]->Copy());
+			} else {
+				result->expressions.push_back(table.GetDefaultExpressionForColumn(
+				    context, insert_types[mapped_index], col.Type(), insert_bindings[mapped_index],
+				    *merge_into.bound_defaults[storage_idx]));
+			}
 		}
 		break;
 	}
@@ -269,6 +278,14 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;
 
+	// bind table constraints/default values in case these are referenced
+	auto &catalog_name = table.ParentCatalog().GetName();
+	auto &schema_name = table.ParentSchema().name;
+	BindDefaultValues(table.GetColumns(), merge_into->bound_defaults, catalog_name.GetIdentifierName(),
+	                  schema_name.GetIdentifierName());
+
+	merge_into->bound_constraints = BindConstraints(table);
+
 	for (auto &entry : node.actions) {
 		if (entry.first == MergeActionCondition::WHEN_MATCHED) {
 			continue;
@@ -327,14 +344,6 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	if (!node.returning_list.empty()) {
 		merge_into->return_chunk = true;
 	}
-
-	// bind table constraints/default values in case these are referenced
-	auto &catalog_name = table.ParentCatalog().GetName();
-	auto &schema_name = table.ParentSchema().name;
-	BindDefaultValues(table.GetColumns(), merge_into->bound_defaults, catalog_name.GetIdentifierName(),
-	                  schema_name.GetIdentifierName());
-
-	merge_into->bound_constraints = BindConstraints(table);
 
 	// bind WHEN_MATCHED merge actions (can contain references to both source and target)
 	for (auto &entry : node.actions) {

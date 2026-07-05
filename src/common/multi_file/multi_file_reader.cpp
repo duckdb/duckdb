@@ -541,12 +541,12 @@ unique_ptr<Expression> MultiFileReader::GetConstantVirtualColumn(MultiFileReader
 	return nullptr;
 }
 
-unique_ptr<Expression> MultiFileReader::GetVirtualColumnExpression(ClientContext &, MultiFileReaderData &,
-                                                                   const vector<MultiFileColumnDefinition> &,
-                                                                   idx_t &column_id, const LogicalType &type,
-                                                                   MultiFileLocalIndex local_idx,
-                                                                   optional_ptr<MultiFileColumnDefinition> &) {
-	return make_uniq<BoundReferenceExpression>(type, local_idx.GetIndex());
+MultiFileReaderVirtualColumnBinding
+MultiFileReader::GetVirtualColumnExpression(ClientContext &, MultiFileReaderData &,
+                                            const vector<MultiFileColumnDefinition> &, idx_t column_id,
+                                            const LogicalType &type, MultiFileLocalIndex local_idx) {
+	return MultiFileReaderVirtualColumnBinding(make_uniq<BoundReferenceExpression>(type, local_idx.GetIndex()),
+	                                           {column_id});
 }
 
 MultiFileReaderBindData MultiFileReader::BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,

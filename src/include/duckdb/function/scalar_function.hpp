@@ -20,21 +20,6 @@
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
-struct FunctionLocalState {
-	DUCKDB_API virtual ~FunctionLocalState();
-
-	template <class TARGET>
-	TARGET &Cast() {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<TARGET &>(*this);
-	}
-	template <class TARGET>
-	const TARGET &Cast() const {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<const TARGET &>(*this);
-	}
-};
-
 struct ScalarFunctionInfo {
 	DUCKDB_API virtual ~ScalarFunctionInfo();
 
@@ -74,12 +59,22 @@ class ScalarFunctionCatalogEntry;
 struct StatementProperties;
 
 struct FunctionStatisticsPruneInput {
-	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, const BaseStatistics &stats_p)
-	    : bind_data(bind_data_p), stats(stats_p) {
+	FunctionStatisticsPruneInput(const BoundFunctionExpression &function_p, optional_ptr<FunctionData> bind_data_p,
+	                             const vector<optional_ptr<const BaseStatistics>> &child_stats_p)
+	    : function(function_p), bind_data(bind_data_p), child_stats(child_stats_p) {
 	}
 
+	//! The bound function expression being checked (gives access to the argument expressions)
+	const BoundFunctionExpression &function;
 	optional_ptr<FunctionData> bind_data;
-	const BaseStatistics &stats;
+
+	//! Statistics for each function argument (an entry is null if it could not be derived for that argument)
+	const vector<optional_ptr<const BaseStatistics>> &child_stats;
+
+	//! Convenience accessor: statistics of the i-th argument, or null if absent / not derivable
+	optional_ptr<const BaseStatistics> ChildStats(idx_t i) const {
+		return i < child_stats.size() ? child_stats[i] : optional_ptr<const BaseStatistics>();
+	}
 };
 
 struct FunctionStatisticsInput {

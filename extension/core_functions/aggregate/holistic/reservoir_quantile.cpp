@@ -167,37 +167,37 @@ struct ReservoirQuantileScalarOperation : public ReservoirQuantileOperation {
 AggregateFunction GetReservoirQuantileAggregateFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT8:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<int8_t>, int8_t, int8_t,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::TINYINT,
-		                                                                                     LogicalType::TINYINT);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<int8_t>, int8_t, int8_t,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::TINYINT,
+		                                                                           LogicalType::TINYINT);
 
 	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<int16_t>, int16_t, int16_t,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::SMALLINT,
-		                                                                                     LogicalType::SMALLINT);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<int16_t>, int16_t, int16_t,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::SMALLINT,
+		                                                                           LogicalType::SMALLINT);
 
 	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<int32_t>, int32_t, int32_t,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::INTEGER,
-		                                                                                     LogicalType::INTEGER);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<int32_t>, int32_t, int32_t,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::INTEGER,
+		                                                                           LogicalType::INTEGER);
 
 	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<int64_t>, int64_t, int64_t,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::BIGINT,
-		                                                                                     LogicalType::BIGINT);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<int64_t>, int64_t, int64_t,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::BIGINT,
+		                                                                           LogicalType::BIGINT);
 
 	case PhysicalType::INT128:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<hugeint_t>, hugeint_t, hugeint_t,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::HUGEINT,
-		                                                                                     LogicalType::HUGEINT);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<hugeint_t>, hugeint_t, hugeint_t,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::HUGEINT,
+		                                                                           LogicalType::HUGEINT);
 	case PhysicalType::FLOAT:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<float>, float, float,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::FLOAT,
-		                                                                                     LogicalType::FLOAT);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<float>, float, float,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::FLOAT,
+		                                                                           LogicalType::FLOAT);
 	case PhysicalType::DOUBLE:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState<double>, double, double,
-		                                                   ReservoirQuantileScalarOperation>(LogicalType::DOUBLE,
-		                                                                                     LogicalType::DOUBLE);
+		return AggregateFunction::UnaryAggregate<ReservoirQuantileState<double>, double, double,
+		                                         ReservoirQuantileScalarOperation>(LogicalType::DOUBLE,
+		                                                                           LogicalType::DOUBLE);
 	default:
 		throw InternalException("Unimplemented reservoir quantile aggregate");
 	}

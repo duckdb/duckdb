@@ -4,6 +4,7 @@ import concurrent.futures
 import contextlib
 import os
 import re
+import shutil
 import shlex
 import signal
 import subprocess
@@ -40,9 +41,9 @@ FAILURE_MARKER = "==============================================================
 
 def enable_line_buffering():
     if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(line_buffering=True, write_through=True)
+        sys.stdout.reconfigure(line_buffering=True, write_through=True, errors="backslashreplace")
     if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(line_buffering=True, write_through=True)
+        sys.stderr.reconfigure(line_buffering=True, write_through=True, errors="backslashreplace")
 
 
 def signal_stop_requested(signum, frame):
@@ -69,6 +70,7 @@ class TestRunnerConfig:
     runtime_threshold_seconds: int | None
     max_failures: int | None
     fail_require_skip: bool
+    coverage_profile_dir: Path | None
 
 
 @dataclass(frozen=True)
@@ -343,6 +345,7 @@ def generate_test_list(
     test_flags: str,
     patterns: list[str],
     test_list_files: list[Path] | None = None,
+    coverage_profile_dir: Path | None = None,
 ):
     # Catch can return a non-zero status code for list commands when tests
     # are found, so we accept non-zero if stdout still contains test output.
@@ -350,6 +353,10 @@ def generate_test_list(
     if test_list_files:
         list_file_args = [arg for test_list_file in test_list_files for arg in ("-f", str(test_list_file))]
     command = [unittest_bin, *shlex.split(test_flags), "--list-tests", *list_file_args, *patterns]
+    child_env = os.environ.copy()
+    if coverage_profile_dir is not None:
+        coverage_profile_dir.mkdir(parents=True, exist_ok=True)
+        child_env["LLVM_PROFILE_FILE"] = coverage_profile_file_pattern(coverage_profile_dir)
     proc = subprocess.run(
         command,
         text=True,
@@ -357,6 +364,7 @@ def generate_test_list(
         errors="backslashreplace",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=child_env,
     )
     if proc.returncode != 0 and not proc.stdout:
         print("Stderr:", proc.stderr, end="", file=sys.stderr, flush=True)
@@ -372,13 +380,14 @@ def open_test_list(
     test_flags: str,
     patterns: list[str],
     test_list_files: list[Path] | None = None,
+    coverage_profile_dir: Path | None = None,
 ):
     if test_list is not None and (test_list_files is None or len(test_list_files) == 1):
         yield test_list
         return
 
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_file:
-        generate_test_list(test_file, unittest_bin, test_flags, patterns, test_list_files)
+        generate_test_list(test_file, unittest_bin, test_flags, patterns, test_list_files, coverage_profile_dir)
     result = Path(test_file.name)
     yield result
     result.unlink()
@@ -532,7 +541,8 @@ PROGRESS_TEST_START_PATTERN = re.compile(r"^\[\d+/\d+\] \(\d+%\): (.+)$")
 FATAL_ERROR_PATTERN = re.compile(r"^\s*due to a fatal error condition:\s*$")
 FAILED_HEADER_PATTERN = re.compile(r"^\s*.+:\s+FAILED:\s*$")
 EXPLICIT_MESSAGE_PATTERN = re.compile(r"^\s*explicitly with message:\s*$")
-CATCH_ASSERTION_LOCATION_PATTERN = re.compile(r"^(.+?):(\d+): FAILED:$")
+# Catch prints source locations as "path:line:" with GCC/Clang and as "path(line):" with MSVC
+CATCH_ASSERTION_LOCATION_PATTERN = re.compile(r"^(.+?)(?::(\d+)|\((\d+)\)): FAILED:$")
 SANITIZER_OR_ASSERT_PATTERN = re.compile(
     r"(AddressSanitizer|LeakSanitizer|ThreadSanitizer|UndefinedBehaviorSanitizer|runtime error:|assert)",
     flags=re.IGNORECASE,
@@ -677,7 +687,7 @@ def parse_stdout_assertion_failure(test_name: str | None, block: list[str]):
             continue
 
         source_path = match.group(1)
-        source_line = int(match.group(2))
+        source_line = int(match.group(2) or match.group(3))
         snippet_lines = render_context_snippet(source_path, source_line)
         detail_lines = []
 
@@ -1051,6 +1061,43 @@ def render_failure_lines(failure: FailureInfo):
     return lines
 
 
+RAW_OUTPUT_TAIL_LINE_COUNT = 100
+
+
+def is_low_information_failure(failure: FailureInfo):
+    # a generic failure where we could not even identify the failing test (or any detail at all) does not help
+    # debugging - in that case we dump the raw unittest output so CI logs contain everything needed to diagnose it
+    if failure.kind != "generic":
+        return False
+    if failure.snippet_lines:
+        return False
+    return failure.test_name is None or not failure.detail_lines
+
+
+def render_raw_output_tail(stdout: str, stderr: str):
+    lines = []
+    for stream_name, output in (("stdout", stdout), ("stderr", stderr)):
+        stream_lines = [line.rstrip() for line in strip_ansi(normalize_output(output)).splitlines()]
+        while stream_lines and not stream_lines[-1].strip():
+            stream_lines.pop()
+        if not stream_lines:
+            lines.extend(["", f"--- raw unittest {stream_name}: empty ---"])
+            continue
+        tail = stream_lines[-RAW_OUTPUT_TAIL_LINE_COUNT:]
+        header = f"--- raw unittest {stream_name}"
+        if len(tail) < len(stream_lines):
+            header += f" (last {len(tail)} of {len(stream_lines)} lines)"
+        lines.extend(["", header + " ---", *tail])
+    return lines
+
+
+def render_failure_lines_with_diagnostics(failure: FailureInfo, stdout: str, stderr: str):
+    lines = render_failure_lines(failure)
+    if is_low_information_failure(failure):
+        lines = [*lines, *render_raw_output_tail(stdout, stderr)]
+    return lines
+
+
 def format_batch_failure(batch, config: TestRunnerConfig, attempt_summaries, recovered: bool, retry_count: int):
     reproduce_batch = batch
     rerun_parts = [shlex.quote(format_unittest_bin_for_display(config.unittest_bin))]
@@ -1115,7 +1162,7 @@ def extract_test_runtimes(stdout: str, stderr: str):
 
 def summarize_failure_output(message: str | None, stdout: str, stderr: str, batch, returncode: int | None = None):
     failure = parse_failure_info(message, stdout, stderr, batch, returncode)
-    return render_failure_lines(failure), failure.reproduce_batch
+    return render_failure_lines_with_diagnostics(failure, stdout, stderr), failure.reproduce_batch
 
 
 def format_failed_test_retry_target(test_name: str | None, batch_info):
@@ -1189,6 +1236,158 @@ def extract_skipped_test_output(stdout: str, stderr: str):
     return 0, {}
 
 
+def coverage_profile_file_pattern(profile_dir: Path):
+    return os.fspath(profile_dir / "duckdb-%p-%m.profraw")
+
+
+def lcov_exclude_pattern_to_regex(pattern: str):
+    pattern = pattern.strip()
+    if not pattern:
+        return None
+    pattern = pattern.replace("\\", "/")
+    regex = re.escape(pattern)
+    regex = regex.replace(r"\*", ".*")
+    if not pattern.startswith("*"):
+        regex = r"^" + regex
+    if not pattern.endswith("*"):
+        regex = regex + r"$"
+    return regex
+
+
+def build_coverage_ignore_filename_regex(source_root: Path):
+    exclude_file = source_root / ".github" / "workflows" / "lcov_exclude"
+    if not exclude_file.is_file():
+        return None
+    patterns = []
+    with exclude_file.open("r", encoding="utf8") as f:
+        for line in f:
+            pattern = lcov_exclude_pattern_to_regex(line)
+            if pattern is not None:
+                patterns.append(pattern)
+    if not patterns:
+        return None
+    return "|".join(f"({pattern})" for pattern in patterns)
+
+
+def find_executable(name: str):
+    path = shutil.which(name)
+    if path:
+        return path
+    return None
+
+
+def build_dir_from_unittest_path(unittest_bin: str):
+    path = Path(unittest_bin).resolve()
+    parents = path.parents
+    if len(parents) >= 2:
+        return parents[1]
+    return path.parent
+
+
+def collect_coverage_objects(unittest_bin: str):
+    unittest_path = Path(unittest_bin).resolve()
+    build_dir = build_dir_from_unittest_path(unittest_bin)
+    objects = [unittest_path]
+    object_candidates = []
+    object_candidates.extend((build_dir / "src").glob("libduckdb.*"))
+    object_candidates.extend((build_dir / "extension").glob("**/*.duckdb_extension"))
+    object_candidates.extend((build_dir / "test" / "extension").glob("**/*.duckdb_extension"))
+    for candidate in sorted(object_candidates):
+        if candidate.suffix not in {".dylib", ".so", ".dll", ".duckdb_extension"}:
+            continue
+        if candidate.is_file() and candidate not in objects:
+            objects.append(candidate)
+    return objects
+
+
+def generate_coverage_report(source_root: Path, unittest_bin: str, profile_dir: Path, report_dir: Path):
+    profraw_files = sorted(profile_dir.glob("*.profraw"))
+    if not profraw_files:
+        print(f"warning: no coverage profiles found in {profile_dir}")
+        return 0
+
+    llvm_profdata = find_executable("llvm-profdata")
+    llvm_cov = find_executable("llvm-cov")
+    genhtml = find_executable("genhtml")
+    if llvm_profdata is None:
+        print("error: llvm-profdata not found in PATH", file=sys.stderr)
+        return 1
+    if llvm_cov is None:
+        print("error: llvm-cov not found in PATH", file=sys.stderr)
+        return 1
+    if genhtml is None:
+        print("error: genhtml not found in PATH; run `brew install lcov`", file=sys.stderr)
+        return 1
+
+    lcov_config_file = source_root / ".github" / "workflows" / "lcovrc"
+    if not lcov_config_file.is_file():
+        print(f"error: lcov config file not found at {lcov_config_file}", file=sys.stderr)
+        return 1
+    coverage_css_file = source_root / "scripts" / "ci" / "codecov.css"
+    if not coverage_css_file.is_file():
+        print(f"error: coverage stylesheet not found at {coverage_css_file}", file=sys.stderr)
+        return 1
+
+    report_dir.mkdir(parents=True, exist_ok=True)
+    merged_profile = profile_dir / "merged.profdata"
+    merge_command = [llvm_profdata, "merge", "-sparse", "--failure-mode=all", "-o", os.fspath(merged_profile)]
+    merge_command.extend(os.fspath(path) for path in profraw_files)
+    merge_proc = subprocess.run(merge_command, check=False)
+    if merge_proc.returncode != 0:
+        return merge_proc.returncode
+
+    objects = collect_coverage_objects(unittest_bin)
+    lcov_info = report_dir / "lcov.info"
+    export_command = [
+        llvm_cov,
+        "export",
+        os.fspath(objects[0]),
+        f"--instr-profile={merged_profile}",
+        "--format=lcov",
+    ]
+    for obj in objects[1:]:
+        export_command.append(f"--object={obj}")
+    ignore_regex = build_coverage_ignore_filename_regex(source_root)
+    if ignore_regex is not None:
+        export_command.append(f"--ignore-filename-regex={ignore_regex}")
+
+    with lcov_info.open("w", encoding="utf8") as lcov_file:
+        export_proc = subprocess.run(export_command, stdout=lcov_file, check=False)
+    if export_proc.returncode != 0:
+        return export_proc.returncode
+
+    genhtml_proc = subprocess.run(
+        [
+            genhtml,
+            "--config-file",
+            os.fspath(lcov_config_file),
+            "--css-file",
+            os.fspath(coverage_css_file),
+            "--quiet",
+            "--hierarchical",
+            "--filter",
+            "region",
+            "--ignore-errors",
+            "inconsistent,inconsistent",
+            "--ignore-errors",
+            "corrupt,corrupt",
+            "--ignore-errors",
+            "unsupported,unsupported",
+            "--ignore-errors",
+            "mismatch,mismatch",
+            "--prefix",
+            os.fspath(source_root),
+            "-o",
+            os.fspath(report_dir),
+            os.fspath(lcov_info),
+        ],
+        check=False,
+    )
+    if genhtml_proc.returncode == 0:
+        print(f"coverage report: {report_dir / 'index.html'}")
+    return genhtml_proc.returncode
+
+
 def run_batch(config: TestRunnerConfig, batch):
     failed = False
     stdout = ""
@@ -1199,6 +1398,9 @@ def run_batch(config: TestRunnerConfig, batch):
     child_env = os.environ.copy()
     # Omit printing "FAILURES SUMMARY" block at the end of each unittest process.
     child_env["SUMMARIZE_FAILURES"] = "0"
+    if config.coverage_profile_dir is not None:
+        config.coverage_profile_dir.mkdir(parents=True, exist_ok=True)
+        child_env["LLVM_PROFILE_FILE"] = coverage_profile_file_pattern(config.coverage_profile_dir)
 
     # On Windows the child process cannot reopen a NamedTemporaryFile while it
     # is still open here, so keep it after close and unlink it ourselves.
@@ -1300,7 +1502,7 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
         batch_info["batch"],
         result.get("returncode"),
     )
-    lines = render_failure_lines(failure)
+    lines = render_failure_lines_with_diagnostics(failure, result["stdout"], result["stderr"])
     reproduce_batch = failure.reproduce_batch
     ctx.state.add_failed_attempt(batch_info["batch_idx"], lines, reproduce_batch)
     retry_target = format_failed_test_retry_target(failure.test_name, batch_info)
@@ -1415,6 +1617,7 @@ def parse_args(argv: list[str] | None = None):
         action="store_true",
         help="fail a batch if unittest output reports skipped tests for `require ...` reasons",
     )
+    parser.add_argument("--coverage-report", type=Path, help="write an LCOV HTML coverage report to this directory")
     # Accept options interleaved with positional patterns, e.g.:
     #   run_tests.py bin "[tag]" --fail-fast test/sql/foo.test
     return parser.parse_intermixed_args(argv)
@@ -1466,9 +1669,10 @@ def create_temp_test_list(
     test_flags: str,
     patterns: list[str],
     test_list_files: list[Path] | None,
+    coverage_profile_dir: Path | None = None,
 ):
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_file:
-        generate_test_list(test_file, unittest_bin, test_flags, patterns, test_list_files)
+        generate_test_list(test_file, unittest_bin, test_flags, patterns, test_list_files, coverage_profile_dir)
         return Path(test_file.name)
 
 
@@ -1494,7 +1698,7 @@ def run_single_config(
             test_list_path = args.test_list
         else:
             generated_test_list = create_temp_test_list(
-                unittest_bin, invocation.test_flags, args.patterns, test_list_files
+                unittest_bin, invocation.test_flags, args.patterns, test_list_files, args.coverage_profile_dir
             )
             test_list_path = generated_test_list
         config = TestRunnerConfig(
@@ -1512,6 +1716,7 @@ def run_single_config(
             runtime_threshold_seconds=args.track_runtime,
             max_failures=max_failures,
             fail_require_skip=args.fail_require_skip,
+            coverage_profile_dir=args.coverage_profile_dir,
         )
 
         tests = load_tests(config.test_list)
@@ -1538,6 +1743,7 @@ def run_single_config(
         config_values.pop("test_list", None)
         config_values.pop("unittest_bin", None)
         config_values.pop("test_command", None)
+        config_values.pop("coverage_profile_dir", None)
         config_values = {k: v for k, v in config_values.items() if v is not None and v != "" and v != []}
         config_output = ", ".join(f"{key}={value}" for key, value in config_values.items())
         print(f"config: {config_output}")
@@ -1603,6 +1809,7 @@ def main(argv: list[str] | None = None):
 
 def main_impl(argv: list[str] | None = None):
     args = parse_args(argv)
+    args.coverage_profile_dir = None
     if args.changed_tests is not None and args.test_list is None:
         print("error: --changed-tests requires --test-list", file=sys.stderr)
         return 1
@@ -1631,62 +1838,78 @@ def main_impl(argv: list[str] | None = None):
     failed_configs = []
     if len(config_invocations) > 1:
         print(f"running {len(config_invocations)} configs")
-    for invocation in config_invocations:
-        if stop_requested():
-            print("interrupted")
-            return 130
-        group_open = False
-        if use_config_groups:
-            print(f"::group::test config: {invocation.label}")
-            group_open = True
-        print_config_header = not use_config_groups and not (
-            len(config_invocations) == 1 and invocation.label == "default"
-        )
-        try:
-            run_result = run_single_config(
-                args,
-                unittest_bin,
-                workers,
-                retry,
-                max_retries,
-                max_failures,
-                batch_size,
-                test_list_files,
-                invocation,
-                print_config_header,
+    coverage_profile_tmp = None
+    try:
+        if args.coverage_report is not None:
+            coverage_profile_tmp = tempfile.TemporaryDirectory(prefix="duckdb-coverage-")
+            args.coverage_profile_dir = Path(coverage_profile_tmp.name)
+        for invocation in config_invocations:
+            if stop_requested():
+                print("interrupted")
+                return 130
+            group_open = False
+            if use_config_groups:
+                print(f"::group::test config: {invocation.label}")
+                group_open = True
+            print_config_header = not use_config_groups and not (
+                len(config_invocations) == 1 and invocation.label == "default"
             )
-        except Exception as exc:
-            print(f"error: {exc}")
-            run_result = ConfigRunResult(
-                returncode=1, passed_tests=0, failed_tests=1, skipped_tests=0, elapsed_seconds=0.0
+            try:
+                run_result = run_single_config(
+                    args,
+                    unittest_bin,
+                    workers,
+                    retry,
+                    max_retries,
+                    max_failures,
+                    batch_size,
+                    test_list_files,
+                    invocation,
+                    print_config_header,
+                )
+            except Exception as exc:
+                print(f"error: {exc}")
+                run_result = ConfigRunResult(
+                    returncode=1, passed_tests=0, failed_tests=1, skipped_tests=0, elapsed_seconds=0.0
+                )
+            returncode = run_result.returncode
+            if group_open:
+                print("::endgroup::")
+            if returncode in (0, 1):
+                if run_result.failed_tests > 0:
+                    print(
+                        "❌ ran tests: "
+                        f"{run_result.passed_tests} passed, {run_result.failed_tests} failed, "
+                        f"{run_result.skipped_tests} skipped in {run_result.elapsed_seconds:.0f}s"
+                    )
+                else:
+                    print(
+                        "ran tests: "
+                        f"{run_result.passed_tests} passed, {run_result.skipped_tests} skipped "
+                        f"in {run_result.elapsed_seconds:.0f}s"
+                    )
+            if returncode == 130:
+                print("interrupted")
+                return 130
+            if returncode != 0:
+                failed_configs.append(invocation.label)
+
+        report_returncode = 0
+        if args.coverage_report is not None:
+            report_returncode = generate_coverage_report(
+                Path.cwd().resolve(), unittest_bin, args.coverage_profile_dir, args.coverage_report
             )
-        returncode = run_result.returncode
-        if group_open:
-            print("::endgroup::")
-        if returncode in (0, 1):
-            if run_result.failed_tests > 0:
-                print(
-                    "❌ ran tests: "
-                    f"{run_result.passed_tests} passed, {run_result.failed_tests} failed, "
-                    f"{run_result.skipped_tests} skipped in {run_result.elapsed_seconds:.0f}s"
-                )
-            else:
-                print(
-                    "ran tests: "
-                    f"{run_result.passed_tests} passed, {run_result.skipped_tests} skipped "
-                    f"in {run_result.elapsed_seconds:.0f}s"
-                )
-        if returncode == 130:
-            print("interrupted")
-            return 130
-        if returncode != 0:
-            failed_configs.append(invocation.label)
+    finally:
+        if coverage_profile_tmp is not None:
+            coverage_profile_tmp.cleanup()
 
     if failed_configs:
         if len(config_invocations) == 1:
             return 1
         print(f"error: {len(failed_configs)} config runs failed: {', '.join(failed_configs)}")
         return 1
+    if args.coverage_report is not None and report_returncode != 0:
+        return report_returncode
     if len(config_invocations) > 1:
         print(f"all {len(config_invocations)} config runs passed")
     return 0

@@ -188,3 +188,41 @@ query I
 select stats(col.c).shredding_state from tbl order by rowid offset 2 limit 1;
 ----
 INCONSISTENT
+
+# ------------------------------ Nested OBJECT paths (depth >= 2) ------------------------------
+
+statement ok
+delete from tbl;
+
+statement ok
+SET force_variant_shredding = 'STRUCT(a STRUCT(b VARCHAR, c VARCHAR))';
+
+statement ok
+insert into tbl select {'a': {'b': 'hello', 'c': 'world'}} from range(5)
+
+statement ok
+checkpoint
+
+restart
+
+# A depth-2 path through nested shredded OBJECTs propagates stats
+query II
+select s.fully_shredded.stats.min, s.fully_shredded.stats.max from (select stats(col.a.b) s from tbl limit 1);
+----
+hello	hello
+
+query II
+select s.fully_shredded.stats.min, s.fully_shredded.stats.max from (select stats(col.a.c) s from tbl limit 1);
+----
+world	world
+
+query I
+select stats(col.a.b).shredding_state from tbl limit 1;
+----
+SHREDDED
+
+# The intermediate OBJECT is fully shredded too
+query I
+select stats(col.a).shredding_state from tbl limit 1;
+----
+SHREDDED

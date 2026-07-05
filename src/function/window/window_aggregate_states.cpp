@@ -31,7 +31,7 @@ void WindowAggregateStates::Combine(WindowAggregateStates &target) {
 }
 
 void WindowAggregateStates::Finalize(Vector &result) {
-	AggregateInputData aggr_input_data(aggr, allocator);
+	AggregateFinalizeInputData aggr_input_data(aggr, allocator);
 	aggr.function.GetStateFinalizeCallback()(*statef, aggr_input_data, result, GetCount(), 0);
 }
 

@@ -34,7 +34,7 @@ class PrefetchCostModelState {
 public:
 	PrefetchCostModelState() = default;
 
-	//! Refine the model from a measured network throughput estimate.
+	//! Refine the model from a measured throughput estimate
 	void RefineFromEstimate(const NetworkThroughputEstimate &estimate);
 
 	bool TryGetColumnGapSize(uint64_t &result) const;
@@ -43,7 +43,7 @@ private:
 	//! Weight applied to an estimate
 	static constexpr double ALPHA = 0.5;
 
-	//! Measured cost model
+	//! Measured cost model, zero until estimates arrive so coalescing starts at the gap floor
 	PrefetchCostModel model = {0, 0};
 	//! Whether we have switched from the seed to measured values
 	bool measured_adopted = false;

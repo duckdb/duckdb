@@ -110,6 +110,10 @@ static bool TryShreddedExtractRecursive(const Vector &input, const vector<Varian
 		// only by key supported
 		return false;
 	}
+	if (input.GetType().id() != LogicalTypeId::STRUCT) {
+		//! Not shredded on OBJECT, can't extract a key
+		return false;
+	}
 	// first entry is "typed_value"
 	auto &typed_entries = StructVector::GetEntries(input);
 	auto &typed_value = typed_entries[0];

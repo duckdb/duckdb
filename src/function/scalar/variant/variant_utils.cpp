@@ -11,6 +11,7 @@
 #include "duckdb/function/variant/variant_value_convert.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/common/types/variant/variant_builder.hpp"
 
 namespace duckdb {
 
@@ -23,40 +24,6 @@ PhysicalType VariantDecimalData::GetPhysicalType() const {
 		return PhysicalType::INT32;
 	} else {
 		return PhysicalType::INT16;
-	}
-}
-
-void VariantUtils::ExecutePathFunction(DataChunk &input, const ExpressionState &state, Vector &result,
-                                       const unary_path_function_t &unary_fn, const many_path_function_t &many_fn) {
-	D_ASSERT(input.ColumnCount() == 1 || input.ColumnCount() == 2);
-	const auto count = input.size();
-	const auto &variant_vec = input.data[0];
-
-	if (input.ColumnCount() == 2) {
-		const auto &path = input.data[1];
-		D_ASSERT(path.GetVectorType() == VectorType::CONSTANT_VECTOR);
-		(void)path;
-	}
-
-	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.BindInfo()->Cast<VariantPathBindData>();
-	auto n_columns = input.ColumnCount();
-
-	if (n_columns == 1) {
-		unary_fn(variant_vec, {}, result, count);
-		return;
-	}
-
-	D_ASSERT(n_columns == 2);
-	const auto &path_type_id = input.data[1].GetType().id();
-
-	if (path_type_id == LogicalTypeId::VARCHAR) {
-		unary_fn(variant_vec, info.paths[0], result, count);
-		return;
-	}
-	if (path_type_id == LogicalTypeId::LIST) {
-		many_fn(variant_vec, info.paths, result, count);
-		return;
 	}
 }
 
@@ -469,6 +436,37 @@ bool VariantUtils::VariantSupportsType(const LogicalType &type) {
 	default:
 		return false;
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// ToVariant sources
+//===--------------------------------------------------------------------===//
+// The single-pass build machinery (VariantBuilder / EmitIterator / BuildVariant) lives in
+// variant_builder.hpp so it can be shared with the parquet reader. A "source" just implements
+// 'bool Emit(idx_t row, VariantBuilder &builder)' (returning whether the row is a SQL NULL).
+namespace {
+
+struct VariantIteratorSource {
+	explicit VariantIteratorSource(const VariantIterator &state) : state(state) {
+	}
+	bool Emit(idx_t row, VariantBuilder &builder) const {
+		auto root = state.Root(row);
+		//! Root() resolves a missing/absent root to a SQL NULL
+		if (root.IsNull()) {
+			return true;
+		}
+		EmitIterator(root, builder);
+		return false;
+	}
+
+	const VariantIterator &state;
+};
+
+} // namespace
+
+void VariantUtils::ToVariant(const VariantIterator &state, idx_t count, Vector &result) {
+	VariantIteratorSource source(state);
+	BuildVariant(source, count, result);
 }
 
 } // namespace duckdb

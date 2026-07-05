@@ -234,7 +234,8 @@ bool ExpressionBinder::ContainsType(const LogicalType &type, LogicalTypeId targe
 		return true;
 	}
 	switch (type.id()) {
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		auto child_count = StructType::GetChildCount(type);
 		for (idx_t i = 0; i < child_count; i++) {
 			if (ContainsType(StructType::GetChildType(type, i), target)) {
@@ -267,13 +268,15 @@ LogicalType ExpressionBinder::ExchangeType(const LogicalType &type, LogicalTypeI
 		return new_type;
 	}
 	switch (type.id()) {
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		// we make a copy of the child types of the struct here
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
 			child_type.second = ExchangeType(child_type.second, target, new_type);
 		}
-		return LogicalType::STRUCT(child_types);
+		return type.id() == LogicalTypeId::TUPLE ? LogicalType::TUPLE(std::move(child_types))
+		                                         : LogicalType::STRUCT(std::move(child_types));
 	}
 	case LogicalTypeId::UNION: {
 		auto member_types = UnionType::CopyMemberTypes(type);

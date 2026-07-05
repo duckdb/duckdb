@@ -96,6 +96,21 @@ struct TableFunctionData : public FunctionData {
 	DUCKDB_API bool Equals(const FunctionData &other) const override;
 };
 
+struct FunctionLocalState {
+	DUCKDB_API virtual ~FunctionLocalState();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
 struct FunctionParameters {
 	vector<Value> values;
 	named_parameter_map_t named_parameters;
@@ -277,12 +292,6 @@ public:
 	//! Additional Information to specify function from it's name
 	string extra_info;
 
-	// Optional catalog name of the function
-	Identifier catalog_name;
-
-	// Optional schema name of the function
-	Identifier schema_name;
-
 public:
 	auto SetName(Identifier name_p) -> void {
 		name = std::move(name_p);
@@ -320,6 +329,12 @@ public:
 	//! Used in the bind to erase an argument from a function
 	DUCKDB_API static void EraseArgument(BoundSimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
 	                                     idx_t argument_index);
+
+private:
+	//! Optional catalog name of the function
+	Identifier catalog_name;
+	//! Optional schema name of the function
+	Identifier schema_name;
 };
 
 class SimpleFunction : public Function {

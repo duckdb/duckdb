@@ -4,7 +4,7 @@ This file provides guidance to coding agents when working with code in this repo
 
 ## Overview
 
-DuckDB is a high-performance analytical database system designed to be fast, reliable, portable, and easy to use. It is an in-process SQL OLAP database management system with a rich SQL dialect, vectorized execution engine, and columnar storage format.
+DuckDB is a high-performance analytical database system designed to be fast, reliable, portable, and easy to use. It is an analytical database management system with a rich SQL dialect, vectorized execution engine, and columnar storage format.
 
 ## Build Commands
 
@@ -256,6 +256,12 @@ DUCKDB_EXTENSIONS='json;icu' make
 - Use C++11 range-based for loops when possible
 - Always use braces for if statements and loops
 - Never use `const_cast`
+
+### Comment Conventions
+
+Try to keep comments short. In general, comments should be one short line. Only in exceptional situations should comments be more than one short line. Code should be mostly self-descriptive and too many large comments make code harder to read and understand.
+
+Avoid adding comments specific to how a change was made to the code that relates to a specific issue. For example, a comment like "add +1 to fix an off-by-one error" is not relevant to understanding the code. Such comments related to specific issues that were addressed belong in a PR description or commit message, not in the code itself.
 
 ### Naming Conventions
 - **Files**: `snake_case` (e.g., `abstract_operator.cpp`)

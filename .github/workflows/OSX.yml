@@ -200,6 +200,12 @@ jobs:
         run: |
           python -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
+      - name: Unittest Stdin Tests
+        shell: bash
+        if: ${{ !inputs.skip_tests }}
+        run: |
+          python -m pytest tools/sqllogic/tests --unittest-binary build/release/test/unittest
+
       - name: Examples
         shell: bash
         if: ${{ !inputs.skip_tests }}

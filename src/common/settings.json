@@ -115,6 +115,13 @@
         "custom_implementation": true
     },
     {
+        "name": "approximate_join_order_threshold",
+        "description": "The minimum number of tables in a join to determine the optimal join order approximately instead of exactly.",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "12"
+    },
+    {
         "name": "arrow_large_buffer_size",
         "description": "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
         "type": "BOOLEAN",
@@ -202,6 +209,13 @@
             "set",
             "reset"
         ]
+    },
+    {
+        "name": "cache_local_files",
+        "description": "Whether the external file cache also caches local files (remote files are always cached)",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
     },
     {
         "name": "catalog_error_max_schemas",
@@ -307,6 +321,20 @@
         "default_value": "0"
     },
     {
+        "name": "debug_force_commit_failure",
+        "description": "DEBUG SETTING: force transaction commit to fail after the undo buffer has been committed, used for testing commit error recovery",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_force_commit_revert_failure",
+        "description": "DEBUG SETTING: force RevertCommit to fail while recovering from a commit failure, used for testing",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_force_external",
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
@@ -328,6 +356,19 @@
         "default_value": "false"
     },
     {
+        "name": "debug_local_file_system_delay_ms",
+        "description": "DEBUG SETTING: time to sleep before local file system open/read/write operations",
+        "type": "UBIGINT",
+        "scope": "global",
+        "default_value": "0"
+    },
+    {
+        "name": "debug_order_verification",
+        "description": "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)",
+        "type": "ENUM<DebugOrderVerification>",
+        "scope": "global"
+    },
+    {
         "name": "debug_physical_table_scan_execution_strategy",
         "description": "DEBUG SETTING: force use of given strategy for executing physical table scans",
         "type": "ENUM<PhysicalTableScanExecutionStrategy>",
@@ -339,6 +380,13 @@
         "description": "DEBUG SETTING: skip checkpointing on commit",
         "type": "BOOLEAN",
         "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_transformer_trampoline_style",
+        "description": "Use the experimental trampoline-style parser transformer",
+        "type": "BOOLEAN",
+        "default_scope": "local",
         "default_value": "false"
     },
     {
@@ -480,7 +528,7 @@
         "description": "Rewrite delim joins to materialized CTEs during dependent join flattening",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "false"
+        "default_value": "true"
     },
     {
         "name": "deprecated_using_key_syntax",
@@ -488,6 +536,13 @@
         "type": "ENUM<DeprecatedUsingKeySyntax>",
         "default_scope": "local",
         "default_value": "DEFAULT"
+    },
+    {
+        "name": "dialect_compatibility_mode",
+        "description": "Enable SQL dialect compatibility for a certain engine (e.g. `SET dialect_compatibility_mode='spark'`)",
+        "type": "ENUM<DialectCompatibilityMode>",
+        "default_scope": "local",
+        "default_value": "NONE"
     },
     {
         "name": "disable_database_invalidation",
@@ -773,6 +828,13 @@
         "type": "BOOLEAN",
         "scope": "global",
         "custom_implementation": true
+    },
+    {
+        "name": "force_update_to_del_and_insert",
+        "description": "DEBUG SETTING: forces all updates to use the delete + insert code path instead of in-place updates",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "force_variant_shredding",
@@ -1122,16 +1184,6 @@
         "default_value": "false"
     },
     {
-        "name": "profile_output",
-        "description": "The file to which profile output should be saved, or empty to print to the terminal",
-        "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true,
-        "aliases": [
-            "profiling_output"
-        ]
-    },
-    {
         "name": "profiling_coverage",
         "description": "The profiling coverage (SELECT or ALL)",
         "type": "VARCHAR",
@@ -1140,8 +1192,25 @@
     },
     {
         "name": "profiling_mode",
-        "description": "The profiling mode (STANDARD or DETAILED)",
+        "description": "DEPRECATED: Sets the profiling mode",
         "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "profiling_output",
+        "description": "The file to which profile output should be saved, or empty to print to the terminal",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true,
+        "aliases": [
+            "profile_output"
+        ]
+    },
+    {
+        "name": "profiling_renderer_settings",
+        "description": "A map of settings passed to the renderer of the profiler output (e.g. {'max_extra_lines': 100}) - settings not recognized by the active renderer are ignored",
+        "type": "MAP(VARCHAR, VARCHAR)",
         "scope": "local",
         "custom_implementation": true
     },
@@ -1151,6 +1220,13 @@
         "type": "BIGINT",
         "scope": "local",
         "custom_implementation": true
+    },
+    {
+        "name": "regex_match_operator_semantics",
+        "description": "Configures whether regex match operators use partial or full string matching",
+        "type": "ENUM<RegexMatchOperatorSemantics>",
+        "default_scope": "local",
+        "default_value": "partial"
     },
     {
         "name": "scalar_subquery_error_on_multiple_rows",
@@ -1221,6 +1297,13 @@
         "type": "VARCHAR",
         "scope": "local",
         "custom_implementation": true
+    },
+    {
+        "name": "table_function_identifier_conversion",
+        "description": "Configures the use of deprecated implicit conversion of unbound identifiers to strings in table function arguments.",
+        "type": "ENUM<TableFunctionIdentifierConversion>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
     },
     {
         "name": "temp_directory",

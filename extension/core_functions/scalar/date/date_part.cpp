@@ -90,10 +90,24 @@ DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, const Logica
 	throw NotImplementedException("\"%s\" units \"%s\" not recognized", EnumUtil::ToString(type.id()), specifier);
 }
 
-template <int64_t MIN, int64_t MAX>
+template <int64_t MIN, int64_t MAX, class T>
 unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<BaseStatistics> &child_stats) {
-	// we can always propagate simple date part statistics
-	// since the min and max can never exceed these bounds
+	// we can only propagate simple date part statistics if the child has stats
+	auto &nstats = child_stats[0];
+	if (!NumericStats::HasMinMax(nstats)) {
+		return nullptr;
+	}
+	auto min = NumericStats::GetMin<T>(nstats);
+	auto max = NumericStats::GetMax<T>(nstats);
+	if (min > max) {
+		return nullptr;
+	}
+	// Infinities produce a NULL date part even though the input is not NULL,
+	// so we cannot propagate the validity (and thus the stats) in that case
+	if (!Value::IsFinite(min) || !Value::IsFinite(max)) {
+		return nullptr;
+	}
+	// the min and max can never exceed these bounds
 	auto result = NumericStats::CreateEmpty(LogicalType::BIGINT);
 	result.CopyValidity(child_stats[0]);
 	NumericStats::SetMin(result, Value::BIGINT(MIN));
@@ -116,6 +130,19 @@ unique_ptr<FunctionLocalState> InitDateCacheLocalState(ExpressionState &state, c
 }
 
 struct DatePart {
+	struct AsTime {
+		template <typename SRC, typename DST>
+		static DST Operation(SRC src) {
+			if (SRC::PRECISION > DST::PRECISION) {
+				const int64_t scaling = SRC::PRECISION / DST::PRECISION;
+				return DST(src.value / scaling);
+			} else {
+				const int64_t scaling = DST::PRECISION / SRC::PRECISION;
+				return DST(src.value * scaling);
+			}
+		}
+	};
+
 	template <class T, class OP, class TR = int64_t>
 	static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<BaseStatistics> &child_stats,
 	                                                              const LogicalType &stats_type = LogicalType::BIGINT) {
@@ -185,7 +212,7 @@ struct DatePart {
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 			// min/max of month operator is [1, 12]
-			return PropagateSimpleDatePartStatistics<1, 12>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<1, 12, T>(input.child_stats);
 		}
 	};
 
@@ -198,7 +225,7 @@ struct DatePart {
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 			// min/max of day operator is [1, 31]
-			return PropagateSimpleDatePartStatistics<1, 31>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<1, 31, T>(input.child_stats);
 		}
 	};
 
@@ -284,7 +311,7 @@ struct DatePart {
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 			// min/max of quarter operator is [1, 4]
-			return PropagateSimpleDatePartStatistics<1, 4>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<1, 4, T>(input.child_stats);
 		}
 	};
 
@@ -303,7 +330,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 6>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 6, T>(input.child_stats);
 		}
 	};
 
@@ -316,7 +343,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<1, 7>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<1, 7, T>(input.child_stats);
 		}
 	};
 
@@ -328,7 +355,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<1, 366>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<1, 366, T>(input.child_stats);
 		}
 	};
 
@@ -340,7 +367,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<1, 53>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<1, 53, T>(input.child_stats);
 		}
 	};
 
@@ -429,7 +456,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 59999999999>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59999999999, T>(input.child_stats);
 		}
 	};
 
@@ -441,7 +468,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 59999999>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59999999, T>(input.child_stats);
 		}
 	};
 
@@ -453,7 +480,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 59999>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59999, T>(input.child_stats);
 		}
 	};
 
@@ -465,7 +492,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 59>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59, T>(input.child_stats);
 		}
 	};
 
@@ -477,7 +504,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 59>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 59, T>(input.child_stats);
 		}
 	};
 
@@ -489,7 +516,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 24>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 24, T>(input.child_stats);
 		}
 	};
 
@@ -518,7 +545,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 1>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 1, T>(input.child_stats);
 		}
 	};
 
@@ -550,7 +577,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 0>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 0, T>(input.child_stats);
 		}
 	};
 
@@ -563,7 +590,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 0>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 0, T>(input.child_stats);
 		}
 	};
 
@@ -576,7 +603,7 @@ struct DatePart {
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateSimpleDatePartStatistics<0, 0>(input.child_stats);
+			return PropagateSimpleDatePartStatistics<0, 0, T>(input.child_stats);
 		}
 	};
 
@@ -793,7 +820,7 @@ int64_t DatePart::YearOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::YearOperator::Operation(dtime_ns_t input) {
-	return YearOperator::Operation<dtime_t, int64_t>(input.time());
+	return YearOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -818,7 +845,7 @@ int64_t DatePart::MonthOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::MonthOperator::Operation(dtime_ns_t input) {
-	return MonthOperator::Operation<dtime_t, int64_t>(input.time());
+	return MonthOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -843,7 +870,7 @@ int64_t DatePart::DayOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::DayOperator::Operation(dtime_ns_t input) {
-	return DayOperator::Operation<dtime_t, int64_t>(input.time());
+	return DayOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -913,7 +940,7 @@ int64_t DatePart::QuarterOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::QuarterOperator::Operation(dtime_ns_t input) {
-	return QuarterOperator::Operation<dtime_t, int64_t>(input.time());
+	return QuarterOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -938,7 +965,7 @@ int64_t DatePart::DayOfWeekOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::DayOfWeekOperator::Operation(dtime_ns_t input) {
-	return DayOfWeekOperator::Operation<dtime_t, int64_t>(input.time());
+	return DayOfWeekOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -963,7 +990,7 @@ int64_t DatePart::ISODayOfWeekOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::ISODayOfWeekOperator::Operation(dtime_ns_t input) {
-	return ISODayOfWeekOperator::Operation<dtime_t, int64_t>(input.time());
+	return ISODayOfWeekOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -988,7 +1015,7 @@ int64_t DatePart::DayOfYearOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::DayOfYearOperator::Operation(dtime_ns_t input) {
-	return DayOfYearOperator::Operation<dtime_t, int64_t>(input.time());
+	return DayOfYearOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -1013,7 +1040,7 @@ int64_t DatePart::WeekOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::WeekOperator::Operation(dtime_ns_t input) {
-	return WeekOperator::Operation<dtime_t, int64_t>(input.time());
+	return WeekOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -1038,7 +1065,7 @@ int64_t DatePart::ISOYearOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::ISOYearOperator::Operation(dtime_ns_t input) {
-	return ISOYearOperator::Operation<dtime_t, int64_t>(input.time());
+	return ISOYearOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -1065,7 +1092,7 @@ int64_t DatePart::YearWeekOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::YearWeekOperator::Operation(dtime_ns_t input) {
-	return YearWeekOperator::Operation<dtime_t, int64_t>(input.time());
+	return YearWeekOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -1092,12 +1119,12 @@ int64_t DatePart::EpochNanosecondsOperator::Operation(interval_t input) {
 
 template <>
 int64_t DatePart::EpochNanosecondsOperator::Operation(dtime_t input) {
-	return input.micros * Interval::NANOS_PER_MICRO;
+	return input.value * Interval::NANOS_PER_MICRO;
 }
 
 template <>
 int64_t DatePart::EpochNanosecondsOperator::Operation(dtime_ns_t input) {
-	return input.micros;
+	return input.value;
 }
 
 template <>
@@ -1123,12 +1150,13 @@ int64_t DatePart::EpochMillisOperator::Operation(timestamp_t input) {
 
 template <>
 int64_t DatePart::EpochMicrosecondsOperator::Operation(dtime_t input) {
-	return input.micros;
+	return input.value;
 }
 
 template <>
 int64_t DatePart::EpochMicrosecondsOperator::Operation(dtime_ns_t input) {
-	return DatePart::EpochMicrosecondsOperator::Operation<dtime_t, int64_t>(input.time());
+	return DatePart::EpochMicrosecondsOperator::Operation<dtime_t, int64_t>(
+	    AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -1148,7 +1176,7 @@ int64_t DatePart::EpochMillisOperator::Operation(interval_t input) {
 
 template <>
 int64_t DatePart::EpochMillisOperator::Operation(dtime_t input) {
-	return input.micros / Interval::MICROS_PER_MSEC;
+	return input.value / Interval::MICROS_PER_MSEC;
 }
 
 template <>
@@ -1166,12 +1194,12 @@ int64_t DatePart::NanosecondsOperator::Operation(timestamp_ns_t input) {
 	int32_t nanos;
 	Timestamp::Convert(input, date, time, nanos);
 	// remove everything but the second & nanosecond part
-	return (time.micros % Interval::MICROS_PER_MINUTE) * Interval::NANOS_PER_MICRO + nanos;
+	return (time.value % Interval::MICROS_PER_MINUTE) * Interval::NANOS_PER_MICRO + nanos;
 }
 
 template <>
 int64_t DatePart::NanosecondsOperator::Operation(dtime_ns_t input) {
-	return input.micros % Interval::NANOS_PER_MINUTE;
+	return input.value % Interval::NANOS_PER_MINUTE;
 }
 
 template <>
@@ -1179,7 +1207,7 @@ int64_t DatePart::MicrosecondsOperator::Operation(timestamp_t input) {
 	D_ASSERT(input.IsFinite());
 	auto time = Timestamp::GetTime(input);
 	// remove everything but the second & microsecond part
-	return time.micros % Interval::MICROS_PER_MINUTE;
+	return time.value % Interval::MICROS_PER_MINUTE;
 }
 
 template <>
@@ -1191,12 +1219,12 @@ int64_t DatePart::MicrosecondsOperator::Operation(interval_t input) {
 template <>
 int64_t DatePart::MicrosecondsOperator::Operation(dtime_t input) {
 	// remove everything but the second & microsecond part
-	return input.micros % Interval::MICROS_PER_MINUTE;
+	return input.value % Interval::MICROS_PER_MINUTE;
 }
 
 template <>
 int64_t DatePart::MicrosecondsOperator::Operation(dtime_ns_t input) {
-	return DatePart::MicrosecondsOperator::Operation<dtime_t, int64_t>(input.time());
+	return DatePart::MicrosecondsOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -1222,7 +1250,7 @@ int64_t DatePart::MillisecondsOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::MillisecondsOperator::Operation(dtime_ns_t input) {
-	return MillisecondsOperator::Operation<dtime_t, int64_t>(input.time());
+	return MillisecondsOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -1248,7 +1276,7 @@ int64_t DatePart::SecondsOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::SecondsOperator::Operation(dtime_ns_t input) {
-	return SecondsOperator::Operation<dtime_t, int64_t>(input.time());
+	return SecondsOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -1261,7 +1289,7 @@ int64_t DatePart::MinutesOperator::Operation(timestamp_t input) {
 	D_ASSERT(input.IsFinite());
 	auto time = Timestamp::GetTime(input);
 	// remove the hour part, and truncate to minutes
-	return (time.micros % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
+	return (time.value % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
 }
 
 template <>
@@ -1273,12 +1301,12 @@ int64_t DatePart::MinutesOperator::Operation(interval_t input) {
 template <>
 int64_t DatePart::MinutesOperator::Operation(dtime_t input) {
 	// remove the hour part, and truncate to minutes
-	return (input.micros % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
+	return (input.value % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
 }
 
 template <>
 int64_t DatePart::MinutesOperator::Operation(dtime_ns_t input) {
-	return MinutesOperator::Operation<dtime_t, int64_t>(input.time());
+	return MinutesOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -1289,7 +1317,7 @@ int64_t DatePart::MinutesOperator::Operation(dtime_tz_t input) {
 template <>
 int64_t DatePart::HoursOperator::Operation(timestamp_t input) {
 	D_ASSERT(input.IsFinite());
-	return Timestamp::GetTime(input).micros / Interval::MICROS_PER_HOUR;
+	return Timestamp::GetTime(input).value / Interval::MICROS_PER_HOUR;
 }
 
 template <>
@@ -1299,12 +1327,12 @@ int64_t DatePart::HoursOperator::Operation(interval_t input) {
 
 template <>
 int64_t DatePart::HoursOperator::Operation(dtime_t input) {
-	return input.micros / Interval::MICROS_PER_HOUR;
+	return input.value / Interval::MICROS_PER_HOUR;
 }
 
 template <>
 int64_t DatePart::HoursOperator::Operation(dtime_ns_t input) {
-	return HoursOperator::Operation<dtime_t, int64_t>(input.time());
+	return HoursOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -1341,12 +1369,12 @@ unique_ptr<BaseStatistics> DatePart::EpochOperator::PropagateStatistics<interval
 
 template <>
 double DatePart::EpochOperator::Operation(dtime_t input) {
-	return double(input.micros) / double(Interval::MICROS_PER_SEC);
+	return double(input.value) / double(Interval::MICROS_PER_SEC);
 }
 
 template <>
 double DatePart::EpochOperator::Operation(dtime_ns_t input) {
-	return EpochOperator::Operation<dtime_t, double>(input.time());
+	return EpochOperator::Operation<dtime_t, double>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>
@@ -1382,7 +1410,7 @@ int64_t DatePart::EraOperator::Operation(dtime_t input) {
 
 template <>
 int64_t DatePart::EraOperator::Operation(dtime_ns_t input) {
-	return EraOperator::Operation<dtime_t, int64_t>(input.time());
+	return EraOperator::Operation<dtime_t, int64_t>(AsTime::Operation<dtime_ns_t, dtime_t>(input));
 }
 
 template <>

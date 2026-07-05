@@ -129,6 +129,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
@@ -260,8 +261,9 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalTypeId::TIME_TZ,   LogicalTypeId::TIME_NS,       LogicalTypeId::BIT,
 	    LogicalTypeId::BIGNUM,    LogicalTypeId::UHUGEINT,      LogicalTypeId::HUGEINT,
 	    LogicalTypeId::UUID,      LogicalTypeId::GEOMETRY,      LogicalTypeId::STRUCT,
-	    LogicalTypeId::LIST,      LogicalTypeId::MAP,           LogicalTypeId::ENUM,
-	    LogicalTypeId::UNION,     LogicalTypeId::ARRAY,         LogicalTypeId::VARIANT,
+	    LogicalTypeId::TUPLE,     LogicalTypeId::LIST,          LogicalTypeId::MAP,
+	    LogicalTypeId::ENUM,      LogicalTypeId::UNION,         LogicalTypeId::ARRAY,
+	    LogicalTypeId::VARIANT,
 	};
 	return types;
 }
@@ -407,12 +409,34 @@ string LogicalType::ToString() const {
 		}
 	}
 	switch (id_) {
+	case LogicalTypeId::TUPLE: {
+		if (!type_info_) {
+			return "TUPLE";
+		}
+		auto &child_types = StructType::GetChildTypes(*this);
+		if (child_types.empty()) {
+			return "TUPLE";
+		}
+		string ret = "TUPLE(";
+		for (size_t i = 0; i < child_types.size(); i++) {
+			ret += child_types[i].second.ToString();
+			if (i < child_types.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += ")";
+		return ret;
+	}
 	case LogicalTypeId::STRUCT: {
 		if (!type_info_) {
 			return "STRUCT";
 		}
-		auto is_unnamed = StructType::IsUnnamed(*this);
 		auto &child_types = StructType::GetChildTypes(*this);
+		if (child_types.empty()) {
+			return "STRUCT";
+		}
+
+		auto is_unnamed = StructType::IsUnnamed(*this);
 		string ret = "STRUCT(";
 		for (size_t i = 0; i < child_types.size(); i++) {
 			if (is_unnamed) {
@@ -524,7 +548,6 @@ string LogicalType::ToString() const {
 		return EnumUtil::ToString(id_);
 	}
 }
-// LCOV_EXCL_STOP
 
 LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
 	auto type = DefaultTypeGenerator::GetDefaultType(Identifier(str));
@@ -659,6 +682,7 @@ bool LogicalType::IsComplete() const {
 			}
 			break;
 		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::TUPLE:
 		case LogicalTypeId::UNION:
 		case LogicalTypeId::VARIANT:
 			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::STRUCT_TYPE_INFO) {
@@ -688,7 +712,12 @@ bool LogicalType::IsComplete() const {
 		D_ASSERT(type.AuxInfo());
 		switch (type.AuxInfo()->type) {
 		case ExtraTypeInfoType::STRUCT_TYPE_INFO:
-			return type.AuxInfo()->Cast<StructTypeInfo>().child_types.empty(); // Cannot be empty
+			// empty STRUCTs/TUPLEs are complete (children, if any, are checked by recursion)
+			// UNION/VARIANT (which also use STRUCT_TYPE_INFO) cannot be empty
+			if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::TUPLE) {
+				return false;
+			}
+			return type.AuxInfo()->Cast<StructTypeInfo>().child_types.empty();
 		case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
 			return DecimalType::GetWidth(type) >= 1 && DecimalType::GetWidth(type) <= Decimal::MAX_WIDTH_DECIMAL &&
 			       DecimalType::GetScale(type) <= DecimalType::GetWidth(type);
@@ -711,7 +740,8 @@ bool LogicalType::SupportsRegularUpdate() const {
 	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::GEOMETRY: // If geometry is shredded, its parts (lists/structs) can't be regularly updated.
 		return false;
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
 		auto &child_types = StructType::GetChildTypes(*this);
 		for (auto &entry : child_types) {
 			if (!entry.second.SupportsRegularUpdate()) {
@@ -880,18 +910,6 @@ LogicalType LogicalType::NormalizeType(const LogicalType &type) {
 	}
 }
 
-class LogicalTypeResolver {
-public:
-	explicit LogicalTypeResolver(optional_ptr<ClientContext> context_p) : context(context_p) {
-	}
-	virtual ~LogicalTypeResolver() = default;
-
-	virtual bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) = 0;
-
-public:
-	optional_ptr<ClientContext> context;
-};
-
 static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
                                          const LogicalType &right, LogicalType &result);
 
@@ -913,74 +931,6 @@ public:
 	bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) override {
 		return TryGetMaxLogicalTypeInternal(*this, left, right, result);
 	}
-};
-
-static bool CombineNullOrUnknown(LogicalTypeResolver &, const LogicalType &left, const LogicalType &right,
-                                 LogicalType &result) {
-	// NULL/unknown (parameter) types always take the other type
-	if (left.id() == LogicalTypeId::SQLNULL || right.id() == LogicalTypeId::SQLNULL) {
-		result = LogicalType::NormalizeType(left.id() == LogicalTypeId::SQLNULL ? right : left);
-	} else {
-		result = LogicalType::NormalizeType(left.id() == LogicalTypeId::UNKNOWN ? right : left);
-	}
-	return true;
-}
-
-static bool CombineEnum(LogicalTypeResolver &logical_type_resolver, const LogicalType &left, const LogicalType &right,
-                        LogicalType &result) {
-	// for enums, match the varchar rules
-	if (left.id() == LogicalTypeId::ENUM) {
-		return logical_type_resolver.Operation(LogicalType::VARCHAR, right, result);
-	}
-	return logical_type_resolver.Operation(left, LogicalType::VARCHAR, result);
-}
-
-static bool CombineVariant(LogicalTypeResolver &, const LogicalType &left, const LogicalType &right,
-                           LogicalType &result) {
-	result = right.id() == LogicalTypeId::VARIANT ? right : left;
-	return true;
-}
-
-// for everything but enums - string literals also take the other type
-static bool CombineStringLiteral(LogicalTypeResolver &, const LogicalType &left, const LogicalType &right,
-                                 LogicalType &result) {
-	result = LogicalType::NormalizeType(left.id() == LogicalTypeId::STRING_LITERAL ? right : left);
-	return true;
-}
-
-using CombineTypesRuleFunction = bool (*)(LogicalTypeResolver &resolver, const LogicalType &left,
-                                          const LogicalType &right, LogicalType &result);
-struct CombineUnequalTypesRule {
-	bool (*matches)(const LogicalType &left, const LogicalType &right); // order-insensitive
-	CombineTypesRuleFunction function;
-};
-
-static bool MatchesVariant(const LogicalType &left, const LogicalType &right) {
-	return left.id() == LogicalTypeId::VARIANT || right.id() == LogicalTypeId::VARIANT;
-}
-
-static bool MatchesNullOrUnknown(const LogicalType &left, const LogicalType &right) {
-	auto null_or_unknown = [](const LogicalType &type) {
-		return type.id() == LogicalTypeId::SQLNULL || type.id() == LogicalTypeId::UNKNOWN;
-	};
-	return null_or_unknown(left) || null_or_unknown(right);
-}
-
-static bool MatchesEnum(const LogicalType &left, const LogicalType &right) {
-	return left.id() == LogicalTypeId::ENUM || right.id() == LogicalTypeId::ENUM;
-}
-
-static bool MatchesStringLiteral(const LogicalType &left, const LogicalType &right) {
-	return left.id() == LogicalTypeId::STRING_LITERAL || right.id() == LogicalTypeId::STRING_LITERAL;
-}
-
-// Rules are matched in order, so the first matching rule wins (VARIANT and NULL/UNKNOWN are matched
-// before ENUM, ENUM before STRING_LITERAL). Each `matches` predicate is order-insensitive in (left, right).
-static const CombineUnequalTypesRule COMBINE_UNEQUAL_TYPES_RULES[] = {
-    {MatchesVariant, CombineVariant},
-    {MatchesNullOrUnknown, CombineNullOrUnknown},
-    {MatchesEnum, CombineEnum},
-    {MatchesStringLiteral, CombineStringLiteral},
 };
 
 // Generic combine engine: try the implicit cast rules in both directions and keep the cheaper one. With a
@@ -1027,244 +977,51 @@ static bool TryCombineViaImplicitCast(LogicalTypeResolver &logical_type_resolver
 	return false;
 }
 
-static bool CombineUnequalTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                                const LogicalType &right, LogicalType &result) {
-	D_ASSERT(right.id() != left.id());
-	for (auto &combine_rule : COMBINE_UNEQUAL_TYPES_RULES) {
-		if (combine_rule.matches(left, right)) {
-			return combine_rule.function(logical_type_resolver, left, right, result);
-		}
-	}
-
-	// for other types - try to combine through the generic implicit cast rules
-	if (TryCombineViaImplicitCast(logical_type_resolver, left, right, result)) {
-		return true;
-	}
-	// for integer literals - rerun the operation with the underlying type
-	if (left.id() == LogicalTypeId::INTEGER_LITERAL) {
-		return logical_type_resolver.Operation(IntegerLiteral::GetType(left), right, result);
-	}
-	if (right.id() == LogicalTypeId::INTEGER_LITERAL) {
-		return logical_type_resolver.Operation(left, IntegerLiteral::GetType(right), result);
-	}
-	// for unsigned/signed comparisons we have a few fallbacks
-	if (left.IsNumeric() && right.IsNumeric()) {
-		result = CombineNumericTypes(left, right);
-		return true;
-	}
-	if (left.id() == LogicalTypeId::BOOLEAN && right.IsIntegral()) {
-		result = right;
-		return true;
-	}
-	if (right.id() == LogicalTypeId::BOOLEAN && left.IsIntegral()) {
-		result = left;
-		return true;
-	}
-	return false;
-}
-
-static bool CombineStructTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                               const LogicalType &right, LogicalType &result) {
-	auto &left_children = StructType::GetChildTypes(left);
-	auto &right_children = StructType::GetChildTypes(right);
-
-	auto left_unnamed = StructType::IsUnnamed(left);
-	auto is_unnamed = left_unnamed || StructType::IsUnnamed(right);
-	child_list_t<LogicalType> child_types;
-
-	// At least one side is unnamed, so we attempt positional casting.
-	if (is_unnamed) {
-		if (left_children.size() != right_children.size()) {
-			// We can't cast, or create the super-set.
-			return false;
-		}
-
-		for (idx_t i = 0; i < left_children.size(); i++) {
-			LogicalType child_type;
-			if (!logical_type_resolver.Operation(left_children[i].second, right_children[i].second, child_type)) {
-				return false;
-			}
-			auto &child_name = left_unnamed ? right_children[i].first : left_children[i].first;
-			child_types.emplace_back(child_name, std::move(child_type));
-		}
-		result = LogicalType::STRUCT(child_types);
-		return true;
-	}
-
-	// Create a super-set of the STRUCT fields.
-	// First, create a name->index map of the right children.
-	InsertionOrderPreservingMap<idx_t, Identifier, identifier_map_t<idx_t>> right_children_map;
-	for (idx_t i = 0; i < right_children.size(); i++) {
-		auto &name = right_children[i].first;
-		right_children_map[name] = i;
-	}
-
-	for (idx_t i = 0; i < left_children.size(); i++) {
-		auto &left_child = left_children[i];
-		auto right_child_it = right_children_map.find(left_child.first);
-
-		if (right_child_it == right_children_map.end()) {
-			// We can directly put the left child.
-			child_types.emplace_back(left_child.first, left_child.second);
-			continue;
-		}
-
-		// We need to recurse to ensure the children have a maximum logical type.
-		LogicalType child_type;
-		auto &right_child = right_children[right_child_it->second];
-		if (!logical_type_resolver.Operation(left_child.second, right_child.second, child_type)) {
-			return false;
-		}
-		child_types.emplace_back(left_child.first, std::move(child_type));
-		right_children_map.erase(right_child_it);
-	}
-
-	// Add all remaining right children.
-	for (const auto &right_child_it : right_children_map) {
-		auto &right_child = right_children[right_child_it.second];
-		child_types.emplace_back(right_child.first, right_child.second);
-	}
-
-	result = LogicalType::STRUCT(child_types);
-	return true;
-}
-
-struct CombineEqualTypesRule {
-	LogicalTypeId type;
-	CombineTypesRuleFunction function;
-};
-
-static bool CombineEqualStringLiteral(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                                      const LogicalType &right, LogicalType &result) {
-	result = LogicalType::VARCHAR;
-	return true;
-}
-static bool CombineEqualIntegerLiteral(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                                       const LogicalType &right, LogicalType &result) {
-	// for two integer literals we unify the underlying types
-	return logical_type_resolver.Operation(IntegerLiteral::GetType(left), IntegerLiteral::GetType(right), result);
-}
-static bool CombineEqualEnum(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                             const LogicalType &right, LogicalType &result) {
-	// If both types are different ENUMs we do a string comparison.
-	result = left == right ? left : LogicalType::VARCHAR;
-	return true;
-}
-static bool CombineEqualVarchar(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                                const LogicalType &right, LogicalType &result) {
-	// varchar: use type that has collation (if any)
-	if (StringType::GetCollation(right).empty()) {
-		result = left;
-	} else {
-		result = right;
-	}
-	return true;
-}
-static bool CombineEqualDecimal(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                                const LogicalType &right, LogicalType &result) {
-	// unify the width/scale so that the resulting decimal always fits
-	// "width - scale" gives us the number of digits on the left side of the decimal point
-	// "scale" gives us the number of digits allowed on the right of the decimal point
-	// using the max of these of the two types gives us the new decimal size
-	auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
-	auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
-	auto extra_width =
-	    MaxValue<uint8_t>(NumericCast<uint8_t>(extra_width_left), NumericCast<uint8_t>(extra_width_right));
-	auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
-	auto width = NumericCast<uint8_t>(extra_width + scale);
-	if (width > DecimalType::MaxWidth()) {
-		// if the resulting decimal does not fit, we truncate the scale
-		width = DecimalType::MaxWidth();
-		scale = NumericCast<uint8_t>(width - extra_width);
-	}
-	result = LogicalType::DECIMAL(width, scale);
-	return true;
-}
-static bool CombineEqualList(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                             const LogicalType &right, LogicalType &result) {
-	// list: perform max recursively on child type
-	LogicalType new_child;
-	if (!logical_type_resolver.Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
-		return false;
-	}
-	result = LogicalType::LIST(new_child);
-	return true;
-}
-static bool CombineEqualArray(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                              const LogicalType &right, LogicalType &result) {
-	LogicalType new_child;
-	if (!logical_type_resolver.Operation(ArrayType::GetChildType(left), ArrayType::GetChildType(right), new_child)) {
-		return false;
-	}
-	auto new_size = MaxValue(ArrayType::GetSize(left), ArrayType::GetSize(right));
-	result = LogicalType::ARRAY(new_child, new_size);
-	return true;
-}
-static bool CombineEqualMap(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                            const LogicalType &right, LogicalType &result) {
-	// map: perform max recursively on child type
-	LogicalType new_child;
-	if (!logical_type_resolver.Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
-		return false;
-	}
-	result = LogicalType::MAP(new_child);
-	return true;
-}
-static bool CombineEqualUnion(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                              const LogicalType &right, LogicalType &result) {
-	auto left_member_count = UnionType::GetMemberCount(left);
-	auto right_member_count = UnionType::GetMemberCount(right);
-	if (left_member_count != right_member_count) {
-		// return the "larger" type, with the most members
-		result = left_member_count > right_member_count ? left : right;
-		return true;
-	}
-	// otherwise, keep left, don't try to meld the two together.
-	result = left;
-	return true;
-}
-
-static const CombineEqualTypesRule COMBINE_EQUAL_TYPES_RULES[] = {
-    {LogicalTypeId::STRING_LITERAL, CombineEqualStringLiteral},
-    {LogicalTypeId::INTEGER_LITERAL, CombineEqualIntegerLiteral},
-    {LogicalTypeId::ENUM, CombineEqualEnum},
-    {LogicalTypeId::VARCHAR, CombineEqualVarchar},
-    {LogicalTypeId::DECIMAL, CombineEqualDecimal},
-    {LogicalTypeId::LIST, CombineEqualList},
-    {LogicalTypeId::ARRAY, CombineEqualArray},
-    {LogicalTypeId::MAP, CombineEqualMap},
-    {LogicalTypeId::STRUCT, CombineStructTypes},
-    {LogicalTypeId::UNION, CombineEqualUnion},
-};
-
-static bool CombineEqualTypes(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
-                              const LogicalType &right, LogicalType &result) {
-	auto type_id = left.id();
-	for (auto &combine_rule : COMBINE_EQUAL_TYPES_RULES) {
-		if (type_id == combine_rule.type) {
-			return combine_rule.function(logical_type_resolver, left, right, result);
-		}
-	}
-	result = left;
-	return true;
-}
-
 static bool TryGetMaxLogicalTypeInternal(LogicalTypeResolver &logical_type_resolver, const LogicalType &left,
                                          const LogicalType &right, LogicalType &result) {
-	// we always prefer aliased types
-	if (!left.GetAlias().empty()) {
-		result = left;
-		return true;
+	auto &optional_context = logical_type_resolver.context;
+	// with a context, check all combine rules, including ones registered by extensions
+	// without one, check only the built-in rules
+	bool success;
+	bool matched = optional_context
+	                   ? CastFunctionSet::Get(*optional_context)
+	                         .TryCombineTypes(logical_type_resolver, left, right, result, success)
+	                   : CastFunctionSet::TryCombineTypes(DefaultCombineTypesRules(), logical_type_resolver, left,
+	                                                      right, result, success);
+	if (matched) {
+		return success;
 	}
-	if (!right.GetAlias().empty()) {
-		result = right;
-		return true;
-	}
+	// unequal types fallthrough
 	if (left.id() != right.id()) {
-		return CombineUnequalTypes(logical_type_resolver, left, right, result);
-	} else {
-		return CombineEqualTypes(logical_type_resolver, left, right, result);
+		// for other types - try to combine through the generic implicit cast rules
+		if (TryCombineViaImplicitCast(logical_type_resolver, left, right, result)) {
+			return true;
+		}
+		// for integer literals - rerun the operation with the underlying type
+		if (left.id() == LogicalTypeId::INTEGER_LITERAL) {
+			return logical_type_resolver.Operation(IntegerLiteral::GetType(left), right, result);
+		}
+		if (right.id() == LogicalTypeId::INTEGER_LITERAL) {
+			return logical_type_resolver.Operation(left, IntegerLiteral::GetType(right), result);
+		}
+		// for unsigned/signed comparisons we have a few fallbacks
+		if (left.IsNumeric() && right.IsNumeric()) {
+			result = CombineNumericTypes(left, right);
+			return true;
+		}
+		if (left.id() == LogicalTypeId::BOOLEAN && right.IsIntegral()) {
+			result = right;
+			return true;
+		}
+		if (right.id() == LogicalTypeId::BOOLEAN && left.IsIntegral()) {
+			result = left;
+			return true;
+		}
+		return false;
 	}
+	// equal types fallthrough
+	result = left;
+	return true;
 }
 
 bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
@@ -1367,6 +1124,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 		return 104;
 	// nested types
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
 		return 125;
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::ARRAY:
@@ -1449,6 +1207,14 @@ void LogicalType::Verify() const {
 		}
 		break;
 	}
+	case LogicalTypeId::TUPLE: {
+		// verify child types - all names must be empty
+		for (auto &entry : StructType::GetChildTypes(*this)) {
+			D_ASSERT(entry.first.empty());
+			entry.second.Verify();
+		}
+		break;
+	}
 	case LogicalTypeId::LIST:
 		ListType::GetChildType(*this).Verify();
 		break;
@@ -1509,7 +1275,14 @@ void LogicalType::Serialize(Serializer &serializer) const {
 			// Ignore errors, just try to write as a USER type instead
 		}
 	}
-	serializer.WriteProperty<LogicalTypeId>(100, "id", id_);
+	// TUPLE is a recent type. We store its own id when targeting a recent storage version (V2_0_0+), but for older
+	// formats we write it as an unnamed STRUCT for backwards compatibility (older engines read it as an unnamed
+	// struct - its children carry empty names - and we convert unnamed structs back to TUPLE on deserialize).
+	auto serialized_id = id_;
+	if (id_ == LogicalTypeId::TUPLE && !serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serialized_id = LogicalTypeId::STRUCT;
+	}
+	serializer.WriteProperty<LogicalTypeId>(100, "id", serialized_id);
 	serializer.WritePropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info", type_info_);
 }
 
@@ -1521,11 +1294,16 @@ LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 		return LogicalType::BLOB;
 	}
 
-	LogicalType result(id, std::move(type_info));
+	LogicalType result(id, type_info);
 
 	if (Geometry::IsSpatialGeometryType(result)) {
 		// This is a legacy geometry type, deserialize as geometry
 		return LogicalType::GEOMETRY();
+	}
+
+	// Convert unnamed (non-empty) STRUCTs back to TUPLE
+	if (id == LogicalTypeId::STRUCT && type_info && StructType::IsUnnamed(result)) {
+		return LogicalType(LogicalTypeId::TUPLE, std::move(type_info));
 	}
 
 	return result;
@@ -1537,7 +1315,8 @@ LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 LogicalType LogicalType::Copy() const {
 	LogicalType copy = *this;
 	if (type_info_ && type_info_->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
-		// We copy (i.e., create new) type info, unless the type is an ENUM, otherwise we have to copy the whole dict
+		// We copy (i.e., create new) type info, unless the type is an ENUM - enum type info is kept shared to avoid
+		// rebuilding the dictionary lookup map; use DeepCopy to force a copy
 		copy.type_info_ = type_info_->Copy();
 	}
 	return copy;
@@ -1545,8 +1324,7 @@ LogicalType LogicalType::Copy() const {
 
 LogicalType LogicalType::DeepCopy() const {
 	LogicalType copy = *this;
-	if (type_info_ && type_info_->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
-		// We copy (i.e., create new) type info, unless the type is an ENUM, otherwise we have to copy the whole dict
+	if (type_info_) {
 		copy.type_info_ = type_info_->DeepCopy();
 	}
 	return copy;
@@ -1670,8 +1448,8 @@ LogicalType LogicalType::LIST(const LogicalType &child) {
 // Struct Type
 //===--------------------------------------------------------------------===//
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION ||
-	         type.id() == LogicalTypeId::VARIANT);
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::TUPLE ||
+	         type.id() == LogicalTypeId::UNION || type.id() == LogicalTypeId::VARIANT);
 
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
@@ -1703,7 +1481,11 @@ idx_t StructType::GetChildIndexUnsafe(const LogicalType &type, const string &nam
 idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
 }
+
 bool StructType::IsUnnamed(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::TUPLE) {
+		return true;
+	}
 	auto &child_types = StructType::GetChildTypes(type);
 	if (child_types.empty()) {
 		return false;
@@ -1714,6 +1496,48 @@ bool StructType::IsUnnamed(const LogicalType &type) {
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	auto info = make_shared_ptr<StructTypeInfo>(std::move(children));
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
+}
+
+bool StructType::IsStruct(const LogicalType &type) {
+	return StructType::IsStruct(type.id());
+}
+
+bool StructType::IsStruct(LogicalTypeId id) {
+	return id == LogicalTypeId::STRUCT || id == LogicalTypeId::TUPLE;
+}
+
+string TupleType::GetChildName(idx_t index) {
+	return "element" + to_string(index + 1);
+}
+
+child_list_t<LogicalType> TupleType::NamedChildren(const LogicalType &type) {
+	auto &child_types = StructType::GetChildTypes(type);
+	child_list_t<LogicalType> result;
+	result.reserve(child_types.size());
+	for (idx_t i = 0; i < child_types.size(); i++) {
+		auto &child = child_types[i];
+		auto name = child.first.empty() ? TupleType::GetChildName(i) : child.first.GetIdentifierName();
+		result.emplace_back(Identifier(std::move(name)), child.second);
+	}
+	return result;
+}
+
+LogicalType LogicalType::TUPLE(child_list_t<LogicalType> children) {
+	// a TUPLE is an unnamed struct - all member names are empty
+	for (auto &child : children) {
+		child.first.clear();
+	}
+	auto info = make_shared_ptr<StructTypeInfo>(std::move(children));
+	return LogicalType(LogicalTypeId::TUPLE, std::move(info));
+}
+
+LogicalType LogicalType::TUPLE(vector<LogicalType> children) {
+	child_list_t<LogicalType> child_list;
+	child_list.reserve(children.size());
+	for (auto &child : children) {
+		child_list.emplace_back(string(), std::move(child));
+	}
+	return LogicalType::TUPLE(std::move(child_list));
 }
 
 //===--------------------------------------------------------------------===//
@@ -2054,10 +1878,11 @@ LogicalType LogicalType::GEOMETRY(const CoordinateReferenceSystem &crs) {
 bool GeoType::HasCRS(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
 	auto info = type.AuxInfo();
-	if (!info) {
+	if (!info || info->type != ExtraTypeInfoType::GEO_TYPE_INFO) {
+		// a GEOMETRY type without geo type info has no CRS - this can happen when an alias is set on a geometry
+		// type that was created without a CRS (SetAlias attaches a generic type info)
 		return false;
 	}
-	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
 	const auto &geo_info = info->Cast<GeoTypeInfo>();
 
 	return geo_info.crs.GetType() != CoordinateReferenceSystemType::INVALID;
@@ -2066,11 +1891,9 @@ bool GeoType::HasCRS(const LogicalType &type) {
 const CoordinateReferenceSystem &GeoType::GetCRS(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::GEOMETRY);
 	auto info = type.AuxInfo();
-	if (!info) {
+	if (!info || info->type != ExtraTypeInfoType::GEO_TYPE_INFO) {
 		throw InternalException("Geometry type has no CRS information");
 	}
-	D_ASSERT(info);
-	D_ASSERT(info->type == ExtraTypeInfoType::GEO_TYPE_INFO);
 	auto &geo_info = info->Cast<GeoTypeInfo>();
 
 	return geo_info.crs;

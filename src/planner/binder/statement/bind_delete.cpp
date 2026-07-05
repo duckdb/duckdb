@@ -33,6 +33,9 @@ BoundStatement Binder::BindNode(DeleteQueryNode &node) {
 	if (auto expanded = TryExpandTriggers(node, table, TriggerEventType::DELETE_EVENT)) {
 		return std::move(*expanded);
 	}
+	if (auto expanded = TryExpandRowTriggers(node, node.returning_list, table, TriggerEventType::DELETE_EVENT)) {
+		return std::move(*expanded);
+	}
 
 	if (!table.temporary) {
 		// delete from persistent table: not read only!

@@ -119,9 +119,7 @@ string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const s
 
 static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_list_t<LogicalType> &select_list) {
 	auto ref = make_uniq<BaseTableRef>();
-	ref->catalog_name = stmt.info->catalog;
-	ref->schema_name = stmt.info->schema;
-	ref->table_name = stmt.info->table;
+	ref->SetQualifiedName(stmt.info->GetQualifiedName());
 
 	auto statement = make_uniq<SelectNode>();
 	statement->from_table = std::move(ref);
@@ -158,13 +156,14 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	// lookup the format in the catalog
 	auto &copy_function = Catalog::GetEntry<CopyFunctionCatalogEntry>(
-	    context, Identifier::InvalidCatalog(), Identifier::DefaultSchema(), Identifier(stmt.info->format));
+	    context,
+	    QualifiedName(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), Identifier(stmt.info->format)));
 	if (!copy_function.function.copy_to_bind && !copy_function.function.plan) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 
 	// gather a list of all the tables
-	string catalog = stmt.database.empty() ? INVALID_CATALOG : stmt.database;
+	string catalog = stmt.database;
 	catalog_entry_vector_t tables;
 	auto schemas = Catalog::GetSchemas(context, catalog);
 	for (auto &schema : schemas) {
@@ -225,9 +224,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			id++;
 		}
 		info->is_from = false;
-		info->catalog = Identifier(catalog);
-		info->schema = table.schema.name;
-		info->table = table.name;
+		info->SetQualifiedName(QualifiedName(Identifier(catalog), table.schema.name, table.name));
 
 		// We can not export generated columns
 		child_list_t<LogicalType> select_list;
@@ -244,9 +241,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		}
 
 		ExportedTableData exported_data;
-		exported_data.database_name = Identifier(catalog);
-		exported_data.table_name = info->table;
-		exported_data.schema_name = info->schema;
+		exported_data.qualified_name =
+		    QualifiedName(Identifier(catalog), info->GetQualifiedName().Schema(), info->Table());
 
 		exported_data.file_path = info->file_path;
 
@@ -274,7 +270,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		fs.CreateDirectory(stmt.info->file_path);
 	}
 
-	stmt.info->catalog = Identifier(catalog);
+	stmt.info->SetQualifiedName(QualifiedName(Identifier(catalog), stmt.info->GetQualifiedName().Schema(),
+	                                          stmt.info->GetQualifiedName().Name()));
 	// prepare the options for export
 	auto &format = stmt.info->format;
 	auto &options = stmt.info->options;

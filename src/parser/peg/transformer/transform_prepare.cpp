@@ -16,10 +16,10 @@ bool IsPrepareableStatement(StatementType type) {
 	}
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformPrepareStatement(PEGTransformer &transformer,
-                                                                          const Identifier &identifier,
-                                                                          const vector<LogicalType> &type_list,
-                                                                          unique_ptr<SQLStatement> statement) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformPrepareStatement(PEGTransformer &transformer, const Identifier &identifier,
+                                                 const optional<vector<LogicalType>> &type_list,
+                                                 unique_ptr<SQLStatement> statement) {
 	auto result = make_uniq<PrepareStatement>();
 	result->name = identifier;
 	if (!IsPrepareableStatement(statement->type)) {

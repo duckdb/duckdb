@@ -87,8 +87,13 @@ typedef void (*aggregate_update_t)(Vector inputs[], AggregateInputData &aggr_inp
 //! The type used for combining hashed aggregate states
 typedef void (*aggregate_combine_t)(Vector &state, Vector &combined, AggregateInputData &aggr_input_data, idx_t count);
 //! The type used for finalizing hashed aggregate function payloads
-typedef void (*aggregate_finalize_t)(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
-                                     idx_t offset);
+typedef void (*aggregate_finalize_t)(Vector &state, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+                                     idx_t count, idx_t offset);
+//! Initializes the local state used by the finalize of the aggregate (optional).
+//! The local state can be used to cache expensive intermediates between finalized groups - callers can keep the
+//! local state alive to re-use it across multiple finalize calls (see AggregateFinalizeInputData).
+typedef unique_ptr<FunctionLocalState> (*aggregate_init_local_state_finalize_t)(const BoundAggregateFunction &function,
+                                                                                optional_ptr<FunctionData> bind_data);
 //! The type used for propagating statistics in aggregate functions (optional)
 typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr,
                                                              AggregateStatisticsInput &input);
@@ -126,7 +131,24 @@ typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr
 typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer,
                                                             BoundAggregateFunction &function);
 
-typedef AggregateStateLayout (*aggregate_get_state_type_t)(const BoundAggregateFunction &function);
+typedef AggregateStateLayout (*aggregate_get_state_type_t)(AggregateLayoutInput &input);
+
+//! Input to the import_aggregate_state callback: deserializes the input_vec.size() exported states from input_vec into
+//! dest_buffer (state i at offset i * layout.total_state_size).
+struct AggregateImportInputData {
+	AggregateImportInputData(const AggregateStateLayout &layout, const Vector &input_vec, data_ptr_t dest_buffer,
+	                         ArenaAllocator &allocator)
+	    : layout(layout), input_vec(input_vec), dest_buffer(dest_buffer), allocator(allocator) {
+	}
+
+	const AggregateStateLayout &layout;
+	const Vector &input_vec;
+	data_ptr_t dest_buffer;
+	ArenaAllocator &allocator;
+};
+
+//! The counterpart of export_aggregate_state, for states a static field layout cannot describe (e.g. a hash map).
+typedef void (*aggregate_import_state_t)(AggregateImportInputData &input);
 
 struct AggregateFunctionInfo {
 	DUCKDB_API virtual ~AggregateFunctionInfo();
@@ -185,6 +207,10 @@ public:
 	aggregate_finalize_t GetStateFinalizeCallback() const { return finalize; }
 	bool HasStateFinalizeCallback() const { return finalize != nullptr; }
 
+	void SetInitLocalStateFinalizeCallback(aggregate_init_local_state_finalize_t callback) { init_local_state_finalize = callback; }
+	aggregate_init_local_state_finalize_t GetInitLocalStateFinalizeCallback() const { return init_local_state_finalize; }
+	bool HasInitLocalStateFinalizeCallback() const { return init_local_state_finalize != nullptr; }
+
 	bool HasWindowCallback() const { return window != nullptr; }
 	aggregate_window_t GetWindowCallback() const { return window; }
 	void SetWindowCallback(aggregate_window_t callback) { window = callback; }
@@ -220,6 +246,8 @@ public:
 	aggregate_combine_t combine = nullptr;
 	//! The hashed aggregate finalization function (may be null, if window is set)
 	aggregate_finalize_t finalize = nullptr;
+	//! Initializes the local state used by the finalize (may be null)
+	aggregate_init_local_state_finalize_t init_local_state_finalize = nullptr;
 	//! The clustered aggregate update function (may be null)
 	aggregate_cluster_update_t cluster_update = nullptr;
 	//! The windowed aggregate custom function (may be null)
@@ -243,6 +271,11 @@ public:
 	aggregate_deserialize_t deserialize = nullptr;
 
 	aggregate_get_state_type_t get_state_type = nullptr;
+
+	//! Explicit state export/import callbacks for states a static field layout cannot describe (e.g. a hash map).
+	//! Must be set together; export acts as the finalize in state-export mode.
+	aggregate_finalize_t export_aggregate_state = nullptr;
+	aggregate_import_state_t import_aggregate_state = nullptr;
 
 	bool operator==(const AggregateFunctionCallbacks &rhs) const;
 	bool operator!=(const AggregateFunctionCallbacks &rhs) const;
@@ -336,6 +369,10 @@ public: // Callbacks
 	auto GetStateFinalizeCallback() const -> aggregate_finalize_t { return callbacks.finalize; }
 	auto SetStateFinalizeCallback(aggregate_finalize_t callback) -> void { callbacks.finalize = callback; }
 
+	auto HasInitLocalStateFinalizeCallback() const -> bool { return callbacks.init_local_state_finalize != nullptr; }
+	auto GetInitLocalStateFinalizeCallback() const -> aggregate_init_local_state_finalize_t { return callbacks.init_local_state_finalize; }
+	auto SetInitLocalStateFinalizeCallback(aggregate_init_local_state_finalize_t callback) -> void { callbacks.init_local_state_finalize = callback; }
+
 	auto HasWindowCallback() const -> bool { return callbacks.window != nullptr; }
 	auto GetWindowCallback() const -> aggregate_window_t { return callbacks.window; }
 	auto SetWindowCallback(aggregate_window_t callback) -> void { callbacks.window = callback; }
@@ -360,6 +397,14 @@ public: // Callbacks
 
 	bool HasGetStateTypeCallback() const { return callbacks.get_state_type != nullptr; }
 	aggregate_get_state_type_t GetStateTypeCallback() const { return callbacks.get_state_type; }
+
+	bool HasExportAggregateStateCallback() const { return callbacks.export_aggregate_state != nullptr; }
+	aggregate_finalize_t GetExportAggregateStateCallback() const { return callbacks.export_aggregate_state; }
+	void SetExportAggregateStateCallback(aggregate_finalize_t callback) { callbacks.export_aggregate_state = callback; }
+
+	bool HasImportAggregateStateCallback() const { return callbacks.import_aggregate_state != nullptr; }
+	aggregate_import_state_t GetImportAggregateStateCallback() const { return callbacks.import_aggregate_state; }
+	void SetImportAggregateStateCallback(aggregate_import_state_t callback) { callbacks.import_aggregate_state = callback; }
 	// clang-format on
 
 public: // Extra function info
@@ -500,6 +545,17 @@ public:
 		return *this;
 	}
 
+	//! Registers explicit export/import callbacks for states a static field layout cannot describe (e.g. a hash map);
+	//! get_state_type still supplies the exported logical type.
+	AggregateFunction &SetStateExportCallbacks(aggregate_get_state_type_t get_state_type_callback,
+	                                           aggregate_finalize_t export_aggregate_state_callback,
+	                                           aggregate_import_state_t import_aggregate_state_callback) {
+		callbacks.get_state_type = get_state_type_callback;
+		callbacks.export_aggregate_state = export_aggregate_state_callback;
+		callbacks.import_aggregate_state = import_aggregate_state_callback;
+		return *this;
+	}
+
 	AggregateFunction &SetClusterCallback(aggregate_cluster_update_t cluster_update) {
 		callbacks.cluster_update = cluster_update;
 		return *this;
@@ -538,13 +594,20 @@ public:
 		                         AggregateFunction::StateCombine<STATE, OP>,
 		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, null_handling,
 		                         UnaryClusterUpdateCallback<STATE, INPUT_TYPE, OP>());
+		// automatically wire up the destructor if the operation defines a Destroy method
+		if constexpr (OperationHasDestroy<STATE, OP>::value) {
+			result.callbacks.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+		}
 		WireStructStateType<STATE>(result);
 		return result;
 	}
 
+	//! Deprecated: use UnaryAggregate instead - the destructor is now automatically wired up when the operation
+	//! defines a Destroy method
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
-	static AggregateFunction UnaryAggregateDestructor(LogicalType input_type, LogicalType return_type) {
+	[[deprecated("Use UnaryAggregate instead - the destructor is now wired up automatically")]] static AggregateFunction
+	UnaryAggregateDestructor(LogicalType input_type, LogicalType return_type) {
 		auto aggregate = UnaryAggregate<STATE, INPUT_TYPE, RESULT_TYPE, OP, destructor_type>(input_type, return_type);
 		aggregate.callbacks.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 		return aggregate;
@@ -564,35 +627,15 @@ public:
 	}
 
 public:
+	//! Returns the logical type for state type ST, resolving types that are only known after binding
+	//! (sort keys, linked lists and StateString fields) from the bound aggregate function.
+	//! Defined out-of-line (after BoundAggregateFunction is complete).
+	template <class ST, class STATE>
+	static LogicalType BuildStateLogical(const BoundAggregateFunction &bound_function);
+
+	//! Defined out-of-line (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().
 	template <class STATE>
-	static void WireStructStateType(AggregateFunction &result) {
-		if constexpr (HasStructStateType<STATE>::value) {
-			if constexpr (IsOptionalStateType<typename STATE::STATE_TYPE>::value) {
-				result.SetStructStateExport([](const BoundAggregateFunction &) {
-					using T = typename STATE::STATE_TYPE::value_type;
-					if constexpr (IsStructStateType<T>::value) {
-						return AggregateStateLayout(T::GetLogicalType(STATE::STATE_NAMES),
-						                            AlignValue<idx_t>(sizeof(STATE)), true);
-					} else {
-						return AggregateStateLayout(PrimitiveToLogicalType<T>(), AlignValue<idx_t>(sizeof(STATE)),
-						                            true);
-					}
-				});
-			} else {
-				result.SetStructStateExport([](const BoundAggregateFunction &) {
-					AggregateStateLayout layout;
-					layout.type = STATE::STATE_TYPE::GetLogicalType(STATE::STATE_NAMES);
-					layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
-					STATE::STATE_TYPE::PopulateField(layout.field);
-					return layout;
-				});
-			}
-		} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {
-			result.SetStructStateExport([](const BoundAggregateFunction &) {
-				return AggregateStateLayout(PrimitiveToLogicalType<STATE>(), AlignValue<idx_t>(sizeof(STATE)));
-			});
-		}
-	}
+	static void WireStructStateType(AggregateFunction &result);
 
 	template <class STATE>
 	static idx_t StateSize(const BoundAggregateFunction &) {
@@ -608,6 +651,15 @@ public:
 	template <class STATE, class OP>
 	struct OperationHasInitialize<STATE, OP, initialize_void_t<decltype(OP::Initialize(std::declval<STATE &>()))>>
 	    : std::true_type {};
+
+	//! Detects whether "OP" provides a "Destroy(STATE &, AggregateInputData &)" method
+	template <class STATE, class OP, class = void>
+	struct OperationHasDestroy : std::false_type {};
+	template <class STATE, class OP>
+	struct OperationHasDestroy<STATE, OP,
+	                           initialize_void_t<decltype(OP::template Destroy<STATE>(
+	                               std::declval<STATE &>(), std::declval<AggregateInputData &>()))>> : std::true_type {
+	};
 
 	template <class STATE, class OP, AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static void StateInitialize(const BoundAggregateFunction &, data_ptr_t state) {
@@ -688,15 +740,15 @@ public:
 	}
 
 	template <class STATE, class RESULT_TYPE, class OP>
-	static void StateFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
-	                          idx_t offset) {
-		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, aggr_input_data, result, count, offset);
+	static void StateFinalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+	                          idx_t count, idx_t offset) {
+		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, finalize_input_data, result, count, offset);
 	}
 
 	template <class STATE, class OP>
-	static void StateVoidFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
-	                              idx_t offset) {
-		AggregateExecutor::VoidFinalize<STATE, OP>(states, aggr_input_data, result, count, offset);
+	static void StateVoidFinalize(Vector &states, AggregateFinalizeInputData &finalize_input_data, Vector &result,
+	                              idx_t count, idx_t offset) {
+		AggregateExecutor::VoidFinalize<STATE, OP>(states, finalize_input_data, result, count, offset);
 	}
 
 	template <class STATE, class OP>
@@ -714,10 +766,63 @@ public:
 	DUCKDB_API bool operator==(const BoundAggregateFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundAggregateFunction &rhs) const;
 
-	AggregateStateLayout GetStateType() const {
+	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
-		return callbacks.get_state_type(*this);
+		AggregateLayoutInput input(*this, bind_data);
+		return callbacks.get_state_type(input);
 	}
 };
+
+// Defined here (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().
+template <class STATE>
+inline void AggregateFunction::WireStructStateType(AggregateFunction &result) {
+	if constexpr (HasStructStateType<STATE>::value) {
+		using ST = typename STATE::STATE_TYPE;
+		result.SetStructStateExport([](AggregateLayoutInput &input) {
+			auto &bound = input.function;
+			AggregateStateLayout layout;
+			if (bound.GetReturnType().IsAggregateState()) {
+				// the function has been modified for state export (see ExportAggregateFunction::SetStateExport) -
+				// its return type IS the state type already
+				layout.type = bound.GetReturnType();
+			} else {
+				layout.type = AggregateFunction::BuildStateLogical<ST, STATE>(bound);
+			}
+			layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
+			layout.field = BuildStateField<ST>();
+			AggregateStateField::PopulateListFunctions(layout.type, layout.field);
+			return layout;
+		});
+	} else if constexpr (HasPrimitiveLogicalType<STATE>::value) {
+		result.SetStructStateExport([](AggregateLayoutInput &) {
+			return AggregateStateLayout(PrimitiveToLogicalType<STATE>(), AlignValue<idx_t>(sizeof(STATE)));
+		});
+	}
+}
+
+// Defined here (after BoundAggregateFunction is complete) so the body can access the bound function's types.
+template <class ST, class STATE>
+inline LogicalType AggregateFunction::BuildStateLogical(const BoundAggregateFunction &bound_function) {
+	// the runtime types of the bound function - used to resolve StateReturnType/StateInputType sources
+	StateLayoutTypeInfo info {bound_function.GetReturnType(), bound_function.GetArguments()};
+	if constexpr (IsStateListType<ST>::value) {
+		using SRC = typename ST::SOURCE_TYPE;
+		if constexpr (IsStateTypeSource<SRC>::value) {
+			return ResolveStateSourceType<SRC>(info);
+		} else {
+			// the element is described by a nested field descriptor (e.g. a sort key)
+			return LogicalType::LIST(FieldToLogicalType<SRC>(info));
+		}
+	} else if constexpr (IsOptionalStateType<ST>::value) {
+		using V = typename ST::value_type;
+		if constexpr (IsStructStateType<V>::value) {
+			return V::GetLogicalType(STATE::STATE_NAMES, info);
+		} else {
+			return FieldToLogicalType<V>(info);
+		}
+	} else {
+		return ST::GetLogicalType(STATE::STATE_NAMES, info);
+	}
+}
 
 } // namespace duckdb

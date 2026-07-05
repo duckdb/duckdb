@@ -4,7 +4,7 @@
 
 # set threshold at 5 X rowgroup size
 statement ok
-ATTACH '__TEST_DIR__/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 614400)
+ATTACH '{TEST_DIR}/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 614400)
 
 statement ok
 CREATE TABLE db1.t(i INTEGER);
@@ -62,17 +62,17 @@ SELECT COUNT(*) FROM db1.t
 
 # ATTACH OR REPLACE with a different vacuum_rebuild_indexes value fails
 statement error
-ATTACH OR REPLACE '__TEST_DIR__/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 0)
+ATTACH OR REPLACE '{TEST_DIR}/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 0)
 ----
 Cannot re-attach with a different vacuum_rebuild_indexes setting
 
 # ATTACH OR REPLACE with the same value is a no-op
 statement ok
-ATTACH OR REPLACE '__TEST_DIR__/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 614400)
+ATTACH OR REPLACE '{TEST_DIR}/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 614400)
 
 # ATTACH IF NOT EXISTS ignores the supplied options; the existing threshold (614400) remains in effect
 statement ok
-ATTACH IF NOT EXISTS '__TEST_DIR__/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 0)
+ATTACH IF NOT EXISTS '{TEST_DIR}/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 0)
 
 # delete all rows in the (now) first row group
 statement ok

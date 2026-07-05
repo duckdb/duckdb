@@ -281,7 +281,7 @@ void WindowSegmentTreePart::WindowSegmentValue(const WindowSegmentTreeGlobalStat
 }
 void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 	//	Finalise the result aggregates and write to result if write_result is set
-	AggregateInputData aggr_input_data(aggr, allocator);
+	AggregateFinalizeInputData aggr_input_data(aggr, allocator);
 	aggr.function.GetStateFinalizeCallback()(statef, aggr_input_data, result, count, 0);
 
 	//	Destruct the result aggregates

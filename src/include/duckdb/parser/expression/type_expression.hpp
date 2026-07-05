@@ -11,6 +11,7 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
@@ -19,26 +20,37 @@ class TypeExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::TYPE;
 
-	TypeExpression(Identifier catalog, Identifier schema, Identifier type_name,
-	               vector<unique_ptr<ParsedExpression>> children);
+	TypeExpression(QualifiedName qualified_name, vector<unique_ptr<ParsedExpression>> children);
 	TypeExpression(Identifier type_name, vector<unique_ptr<ParsedExpression>> children);
 	TypeExpression(const string &type_name, vector<unique_ptr<ParsedExpression>> children);
 
 public:
+	const QualifiedName &GetQualifiedName() const {
+		return qualified_name;
+	}
+	QualifiedName &GetQualifiedNameMutable() {
+		return qualified_name;
+	}
+	void SetQualifiedName(QualifiedName name) {
+		qualified_name = std::move(name);
+	}
+	void SetQualifiedName(Identifier catalog, Identifier schema, Identifier name) {
+		qualified_name = QualifiedName(std::move(catalog), std::move(schema), std::move(name));
+	}
 	const Identifier &GetTypeName() const {
-		return type_name;
+		return qualified_name.Name();
 	}
 	const Identifier &GetSchema() const {
-		return schema;
+		return qualified_name.Schema();
 	}
 	void SetSchema(Identifier new_schema) {
-		schema = std::move(new_schema);
+		qualified_name = QualifiedName(qualified_name.Catalog(), std::move(new_schema), qualified_name.Name());
 	}
 	const Identifier &GetCatalog() const {
-		return catalog;
+		return qualified_name.Catalog();
 	}
 	void SetCatalog(Identifier new_catalog) {
-		catalog = std::move(new_catalog);
+		qualified_name = QualifiedName(std::move(new_catalog), qualified_name.Schema(), qualified_name.Name());
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
 		return children;
@@ -63,10 +75,8 @@ public:
 private:
 	TypeExpression();
 
-	//! Qualified name parts
-	Identifier catalog;
-	Identifier schema;
-	Identifier type_name;
+	//! Qualified name of the type (catalog.schema.name)
+	QualifiedName qualified_name;
 
 	//! Children of the type expression (e.g. type parameters)
 	vector<unique_ptr<ParsedExpression>> children;

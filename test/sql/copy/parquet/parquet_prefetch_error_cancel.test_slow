@@ -10,9 +10,6 @@ COPY (SELECT i FROM range(0, 2000000) t(i)) TO '{TEST_DIR}/uaf.parquet' (FORMAT 
 statement ok
 SET threads=32
 
-statement ok
-SET prefetch_all_parquet_files=true
-
 loop iter 0 50
 
 statement error

@@ -1,7 +1,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/variant.hpp"
+#include "duckdb/function/scalar/variant_path_function.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
-#include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
 
@@ -19,69 +19,17 @@ static ValidityMask CollectVariantExistence(const UnifiedVariantVectorData &vari
 	return path_validity;
 }
 
-static void UnaryVariantExists(const Vector &variant_vec, const vector<VariantPathComponent> &components,
-                               Vector &result, const idx_t count) {
-	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
-	const UnifiedVariantVectorData variant(source_format);
-
-	const auto &path_validity = CollectVariantExistence(variant, components, count);
-
-	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
-	auto row_writer = FlatVector::Writer<bool>(result, count);
-
-	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		if (!variant.RowIsValid(row_idx)) {
-			row_writer.WriteNull();
-			continue;
-		}
-
-		if (path_validity.RowIsValid(row_idx)) {
-			row_writer.WriteValue(true);
-		} else {
-			row_writer.WriteValue(false);
-		}
-	}
-}
-
-static void ManyVariantExists(const Vector &variant_vec, const vector<vector<VariantPathComponent>> &paths,
-                              Vector &result, const idx_t count) {
-	vector<ValidityMask> existence_by_path;
-	existence_by_path.reserve(paths.size());
-
-	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
-	const UnifiedVariantVectorData variant(source_format);
-
-	for (const auto &path : paths) {
-		existence_by_path.push_back(CollectVariantExistence(variant, path, count));
-	}
-
-	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
-	auto result_writer = FlatVector::Writer<VectorListType<bool>>(result, count);
-
-	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		if (!variant.RowIsValid(row_idx)) {
-			result_writer.WriteNull();
-			continue;
-		}
-
-		auto row_writer = result_writer.WriteList(paths.size());
-		idx_t path_idx = 0;
-		for (auto &path_existence_writer : row_writer) {
-			if (existence_by_path[path_idx].RowIsValid(row_idx)) {
-				path_existence_writer.WriteValue(true);
-			} else {
-				path_existence_writer.WriteValue(false);
-			}
-
-			path_idx++;
-		}
+static void WriteExistsResult(const UnifiedVariantVectorData &, VectorWriter<bool> &existence_writer,
+                              const ValidityMask &path_validity, const idx_t row_idx) {
+	if (path_validity.RowIsValid(row_idx)) {
+		existence_writer.WriteValue(true);
+	} else {
+		existence_writer.WriteValue(false);
 	}
 }
 
 static void VariantExistsFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	VariantUtils::ExecutePathFunction(input, state, result, UnaryVariantExists, ManyVariantExists);
+	VariantPathFunction::Execute<ValidityMask, bool>(input, state, result, CollectVariantExistence, WriteExistsResult);
 }
 
 ScalarFunctionSet VariantExistsFun::GetFunctions() {

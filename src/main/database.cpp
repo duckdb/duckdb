@@ -1,5 +1,5 @@
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/metrics_manager.hpp"
+#include "duckdb/main/profiler/metrics_manager.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
@@ -555,7 +555,7 @@ const DBConfig &DBConfig::GetConfig(const ClientContext &context) {
 }
 
 idx_t DatabaseInstance::NumberOfThreads() {
-	return NumericCast<idx_t>(scheduler->NumberOfThreads());
+	return scheduler->NumberOfThreads();
 }
 
 idx_t DuckDB::NumberOfThreads() {

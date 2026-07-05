@@ -1,8 +1,8 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/types/variant.hpp"
+#include "duckdb/function/scalar/variant_path_function.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
-#include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
 
@@ -65,86 +65,32 @@ static Vector CollectVariantKeys(const UnifiedVariantVectorData &variant,
 	return key_ids;
 }
 
-static void UnaryVariantKeys(const Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
-                             const idx_t count) {
-	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
-	const UnifiedVariantVectorData variant(source_format);
-
-	auto key_ids = CollectVariantKeys(variant, components, count);
+static void WriteKeysResult(const UnifiedVariantVectorData &variant,
+                            VectorWriter<VectorListType<string_t>> &result_writer, const Vector &key_ids,
+                            const idx_t row_idx) {
 	const auto &list_validity = FlatVector::Validity(key_ids);
+	if (!list_validity.RowIsValid(row_idx)) {
+		result_writer.WriteNull();
+		return;
+	}
+
 	const auto list_entries = FlatVector::GetData<const list_entry_t>(key_ids);
 	const auto &child = ListVector::GetChild(key_ids);
 	const auto key_ids_data = FlatVector::GetData<const idx_t>(child);
 
-	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
-	auto result_writer = FlatVector::Writer<VectorListType<string_t>>(result, count);
+	auto &entry = list_entries[row_idx];
+	auto row_writer = result_writer.WriteList(entry.length);
 
-	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		if (!list_validity.RowIsValid(row_idx)) {
-			result_writer.WriteNull();
-			continue;
-		}
-
-		auto &entry = list_entries[row_idx];
-		auto row_writer = result_writer.WriteList(entry.length);
-
-		idx_t key_idx = 0;
-		for (auto &key_writer : row_writer) {
-			const auto key_id = key_ids_data[entry.offset + key_idx++];
-			key_writer.WriteValue(variant.GetKey(row_idx, key_id));
-		}
-	}
-}
-
-static void ManyVariantKeys(const Vector &variant_vec, const vector<vector<VariantPathComponent>> &paths,
-                            Vector &result, const idx_t count) {
-	vector<Vector> keys_by_path;
-	keys_by_path.reserve(paths.size());
-
-	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
-	const UnifiedVariantVectorData variant(source_format);
-
-	for (const auto &path : paths) {
-		keys_by_path.push_back(CollectVariantKeys(variant, path, count));
-	}
-
-	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
-	auto result_writer = FlatVector::Writer<VectorListType<VectorListType<string_t>>>(result, count);
-
-	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		auto row_writer = result_writer.WriteList(paths.size());
-		idx_t path_idx = 0;
-		for (auto &path_keys_writer : row_writer) {
-			const auto &key_ids = keys_by_path[path_idx];
-			const auto &list_validity = FlatVector::Validity(key_ids);
-			const auto list_entries = FlatVector::GetData<const list_entry_t>(key_ids);
-			const auto &child = ListVector::GetChild(key_ids);
-			const auto key_ids_data = FlatVector::GetData<const idx_t>(child);
-
-			if (!list_validity.RowIsValid(row_idx)) {
-				path_keys_writer.WriteNull();
-				path_idx++;
-				continue;
-			}
-
-			auto &entry = list_entries[row_idx];
-			auto keys_writer = path_keys_writer.WriteList(entry.length);
-
-			idx_t key_idx = 0;
-			for (auto &key_writer : keys_writer) {
-				const auto key_id = key_ids_data[entry.offset + key_idx++];
-				key_writer.WriteValue(variant.GetKey(row_idx, key_id));
-			}
-
-			path_idx++;
-		}
+	idx_t key_idx = 0;
+	for (auto &key_writer : row_writer) {
+		const auto key_id = key_ids_data[entry.offset + key_idx++];
+		key_writer.WriteValue(variant.GetKey(row_idx, key_id));
 	}
 }
 
 static void VariantKeysFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	VariantUtils::ExecutePathFunction(input, state, result, UnaryVariantKeys, ManyVariantKeys);
+	VariantPathFunction::Execute<Vector, VectorListType<string_t>>(input, state, result, CollectVariantKeys,
+	                                                               WriteKeysResult);
 }
 
 static void AddFunctionsWithParameterType(ScalarFunctionSet &fun_set, const LogicalType &input_type) {

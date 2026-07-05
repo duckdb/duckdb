@@ -462,9 +462,8 @@ template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
 AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
 	using OP = ModeFunction<TYPE_OP>;
-	auto func =
-	    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP, AggregateDestructorType::LEGACY>(
-	        type, type);
+	auto func = AggregateFunction::UnaryAggregate<STATE, INPUT_TYPE, INPUT_TYPE, OP, AggregateDestructorType::LEGACY>(
+	    type, type);
 	func.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>);
 	return func;
 }
@@ -563,9 +562,8 @@ template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
 AggregateFunction GetTypedEntropyFunction(const LogicalType &type) {
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
 	using OP = EntropyFunction<TYPE_OP>;
-	auto func =
-	    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, double, OP, AggregateDestructorType::LEGACY>(
-	        type, LogicalType::DOUBLE);
+	auto func = AggregateFunction::UnaryAggregate<STATE, INPUT_TYPE, double, OP, AggregateDestructorType::LEGACY>(
+	    type, LogicalType::DOUBLE);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return func;
 }

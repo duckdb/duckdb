@@ -1,6 +1,6 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/metrics_manager.hpp"
+#include "duckdb/main/profiler/metrics_manager.hpp"
 
 namespace duckdb {
 

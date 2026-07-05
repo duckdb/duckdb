@@ -377,9 +377,7 @@ void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnS
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
 	FlatVector::SetSize(result, count_t(scan_count));
 
-	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(vdata);
-	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, scan_count, s_count);
+	ColumnSegment::FilterSelection(sel, result, filter_state, scan_count, s_count);
 }
 
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

@@ -2,7 +2,6 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -10,6 +9,7 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/settings.hpp"

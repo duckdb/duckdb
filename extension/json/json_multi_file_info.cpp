@@ -232,7 +232,9 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 		} else {
 			JSONCheckSingleParameter(key, values);
 			options.auto_detect = BooleanValue::Get(values.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
-			options.format = JSONFormat::NEWLINE_DELIMITED;
+			if (options.format == JSONFormat::AUTO_DETECT) {
+				options.format = JSONFormat::NEWLINE_DELIMITED;
+			}
 		}
 		return true;
 	}

@@ -86,7 +86,8 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 		}
 	}
 	auto result = context->FetchResultInternal(lock, *this);
-	Close();
+	// release our context reference (cannot use Close(): the context lock is already held here)
+	context.reset();
 	return result;
 }
 
@@ -96,6 +97,14 @@ unique_ptr<QueryResult> PendingQueryResult::Execute() {
 }
 
 void PendingQueryResult::Close() {
+	if (context) {
+		auto lock = LockContext();
+		if (context->IsActiveResult(*lock, *this)) {
+			// Abandoned before execution finished: release the active-query state now (matching
+			// InitialCleanup) instead of leaking it until the next query or context teardown.
+			context->CleanupInternal(*lock, this, false);
+		}
+	}
 	context.reset();
 }
 

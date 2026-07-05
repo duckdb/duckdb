@@ -14,7 +14,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/main/profiler/profiling_utils.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/planner/constraints/list.hpp"
@@ -680,8 +680,8 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	}
 
 	// Get the column types in their physical order.
-	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, db.GetName(), bound_foreign_key.info.schema,
-	                                                         bound_foreign_key.info.table);
+	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
+	    context, QualifiedName(db.GetName(), bound_foreign_key.info.schema, bound_foreign_key.info.table));
 	vector<LogicalType> types;
 	for (auto &col : table_entry.GetColumns().Physical()) {
 		types.emplace_back(col.Type());

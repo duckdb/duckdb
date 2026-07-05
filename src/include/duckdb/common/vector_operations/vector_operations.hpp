@@ -152,19 +152,6 @@ struct VectorOperations {
 	                                        optional_ptr<ValidityMask> null_mask = nullptr);
 
 	//===--------------------------------------------------------------------===//
-	// Nested Comparisons
-	//===--------------------------------------------------------------------===//
-	// true := A != B with nulls being equal
-	static idx_t NestedNotEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
-	                             idx_t count, optional_ptr<SelectionVector> true_sel,
-	                             optional_ptr<SelectionVector> false_sel,
-	                             optional_ptr<ValidityMask> null_mask = nullptr);
-	// true := A == B with nulls being equal
-	static idx_t NestedEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
-	                          idx_t count, optional_ptr<SelectionVector> true_sel,
-	                          optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask = nullptr);
-
-	//===--------------------------------------------------------------------===//
 	// Hash functions
 	//===--------------------------------------------------------------------===//
 	// hashes = HASH(input)

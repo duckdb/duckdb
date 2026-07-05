@@ -37,11 +37,13 @@
       {
         "id": 200,
         "name": "schema_name",
+        "serialize_property": "qualified_name.Schema()",
         "type": "Identifier"
       },
       {
         "id": 201,
         "name": "table_name",
+        "serialize_property": "qualified_name.Name()",
         "type": "Identifier"
       },
       {
@@ -52,6 +54,7 @@
       {
         "id": 203,
         "name": "catalog_name",
+        "serialize_property": "qualified_name.Catalog()",
         "type": "Identifier"
       },
       {
@@ -59,7 +62,14 @@
         "name": "at_clause",
         "type": "AtClause*"
       }
-    ]
+    ],
+    "methods": {
+      "SetQualifiedName": [
+        "catalog_name",
+        "schema_name",
+        "table_name"
+      ]
+    }
   },
   {
     "class": "JoinRef",
@@ -160,8 +170,7 @@
     "class": "EmptyTableRef",
     "base": "TableRef",
     "enum": "EMPTY_FROM",
-    "members": [
-    ]
+    "members": []
   },
   {
     "class": "ExpressionListRef",
@@ -201,7 +210,10 @@
         "type": "optionally_owned_ptr<ColumnDataCollection>"
       }
     ],
-    "constructor": ["collection", "expected_names"]
+    "constructor": [
+      "collection",
+      "expected_names"
+    ]
   },
   {
     "class": "PivotRef",
@@ -253,6 +265,7 @@
       {
         "id": 200,
         "name": "table_name",
+        "serialize_property": "qualified_name.Name()",
         "type": "Identifier"
       },
       {
@@ -268,14 +281,23 @@
       {
         "id": 203,
         "name": "catalog_name",
+        "serialize_property": "qualified_name.Catalog()",
         "type": "Identifier"
       },
       {
         "id": 204,
         "name": "schema_name",
+        "serialize_property": "qualified_name.Schema()",
         "type": "Identifier"
       }
-    ]
+    ],
+    "methods": {
+      "SetQualifiedName": [
+        "catalog_name",
+        "schema_name",
+        "table_name"
+      ]
+    }
   },
   {
     "class": "AtClause",
@@ -294,6 +316,9 @@
         "type": "ParsedExpression*"
       }
     ],
-    "constructor": ["unit", "expr"]
+    "constructor": [
+      "unit",
+      "expr"
+    ]
   }
 ]

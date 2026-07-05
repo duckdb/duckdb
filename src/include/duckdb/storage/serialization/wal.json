@@ -1,0 +1,342 @@
+[
+  {
+    "class": "WALCheckpoint",
+    "includes": [
+      "duckdb/storage/wal_entry.hpp"
+    ],
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "meta_block",
+        "type": "MetaBlockPointer"
+      }
+    ]
+  },
+  {
+    "class": "WALCreateTable",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "table",
+        "type": "CreateInfo*",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALDropTable",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 102,
+        "name": "name",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALCreateSchema",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "Identifier",
+        "serialize_until": "v2.0.0"
+      },
+      {
+        "id": 102,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "default": "QualifiedName()"
+      }
+    ]
+  },
+  {
+    "class": "WALDropSchema",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "Identifier",
+        "serialize_until": "v2.0.0"
+      },
+      {
+        "id": 102,
+        "name": "qualified_name",
+        "type": "QualifiedName",
+        "version": "v2.0.0",
+        "default": "QualifiedName()"
+      }
+    ]
+  },
+  {
+    "class": "WALCreateView",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "view",
+        "type": "CreateInfo*",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALDropView",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 102,
+        "name": "name",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALCreateSequence",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "sequence",
+        "type": "CreateInfo*",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALDropSequence",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 102,
+        "name": "name",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALSequenceValue",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 102,
+        "name": "name",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 103,
+        "name": "usage_count",
+        "type": "uint64_t",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 104,
+        "name": "counter",
+        "type": "int64_t",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 105,
+        "name": "last_value",
+        "type": "optional<int64_t>",
+        "version": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALCreateMacro",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "macro",
+        "type": "CreateInfo*",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALDropMacro",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 102,
+        "name": "name",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALCreateTableMacro",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "table_macro",
+        "type": "CreateInfo*",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALDropTableMacro",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 102,
+        "name": "name",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALCreateType",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "type",
+        "type": "CreateInfo*",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALDropType",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 102,
+        "name": "name",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALCreateTrigger",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "trigger",
+        "type": "CreateInfo*",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALDropTrigger",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 102,
+        "name": "name",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 103,
+        "name": "table",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALDropIndex",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 102,
+        "name": "name",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      }
+    ]
+  },
+  {
+    "class": "WALUseTable",
+    "pointer_type": "none",
+    "members": [
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      },
+      {
+        "id": 102,
+        "name": "table",
+        "type": "Identifier",
+        "required_until": "v2.0.0"
+      }
+    ]
+  }
+]

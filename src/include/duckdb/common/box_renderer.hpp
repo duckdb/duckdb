@@ -10,6 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/printer.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/list.hpp"
 #include "duckdb/common/column_data_collection_render_interface.hpp"

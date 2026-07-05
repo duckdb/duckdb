@@ -99,7 +99,7 @@ public:
 
 	//! Explain the query plan of this relation
 	DUCKDB_API unique_ptr<QueryResult> Explain(ExplainType type = ExplainType::EXPLAIN_STANDARD,
-	                                           ExplainFormat explain_format = ExplainFormat::DEFAULT);
+	                                           const ProfilerPrintFormat &format = ProfilerPrintFormat::Default());
 
 	DUCKDB_API virtual unique_ptr<TableRef> GetTableRef();
 	virtual bool IsReadOnly() {

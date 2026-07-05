@@ -38,6 +38,7 @@
 #include "duckdb/common/types/type_manager.hpp"
 #include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/enums/debug_verification_mode.hpp"
+#include "duckdb/common/enums/debug_order_verification.hpp"
 
 namespace duckdb {
 
@@ -118,6 +119,8 @@ struct DBConfigOptions {
 	vector<string> extension_directories;
 	//! Debug setting - how to initialize  blocks in the storage layer when allocating
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
+	//! Debug setting - how to verify ORDER BY results (e.g. by rewriting ORDER BY into create_sort_key)
+	DebugOrderVerification debug_order_verification = DebugOrderVerification::NONE;
 	//! The set of user-provided options
 	case_insensitive_map_t<Value> user_options;
 	//! The set of unrecognized (other) options

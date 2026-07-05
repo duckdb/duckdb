@@ -1,5 +1,58 @@
 [
 	{
+		"name": "variant_array_length",
+		"variants": [
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					}
+				],
+				"description": "Returns the number of elements in the variant, or `0` if not an array.",
+				"example": "variant_array_length(['duck', 'goose']::VARIANT)",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR"
+					}
+				],
+				"description": "Returns the number of elements in the array at the specified path in the variant, or `0` if not an array.",
+				"example": "variant_array_length({'a': ['duck', 'goose']}::VARIANT, 'a')",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR[]"
+					}
+				],
+				"description": "Returns the number of elements in the array for each specified path in the variant, or `0` if not an array.",
+				"example": "variant_array_length({'a': 1, 'b': ['duck', 'goose']}::VARIANT, ['a', 'b'])",
+				"categories": [
+					"variant"
+				]
+			}
+		],
+		"type": "scalar_function_set"
+	},
+	{
 		"name": "variant_exists",
 		"variants": [
 			{
@@ -84,6 +137,16 @@
 		"parameters": "input_variant",
 		"description": "Normalizes the `input_variant` to a canonical representation.",
 		"example": "variant_normalize({'b': [1,2,3], 'a': 42})::VARIANT)",
+		"categories": [
+			"variant"
+		],
+		"type": "scalar_function"
+	},
+	{
+		"name": "variant_comparator",
+		"parameters": "input_variant",
+		"description": "Returns a binary sort key that orders `input_variant` according to the logical ordering of VARIANT values (used internally for comparison and ordering).",
+		"example": "variant_comparator({'a': 1, 'b': 2}::VARIANT)",
 		"categories": [
 			"variant"
 		],

@@ -423,9 +423,7 @@ template <class T>
 static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_name, const Identifier &schema,
                             string suffix) {
 	auto info = make_uniq<CreateTableInfo>();
-	info->catalog = catalog_name;
-	info->schema = schema;
-	info->table = Identifier(T::Name + suffix);
+	info->SetQualifiedName(QualifiedName(catalog_name, schema, Identifier(T::Name + suffix)));
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
@@ -480,7 +478,8 @@ struct TPCHDBgenParameters {
 			auto tname = get_table_name(i);
 			if (!tname.empty()) {
 				string full_tname = string(tname) + string(suffix);
-				auto &tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, Identifier(full_tname));
+				auto &tbl_catalog = catalog.GetEntry<TableCatalogEntry>(
+				    context, QualifiedName(catalog.GetName(), schema, Identifier(full_tname)));
 				tables[i] = &tbl_catalog;
 			}
 		}

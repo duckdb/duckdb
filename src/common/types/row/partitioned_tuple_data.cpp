@@ -8,14 +8,15 @@
 namespace duckdb {
 
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, BufferManager &buffer_manager_p,
-                                           shared_ptr<TupleDataLayout> &layout_ptr_p, MemoryTag tag_p)
-    : type(type_p), buffer_manager(buffer_manager_p),
+                                           shared_ptr<TupleDataLayout> &layout_ptr_p, MemoryTag tag_p,
+                                           QueryContext context_p)
+    : type(type_p), buffer_manager(buffer_manager_p), context(context_p),
       stl_allocator(make_shared_ptr<ArenaAllocator>(buffer_manager.GetBufferAllocator())), layout_ptr(layout_ptr_p),
       layout(*layout_ptr), tag(tag_p), count(0), data_size(0) {
 }
 
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleData &other)
-    : PartitionedTupleData(other.type, other.buffer_manager, other.layout_ptr, other.tag) {
+    : PartitionedTupleData(other.type, other.buffer_manager, other.layout_ptr, other.tag, other.context) {
 }
 
 PartitionedTupleData::~PartitionedTupleData() {
@@ -322,7 +323,8 @@ void PartitionedTupleData::Reset() {
 	Verify();
 }
 
-void PartitionedTupleData::Repartition(ClientContext &context, PartitionedTupleData &new_partitioned_data) {
+void PartitionedTupleData::Repartition(ClientContext &context, PartitionedTupleData &new_partitioned_data,
+                                       optional_ptr<PartitionedTupleDataRepartitionKeyTracker> key_tracker) {
 	D_ASSERT(layout.GetTypes() == new_partitioned_data.layout.GetTypes());
 
 	if (partitions.size() == new_partitioned_data.partitions.size()) {
@@ -342,7 +344,11 @@ void PartitionedTupleData::Repartition(ClientContext &context, PartitionedTupleD
 			do {
 				// Check for interrupts with each chunk
 				context.InterruptCheck();
-				new_partitioned_data.Append(append_state, chunk_state, iterator.GetCurrentChunkCount());
+				const auto count = iterator.GetCurrentChunkCount();
+				new_partitioned_data.Append(append_state, chunk_state, count);
+				if (key_tracker) {
+					key_tracker->RepartitionChunk(partition, chunk_state, append_state, count);
+				}
 			} while (iterator.Next());
 
 			RepartitionFinalizeStates(*this, new_partitioned_data, append_state, partition_idx);
@@ -369,7 +375,7 @@ unsafe_vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartiti
 
 unique_ptr<TupleDataCollection> PartitionedTupleData::GetUnpartitioned() {
 	auto data_collection = std::move(partitions[0]);
-	partitions[0] = make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, tag);
+	partitions[0] = make_uniq<TupleDataCollection>(buffer_manager, layout_ptr, tag, nullptr, context);
 
 	for (idx_t i = 1; i < partitions.size(); i++) {
 		data_collection->Combine(*partitions[i]);

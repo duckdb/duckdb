@@ -23,9 +23,7 @@
 #include <string.h>
 #include <stack>
 
-#include "yyjson.hpp"
-
-using namespace duckdb_yyjson; // NOLINT
+#include "duckdb/common/json_document.hpp"
 
 namespace duckdb {
 
@@ -716,182 +714,75 @@ string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const s
 	return StringUtil::CandidatesMessage(closest_strings, message_prefix);
 }
 
-static unique_ptr<ComplexJSON> ParseJSON(const string &json, yyjson_doc *doc, yyjson_val *root, bool ignore_errors) {
-	auto result = make_uniq<ComplexJSON>();
-	switch (yyjson_get_tag(root)) {
-	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE: {
-		size_t idx, max;
-		yyjson_val *val;
-		yyjson_arr_foreach(root, idx, max, val) {
-			result->AddArrayElement(ParseJSON(json, doc, val, ignore_errors));
-		}
-		return result;
-	}
-	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE: {
-		size_t idx, max;
-		yyjson_val *key, *value;
-		yyjson_obj_foreach(root, idx, max, key, value) {
-			const auto key_val = yyjson_get_str(key);
-			const auto key_len = yyjson_get_len(key);
-			result->AddObjectEntry(string(key_val, key_len), ParseJSON(json, doc, value, ignore_errors));
-		}
-		return result;
-	}
-	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
-	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE: {
-		// Since this is a string, we can directly add the value
-		const auto value_val = yyjson_get_str(root);
-		const auto value_len = yyjson_get_len(root);
-		return make_uniq<ComplexJSON>(string(value_val, value_len));
-	}
-	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE:
-	case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_FALSE: {
-		// boolean values
-		const bool bool_val = yyjson_get_bool(root);
-		return make_uniq<ComplexJSON>(bool_val ? "true" : "false");
-	}
-	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
-		return make_uniq<ComplexJSON>(to_string(unsafe_yyjson_get_uint(root)));
-	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
-		return make_uniq<ComplexJSON>(to_string(unsafe_yyjson_get_sint(root)));
-	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
-	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
-		return make_uniq<ComplexJSON>(to_string(unsafe_yyjson_get_real(root)));
-	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
-		return make_uniq<ComplexJSON>("null");
+//! Converts a single JSON value to its string representation: scalars become their literal value, nested
+//! objects/arrays are re-serialized as a JSON string.
+static string JSONValueToString(const string &json, JSONValue value) {
+	switch (value.GetType()) {
+	case JSONValueType::STRING:
+		return value.GetString();
+	case JSONValueType::BOOLEAN:
+		return value.GetBoolean() ? "true" : "false";
+	case JSONValueType::UNSIGNED_INTEGER:
+		return to_string(value.GetUnsignedInteger());
+	case JSONValueType::SIGNED_INTEGER:
+		return to_string(value.GetSignedInteger());
+	case JSONValueType::DOUBLE:
+	case JSONValueType::RAW:
+		return to_string(value.GetDouble());
+	case JSONValueType::JSON_NULL:
+		return "null";
+	case JSONValueType::OBJECT:
+	case JSONValueType::ARRAY:
+		return value.ToString(JSONWriteFlags::ALLOW_INVALID_UNICODE);
 	default:
-		yyjson_doc_free(doc);
 		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
 }
 
-unique_ptr<ComplexJSON> StringUtil::ParseJSONMap(const string &json, bool ignore_errors) {
-	auto result = make_uniq<ComplexJSON>(json);
+unordered_map<string, string> StringUtil::ParseJSONMap(const string &json, bool ignore_errors) {
+	unordered_map<string, string> result;
 	if (json.empty()) {
 		return result;
 	}
-	yyjson_read_flag flags = YYJSON_READ_ALLOW_INVALID_UNICODE;
-	yyjson_doc *doc = yyjson_read(json.c_str(), json.size(), flags);
+	JSONParseError error;
+	auto doc = JSONDocument::TryParse(json.c_str(), json.size(), error, JSONReadFlags::ALLOW_INVALID_UNICODE);
 	if (!doc) {
 		if (ignore_errors) {
 			return result;
 		}
 		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
-	yyjson_val *root = yyjson_doc_get_root(doc);
-	if (!root || yyjson_get_type(root) != YYJSON_TYPE_OBJ) {
-		yyjson_doc_free(doc);
+	auto root = doc->GetRoot();
+	if (!root.IsObject()) {
 		if (ignore_errors) {
 			return result;
 		}
 		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
-
-	result = ParseJSON(json, doc, root, ignore_errors);
-	yyjson_doc_free(doc);
+	root.IterateObject([&](const string &key, JSONValue value) { result[key] = JSONValueToString(json, value); });
 	return result;
 }
 
-string WriteJsonToString(yyjson_mut_doc *doc) {
-	yyjson_write_err err;
-	size_t len;
-	constexpr yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
-	char *json = yyjson_mut_write_opts(doc, flags, nullptr, &len, &err);
-	if (!json) {
-		yyjson_mut_doc_free(doc);
-		throw SerializationException("Failed to write JSON string: %s", err.msg);
-	}
-	// Create a string from the JSON
-	string result(json, len);
-
-	// Free the JSON and the document
-	free(json);
-	yyjson_mut_doc_free(doc);
-
-	// Return the result
-	return result;
-}
-
-string ToJsonMapInternal(const unordered_map<string, string> &map, yyjson_mut_doc *doc, yyjson_mut_val *root) {
-	for (auto &entry : map) {
-		auto key = yyjson_mut_strncpy(doc, entry.first.c_str(), entry.first.size());
-		auto value = yyjson_mut_strncpy(doc, entry.second.c_str(), entry.second.size());
-		yyjson_mut_obj_add(root, key, value);
-	}
-	return WriteJsonToString(doc);
-}
 string StringUtil::ToJSONMap(const unordered_map<string, string> &map) {
-	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
-	yyjson_mut_val *root = yyjson_mut_obj(doc);
-	yyjson_mut_doc_set_root(doc, root);
-
-	return ToJsonMapInternal(map, doc, root);
-}
-
-string ComplexJSON::GetValue(const string &key) const {
-	if (type == ComplexJSONType::OBJECT) {
-		if (obj_value.find(key) != obj_value.end()) {
-			return GetValueRecursive(*obj_value.at(key));
-		}
+	JSONWriter writer;
+	auto obj = writer.CreateObject();
+	for (auto &entry : map) {
+		obj.AddString(entry.first, entry.second);
 	}
-	// Object either doesn't exist or this is just a string
-	return "";
-}
-
-string ComplexJSON::GetValue(const idx_t &index) const {
-	if (type == ComplexJSONType::ARRAY) {
-		if (index >= arr_value.size()) {
-			return "";
-		}
-		return GetValueRecursive(*arr_value[index]);
-	}
-	return "";
-}
-
-string ComplexJSON::GetValueRecursive(const ComplexJSON &child) {
-	if (child.type == ComplexJSONType::OBJECT) {
-		// We have to construct the nested json
-		yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
-		yyjson_mut_val *root = yyjson_mut_obj(doc);
-		yyjson_mut_doc_set_root(doc, root);
-		for (const auto &object : child.obj_value) {
-			auto key = yyjson_mut_strncpy(doc, object.first.c_str(), object.first.size());
-			auto value_str = GetValueRecursive(*object.second);
-			auto value = yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
-			yyjson_mut_obj_add(root, key, value);
-		}
-		return WriteJsonToString(doc);
-	} else if (child.type == ComplexJSONType::ARRAY) {
-		yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
-		yyjson_mut_val *root = yyjson_mut_arr(doc);
-		yyjson_mut_doc_set_root(doc, root);
-		for (const auto &elem : child.arr_value) {
-			auto value_str = GetValueRecursive(*elem);
-			auto value = yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
-			yyjson_mut_arr_append(root, value);
-		}
-		return WriteJsonToString(doc);
-	} else {
-		// simple string we can just write
-		return child.str_value;
-	}
-}
-string StringUtil::ToComplexJSONMap(const ComplexJSON &complex_json) {
-	return ComplexJSON::GetValueRecursive(complex_json);
+	writer.SetRoot(obj);
+	return writer.ToString(JSONWriteFlags::ALLOW_INVALID_UNICODE);
 }
 
 string StringUtil::ValidateJSON(const char *data, const idx_t &len) {
 	// Same flags as in JSON extension
-	static constexpr auto READ_FLAG =
-	    YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS | YYJSON_READ_BIGNUM_AS_RAW;
-	yyjson_read_err error;
-	yyjson_doc *doc = yyjson_read_opts((char *)data, len, READ_FLAG, nullptr, &error); // NOLINT: for yyjson
-	if (error.code != YYJSON_READ_SUCCESS) {
-		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. Input: \"%s\"", error.pos, error.msg,
-		                          string(data, len));
+	static constexpr auto READ_FLAGS =
+	    JSONReadFlags::ALLOW_INF_AND_NAN | JSONReadFlags::ALLOW_TRAILING_COMMAS | JSONReadFlags::BIGNUM_AS_RAW;
+	JSONParseError error;
+	auto doc = JSONDocument::TryParse(data, len, error, READ_FLAGS);
+	if (error.HasError()) {
+		return StringUtil::Format("Malformed JSON at byte %lld of input: %s. Input: \"%s\"", error.position,
+		                          error.message, string(data, len));
 	}
-
-	yyjson_doc_free(doc);
 	return string();
 }
 
@@ -900,15 +791,15 @@ string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,
 	D_ASSERT(map.find("exception_type") == map.end());
 	D_ASSERT(map.find("exception_message") == map.end());
 
-	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
-	yyjson_mut_val *root = yyjson_mut_obj(doc);
-	yyjson_mut_doc_set_root(doc, root);
-
-	auto except_str = Exception::ExceptionTypeToString(type);
-	yyjson_mut_obj_add_strncpy(doc, root, "exception_type", except_str.c_str(), except_str.size());
-	yyjson_mut_obj_add_strncpy(doc, root, "exception_message", message.c_str(), message.size());
-
-	return ToJsonMapInternal(map, doc, root);
+	JSONWriter writer;
+	auto obj = writer.CreateObject();
+	obj.AddString("exception_type", Exception::ExceptionTypeToString(type));
+	obj.AddString("exception_message", message);
+	for (auto &entry : map) {
+		obj.AddString(entry.first, entry.second);
+	}
+	writer.SetRoot(obj);
+	return writer.ToString(JSONWriteFlags::ALLOW_INVALID_UNICODE);
 }
 
 string StringUtil::GetFileName(const string &file_path) {

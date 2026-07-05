@@ -258,6 +258,17 @@ struct AllowedPathsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ApproximateJoinOrderThresholdSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "approximate_join_order_threshold";
+	static constexpr const char *Description =
+	    "The minimum number of tables in a join to determine the optimal join order approximately instead of exactly.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "12";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct ArrowLargeBufferSizeSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "arrow_large_buffer_size";
@@ -390,6 +401,17 @@ struct BlockAllocatorMemorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct CacheLocalFilesSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "cache_local_files";
+	static constexpr const char *Description =
+	    "Whether the external file cache also caches local files (remote files are always cached)";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct CatalogErrorMaxSchemasSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "catalog_error_max_schemas";
@@ -520,6 +542,28 @@ struct DebugEvictionQueueSleepMicroSecondsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugForceCommitFailureSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_force_commit_failure";
+	static constexpr const char *Description = "DEBUG SETTING: force transaction commit to fail after the undo buffer "
+	                                           "has been committed, used for testing commit error recovery";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugForceCommitRevertFailureSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_force_commit_revert_failure";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: force RevertCommit to fail while recovering from a commit failure, used for testing";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugForceExternalSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_force_external";
@@ -552,6 +596,28 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugLocalFileSystemDelayMsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "debug_local_file_system_delay_ms";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: time to sleep before local file system open/read/write operations";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugOrderVerificationSetting {
+	using RETURN_TYPE = DebugOrderVerification;
+	static constexpr const char *Name = "debug_order_verification";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: verify ORDER BY results by rewriting the ordering (NONE, CREATE_SORT_KEY or VARIANT)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct DebugPhysicalTableScanExecutionStrategySetting {
 	using RETURN_TYPE = PhysicalTableScanExecutionStrategy;
 	static constexpr const char *Name = "debug_physical_table_scan_execution_strategy";
@@ -571,6 +637,16 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugTransformerTrampolineStyleSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_transformer_trampoline_style";
+	static constexpr const char *Description = "Use the experimental trampoline-style parser transformer";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
@@ -765,7 +841,7 @@ struct DelimJoinAsCteSetting {
 	static constexpr const char *Description =
 	    "Rewrite delim joins to materialized CTEs during dependent join flattening";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
@@ -776,6 +852,18 @@ struct DeprecatedUsingKeySyntaxSetting {
 	static constexpr const char *Description = "Configures the use of the deprecated union syntax for USING KEY CTEs.";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr const char *DefaultValue = "DEFAULT";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct DialectCompatibilityModeSetting {
+	using RETURN_TYPE = DialectCompatibilityMode;
+	static constexpr const char *Name = "dialect_compatibility_mode";
+	static constexpr const char *Description =
+	    "Enable SQL dialect compatibility for a certain engine (e.g. `SET dialect_compatibility_mode='spark'`)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "NONE";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
@@ -1156,6 +1244,17 @@ struct ForceMbedtlsUnsafeSetting {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct ForceUpdateToDelAndInsertSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "force_update_to_del_and_insert";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: forces all updates to use the delete + insert code path instead of in-place updates";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct ForceVariantShredding {
@@ -1649,17 +1748,6 @@ struct ProduceArrowStringViewSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct ProfileOutputSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "profile_output";
-	static constexpr const char *Description =
-	    "The file to which profile output should be saved, or empty to print to the terminal";
-	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct ProfilingCoverageSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "profiling_coverage";
@@ -1673,8 +1761,31 @@ struct ProfilingCoverageSetting {
 struct ProfilingModeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "profiling_mode";
-	static constexpr const char *Description = "The profiling mode (STANDARD or DETAILED)";
+	static constexpr const char *Description = "DEPRECATED: Sets the profiling mode";
 	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ProfilingOutputSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "profiling_output";
+	static constexpr const char *Description =
+	    "The file to which profile output should be saved, or empty to print to the terminal";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ProfilingRendererSettingsSetting {
+	using RETURN_TYPE = unordered_map<string, string>;
+	static constexpr const char *Name = "profiling_renderer_settings";
+	static constexpr const char *Description =
+	    "A map of settings passed to the renderer of the profiler output (e.g. {'max_extra_lines': 100}) - settings "
+	    "not recognized by the active renderer are ignored";
+	static constexpr const char *InputType = "MAP(VARCHAR, VARCHAR)";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
@@ -1689,6 +1800,18 @@ struct ProgressBarTimeSetting {
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct RegexMatchOperatorSemanticsSetting {
+	using RETURN_TYPE = RegexMatchOperatorSemantics;
+	static constexpr const char *Name = "regex_match_operator_semantics";
+	static constexpr const char *Description =
+	    "Configures whether regex match operators use partial or full string matching";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "partial";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct ScalarSubqueryErrorOnMultipleRowsSetting {
@@ -1789,6 +1912,18 @@ struct StreamingBufferSizeSetting {
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct TableFunctionIdentifierConversionSetting {
+	using RETURN_TYPE = TableFunctionIdentifierConversion;
+	static constexpr const char *Name = "table_function_identifier_conversion";
+	static constexpr const char *Description = "Configures the use of deprecated implicit conversion of unbound "
+	                                           "identifiers to strings in table function arguments.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "DEFAULT";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct TempDirectorySetting {

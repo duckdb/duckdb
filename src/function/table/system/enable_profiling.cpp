@@ -21,7 +21,6 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 
 	auto &client_config = ClientConfig::GetConfig(context);
 	client_config.enable_profiler = true;
-	client_config.emit_profiler_output = true;
 
 	if (!bind_data.format.IsNull() && !bind_data.save_location.IsNull()) {
 		auto &file_system = FileSystem::GetFileSystem(context);
@@ -32,7 +31,7 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 		}
 
 		EnableProfilingSetting::ResetLocal(context);
-		ProfileOutputSetting::ResetLocal(context);
+		ProfilingOutputSetting::ResetLocal(context);
 	}
 
 	if (!bind_data.format.IsNull()) {
@@ -44,7 +43,7 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 	}
 
 	if (!bind_data.save_location.IsNull()) {
-		ProfileOutputSetting::SetLocal(context, bind_data.save_location);
+		ProfilingOutputSetting::SetLocal(context, bind_data.save_location);
 	}
 
 	if (!bind_data.mode.IsNull()) {
@@ -119,7 +118,6 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 static void DisableProfiling(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
 	auto &client_config = ClientConfig::GetConfig(context);
 	client_config.enable_profiler = false;
-	client_config.emit_profiler_output = false;
 }
 
 static unique_ptr<FunctionData> BindDisableProfiling(ClientContext &context, TableFunctionBindInput &input,

@@ -31,6 +31,6 @@ SELECT * EXCLUDE(description) FROM duckdb_profiling_settings();
 ----
 enable_profiling	json
 profiling_coverage	ALL
-profiling_mode	detailed
+profiling_mode	standard
 profiling_output	{TEST_DIR}/test_profiling_output.json
 tracked_metrics	[query.cpu_time]

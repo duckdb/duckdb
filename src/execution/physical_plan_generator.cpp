@@ -63,7 +63,8 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op
 	auto debug_verify_vector = Settings::Get<DebugVerifyVectorSetting>(context);
 	if (debug_verify_vector != DebugVectorVerification::NONE) {
 		if (debug_verify_vector != DebugVectorVerification::DICTIONARY_EXPRESSION &&
-		    debug_verify_vector != DebugVectorVerification::VARIANT_VECTOR) {
+		    debug_verify_vector != DebugVectorVerification::VARIANT_VECTOR &&
+		    debug_verify_vector != DebugVectorVerification::SHREDDED_VECTOR) {
 			physical_plan->SetRoot(Make<PhysicalVerifyVector>(physical_plan->Root(), debug_verify_vector));
 		}
 	}
@@ -126,6 +127,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalUpdate>());
 	case LogicalOperatorType::LOGICAL_MERGE_INTO:
 		return CreatePlan(op.Cast<LogicalMergeInto>());
+	case LogicalOperatorType::LOGICAL_TRIGGER:
+		throw InternalException("LogicalTrigger must be rewritten before physical planning");
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		return CreatePlan(op.Cast<LogicalCreateTable>());
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
