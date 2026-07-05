@@ -1,0 +1,27 @@
+# name: test/optimizer/left_to_prefix.test
+# description: Test rewriting of left(s, n) = constant into prefix comparisons
+# group: [optimizer]
+
+statement ok
+CREATE TABLE strings(s VARCHAR);
+
+# left(s, n) = c with len(c) == n becomes a prefix comparison
+query I nosort prefix_exact
+EXPLAIN SELECT count(*) FROM strings WHERE left(s, 3) = 'hel'
+----
+
+query I nosort prefix_exact
+EXPLAIN SELECT count(*) FROM strings WHERE prefix(s, 'hel')
+----
+
+query I nosort prefix_exact
+EXPLAIN SELECT count(*) FROM strings WHERE 'hel' = left(s, 3)
+----
+
+query I nosort prefix_shorter
+EXPLAIN SELECT count(*) FROM strings WHERE left(s, 10) = 'hello'
+----
+
+query I nosort prefix_shorter
+EXPLAIN SELECT count(*) FROM strings WHERE s = 'hello'
+----
