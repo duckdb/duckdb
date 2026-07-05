@@ -69,6 +69,9 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 	names.emplace_back("watermark_interval");
 	return_types.emplace_back(LogicalType::INTERVAL);
 
+	names.emplace_back("entity_table");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	return nullptr;
 }
 
@@ -145,6 +148,8 @@ static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &d
 		output.data[14].Append(Value::INTERVAL(feat.window_interval));
 		// watermark_interval
 		output.data[15].Append(Value::INTERVAL(feat.watermark_interval));
+		// entity_table
+		output.data[16].Append(Value(feat.entity_table));
 
 		count++;
 	}

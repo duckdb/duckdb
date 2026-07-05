@@ -10,10 +10,17 @@ require skip_reload
 # Setup
 # ============================================================
 statement ok
+CREATE TABLE customers (customer VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO customers VALUES ('x'), ('y'), ('z');
+
+statement ok
 CREATE TABLE events (
     customer VARCHAR,
     value INTEGER,
-    event_time TIMESTAMP
+    event_time TIMESTAMP,
+    FOREIGN KEY (customer) REFERENCES customers(customer)
 );
 
 statement ok
@@ -28,10 +35,10 @@ INSERT INTO events VALUES
 # FULL refresh with RETAIN 3: version increments each refresh
 # ============================================================
 statement ok
-CREATE FEATURE versioned_full 
-    TIMESTAMP event_time 
+CREATE FEATURE versioned_full
+    ENTITY customers
+    TIMESTAMP event_time
     WINDOW 7 DAYS
-    REFRESH FULL
     RETAIN 3
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
@@ -157,10 +164,10 @@ DROP FEATURE versioned_full;
 # RETAIN 1: only latest version kept (default behavior)
 # ============================================================
 statement ok
-CREATE FEATURE versioned_retain1 
-    TIMESTAMP event_time 
+CREATE FEATURE versioned_retain1
+    ENTITY customers
+    TIMESTAMP event_time
     WINDOW 7 DAYS
-    REFRESH FULL
     RETAIN 1
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
@@ -207,13 +214,13 @@ statement ok
 DROP FEATURE versioned_retain1;
 
 # ============================================================
-# INCREMENTAL refresh: version increments, old versions GC'd
+# Refresh with new data: version increments, old versions GC'd
 # ============================================================
 statement ok
-CREATE FEATURE versioned_incr 
-    TIMESTAMP event_time 
+CREATE FEATURE versioned_incr
+    ENTITY customers
+    TIMESTAMP event_time
     WINDOW 7 DAYS
-    REFRESH INCREMENTAL
     RETAIN 2
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
@@ -239,13 +246,11 @@ INSERT INTO events VALUES
     ('y', 50, '2024-01-03 10:00:00'),
     ('z', 20, '2024-01-03 11:00:00');
 
-# Incremental refresh -> version 2
-# With the default zero watermark, recompute runs from max(feature_timestamp) onward;
-# the stable prefix is copied forward.
+# Refresh -> version 2 (full recompute of every event-time anchor)
 query I
 REFRESH FEATURE versioned_incr;
 ----
-4
+8
 
 # Both v1 and v2 exist (RETAIN 2)
 query I
@@ -284,7 +289,7 @@ INSERT INTO events VALUES
 query I
 REFRESH FEATURE versioned_incr;
 ----
-3
+10
 
 # Version 1 is gone (GC'd, only retain 2)
 statement error
@@ -318,10 +323,17 @@ DROP FEATURE versioned_incr;
 # Refresh always increments the version (even with no source changes)
 # ============================================================
 statement ok
+CREATE TABLE stable_ents (eid VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO stable_ents VALUES ('a'), ('b'), ('c');
+
+statement ok
 CREATE TABLE stable_src (
     eid VARCHAR,
     val INTEGER,
-    ts TIMESTAMP
+    ts TIMESTAMP,
+    FOREIGN KEY (eid) REFERENCES stable_ents(eid)
 );
 
 statement ok
@@ -331,10 +343,10 @@ INSERT INTO stable_src VALUES
     ('c', 30, '2024-01-02 10:00:00');
 
 statement ok
-CREATE FEATURE stable_feat 
-    TIMESTAMP ts 
+CREATE FEATURE stable_feat
+    ENTITY stable_ents
+    TIMESTAMP ts
     WINDOW 7 DAYS
-    REFRESH INCREMENTAL
     RETAIN 3
     AS (SELECT eid, SUM(val) AS total FROM stable_src GROUP BY eid);
 
@@ -353,11 +365,11 @@ SELECT COUNT(*) FROM stable_feat;
 ----
 3
 
-# No new data, but refresh still recomputes the event-time tail and bumps the version.
+# No new data, but a refresh fully recomputes every anchor and bumps the version.
 query I
 REFRESH FEATURE stable_feat;
 ----
-1
+3
 
 # Version 2 table now exists alongside version 1
 query I
@@ -380,7 +392,7 @@ INSERT INTO stable_src VALUES ('a', 20, '2024-01-03 08:00:00');
 query I
 REFRESH FEATURE stable_feat;
 ----
-2
+4
 
 query I
 SELECT COUNT(*) FROM stable_feat__v3;
@@ -397,7 +409,7 @@ a	30
 query I
 REFRESH FEATURE stable_feat;
 ----
-1
+4
 
 query I
 SELECT COUNT(*) FROM stable_feat__v2;

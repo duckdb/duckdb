@@ -9,10 +9,17 @@ load {TEST_DIR}/feature_persistence.db
 # Setup
 # ============================================================
 statement ok
+CREATE TABLE customers (customer VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO customers VALUES ('x'), ('y'), ('z');
+
+statement ok
 CREATE TABLE events (
     customer VARCHAR,
     value INTEGER,
-    event_time TIMESTAMP
+    event_time TIMESTAMP,
+    FOREIGN KEY (customer) REFERENCES customers(customer)
 );
 
 statement ok
@@ -24,9 +31,8 @@ INSERT INTO events VALUES
     ('z',  5, '2024-01-01 06:00:00');
 
 statement ok
-CREATE FEATURE persisted TIMESTAMP event_time 
+CREATE FEATURE persisted ENTITY customers TIMESTAMP event_time
     WINDOW 7 DAYS
-    REFRESH FULL
     RETAIN 3
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 

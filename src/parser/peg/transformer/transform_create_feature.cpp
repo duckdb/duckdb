@@ -113,65 +113,59 @@ static interval_t ParseFeatureScheduleInterval(ParseResult &parse_result) {
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PEGTransformer &transformer,
                                                                               ParseResult &parse_result) {
-	// CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral
-	//                      FeatureWindowClause? FeatureWatermarkClause?
-	//                      FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause? 'AS'
-	//                      Parens(SelectStatementInternal)
+	// CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral
+	//                      'TIMESTAMP' IdentifierOrStringLiteral FeatureWindowClause? FeatureWatermarkClause?
+	//                      FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 
 	// index 0: 'FEATURE' keyword
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto feature_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2)).name;
-	// index 3: 'TIMESTAMP' keyword
-	auto timestamp_column = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(4)).name;
-	// index 5: FeatureWindowClause? (default: 1 day)
+	// index 3: 'ENTITY' keyword
+	auto entity_table = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(4)).name;
+	// index 5: 'TIMESTAMP' keyword
+	auto timestamp_column = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(6)).name;
+	// index 7: FeatureWindowClause? (default: 1 day)
 	interval_t window_interval {0, 1, 0};
-	auto &window_opt = list_pr.Child<OptionalParseResult>(5);
+	auto &window_opt = list_pr.Child<OptionalParseResult>(7);
 	if (window_opt.HasResult()) {
 		auto &clause = window_opt.GetResult().Cast<ListParseResult>();
 		window_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WINDOW");
 	}
-	// index 6: FeatureWatermarkClause? (default: zero interval)
+	// index 8: FeatureWatermarkClause? (default: zero interval)
 	interval_t watermark_interval = ZERO_INTERVAL;
-	auto &watermark_opt = list_pr.Child<OptionalParseResult>(6);
+	auto &watermark_opt = list_pr.Child<OptionalParseResult>(8);
 	if (watermark_opt.HasResult()) {
 		auto &clause = watermark_opt.GetResult().Cast<ListParseResult>();
 		watermark_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WATERMARK");
 	}
-	// index 7: FeatureRefreshClause? (default: INCREMENTAL)
-	FeatureRefreshMode refresh_mode = FeatureRefreshMode::INCREMENTAL;
-	auto &refresh_opt = list_pr.Child<OptionalParseResult>(7);
-	if (refresh_opt.HasResult()) {
-		auto &clause = refresh_opt.GetResult().Cast<ListParseResult>();
-		refresh_mode = transformer.Transform<FeatureRefreshMode>(clause.Child<ListParseResult>(1));
-	}
-	// index 8: FeatureScheduleClause? (default: no schedule)
+	// index 9: FeatureScheduleClause? (default: no schedule)
 	bool has_schedule = false;
 	interval_t schedule_interval {0, 0, 0};
-	auto &schedule_opt = list_pr.Child<OptionalParseResult>(8);
+	auto &schedule_opt = list_pr.Child<OptionalParseResult>(9);
 	if (schedule_opt.HasResult()) {
 		schedule_interval = transformer.Transform<interval_t>(schedule_opt.GetResult());
 		has_schedule = true;
 	}
-	// index 9: FeatureRetainClause? (default: 1)
+	// index 10: FeatureRetainClause? (default: 1)
 	int64_t retain_versions = 1;
-	auto &retain_opt = list_pr.Child<OptionalParseResult>(9);
+	auto &retain_opt = list_pr.Child<OptionalParseResult>(10);
 	if (retain_opt.HasResult()) {
 		auto &clause = retain_opt.GetResult().Cast<ListParseResult>();
 		retain_versions = std::stoll(clause.Child<NumberParseResult>(1).number);
 	}
-	// index 10: 'AS' keyword
-	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(11));
+	// index 11: 'AS' keyword
+	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(12));
 	auto query = transformer.Transform<unique_ptr<SelectStatement>>(select_parens);
 
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateFeatureInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->feature_name = feature_name;
+	info->entity_table = entity_table;
 	info->timestamp_column = timestamp_column;
 	info->window_interval = window_interval;
 	info->watermark_interval = watermark_interval;
-	info->refresh_mode = refresh_mode;
 	info->retain_versions = retain_versions;
 	info->has_schedule = has_schedule;
 	info->schedule_interval = schedule_interval;
@@ -184,12 +178,6 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 interval_t PEGTransformerFactory::TransformFeatureScheduleClause(PEGTransformer &transformer,
                                                                  ParseResult &parse_result) {
 	return ParseFeatureScheduleInterval(parse_result);
-}
-
-FeatureRefreshMode PEGTransformerFactory::TransformFeatureRefreshMode(PEGTransformer &transformer,
-                                                                      ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.TransformEnum<FeatureRefreshMode>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformRefreshFeatureStatement(PEGTransformer &transformer,

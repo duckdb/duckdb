@@ -21,7 +21,9 @@ struct CreateFeatureInfo : public CreateInfo {
 
 	//! Feature name
 	string feature_name;
-	//! Source table name
+	//! Entity table name (the LEFT JOIN anchor); declared via the ENTITY clause
+	string entity_table;
+	//! Source table name (the event/relation table, derived from the feature query FROM)
 	string source_table;
 	//! Entity columns (the GROUP BY keys); empty for global features
 	vector<string> entity_columns;

@@ -23,7 +23,9 @@ public:
 public:
 	FeatureCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateFeatureInfo &info);
 
-	//! The source table name
+	//! The entity table name (the LEFT JOIN anchor); declared via the ENTITY clause
+	string entity_table;
+	//! The source table name (the event/relation table)
 	string source_table;
 	//! The entity columns; empty for global features
 	vector<string> entity_columns;

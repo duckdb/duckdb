@@ -19,6 +19,7 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	auto result = make_uniq<CreateFeatureInfo>();
 	CopyProperties(*result);
 	result->feature_name = feature_name;
+	result->entity_table = entity_table;
 	result->source_table = source_table;
 	result->entity_columns = entity_columns;
 	result->timestamp_column = timestamp_column;
@@ -47,19 +48,11 @@ string CreateFeatureInfo::ToString() const {
 		result += "IF NOT EXISTS ";
 	}
 	result += feature_name;
+	result += " ENTITY " + entity_table;
 	result += " TIMESTAMP " + timestamp_column;
 	result += " WINDOW INTERVAL '" + Interval::ToString(window_interval) + "'";
 	if (!IntervalEquals(watermark_interval, interval_t {0, 0, 0})) {
 		result += " WATERMARK INTERVAL '" + Interval::ToString(watermark_interval) + "'";
-	}
-	result += " REFRESH ";
-	switch (refresh_mode) {
-	case FeatureRefreshMode::FULL:
-		result += "FULL";
-		break;
-	case FeatureRefreshMode::INCREMENTAL:
-		result += "INCREMENTAL";
-		break;
 	}
 	if (has_schedule) {
 		result += " EVERY INTERVAL '" + Interval::ToString(schedule_interval) + "'";

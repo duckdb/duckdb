@@ -451,6 +451,11 @@
         "name": "watermark_interval",
         "type": "interval_t",
         "default": "interval_t()"
+      },
+      {
+        "id": 215,
+        "name": "entity_table",
+        "type": "string"
       }
     ]
   }

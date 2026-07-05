@@ -8,7 +8,7 @@
 --
 -- Reduce the range(0, 100) below to download fewer Parquet files for a
 -- smaller, faster benchmark.
-CREATE TABLE hits AS
+CREATE TABLE hits_raw AS
 SELECT
     CAST(UserID AS BIGINT)     AS UserID,
     epoch_ms(EventTime * 1000) AS EventTime,
@@ -20,21 +20,37 @@ FROM read_parquet(
     binary_as_string = True
 );
 
--- FULL-refresh feature: hourly windowed aggregation per user over a 24h window.
--- Exercises the CREATE FEATURE / REFRESH FULL group-by aggregation path.
-CREATE FEATURE user_activity_full TIMESTAMP EventTime 
+-- Entity table: the distinct users. CREATE FEATURE requires the event table's
+-- entity columns to form a FOREIGN KEY into the declared entity table, so we
+-- populate the entities first and give hits a foreign key into them.
+CREATE TABLE users (UserID BIGINT PRIMARY KEY);
+
+INSERT INTO users SELECT DISTINCT UserID FROM hits_raw;
+
+CREATE TABLE hits (
+    UserID    BIGINT,
+    EventTime TIMESTAMP,
+    RegionID  INTEGER,
+    CounterID INTEGER,
+    FOREIGN KEY (UserID) REFERENCES users(UserID)
+);
+
+INSERT INTO hits SELECT UserID, EventTime, RegionID, CounterID FROM hits_raw;
+
+DROP TABLE hits_raw;
+
+-- Hourly windowed aggregation per user over a 24h window. Exercises the
+-- CREATE FEATURE / REFRESH group-by aggregation path.
+CREATE FEATURE user_activity_full ENTITY users TIMESTAMP EventTime
     WINDOW 24 HOURS
-    REFRESH FULL
     RETAIN 1
     AS (SELECT UserID, COUNT(*) AS event_count, AVG(RegionID) AS avg_region FROM hits GROUP BY UserID);
 
--- INCREMENTAL-refresh feature: same shape, watermark-based incremental refresh.
--- A refresh recomputes the tail from max(feature_timestamp) minus one hour, so
--- it exercises the REFRESH INCREMENTAL watermark path even without new source rows.
-CREATE FEATURE user_activity_incr TIMESTAMP EventTime 
+-- Same shape with a RETAIN window, used by the interleaved refresh/serve benchmark.
+-- WATERMARK is accepted but no longer changes refresh behavior.
+CREATE FEATURE user_activity_incr ENTITY users TIMESTAMP EventTime
     WINDOW 24 HOURS
     WATERMARK 1 HOUR
-    REFRESH INCREMENTAL
     RETAIN 5
     AS (SELECT UserID, COUNT(*) AS event_count FROM hits GROUP BY UserID);
 

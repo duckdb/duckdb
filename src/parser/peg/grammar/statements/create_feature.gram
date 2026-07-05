@@ -1,8 +1,7 @@
-CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureWindowClause? FeatureWatermarkClause? FeatureRefreshClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
+CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral FeatureWindowClause? FeatureWatermarkClause? FeatureScheduleClause? FeatureRetainClause? 'AS' Parens(SelectStatementInternal)
 
 FeatureWindowClause <- 'WINDOW' FeatureInterval
 FeatureWatermarkClause <- 'WATERMARK' FeatureInterval
-FeatureRefreshClause <- 'REFRESH' FeatureRefreshMode
 FeatureScheduleClause <- 'EVERY' FeatureInterval
 FeatureRetainClause <- 'RETAIN' NumberLiteral
 
@@ -20,10 +19,6 @@ FeatureIntervalUnitMinute <- 'MINUTE'
 FeatureIntervalUnitMinutes <- 'MINUTES'
 FeatureIntervalUnitSecond <- 'SECOND'
 FeatureIntervalUnitSeconds <- 'SECONDS'
-
-FeatureRefreshMode <- FeatureRefreshFull / FeatureRefreshIncremental
-FeatureRefreshFull <- 'FULL'
-FeatureRefreshIncremental <- 'INCREMENTAL'
 
 RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral
 

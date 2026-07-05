@@ -9,19 +9,32 @@ require skip_reload
 # ============================================================
 # Setup
 # ============================================================
+# The entity table is the LEFT JOIN anchor; the event table must carry a foreign key into it.
 statement ok
-CREATE TABLE transactions (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+CREATE TABLE cards (card_no VARCHAR PRIMARY KEY);
+
+statement ok
+CREATE TABLE transactions (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP, FOREIGN KEY (card_no) REFERENCES cards(card_no));
 
 statement ok
 CREATE TABLE events (id INTEGER, name VARCHAR);
+
+statement ok
+CREATE TABLE no_fk (uid VARCHAR, amount INTEGER, ts TIMESTAMP);
 
 # ============================================================
 # Parser validation
 # ============================================================
 
+# Missing ENTITY keyword
+statement error
+CREATE FEATURE bad TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+----
+syntax error
+
 # Missing TIMESTAMP keyword
 statement error
-CREATE FEATURE bad WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT 1 FROM transactions);
+CREATE FEATURE bad ENTITY cards WINDOW 7 DAYS RETAIN 1 AS (SELECT 1 FROM transactions);
 ----
 syntax error
 
@@ -31,45 +44,57 @@ syntax error
 
 # Non-existent source table
 statement error
-CREATE FEATURE bad TIMESTAMP col2 WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT 1 FROM nonexistent);
+CREATE FEATURE bad ENTITY cards TIMESTAMP col2 WINDOW 7 DAYS RETAIN 1 AS (SELECT 1 FROM nonexistent);
 ----
 Table with name nonexistent does not exist
 
 # Non-existent entity column
 statement error
-CREATE FEATURE bad TIMESTAMP event_time WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT bad_col, SUM(amount) FROM transactions GROUP BY bad_col);
+CREATE FEATURE bad ENTITY cards TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT bad_col, SUM(amount) FROM transactions GROUP BY bad_col);
 ----
 Entity column "bad_col" does not exist
 
 # Non-existent timestamp column
 statement error
-CREATE FEATURE bad TIMESTAMP bad_col WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE bad ENTITY cards TIMESTAMP bad_col WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 ----
 Timestamp column "bad_col" does not exist
 
 # Timestamp column with wrong type (VARCHAR)
 statement error
-CREATE FEATURE bad TIMESTAMP name WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT id, COUNT(*) FROM events GROUP BY id);
+CREATE FEATURE bad ENTITY events TIMESTAMP name WINDOW 7 DAYS RETAIN 1 AS (SELECT id, COUNT(*) FROM events GROUP BY id);
 ----
 must be a temporal type
+
+# Non-existent entity table
+statement error
+CREATE FEATURE bad ENTITY nonexistent TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+----
+<REGEX>:.*nonexistent does not exist.*
+
+# Entity columns without a FOREIGN KEY into the entity table
+statement error
+CREATE FEATURE bad ENTITY cards TIMESTAMP ts WINDOW 7 DAYS RETAIN 1 AS (SELECT uid, SUM(amount) FROM no_fk GROUP BY uid);
+----
+<REGEX>:.*FOREIGN KEY.*
 
 # ============================================================
 # CREATE FEATURE basic
 # ============================================================
 statement ok
-CREATE FEATURE daily_txn TIMESTAMP event_time  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE daily_txn ENTITY cards TIMESTAMP event_time  WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 # Feature appears in duckdb_features()
-query IIII
-SELECT feature_name, source_table, entity_columns, window_interval FROM duckdb_features();
+query IIIII
+SELECT feature_name, entity_table, source_table, entity_columns, window_interval FROM duckdb_features();
 ----
-daily_txn	transactions	card_no	7 days
+daily_txn	cards	transactions	card_no	7 days
 
 # DESCRIBE FEATURE shows metadata. current_version is 0 until the first REFRESH materializes v1.
 query IIIIIIIIII
 DESCRIBE FEATURE daily_txn;
 ----
-daily_txn	transactions	card_no	event_time	FULL	1	0	7 days	00:00:00	CREATE FEATURE daily_txn TIMESTAMP event_time WINDOW INTERVAL '7 days' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+daily_txn	cards	transactions	card_no	event_time	1	0	7 days	00:00:00	CREATE FEATURE daily_txn ENTITY cards TIMESTAMP event_time WINDOW INTERVAL '7 days' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 # DESCRIBE non-existent feature returns empty
 query I
@@ -79,21 +104,21 @@ SELECT COUNT(*) FROM (DESCRIBE FEATURE nonexistent);
 
 # Duplicate fails
 statement error
-CREATE FEATURE daily_txn TIMESTAMP event_time  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE daily_txn ENTITY cards TIMESTAMP event_time  WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 ----
 already exists
 
 # IF NOT EXISTS succeeds silently
 statement ok
-CREATE FEATURE IF NOT EXISTS daily_txn TIMESTAMP event_time  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE IF NOT EXISTS daily_txn ENTITY cards TIMESTAMP event_time  WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 # HOUR windows work
 statement ok
-CREATE FEATURE hourly_stats TIMESTAMP event_time  WINDOW 24 HOURS REFRESH INCREMENTAL RETAIN 5 AS (SELECT card_no, AVG(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE hourly_stats ENTITY cards TIMESTAMP event_time  WINDOW 24 HOURS RETAIN 5 AS (SELECT card_no, AVG(amount) FROM transactions GROUP BY card_no);
 
 # WINDOW accepts explicit interval shorthand
 statement ok
-CREATE FEATURE explicit_hours TIMESTAMP event_time  WINDOW 24 HOURS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE explicit_hours ENTITY cards TIMESTAMP event_time  WINDOW 24 HOURS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query I
 SELECT window_interval FROM duckdb_features() WHERE feature_name = 'explicit_hours';
@@ -112,16 +137,16 @@ SELECT window_interval, watermark_interval FROM duckdb_features() WHERE feature_
 
 # WATERMARK accepts explicit interval shorthand independent of WINDOW
 statement ok
-CREATE FEATURE watermark_minutes TIMESTAMP event_time  WINDOW 24 HOURS WATERMARK 30 MINUTES REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE watermark_minutes ENTITY cards TIMESTAMP event_time  WINDOW 24 HOURS WATERMARK 30 MINUTES RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
 SELECT watermark_interval, sql FROM duckdb_features() WHERE feature_name = 'watermark_minutes';
 ----
-00:30:00	CREATE FEATURE watermark_minutes TIMESTAMP event_time WINDOW INTERVAL '24:00:00' WATERMARK INTERVAL '00:30:00' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+00:30:00	CREATE FEATURE watermark_minutes ENTITY cards TIMESTAMP event_time WINDOW INTERVAL '24:00:00' WATERMARK INTERVAL '00:30:00' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 # WINDOW also accepts INTERVAL string syntax
 statement ok
-CREATE FEATURE interval_minutes TIMESTAMP event_time  WINDOW INTERVAL '90 minutes' REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE interval_minutes ENTITY cards TIMESTAMP event_time  WINDOW INTERVAL '90 minutes' RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query I
 SELECT window_interval FROM duckdb_features() WHERE feature_name = 'interval_minutes';
@@ -130,12 +155,12 @@ SELECT window_interval FROM duckdb_features() WHERE feature_name = 'interval_min
 
 # WATERMARK also accepts INTERVAL string syntax
 statement ok
-CREATE FEATURE watermark_interval_string TIMESTAMP event_time  WINDOW 7 DAYS WATERMARK INTERVAL '2 hours' REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE watermark_interval_string ENTITY cards TIMESTAMP event_time  WINDOW 7 DAYS WATERMARK INTERVAL '2 hours' RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
 SELECT watermark_interval, sql FROM duckdb_features() WHERE feature_name = 'watermark_interval_string';
 ----
-02:00:00	CREATE FEATURE watermark_interval_string TIMESTAMP event_time WINDOW INTERVAL '7 days' WATERMARK INTERVAL '02:00:00' REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+02:00:00	CREATE FEATURE watermark_interval_string ENTITY cards TIMESTAMP event_time WINDOW INTERVAL '7 days' WATERMARK INTERVAL '02:00:00' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 query I
 SELECT COUNT(*) FROM duckdb_features();
@@ -160,13 +185,13 @@ DROP FEATURE watermark_interval_string;
 
 # WINDOW requires an explicit unit
 statement error
-CREATE FEATURE bare_window TIMESTAMP event_time WINDOW 3 REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE bare_window ENTITY cards TIMESTAMP event_time WINDOW 3 RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 ----
 syntax error
 
 # Explicit day shorthand works
 statement ok
-CREATE FEATURE explicit_days TIMESTAMP event_time WINDOW 3 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE explicit_days ENTITY cards TIMESTAMP event_time WINDOW 3 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
 SELECT feature_name, window_interval FROM duckdb_features() WHERE feature_name = 'explicit_days';
@@ -178,7 +203,7 @@ DROP FEATURE explicit_days;
 
 # Omit WINDOW -> defaults to 1
 statement ok
-CREATE FEATURE default_window TIMESTAMP event_time  REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE default_window ENTITY cards TIMESTAMP event_time  RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
 SELECT feature_name, window_interval FROM duckdb_features() WHERE feature_name = 'default_window';
@@ -188,21 +213,9 @@ default_window	1 day
 statement ok
 DROP FEATURE default_window;
 
-# Omit REFRESH -> defaults to INCREMENTAL
-statement ok
-CREATE FEATURE default_refresh TIMESTAMP event_time  WINDOW 3 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
-
-query II
-SELECT feature_name, refresh_mode FROM duckdb_features() WHERE feature_name = 'default_refresh';
-----
-default_refresh	INCREMENTAL
-
-statement ok
-DROP FEATURE default_refresh;
-
 # Omit RETAIN -> defaults to 1
 statement ok
-CREATE FEATURE default_retain TIMESTAMP event_time  WINDOW 3 DAYS REFRESH FULL AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+CREATE FEATURE default_retain ENTITY cards TIMESTAMP event_time  WINDOW 3 DAYS AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 query II
 SELECT feature_name, retain_versions FROM duckdb_features() WHERE feature_name = 'default_retain';
@@ -214,12 +227,12 @@ DROP FEATURE default_retain;
 
 # Omit all optional params -> all defaults applied
 statement ok
-CREATE FEATURE all_defaults TIMESTAMP event_time AS (SELECT card_no, COUNT(*) AS cnt FROM transactions GROUP BY card_no);
+CREATE FEATURE all_defaults ENTITY cards TIMESTAMP event_time AS (SELECT card_no, COUNT(*) AS cnt FROM transactions GROUP BY card_no);
 
-query IIIII
-SELECT feature_name, window_interval, watermark_interval, refresh_mode, retain_versions FROM duckdb_features() WHERE feature_name = 'all_defaults';
+query IIII
+SELECT feature_name, window_interval, watermark_interval, retain_versions FROM duckdb_features() WHERE feature_name = 'all_defaults';
 ----
-all_defaults	1 day	00:00:00	INCREMENTAL	1
+all_defaults	1 day	00:00:00	1
 
 statement ok
 DROP FEATURE all_defaults;
@@ -274,16 +287,19 @@ SELECT * FROM daily_txn;
 # Cascade chains: multiple features on different tables
 # ============================================================
 statement ok
-CREATE TABLE t1 (entity_id VARCHAR, val DECIMAL, ts TIMESTAMP);
+CREATE TABLE entities (entity_id VARCHAR PRIMARY KEY);
 
 statement ok
-CREATE TABLE t2 (entity_id VARCHAR, score INTEGER, ts TIMESTAMP);
+CREATE TABLE t1 (entity_id VARCHAR, val DECIMAL, ts TIMESTAMP, FOREIGN KEY (entity_id) REFERENCES entities(entity_id));
 
 statement ok
-CREATE FEATURE feat_t1 TIMESTAMP ts  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT entity_id, SUM(val) FROM t1 GROUP BY entity_id);
+CREATE TABLE t2 (entity_id VARCHAR, score INTEGER, ts TIMESTAMP, FOREIGN KEY (entity_id) REFERENCES entities(entity_id));
 
 statement ok
-CREATE FEATURE feat_t2 TIMESTAMP ts  WINDOW 24 HOURS REFRESH FULL RETAIN 3 AS (SELECT entity_id, AVG(score) FROM t2 GROUP BY entity_id);
+CREATE FEATURE feat_t1 ENTITY entities TIMESTAMP ts  WINDOW 7 DAYS RETAIN 1 AS (SELECT entity_id, SUM(val) FROM t1 GROUP BY entity_id);
+
+statement ok
+CREATE FEATURE feat_t2 ENTITY entities TIMESTAMP ts  WINDOW 24 HOURS RETAIN 3 AS (SELECT entity_id, AVG(score) FROM t2 GROUP BY entity_id);
 
 query I
 SELECT COUNT(*) FROM duckdb_features();

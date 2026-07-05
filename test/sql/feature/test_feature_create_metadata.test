@@ -6,8 +6,15 @@ require noforcestorage
 
 require skip_reload
 
+# The entity table is the LEFT JOIN anchor; the event table must carry a foreign key into it.
 statement ok
-CREATE TABLE events (customer VARCHAR, value INTEGER, event_time TIMESTAMP);
+CREATE TABLE customers (customer VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO customers VALUES ('x'), ('y');
+
+statement ok
+CREATE TABLE events (customer VARCHAR, value INTEGER, event_time TIMESTAMP, FOREIGN KEY (customer) REFERENCES customers(customer));
 
 statement ok
 INSERT INTO events VALUES
@@ -19,7 +26,7 @@ INSERT INTO events VALUES
 # CREATE FEATURE returns the created feature's name
 # ============================================================
 query I
-CREATE FEATURE f TIMESTAMP event_time WINDOW 7 DAYS REFRESH FULL RETAIN 2 AS (SELECT customer, SUM(value) AS total FROM events GROUP BY customer);
+CREATE FEATURE f ENTITY customers TIMESTAMP event_time WINDOW 7 DAYS RETAIN 2 AS (SELECT customer, SUM(value) AS total FROM events GROUP BY customer);
 ----
 f
 
@@ -91,11 +98,10 @@ SERVE FEATURE f FOR spine;
 x	2024-01-03 00:00:00	2024-01-02 08:00:00	30
 
 # ============================================================
-# INCREMENTAL feature's first refresh also bootstraps v1 (full materialization,
-# since there is no prior version to copy forward from)
+# A second feature on the same tables also bootstraps v1 on its first refresh
 # ============================================================
 statement ok
-CREATE FEATURE g TIMESTAMP event_time WINDOW 7 DAYS REFRESH INCREMENTAL RETAIN 1 AS (SELECT customer, SUM(value) AS total FROM events GROUP BY customer);
+CREATE FEATURE g ENTITY customers TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT customer, SUM(value) AS total FROM events GROUP BY customer);
 
 statement error
 SELECT * FROM g;

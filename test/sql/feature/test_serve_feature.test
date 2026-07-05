@@ -10,7 +10,13 @@ require skip_reload
 # Setup: create source data and feature
 # ============================================================
 statement ok
-CREATE TABLE transactions (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+CREATE TABLE cards (card_no VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO cards VALUES ('C001'), ('C002');
+
+statement ok
+CREATE TABLE transactions (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP, FOREIGN KEY (card_no) REFERENCES cards(card_no));
 
 statement ok
 INSERT INTO transactions VALUES
@@ -22,7 +28,7 @@ INSERT INTO transactions VALUES
     ('C002', 25.00, '2024-03-03 08:00:00');
 
 statement ok
-CREATE FEATURE daily_txn TIMESTAMP event_time  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) AS total_amount, COUNT(amount) AS txn_count FROM transactions GROUP BY card_no);
+CREATE FEATURE daily_txn ENTITY cards TIMESTAMP event_time  WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) AS total_amount, COUNT(amount) AS txn_count FROM transactions GROUP BY card_no);
 
 # Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
 statement ok
@@ -118,7 +124,7 @@ C002	2024-03-03 10:00:00	2024-03-03 08:00:00	400.00	3
 # ============================================================
 
 statement ok
-CREATE FEATURE global_txn_count TIMESTAMP event_time WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT COUNT(*) AS global_count FROM transactions);
+CREATE FEATURE global_txn_count ENTITY cards TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT COUNT(*) AS global_count FROM transactions);
 
 # Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
 statement ok
@@ -144,7 +150,13 @@ C002	2024-03-03 10:00:00	2024-03-03 08:00:00	400.00	3	2024-03-03 08:00:00	6
 # ============================================================
 
 statement ok
-CREATE TABLE merchant_transactions (card_no VARCHAR, merchant_id VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+CREATE TABLE merchants (card_no VARCHAR, merchant_id VARCHAR, PRIMARY KEY (card_no, merchant_id));
+
+statement ok
+INSERT INTO merchants VALUES ('C001', 'M1'), ('C001', 'M2'), ('C002', 'M1');
+
+statement ok
+CREATE TABLE merchant_transactions (card_no VARCHAR, merchant_id VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP, FOREIGN KEY (card_no, merchant_id) REFERENCES merchants(card_no, merchant_id));
 
 statement ok
 INSERT INTO merchant_transactions VALUES
@@ -154,7 +166,7 @@ INSERT INTO merchant_transactions VALUES
     ('C002', 'M1',  75.00, '2024-03-01 11:00:00');
 
 statement ok
-CREATE FEATURE merchant_txn TIMESTAMP event_time WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, merchant_id, SUM(amount) AS merchant_total FROM merchant_transactions GROUP BY card_no, merchant_id);
+CREATE FEATURE merchant_txn ENTITY merchants TIMESTAMP event_time WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, merchant_id, SUM(amount) AS merchant_total FROM merchant_transactions GROUP BY card_no, merchant_id);
 
 # Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
 statement ok
@@ -266,7 +278,7 @@ does not exist
 # ============================================================
 
 statement ok
-CREATE FEATURE daily_txn_avg TIMESTAMP event_time  WINDOW 7 DAYS REFRESH FULL RETAIN 1 AS (SELECT card_no, AVG(amount) AS avg_amount FROM transactions GROUP BY card_no);
+CREATE FEATURE daily_txn_avg ENTITY cards TIMESTAMP event_time  WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, AVG(amount) AS avg_amount FROM transactions GROUP BY card_no);
 
 # Bootstrap the first version (v1); CREATE FEATURE only registers metadata.
 statement ok

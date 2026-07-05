@@ -380,7 +380,6 @@ void PEGTransformerFactory::RegisterCreateTrigger() {
 void PEGTransformerFactory::RegisterCreateFeature() {
 	REGISTER_TRANSFORM(TransformCreateFeatureStmt);
 	REGISTER_TRANSFORM(TransformFeatureScheduleClause);
-	REGISTER_TRANSFORM(TransformFeatureRefreshMode);
 	REGISTER_TRANSFORM(TransformRefreshFeatureStatement);
 	REGISTER_TRANSFORM(TransformFeatureAtVersionStatement);
 	REGISTER_TRANSFORM(TransformServeFeatureStatement);
@@ -961,9 +960,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<TriggerTiming>("TriggerInsteadOf", TriggerTiming::INSTEAD_OF);
 	RegisterEnum<TriggerForEach>("ForEachRow", TriggerForEach::ROW);
 	RegisterEnum<TriggerForEach>("ForEachStatement", TriggerForEach::STATEMENT);
-
-	RegisterEnum<FeatureRefreshMode>("FeatureRefreshFull", FeatureRefreshMode::FULL);
-	RegisterEnum<FeatureRefreshMode>("FeatureRefreshIncremental", FeatureRefreshMode::INCREMENTAL);
 
 	RegisterEnum<string>("MinValue", "minvalue");
 	RegisterEnum<string>("MaxValue", "maxvalue");

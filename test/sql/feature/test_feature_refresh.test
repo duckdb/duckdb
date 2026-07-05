@@ -10,10 +10,17 @@ require skip_reload
 # FULL refresh: delete everything, recompute from scratch
 # ============================================================
 statement ok
+CREATE TABLE users (user_id VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO users VALUES ('alice'), ('bob'), ('carol'), ('charlie');
+
+statement ok
 CREATE TABLE transactions (
     user_id VARCHAR,
     amount DECIMAL(10,2),
-    ts TIMESTAMP
+    ts TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 
 statement ok
@@ -26,10 +33,10 @@ INSERT INTO transactions VALUES
     ('carol', 150.00, '2024-01-03 10:00:00');
 
 statement ok
-CREATE FEATURE total_spend 
-    TIMESTAMP ts 
+CREATE FEATURE total_spend
+    ENTITY users
+    TIMESTAMP ts
     WINDOW 7 DAYS
-    REFRESH FULL
     RETAIN 1
     AS (SELECT user_id, SUM(amount) AS total_amount, COUNT(*) AS tx_count FROM transactions GROUP BY user_id);
 
@@ -126,13 +133,20 @@ statement ok
 DROP TABLE transactions;
 
 # ============================================================
-# INCREMENTAL refresh: watermark + window approach
+# Refresh recomputes the full windowed history each time
 # ============================================================
+statement ok
+CREATE TABLE customers (customer VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO customers VALUES ('x'), ('y'), ('z'), ('w');
+
 statement ok
 CREATE TABLE events (
     customer VARCHAR,
     value INTEGER,
-    event_time TIMESTAMP
+    event_time TIMESTAMP,
+    FOREIGN KEY (customer) REFERENCES customers(customer)
 );
 
 statement ok
@@ -144,10 +158,10 @@ INSERT INTO events VALUES
     ('z',  5, '2024-01-01 06:00:00');
 
 statement ok
-CREATE FEATURE event_sum 
-    TIMESTAMP event_time 
+CREATE FEATURE event_sum
+    ENTITY customers
+    TIMESTAMP event_time
     WINDOW 7 DAYS
-    REFRESH INCREMENTAL
     RETAIN 1
     AS (SELECT customer, SUM(value) AS total_value FROM events GROUP BY customer);
 
@@ -182,11 +196,11 @@ INSERT INTO events VALUES
     ('y', 50, '2024-01-03 10:00:00'),
     ('z', 60, '2024-01-03 14:00:00');
 
-# Default watermark is zero, so recompute runs from max(feature_timestamp) onward.
+# A refresh fully recomputes every event-time anchor across all entities.
 query I
 REFRESH FEATURE event_sum;
 ----
-4
+8
 
 query II rowsort
 SELECT customer, total_value FROM event_sum WHERE feature_timestamp IN ('2024-01-01 08:00:00'::TIMESTAMP, '2024-01-01 12:00:00'::TIMESTAMP, '2024-01-01 06:00:00'::TIMESTAMP) ORDER BY customer;
@@ -210,13 +224,13 @@ x	70
 y	95
 z	65
 
-# ---- Scenario 2: No new data — refresh still recomputes the tail ----
-# A refresh always recomputes the event-time tail and bumps the version, even
+# ---- Scenario 2: No new data — refresh still recomputes everything ----
+# A refresh always recomputes every anchor and bumps the version, even
 # when no source rows changed. The recomputed values are identical.
 query I
 REFRESH FEATURE event_sum;
 ----
-1
+8
 
 # ---- Scenario 3: Add more data, verify watermark advances ----
 statement ok
@@ -224,11 +238,11 @@ INSERT INTO events VALUES
     ('x', 100, '2024-01-05 12:00:00'),
     ('y',  80, '2024-01-06 09:00:00');
 
-# New data plus the current max timestamp are processed forward.
+# All anchors are recomputed, including the new Jan 5 / Jan 6 event timestamps.
 query I
 REFRESH FEATURE event_sum;
 ----
-3
+10
 
 # Jan 5 timestamp: x sees 10+20+40+100=170
 query II rowsort
@@ -258,11 +272,11 @@ statement ok
 INSERT INTO events VALUES
     ('w', 200, '2024-01-07 10:00:00');
 
-# New entity w arrives on Jan 7; the current max timestamp is recomputed too.
+# New entity w arrives on Jan 7; every anchor is recomputed.
 query I
 REFRESH FEATURE event_sum;
 ----
-2
+11
 
 query II
 SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-07 10:00:00'::TIMESTAMP;
@@ -276,10 +290,17 @@ w	200
 # The explicit watermark interval makes refresh recompute far enough back to pick it up.
 
 statement ok
+CREATE TABLE late_ents (entity VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO late_ents VALUES ('a');
+
+statement ok
 CREATE TABLE late_events (
     entity VARCHAR,
     val INTEGER,
-    ts TIMESTAMP
+    ts TIMESTAMP,
+    FOREIGN KEY (entity) REFERENCES late_ents(entity)
 );
 
 statement ok
@@ -288,11 +309,11 @@ INSERT INTO late_events VALUES
     ('a', 20, '2024-01-02 08:00:00');
 
 statement ok
-CREATE FEATURE late_test 
-    TIMESTAMP ts 
+CREATE FEATURE late_test
+    ENTITY late_ents
+    TIMESTAMP ts
     WINDOW 7 DAYS
     WATERMARK 1 DAY
-    REFRESH INCREMENTAL
     RETAIN 1
     AS (SELECT entity, SUM(val) AS total FROM late_events GROUP BY entity);
 
@@ -353,16 +374,21 @@ statement ok
 DROP TABLE late_events;
 
 # ============================================================
-# INCREMENTAL refresh: different watermark intervals on the same source
+# WATERMARK is accepted but inert: every refresh fully recomputes the history,
+# so a late-arriving row is always picked up regardless of the watermark.
 # ============================================================
-# A zero watermark only recomputes the current max timestamp anchor. A wider
-# watermark also creates late-arriving anchors that fall inside the interval.
+statement ok
+CREATE TABLE wm_ents (entity VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO wm_ents VALUES ('a');
 
 statement ok
 CREATE TABLE watermark_events (
     entity VARCHAR,
     val INTEGER,
-    ts TIMESTAMP
+    ts TIMESTAMP,
+    FOREIGN KEY (entity) REFERENCES wm_ents(entity)
 );
 
 statement ok
@@ -371,10 +397,10 @@ INSERT INTO watermark_events VALUES
     ('a', 20, '2024-01-03 08:00:00');
 
 statement ok
-CREATE FEATURE wm_zero 
+CREATE FEATURE wm_zero
+    ENTITY wm_ents
     TIMESTAMP ts
     WINDOW 7 DAYS
-    REFRESH INCREMENTAL
     RETAIN 1
     AS (SELECT entity, SUM(val) AS total FROM watermark_events GROUP BY entity);
 
@@ -383,11 +409,11 @@ statement ok
 REFRESH FEATURE wm_zero;
 
 statement ok
-CREATE FEATURE wm_two_days 
+CREATE FEATURE wm_two_days
+    ENTITY wm_ents
     TIMESTAMP ts
     WINDOW 7 DAYS
     WATERMARK 2 DAYS
-    REFRESH INCREMENTAL
     RETAIN 1
     AS (SELECT entity, SUM(val) AS total FROM watermark_events GROUP BY entity);
 
@@ -395,37 +421,37 @@ CREATE FEATURE wm_two_days
 statement ok
 REFRESH FEATURE wm_two_days;
 
+# A late row arrives before the current max timestamp.
 statement ok
 INSERT INTO watermark_events VALUES ('a', 5, '2024-01-02 08:00:00');
 
+# Both features fully recompute — the WATERMARK clause makes no difference.
 query I
 REFRESH FEATURE wm_zero;
 ----
-1
+3
 
 query I
 REFRESH FEATURE wm_two_days;
 ----
 3
 
-# The zero-watermark feature recomputes the max timestamp, so the late value is
-# included in the Jan 3 aggregate, but no Jan 2 anchor is materialized.
+# Both materialize the late Jan 2 anchor: Jan 1 (10) + Jan 2 (5) = 15.
 query I
 SELECT COUNT(*) FROM wm_zero;
 ----
-2
+3
 
-query I
-SELECT COUNT(*) FROM wm_zero WHERE feature_timestamp = '2024-01-02 08:00:00'::TIMESTAMP;
+query R
+SELECT total FROM wm_zero WHERE feature_timestamp = '2024-01-02 08:00:00'::TIMESTAMP;
 ----
-0
+15
 
 query R
 SELECT total FROM wm_zero WHERE feature_timestamp = '2024-01-03 08:00:00'::TIMESTAMP;
 ----
 35
 
-# The two-day watermark recomputes far enough back to materialize the late Jan 2 anchor.
 query I
 SELECT COUNT(*) FROM wm_two_days;
 ----
@@ -455,17 +481,24 @@ DROP TABLE watermark_events;
 # ============================================================
 
 statement ok
+CREATE TABLE empty_ents (entity VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO empty_ents VALUES ('a');
+
+statement ok
 CREATE TABLE empty_initial_events (
     entity VARCHAR,
     val INTEGER,
-    ts TIMESTAMP
+    ts TIMESTAMP,
+    FOREIGN KEY (entity) REFERENCES empty_ents(entity)
 );
 
 statement ok
 CREATE FEATURE empty_initial
+    ENTITY empty_ents
     TIMESTAMP ts
     WINDOW 7 DAYS
-    REFRESH INCREMENTAL
     RETAIN 1
     AS (SELECT entity, SUM(val) AS total FROM empty_initial_events GROUP BY entity);
 
@@ -530,10 +563,17 @@ Feature "nonexistent" does not exist
 # Dropping the source table with CASCADE removes the dependent feature, so a later
 # refresh reports the feature as missing instead of failing deeper in materialization.
 statement ok
+CREATE TABLE err_ents (entity VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO err_ents VALUES ('a');
+
+statement ok
 CREATE TABLE refresh_error_src (
     entity VARCHAR,
     val INTEGER,
-    ts TIMESTAMP
+    ts TIMESTAMP,
+    FOREIGN KEY (entity) REFERENCES err_ents(entity)
 );
 
 statement ok
@@ -541,9 +581,9 @@ INSERT INTO refresh_error_src VALUES ('a', 10, '2024-01-01 08:00:00');
 
 statement ok
 CREATE FEATURE refresh_error_feature
+    ENTITY err_ents
     TIMESTAMP ts
     WINDOW 7 DAYS
-    REFRESH FULL
     RETAIN 1
     AS (SELECT entity, SUM(val) AS total FROM refresh_error_src GROUP BY entity);
 

@@ -101,6 +101,40 @@ static vector<string> GetFeatureEntityColumns(const SelectNode &select_node, con
 	return result;
 }
 
+//! The feature's entity columns in the source (event) table must form a FOREIGN KEY that references the
+//! declared entity table. This guarantees every entity value the feature aggregates over is anchored to a
+//! row in the entity table that REFRESH will LEFT JOIN against.
+static void ValidateFeatureEntityForeignKey(const TableCatalogEntry &source_entry, const string &source_table,
+                                            const string &entity_table, const vector<string> &entity_columns) {
+	for (auto &constraint : source_entry.GetConstraints()) {
+		if (constraint->type != ConstraintType::FOREIGN_KEY) {
+			continue;
+		}
+		auto &fk = constraint->Cast<ForeignKeyConstraint>();
+		// FK_TYPE_FOREIGN_KEY_TABLE means the source table is the child (foreign key) side of the relation.
+		if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+			continue;
+		}
+		if (!StringUtil::CIEquals(fk.info.table, entity_table)) {
+			continue;
+		}
+		bool all_covered = true;
+		for (auto &entity_column : entity_columns) {
+			if (!FeatureColumnListContains(fk.fk_columns, entity_column)) {
+				all_covered = false;
+				break;
+			}
+		}
+		if (all_covered) {
+			return;
+		}
+	}
+	throw BinderException(
+	    "CREATE FEATURE requires a FOREIGN KEY on \"%s\" (%s) referencing the entity table \"%s\"; the entity "
+	    "columns must depend on the entity table",
+	    source_table, StringUtil::Join(entity_columns, ", "), entity_table);
+}
+
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
 	auto &context = retriever.GetContext();
 	if (schema.empty()) {
@@ -838,6 +872,14 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		feature_info.dependencies.AddDependency(table_entry);
 
 		feature_info.entity_columns = GetFeatureEntityColumns(select_node, table_entry, feature_info.source_table);
+
+		// Validate the declared entity table exists and that the entity columns form a foreign key into it.
+		auto &entity_table_entry = Catalog::GetEntry<TableCatalogEntry>(
+		    context, feature_info.catalog, feature_info.schema, feature_info.entity_table);
+		ValidateFeatureEntityForeignKey(table_entry, feature_info.source_table, feature_info.entity_table,
+		                                feature_info.entity_columns);
+		// Register dependency on the entity table so DROP TABLE blocks without CASCADE
+		feature_info.dependencies.AddDependency(entity_table_entry);
 
 		FeaturePITQueryParameters pit_parameters;
 		pit_parameters.source_table = feature_info.source_table;

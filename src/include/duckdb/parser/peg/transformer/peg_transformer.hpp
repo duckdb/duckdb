@@ -580,7 +580,6 @@ private:
 	static unique_ptr<CreateStatement> TransformCreateFeatureStmt(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 	static interval_t TransformFeatureScheduleClause(PEGTransformer &transformer, ParseResult &parse_result);
-	static FeatureRefreshMode TransformFeatureRefreshMode(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformRefreshFeatureStatement(PEGTransformer &transformer,
 	                                                                 ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformFeatureAtVersionStatement(PEGTransformer &transformer,

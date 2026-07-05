@@ -113,6 +113,7 @@ void CreateFeatureInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(212, "schedule_enabled", schedule_enabled, true);
 	serializer.WritePropertyWithDefault<interval_t>(213, "window_interval", window_interval, interval_t());
 	serializer.WritePropertyWithDefault<interval_t>(214, "watermark_interval", watermark_interval, interval_t());
+	serializer.WritePropertyWithDefault<string>(215, "entity_table", entity_table);
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer) {
@@ -132,6 +133,7 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadPropertyWithExplicitDefault<bool>(212, "schedule_enabled", result->schedule_enabled, true);
 	deserializer.ReadPropertyWithExplicitDefault<interval_t>(213, "window_interval", result->window_interval, interval_t());
 	deserializer.ReadPropertyWithExplicitDefault<interval_t>(214, "watermark_interval", result->watermark_interval, interval_t());
+	deserializer.ReadPropertyWithDefault<string>(215, "entity_table", result->entity_table);
 	result->FinalizeDeserialization();
 	return std::move(result);
 }

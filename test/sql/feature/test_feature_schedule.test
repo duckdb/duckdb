@@ -10,7 +10,13 @@ require skip_reload
 # Setup
 # ============================================================
 statement ok
-CREATE TABLE hits (UserID VARCHAR, EventTime TIMESTAMP);
+CREATE TABLE users (UserID VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO users VALUES ('a'), ('b');
+
+statement ok
+CREATE TABLE hits (UserID VARCHAR, EventTime TIMESTAMP, FOREIGN KEY (UserID) REFERENCES users(UserID));
 
 statement ok
 INSERT INTO hits VALUES
@@ -22,10 +28,10 @@ INSERT INTO hits VALUES
 # Create a feature without a schedule (default: no schedule)
 # ============================================================
 statement ok
-CREATE FEATURE no_sched 
-    TIMESTAMP EventTime 
+CREATE FEATURE no_sched
+    ENTITY users
+    TIMESTAMP EventTime
     WINDOW 24 HOURS
-    REFRESH INCREMENTAL
     RETAIN 5
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
 
@@ -38,10 +44,10 @@ NULL	false
 # Create a feature WITH a schedule
 # ============================================================
 statement ok
-CREATE FEATURE user_activity 
-    TIMESTAMP EventTime 
+CREATE FEATURE user_activity
+    ENTITY users
+    TIMESTAMP EventTime
     WINDOW 24 HOURS
-    REFRESH INCREMENTAL
     EVERY INTERVAL 1 HOUR
     RETAIN 5
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
@@ -61,8 +67,9 @@ SELECT sql FROM duckdb_features() WHERE feature_name = 'user_activity';
 # Schedule accepts compound / minute intervals
 # ============================================================
 statement ok
-CREATE FEATURE half_hourly 
-    TIMESTAMP EventTime 
+CREATE FEATURE half_hourly
+    ENTITY users
+    TIMESTAMP EventTime
     WINDOW 60 MINUTES
     EVERY INTERVAL 30 MINUTES
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
@@ -75,6 +82,7 @@ SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_
 # Quoted interval strings are still accepted as an alternate spelling.
 statement ok
 CREATE FEATURE quoted_schedule
+    ENTITY users
     TIMESTAMP EventTime
     WINDOW 60 MINUTES
     EVERY INTERVAL '15 minutes'
@@ -89,8 +97,9 @@ SELECT schedule_interval, schedule_enabled FROM duckdb_features() WHERE feature_
 # Schedule shorthand normalizes to the same interval metadata
 # ============================================================
 statement ok
-CREATE FEATURE shorthand_hours 
-    TIMESTAMP EventTime 
+CREATE FEATURE shorthand_hours
+    ENTITY users
+    TIMESTAMP EventTime
     WINDOW 24 HOURS
     EVERY 2 HOURS
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
@@ -109,14 +118,15 @@ SELECT sql FROM duckdb_features() WHERE feature_name = 'shorthand_hours';
 # Validation: non-positive interval is rejected
 # ============================================================
 statement error
-CREATE FEATURE bad_sched TIMESTAMP EventTime
+CREATE FEATURE bad_sched ENTITY users TIMESTAMP EventTime
     EVERY INTERVAL 0 SECONDS
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
 ----
 <REGEX>:.*interval must be positive.*
 
 statement error
-CREATE FEATURE bad_shorthand_zero 
+CREATE FEATURE bad_shorthand_zero
+    ENTITY users
     TIMESTAMP EventTime
     EVERY 0 HOURS
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
@@ -124,7 +134,8 @@ CREATE FEATURE bad_shorthand_zero
 <REGEX>:.*interval must be positive.*
 
 statement error
-CREATE FEATURE bad_shorthand_decimal 
+CREATE FEATURE bad_shorthand_decimal
+    ENTITY users
     TIMESTAMP EventTime
     EVERY 1.5 HOURS
     AS (SELECT UserID, COUNT(*) FROM hits GROUP BY UserID);
@@ -139,8 +150,8 @@ CREATE FEATURE bad_shorthand_decimal
 statement ok
 REFRESH FEATURE user_activity;
 
-# The next incremental refresh recomputes only the event-time tail (a@01-02).
+# A refresh fully recomputes every event-time anchor (a@01-01, a@01-02, b@01-01 = 3 rows).
 query I
 REFRESH FEATURE user_activity;
 ----
-1
+3
