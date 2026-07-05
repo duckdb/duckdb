@@ -51,13 +51,14 @@ string BuildSignature(const string &name, const vector<string> &parameters, cons
                       const string &varargs, const string &return_type, const string &name_color = string(),
                       const string &type_color = string(), const string &color_off = string());
 
-//! Render the full manual page for the given overloads, wrapped to `content_width` columns. Signatures
-//! are grouped under a heading per function type and numbered sequentially; the Descriptions and
-//! Examples sections reference those numbers and deduplicate shared content. Reference markers are
-//! wrapped in `layout_on` / `layout_off`, section headings in `heading_on` / `heading_off`, and the
+//! Render the full manual page for `name`'s overloads, wrapped to `content_width` columns. The page
+//! opens with a banner carrying `name` (framed by horizontal rules); signatures are grouped under a
+//! heading per function type and numbered sequentially; the Descriptions and Examples sections
+//! reference those numbers and deduplicate shared content. Reference markers and rules are wrapped in
+//! `layout_on` / `layout_off`, headings (and the banner name) in `heading_on` / `heading_off`, and the
 //! schema-path labels in `path_on` / `path_off` (empty to disable coloring). `highlighter`, if set,
 //! syntax-highlights the examples. Returns the page text.
-string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_width,
+string RenderManualPage(const vector<ManualOverload> &overloads, const string &name, idx_t content_width,
                         const string &layout_on = string(), const string &layout_off = string(),
                         const string &heading_on = string(), const string &heading_off = string(),
                         const string &path_on = string(), const string &path_off = string(),

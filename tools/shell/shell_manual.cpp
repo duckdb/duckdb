@@ -355,14 +355,14 @@ string BuildSignature(const string &name, const vector<string> &parameters, cons
 	return result;
 }
 
-string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_width, const string &layout_on,
-                        const string &layout_off, const string &heading_on, const string &heading_off,
-                        const string &path_on, const string &path_off, const ManualHighlighter &highlighter) {
+string RenderManualPage(const vector<ManualOverload> &overloads, const string &name, idx_t content_width,
+                        const string &layout_on, const string &layout_off, const string &heading_on,
+                        const string &heading_off, const string &path_on, const string &path_off,
+                        const ManualHighlighter &highlighter) {
 	if (content_width < 24) {
 		content_width = 24;
 	}
 	Canvas canvas(content_width, highlighter);
-	canvas.Blank();
 
 	// reference markers like "(1)" are colored with the (gray) layout color
 	auto color_ref = [&](const string &refs) {
@@ -373,10 +373,21 @@ string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_w
 		string upper = StringUtil::Upper(text);
 		return heading_on.empty() ? upper : heading_on + upper + heading_off;
 	};
+	// the banner entry name is emphasized (white + bold) but kept in its real case
+	auto title = [&](const string &text) {
+		return heading_on.empty() ? text : heading_on + text + heading_off;
+	};
 	// schema-path labels are de-emphasized (gray + italic)
 	auto path_label = [&](const string &text) {
 		return path_on.empty() ? text : path_on + text + path_off;
 	};
+
+	// top-level banner: the entry name framed by full-width horizontal rules
+	string rule = StringUtil::Repeat("\xE2\x94\x80", content_width); // "─"
+	canvas.Line(0, color_ref(rule));
+	canvas.Line(0, title(name));
+	canvas.Line(0, color_ref(rule));
+	canvas.Blank();
 
 	// group overloads by function type (first-appearance order) and number them in that grouped order
 	vector<string> type_order;

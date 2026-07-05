@@ -12,7 +12,7 @@ def test_manual_basic(shell):
     )
     result = test.run()
     result.check_stdout('list_value')
-    result.check_stdout('SCALAR FUNCTIONS')
+    result.check_stdout('FUNCTIONS (SCALAR)')
     result.check_stdout('DESCRIPTION')
     result.check_stdout('EXAMPLES')
     result.check_stdout('->')
@@ -47,7 +47,7 @@ def test_manual_case_insensitive(shell):
         .statement('.manual LIST_VALUE')
     )
     result = test.run()
-    result.check_stdout('SCALAR FUNCTIONS')
+    result.check_stdout('FUNCTIONS (SCALAR)')
 
 
 def test_manual_multiple_function_types(shell):
@@ -57,8 +57,8 @@ def test_manual_multiple_function_types(shell):
         .statement('.manual generate_series')
     )
     result = test.run()
-    result.check_stdout('SCALAR FUNCTIONS')
-    result.check_stdout('TABLE FUNCTIONS')
+    result.check_stdout('FUNCTIONS (SCALAR)')
+    result.check_stdout('FUNCTIONS (TABLE)')
 
 
 def test_manual_unknown_function(shell):
@@ -68,6 +68,17 @@ def test_manual_unknown_function(shell):
     )
     result = test.run()
     result.check_stderr('No function named')
+
+
+def test_manual_banner(shell):
+    # the page opens with a banner carrying the entry name, framed by horizontal rules
+    test = (
+        ShellTest(shell)
+        .statement('.manual list_contains')
+    )
+    result = test.run()
+    result.check_stdout('list_contains')
+    result.check_stdout('───')
 
 
 def test_manual_schema_path(shell):

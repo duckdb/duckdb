@@ -621,8 +621,10 @@ ORDER BY function_type, database_name, schema_name, length(parameter_types), par
 	}
 
 	vector<ManualOverload> overloads;
+	string entry_name;
 	for (auto &row : *query_result) {
 		string function_name = row.GetValue<string>(0);
+		entry_name = function_name; // canonical-cased name (identical across a name's overloads)
 		string return_type = row.IsNull(2) ? string() : row.GetValue<string>(2);
 		auto parameters = ManualStringList(row.GetBaseValue(3));
 		auto parameter_types = ManualStringList(row.GetBaseValue(4));
@@ -693,8 +695,8 @@ LIMIT 5)");
 		state.HighlightSQL(highlighted);
 		return highlighted;
 	};
-	string page = RenderManualPage(overloads, content_width, layout_on, layout_off, heading_on, heading_off, path_on,
-	                               path_off, highlighter);
+	string page = RenderManualPage(overloads, entry_name, content_width, layout_on, layout_off, heading_on, heading_off,
+	                               path_on, path_off, highlighter);
 
 	// page the output when it is long (respecting the user's .pager mode); no-op off an interactive console
 	idx_t line_count = 0;
