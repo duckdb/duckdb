@@ -11,6 +11,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -122,8 +123,22 @@ static void CheckPrimitive(const VariantAnalyzeData &state, ShredAnalysisState &
 		if (!state.decimal_consistent) {
 			return;
 		}
+		//! The Variant encoding does not store a precision, so the analyzed width is derived from the
+		//! values and can be invalid for Parquet: a zero value derives a width of 0, and a width below
+		//! the scale is invalid as well. Clamp it up; if the clamped width exceeds the decimal range,
+		//! don't shred as decimal.
+		auto width = state.decimal_width;
+		if (width < 1) {
+			width = 1;
+		}
+		if (width < state.decimal_scale) {
+			width = state.decimal_scale;
+		}
+		if (width > Decimal::MAX_WIDTH_DECIMAL) {
+			return;
+		}
 		result.highest_count = count;
-		result.type = LogicalType::DECIMAL(state.decimal_width, state.decimal_scale);
+		result.type = LogicalType::DECIMAL(static_cast<uint8_t>(width), static_cast<uint8_t>(state.decimal_scale));
 	} else {
 		result.highest_count = count;
 		result.type = SHREDDED_TYPE;

@@ -1,0 +1,34 @@
+# name: test/sql/copy/parquet/shredded_variant_decimal_width.test
+# group: [parquet]
+
+require parquet
+
+# The Variant encoding does not store a decimal precision - the shredding analysis derives it
+# from the values. Zero-valued decimals derive a width of 0, which used to produce an invalid
+# Parquet DECIMAL annotation (precision must be >= 1 and >= scale) that strict readers reject.
+# Round-trip through the binary Variant encoding to force the derived-width path: the mixed
+# types keep the decimals unshredded in the 'value' blob on the first write.
+
+statement ok
+COPY (
+    SELECT CASE WHEN i % 3 = 0 THEN 0.00::DECIMAL(4,2)::VARIANT ELSE ('x' || i)::VARIANT END AS col
+    FROM range(9) t(i)
+) TO '{TEST_DIR}/canonical_zero_decimals.parquet'
+
+# The all-decimal rewrite shreds them as a typed decimal column; the derived width of the
+# zero values must be clamped to a valid precision (>= max(1, scale)).
+statement ok
+COPY (
+    SELECT col FROM '{TEST_DIR}/canonical_zero_decimals.parquet'
+    WHERE variant_typeof(col) LIKE 'DECIMAL%'
+) TO '{TEST_DIR}/shredded_zero_decimals.parquet'
+
+query II
+SELECT precision, scale FROM parquet_schema('{TEST_DIR}/shredded_zero_decimals.parquet') WHERE precision IS NOT NULL
+----
+2	2
+
+query I
+SELECT count(*) FROM '{TEST_DIR}/shredded_zero_decimals.parquet' WHERE col = 0.00::DECIMAL(4,2)::VARIANT
+----
+3
