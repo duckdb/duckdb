@@ -31,6 +31,8 @@ struct ManualOverload {
 	//! Raw function type from duckdb_functions() ("scalar", "aggregate", "table", ...); overloads are
 	//! grouped under a heading per type and numbered sequentially in that grouped order.
 	string function_type;
+	//! Qualified schema the entry lives in ("database.schema"), shown once above each signature group.
+	string schema_path;
 	//! e.g. "list_value(any ANY, ...) -> LIST"
 	string signature;
 	//! Overload description (may be empty)
@@ -51,13 +53,14 @@ string BuildSignature(const string &name, const vector<string> &parameters, cons
 
 //! Render the full manual page for the given overloads, wrapped to `content_width` columns. Signatures
 //! are grouped under a heading per function type and numbered sequentially; the Descriptions and
-//! Examples sections reference those numbers and deduplicate shared content. Box-drawing characters
-//! (of the nested example boxes) are wrapped in `layout_on` / `layout_off` terminal codes and section
-//! headings in `heading_on` / `heading_off` (empty to disable coloring). `highlighter`, if set,
+//! Examples sections reference those numbers and deduplicate shared content. Reference markers are
+//! wrapped in `layout_on` / `layout_off`, section headings in `heading_on` / `heading_off`, and the
+//! schema-path labels in `path_on` / `path_off` (empty to disable coloring). `highlighter`, if set,
 //! syntax-highlights the examples. Returns the page text.
 string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_width,
                         const string &layout_on = string(), const string &layout_off = string(),
                         const string &heading_on = string(), const string &heading_off = string(),
+                        const string &path_on = string(), const string &path_off = string(),
                         const ManualHighlighter &highlighter = ManualHighlighter());
 
 } // namespace duckdb_shell

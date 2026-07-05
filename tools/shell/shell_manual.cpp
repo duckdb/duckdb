@@ -135,9 +135,9 @@ public:
 		lines.emplace_back();
 	}
 
-	//! A verbatim line at column 0 (section headings).
-	void Line(const string &text) {
-		lines.push_back(text);
+	//! A verbatim line indented `level` levels (section headings, schema-path labels).
+	void Line(idx_t level, const string &text) {
+		lines.push_back(string(level * INDENT, ' ') + text);
 	}
 
 	//! A right-aligned label, flush against the right margin (the "(1), (2)" reference groups).
@@ -146,10 +146,10 @@ public:
 		lines.push_back(width > label_width ? string(width - label_width, ' ') + label : label);
 	}
 
-	//! A signature indented one level, with `number` right-aligned against the margin on the last line
-	//! (or on its own line when there is no room). `text`/`number` may contain ANSI color codes.
-	void Numbered(const string &text, const string &number) {
-		Body(text);
+	//! A signature indented `level` levels, with `number` right-aligned against the margin on the last
+	//! line (or on its own line when there is no room). `text`/`number` may contain ANSI color codes.
+	void Numbered(idx_t level, const string &text, const string &number) {
+		Body(level, text);
 		idx_t number_width = RenderLength(number);
 		idx_t used = RenderLength(lines.back());
 		if (used + 1 + number_width <= width) {
@@ -159,22 +159,23 @@ public:
 		}
 	}
 
-	//! A word-wrapped body block, every line indented one level.
-	void Body(const string &text) {
-		auto wrapped = WordWrap(text, BodyBudget());
+	//! A word-wrapped body block, every line indented `level` levels.
+	void Body(idx_t level, const string &text) {
+		idx_t indent = level * INDENT;
+		auto wrapped = WordWrap(text, Budget(indent));
 		if (wrapped.empty()) {
-			lines.push_back(string(INDENT, ' '));
+			lines.push_back(string(indent, ' '));
 			return;
 		}
 		for (auto &chunk : wrapped) {
-			lines.push_back(string(INDENT, ' ') + chunk);
+			lines.push_back(string(indent, ' ') + chunk);
 		}
 	}
 
-	//! A line of syntax-highlighted content indented one level, emitted verbatim (no wrapping) so it
-	//! stays copy-pasteable.
-	void Highlighted(const string &text) {
-		lines.push_back(string(INDENT, ' ') + (highlight ? highlight(text) : text));
+	//! A line of syntax-highlighted content indented `level` levels, emitted verbatim (no wrapping) so
+	//! it stays copy-pasteable.
+	void Highlighted(idx_t level, const string &text) {
+		lines.push_back(string(level * INDENT, ' ') + (highlight ? highlight(text) : text));
 	}
 
 	//! Render the accumulated lines.
@@ -188,9 +189,9 @@ public:
 	}
 
 private:
-	//! Word-wrap budget for content sitting at one indentation level.
-	idx_t BodyBudget() const {
-		return width > INDENT + 4 ? width - INDENT : 4;
+	//! Word-wrap budget for content sitting at `indent` columns.
+	idx_t Budget(idx_t indent) const {
+		return width > indent + 4 ? width - indent : 4;
 	}
 
 private:
@@ -218,14 +219,33 @@ struct ContentGroup {
 	vector<string> examples;
 };
 
-//! Format a group's reference header, e.g. "(1), (2), (3)".
-string FormatRefs(const vector<idx_t> &numbers) {
-	string result;
-	for (idx_t i = 0; i < numbers.size(); i++) {
-		if (i > 0) {
-			result += ", ";
+//! Format a group's reference header, e.g. "(1), (2), (3)". Runs of more than 5 consecutive numbers
+//! are collapsed to a "(first-last)" range. Each piece is a space-separated, independently colored (via
+//! `colorize`) token so the header can be word-wrapped safely.
+string FormatRefs(const vector<idx_t> &numbers, const std::function<string(const string &)> &colorize) {
+	// build the pieces, collapsing each maximal run of > 3 consecutive numbers into "(first-last)"
+	vector<string> pieces;
+	for (idx_t i = 0; i < numbers.size();) {
+		idx_t j = i;
+		while (j + 1 < numbers.size() && numbers[j + 1] == numbers[j] + 1) {
+			j++;
 		}
-		result += "(" + std::to_string(numbers[i]) + ")";
+		if (j - i + 1 > 5) {
+			pieces.push_back("(" + std::to_string(numbers[i]) + "-" + std::to_string(numbers[j]) + ")");
+		} else {
+			for (idx_t k = i; k <= j; k++) {
+				pieces.push_back("(" + std::to_string(numbers[k]) + ")");
+			}
+		}
+		i = j + 1;
+	}
+	string result;
+	for (idx_t i = 0; i < pieces.size(); i++) {
+		if (i > 0) {
+			result += " ";
+		}
+		string token = i + 1 < pieces.size() ? pieces[i] + "," : pieces[i];
+		result += colorize ? colorize(token) : token;
 	}
 	return result;
 }
@@ -284,11 +304,8 @@ vector<ContentGroup> GroupByExamples(const vector<NumberedOverload> &overloads) 
 }
 
 //! Human-readable heading for a raw function type, e.g. "scalar" -> "Scalar Functions",
-//! "table_macro" -> "Table Macro Functions". The "type" sentinel (from duckdb_types()) -> "Types".
+//! "table_macro" -> "Table Macro Functions".
 string FunctionTypeHeading(const string &function_type) {
-	if (function_type == "type") {
-		return "Logical Types";
-	}
 	auto words = StringUtil::Split(function_type, '_');
 	for (auto &word : words) {
 		if (!word.empty()) {
@@ -296,7 +313,7 @@ string FunctionTypeHeading(const string &function_type) {
 		}
 	}
 	string label = StringUtil::Join(words, " ");
-	return label.empty() ? "Functions" : label + " Functions";
+	return label.empty() ? "Functions" : "Functions (" + label + ")";
 }
 
 } // namespace
@@ -340,11 +357,12 @@ string BuildSignature(const string &name, const vector<string> &parameters, cons
 
 string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_width, const string &layout_on,
                         const string &layout_off, const string &heading_on, const string &heading_off,
-                        const ManualHighlighter &highlighter) {
+                        const string &path_on, const string &path_off, const ManualHighlighter &highlighter) {
 	if (content_width < 24) {
 		content_width = 24;
 	}
 	Canvas canvas(content_width, highlighter);
+	canvas.Blank();
 
 	// reference markers like "(1)" are colored with the (gray) layout color
 	auto color_ref = [&](const string &refs) {
@@ -354,6 +372,10 @@ string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_w
 	auto heading = [&](const string &text) {
 		string upper = StringUtil::Upper(text);
 		return heading_on.empty() ? upper : heading_on + upper + heading_off;
+	};
+	// schema-path labels are de-emphasized (gray + italic)
+	auto path_label = [&](const string &text) {
+		return path_on.empty() ? text : path_on + text + path_off;
 	};
 
 	// group overloads by function type (first-appearance order) and number them in that grouped order
@@ -375,52 +397,65 @@ string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_w
 	// with a single entry the "(n)" markers are noise: omit them everywhere
 	bool show_numbers = numbered.size() > 1;
 
-	// Signatures, under a heading per function type; the "(n)" marker is right-aligned at the margin
+	// Signatures, under a heading per function type; within a type they are grouped by qualified schema
+	// path (shown once, gray) and the "(n)" marker is right-aligned at the margin
 	for (auto &type : type_order) {
-		canvas.Line(heading(FunctionTypeHeading(type)));
+		canvas.Line(0, heading(FunctionTypeHeading(type)));
 		canvas.Blank();
+		bool first = true;
+		string current_path;
 		for (auto &entry : numbered) {
 			if (entry.overload->function_type != type) {
 				continue;
 			}
+			if (first || entry.overload->schema_path != current_path) {
+				current_path = entry.overload->schema_path;
+				canvas.Line(1, path_label(current_path));
+				canvas.Blank();
+			}
+			first = false;
 			// the signature is already colored structurally by BuildSignature; do not re-highlight it
 			if (show_numbers) {
-				canvas.Numbered(entry.overload->signature, color_ref("(" + std::to_string(entry.number) + ")"));
+				canvas.Numbered(2, entry.overload->signature, color_ref("(" + std::to_string(entry.number) + ")"));
 			} else {
-				canvas.Body(entry.overload->signature);
+				canvas.Body(2, entry.overload->signature);
 			}
 			canvas.Blank();
 		}
 	}
 
-	// Descriptions: the reference group right-aligned, then the body on the line(s) below
+	// Descriptions: the reference group left-aligned above the body on the line(s) below
 	auto description_groups = GroupByDescription(numbered);
 	if (!description_groups.empty()) {
-		canvas.Line(heading("Descriptions"));
+		canvas.Line(0, heading("Description"));
+		canvas.Blank();
 		for (auto &group : description_groups) {
 			if (show_numbers) {
-				canvas.RightAligned(color_ref(FormatRefs(group.numbers)));
+				canvas.Body(1, FormatRefs(group.numbers, color_ref));
+				canvas.Blank();
 			}
-			canvas.Body(group.text);
+			canvas.Body(2, group.text);
 			canvas.Blank();
 		}
 	}
 
-	// Examples: the reference group right-aligned, then the (syntax-highlighted) SQL below, verbatim
-	// and un-boxed so it can be copy-pasted directly from the terminal
+	// Examples: the reference group left-aligned above the (syntax-highlighted) SQL, verbatim and
+	// un-boxed so it can be copy-pasted directly from the terminal
 	auto example_groups = GroupByExamples(numbered);
 	if (!example_groups.empty()) {
-		canvas.Line(heading("Examples"));
+		canvas.Line(0, heading("Examples"));
+		canvas.Blank();
 		for (auto &group : example_groups) {
 			if (show_numbers) {
-				canvas.RightAligned(color_ref(FormatRefs(group.numbers)));
+				canvas.Body(1, FormatRefs(group.numbers, color_ref));
+				canvas.Blank();
 			}
 			for (idx_t e = 0; e < group.examples.size(); e++) {
 				if (e > 0) {
 					canvas.Blank();
 				}
 				for (auto &physical : StringUtil::Split(group.examples[e], '\n')) {
-					canvas.Highlighted(physical);
+					canvas.Highlighted(2, physical);
 				}
 			}
 			canvas.Blank();

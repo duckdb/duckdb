@@ -100,26 +100,26 @@ SCALAR FUNCTIONS
 
 MACRO FUNCTIONS
 
-	(1) range(col0 BIGINT) -> TABLE (col0 BIGINT)
+    (1) range(col0 BIGINT) -> TABLE (col0 BIGINT)
 
 	(2) range(col0 BIGINT, col1 BIGINT) -> TABLE (col0 BIGINT)
 
-	DEFINITIONS:
+DEFINITIONS:
 
-		(1)
-			1 + x
+	(1)
+		1 + x
 
-		(2)
-			1 + x + y
+	(2)
+		1 + x + y
 
-	DESCRIPTIONS:
+DESCRIPTIONS:
 
 	(1), (2)
 
 		Creates a list of values between `start` and `stop` - the stop parameter is
 		exclusive.
 
-	EXAMPLES
+EXAMPLES
 
 	(1), (2)
 
@@ -160,3 +160,136 @@ EXAMPLES
   list_extract([4, 5, 6], 3)
 
 
+
+```
+Scalar Functions
+
+	(1)     range(start BIGINT) -> BIGINT[]
+
+	(2)     range(start BIGINT, stop BIGINT) -> BIGINT[]
+
+	(3)     range(start BIGINT, stop BIGINT, step BIGINT) -> BIGINT[]
+
+	(4)     range(start TIMESTAMP, stop TIMESTAMP, step INTERVAL) -> TIMESTAMP[]
+
+	(5)     range(start TIMESTAMP WITH TIME ZONE, stop TIMESTAMP WITH TIME ZONE, step INTERVAL)
+			-> TIMESTAMP WITH TIME ZONE[]
+
+Table Functions
+
+	(6)	range(col0 BIGINT)
+
+	(7)	range(col0 BIGINT, col1 BIGINT)
+
+	(8)	range(col0 BIGINT, col1 BIGINT, col2 BIGINT)
+
+	(9)	range(col0 TIMESTAMP, col1 TIMESTAMP, col2 INTERVAL)
+
+	(10)	range(col0 TIMESTAMP WITH TIME ZONE, col1 TIMESTAMP WITH TIME ZONE, col2 INTERVAL)
+
+Descriptions
+
+	(1), (2), (3), (4), (5)
+
+		Creates a list of values between `start` and `stop` - the stop parameter is
+		exclusive.
+
+Examples
+
+	(1), (2), (3), (4), (5)
+
+        range(2, 5, 3)
+```
+
+
+
+
+```
+SCALAR FUNCTIONS
+
+  system.main
+
+   1) range(start BIGINT) -> BIGINT[]
+
+   2) range(start BIGINT, stop BIGINT) -> BIGINT[]
+
+  system.temp
+
+   3) range(start BIGINT, stop BIGINT, step BIGINT) -> BIGINT[]
+
+DESCRIPTIONS
+
+   1), 2), 3)
+
+	  Creates a list of values between `start` and `stop` - the stop parameter is
+	  exclusive.
+
+```
+
+
+
+```
+
+SCALAR FUNCTIONS
+
+	path		name																		no#
+
+    system
+    ├── main
+    │   ├── 	range(start BIGINT) -> BIGINT[]											    (01)
+    │   │
+    │   └── 	range(start BIGINT, stop BIGINT) -> BIGINT[]								(02)
+    └── temp
+        └── 	range(start BIGINT, stop BIGINT, step BIGINT) -> BIGINT[]					(03)
+
+DESCRIPTION
+
+    (01), (02), (03)
+
+	    Creates a list of values between `start` and `stop` - the stop parameter is
+	    exclusive.
+
+EXAMPLES
+
+    (01), (02), (03)
+
+        SELECT * FROM range(2, 5, 3)
+
+
+```
+
+```
+TABLE FUNCTIONS
+
+   system.main
+
+    1) range(col0 BIGINT)
+
+    2) range(col0 BIGINT, col1 BIGINT)
+
+DESCRIPTION
+
+	1), 2)
+
+
+
+
+
+SCALAR FUNCTIONS
+
+	system.main
+
+    [02]	list_extract(list T[], index BIGINT) -> T
+
+    [03]	list_extract(list VARCHAR, index BIGINT) -> VARCHAR
+
+
+
+```
+
+
+EXAMPLES
+
+  (1, ..., 92)
+
+    arg_min_null_val(A, B, N)
