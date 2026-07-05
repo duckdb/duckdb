@@ -1,0 +1,50 @@
+# Connect-mode (Layer 1) grammar — runs over the same token stream as the main SQL grammar but
+# recognizes only the CONNECT-family statements + everything-else-as-opaque-text. Used by
+# ClientContext when a CONNECT binding is active, to forward non-control statements verbatim to
+# the bound catalog instead of letting the full SQL parser decompose them (e.g. PIVOT).
+#
+# The Identifier / StringLiteral primitives are copy-pasted from src/parser/peg/grammar — see
+# README for rationale (stability over drift-protection for a small, separate grammar).
+
+Program          <- Chunk (Semi Chunk)* Semi?
+
+# Order matters: well-formed CONNECT-family variants are tried first. Anything that starts with
+# CONNECT/DISCONNECT but doesn't match a well-formed form falls into the Forbidden* variants —
+# the dispatcher errors explicitly on these (rather than silently treating them as Raw, which
+# would forward malformed control statements to the remote backend).
+Chunk            <- ExecuteChunk
+                  / ConnectChunk
+                  / DisconnectChunk
+                  / ForbiddenConnect
+                  / ForbiddenDisconnect
+                  / RawChunk
+
+ConnectChunk     <- 'CONNECT' (Identifier / 'LOCAL' / StringLiteral)?
+DisconnectChunk  <- 'DISCONNECT'
+# EXECUTE payload is bare Raw — the payload can contain any text including the word CONNECT,
+# since it's forwarded verbatim to the remote backend. Nested control statements as part of
+# the payload are not specially rejected.
+ExecuteChunk     <- 'CONNECT' Identifier 'EXECUTE' Raw
+
+# Catch malformed control statements and surface a clear error rather than a confusing parse failure
+# or silent raw forwarding.
+ForbiddenConnect    <- 'CONNECT' Raw
+ForbiddenDisconnect <- 'DISCONNECT' Raw
+
+# RawChunk MUST NOT start with CONNECT/DISCONNECT — those go to the Forbidden* paths above.
+# (Note: the `!` negative-lookahead is silently ignored by DuckDB's PEG runtime today, so this
+# guard is documentation-only. ConnectChunk/DisconnectChunk being tried first via ordered choice
+# is what actually prevents the misclassification at runtime.)
+RawChunk         <- !ControlKeyword Raw
+ControlKeyword   <- 'CONNECT' / 'DISCONNECT'
+
+# `InStatementToken` is a built-in primitive: any non-TERMINATOR token. Lets us capture opaque
+# text up to a `;` without needing a `!` negative-lookahead operator.
+Raw              <- InStatementToken+
+Semi             <- ';'
+
+# Primitives (copy-pasted; lift to a shared file when a second Layer-1 grammar shows up)
+Identifier        <- QuotedIdentifier / PlainIdentifier
+QuotedIdentifier  <- '"' [^"]* '"'
+PlainIdentifier   <- [a-zA-Z_] [a-zA-Z0-9_]*
+StringLiteral     <- "'" [^']* "'"
