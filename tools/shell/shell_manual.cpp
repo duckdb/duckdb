@@ -146,6 +146,13 @@ public:
 		lines.push_back(width > label_width ? string(width - label_width, ' ') + label : label);
 	}
 
+	//! A horizontally centered line (the banner entry name); widths ignore ANSI codes.
+	void Centered(const string &text) {
+		idx_t text_width = RenderLength(text);
+		idx_t pad = width > text_width ? (width - text_width) / 2 : 0;
+		lines.push_back(string(pad, ' ') + text);
+	}
+
 	//! A signature indented `level` levels, with `number` right-aligned against the margin on the last
 	//! line (or on its own line when there is no room). `text`/`number` may contain ANSI color codes.
 	void Numbered(idx_t level, const string &text, const string &number) {
@@ -385,7 +392,7 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &n
 	// top-level banner: the entry name framed by full-width horizontal rules
 	string rule = StringUtil::Repeat("\xE2\x94\x80", content_width); // "─"
 	canvas.Line(0, color_ref(rule));
-	canvas.Line(0, title(name));
+	canvas.Centered(title(name));
 	canvas.Line(0, color_ref(rule));
 	canvas.Blank();
 
@@ -405,8 +412,18 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &n
 		}
 	}
 
-	// with a single entry the "(n)" markers are noise: omit them everywhere
-	bool show_numbers = numbered.size() > 1;
+	// group descriptions/examples up front so signature numbering can react to them
+	auto description_groups = GroupByDescription(numbered);
+	auto example_groups = GroupByExamples(numbered);
+	// a single group covering every overload applies to all of them, so its reference is redundant
+	auto covers_all = [&](const vector<ContentGroup> &groups) {
+		return groups.size() == 1 && groups[0].numbers.size() == numbered.size();
+	};
+	bool description_refs = !description_groups.empty() && !covers_all(description_groups);
+	bool example_refs = !example_groups.empty() && !covers_all(example_groups);
+	// the "(n)" markers only earn their place when a description/example references specific overloads;
+	// with a single overload, or when every overload shares the same content, they are just noise
+	bool show_numbers = numbered.size() > 1 && (description_refs || example_refs);
 
 	// Signatures, under a heading per function type; within a type they are grouped by qualified schema
 	// path (shown once, gray) and the "(n)" marker is right-aligned at the margin
@@ -436,12 +453,11 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &n
 	}
 
 	// Descriptions: the reference group left-aligned above the body on the line(s) below
-	auto description_groups = GroupByDescription(numbered);
 	if (!description_groups.empty()) {
 		canvas.Line(0, heading("Description"));
 		canvas.Blank();
 		for (auto &group : description_groups) {
-			if (show_numbers) {
+			if (description_refs) {
 				canvas.Body(1, FormatRefs(group.numbers, color_ref));
 				canvas.Blank();
 			}
@@ -452,12 +468,11 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &n
 
 	// Examples: the reference group left-aligned above the (syntax-highlighted) SQL, verbatim and
 	// un-boxed so it can be copy-pasted directly from the terminal
-	auto example_groups = GroupByExamples(numbered);
 	if (!example_groups.empty()) {
 		canvas.Line(0, heading("Examples"));
 		canvas.Blank();
 		for (auto &group : example_groups) {
-			if (show_numbers) {
+			if (example_refs) {
 				canvas.Body(1, FormatRefs(group.numbers, color_ref));
 				canvas.Blank();
 			}

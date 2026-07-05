@@ -19,14 +19,24 @@ def test_manual_basic(shell):
 
 
 def test_manual_multiple_overloads(shell):
-    # multiple overloads get numbered signatures
+    # overloads get numbered signatures when descriptions/examples differ between them
     test = (
         ShellTest(shell)
-        .statement('.manual regexp_matches')
+        .statement('.manual regexp_extract')
     )
     result = test.run()
     result.check_stdout('(1)')
     result.check_stdout('(2)')
+
+
+def test_manual_shared_content_no_numbers(shell):
+    # when every overload shares the same description and example, the numbers/refs are omitted
+    test = (
+        ShellTest(shell)
+        .statement('.manual date_diff')
+    )
+    result = test.run()
+    result.check_not_exist('(1)')
 
 
 def test_manual_dedup_description(shell):
