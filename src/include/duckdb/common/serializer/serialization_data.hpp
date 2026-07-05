@@ -28,8 +28,14 @@ struct SerializationData {
 		virtual ~CustomData() = default;
 	};
 
-	// Out-of-line so the stack<const_reference<CompressionInfo>> destructor is only instantiated where the type is
-	// complete (serialization_data.cpp); other TUs may reach this header with CompressionInfo only forward-declared.
+	// Out-of-line so the special members touching stack<const_reference<CompressionInfo>> are only instantiated where
+	// the type is complete (serialization_data.cpp); other TUs may reach this header with CompressionInfo
+	// forward-declared.
+	SerializationData();
+	SerializationData(const SerializationData &);
+	SerializationData(SerializationData &&) noexcept;
+	SerializationData &operator=(const SerializationData &);
+	SerializationData &operator=(SerializationData &&) noexcept;
 	~SerializationData();
 
 	stack<reference<ClientContext>> contexts;
