@@ -220,17 +220,18 @@ static inline void ShuffleUnpackIter(const uint8_t *DUCKDB_BITPACKING_RESTRICT b
 	}
 }
 
-// Which (WIDTH, OUT) use the shuffle path. uint16: straddling widths (gcd(WIDTH,16) <= 2). uint32: 17..31 minus
-// the widths whose value can span 5 bytes ((8 - gcd(WIDTH,8)) + WIDTH > 32) that a 4-byte gather lane can't hold.
+// Which (WIDTH, OUT) use the shuffle path. uint16: sub-byte widths plus straddling widths (gcd(WIDTH,16) <= 2).
+// uint32: all widths except the byte-aligned 8/16 and the widths whose value can span 5 bytes
+// ((8 - gcd(WIDTH,8)) + WIDTH > 32) that a 4-byte gather lane can't hold.
 template <uint32_t WIDTH, class OUT_T>
 static constexpr bool UseShuffleUnpack() {
 	if (WIDTH == 0 || WIDTH >= 8 * sizeof(OUT_T)) {
 		return false;
 	}
 	if (sizeof(OUT_T) == 2) {
-		return WIDTH >= 2 && BitpackingGcd(WIDTH, 16) <= 2;
+		return WIDTH < 8 || BitpackingGcd(WIDTH, 16) <= 2;
 	} else if (sizeof(OUT_T) == 4) {
-		return WIDTH >= 17 && (8 - BitpackingGcd(WIDTH, 8)) + WIDTH <= 32;
+		return WIDTH != 8 && WIDTH != 16 && (8 - BitpackingGcd(WIDTH, 8)) + WIDTH <= 32;
 	}
 	return false;
 }

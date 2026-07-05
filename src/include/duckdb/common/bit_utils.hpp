@@ -89,11 +89,10 @@ struct CountOnes<uint64_t> {
 #if defined(_M_X64)
 		return idx_t(__popcnt64(value));
 #else
-		return idx_t(__popcnt(static_cast<unsigned int>(value)) +
-		             __popcnt(static_cast<unsigned int>(value >> 32)));
+		return idx_t(__popcnt(static_cast<unsigned int>(value)) + __popcnt(static_cast<unsigned int>(value >> 32)));
 #endif
 #else
-		return idx_t(__builtin_popcountll(static_cast<unsigned long long>(value)));
+		return idx_t(__builtin_popcountll(value));
 #endif
 	}
 };
