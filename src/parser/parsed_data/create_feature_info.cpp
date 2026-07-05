@@ -22,6 +22,7 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	result->entity_table = entity_table;
 	result->source_table = source_table;
 	result->entity_columns = entity_columns;
+	result->entity_key_columns = entity_key_columns;
 	result->timestamp_column = timestamp_column;
 	result->window_interval = window_interval;
 	result->watermark_interval = watermark_interval;

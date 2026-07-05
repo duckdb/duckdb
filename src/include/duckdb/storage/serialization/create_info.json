@@ -456,6 +456,11 @@
         "id": 215,
         "name": "entity_table",
         "type": "string"
+      },
+      {
+        "id": 216,
+        "name": "entity_key_columns",
+        "type": "vector<string>"
       }
     ]
   }

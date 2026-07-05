@@ -27,8 +27,10 @@ public:
 	string entity_table;
 	//! The source table name (the event/relation table)
 	string source_table;
-	//! The entity columns; empty for global features
+	//! The entity columns (event-side names); empty for global features
 	vector<string> entity_columns;
+	//! The entity table key columns referenced by the foreign key, aligned to entity_columns
+	vector<string> entity_key_columns;
 	//! The timestamp column
 	string timestamp_column;
 	//! The lookback window interval

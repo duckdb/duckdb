@@ -18,6 +18,7 @@
 #include "duckdb/common/feature_query.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -103,9 +104,11 @@ static vector<string> GetFeatureEntityColumns(const SelectNode &select_node, con
 
 //! The feature's entity columns in the source (event) table must form a FOREIGN KEY that references the
 //! declared entity table. This guarantees every entity value the feature aggregates over is anchored to a
-//! row in the entity table that REFRESH will LEFT JOIN against.
-static void ValidateFeatureEntityForeignKey(const TableCatalogEntry &source_entry, const string &source_table,
-                                            const string &entity_table, const vector<string> &entity_columns) {
+//! row in the entity table that REFRESH will LEFT JOIN against. Returns the entity-table key columns the
+//! foreign key references, aligned to entity_columns (used to build the snapshot join).
+static vector<string> ValidateFeatureEntityForeignKey(const TableCatalogEntry &source_entry, const string &source_table,
+                                                      const string &entity_table,
+                                                      const vector<string> &entity_columns) {
 	for (auto &constraint : source_entry.GetConstraints()) {
 		if (constraint->type != ConstraintType::FOREIGN_KEY) {
 			continue;
@@ -118,15 +121,26 @@ static void ValidateFeatureEntityForeignKey(const TableCatalogEntry &source_entr
 		if (!StringUtil::CIEquals(fk.info.table, entity_table)) {
 			continue;
 		}
+		// Map each entity column (fk side) to the entity-table column it references (pk side). fk_columns
+		// and pk_columns are parallel arrays, so a matched index gives the referenced key column.
+		vector<string> key_columns;
 		bool all_covered = true;
 		for (auto &entity_column : entity_columns) {
-			if (!FeatureColumnListContains(fk.fk_columns, entity_column)) {
+			idx_t match = DConstants::INVALID_INDEX;
+			for (idx_t i = 0; i < fk.fk_columns.size(); i++) {
+				if (StringUtil::CIEquals(fk.fk_columns[i], entity_column)) {
+					match = i;
+					break;
+				}
+			}
+			if (match == DConstants::INVALID_INDEX) {
 				all_covered = false;
 				break;
 			}
+			key_columns.push_back(match < fk.pk_columns.size() ? fk.pk_columns[match] : entity_column);
 		}
 		if (all_covered) {
-			return;
+			return key_columns;
 		}
 	}
 	throw BinderException(
@@ -876,23 +890,27 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// Validate the declared entity table exists and that the entity columns form a foreign key into it.
 		auto &entity_table_entry = Catalog::GetEntry<TableCatalogEntry>(context, feature_info.catalog,
 		                                                                feature_info.schema, feature_info.entity_table);
-		ValidateFeatureEntityForeignKey(table_entry, feature_info.source_table, feature_info.entity_table,
-		                                feature_info.entity_columns);
+		feature_info.entity_key_columns = ValidateFeatureEntityForeignKey(
+		    table_entry, feature_info.source_table, feature_info.entity_table, feature_info.entity_columns);
 		// Register dependency on the entity table so DROP TABLE blocks without CASCADE
 		feature_info.dependencies.AddDependency(entity_table_entry);
 
-		FeaturePITQueryParameters pit_parameters;
-		pit_parameters.source_table = feature_info.source_table;
-		pit_parameters.timestamp_column = feature_info.timestamp_column;
-		pit_parameters.entity_columns = feature_info.entity_columns;
-		pit_parameters.window_interval = feature_info.window_interval;
-		auto pit_select = BuildFeaturePITQuery(select_node, pit_parameters);
+		FeatureSnapshotParameters snapshot_parameters;
+		snapshot_parameters.entity_table = feature_info.entity_table;
+		snapshot_parameters.source_table = feature_info.source_table;
+		snapshot_parameters.entity_columns = feature_info.entity_columns;
+		snapshot_parameters.entity_key_columns = feature_info.entity_key_columns;
+		snapshot_parameters.timestamp_column = feature_info.timestamp_column;
+		snapshot_parameters.window_interval = feature_info.window_interval;
+		// The concrete refresh timestamp does not affect the schema; use "now" as a placeholder here.
+		snapshot_parameters.feature_ts = Timestamp::GetCurrentTimestamp();
+		auto snapshot_select = BuildFeatureSnapshotQuery(select_node, snapshot_parameters);
 		auto query_binder = Binder::CreateBinder(context, this);
-		auto query_obj = query_binder->Bind(*pit_select);
+		auto query_obj = query_binder->Bind(*snapshot_select);
 
 		// Store result schema in feature info as metadata. CREATE FEATURE registers metadata only; it does
 		// not materialize a version table (and thus takes no child plan) — the first REFRESH FEATURE builds
-		// feature_name__v1. Binding the PIT query above still validates the query and captures its schema.
+		// feature_name__v1. Binding the snapshot query above still validates the query and captures its schema.
 		feature_info.result_names = query_obj.names;
 		feature_info.result_types = query_obj.types;
 

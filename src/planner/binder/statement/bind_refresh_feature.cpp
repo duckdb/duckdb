@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog_entry/feature_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/feature_refresh.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/parser/statement/refresh_feature_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -31,19 +32,21 @@ BoundStatement Binder::Bind(RefreshFeatureStatement &stmt) {
 	}
 	auto &feat = *feature_entry;
 
-	// Build and bind the query that produces the full contents of the next feature version. Its result
-	// schema defines the new version table; the plan becomes the child of the refresh operator. The
-	// query projects a trailing boolean marker column (see BuildFeatureRefreshQuery) that flags the
-	// recomputed rows — the operator sums it for rows_affected and strips it before appending, so it is
-	// excluded from the version-table schema here.
-	auto refresh_query = BuildFeatureRefreshQuery(feat);
+	// The snapshot timestamp: the AT clause when given, otherwise the current time.
+	timestamp_t feature_ts = stmt.at_timestamp.empty() ? Timestamp::GetCurrentTimestamp()
+	                                                    : Timestamp::FromString(stmt.at_timestamp, false);
+
+	// Build and bind the query that produces the full contents of the next feature version: one snapshot
+	// row per entity. Its result schema defines the new version table; the plan becomes the child of the
+	// refresh operator.
+	auto refresh_query = BuildFeatureRefreshQuery(feat, feature_ts);
 	auto query_binder = Binder::CreateBinder(context, this);
 	auto query_obj = query_binder->Bind(*refresh_query);
-	D_ASSERT(query_obj.names.size() >= 2);
+	D_ASSERT(query_obj.names.size() >= 1);
 
 	auto refresh_node = make_uniq<LogicalRefreshFeature>(stmt.feature_name);
-	refresh_node->result_names.assign(query_obj.names.begin(), query_obj.names.end() - 1);
-	refresh_node->result_types.assign(query_obj.types.begin(), query_obj.types.end() - 1);
+	refresh_node->result_names = query_obj.names;
+	refresh_node->result_types = query_obj.types;
 	refresh_node->children.push_back(std::move(query_obj.plan));
 	result.plan = std::move(refresh_node);
 

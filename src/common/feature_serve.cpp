@@ -8,6 +8,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -126,9 +127,8 @@ ResolveEntityMappings(const FeatureCatalogEntry &feat, const vector<FeatureServe
 	return result;
 }
 
-static unique_ptr<ParsedExpression> ServeJoinCondition(const FeatureCatalogEntry &feat, const string &feature_alias,
-                                                       const vector<FeatureServeEntityMapping> &entity_mappings,
-                                                       const string &spine_ts) {
+static unique_ptr<ParsedExpression> ServeJoinCondition(const string &feature_alias,
+                                                       const vector<FeatureServeEntityMapping> &entity_mappings) {
 	unique_ptr<ParsedExpression> condition;
 	for (auto &mapping : entity_mappings) {
 		auto entity_condition =
@@ -137,11 +137,11 @@ static unique_ptr<ParsedExpression> ServeJoinCondition(const FeatureCatalogEntry
 		condition =
 		    condition ? Conjoin(std::move(condition), std::move(entity_condition)) : std::move(entity_condition);
 	}
-
-	auto timestamp_condition =
-	    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, ColumnRef("spine", spine_ts),
-	                                    ColumnRef(feature_alias, "feature_timestamp"));
-	return condition ? Conjoin(std::move(condition), std::move(timestamp_condition)) : std::move(timestamp_condition);
+	// Global feature (no entity mapping): the version table has a single row, cross-join it onto the spine.
+	if (!condition) {
+		return make_uniq<ConstantExpression>(Value::BOOLEAN(true));
+	}
+	return condition;
 }
 
 static unique_ptr<StarExpression> FeatureStar(const string &feature_alias, const vector<string> &feature_entities) {
@@ -149,22 +149,21 @@ static unique_ptr<StarExpression> FeatureStar(const string &feature_alias, const
 	for (auto &feature_entity : feature_entities) {
 		result->exclude_list.insert(QualifiedColumnName(feature_entity));
 	}
-	result->exclude_list.insert(QualifiedColumnName("feature_timestamp"));
 	return result;
 }
 
 static void AttachServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatalogEntry &feat,
                             const string &feature_alias, const vector<FeatureServeEntityMapping> &feature_mappings,
-                            const string &spine_entity_override, const string &as_of_override) {
+                            const string &spine_entity_override) {
+	// Serve the current snapshot version: one row per entity, joined to the spine by entity key.
 	auto versioned_table = feat.name + "__v" + duckdb::to_string(feat.current_version);
-	auto spine_ts = as_of_override.empty() ? feat.timestamp_column : as_of_override;
 	auto entity_mappings = ResolveEntityMappings(feat, feature_mappings, spine_entity_override);
 
-	auto join = make_uniq<JoinRef>(JoinRefType::ASOF);
+	auto join = make_uniq<JoinRef>(JoinRefType::REGULAR);
 	join->type = JoinType::LEFT;
 	join->left = std::move(from_table);
 	join->right = BaseTable(versioned_table, feature_alias);
-	join->condition = ServeJoinCondition(feat, feature_alias, entity_mappings, spine_ts);
+	join->condition = ServeJoinCondition(feature_alias, entity_mappings);
 	from_table = std::move(join);
 }
 
@@ -191,11 +190,9 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 
 		auto select = make_uniq<SelectNode>();
 		select->select_list.push_back(make_uniq<StarExpression>("spine"));
-		select->select_list.push_back(ColumnRef("f", "feature_timestamp"));
 		select->select_list.push_back(FeatureStar("f", feat.entity_columns));
 		select->from_table = BaseTable(spine_table, "spine");
-		AttachServeJoin(select->from_table, feat, "f", request.entity_mappings, spine_entity_override,
-		                spine_asof_column);
+		AttachServeJoin(select->from_table, feat, "f", request.entity_mappings, spine_entity_override);
 
 		auto result = make_uniq<SelectStatement>();
 		result->node = std::move(select);
@@ -211,12 +208,8 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 		auto &feat = ResolveServableFeature(context, request.feature_name);
 		auto alias = "f" + duckdb::to_string(i);
 
-		auto timestamp = ColumnRef(alias, "feature_timestamp");
-		timestamp->SetAlias(feat.name + "_timestamp");
-		select->select_list.push_back(std::move(timestamp));
 		select->select_list.push_back(FeatureStar(alias, feat.entity_columns));
-		AttachServeJoin(select->from_table, feat, alias, request.entity_mappings, spine_entity_override,
-		                spine_asof_column);
+		AttachServeJoin(select->from_table, feat, alias, request.entity_mappings, spine_entity_override);
 	}
 
 	auto result = make_uniq<SelectStatement>();

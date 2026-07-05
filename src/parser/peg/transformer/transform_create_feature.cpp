@@ -182,7 +182,8 @@ interval_t PEGTransformerFactory::TransformFeatureScheduleClause(PEGTransformer 
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformRefreshFeatureStatement(PEGTransformer &transformer,
                                                                                  ParseResult &parse_result) {
-	// RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral
+	// RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral FeatureRefreshAtClause?
+	// FeatureRefreshAtClause <- 'AT' StringLiteral
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	// index 0: 'REFRESH' keyword
 	// index 1: 'FEATURE' keyword
@@ -190,6 +191,12 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformRefreshFeatureStatement
 
 	auto result = make_uniq<RefreshFeatureStatement>();
 	result->feature_name = std::move(feature_name);
+	// index 3: FeatureRefreshAtClause? (optional AT '<timestamp>')
+	auto &at_opt = list_pr.Child<OptionalParseResult>(3);
+	if (at_opt.HasResult()) {
+		auto &clause = at_opt.GetResult().Cast<ListParseResult>();
+		result->at_timestamp = clause.Child<StringLiteralParseResult>(1).result;
+	}
 	return std::move(result);
 }
 

@@ -25,8 +25,10 @@ struct CreateFeatureInfo : public CreateInfo {
 	string entity_table;
 	//! Source table name (the event/relation table, derived from the feature query FROM)
 	string source_table;
-	//! Entity columns (the GROUP BY keys); empty for global features
+	//! Entity columns (the GROUP BY keys, event-side names); empty for global features
 	vector<string> entity_columns;
+	//! Entity table key columns referenced by the foreign key, aligned to entity_columns
+	vector<string> entity_key_columns;
 	//! Timestamp column (temporal ordering)
 	string timestamp_column;
 	//! Lookback window interval

@@ -20,6 +20,8 @@ public:
 	RefreshFeatureStatement();
 
 	string feature_name;
+	//! Optional AT timestamp literal; when empty the feature is snapshotted at the current time.
+	string at_timestamp;
 
 protected:
 	RefreshFeatureStatement(const RefreshFeatureStatement &other);

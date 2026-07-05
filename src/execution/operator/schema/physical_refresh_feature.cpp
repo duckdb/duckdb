@@ -79,25 +79,9 @@ SinkResultType PhysicalRefreshFeature::Sink(ExecutionContext &context, DataChunk
 	auto &storage = gstate.table->GetStorage();
 	chunk.Flatten();
 
-	// The child projects the feature columns plus a trailing boolean marker (TRUE for recomputed rows,
-	// FALSE for rows copied forward). Sum the marker to report only the recomputed rows as rows_affected,
-	// then append just the feature columns to the version table.
-	const idx_t feature_column_count = result_types.size();
-	auto &marker = chunk.data[feature_column_count];
-	auto marker_data = FlatVector::GetData<bool>(marker);
-	auto &marker_validity = FlatVector::Validity(marker);
-	for (idx_t i = 0; i < chunk.size(); i++) {
-		if (marker_validity.RowIsValid(i) && marker_data[i]) {
-			lstate.recomputed_count++;
-		}
-	}
-
-	DataChunk append_chunk;
-	append_chunk.InitializeEmpty(result_types);
-	for (idx_t c = 0; c < feature_column_count; c++) {
-		append_chunk.data[c].Reference(chunk.data[c]);
-	}
-	append_chunk.SetCardinality(chunk.size());
+	// The child projects exactly the feature columns: one snapshot row per entity. Every row is appended
+	// to the new version table and counted as an affected row.
+	lstate.recomputed_count += chunk.size();
 
 	// Lazily create a per-thread optimistic row group collection so that each pipeline thread appends
 	// to its own collection without contention.
@@ -113,7 +97,7 @@ SinkResultType PhysicalRefreshFeature::Sink(ExecutionContext &context, DataChunk
 
 	auto &optimistic_collection = storage.GetOptimisticCollection(context.client, lstate.collection_index);
 	auto &collection = *optimistic_collection.collection;
-	auto new_row_group = collection.Append(append_chunk, lstate.local_append_state);
+	auto new_row_group = collection.Append(chunk, lstate.local_append_state);
 	if (new_row_group) {
 		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection);
 	}
@@ -138,8 +122,7 @@ SinkCombineResultType PhysicalRefreshFeature::Combine(ExecutionContext &context,
 	auto append_count = collection.GetTotalRows();
 
 	lock_guard<mutex> l(gstate.lock);
-	// rows_affected reports the recomputed rows only; append_count (all rows, including those copied
-	// forward) still drives the append-path decision below.
+	// rows_affected is the number of snapshot rows appended (one per entity).
 	gstate.insert_count += lstate.recomputed_count;
 	vector<unique_ptr<BoundConstraint>> empty_constraints;
 	if (append_count < row_group_size) {

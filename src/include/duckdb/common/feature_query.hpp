@@ -9,6 +9,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
@@ -16,16 +17,33 @@ namespace duckdb {
 class SelectNode;
 class SelectStatement;
 
-struct FeaturePITQueryParameters {
+struct FeatureSnapshotParameters {
+	//! The entity table (LEFT JOIN anchor).
+	string entity_table;
+	//! The source/event table the feature query reads from.
 	string source_table;
-	string timestamp_column;
+	//! Entity columns (event-side names); empty for global features.
 	vector<string> entity_columns;
+	//! Entity table key columns referenced by the foreign key, aligned to entity_columns.
+	vector<string> entity_key_columns;
+	//! The event timestamp column used for the window filter.
+	string timestamp_column;
+	//! The lookback window interval.
 	interval_t window_interval;
-	unique_ptr<ParsedExpression> anchor_filter;
+	//! The snapshot timestamp: events in [feature_ts - window, feature_ts) are aggregated.
+	timestamp_t feature_ts;
 };
 
 bool FeatureColumnListContains(const vector<string> &columns, const string &column_name);
-unique_ptr<SelectStatement> BuildFeaturePITQuery(const SelectNode &select_node,
-                                                 const FeaturePITQueryParameters &parameters);
+
+//! Builds the SELECT statement that produces one snapshot row per entity at feature_ts:
+//!   SELECT e.<key> AS <entity_col>, <coalesced feature exprs>
+//!   FROM <entity_table> e
+//!   LEFT JOIN (<user feature query> WHERE ts >= feature_ts - window AND ts < feature_ts) agg
+//!     ON e.<key> = agg.<entity_col> ...
+//! Entities with no events in the window keep NULL feature values, except SUM/COUNT aggregates which
+//! default to 0. For a global feature (no entity columns) the result is a single aggregate row.
+unique_ptr<SelectStatement> BuildFeatureSnapshotQuery(const SelectNode &select_node,
+                                                      const FeatureSnapshotParameters &parameters);
 
 } // namespace duckdb

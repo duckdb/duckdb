@@ -20,7 +20,8 @@ FeatureIntervalUnitMinutes <- 'MINUTES'
 FeatureIntervalUnitSecond <- 'SECOND'
 FeatureIntervalUnitSeconds <- 'SECONDS'
 
-RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral
+RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral FeatureRefreshAtClause?
+FeatureRefreshAtClause <- 'AT' StringLiteral
 
 FeatureAtVersionStatement <- 'FEATURE' IdentifierOrStringLiteral 'AT' 'VERSION' NumberLiteral
 
