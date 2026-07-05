@@ -258,6 +258,9 @@ struct PEGMatcher {
 
 	static shared_ptr<PEGMatcher> Get(ClientContext &context);
 	static shared_ptr<PEGMatcher> Get(DatabaseInstance &db);
+	//! Compile a standalone PEG grammar (not the main SQL grammar) into its own matcher. The root
+	//! rule is reachable via ProgramMatcher(). Used by Layer-1 grammars like connect-mode.
+	static shared_ptr<PEGMatcher> CompileGrammar(const char *grammar, const char *root_rule);
 
 private:
 	friend struct ParserCache;
