@@ -474,6 +474,51 @@ public:
 	}
 };
 
+//! Consumes any single non-TERMINATOR token. Useful in grammars that want to capture opaque text
+//! up to a `;` (statement boundary) without needing a negative lookahead operator.
+class InStatementTokenMatcher : public Matcher {
+public:
+	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
+
+	InStatementTokenMatcher() : Matcher(TYPE) {
+	}
+
+	MatchResultType Match(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return MatchResultType::FAIL;
+		}
+		if (state.tokens[state.token_index].type == TokenType::TERMINATOR) {
+			return MatchResultType::FAIL;
+		}
+		state.token_index++;
+		state.UpdateMaxTokenIndex();
+		return MatchResultType::SUCCESS;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return nullptr;
+		}
+		auto &token = state.tokens[state.token_index];
+		if (token.type == TokenType::TERMINATOR) {
+			return nullptr;
+		}
+		auto token_text = token.text;
+		auto start_offset = optional_idx(token.offset);
+		state.token_index++;
+		state.UpdateMaxTokenIndex();
+		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text, start_offset));
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		return SuggestionType::OPTIONAL;
+	}
+
+	string ToString() const override {
+		return "ANY_TOKEN";
+	}
+};
+
 class IdentifierMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
@@ -1061,6 +1106,10 @@ public:
 
 	//! Create a matcher from a PEG grammar
 	Matcher &CreateMatcher(const char *grammar, const char *root_rule);
+	//! Create a matcher from a standalone PEG grammar that only relies on a small set of
+	//! universally-useful primitive overrides (InStatementToken / Identifier / StringLiteral).
+	//! Used by Layer-1 grammars (e.g. connect-mode) that are not the main SQL grammar.
+	Matcher &CreateMatcherNoOverrides(const char *grammar, const char *root_rule);
 	//! Look up a matcher for a rule that was already built (as a sub-rule of a previous
 	//! CreateMatcher call). Throws if the rule has not been built.
 	Matcher &GetMatcher(const string &rule_name);
@@ -1506,6 +1555,17 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	return CreateMatcher(parser, root_rule);
 }
 
+Matcher &MatcherFactory::CreateMatcherNoOverrides(const char *grammar, const char *root_rule) {
+	PEGParser parser;
+	parser.ParseRules(grammar);
+	// Universally-useful primitives that standalone Layer-1 grammars can reference. These shadow
+	// any same-named rules defined in the grammar (matching how the SQL grammar binds them above).
+	AddRuleOverride("InStatementToken", allocator.Allocate(make_uniq<InStatementTokenMatcher>()));
+	AddRuleOverride("Identifier", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
+	AddRuleOverride("StringLiteral", allocator.Allocate(make_uniq<StringLiteralMatcher>()));
+	return CreateMatcher(parser, root_rule);
+}
+
 shared_ptr<PEGMatcher> PEGMatcher::Get(ClientContext &context) {
 	auto &db = DatabaseInstance::GetDatabase(context);
 	return PEGMatcher::Get(db);
@@ -1514,6 +1574,13 @@ shared_ptr<PEGMatcher> PEGMatcher::Get(ClientContext &context) {
 shared_ptr<PEGMatcher> PEGMatcher::Get(DatabaseInstance &db) {
 	auto &parser_cache = db.GetParserCache();
 	return parser_cache.GetMatcher();
+}
+
+shared_ptr<PEGMatcher> PEGMatcher::CompileGrammar(const char *grammar, const char *root_rule) {
+	auto new_matcher = make_shared_ptr<PEGMatcher>();
+	MatcherFactory factory(new_matcher->allocator);
+	new_matcher->program_matcher = factory.CreateMatcherNoOverrides(grammar, root_rule);
+	return new_matcher;
 }
 
 shared_ptr<PEGMatcher> ParserCache::GetMatcher() {
