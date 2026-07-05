@@ -874,8 +874,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		feature_info.entity_columns = GetFeatureEntityColumns(select_node, table_entry, feature_info.source_table);
 
 		// Validate the declared entity table exists and that the entity columns form a foreign key into it.
-		auto &entity_table_entry = Catalog::GetEntry<TableCatalogEntry>(
-		    context, feature_info.catalog, feature_info.schema, feature_info.entity_table);
+		auto &entity_table_entry = Catalog::GetEntry<TableCatalogEntry>(context, feature_info.catalog,
+		                                                                feature_info.schema, feature_info.entity_table);
 		ValidateFeatureEntityForeignKey(table_entry, feature_info.source_table, feature_info.entity_table,
 		                                feature_info.entity_columns);
 		// Register dependency on the entity table so DROP TABLE blocks without CASCADE
