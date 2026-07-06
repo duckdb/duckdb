@@ -32,16 +32,59 @@
 namespace duckdb {
 
 static bool CanRebuildExistingIndexesAfterVacuum(DataTableInfo &info, AttachedDatabase &attached, idx_t total_rows) {
-	auto &indexes = info.GetIndexes();
-	if (indexes.Empty() || indexes.HasUnbound()) {
-		return false;
-	}
 	auto vacuum_rebuild_threshold = attached.GetVacuumRebuildIndexThreshold();
 	if (vacuum_rebuild_threshold == 0 || total_rows > vacuum_rebuild_threshold) {
 		return false;
 	}
-	auto index_types = indexes.DistinctIndexTypes();
-	return index_types.size() == 1 && index_types.count(ART::TYPE_NAME);
+	return info.GetIndexes().AllIndexesBoundOfType(ART::TYPE_NAME);
+}
+
+bool RowGroupCollection::IsVacuumRemapEligible(DataTableInfo &table_info, AttachedDatabase &attached,
+                                               optional_ptr<vector<reference<ART>>> remap_indexes) {
+	if (remap_indexes) {
+		remap_indexes->clear();
+	}
+	if (!StorageCompatibility::FromDatabase(attached).CanPersistRowIdGaps()) {
+		return false;
+	}
+	// Verify the type and Cast<ART> of each index under a single held lock: IndexEntries() keeps
+	// index_entries_lock for the whole iteration, so the check and the cast cannot straddle a lock gap where a
+	// concurrent CREATE INDEX of a non-ART type could slip a non-ART entry past the check into the cast.
+	bool any_index = false;
+	for (auto &entry : table_info.GetIndexes().IndexEntries()) {
+		any_index = true;
+		auto &index = *entry.index;
+		if (!index.IsBound() || index.GetIndexType() != ART::TYPE_NAME) {
+			if (remap_indexes) {
+				remap_indexes->clear();
+			}
+			return false;
+		}
+		auto &art = index.Cast<ART>();
+		if (!art.CanVacuumRemap()) {
+			if (remap_indexes) {
+				remap_indexes->clear();
+			}
+			return false;
+		}
+		if (remap_indexes) {
+			remap_indexes->push_back(art);
+		}
+	}
+	// An empty index list is not remap-eligible (matches the old Empty() guard).
+	return any_index;
+}
+
+VacuumIndexStrategy
+RowGroupCollection::GetVacuumIndexStrategy(AttachedDatabase &attached,
+                                           optional_ptr<vector<reference<ART>>> remap_indexes) const {
+	if (IsVacuumRemapEligible(*info, attached, remap_indexes)) {
+		return VacuumIndexStrategy::REMAP;
+	}
+	if (CanRebuildExistingIndexesAfterVacuum(*info, attached, GetTotalRows())) {
+		return VacuumIndexStrategy::REBUILD;
+	}
+	return VacuumIndexStrategy::NONE;
 }
 
 //===--------------------------------------------------------------------===//
@@ -587,8 +630,7 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	if (!needs_new_row_group) {
 		auto last_row_group = state.row_groups->GetLastSegment(l);
 		D_ASSERT(last_row_group->GetRowEnd() == state.row_groups->GetBaseRowId() + next_row_id);
-		if (info->GetIndexes().Empty() || CanRebuildExistingIndexesAfterVacuum(*info, GetAttached(), GetTotalRows()) ||
-		    ART::CanVacuumRemapTable(*info, GetAttached())) {
+		if (info->GetIndexes().Empty() || GetVacuumIndexStrategy(GetAttached()) != VacuumIndexStrategy::NONE) {
 			// Honor SUGGEST_NEW if vacuum can compact the table later, either because there are no indexes or because
 			// the existing indexes can be rebuilt or remapped after vacuuming.
 			needs_new_row_group = row_group_append_mode == RowGroupAppendMode::SUGGEST_NEW;
@@ -1292,43 +1334,63 @@ private:
 //===--------------------------------------------------------------------===//
 // Vacuum
 //===--------------------------------------------------------------------===//
-struct VacuumState {
-	bool can_vacuum_deletes = true;
-	bool can_change_row_ids = false;
-	//! Whether we are allowed to rebuild indexes after a vacuum (only true when vacuum_rebuild_indexes
-	//! threshold is set, the table's row count is within the threshold, and all indexes are bound ART's).
-	bool can_rebuild_indexes = false;
-	bool can_incremental_remap = false;
-	vector<reference<ART>> remap_indexes;
-	vector<column_t> remap_column_ids;
-	vector<optional_idx> remap_column_buffer_indexes;
-	vector<LogicalType> remap_buffer_types;
-	idx_t row_start = 0;
-	idx_t next_vacuum_idx = 0;
-	vector<optional_idx> row_group_counts;
+//! Immutable plan for incremental index remapping, computed once per checkpoint and read by every VacuumTask.
+//! The remap buffer holds the sorted indexed key columns, followed by [old_rowid, new_rowid].
+struct IndexRemapPlan {
+	//! The ART indexes whose rowids are remapped.
+	vector<reference<ART>> indexes;
+	//! Buffer slot -> table column id, for the sorted set of indexed key columns held in the buffer.
+	vector<column_t> column_ids;
+	//! Table column id -> buffer slot (invalid for non-indexed columns).
+	vector<optional_idx> column_buffer_slots;
+	//! Buffer schema: the key column types, then two ROW_TYPE columns for the old and new rowids.
+	vector<LogicalType> buffer_types;
 
-	//! Compute the remap buffer layout: the sorted indexed key columns, followed by [old_rowid, new_rowid].
-	void InitializeRemapBufferLayout(DataTableInfo &info, const vector<LogicalType> &types);
+	bool Empty() const {
+		return indexes.empty();
+	}
+	//! Buffer column index of the old rowid (immediately after the key columns).
+	idx_t OldRowIdColumn() const {
+		return column_ids.size();
+	}
+	//! Buffer column index of the new rowid.
+	idx_t NewRowIdColumn() const {
+		return column_ids.size() + 1;
+	}
+	//! Compute the buffer layout from the table's indexed columns.
+	void Initialize(DataTableInfo &info, const vector<LogicalType> &types);
 };
 
-void VacuumState::InitializeRemapBufferLayout(DataTableInfo &info, const vector<LogicalType> &types) {
+void IndexRemapPlan::Initialize(DataTableInfo &info, const vector<LogicalType> &types) {
 	auto required_columns = info.GetIndexes().GetRequiredColumns();
-	remap_column_ids.assign(required_columns.begin(), required_columns.end());
-	sort(remap_column_ids.begin(), remap_column_ids.end());
+	column_ids.assign(required_columns.begin(), required_columns.end());
+	sort(column_ids.begin(), column_ids.end());
 
-	remap_column_buffer_indexes.resize(types.size());
-	remap_buffer_types.reserve(remap_column_ids.size() + 2);
-	for (idx_t buffer_idx = 0; buffer_idx < remap_column_ids.size(); buffer_idx++) {
-		auto column_id = remap_column_ids[buffer_idx];
+	column_buffer_slots.resize(types.size());
+	buffer_types.reserve(column_ids.size() + 2);
+	for (idx_t buffer_idx = 0; buffer_idx < column_ids.size(); buffer_idx++) {
+		auto column_id = column_ids[buffer_idx];
 		if (column_id >= types.size()) {
 			throw InternalException("Indexed column id %d out of bounds during vacuum remap initialization", column_id);
 		}
-		remap_column_buffer_indexes[column_id] = buffer_idx;
-		remap_buffer_types.push_back(types[column_id]);
+		column_buffer_slots[column_id] = buffer_idx;
+		buffer_types.push_back(types[column_id]);
 	}
-	remap_buffer_types.push_back(LogicalType::ROW_TYPE);
-	remap_buffer_types.push_back(LogicalType::ROW_TYPE);
+	buffer_types.push_back(LogicalType::ROW_TYPE);
+	buffer_types.push_back(LogicalType::ROW_TYPE);
 }
+
+struct VacuumState {
+	bool can_vacuum_deletes = true;
+	bool can_change_row_ids = false;
+	//! How vacuum handles the table's indexes when it changes rowids (REMAP, REBUILD, or NONE).
+	VacuumIndexStrategy index_strategy = VacuumIndexStrategy::NONE;
+	//! The remap plan, populated only when index_strategy == REMAP.
+	IndexRemapPlan remap_plan;
+	idx_t row_start = 0;
+	idx_t next_vacuum_idx = 0;
+	vector<optional_idx> row_group_counts;
+};
 
 class VacuumTask : public BaseCheckpointTask {
 public:
@@ -1348,16 +1410,17 @@ public:
 		auto &collection = checkpoint_state.collection;
 		const idx_t row_group_size = collection.GetRowGroupSize();
 		auto &types = collection.GetTypes();
-		const bool apply_index_remap = vacuum_state.can_incremental_remap && !vacuum_state.remap_indexes.empty();
+		auto &remap_plan = vacuum_state.remap_plan;
+		const bool apply_index_remap = vacuum_state.index_strategy == VacuumIndexStrategy::REMAP && !remap_plan.Empty();
 
 		unique_ptr<ColumnDataCollection> remap_buffer;
 		ColumnDataAppendState remap_append_state;
 		DataChunk remap_append_chunk;
 		if (apply_index_remap) {
 			auto &buffer_manager = BufferManager::GetBufferManager(collection.GetAttached());
-			remap_buffer = make_uniq<ColumnDataCollection>(buffer_manager, vacuum_state.remap_buffer_types);
+			remap_buffer = make_uniq<ColumnDataCollection>(buffer_manager, remap_plan.buffer_types);
 			remap_buffer->InitializeAppend(remap_append_state);
-			remap_append_chunk.InitializeEmpty(vacuum_state.remap_buffer_types);
+			remap_append_chunk.InitializeEmpty(remap_plan.buffer_types);
 		}
 
 		// create the new set of target row groups (initially empty)
@@ -1530,15 +1593,14 @@ private:
 		Vector new_rowids(LogicalType::ROW_TYPE);
 		new_rowids.Sequence(UnsafeNumericCast<int64_t>(new_rowid_start), 1, count);
 
+		auto &remap_plan = vacuum_state.remap_plan;
 		remap_chunk.Reset();
-		for (idx_t buffer_idx = 0; buffer_idx < vacuum_state.remap_column_ids.size(); buffer_idx++) {
-			auto column_id = vacuum_state.remap_column_ids[buffer_idx];
+		for (idx_t buffer_idx = 0; buffer_idx < remap_plan.column_ids.size(); buffer_idx++) {
+			auto column_id = remap_plan.column_ids[buffer_idx];
 			remap_chunk.data[buffer_idx].Reference(scan_chunk.data[column_id]);
 		}
-		const auto old_rowid_idx = vacuum_state.remap_column_ids.size();
-		const auto new_rowid_idx = old_rowid_idx + 1;
-		remap_chunk.data[old_rowid_idx].Reference(scan_chunk.data[rowid_column_index]);
-		remap_chunk.data[new_rowid_idx].Reference(new_rowids);
+		remap_chunk.data[remap_plan.OldRowIdColumn()].Reference(scan_chunk.data[rowid_column_index]);
+		remap_chunk.data[remap_plan.NewRowIdColumn()].Reference(new_rowids);
 		remap_chunk.Slice(moved_sel, moved_count);
 		remap_buffer.Append(append_state, remap_chunk);
 	}
@@ -1549,7 +1611,7 @@ private:
 		auto &types = checkpoint_state.collection.GetTypes();
 		vector<bool> referenced_columns(types.size(), false);
 		for (auto column_id : art.GetColumnIds()) {
-			auto buffer_idx = vacuum_state.remap_column_buffer_indexes[column_id];
+			auto buffer_idx = vacuum_state.remap_plan.column_buffer_slots[column_id];
 			if (!buffer_idx.IsValid()) {
 				throw InternalException("Indexed column id %d missing from vacuum remap buffer", column_id);
 			}
@@ -1566,15 +1628,16 @@ private:
 	}
 
 	void ApplyIndexRemap(ColumnDataCollection &remap_buffer) {
-		const auto old_rowid_idx = vacuum_state.remap_column_ids.size();
-		const auto new_rowid_idx = old_rowid_idx + 1;
+		auto &remap_plan = vacuum_state.remap_plan;
+		const auto old_rowid_idx = remap_plan.OldRowIdColumn();
+		const auto new_rowid_idx = remap_plan.NewRowIdColumn();
 
 		DataChunk buffer_chunk;
 		remap_buffer.InitializeScanChunk(buffer_chunk);
 		DataChunk table_chunk;
 		table_chunk.InitializeEmpty(checkpoint_state.collection.GetTypes());
 
-		for (auto &art_ref : vacuum_state.remap_indexes) {
+		for (auto &art_ref : remap_plan.indexes) {
 			auto &art = art_ref.get();
 			IndexLock index_lock;
 			art.InitializeLock(index_lock);
@@ -1626,20 +1689,15 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	// rebuilt after vacuuming.
 	bool has_indexes = !info->GetIndexes().Empty();
 
-	// vacuum_rebuild_indexes allows rowid-changing vacuum for indexed tables when the table's row count is within
-	// the threshold and all indexes are bound ART indexes.
+	// Decide how vacuum handles the ART indexes: REMAP (incremental), REBUILD (legacy full ART rebuild), or NONE.
 	auto &attached = checkpoint_state.writer.GetAttached();
-	state.can_incremental_remap = ART::CanVacuumRemapTable(*info, attached, &state.remap_indexes);
-	state.can_rebuild_indexes = CanRebuildExistingIndexesAfterVacuum(*info, attached, GetTotalRows());
-	if (state.can_incremental_remap) {
-		// Precedence: remap replaces the legacy full rebuild, so the post-checkpoint rebuild gate must not fire.
-		state.can_rebuild_indexes = false;
-		state.InitializeRemapBufferLayout(*info, types);
+	state.index_strategy = GetVacuumIndexStrategy(attached, &state.remap_plan.indexes);
+	if (state.index_strategy == VacuumIndexStrategy::REMAP) {
+		state.remap_plan.Initialize(*info, types);
 	}
-	D_ASSERT(!(state.can_incremental_remap && state.can_rebuild_indexes));
 
 	// can_change_row_ids only answers whether index state allows changing row_ids.
-	state.can_change_row_ids = !has_indexes || state.can_rebuild_indexes || state.can_incremental_remap;
+	state.can_change_row_ids = !has_indexes || state.index_strategy != VacuumIndexStrategy::NONE;
 
 	// obtain the set of committed row counts for each row group
 	auto num_row_groups = checkpoint_state.SegmentCount();
@@ -2219,13 +2277,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	D_ASSERT(next_row_id.load() >= total_rows.load());
 	SetRowGroups(std::move(new_row_groups));
 	Verify();
-	// Rebuild indexes if:
-	// 1) can_rebuild_indexes is set (it is set when the vacuum_rebuild_indexes
-	// threshold is set, the table's row count is within the threshold,
-	// and all the indexes are bound ART's),
-	// and
-	// 2) we have changed rowids.
-	if (vacuum_state.can_rebuild_indexes && writer.RowIdsChanged()) {
+	// Rebuild indexes if the REBUILD strategy was chosen (legacy vacuum_rebuild_indexes path) and rowids changed.
+	if (vacuum_state.index_strategy == VacuumIndexStrategy::REBUILD && writer.RowIdsChanged()) {
 		writer.SetRebuildIndexes();
 	}
 }

@@ -22,11 +22,9 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -690,40 +688,6 @@ bool ART::CanVacuumRemap() const {
 	for (auto &type : logical_types) {
 		if (type.id() == LogicalTypeId::GEOMETRY) {
 			return false;
-		}
-	}
-	return true;
-}
-
-bool ART::CanVacuumRemapTable(DataTableInfo &table_info, AttachedDatabase &attached,
-                              optional_ptr<vector<reference<ART>>> remap_indexes) {
-	if (remap_indexes) {
-		remap_indexes->clear();
-	}
-	if (StorageCompatibility::FromDatabase(attached).storage_version < StorageVersion::V2_0_0) {
-		return false;
-	}
-	auto &indexes = table_info.GetIndexes();
-	if (indexes.Empty() || indexes.HasUnbound()) {
-		return false;
-	}
-	for (auto &entry : indexes.IndexEntries()) {
-		auto &index = *entry.index;
-		if (!index.IsBound() || index.GetIndexType() != ART::TYPE_NAME) {
-			if (remap_indexes) {
-				remap_indexes->clear();
-			}
-			return false;
-		}
-		auto &art = index.Cast<ART>();
-		if (!art.CanVacuumRemap()) {
-			if (remap_indexes) {
-				remap_indexes->clear();
-			}
-			return false;
-		}
-		if (remap_indexes) {
-			remap_indexes->push_back(art);
 		}
 	}
 	return true;

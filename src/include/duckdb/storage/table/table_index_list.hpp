@@ -91,6 +91,8 @@ public:
 	}
 	//! Returns the set of distinct index types across all bound indexes.
 	unordered_set<string> DistinctIndexTypes() const;
+	//! Returns true if the list is non-empty, has no unbound indexes, and every index has the given type.
+	bool AllIndexesBoundOfType(const char *index_type) const;
 	//! Overwrite this list with the other list.
 	void Move(TableIndexList &other) {
 		D_ASSERT(index_entries.empty());

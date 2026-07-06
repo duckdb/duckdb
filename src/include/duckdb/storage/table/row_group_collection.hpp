@@ -44,6 +44,18 @@ class DataTable;
 class DuckTableEntry;
 class RowGroupIterationHelper;
 class TableScanState;
+class ART;
+
+//! How checkpoint vacuum handles the table's indexes when it compacts row groups and changes rowids.
+//! The options are mutually exclusive; REMAP takes precedence over REBUILD.
+enum class VacuumIndexStrategy : uint8_t {
+	//! Indexes forbid changing rowids: vacuum must preserve them (or there are no indexes to worry about).
+	NONE,
+	//! Rebuild all indexes from scratch after vacuum (legacy vacuum_rebuild_indexes path).
+	REBUILD,
+	//! Incrementally remap the affected rowids in each ART index during vacuum.
+	REMAP
+};
 
 //! Snapshot state used to iterate row groups without holding the row-group segment-tree
 //! lock for the duration of the scan. Holding row_groups pins the snapshot alive; consistency
@@ -130,6 +142,17 @@ public:
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
+
+	//! Returns true if checkpoint vacuum can incrementally remap the table's index rowids: rowid gaps are
+	//! persistable and every index is a bound ART that supports remap. If remap_indexes is set, it is filled
+	//! with the remappable ARTs. Depends only on the index set and storage version, not on collection state.
+	static bool IsVacuumRemapEligible(DataTableInfo &table_info, AttachedDatabase &attached,
+	                                  optional_ptr<vector<reference<ART>>> remap_indexes = nullptr);
+
+	//! Decides how vacuum handles this table's indexes: REMAP (preferred), else REBUILD, else NONE.
+	//! If the result is REMAP and remap_indexes is set, it is filled with the remappable ARTs.
+	VacuumIndexStrategy GetVacuumIndexStrategy(AttachedDatabase &attached,
+	                                           optional_ptr<vector<reference<ART>>> remap_indexes = nullptr) const;
 
 	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
 	                           optional_idx checkpoint_row_group_count);

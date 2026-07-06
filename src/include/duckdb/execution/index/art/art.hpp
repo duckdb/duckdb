@@ -22,7 +22,6 @@ class ConflictManager;
 class ARTKey;
 class ARTKeySection;
 class FixedSizeAllocator;
-struct DataTableInfo;
 
 struct ARTIndexScanState;
 
@@ -149,12 +148,8 @@ public:
 	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
 	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
 	                        unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys);
+	//! Returns true if this ART's rowids can be incrementally remapped by checkpoint vacuum.
 	bool CanVacuumRemap() const;
-	//! Returns true if checkpoint vacuum can incrementally remap the table's index rowids:
-	//! rowid gaps are persistable and every index is a bound ART that supports remap.
-	//! If remap_indexes is set, it is filled with the remappable ARTs.
-	static bool CanVacuumRemapTable(DataTableInfo &table_info, AttachedDatabase &attached,
-	                                optional_ptr<vector<reference<ART>>> remap_indexes = nullptr);
 
 	//! Verifies the nodes.
 	void Verify(IndexLock &l) override;

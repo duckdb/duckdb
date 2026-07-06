@@ -33,6 +33,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
@@ -810,7 +811,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	}
 
 	info->BindIndexes(context, ART::TYPE_NAME);
-	if (!vacuum_lock && ART::CanVacuumRemapTable(*info, attached)) {
+	if (!vacuum_lock && RowGroupCollection::IsVacuumRemapEligible(*info, attached)) {
 		auto &transaction_manager = DuckTransactionManager::Get(attached);
 		vacuum_lock = transaction_manager.SharedVacuumLock();
 	}
