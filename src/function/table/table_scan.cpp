@@ -6,6 +6,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -33,7 +34,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
@@ -128,8 +128,7 @@ public:
 	bool started_last_phase;
 	//! Synchronize changes to the global index scan state.
 	mutex index_scan_lock;
-	//! Synchronize <ART version, SegmentTree<RowGroup>> when vacuum_rebuild_indexes is enabled (since
-	//! ART indexes are rebuilt during vacuuming with this setting).
+	//! Keep ART rowids and row-group trees paired while rowid-moving index vacuum can run.
 	unique_ptr<StorageLockKey> vacuum_lock;
 
 public:
@@ -804,11 +803,16 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 	info->BindIndexes(context, ART::TYPE_NAME);
 
-	// Hold the shared vacuum lock when a checkpoint can change row IDs stored in ART indexes: the lock keeps the
-	// row IDs we obtain from the ART valid against the row groups until the scan state is set up.
+	// Hold the vacuum lock when this database can run rowid-moving indexed vacuum: rowids collected from the
+	// ART must be fetched against the matching row-group tree.
 	unique_ptr<StorageLockKey> vacuum_lock;
 	auto &attached = storage.GetAttached();
-	if (attached.GetVacuumRebuildIndexThreshold() > 0 || RowGroupCollection::IsVacuumRemapEligible(*info, attached)) {
+
+	// This is a coarse over-approximation, since this state shouldn't change for the duration of the scan.
+	// FIXME: remove taking the vacuum lock entirely here (perhaps using shadow ARTs).
+	const bool indexed_vacuum_may_move_rowids = attached.GetVacuumRebuildIndexThreshold() > 0 ||
+	                                            StorageCompatibility::FromDatabase(attached).CanPersistRowIdGaps();
+	if (indexed_vacuum_may_move_rowids) {
 		vacuum_lock = DuckTransactionManager::Get(attached).SharedVacuumLock();
 	}
 
