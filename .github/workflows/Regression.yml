@@ -274,7 +274,6 @@ jobs:
             --new build/current/release/benchmark/benchmark_runner \
             --benchmarks ${{ matrix.benchmarks }} \
             --verbose \
-            --threads 2 \
             --clear-benchmark-cache \
             --disable-timeout \
             --max-timeout 3600
