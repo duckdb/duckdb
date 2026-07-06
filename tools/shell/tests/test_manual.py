@@ -126,6 +126,56 @@ def test_manual_schema_path(shell):
     result.check_stdout('system.main')
 
 
+def test_manual_qualified_schema(shell):
+    # a schema-qualified name restricts the match to that schema
+    test = (
+        ShellTest(shell)
+        .statement('.manual main.list_contains')
+    )
+    result = test.run()
+    result.check_stdout('list_contains')
+    result.check_stdout('system.main')
+
+
+def test_manual_qualified_database(shell):
+    # a fully qualified database.schema.name is honored
+    test = (
+        ShellTest(shell)
+        .statement('.manual system.main.list_contains')
+    )
+    result = test.run()
+    result.check_stdout('list_contains')
+    result.check_stdout('system.main')
+
+
+def test_manual_qualified_miss(shell):
+    # a qualifier that matches no schema yields a miss, not a cross-schema match
+    test = (
+        ShellTest(shell)
+        .statement('.manual not_a_schema.list_contains')
+    )
+    result = test.run()
+    result.check_stderr("No function matches 'not_a_schema.list_contains'")
+
+
+def test_manual_too_many_qualifiers(shell):
+    # more than database.schema.function is rejected
+    test = (
+        ShellTest(shell)
+        .statement('.manual a.b.c.d')
+    )
+    result = test.run()
+    result.check_stderr('is not a valid function name')
+
+
+def test_manual_quoted_name(shell):
+    # quoted components follow the standard qualified-name parsing
+    test = ShellTest(shell, ['-manual', '"list_contains"'])
+    result = test.run()
+    result.check_stdout('list_contains')
+    result.check_stdout('scalar function')
+
+
 def test_manual_did_you_mean(shell):
     # a near-miss name suggests the closest matches
     test = (

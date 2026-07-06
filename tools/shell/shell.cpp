@@ -2302,21 +2302,36 @@ MetadataResult ShellState::DisplayManual(const vector<string> &args) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	auto &con = *conn;
-	// the argument is used directly as a case-insensitive LIKE pattern: a plain word matches exactly,
+	// the argument is a function name, optionally qualified: NAME, SCHEMA.NAME or DATABASE.SCHEMA.NAME;
+	// quoted components ("my.func") are handled by the standard qualified-name parsing
+	duckdb::QualifiedName qname;
+	try {
+		qname = duckdb::QualifiedName::Parse(args[1]);
+	} catch (const std::exception &ex) {
+		PrintF(PrintOutput::STDERR, "'%s' is not a valid function name - %s\n", args[1],
+		       ErrorData(ex).RawMessage().c_str());
+		return MetadataResult::FAIL;
+	}
+	// missing qualifiers match everything
+	string name_pattern = qname.Name().GetIdentifierName();
+	string schema_pattern = qname.Schema().empty() ? "%" : qname.Schema().GetIdentifierName();
+	string database_pattern = qname.Catalog().empty() ? "%" : qname.Catalog().GetIdentifierName();
+
+	// each part is used directly as a case-insensitive LIKE pattern: a plain word matches exactly,
 	// while wildcards ("%abs") are honored. A pattern may resolve to several distinct functions - each
 	// is rendered as its own manual entry
 	auto prepared = con.Prepare(R"(
 SELECT function_name, function_type, return_type, parameters, parameter_types, varargs, description, examples,
        database_name, schema_name
 FROM duckdb_functions()
-WHERE function_name ILIKE ?
+WHERE database_name ILIKE ? AND schema_name ILIKE ? AND function_name ILIKE ?
 ORDER BY function_name, function_type, database_name, schema_name, length(parameter_types), parameter_types)");
 	if (prepared->HasError()) {
 		PrintDatabaseError(prepared->GetError());
 		return MetadataResult::FAIL;
 	}
-	// note: pass a C string - the variadic Execute maps std::string to BLOB
-	auto query_result = prepared->Execute(args[1].c_str());
+	// note: pass C strings - the variadic Execute maps std::string to BLOB
+	auto query_result = prepared->Execute(database_pattern.c_str(), schema_pattern.c_str(), name_pattern.c_str());
 	if (query_result->HasError()) {
 		PrintDatabaseError(query_result->GetError());
 		return MetadataResult::FAIL;
@@ -2339,18 +2354,21 @@ ORDER BY function_name, function_type, database_name, schema_name, length(parame
 
 	if (items.empty()) {
 		PrintF(PrintOutput::STDERR, "No function matches '%s'\n", args[1]);
-		// suggest similarly-named functions (typo tolerance) via Jaro-Winkler similarity
+		// suggest similarly-named functions within the same qualifiers (typo tolerance) via
+		// Jaro-Winkler similarity
 		auto suggest_prepared = con.Prepare(R"(
 SELECT name FROM (
   SELECT min(function_name) AS name, max(jaro_winkler_similarity(lower(function_name), lower(?))) AS score
   FROM duckdb_functions()
+  WHERE database_name ILIKE ? AND schema_name ILIKE ?
   GROUP BY lower(function_name)
 )
 WHERE score >= 0.7
 ORDER BY score DESC, name
 LIMIT 5)");
 		if (!suggest_prepared->HasError()) {
-			auto suggest_result = suggest_prepared->Execute(args[1].c_str());
+			auto suggest_result =
+			    suggest_prepared->Execute(name_pattern.c_str(), database_pattern.c_str(), schema_pattern.c_str());
 			if (!suggest_result->HasError()) {
 				vector<string> suggestions;
 				for (auto &row : *suggest_result) {

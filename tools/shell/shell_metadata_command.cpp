@@ -940,7 +940,8 @@ static const MetadataCommand metadata_commands[] = {
      "Toggle readable rendering of large numbers (duckbox only)", 0, "Mode: all|footer|off"},
     {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0, ""},
     {"manual", 2, ShowManual, "FUNCTION", "Show the manual page for a SQL function", 0,
-     "Displays the signatures, descriptions and examples of all overloads of FUNCTION."},
+     "Displays the signatures, descriptions and examples of all overloads of FUNCTION.\n"
+     "FUNCTION may be qualified: [database.][schema.]function."},
     {"maxrows", 0, SetMaxRows, "COUNT",
      "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0, ""},
     {"maxwidth", 0, SetMaxWidth, "COUNT",
