@@ -802,18 +802,14 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	bool index_scan = false;
 	set<row_t> row_ids;
 
-	// Hold the shared vacuum lock when a checkpoint can change row IDs stored in ART indexes.
+	info->BindIndexes(context, ART::TYPE_NAME);
+
+	// Hold the shared vacuum lock when a checkpoint can change row IDs stored in ART indexes: the lock keeps the
+	// row IDs we obtain from the ART valid against the row groups until the scan state is set up.
 	unique_ptr<StorageLockKey> vacuum_lock;
 	auto &attached = storage.GetAttached();
-	if (attached.GetVacuumRebuildIndexThreshold() > 0) {
-		auto &transaction_manager = DuckTransactionManager::Get(attached);
-		vacuum_lock = transaction_manager.SharedVacuumLock();
-	}
-
-	info->BindIndexes(context, ART::TYPE_NAME);
-	if (!vacuum_lock && RowGroupCollection::IsVacuumRemapEligible(*info, attached)) {
-		auto &transaction_manager = DuckTransactionManager::Get(attached);
-		vacuum_lock = transaction_manager.SharedVacuumLock();
+	if (attached.GetVacuumRebuildIndexThreshold() > 0 || RowGroupCollection::IsVacuumRemapEligible(*info, attached)) {
+		vacuum_lock = DuckTransactionManager::Get(attached).SharedVacuumLock();
 	}
 
 	for (auto &entry : indexes.IndexEntries()) {
