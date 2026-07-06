@@ -16,6 +16,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 
@@ -666,7 +667,7 @@ struct TPCHDBgenParameters {
 
 static constexpr int DBGEN_TABLES[] = {SUPP, CUST, ORDER_LINE, PART_PSUPP, NATION, REGION};
 static constexpr idx_t DBGEN_ROW_BATCH_SIZE = 100000;
-static constexpr idx_t DBGEN_TARGET_CHUNK_ROWS = 122880;
+static constexpr idx_t DBGEN_TARGET_CHUNK_ROWS = 2 * DEFAULT_ROW_GROUP_SIZE;
 
 struct DBGenTableRange {
 	idx_t offset;
