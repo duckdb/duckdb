@@ -1,9 +1,6 @@
 #include "duckdb/planner/table_filter_state.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
@@ -26,121 +23,6 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 
 ExpressionFilterState::~ExpressionFilterState() {
 }
-
-class ConstantFalseFilterExecutor final : public ExpressionFilterExecutor {
-public:
-	idx_t FilterSelection(SelectionVector &sel, Vector &vector, idx_t scan_count,
-	                      idx_t &approved_tuple_count) override {
-		approved_tuple_count = 0;
-		return 0;
-	}
-};
-
-template <class T, class OP, bool HAS_NULL>
-static idx_t TemplatedFilterSelection(const UnifiedVectorFormat &vdata, T predicate, const SelectionVector &sel,
-                                      const idx_t approved_tuple_count, SelectionVector &result_sel) {
-	auto &mask = vdata.validity;
-	const auto vec = UnifiedVectorFormat::GetData<const T>(vdata);
-	idx_t result_count = 0;
-	for (idx_t i = 0; i < approved_tuple_count; i++) {
-		const auto idx = sel.get_index(i);
-		auto vector_idx = vdata.sel->get_index(idx);
-		bool comparison_result =
-		    (!HAS_NULL || mask.RowIsValidUnsafe(vector_idx)) && OP::Operation(vec[vector_idx], predicate);
-		result_sel.set_index(result_count, idx);
-		result_count += comparison_result;
-	}
-	return result_count;
-}
-
-template <class T>
-static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, SelectionVector &sel,
-                                  idx_t &approved_tuple_count, ExpressionType comparison_type) {
-	SelectionVector new_sel(approved_tuple_count);
-	auto &mask = vdata.validity;
-	switch (comparison_type) {
-	case ExpressionType::COMPARE_EQUAL:
-		if (mask.CannotHaveNull()) {
-			approved_tuple_count =
-			    TemplatedFilterSelection<T, Equals, false>(vdata, predicate, sel, approved_tuple_count, new_sel);
-		} else {
-			approved_tuple_count =
-			    TemplatedFilterSelection<T, Equals, true>(vdata, predicate, sel, approved_tuple_count, new_sel);
-		}
-		break;
-	case ExpressionType::COMPARE_NOTEQUAL:
-		if (mask.CannotHaveNull()) {
-			approved_tuple_count =
-			    TemplatedFilterSelection<T, NotEquals, false>(vdata, predicate, sel, approved_tuple_count, new_sel);
-		} else {
-			approved_tuple_count =
-			    TemplatedFilterSelection<T, NotEquals, true>(vdata, predicate, sel, approved_tuple_count, new_sel);
-		}
-		break;
-	case ExpressionType::COMPARE_LESSTHAN:
-		if (mask.CannotHaveNull()) {
-			approved_tuple_count =
-			    TemplatedFilterSelection<T, LessThan, false>(vdata, predicate, sel, approved_tuple_count, new_sel);
-		} else {
-			approved_tuple_count =
-			    TemplatedFilterSelection<T, LessThan, true>(vdata, predicate, sel, approved_tuple_count, new_sel);
-		}
-		break;
-	case ExpressionType::COMPARE_GREATERTHAN:
-		if (mask.CannotHaveNull()) {
-			approved_tuple_count =
-			    TemplatedFilterSelection<T, GreaterThan, false>(vdata, predicate, sel, approved_tuple_count, new_sel);
-		} else {
-			approved_tuple_count =
-			    TemplatedFilterSelection<T, GreaterThan, true>(vdata, predicate, sel, approved_tuple_count, new_sel);
-		}
-		break;
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		if (mask.CannotHaveNull()) {
-			approved_tuple_count = TemplatedFilterSelection<T, LessThanEquals, false>(vdata, predicate, sel,
-			                                                                          approved_tuple_count, new_sel);
-		} else {
-			approved_tuple_count =
-			    TemplatedFilterSelection<T, LessThanEquals, true>(vdata, predicate, sel, approved_tuple_count, new_sel);
-		}
-		break;
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		if (mask.CannotHaveNull()) {
-			approved_tuple_count = TemplatedFilterSelection<T, GreaterThanEquals, false>(vdata, predicate, sel,
-			                                                                             approved_tuple_count, new_sel);
-		} else {
-			approved_tuple_count = TemplatedFilterSelection<T, GreaterThanEquals, true>(vdata, predicate, sel,
-			                                                                            approved_tuple_count, new_sel);
-		}
-		break;
-	default:
-		throw NotImplementedException("Unknown comparison type for table filter");
-	}
-	sel.Initialize(new_sel);
-}
-
-template <class T>
-class ComparisonFilterExecutor final : public ExpressionFilterExecutor {
-public:
-	ComparisonFilterExecutor(T predicate_p, ExpressionType comparison_type_p)
-	    : predicate(predicate_p), comparison_type(comparison_type_p) {
-	}
-
-	idx_t FilterSelection(SelectionVector &sel, Vector &vector, idx_t scan_count,
-	                      idx_t &approved_tuple_count) override {
-		if (approved_tuple_count == 0) {
-			return 0;
-		}
-		UnifiedVectorFormat vdata;
-		vector.ToUnifiedFormat(vdata);
-		FilterSelectionSwitch<T>(vdata, predicate, sel, approved_tuple_count, comparison_type);
-		return approved_tuple_count;
-	}
-
-private:
-	T predicate;
-	ExpressionType comparison_type;
-};
 
 class ConjunctionAndFilterExecutor final : public ExpressionFilterExecutor {
 public:
@@ -383,133 +265,6 @@ private:
 	unique_ptr<SelectivityOptionalFilterState::SelectivityStats> stats;
 };
 
-static bool IsSupportedComparisonType(ExpressionType comparison_type) {
-	switch (comparison_type) {
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOTEQUAL:
-	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_GREATERTHAN:
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return true;
-	default:
-		return false;
-	}
-}
-
-template <class T>
-static unique_ptr<ExpressionFilterExecutor> CreateComparisonExecutor(const Value &predicate,
-                                                                     ExpressionType comparison_type) {
-	return make_uniq<ComparisonFilterExecutor<T>>(predicate.GetValueUnsafe<T>(), comparison_type);
-}
-
-static unique_ptr<ExpressionFilterExecutor> CreateComparisonExecutor(const LogicalType &type, const Value &predicate,
-                                                                     ExpressionType comparison_type) {
-	switch (type.id()) {
-	case LogicalTypeId::DATE:
-		return CreateComparisonExecutor<date_t>(predicate, comparison_type);
-	case LogicalTypeId::TIME:
-		return CreateComparisonExecutor<dtime_t>(predicate, comparison_type);
-	case LogicalTypeId::TIME_NS:
-		return CreateComparisonExecutor<dtime_ns_t>(predicate, comparison_type);
-	case LogicalTypeId::TIME_TZ:
-		return CreateComparisonExecutor<dtime_tz_t>(predicate, comparison_type);
-	case LogicalTypeId::TIMESTAMP:
-		return CreateComparisonExecutor<timestamp_t>(predicate, comparison_type);
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return CreateComparisonExecutor<timestamp_sec_t>(predicate, comparison_type);
-	case LogicalTypeId::TIMESTAMP_MS:
-		return CreateComparisonExecutor<timestamp_ms_t>(predicate, comparison_type);
-	case LogicalTypeId::TIMESTAMP_NS:
-		return CreateComparisonExecutor<timestamp_ns_t>(predicate, comparison_type);
-	case LogicalTypeId::TIMESTAMP_TZ:
-		return CreateComparisonExecutor<timestamp_tz_t>(predicate, comparison_type);
-	case LogicalTypeId::TIMESTAMP_TZ_NS:
-		return CreateComparisonExecutor<timestamp_tz_ns_t>(predicate, comparison_type);
-	default:
-		break;
-	}
-
-	switch (type.InternalType()) {
-	case PhysicalType::BOOL:
-		return CreateComparisonExecutor<bool>(predicate, comparison_type);
-	case PhysicalType::UINT8:
-		return CreateComparisonExecutor<uint8_t>(predicate, comparison_type);
-	case PhysicalType::UINT16:
-		return CreateComparisonExecutor<uint16_t>(predicate, comparison_type);
-	case PhysicalType::UINT32:
-		return CreateComparisonExecutor<uint32_t>(predicate, comparison_type);
-	case PhysicalType::UINT64:
-		return CreateComparisonExecutor<uint64_t>(predicate, comparison_type);
-	case PhysicalType::UINT128:
-		return CreateComparisonExecutor<uhugeint_t>(predicate, comparison_type);
-	case PhysicalType::INT8:
-		return CreateComparisonExecutor<int8_t>(predicate, comparison_type);
-	case PhysicalType::INT16:
-		return CreateComparisonExecutor<int16_t>(predicate, comparison_type);
-	case PhysicalType::INT32:
-		return CreateComparisonExecutor<int32_t>(predicate, comparison_type);
-	case PhysicalType::INT64:
-		return CreateComparisonExecutor<int64_t>(predicate, comparison_type);
-	case PhysicalType::INT128:
-		return CreateComparisonExecutor<hugeint_t>(predicate, comparison_type);
-	case PhysicalType::FLOAT:
-		return CreateComparisonExecutor<float>(predicate, comparison_type);
-	case PhysicalType::DOUBLE:
-		return CreateComparisonExecutor<double>(predicate, comparison_type);
-	default:
-		return nullptr;
-	}
-}
-
-static unique_ptr<ExpressionFilterExecutor> TryCreateComparisonExecutor(const BoundFunctionExpression &comparison) {
-	auto comparison_type = comparison.GetExpressionType();
-	if (!IsSupportedComparisonType(comparison_type)) {
-		return nullptr;
-	}
-
-	optional_ptr<const BoundReferenceExpression> reference;
-	optional_ptr<const BoundConstantExpression> constant;
-	const auto &left = BoundComparisonExpression::Left(comparison);
-	const auto &right = BoundComparisonExpression::Right(comparison);
-	if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
-	    right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		reference = &left.Cast<BoundReferenceExpression>();
-		constant = &right.Cast<BoundConstantExpression>();
-	} else if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-	           right.GetExpressionClass() == ExpressionClass::BOUND_REF) {
-		reference = &right.Cast<BoundReferenceExpression>();
-		constant = &left.Cast<BoundConstantExpression>();
-		comparison_type = FlipComparisonExpression(comparison_type);
-	} else {
-		return nullptr;
-	}
-	if (reference->Index() != 0) {
-		return nullptr;
-	}
-
-	auto predicate = constant->GetValue();
-	if (predicate.IsNull()) {
-		return make_uniq<ConstantFalseFilterExecutor>();
-	}
-
-	auto &column_type = reference->GetReturnType();
-	if (predicate.type() != column_type) {
-		Value cast_predicate;
-		if (!predicate.DefaultTryCastAs(column_type, cast_predicate, nullptr)) {
-			return nullptr;
-		}
-		predicate = std::move(cast_predicate);
-		if (predicate.IsNull()) {
-			return make_uniq<ConstantFalseFilterExecutor>();
-		}
-	}
-	if (predicate.type().InternalType() != column_type.InternalType()) {
-		return nullptr;
-	}
-	return CreateComparisonExecutor(column_type, predicate, comparison_type);
-}
-
 static bool IsColumnReferenceFunction(const BoundFunctionExpression &func) {
 	auto &children = func.GetChildren();
 	if (children.size() != 1 || children[0]->GetExpressionClass() != ExpressionClass::BOUND_REF) {
@@ -521,9 +276,6 @@ static bool IsColumnReferenceFunction(const BoundFunctionExpression &func) {
 
 static unique_ptr<ExpressionFilterExecutor> TryCreateFunctionExecutor(const BoundFunctionExpression &func,
                                                                       bool inside_selectivity_optional) {
-	if (BoundComparisonExpression::IsComparison(func)) {
-		return TryCreateComparisonExecutor(func);
-	}
 	if (!IsColumnReferenceFunction(func)) {
 		return nullptr;
 	}
@@ -537,7 +289,13 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateFunctionExecutor(const Boun
 			return make_uniq<OptionalFilterExecutor>();
 		}
 		auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-		auto child = data.child_filter_expr ? TryCreateFastExecutor(*data.child_filter_expr, true) : nullptr;
+		if (!data.child_filter_expr) {
+			return make_uniq<OptionalFilterExecutor>();
+		}
+		auto child = TryCreateFastExecutor(*data.child_filter_expr, true);
+		if (!child) {
+			return nullptr;
+		}
 		return make_uniq<SelectivityOptionalFilterExecutor>(std::move(child), data.n_vectors_to_check,
 		                                                    data.selectivity_threshold);
 	}

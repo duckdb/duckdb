@@ -1013,14 +1013,6 @@ void JoinHashTable::AllocatePointerTable() {
 	            {"size", to_string(data_collection->SizeInBytes() + hash_map.GetSize())}});
 }
 
-void JoinHashTable::PrepareBuildBloomFilter(idx_t estimated_row_count) {
-	should_build_bloom_filter = true;
-	if (!bloom_filter.IsInitialized()) {
-		bloom_filter_init_count = MaxValue<idx_t>(estimated_row_count, idx_t(1));
-		bloom_filter.Initialize(context, bloom_filter_init_count);
-	}
-}
-
 void JoinHashTable::PrepareBloomFilterForFinalize() {
 	if (!should_build_bloom_filter) {
 		return;
