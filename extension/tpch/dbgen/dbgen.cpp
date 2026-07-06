@@ -54,10 +54,12 @@ struct tpch_append_information {
 		chunk.Initialize(context, table.GetTypes());
 	}
 
-	void InitializeOptimistic(ClientContext &context, DuckTableEntry &table) {
+	void InitializeOptimistic(ClientContext &context, DuckTableEntry &table,
+	                          OptimisticWritePartialManagers partial_manager_type) {
 		table_entry = table;
 		optimistic_writer = make_uniq<OptimisticDataWriter>(context, table.GetStorage());
-		optimistic_collection = optimistic_writer->CreateCollection(table.GetStorage(), table.GetTypes());
+		optimistic_collection =
+		    optimistic_writer->CreateCollection(table.GetStorage(), table.GetTypes(), partial_manager_type);
 		auto &row_collection = *optimistic_collection->collection;
 		row_collection.InitializeEmpty();
 		row_collection.InitializeAppend(append_state);
@@ -154,6 +156,7 @@ struct tpch_append_information {
 		auto &row_collection = *optimistic_collection->collection;
 		if (row_collection.GetTotalRows() >= storage.GetRowGroupSize()) {
 			optimistic_writer->WriteUnflushedRowGroups(*optimistic_collection);
+			optimistic_writer->FinalFlush();
 		}
 	}
 };
@@ -766,9 +769,13 @@ public:
 				case TPCHAppendMode::APPENDER:
 					append_info[i].Initialize(context, tbl_catalog, flush_count);
 					break;
-				case TPCHAppendMode::OPTIMISTIC:
-					append_info[i].InitializeOptimistic(context, tbl_catalog.Cast<DuckTableEntry>());
+				case TPCHAppendMode::OPTIMISTIC: {
+					auto partial_manager_type = i == LINE ? OptimisticWritePartialManagers::GLOBAL
+					                                      : OptimisticWritePartialManagers::PER_COLUMN;
+					append_info[i].InitializeOptimistic(context, tbl_catalog.Cast<DuckTableEntry>(),
+					                                    partial_manager_type);
 					break;
+				}
 				default:
 					throw InternalException("Unsupported TPC-H append mode");
 				}
