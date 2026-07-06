@@ -51,13 +51,13 @@ private:
 //! Drives read-ahead for the multi-file scan, it's purpose is to keep several scan jobs scheduled ahead of decoding
 class MultiFileReadAhead {
 public:
-	MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth);
+	MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth, bool auto_depth);
 	~MultiFileReadAhead();
 
 public:
-	//! Resolve the effective read-ahead depth from the read_ahead_depth setting (-1 = auto from thread count).
-	//! Returns 0 when read-ahead is disabled.
-	static idx_t ResolveDepth(ClientContext &context, idx_t max_threads);
+	//! Create the read-ahead driver from the read_ahead_depth setting (-1 = auto from thread count).
+	//! Returns null when the resolved depth is 0, i.e., read-ahead is disabled.
+	static unique_ptr<MultiFileReadAhead> Create(ClientContext &context, idx_t max_threads);
 
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
 	//! Returns false when the scan has no more jobs.
@@ -105,7 +105,8 @@ private:
 	//! Be sure to drain any running work on early exit
 	void Drain() noexcept;
 
-	idx_t read_ahead_depth;
+	//! Number of jobs the scan keeps scheduled ahead of decoding
+	const idx_t read_ahead_depth;
 	//! Whether the depth came from the -1 auto mode, enables the byte budget and the producer slot exemption
 	const bool auto_depth;
 	//! Maximum bytes of I/O scheduled ahead of decoding, additional jobs wait until claims free up bytes.

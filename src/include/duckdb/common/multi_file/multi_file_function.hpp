@@ -567,10 +567,7 @@ public:
 		    TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
 			return;
 		}
-		auto depth = MultiFileReadAhead::ResolveDepth(context, gstate.max_threads);
-		if (depth > 0) {
-			gstate.read_ahead = make_uniq<MultiFileReadAhead>(context, depth);
-		}
+		gstate.read_ahead = MultiFileReadAhead::Create(context, gstate.max_threads);
 	}
 
 	static unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,

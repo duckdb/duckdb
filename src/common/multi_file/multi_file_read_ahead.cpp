@@ -52,20 +52,22 @@ bool ReadAheadJobCompletion::TryPark(const InterruptState &interrupt_state) {
 	return parked_scan.BlockTask(interrupt_state);
 }
 
-MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p)
-    : read_ahead_depth(read_ahead_depth_p), auto_depth(Settings::Get<ReadAheadDepthSetting>(context) == -1),
+MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p, bool auto_depth_p)
+    : read_ahead_depth(read_ahead_depth_p), auto_depth(auto_depth_p),
       io_byte_budget(auto_depth ? BufferManager::GetBufferManager(context).GetMaxMemory() / 4
                                 : NumericLimits<idx_t>::Maximum()) {
 	D_ASSERT(read_ahead_depth_p > 0);
 	executor = make_uniq<TaskExecutor>(context, TaskSchedulerType::ASYNC);
 }
 
-idx_t MultiFileReadAhead::ResolveDepth(ClientContext &context, idx_t max_threads) {
+unique_ptr<MultiFileReadAhead> MultiFileReadAhead::Create(ClientContext &context, idx_t max_threads) {
 	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
-	if (configured_depth == -1) {
-		return MaxValue<idx_t>(max_threads / 4, 4);
+	const bool auto_depth = configured_depth == -1;
+	const auto depth = auto_depth ? MaxValue<idx_t>(max_threads / 4, 4) : NumericCast<idx_t>(configured_depth);
+	if (depth == 0) {
+		return nullptr;
 	}
-	return NumericCast<idx_t>(configured_depth);
+	return make_uniq<MultiFileReadAhead>(context, depth, auto_depth);
 }
 
 MultiFileReadAhead::~MultiFileReadAhead() {
