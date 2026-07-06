@@ -340,6 +340,9 @@ public:
 				can_skip_file = true;
 			} else {
 				current_reader_data.reader->PrepareReader(context, *global_state.global_state);
+				if (global_state.read_ahead) {
+					current_reader_data.reader->PrepareReadAhead(context, *global_state.global_state);
+				}
 			}
 
 			// Now re-lock the state and add the reader
