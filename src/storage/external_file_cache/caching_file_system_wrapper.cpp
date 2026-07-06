@@ -253,7 +253,7 @@ bool CachingFileSystemWrapper::ListFilesExtended(const string &directory,
 }
 
 bool CachingFileSystemWrapper::SupportsListFilesExtended() const {
-	// Cannot delegate to internal filesystem's invocaton since it's `protected`.
+	// Cannot delegate to internal filesystem's invocation since it's `protected`.
 	return true;
 }
 
