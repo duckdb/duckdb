@@ -258,6 +258,17 @@ struct AllowedPathsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ApproximateJoinOrderThresholdSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "approximate_join_order_threshold";
+	static constexpr const char *Description =
+	    "The minimum number of tables in a join to determine the optimal join order approximately instead of exactly.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "12";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct ArrowLargeBufferSizeSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "arrow_large_buffer_size";

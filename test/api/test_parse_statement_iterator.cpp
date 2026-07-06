@@ -120,11 +120,12 @@ TEST_CASE("ParseIterator: parser errors surface through Peek", "[api][parse_iter
 	REQUIRE_THROWS(it.Peek());
 }
 
-TEST_CASE("ParseIterator: movable and move-assignable", "[api][parse_iterator]") {
+TEST_CASE("ParseIterator: movable", "[api][parse_iterator]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	auto &ctx = *con.context;
 
+	// Move-constructible (it binds a ClientContext reference, so it is not move-assignable).
 	ParseIterator it(ctx, "SELECT 1; SELECT 2;");
 	REQUIRE(it.Peek());
 	REQUIRE(it.GetStatement());
@@ -133,15 +134,6 @@ TEST_CASE("ParseIterator: movable and move-assignable", "[api][parse_iterator]")
 	REQUIRE(moved.Peek());
 	REQUIRE(moved.GetStatement());
 	REQUIRE_FALSE(moved.Peek());
-
-	ParseIterator target(ctx, "SELECT 99;");
-	ParseIterator src(ctx, "SELECT 1; SELECT 2;");
-	REQUIRE(src.Peek());
-	REQUIRE(src.GetStatement());
-	target = std::move(src);
-	REQUIRE(target.Peek());
-	REQUIRE(target.GetStatement());
-	REQUIRE_FALSE(target.Peek());
 }
 
 TEST_CASE("ParseIterator: separators are skipped, no trailing separator needed", "[api][parse_iterator]") {

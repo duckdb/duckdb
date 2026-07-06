@@ -1,0 +1,7 @@
+# name: benchmark/tpcds/sf3/q33.benchmark
+# description: Run query 33 from the TPC-DS benchmark (SF3)
+# group: [sf3]
+
+template benchmark/tpcds/sf3/tpcds_sf3.benchmark.in
+QUERY_NUMBER=33
+QUERY_NUMBER_PADDED=33

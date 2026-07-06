@@ -748,7 +748,8 @@ FunctionExpressionArguments <- Parens(FunctionExpressionArgumentList)
 FunctionExpressionArgumentList <- DistinctOrAll? FunctionArgumentList? OrderByClause? IgnoreOrRespectNulls?
 FunctionArgumentList <- List(FunctionArgument)
 
-FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunctionName / FunctionName
+FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunctionName / FunctionNameAsQualifiedName
+FunctionNameAsQualifiedName <- FunctionName
 CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification? ReservedFunctionName
 SchemaReservedFunctionName <- SchemaQualification ReservedFunctionName
 
@@ -828,7 +829,8 @@ ExcludeGroup <- 'GROUP'
 ExcludeTies <- 'TIES'
 ExcludeNoOthers <- 'NO' 'OTHERS'
 OverClause <- 'OVER' WindowFrame
-WindowFrame <- ParensIdentifier / WindowFrameDefinition / Identifier
+WindowFrame <- ParensIdentifier / WindowFrameDefinition / IdentifierWindowFrame
+IdentifierWindowFrame <- Identifier
 ParensIdentifier <- Parens(Identifier)
 WindowFrameDefinition <- WindowFrameNameContentsParens / WindowFrameContentsParens
 WindowFrameNameContentsParens <- Parens(WindowFrameNameContents)
@@ -966,7 +968,10 @@ BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 OtherOperatorExpression <- BitwiseExpression OtherOperatorTail*
 OtherOperatorTail <- OtherOperator BitwiseExpression
 OtherOperator <-
-    QualifiedOperator / AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral
+    AnyAllParsedOperator / NamedOtherOperator
+AnyAllParsedOperator <- AnyAllOperator
+NamedOtherOperator <-
+    QualifiedOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral
 OperatorLiteral <- Identifier
 AnyAllOperator <- AnyOp AnyOrAll
 AnyOrAll <- SubqueryAny / SubqueryAll
@@ -1220,8 +1225,9 @@ SetNullKeyAction <- 'SET' 'NULL'
 SetDefaultKeyAction <- 'SET' 'DEFAULT'
 
 TopLevelConstraint <- ConstraintNameClause? TopLevelConstraintList
-TopLevelConstraintList <- TopPrimaryKeyConstraint / CheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
+TopLevelConstraintList <- TopPrimaryKeyConstraint / TopCheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
 ConstraintNameClause <- 'CONSTRAINT' Identifier
+TopCheckConstraint <- CheckConstraint
 TopPrimaryKeyConstraint <- 'PRIMARY' 'KEY' ColumnIdList
 TopUniqueConstraint <- 'UNIQUE' ColumnIdList
 TopForeignKeyConstraint <- 'FOREIGN' 'KEY' ColumnIdList ForeignKeyConstraint
@@ -1234,11 +1240,13 @@ DotColLabel <- '.' ColLabel
 Identifier <- QuotedIdentifier / PlainIdentifier
 
 ColId <- UnreservedKeyword / ColumnNameKeyword / Identifier
-ColIdOrString <- ColId / StringLiteral
+ColIdOrString <- ColId / StringLiteralIdentifier
 TypeFuncName <- UnreservedKeyword / TypeNameKeyword / FuncNameKeyword / Identifier
 TypeName <- UnreservedKeyword / TypeNameKeyword / Identifier
 ColLabel <- ReservedKeyword / UnreservedKeyword / ColumnNameKeyword / FuncNameKeyword / TypeNameKeyword / Identifier
-ColLabelOrString <- ColLabel / StringLiteral
+ColLabelOrString <- ColLabelIdentifier / StringLiteralIdentifier
+ColLabelIdentifier <- ColLabel
+StringLiteralIdentifier <- StringLiteral
 GeneratedColumn <- Generated? 'AS' Parens(Expression) GeneratedColumnType?
 
 Generated <- 'GENERATED' AlwaysOrByDefault?
@@ -1268,7 +1276,7 @@ RelOption <- RelOptionName RelOptionArgumentOpt?
 RelOptionName <- DottedIdentifierString / StringLiteral
 DottedIdentifierString <- DottedIdentifier
 RelOptionArgumentOpt <- '=' DefArg
-DefArg <- DefArgNull / DefArgKeyword / DefArgStringLiteral / NumberLiteral / NoneLiteral / Expression
+DefArg <- DefArgNull / DefArgStringLiteral / NumberLiteral / NoneLiteral / Expression / DefArgKeyword
 DefArgNull <- NullLiteral
 DefArgKeyword <- ReservedKeyword
 DefArgStringLiteral <- StringLiteral
@@ -1442,7 +1450,9 @@ TableUnpivotClauseBody <- UnpivotHeader 'FOR' UnpivotValueList+
 
 PivotHeader <- BaseExpression
 PivotValueList <- PivotHeader 'IN' PivotValueTarget
-PivotValueTarget <- Identifier / PivotTargetList
+PivotValueTarget <- PivotEnumTarget / PivotListTarget
+PivotEnumTarget <- Identifier
+PivotListTarget <- PivotTargetList
 UnpivotValueList <- UnpivotHeader 'IN' UnpivotTargetList
 PivotTargetList <- Parens(TargetList)
 UnpivotTargetList <- Parens(TargetList)
@@ -1592,7 +1602,7 @@ ConnectStatement <- 'CONNECT' SessionTarget?
 DisconnectStatement <- 'DISCONNECT'
 SessionTarget <- LocalSessionTarget / StringSessionTarget / CatalogSessionTarget
 LocalSessionTarget <- 'LOCAL'
-StringSessionTarget <- StringLiteral
+StringSessionTarget <- StringLiteral GenericCopyOptionList?
 CatalogSessionTarget <- CatalogName
 
 CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType
@@ -1743,7 +1753,8 @@ AlterSequenceStmt <- 'SEQUENCE' IfExists? QualifiedSequenceName AlterSequenceOpt
 
 QualifiedSequenceName <- CatalogQualification? SchemaQualification? SequenceName
 
-AlterSequenceOptions <- RenameAlter / SetSequenceOption
+AlterSequenceOptions <- RenameAlterSequenceOptions / SetSequenceOption
+RenameAlterSequenceOptions <- RenameAlter
 SetSequenceOption <- SequenceOption+
 
 AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifier
@@ -1837,7 +1848,9 @@ CommentSchema <- 'SCHEMA'
 CommentType <- 'TYPE'
 CommentColumn <- 'COLUMN'
 
-CommentValue <- NullLiteral / StringLiteral
+CommentValue <- NullLiteral / StringLiteralValue
+StringLiteralValue <- StringLiteral
+
 CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ReferencingClause? ForEachClause? TriggerBody
 
 TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement / MergeIntoStatement

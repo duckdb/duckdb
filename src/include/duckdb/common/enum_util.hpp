@@ -180,6 +180,8 @@ enum class DecimalBitWidth : uint8_t;
 
 enum class DefaultOrderByNullType : uint8_t;
 
+enum class DeferredRuntimeFilterType : uint8_t;
+
 enum class DependencyEntryType : uint8_t;
 
 enum class DeprecatedIndexType : uint8_t;
@@ -796,6 +798,9 @@ const char* EnumUtil::ToChars<DecimalBitWidth>(DecimalBitWidth value);
 
 template<>
 const char* EnumUtil::ToChars<DefaultOrderByNullType>(DefaultOrderByNullType value);
+
+template<>
+const char* EnumUtil::ToChars<DeferredRuntimeFilterType>(DeferredRuntimeFilterType value);
 
 template<>
 const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
@@ -1610,6 +1615,9 @@ DecimalBitWidth EnumUtil::FromString<DecimalBitWidth>(const char *value);
 
 template<>
 DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *value);
+
+template<>
+DeferredRuntimeFilterType EnumUtil::FromString<DeferredRuntimeFilterType>(const char *value);
 
 template<>
 DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value);
