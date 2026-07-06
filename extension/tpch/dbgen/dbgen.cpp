@@ -23,12 +23,14 @@
 #define DECLARER /* EXTERN references get defined here */
 
 #include "dbgen/dss.h"
+#include "dbgen/rng64.h"
 #include "dbgen/dsstypes.h"
 
 #include <cassert>
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstring>
 #include <mutex>
 
 using namespace duckdb;
@@ -194,14 +196,10 @@ void append_int64(tpch_append_information &info, int64_t value) {
 	FlatVector::GetDataMutable<int64_t>(vector)[info.active_row] = value;
 }
 
-void append_string(tpch_append_information &info, const char *value, idx_t length) {
+void append_string_reference(tpch_append_information &info, const char *value, idx_t length) {
 	auto &vector = append_next_column(info);
-	FlatVector::GetDataMutable<string_t>(vector)[info.active_row] = StringVector::AddString(vector, value, length);
-}
-
-void append_string(tpch_append_information &info, const char *value) {
-	auto &vector = append_next_column(info);
-	FlatVector::GetDataMutable<string_t>(vector)[info.active_row] = StringVector::AddString(vector, value);
+	FlatVector::GetDataMutable<string_t>(vector)[info.active_row] =
+	    string_t(value, UnsafeNumericCast<uint32_t>(length));
 }
 
 void append_decimal(tpch_append_information &info, int64_t value) {
@@ -209,233 +207,397 @@ void append_decimal(tpch_append_information &info, int64_t value) {
 	FlatVector::GetDataMutable<int64_t>(vector)[info.active_row] = value;
 }
 
-static date_t parse_tpch_date(const char *value) {
-	static constexpr int32_t UNIX_EPOCH_OFFSET = 8035;
-	static constexpr int32_t YEAR_OFFSET[] = {0, 366, 731, 1096, 1461, 1827, 2192};
-	static constexpr int32_t CUMULATIVE_DAYS[] = {0,  0,   31,  59,  90,  120, 151,
-	                                              181, 212, 243, 273, 304, 334};
-	static constexpr int32_t CUMULATIVE_LEAP_DAYS[] = {0,  0,   31,  60,  91,  121, 152,
-	                                                   182, 213, 244, 274, 305, 335};
-	auto year = static_cast<int32_t>((value[2] - '0') * 10 + (value[3] - '0'));
-	auto month = static_cast<int32_t>((value[5] - '0') * 10 + (value[6] - '0'));
-	auto day = static_cast<int32_t>((value[8] - '0') * 10 + (value[9] - '0'));
-	D_ASSERT(year >= 92 && year <= 98);
-	auto year_index = year - 92;
-	auto &year_days = (year == 92 || year == 96) ? CUMULATIVE_LEAP_DAYS : CUMULATIVE_DAYS;
-	return date_t(UNIX_EPOCH_OFFSET + YEAR_OFFSET[year_index] + year_days[month] + day - 1);
-}
-
-void append_date(tpch_append_information &info, const char *value) {
-	auto &vector = append_next_column(info);
-	FlatVector::GetDataMutable<date_t>(vector)[info.active_row] = parse_tpch_date(value);
-}
-
 void append_char(tpch_append_information &info, char value) {
 	auto &vector = append_next_column(info);
-	FlatVector::GetDataMutable<string_t>(vector)[info.active_row] = StringVector::AddString(vector, &value, 1);
+	FlatVector::GetDataMutable<string_t>(vector)[info.active_row] = string_t(&value, 1);
 }
 
-static void append_order(order_t *o, tpch_append_information *info) {
-	auto &append_info = info[ORDER];
-
-	// fill the current row with the order information
-	append_begin_row(append_info);
-	// o_orderkey
-	append_int64(append_info, o->okey);
-	// o_custkey
-	append_int64(append_info, o->custkey);
-	// o_orderstatus
-	append_char(append_info, o->orderstatus);
-	// o_totalprice
-	append_decimal(append_info, o->totalprice);
-	// o_orderdate
-	append_date(append_info, o->odate);
-	// o_orderpriority
-	append_string(append_info, o->opriority);
-	// o_clerk
-	append_string(append_info, o->clerk, O_CLRK_LEN);
-	// o_shippriority
-	append_int32(append_info, o->spriority);
-	// o_comment
-	append_string(append_info, o->comment, o->clen);
-	append_end_row(append_info);
+static date_t raw_tpch_date(DSS_HUGE value) {
+	static constexpr int32_t UNIX_EPOCH_OFFSET = 8035;
+	return date_t(NumericCast<int32_t>(value - STARTDATE + UNIX_EPOCH_OFFSET));
 }
 
-static void append_line(order_t *o, tpch_append_information *info) {
-	auto &append_info = info[LINE];
+void append_date(tpch_append_information &info, DSS_HUGE value) {
+	auto &vector = append_next_column(info);
+	FlatVector::GetDataMutable<date_t>(vector)[info.active_row] = raw_tpch_date(value);
+}
 
-	// fill the current row with the order information
-	for (DSS_HUGE i = 0; i < o->lines; i++) {
-		append_begin_row(append_info);
-		// l_orderkey
-		append_int64(append_info, o->l[i].okey);
-		// l_partkey
-		append_int64(append_info, o->l[i].partkey);
-		// l_suppkey
-		append_int64(append_info, o->l[i].suppkey);
-		// l_linenumber
-		append_int64(append_info, o->l[i].lcnt);
-		// l_quantity
-		append_decimal(append_info, o->l[i].quantity);
-		// l_extendedprice
-		append_decimal(append_info, o->l[i].eprice);
-		// l_discount
-		append_decimal(append_info, o->l[i].discount);
-		// l_tax
-		append_decimal(append_info, o->l[i].tax);
-		// l_returnflag
-		append_char(append_info, o->l[i].rflag[0]);
-		// l_linestatus
-		append_char(append_info, o->l[i].lstatus[0]);
-		// l_shipdate
-		append_date(append_info, o->l[i].sdate);
-		// l_commitdate
-		append_date(append_info, o->l[i].cdate);
-		// l_receiptdate
-		append_date(append_info, o->l[i].rdate);
-		// l_shipinstruct
-		append_string(append_info, o->l[i].shipinstruct);
-		// l_shipmode
-		append_string(append_info, o->l[i].shipmode);
-		// l_comment
-		append_string(append_info, o->l[i].comment, o->l[i].clen);
-		append_end_row(append_info);
+static string_t &append_empty_string(tpch_append_information &info, idx_t length) {
+	auto &vector = append_next_column(info);
+	auto data = FlatVector::GetDataMutable<string_t>(vector);
+	data[info.active_row] = StringVector::EmptyString(vector, length);
+	return data[info.active_row];
+}
+
+static int PaddedNumberWidth(DSS_HUGE value, int min_width) {
+	int width = 1;
+	for (auto remaining = value; remaining >= 10; remaining /= 10) {
+		width++;
+	}
+	return MaxValue(width, min_width);
+}
+
+static void WritePaddedNumber(char *target, DSS_HUGE value, int width) {
+	for (auto i = width; i > 0; i--) {
+		target[i - 1] = char('0' + (value % 10));
+		value /= 10;
 	}
 }
 
-static void append_order_line(order_t *o, tpch_append_information *info) {
-	append_order(o, info);
-	append_line(o, info);
+static void AppendTaggedNumber(tpch_append_information &info, const char *tag, idx_t tag_length, DSS_HUGE value,
+                               int min_width) {
+	auto number_width = PaddedNumberWidth(value, min_width);
+	auto &result = append_empty_string(info, tag_length + number_width);
+	auto target = result.GetDataWriteable();
+	memcpy(target, tag, tag_length);
+	WritePaddedNumber(target + tag_length, value, number_width);
+	result.Finalize();
 }
 
-static void append_supp(supplier_t *supp, tpch_append_information *info) {
+static void AppendPhone(tpch_append_information &info, DSS_HUGE nation_code, seed_t *seed) {
+	DSS_HUGE acode, exchg, number;
+	RANDOM(acode, 100, 999, seed);
+	RANDOM(exchg, 100, 999, seed);
+	RANDOM(number, 1000, 9999, seed);
+
+	auto &result = append_empty_string(info, PHONE_LEN);
+	auto target = result.GetDataWriteable();
+	WritePaddedNumber(target, 10 + (nation_code % NATIONS_MAX), 2);
+	target[2] = '-';
+	WritePaddedNumber(target + 3, acode, 3);
+	target[6] = '-';
+	WritePaddedNumber(target + 7, exchg, 3);
+	target[10] = '-';
+	WritePaddedNumber(target + 11, number, 4);
+	result.Finalize();
+}
+
+static void AppendRandomAlphaNumeric(tpch_append_information &info, int average_length, seed_t *seed) {
+	static const char ALPHA_NUM[] = "0123456789abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ,";
+	DSS_HUGE length, char_int = 0;
+	RANDOM(length, int(average_length * V_STR_LOW), int(average_length * V_STR_HGH), seed);
+
+	auto &result = append_empty_string(info, NumericCast<idx_t>(length));
+	auto target = result.GetDataWriteable();
+	for (DSS_HUGE i = 0; i < length; i++) {
+		if (i % 5 == 0) {
+			RANDOM(char_int, 0, MAX_LONG, seed);
+		}
+		target[i] = ALPHA_NUM[char_int & 077];
+		char_int >>= 6;
+	}
+	result.Finalize();
+}
+
+static void AppendText(tpch_append_information &info, int average_length, seed_t *seed) {
+	const char *source;
+	auto length = dbg_text_source(int(average_length * V_STR_LOW), int(average_length * V_STR_HGH), seed, &source);
+	append_string_reference(info, source, NumericCast<idx_t>(length));
+}
+
+struct TPCHStringRef {
+	const char *data;
+	idx_t length;
+};
+
+static TPCHStringRef PickDistribution(distribution *set, seed_t *seed) {
+	long index = 0;
+	DSS_HUGE choice;
+
+	RANDOM(choice, 1, set->list[set->count - 1].weight, seed);
+	while (set->list[index].weight < choice) {
+		index++;
+	}
+	auto data = set->list[index].text;
+	return TPCHStringRef {data, NumericCast<idx_t>(set->list[index].length)};
+}
+
+static void AppendDistribution(tpch_append_information &info, distribution *set, seed_t *seed) {
+	auto entry = PickDistribution(set, seed);
+	append_string_reference(info, entry.data, entry.length);
+}
+
+static DSS_HUGE RetailPrice(DSS_HUGE part_key) {
+	DSS_HUGE price = 90000;
+	price += (part_key / 10) % 20001;
+	price += (part_key % 1000) * 100;
+	return price;
+}
+
+static DSS_HUGE PartSuppBridge(DBGenContext *ctx, DSS_HUGE part_key, DSS_HUGE supp_num) {
+	DSS_HUGE total_supplier_count = ctx->tdefs[SUPP].base * ctx->scale_factor;
+	return (part_key + supp_num * (total_supplier_count / SUPP_PER_PART + (long)((part_key - 1) / total_supplier_count))) %
+	           total_supplier_count +
+	       1;
+}
+
+static void AppendPartName(tpch_append_information &info, DBGenContext *ctx) {
+	permute_dist(&colors, &ctx->Seed[P_NAME_SD], ctx);
+	idx_t length = 0;
+	for (idx_t i = 0; i < P_NAME_SCL; i++) {
+		length += NumericCast<idx_t>(colors.list[ctx->permute[i]].length);
+	}
+	length += P_NAME_SCL - 1;
+
+	auto &result = append_empty_string(info, length);
+	auto target = result.GetDataWriteable();
+	for (idx_t i = 0; i < P_NAME_SCL; i++) {
+		auto &member = colors.list[ctx->permute[i]];
+		auto member_length = NumericCast<idx_t>(member.length);
+		auto member_text = member.text;
+		memcpy(target, member_text, member_length);
+		target += member_length;
+		if (i + 1 < P_NAME_SCL) {
+			*target++ = ' ';
+		}
+	}
+	result.Finalize();
+}
+
+static void AppendSupplierComment(tpch_append_information &info, DBGenContext *ctx) {
+	const char *source;
+	auto length = dbg_text_source(int(S_CMNT_LEN * V_STR_LOW), int(S_CMNT_LEN * V_STR_HGH), &ctx->Seed[S_CMNT_SD],
+	                              &source);
+	auto &result = append_empty_string(info, NumericCast<idx_t>(length));
+	auto target = result.GetDataWriteable();
+	memcpy(target, source, NumericCast<idx_t>(length));
+
+	DSS_HUGE bad_press, noise, offset, type;
+	RANDOM(bad_press, 1, 10000, &ctx->Seed[BBB_CMNT_SD]);
+	RANDOM(type, 0, 100, &ctx->Seed[BBB_TYPE_SD]);
+	RANDOM(noise, 0, (length - BBB_CMNT_LEN), &ctx->Seed[BBB_JNK_SD]);
+	RANDOM(offset, 0, (length - (BBB_CMNT_LEN + noise)), &ctx->Seed[BBB_OFFSET_SD]);
+	if (bad_press <= S_CMNT_BBB) {
+		type = (type < BBB_DEADBEATS) ? 0 : 1;
+		memcpy(target + offset, BBB_BASE, BBB_BASE_LEN);
+		if (type == 0) {
+			memcpy(target + BBB_BASE_LEN + offset + noise, BBB_COMPLAIN, BBB_TYPE_LEN);
+		} else {
+			memcpy(target + BBB_BASE_LEN + offset + noise, BBB_COMMEND, BBB_TYPE_LEN);
+		}
+	}
+	result.Finalize();
+}
+
+static void AppendManufacturer(tpch_append_information &info, DSS_HUGE manufacturer) {
+	AppendTaggedNumber(info, P_MFG_TAG, sizeof(P_MFG_TAG) - 1, manufacturer, 1);
+}
+
+static void AppendBrand(tpch_append_information &info, DSS_HUGE manufacturer, DSS_HUGE brand) {
+	AppendTaggedNumber(info, P_BRND_TAG, sizeof(P_BRND_TAG) - 1, manufacturer * 10 + brand, 2);
+}
+
+static void GenerateOrderLine(DSS_HUGE index, tpch_append_information *info, DBGenContext *ctx) {
+	auto &order_info = info[ORDER];
+	auto &line_info = info[LINE];
+	static const DSS_HUGE CURRENT_DATE_RAW = STARTDATE + unjulian(CURRENTDATE);
+
+	DSS_HUGE order_key;
+	mk_sparse(index, &order_key, 0);
+
+	DSS_HUGE cust_key;
+	if (ctx->scale_factor >= 30000) {
+		dss_random64(&cust_key, O_CKEY_MIN, O_CKEY_MAX, &ctx->Seed[O_CKEY_SD]);
+	} else {
+		RANDOM(cust_key, O_CKEY_MIN, O_CKEY_MAX, &ctx->Seed[O_CKEY_SD]);
+	}
+	int delta = 1;
+	while (cust_key % CUST_MORTALITY == 0) {
+		cust_key += delta;
+		cust_key = MIN(cust_key, O_CKEY_MAX);
+		delta *= -1;
+	}
+
+	DSS_HUGE order_date;
+	RANDOM(order_date, O_ODATE_MIN, O_ODATE_MAX, &ctx->Seed[O_ODATE_SD]);
+	auto order_priority = PickDistribution(&o_priority_set, &ctx->Seed[O_PRIO_SD]);
+	DSS_HUGE clerk_number;
+	RANDOM(clerk_number, 1, MAX((ctx->scale_factor * O_CLRK_SCL), O_CLRK_SCL), &ctx->Seed[O_CLRK_SD]);
+	const char *order_comment;
+	auto order_comment_length =
+	    dbg_text_source(int(O_CMNT_LEN * V_STR_LOW), int(O_CMNT_LEN * V_STR_HGH), &ctx->Seed[O_CMNT_SD],
+	                    &order_comment);
+
+	DSS_HUGE line_count;
+	RANDOM(line_count, O_LCNT_MIN, O_LCNT_MAX, &ctx->Seed[O_LCNT_SD]);
+
+	DSS_HUGE total_price = 0;
+	DSS_HUGE closed_line_count = 0;
+	for (DSS_HUGE line_number = 0; line_number < line_count; line_number++) {
+		DSS_HUGE quantity, discount, tax, part_key, supp_num, ship_date, commit_date, receipt_date;
+		RANDOM(quantity, L_QTY_MIN, L_QTY_MAX, &ctx->Seed[L_QTY_SD]);
+		RANDOM(discount, L_DCNT_MIN, L_DCNT_MAX, &ctx->Seed[L_DCNT_SD]);
+		RANDOM(tax, L_TAX_MIN, L_TAX_MAX, &ctx->Seed[L_TAX_SD]);
+		auto ship_instruct = PickDistribution(&l_instruct_set, &ctx->Seed[L_SHIP_SD]);
+		auto ship_mode = PickDistribution(&l_smode_set, &ctx->Seed[L_SMODE_SD]);
+		const char *line_comment;
+		auto line_comment_length =
+		    dbg_text_source(int(L_CMNT_LEN * V_STR_LOW), int(L_CMNT_LEN * V_STR_HGH), &ctx->Seed[L_CMNT_SD],
+		                    &line_comment);
+		if (ctx->scale_factor >= 30000) {
+			dss_random64(&part_key, L_PKEY_MIN, L_PKEY_MAX, &ctx->Seed[L_PKEY_SD]);
+		} else {
+			RANDOM(part_key, L_PKEY_MIN, L_PKEY_MAX, &ctx->Seed[L_PKEY_SD]);
+		}
+		auto retail_price = RetailPrice(part_key);
+		RANDOM(supp_num, 0, 3, &ctx->Seed[L_SKEY_SD]);
+		auto supp_key = PartSuppBridge(ctx, part_key, supp_num);
+		quantity *= 100;
+		auto extended_price = retail_price * quantity / 100;
+		total_price += ((extended_price * (100 - discount)) / PENNIES) * (100 + tax) / PENNIES;
+
+		RANDOM(ship_date, L_SDTE_MIN, L_SDTE_MAX, &ctx->Seed[L_SDTE_SD]);
+		ship_date += order_date;
+		RANDOM(commit_date, L_CDTE_MIN, L_CDTE_MAX, &ctx->Seed[L_CDTE_SD]);
+		commit_date += order_date;
+		RANDOM(receipt_date, L_RDTE_MIN, L_RDTE_MAX, &ctx->Seed[L_RDTE_SD]);
+		receipt_date += ship_date;
+
+		char return_flag = 'N';
+		if (receipt_date <= CURRENT_DATE_RAW) {
+			return_flag = PickDistribution(&l_rflag_set, &ctx->Seed[L_RFLG_SD]).data[0];
+		}
+		char line_status;
+		if (ship_date <= CURRENT_DATE_RAW) {
+			closed_line_count++;
+			line_status = 'F';
+		} else {
+			line_status = 'O';
+		}
+
+		append_begin_row(line_info);
+		append_int64(line_info, order_key);
+		append_int64(line_info, part_key);
+		append_int64(line_info, supp_key);
+		append_int64(line_info, line_number + 1);
+		append_decimal(line_info, quantity);
+		append_decimal(line_info, extended_price);
+		append_decimal(line_info, discount);
+		append_decimal(line_info, tax);
+		append_char(line_info, return_flag);
+		append_char(line_info, line_status);
+		append_date(line_info, ship_date);
+		append_date(line_info, commit_date);
+		append_date(line_info, receipt_date);
+		append_string_reference(line_info, ship_instruct.data, ship_instruct.length);
+		append_string_reference(line_info, ship_mode.data, ship_mode.length);
+		append_string_reference(line_info, line_comment, NumericCast<idx_t>(line_comment_length));
+		append_end_row(line_info);
+	}
+
+	char order_status = 'O';
+	if (closed_line_count > 0) {
+		order_status = 'P';
+	}
+	if (closed_line_count == line_count) {
+		order_status = 'F';
+	}
+
+	append_begin_row(order_info);
+	append_int64(order_info, order_key);
+	append_int64(order_info, cust_key);
+	append_char(order_info, order_status);
+	append_decimal(order_info, total_price);
+	append_date(order_info, order_date);
+	append_string_reference(order_info, order_priority.data, order_priority.length);
+	AppendTaggedNumber(order_info, O_CLRK_TAG, sizeof(O_CLRK_TAG) - 1, clerk_number, 9);
+	append_int32(order_info, 0);
+	append_string_reference(order_info, order_comment, NumericCast<idx_t>(order_comment_length));
+	append_end_row(order_info);
+}
+
+static void GenerateSupplier(DSS_HUGE index, tpch_append_information *info, DBGenContext *ctx) {
 	auto &append_info = info[SUPP];
-
 	append_begin_row(append_info);
-	// s_suppkey
-	append_int64(append_info, supp->suppkey);
-	// s_name
-	append_string(append_info, supp->name);
-	// s_address
-	append_string(append_info, supp->address, supp->alen);
-	// s_nationkey
-	append_int32(append_info, supp->nation_code);
-	// s_phone
-	append_string(append_info, supp->phone, PHONE_LEN);
-	// s_acctbal
-	append_decimal(append_info, supp->acctbal);
-	// s_comment
-	append_string(append_info, supp->comment, supp->clen);
+	append_int64(append_info, index);
+	AppendTaggedNumber(append_info, S_NAME_TAG, sizeof(S_NAME_TAG) - 1, index, 9);
+	AppendRandomAlphaNumeric(append_info, S_ADDR_LEN, &ctx->Seed[S_ADDR_SD]);
+	DSS_HUGE nation_code;
+	RANDOM(nation_code, 0, nations.count - 1, &ctx->Seed[S_NTRG_SD]);
+	append_int32(append_info, NumericCast<int32_t>(nation_code));
+	AppendPhone(append_info, nation_code, &ctx->Seed[S_PHNE_SD]);
+	DSS_HUGE acctbal;
+	RANDOM(acctbal, S_ABAL_MIN, S_ABAL_MAX, &ctx->Seed[S_ABAL_SD]);
+	append_decimal(append_info, acctbal);
+	AppendSupplierComment(append_info, ctx);
 	append_end_row(append_info);
 }
 
-static void append_cust(customer_t *c, tpch_append_information *info) {
+static void GenerateCustomer(DSS_HUGE index, tpch_append_information *info, DBGenContext *ctx) {
 	auto &append_info = info[CUST];
-
 	append_begin_row(append_info);
-	// c_custkey
-	append_int64(append_info, c->custkey);
-	// c_name
-	append_string(append_info, c->name);
-	// c_address
-	append_string(append_info, c->address, c->alen);
-	// c_nationkey
-	append_int32(append_info, c->nation_code);
-	// c_phone
-	append_string(append_info, c->phone, PHONE_LEN);
-	// c_acctbal
-	append_decimal(append_info, c->acctbal);
-	// c_mktsegment
-	append_string(append_info, c->mktsegment);
-	// c_comment
-	append_string(append_info, c->comment, c->clen);
+	append_int64(append_info, index);
+	AppendTaggedNumber(append_info, C_NAME_TAG, sizeof(C_NAME_TAG) - 1, index, 9);
+	AppendRandomAlphaNumeric(append_info, C_ADDR_LEN, &ctx->Seed[C_ADDR_SD]);
+	DSS_HUGE nation_code;
+	RANDOM(nation_code, 0, nations.count - 1, &ctx->Seed[C_NTRG_SD]);
+	append_int32(append_info, NumericCast<int32_t>(nation_code));
+	AppendPhone(append_info, nation_code, &ctx->Seed[C_PHNE_SD]);
+	DSS_HUGE acctbal;
+	RANDOM(acctbal, C_ABAL_MIN, C_ABAL_MAX, &ctx->Seed[C_ABAL_SD]);
+	append_decimal(append_info, acctbal);
+	AppendDistribution(append_info, &c_mseg_set, &ctx->Seed[C_MSEG_SD]);
+	AppendText(append_info, C_CMNT_LEN, &ctx->Seed[C_CMNT_SD]);
 	append_end_row(append_info);
 }
 
-static void append_part(part_t *part, tpch_append_information *info) {
-	auto &append_info = info[PART];
+static void GeneratePartAndPartsupp(DSS_HUGE index, tpch_append_information *info, DBGenContext *ctx) {
+	auto &part_info = info[PART];
+	append_begin_row(part_info);
+	append_int64(part_info, index);
+	AppendPartName(part_info, ctx);
+	DSS_HUGE manufacturer;
+	RANDOM(manufacturer, P_MFG_MIN, P_MFG_MAX, &ctx->Seed[P_MFG_SD]);
+	AppendManufacturer(part_info, manufacturer);
+	DSS_HUGE brand;
+	RANDOM(brand, P_BRND_MIN, P_BRND_MAX, &ctx->Seed[P_BRND_SD]);
+	AppendBrand(part_info, manufacturer, brand);
+	AppendDistribution(part_info, &p_types_set, &ctx->Seed[P_TYPE_SD]);
+	DSS_HUGE size;
+	RANDOM(size, P_SIZE_MIN, P_SIZE_MAX, &ctx->Seed[P_SIZE_SD]);
+	append_int32(part_info, NumericCast<int32_t>(size));
+	AppendDistribution(part_info, &p_cntr_set, &ctx->Seed[P_CNTR_SD]);
+	append_decimal(part_info, RetailPrice(index));
+	AppendText(part_info, P_CMNT_LEN, &ctx->Seed[P_CMNT_SD]);
+	append_end_row(part_info);
 
-	append_begin_row(append_info);
-	// p_partkey
-	append_int64(append_info, part->partkey);
-	// p_name
-	append_string(append_info, part->name, part->nlen);
-	// p_mfgr
-	append_string(append_info, part->mfgr, sizeof(P_MFG_TAG));
-	// p_brand
-	append_string(append_info, part->brand, sizeof(P_BRND_TAG) + 1);
-	// p_type
-	append_string(append_info, part->type, part->tlen);
-	// p_size
-	append_int32(append_info, part->size);
-	// p_container
-	append_string(append_info, part->container);
-	// p_retailprice
-	append_decimal(append_info, part->retailprice);
-	// p_comment
-	append_string(append_info, part->comment, part->clen);
-	append_end_row(append_info);
-}
-
-static void append_psupp(part_t *part, tpch_append_information *info) {
-	auto &append_info = info[PSUPP];
-	for (size_t i = 0; i < SUPP_PER_PART; i++) {
-		append_begin_row(append_info);
-		// ps_partkey
-		append_int64(append_info, part->s[i].partkey);
-		// ps_suppkey
-		append_int64(append_info, part->s[i].suppkey);
-		// ps_availqty
-		append_int64(append_info, part->s[i].qty);
-		// ps_supplycost
-		append_decimal(append_info, part->s[i].scost);
-		// ps_comment
-		append_string(append_info, part->s[i].comment, part->s[i].clen);
-		append_end_row(append_info);
+	auto &partsupp_info = info[PSUPP];
+	for (DSS_HUGE supp_num = 0; supp_num < SUPP_PER_PART; supp_num++) {
+		append_begin_row(partsupp_info);
+		append_int64(partsupp_info, index);
+		append_int64(partsupp_info, PartSuppBridge(ctx, index, supp_num));
+		DSS_HUGE quantity;
+		RANDOM(quantity, PS_QTY_MIN, PS_QTY_MAX, &ctx->Seed[PS_QTY_SD]);
+		append_int64(partsupp_info, quantity);
+		DSS_HUGE supply_cost;
+		RANDOM(supply_cost, PS_SCST_MIN, PS_SCST_MAX, &ctx->Seed[PS_SCST_SD]);
+		append_decimal(partsupp_info, supply_cost);
+		AppendText(partsupp_info, PS_CMNT_LEN, &ctx->Seed[PS_CMNT_SD]);
+		append_end_row(partsupp_info);
 	}
 }
 
-static void append_part_psupp(part_t *part, tpch_append_information *info) {
-	append_part(part, info);
-	append_psupp(part, info);
-}
-
-static void append_nation(code_t *c, tpch_append_information *info) {
+static void GenerateNation(DSS_HUGE index, tpch_append_information *info, DBGenContext *ctx) {
 	auto &append_info = info[NATION];
-
 	append_begin_row(append_info);
-	// n_nationkey
-	append_int32(append_info, c->code);
-	// n_name
-	append_string(append_info, c->text);
-	// n_regionkey
-	append_int32(append_info, c->join);
-	// n_comment
-	append_string(append_info, c->comment, c->clen);
+	append_int32(append_info, NumericCast<int32_t>(index - 1));
+	append_string_reference(append_info, nations.list[index - 1].text, NumericCast<idx_t>(nations.list[index - 1].length));
+	append_int32(append_info, NumericCast<int32_t>(nations.list[index - 1].weight));
+	AppendText(append_info, N_CMNT_LEN, &ctx->Seed[N_CMNT_SD]);
 	append_end_row(append_info);
 }
 
-static void append_region(code_t *c, tpch_append_information *info) {
+static void GenerateRegion(DSS_HUGE index, tpch_append_information *info, DBGenContext *ctx) {
 	auto &append_info = info[REGION];
-
 	append_begin_row(append_info);
-	// r_regionkey
-	append_int32(append_info, c->code);
-	// r_name
-	append_string(append_info, c->text);
-	// r_comment
-	append_string(append_info, c->comment, c->clen);
+	append_int32(append_info, NumericCast<int32_t>(index - 1));
+	append_string_reference(append_info, regions.list[index - 1].text, NumericCast<idx_t>(regions.list[index - 1].length));
+	AppendText(append_info, R_CMNT_LEN, &ctx->Seed[R_CMNT_SD]);
 	append_end_row(append_info);
 }
 
 static void gen_tbl(ClientContext &context, int tnum, DSS_HUGE count, tpch_append_information *info,
                     DBGenContext *dbgen_ctx, idx_t offset = 0) {
-	order_t o;
-	supplier_t supp;
-	customer_t cust;
-	part_t part;
-	code_t code;
-
 	for (DSS_HUGE i = offset + 1; count; count--, i++) {
 		if (count % 1000 == 0) {
 			context.InterruptCheck();
@@ -445,30 +607,24 @@ static void gen_tbl(ClientContext &context, int tnum, DSS_HUGE count, tpch_appen
 		case LINE:
 		case ORDER:
 		case ORDER_LINE:
-			mk_order(i, &o, dbgen_ctx, 0);
-			append_order_line(&o, info);
+			GenerateOrderLine(i, info, dbgen_ctx);
 			break;
 		case SUPP:
-			mk_supp(i, &supp, dbgen_ctx);
-			append_supp(&supp, info);
+			GenerateSupplier(i, info, dbgen_ctx);
 			break;
 		case CUST:
-			mk_cust(i, &cust, dbgen_ctx);
-			append_cust(&cust, info);
+			GenerateCustomer(i, info, dbgen_ctx);
 			break;
 		case PSUPP:
 		case PART:
 		case PART_PSUPP:
-			mk_part(i, &part, dbgen_ctx);
-			append_part_psupp(&part, info);
+			GeneratePartAndPartsupp(i, info, dbgen_ctx);
 			break;
 		case NATION:
-			mk_nation(i, &code, dbgen_ctx);
-			append_nation(&code, info);
+			GenerateNation(i, info, dbgen_ctx);
 			break;
 		case REGION:
-			mk_region(i, &code, dbgen_ctx);
-			append_region(&code, info);
+			GenerateRegion(i, info, dbgen_ctx);
 			break;
 		}
 		row_stop_h(tnum, dbgen_ctx);
