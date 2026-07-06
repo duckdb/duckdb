@@ -121,8 +121,15 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 				state.SetPipelineSource(current, *cte_source);
 				return;
 			}
-			current.AddDataflowDependency(cte_dependency);
-			state.SetPipelineSource(current, *cte_source);
+			if (cte.ShouldUseBufferedConsumer(current)) {
+				current.AddDataflowDependency(cte_dependency);
+				state.SetPipelineSource(current, *cte_source);
+				return;
+			}
+			D_ASSERT(collection);
+			cte.RegisterMaterializedConsumer(source.consumer_idx);
+			current.AddDependency(cte_dependency);
+			state.SetPipelineSource(current, *this);
 			return;
 		}
 		auto entry = state.cte_dependencies.find(*this);

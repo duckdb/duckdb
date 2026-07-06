@@ -245,6 +245,37 @@ bool Pipeline::CanUseExternalInput() const {
 	return true;
 }
 
+static bool CanStopSourceEarlyOperator(const PhysicalOperator &op) {
+	switch (op.type) {
+	case PhysicalOperatorType::STREAMING_LIMIT:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool CanStopSourceEarlySink(const PhysicalOperator &op) {
+	switch (op.type) {
+	case PhysicalOperatorType::LIMIT:
+	case PhysicalOperatorType::LIMITED_DISTINCT:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool Pipeline::CanStopSourceEarly() const {
+	if (sink && CanStopSourceEarlySink(*sink)) {
+		return true;
+	}
+	for (auto &op_ref : operators) {
+		if (CanStopSourceEarlyOperator(op_ref.get())) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void Pipeline::Schedule(shared_ptr<Event> &event) {
 	D_ASSERT(ready);
 	D_ASSERT(sink);

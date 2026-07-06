@@ -47,7 +47,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) 
 
 	auto &cte = Make<PhysicalCTE>(op.ctename, op.table_index, right.types, left, right, op.estimated_cardinality);
 	auto &cast_cte = cte.Cast<PhysicalCTE>();
-	cast_cte.working_table = exchange ? nullptr : working_table;
+	cast_cte.working_table = working_table;
 	cast_cte.exchange = exchange;
 	cast_cte.cte_scans = materialized_ctes[op.table_index];
 	cast_cte.cte_body_is_dml = cte_body_is_dml;

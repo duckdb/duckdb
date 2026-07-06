@@ -67,6 +67,8 @@ public:
 	TableIndex table_index;
 	Identifier ctename;
 	bool cte_body_is_dml = false;
+	bool has_materialized_consumers = false;
+	idx_t materialized_consumer_count = 0;
 
 public:
 	// Sink interface
@@ -99,6 +101,10 @@ public:
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 	bool TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx);
+	bool ShouldUseBufferedConsumer(Pipeline &pipeline) const;
+	void RegisterMaterializedConsumer(idx_t consumer_idx);
+	bool UseStreamingExchange() const;
+	bool RequiresMaterialization() const;
 
 	vector<const_reference<PhysicalOperator>> GetSources() const override;
 };

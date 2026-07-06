@@ -245,8 +245,14 @@ PipelineBroadcastExchangeLocalState::PipelineBroadcastExchangeLocalState(ClientC
 	vector<reference<Pipeline>> direct_pipeline_refs;
 	{
 		lock_guard<mutex> guard(exchange.lock);
-		direct_only = !exchange.consumers.empty() && exchange.active_consumers == 0 &&
-		              exchange.direct_pipelines.size() == exchange.consumers.size();
+		idx_t exchange_consumers = 0;
+		for (auto &consumer : exchange.consumers) {
+			if (!consumer.disabled) {
+				exchange_consumers++;
+			}
+		}
+		direct_only = exchange_consumers > 0 && exchange.active_consumers == 0 &&
+		              exchange.direct_pipelines.size() == exchange_consumers;
 		direct_pipeline_refs = exchange.direct_pipelines;
 	}
 
@@ -281,6 +287,29 @@ idx_t PipelineBroadcastExchange::RegisterConsumer() {
 	return consumers.size() - 1;
 }
 
+bool PipelineBroadcastExchange::DisableConsumer(idx_t consumer_idx) {
+	lock_guard<mutex> guard(lock);
+	D_ASSERT(consumer_idx < consumers.size());
+	auto &consumer = consumers[consumer_idx];
+	if (consumer.disabled) {
+		return false;
+	}
+	D_ASSERT(!consumer.direct);
+	if (consumer.active) {
+		D_ASSERT(active_consumers > 0);
+		active_consumers--;
+	}
+	consumer.disabled = true;
+	consumer.active = false;
+	consumer.position = next_position;
+	consumer.detached = false;
+	consumer.read_in_progress = false;
+	consumer.read_position = next_position;
+	consumer.shared_reader.reset();
+	ClearDetachedBufferLocked(consumer);
+	return true;
+}
+
 bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx) {
 	if (!pipeline.CanUseExternalInput()) {
 		return false;
@@ -288,6 +317,7 @@ bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, id
 	lock_guard<mutex> guard(lock);
 	D_ASSERT(consumer_idx < consumers.size());
 	auto &consumer = consumers[consumer_idx];
+	D_ASSERT(!consumer.disabled);
 	if (consumer.direct) {
 		return true;
 	}
@@ -325,7 +355,7 @@ void PipelineBroadcastExchange::Reset() {
 		for (auto &consumer : consumers) {
 			consumer.position = base_position;
 			consumer.rows_read = 0;
-			consumer.active = !consumer.direct;
+			consumer.active = !consumer.disabled && !consumer.direct;
 			if (consumer.active) {
 				active_consumers++;
 			}
@@ -766,9 +796,20 @@ idx_t PipelineBroadcastExchange::MaxThreads() const {
 	return MaxValue<idx_t>(max_threads, 1);
 }
 
-idx_t PipelineBroadcastExchange::ConsumerCount() const {
+idx_t PipelineBroadcastExchange::RegisteredConsumerCount() const {
 	lock_guard<mutex> guard(lock);
 	return consumers.size();
+}
+
+idx_t PipelineBroadcastExchange::ConsumerCount() const {
+	lock_guard<mutex> guard(lock);
+	idx_t count = 0;
+	for (auto &consumer : consumers) {
+		if (!consumer.disabled) {
+			count++;
+		}
+	}
+	return count;
 }
 
 idx_t PipelineBroadcastExchange::DirectConsumerCount() const {

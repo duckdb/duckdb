@@ -29,7 +29,13 @@ query II
 EXPLAIN ANALYZE WITH d AS (SELECT i AS a FROM range(10) tbl(i))
 SELECT * FROM (SELECT sum(a) FROM d), (SELECT a FROM d ORDER BY a LIMIT 1);
 ----
-analyzed_plan	<REGEX>:.*Fanout Mode: MIXED.*Direct Consumers: 1.*Buffered Consumers: 1.*
+analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Fanout Mode: DIRECT.*Direct Consumers: 1.*Buffered Consumers: 0.*Materialized Consumers: 1.*
+
+query II
+EXPLAIN ANALYZE WITH d AS (SELECT i AS a FROM range(10) tbl(i))
+SELECT * FROM (SELECT sum(a) FROM d), (SELECT a FROM d LIMIT 1);
+----
+analyzed_plan	<REGEX>:.*Execution Mode: STREAMING_FANOUT.*Fanout Mode: MIXED.*Direct Consumers: 1.*Buffered Consumers: 1.*
 
 query II
 WITH t(x) AS MATERIALIZED (SELECT t FROM generate_series(1,3) AS _(t)) SELECT t1.x,1 as y FROM t AS t1 ORDER BY x;
@@ -160,7 +166,7 @@ SELECT count(*)
 FROM d lhs
 WHERE v < (SELECT avg(v) + 1 FROM d rhs WHERE rhs.k = lhs.k);
 ----
-analyzed_plan	<REGEX>:.*Fanout Mode: MIXED.*Direct Consumers: 1.*Buffered Consumers: 1.*
+analyzed_plan	<REGEX>:.*Execution Mode: HYBRID_FANOUT.*Fanout Mode: DIRECT.*Direct Consumers: 1.*Buffered Consumers: 0.*Materialized Consumers: 1.*
 
 query IIII
 WITH d AS (

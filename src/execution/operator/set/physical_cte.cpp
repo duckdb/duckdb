@@ -98,12 +98,14 @@ PhysicalCTE::~PhysicalCTE() {
 class CTEGlobalState : public GlobalSinkState {
 public:
 	explicit CTEGlobalState(ClientContext &context, const PhysicalCTE &op)
-	    : op(op), working_table_ref(op.working_table.get()), exchange(op.exchange) {
+	    : op(op), working_table_ref(op.working_table.get()),
+	      exchange(op.UseStreamingExchange() ? op.exchange : nullptr), materialize(op.RequiresMaterialization()) {
 		ResetState(context);
 	}
 	const PhysicalCTE &op;
 	optional_ptr<ColumnDataCollection> working_table_ref;
 	shared_ptr<PipelineBroadcastExchange> exchange;
+	bool materialize;
 
 	mutex lhs_lock;
 
@@ -111,10 +113,13 @@ private:
 	void ResetState(ClientContext &context) {
 		if (exchange) {
 			exchange->Reset();
-			working_table_ref = nullptr;
-		} else {
+		}
+		if (materialize) {
+			D_ASSERT(op.working_table);
 			op.working_table->Reset();
 			working_table_ref = op.working_table.get();
+		} else {
+			working_table_ref = nullptr;
 		}
 		GlobalSinkState::Reset(context);
 	}
@@ -136,11 +141,15 @@ public:
 
 class CTELocalState : public LocalSinkState {
 public:
-	explicit CTELocalState(ClientContext &context, const PhysicalCTE &op) : materialized_mode(!op.exchange) {
-		if (materialized_mode) {
+	explicit CTELocalState(ClientContext &context, const PhysicalCTE &op)
+	    : materialize(op.RequiresMaterialization()), use_exchange(op.UseStreamingExchange()) {
+		if (materialize) {
+			D_ASSERT(op.working_table);
 			lhs_data = make_uniq<ColumnDataCollection>(context, op.working_table->Types());
 			lhs_data->InitializeAppend(append_state);
-		} else {
+		}
+		if (use_exchange) {
+			D_ASSERT(op.exchange);
 			exchange_state = op.exchange->GetLocalState(context);
 		}
 	}
@@ -148,11 +157,13 @@ public:
 	unique_ptr<LocalSinkState> distinct_state;
 	unique_ptr<ColumnDataCollection> lhs_data;
 	ColumnDataAppendState append_state;
-	bool materialized_mode;
+	bool materialize;
+	bool use_exchange;
+	bool combined = false;
 	unique_ptr<PipelineBroadcastExchangeLocalState> exchange_state;
 
 	void Append(DataChunk &input) {
-		D_ASSERT(materialized_mode);
+		D_ASSERT(materialize);
 		D_ASSERT(lhs_data);
 		lhs_data->Append(append_state, input);
 	}
@@ -170,32 +181,45 @@ unique_ptr<LocalSinkState> PhysicalCTE::GetLocalSinkState(ExecutionContext &cont
 SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<CTEGlobalState>();
 	auto &lstate = input.local_state.Cast<CTELocalState>();
-	if (exchange) {
+	SinkResultType result = SinkResultType::NEED_MORE_INPUT;
+	if (lstate.use_exchange) {
 		D_ASSERT(gstate.exchange);
 		D_ASSERT(lstate.exchange_state);
-		return gstate.exchange->Push(chunk, *lstate.exchange_state, input.interrupt_state);
+		result = gstate.exchange->Push(chunk, *lstate.exchange_state, input.interrupt_state);
+		if (result == SinkResultType::BLOCKED) {
+			return result;
+		}
 	}
-	lstate.Append(chunk);
+	if (lstate.materialize) {
+		lstate.Append(chunk);
+		return SinkResultType::NEED_MORE_INPUT;
+	}
 
-	return SinkResultType::NEED_MORE_INPUT;
+	return result;
 }
 
 SinkCombineResultType PhysicalCTE::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &lstate = input.local_state.Cast<CTELocalState>();
-	if (exchange) {
+	if (lstate.use_exchange) {
 		D_ASSERT(lstate.exchange_state);
-		return exchange->FinishLocal(*lstate.exchange_state, input.interrupt_state);
+		auto result = exchange->FinishLocal(*lstate.exchange_state, input.interrupt_state);
+		if (result == SinkCombineResultType::BLOCKED) {
+			return result;
+		}
 	}
-	auto &gstate = input.global_state.Cast<CTEGlobalState>();
-	D_ASSERT(lstate.lhs_data);
-	gstate.MergeIT(*lstate.lhs_data);
+	if (lstate.materialize && !lstate.combined) {
+		auto &gstate = input.global_state.Cast<CTEGlobalState>();
+		D_ASSERT(lstate.lhs_data);
+		gstate.MergeIT(*lstate.lhs_data);
+		lstate.combined = true;
+	}
 
 	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalCTE::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                        OperatorSinkFinalizeInput &input) const {
-	if (exchange) {
+	if (exchange && UseStreamingExchange()) {
 		auto &gstate = input.global_state.Cast<CTEGlobalState>();
 		gstate.exchange->Finish();
 		gstate.exchange->FinishDirectConsumers();
@@ -236,6 +260,10 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 
 	children[1].get().BuildPipelines(current, meta_pipeline);
 
+	if (exchange && !UseStreamingExchange()) {
+		auto cte_pipeline = child_meta_pipeline.GetBasePipeline();
+		current.AddDependency(cte_pipeline);
+	}
 	if (exchange && last_child_ptr && !current.HasDataflowDependencies()) {
 		for (auto &dml_pipeline : dml_pipelines) {
 			current.AddDependency(dml_pipeline);
@@ -253,6 +281,32 @@ bool PhysicalCTE::TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_i
 	return exchange->TryRegisterDirectConsumer(pipeline, consumer_idx);
 }
 
+bool PhysicalCTE::ShouldUseBufferedConsumer(Pipeline &pipeline) const {
+	if (!exchange) {
+		return false;
+	}
+	if (exchange->RegisteredConsumerCount() == 1) {
+		return true;
+	}
+	return pipeline.CanStopSourceEarly();
+}
+
+void PhysicalCTE::RegisterMaterializedConsumer(idx_t consumer_idx) {
+	D_ASSERT(exchange);
+	if (exchange->DisableConsumer(consumer_idx)) {
+		has_materialized_consumers = true;
+		materialized_consumer_count++;
+	}
+}
+
+bool PhysicalCTE::UseStreamingExchange() const {
+	return exchange && exchange->ConsumerCount() > 0;
+}
+
+bool PhysicalCTE::RequiresMaterialization() const {
+	return !exchange || has_materialized_consumers;
+}
+
 vector<const_reference<PhysicalOperator>> PhysicalCTE::GetSources() const {
 	return children[1].get().GetSources();
 }
@@ -261,11 +315,19 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename.GetIdentifierName();
 	result["Table Index"] = StringUtil::Format("%llu", table_index.index);
-	result["Execution Mode"] = exchange ? "STREAMING_FANOUT" : "MATERIALIZED";
-	if (exchange && exchange->RunToCompletion()) {
+	auto use_exchange = UseStreamingExchange();
+	auto materialize = RequiresMaterialization();
+	if (use_exchange && materialize) {
+		result["Execution Mode"] = "HYBRID_FANOUT";
+	} else if (use_exchange) {
+		result["Execution Mode"] = "STREAMING_FANOUT";
+	} else {
+		result["Execution Mode"] = "MATERIALIZED";
+	}
+	if (use_exchange && exchange->RunToCompletion()) {
 		result["Run To Completion"] = "true";
 	}
-	if (exchange) {
+	if (use_exchange) {
 		auto direct_count = exchange->DirectConsumerCount();
 		auto consumer_count = exchange->ConsumerCount();
 		D_ASSERT(direct_count <= consumer_count);
@@ -281,6 +343,9 @@ InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 		result["Direct Consumers"] = StringUtil::Format("%llu", direct_count);
 		result["Buffered Consumers"] = StringUtil::Format("%llu", buffered_count);
 		result["Chunk Storage"] = buffered_count == 0 ? "NONE" : "POOLED/COLUMN_DATA";
+	}
+	if (materialized_consumer_count > 0) {
+		result["Materialized Consumers"] = StringUtil::Format("%llu", materialized_consumer_count);
 	}
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;

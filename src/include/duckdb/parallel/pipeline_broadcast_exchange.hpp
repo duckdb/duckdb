@@ -56,6 +56,7 @@ public:
 	unique_ptr<PipelineBroadcastExchangeLocalState> GetLocalState(ClientContext &context) const;
 
 	idx_t RegisterConsumer();
+	bool DisableConsumer(idx_t consumer_idx);
 	bool TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx);
 	void Reset();
 
@@ -74,6 +75,7 @@ public:
 	ProgressData ScanProgress(idx_t consumer_idx, idx_t estimated_cardinality) const;
 	ProgressData SinkProgress(const ProgressData &source_progress, idx_t estimated_cardinality) const;
 	idx_t MaxThreads() const;
+	idx_t RegisteredConsumerCount() const;
 	idx_t ConsumerCount() const;
 	idx_t DirectConsumerCount() const;
 	bool HasBufferedConsumers() const;
@@ -99,6 +101,7 @@ private:
 		idx_t position = 0;
 		idx_t rows_read = 0;
 		bool active = true;
+		bool disabled = false;
 		bool direct = false;
 		bool detached = false;
 		bool read_in_progress = false;

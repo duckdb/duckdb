@@ -116,6 +116,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 		auto &cast_chunk_scan = chunk_scan.Cast<PhysicalColumnDataScan>();
 		auto exchange = materialized_cte_exchanges.find(op.cte_index);
 		if (exchange != materialized_cte_exchanges.end()) {
+			auto cte = recursive_cte_tables.find(op.cte_index);
+			if (cte == recursive_cte_tables.end()) {
+				throw InvalidInputException("Referenced materialized CTE does not exist.");
+			}
+			cast_chunk_scan.collection = cte->second.get();
 			auto consumer_idx = exchange->second->RegisterConsumer();
 			auto &source = Make<PhysicalCTEConsumerSource>(op.chunk_types, op.estimated_cardinality, op.cte_index,
 			                                               exchange->second, consumer_idx);

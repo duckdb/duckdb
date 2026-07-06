@@ -143,6 +143,7 @@ public:
 	void SetExternalInputEvent(shared_ptr<Event> event);
 	void CompleteExternalInput();
 	bool CanUseExternalInput() const;
+	bool CanStopSourceEarly() const;
 
 	//! Registers a new batch index for a pipeline executor - returns the current minimum batch index
 	idx_t RegisterNewBatchIndex();
