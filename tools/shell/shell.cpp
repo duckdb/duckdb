@@ -89,6 +89,7 @@
 #include "duckdb.hpp"
 #include "shell_renderer.hpp"
 #include "shell_highlight.hpp"
+#include "shell_manual.hpp"
 #include "shell_state.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/client_config.hpp"
@@ -2281,6 +2282,144 @@ GROUP BY ALL;
 		result.push_back(std::move(table));
 	}
 	RenderTableMetadata(result);
+	return MetadataResult::SUCCESS;
+}
+
+//! Convert a LIST(VARCHAR) Value into a vector of strings (NULL children become "").
+static vector<string> ManualStringList(const duckdb::Value &value) {
+	vector<string> result;
+	if (value.IsNull()) {
+		return result;
+	}
+	for (auto &child : duckdb::ListValue::GetChildren(value)) {
+		result.push_back(child.IsNull() ? "" : child.ToString());
+	}
+	return result;
+}
+
+MetadataResult ShellState::DisplayManual(const vector<string> &args) {
+	if (args.size() != 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	auto &con = *conn;
+	// the argument is used directly as a case-insensitive LIKE pattern: a plain word matches exactly,
+	// while wildcards ("%abs") are honored. A pattern may resolve to several distinct functions - each
+	// is rendered as its own manual entry
+	auto prepared = con.Prepare(R"(
+SELECT function_name, function_type, return_type, parameters, parameter_types, varargs, description, examples,
+       database_name, schema_name
+FROM duckdb_functions()
+WHERE function_name ILIKE ?
+ORDER BY function_name, function_type, database_name, schema_name, length(parameter_types), parameter_types)");
+	if (prepared->HasError()) {
+		PrintDatabaseError(prepared->GetError());
+		return MetadataResult::FAIL;
+	}
+	duckdb::vector<duckdb::Value> bind_values;
+	bind_values.emplace_back(args[1]);
+	auto query_result = prepared->Execute(bind_values);
+	if (query_result->HasError()) {
+		PrintDatabaseError(query_result->GetError());
+		return MetadataResult::FAIL;
+	}
+
+	// coloring is only applied on an interactive console (matching the shell's SQL highlighter)
+	bool use_color = ShellHighlight::IsEnabled() && stdin_is_interactive && stdout_is_console;
+	// signature styling: parameter names in gray italic, parameter/return types bold
+	string name_color, type_color, color_off;
+	if (use_color) {
+		name_color = ShellHighlight::TerminalCode(PrintColor::GRAY, PrintIntensity::ITALIC);
+		type_color = ShellHighlight::TerminalCode(PrintColor::STANDARD, PrintIntensity::BOLD);
+		color_off = ShellHighlight::ResetTerminalCode();
+	}
+
+	vector<ManualOverload> overloads;
+	for (auto &row : *query_result) {
+		string function_name = row.GetValue<string>(0);
+		string return_type = row.IsNull(2) ? string() : row.GetValue<string>(2);
+		auto parameters = ManualStringList(row.GetBaseValue(3));
+		auto parameter_types = ManualStringList(row.GetBaseValue(4));
+		string varargs = row.IsNull(5) ? string() : row.GetValue<string>(5);
+
+		ManualOverload overload;
+		overload.function_name = function_name;
+		overload.function_type = row.GetValue<string>(1);
+		overload.schema_path = row.GetValue<string>(8) + "." + row.GetValue<string>(9);
+		overload.signature = BuildSignature(function_name, parameters, parameter_types, varargs, return_type,
+		                                    name_color, type_color, color_off);
+		overload.description = row.IsNull(6) ? string() : row.GetValue<string>(6);
+		overload.examples = ManualStringList(row.GetBaseValue(7));
+		overloads.push_back(std::move(overload));
+	}
+
+	if (overloads.empty()) {
+		PrintF(PrintOutput::STDERR, "No function matches '%s'\n", args[1]);
+		// suggest similarly-named functions (typo tolerance) via Jaro-Winkler similarity
+		auto suggest_prepared = con.Prepare(R"(
+SELECT name FROM (
+  SELECT min(function_name) AS name, max(jaro_winkler_similarity(lower(function_name), lower(?))) AS score
+  FROM duckdb_functions()
+  GROUP BY lower(function_name)
+)
+WHERE score >= 0.7
+ORDER BY score DESC, name
+LIMIT 5)");
+		if (!suggest_prepared->HasError()) {
+			duckdb::vector<duckdb::Value> suggest_values;
+			suggest_values.emplace_back(args[1]);
+			auto suggest_result = suggest_prepared->Execute(suggest_values);
+			if (!suggest_result->HasError()) {
+				vector<string> suggestions;
+				for (auto &row : *suggest_result) {
+					suggestions.push_back(row.GetValue<string>(0));
+				}
+				if (!suggestions.empty()) {
+					Print(PrintOutput::STDERR, "\nDid you mean:\n");
+					for (auto &suggestion : suggestions) {
+						PrintF(PrintOutput::STDERR, "\t%s\n", suggestion.c_str());
+					}
+				}
+			}
+		}
+		return MetadataResult::SUCCESS;
+	}
+
+	// page width: terminal width, clamped to a readable range
+	idx_t content_width = GetMaxRenderWidth();
+	content_width = duckdb::MaxValue<idx_t>(40, duckdb::MinValue<idx_t>(content_width, 98));
+
+	// style the structural elements: reference markers/rules like the EXPLAIN layout (gray), section
+	// headings and the banner name in bold white, and the header schema path / entry type in white
+	ManualStyle style;
+	if (use_color) {
+		auto &layout = ShellHighlight::GetHighlightElement(HighlightElementType::EXPLAIN_LAYOUT);
+		style.layout_on = ShellHighlight::TerminalCode(layout.color, layout.intensity);
+		if (!style.layout_on.empty()) {
+			style.layout_off = ShellHighlight::ResetTerminalCode();
+		}
+		style.heading_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::BOLD);
+		style.heading_off = ShellHighlight::ResetTerminalCode();
+		style.path_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::STANDARD);
+		style.path_off = ShellHighlight::ResetTerminalCode();
+	}
+
+	// syntax-highlight the examples using the shell's SQL highlighter (no-op off-console)
+	ManualHighlighter highlighter = [this](const string &text) {
+		string highlighted = text;
+		HighlightSQL(highlighted);
+		return highlighted;
+	};
+	string page = RenderManualPage(overloads, args[1], content_width, style, highlighter);
+
+	// page the output when it is long (respecting the user's .pager mode); no-op off an interactive console
+	idx_t line_count = 0;
+	for (auto c : page) {
+		if (c == '\n') {
+			line_count++;
+		}
+	}
+	auto pager_setup = ShouldUsePager(line_count) ? SetupPager() : nullptr;
+	Print(page);
 	return MetadataResult::SUCCESS;
 }
 

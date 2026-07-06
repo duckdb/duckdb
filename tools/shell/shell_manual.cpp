@@ -179,14 +179,6 @@ public:
 		}
 	}
 
-	//! A word-wrapped block whose lines start at `indent` columns (used for a multi-reference list).
-	void Wrapped(idx_t indent, const string &text) {
-		idx_t budget = width > indent + 4 ? width - indent : 4;
-		for (auto &chunk : WordWrap(text, budget)) {
-			lines.push_back(string(indent, ' ') + chunk);
-		}
-	}
-
 	//! A word-wrapped entry whose `marker` sits in the indent gap on the first line, with the text
 	//! aligned at `level`; continuation lines are indented to `level`.
 	void Item(idx_t level, const string &marker, const string &text) {
@@ -293,16 +285,20 @@ string FormatRefs(const vector<idx_t> &numbers, const std::function<string(const
 	return result;
 }
 
-//! Bucket overloads by a string key, preserving first-appearance order and dropping empty content.
-vector<ContentGroup> GroupByDescription(const vector<NumberedOverload> &overloads) {
+//! Bucket overloads into content groups, preserving first-appearance order. `key` returns the grouping
+//! key for an overload (empty to skip it); `fill` initializes a freshly-created group's content.
+vector<ContentGroup> GroupBy(const vector<NumberedOverload> &overloads,
+                             const std::function<string(const ManualOverload &)> &key,
+                             const std::function<void(ContentGroup &, const ManualOverload &)> &fill) {
 	vector<ContentGroup> groups;
 	for (auto &entry : overloads) {
-		if (entry.overload->description.empty()) {
+		string group_key = key(*entry.overload);
+		if (group_key.empty()) {
 			continue;
 		}
 		bool found = false;
 		for (auto &group : groups) {
-			if (group.text == entry.overload->description) {
+			if (group.text == group_key) {
 				group.numbers.push_back(entry.number);
 				found = true;
 				break;
@@ -311,39 +307,30 @@ vector<ContentGroup> GroupByDescription(const vector<NumberedOverload> &overload
 		if (!found) {
 			ContentGroup group;
 			group.numbers.push_back(entry.number);
-			group.text = entry.overload->description;
+			group.text = group_key;
+			fill(group, *entry.overload);
 			groups.push_back(std::move(group));
 		}
 	}
 	return groups;
 }
 
-//! Bucket overloads by their example list, preserving first-appearance order and dropping empties.
+//! Group overloads by their (identical) description text.
+vector<ContentGroup> GroupByDescription(const vector<NumberedOverload> &overloads) {
+	return GroupBy(
+	    overloads, [](const ManualOverload &overload) { return overload.description; },
+	    [](ContentGroup &, const ManualOverload &) {});
+}
+
+//! Group overloads by their (identical) example list, keyed on the joined examples.
 vector<ContentGroup> GroupByExamples(const vector<NumberedOverload> &overloads) {
-	vector<ContentGroup> groups;
-	for (auto &entry : overloads) {
-		if (entry.overload->examples.empty()) {
-			continue;
-		}
-		// join with a separator that cannot appear inside a single example to key the group
-		string key = StringUtil::Join(entry.overload->examples, "\n\x01\n");
-		bool found = false;
-		for (auto &group : groups) {
-			if (group.text == key) {
-				group.numbers.push_back(entry.number);
-				found = true;
-				break;
-			}
-		}
-		if (!found) {
-			ContentGroup group;
-			group.numbers.push_back(entry.number);
-			group.text = key;
-			group.examples = entry.overload->examples;
-			groups.push_back(std::move(group));
-		}
-	}
-	return groups;
+	return GroupBy(
+	    overloads,
+	    [](const ManualOverload &overload) {
+		    // join with a separator that cannot appear inside a single example to key the group
+		    return overload.examples.empty() ? string() : StringUtil::Join(overload.examples, "\n\x01\n");
+	    },
+	    [](ContentGroup &group, const ManualOverload &overload) { group.examples = overload.examples; });
 }
 
 //! Banner label for a raw function type, e.g. "scalar" -> "scalar function",
@@ -397,35 +384,33 @@ string BuildSignature(const string &name, const vector<string> &parameters, cons
 }
 
 string RenderManualPage(const vector<ManualOverload> &overloads, const string &pattern, idx_t content_width,
-                        const string &layout_on, const string &layout_off, const string &heading_on,
-                        const string &heading_off, const string &path_on, const string &path_off,
-                        const ManualHighlighter &highlighter) {
+                        const ManualStyle &style, const ManualHighlighter &highlighter) {
 	if (content_width < 24) {
 		content_width = 24;
 	}
 	Canvas canvas(content_width, highlighter);
 
-	// reference markers like "(1)" are colored with the (gray) layout color
-	auto color_ref = [&](const string &refs) {
-		return layout_on.empty() ? refs : layout_on + refs + layout_off;
+	// reference markers, rules and the counter are colored with the (gray) layout color
+	auto color_ref = [&](const string &text) {
+		return style.layout_on.empty() ? text : style.layout_on + text + style.layout_off;
 	};
-	// a signature/reference marker "n." (gray); it is placed in the marker column and the following
-	// content is padded to align, leaving room for multi-digit numbers
+	// a signature/reference marker "n." (gray); MarkerPrefix pads the following content into alignment,
+	// leaving room for multi-digit numbers
 	auto marker = [&](idx_t n) {
 		return color_ref(std::to_string(n) + ".");
 	};
 	// section headings are upper-cased and emphasized (white + bold)
 	auto heading = [&](const string &text) {
 		string upper = StringUtil::Upper(text);
-		return heading_on.empty() ? upper : heading_on + upper + heading_off;
+		return style.heading_on.empty() ? upper : style.heading_on + upper + style.heading_off;
 	};
 	// the banner entry name is emphasized (white + bold) but kept in its real case
 	auto title = [&](const string &text) {
-		return heading_on.empty() ? text : heading_on + text + heading_off;
+		return style.heading_on.empty() ? text : style.heading_on + text + style.heading_off;
 	};
 	// header schema path / entry type styling (white)
 	auto path_label = [&](const string &text) {
-		return path_on.empty() ? text : path_on + text + path_off;
+		return style.path_on.empty() ? text : style.path_on + text + style.path_off;
 	};
 
 	// header rules and content are inset one level
@@ -459,11 +444,9 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 
 	// each frame opens with a full-width "─" rule that, when several entries are shown, embeds a centered
 	// "n / total" position counter
-	auto frame_rule = [&](idx_t index, bool with_counter) {
-		string counter;
-		if (with_counter) {
-			counter = " " + std::to_string(index + 1) + " / " + std::to_string(frames.size()) + " ";
-		}
+	bool multiple = frames.size() > 1;
+	auto frame_rule = [&](idx_t index) {
+		string counter = multiple ? " " + std::to_string(index + 1) + " / " + std::to_string(frames.size()) + " " : "";
 		string bar;
 		if (!counter.empty() && counter.size() + 2 <= rule_width) {
 			idx_t left = (rule_width - counter.size()) / 2;
@@ -479,19 +462,17 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 	for (idx_t f = 0; f < frames.size(); f++) {
 		auto &frame = frames[f];
 
-		// frame header: for multiple entries a rule (with a "n / total" counter) precedes the schema path
-		// (left), entry name (centered), entry type (right); a single entry skips the rule
+		// frame header: a rule (with a "n / total" counter when several entries are shown) above the
+		// schema path (left), entry name (centered) and entry type (right); stacked+centered if too wide
 		string header_path = path_label(frame.schema_path);
 		string header_name = title(frame.function_name);
 		string header_type = path_label(EntryTypeLabel(frame.function_type));
-		canvas.Line(0, frame_rule(f, frames.size() > 1));
-
+		canvas.Line(0, frame_rule(f));
 		if (!canvas.TryHeaderRow(rule_indent, header_path, header_name, header_type, 4)) {
 			canvas.Centered(rule_indent, header_path);
 			canvas.Centered(rule_indent, header_name);
 			canvas.Centered(rule_indent, header_type);
 		}
-		// canvas.Line(0, frame_rule(f, false));
 		canvas.Blank();
 
 		// number this frame's overloads; group descriptions/examples so numbering can react to them
@@ -507,12 +488,11 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 		};
 		bool description_refs = !description_groups.empty() && !covers_all(description_groups);
 		bool example_refs = !example_groups.empty() && !covers_all(example_groups);
-		// the "(n)" markers only earn their place when a description/example references specific overloads
+		// the "n." markers only earn their place when a description/example references specific overloads
 		bool show_numbers = numbered.size() > 1 && (description_refs || example_refs);
 
 		// the "n." marker sits at level 2 (4 cols) and content aligns at level 4 (8 cols); a multi-
-		// reference group lists its numbers on their own line, aligned with the marker column
-		idx_t ref_indent = 2 * INDENT;
+		// reference group lists its numbers on their own line (also level 2), aligned with the marker
 
 		// Signatures; the "n." marker sits in the indent gap on the first line
 		canvas.Line(1, heading("Signature"));
@@ -538,7 +518,7 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 				} else if (group.numbers.size() == 1) {
 					canvas.Item(4, marker(group.numbers[0]), group.text);
 				} else {
-					canvas.Wrapped(ref_indent, FormatRefs(group.numbers, color_ref));
+					canvas.Body(2, FormatRefs(group.numbers, color_ref));
 					canvas.Blank();
 					canvas.Body(4, group.text);
 				}
@@ -553,7 +533,7 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 			for (auto &group : example_groups) {
 				bool inline_ref = example_refs && group.numbers.size() == 1;
 				if (example_refs && group.numbers.size() > 1) {
-					canvas.Wrapped(ref_indent, FormatRefs(group.numbers, color_ref));
+					canvas.Body(2, FormatRefs(group.numbers, color_ref));
 					canvas.Blank();
 				}
 				bool first_line = true;

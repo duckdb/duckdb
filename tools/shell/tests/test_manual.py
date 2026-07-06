@@ -135,3 +135,20 @@ def test_manual_did_you_mean(shell):
     result = test.run()
     result.check_stderr('Did you mean')
     result.check_stderr('reverse')
+
+
+def test_manual_cli_flag(shell):
+    # the -manual CLI flag renders a function's manual page directly and exits
+    test = ShellTest(shell, ['-manual', 'list_contains'])
+    result = test.run()
+    result.check_stdout('list_contains')
+    result.check_stdout('scalar function')
+    result.check_stdout('DESCRIPTION')
+
+
+def test_manual_cli_flag_miss(shell):
+    # a miss on the CLI flag still reports the error and suggestions
+    test = ShellTest(shell, ['-manual', 'reverze'])
+    result = test.run()
+    result.check_stderr("No function matches 'reverze'")
+    result.check_stderr('reverse')
