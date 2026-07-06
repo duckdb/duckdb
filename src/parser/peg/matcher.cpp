@@ -1426,6 +1426,8 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME)));
 	AddRuleOverride("ReservedFunctionName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
 	                                            SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME)));
+	AddRuleOverride("ReservedKeyword",
+	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
 	AddRuleOverride("TableFunctionName",
 	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_FUNCTION_NAME)));
 	AddRuleOverride("TypeName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME)));

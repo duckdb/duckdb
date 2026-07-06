@@ -83,14 +83,8 @@ CatalogType PEGTransformerFactory::TransformCommentColumn(PEGTransformer &transf
 	return CatalogType::INVALID;
 }
 
-Value PEGTransformerFactory::TransformCommentValue(PEGTransformer &transformer, ParseResult &choice_result) {
-	// CommentValue <- NullLiteral / StringLiteral
-	auto &list_pr = choice_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	if (choice_pr.GetResult().type == ParseResultType::STRING) {
-		return Value(choice_pr.GetResult().Cast<StringLiteralParseResult>().result);
-	}
-	return transformer.Transform<Value>(choice_pr.GetResult());
+Value PEGTransformerFactory::TransformStringLiteralValue(PEGTransformer &transformer, const string &string_literal) {
+	return Value(string_literal);
 }
 
 } // namespace duckdb
