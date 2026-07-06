@@ -51,7 +51,6 @@ SELECT rowid, i FROM rebuild_then_remap.t WHERE i = 4096;
 2048	4096
 
 # Upgrade storage and reattach without the rebuild threshold.
-
 statement ok
 DETACH rebuild_then_remap;
 

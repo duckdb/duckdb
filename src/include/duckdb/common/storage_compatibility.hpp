@@ -27,9 +27,7 @@ public:
 	bool CompareVersionString(const string &property_version) const;
 	StorageVersion GetStorageVersionCompatibility() const;
 	//! Whether this storage version can persist rowid gaps (i.e. serialize next_row_id), added in v2.0.0.
-	bool CanPersistRowIdGaps() const {
-		return storage_version >= StorageVersion::V2_0_0;
-	}
+	bool CanPersistRowIdGaps() const;
 
 public:
 	//! The user provided version

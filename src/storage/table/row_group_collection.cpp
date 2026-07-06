@@ -1339,44 +1339,152 @@ private:
 // Vacuum
 //===--------------------------------------------------------------------===//
 
-struct IndexRemapPlan {
-	vector<reference<ART>> indexes;
-	//! Buffer slot -> table column id for the indexed key columns, in the sorted canonical order of
-	//! TableIndexList::InitializeIndexChunk (the same layout used for buffering unbound index operations).
+//! Per-task remap execution: buffers the shifted rows of a vacuum merge, then applies them to each ART.
+//! The buffer holds the indexed key columns in the sorted canonical order of
+//! TableIndexList::InitializeIndexChunk, followed by the old and new rowid.
+class VacuumIndexRemapper {
+public:
+	VacuumIndexRemapper(const vector<reference<ART>> &indexes, RowGroupCollection &collection)
+	    : indexes(indexes), table_types(collection.GetTypes()) {
+		DataChunk index_chunk;
+		TableIndexList::InitializeIndexChunk(index_chunk, table_types, mapped_column_ids, collection.GetTableInfo());
+		old_rowid_idx = mapped_column_ids.size();
+		new_rowid_idx = old_rowid_idx + 1;
+
+		auto buffer_types = index_chunk.GetTypes();
+		buffer_types.push_back(LogicalType::ROW_TYPE);
+		buffer_types.push_back(LogicalType::ROW_TYPE);
+		buffer =
+		    make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(collection.GetAttached()), buffer_types);
+		buffer->InitializeAppend(buffer_append_state);
+		buffer_chunk.InitializeEmpty(buffer_types);
+		for (idx_t c = 0; c < table_types.size(); c++) {
+			table_column_ids.emplace_back(c);
+		}
+		append_chunk.InitializeEmpty(table_types);
+	}
+
+	//! Initialize the merge scan chunk with the table columns plus a trailing rowid column.
+	void InitializeMergeScan(DataChunk &scan_chunk, vector<StorageIndex> &column_ids) const {
+		column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+		auto scan_types = table_types;
+		scan_types.push_back(LogicalType::ROW_TYPE);
+		scan_chunk.Initialize(Allocator::DefaultAllocator(), scan_types);
+	}
+
+	//! Buffer the chunk's moved rows and return the table columns to append (stripping the rowid column).
+	DataChunk &ProcessScanChunk(DataChunk &scan_chunk, idx_t new_rowid_start) {
+		BufferMovedRows(scan_chunk, new_rowid_start);
+		append_chunk.ReferenceColumns(scan_chunk, table_column_ids);
+		return append_chunk;
+	}
+
+	//! Apply the buffered remaps to every ART.
+	void Apply() {
+		if (buffer->Count() == 0) {
+			return;
+		}
+		DataChunk scan_chunk;
+		buffer->InitializeScanChunk(scan_chunk);
+		DataChunk table_chunk;
+		table_chunk.InitializeEmpty(table_types);
+
+		// Reference the buffered key columns into the table-shaped chunk. Non-indexed columns stay
+		// unreferenced: index expressions only read the index's own columns (see ApplyBufferedReplays).
+		auto reference_table_chunk = [&]() {
+			for (idx_t col_idx = 0; col_idx < mapped_column_ids.size(); col_idx++) {
+				const auto col_id = mapped_column_ids[col_idx].GetPrimaryIndex();
+				table_chunk.data[col_id].Reference(scan_chunk.data[col_idx]);
+			}
+		};
+
+		for (auto &art_ref : indexes) {
+			auto &art = art_ref.get();
+			IndexLock index_lock;
+			art.InitializeLock(index_lock);
+
+			// Delete old rowids first to avoid same-key rowid collisions within the task.
+			ColumnDataScanState scan_state;
+			buffer->InitializeScan(scan_state);
+			while (buffer->Scan(scan_state, scan_chunk)) {
+				reference_table_chunk();
+				art.Delete(index_lock, table_chunk, scan_chunk.data[old_rowid_idx]);
+			}
+
+			// Remapping must not re-run uniqueness checks for already-validated rows.
+			buffer->InitializeScan(scan_state);
+			while (buffer->Scan(scan_state, scan_chunk)) {
+				reference_table_chunk();
+				IndexAppendInfo append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
+				auto error = art.Append(index_lock, table_chunk, scan_chunk.data[new_rowid_idx], append_info);
+				if (error.HasError()) {
+					error.Throw();
+				}
+			}
+		}
+	}
+
+private:
+	void BufferMovedRows(DataChunk &scan_chunk, idx_t new_rowid_start) {
+		const auto count = scan_chunk.size();
+		const auto rowid_column_index = table_types.size();
+
+		UnifiedVectorFormat old_rowid_data;
+		scan_chunk.data[rowid_column_index].ToUnifiedFormat(old_rowid_data);
+		auto old_rowids = UnifiedVectorFormat::GetData<row_t>(old_rowid_data);
+
+		SelectionVector moved_sel(STANDARD_VECTOR_SIZE);
+		idx_t moved_count = 0;
+		for (idx_t i = 0; i < count; i++) {
+			auto source_idx = old_rowid_data.sel->get_index(i);
+			auto old_rowid = old_rowids[source_idx];
+			auto new_rowid = UnsafeNumericCast<row_t>(new_rowid_start + i);
+			if (old_rowid == new_rowid) {
+				continue;
+			}
+			moved_sel.set_index(moved_count++, i);
+		}
+		if (moved_count == 0) {
+			return;
+		}
+
+		Vector new_rowids(LogicalType::ROW_TYPE);
+		new_rowids.Sequence(UnsafeNumericCast<int64_t>(new_rowid_start), 1, count);
+
+		buffer_chunk.Reset();
+		TableIndexList::ReferenceIndexChunk(scan_chunk, buffer_chunk, mapped_column_ids);
+		buffer_chunk.data[old_rowid_idx].Reference(scan_chunk.data[rowid_column_index]);
+		buffer_chunk.data[new_rowid_idx].Reference(new_rowids);
+		buffer_chunk.Slice(moved_sel, moved_count);
+		buffer->Append(buffer_append_state, buffer_chunk);
+	}
+
+private:
+	//! The ARTs to remap.
+	const vector<reference<ART>> &indexes;
+	const vector<LogicalType> &table_types;
+	//! Buffer slot -> table column id for the indexed key columns.
 	vector<StorageIndex> mapped_column_ids;
-	//! Buffer schema: the key column types, then two ROW_TYPE columns for the old and new rowids.
-	vector<LogicalType> buffer_types;
-
-	bool Empty() const {
-		return indexes.empty();
-	}
-	//! Buffer column index of the old rowid.
-	idx_t OldRowIdColumn() const {
-		return mapped_column_ids.size();
-	}
-	//! Buffer column index of the new rowid.
-	idx_t NewRowIdColumn() const {
-		return mapped_column_ids.size() + 1;
-	}
-	//! Compute the buffer layout from the table's indexed columns.
-	void Initialize(DataTableInfo &info, const vector<LogicalType> &types);
+	//! Buffer column indexes of the old and new rowid.
+	idx_t old_rowid_idx;
+	idx_t new_rowid_idx;
+	unique_ptr<ColumnDataCollection> buffer;
+	ColumnDataAppendState buffer_append_state;
+	//! Buffer-layout chunk used to append moved rows.
+	DataChunk buffer_chunk;
+	//! The scan chunk's table columns (excludes the trailing rowid column).
+	vector<column_t> table_column_ids;
+	//! Table-column view of the scan chunk handed back to the merge append.
+	DataChunk append_chunk;
 };
-
-void IndexRemapPlan::Initialize(DataTableInfo &info, const vector<LogicalType> &types) {
-	DataChunk index_chunk;
-	TableIndexList::InitializeIndexChunk(index_chunk, types, mapped_column_ids, info);
-	buffer_types = index_chunk.GetTypes();
-	buffer_types.push_back(LogicalType::ROW_TYPE);
-	buffer_types.push_back(LogicalType::ROW_TYPE);
-}
 
 struct VacuumState {
 	bool can_vacuum_deletes = true;
 	bool can_change_row_ids = false;
 	//! How vacuum handles the table's indexes when it changes rowids.
 	VacuumIndexStrategy index_strategy = VacuumIndexStrategy::KEEP_ROW_IDS;
-	//! The remap plan, populated only when index_strategy == REMAP.
-	IndexRemapPlan remap_plan;
+	//! The ARTs to remap, populated only when index_strategy == REMAP.
+	vector<reference<ART>> remap_indexes;
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
 	vector<optional_idx> row_group_counts;
@@ -1400,17 +1508,9 @@ public:
 		auto &collection = checkpoint_state.collection;
 		const idx_t row_group_size = collection.GetRowGroupSize();
 		auto &types = collection.GetTypes();
-		auto &remap_plan = vacuum_state.remap_plan;
-		const bool apply_index_remap = vacuum_state.index_strategy == VacuumIndexStrategy::REMAP && !remap_plan.Empty();
-
-		unique_ptr<ColumnDataCollection> remap_buffer;
-		ColumnDataAppendState remap_append_state;
-		DataChunk remap_append_chunk;
-		if (apply_index_remap) {
-			auto &buffer_manager = BufferManager::GetBufferManager(collection.GetAttached());
-			remap_buffer = make_uniq<ColumnDataCollection>(buffer_manager, remap_plan.buffer_types);
-			remap_buffer->InitializeAppend(remap_append_state);
-			remap_append_chunk.InitializeEmpty(remap_plan.buffer_types);
+		unique_ptr<VacuumIndexRemapper> remapper;
+		if (vacuum_state.index_strategy == VacuumIndexStrategy::REMAP && !vacuum_state.remap_indexes.empty()) {
+			remapper = make_uniq<VacuumIndexRemapper>(vacuum_state.remap_indexes, collection);
 		}
 
 		// create the new set of target row groups (initially empty)
@@ -1426,25 +1526,16 @@ public:
 			row_group_rows -= current_row_group_rows;
 		}
 
-		vector<LogicalType> scan_types(types.begin(), types.end());
 		vector<StorageIndex> column_ids;
 		for (idx_t c = 0; c < types.size(); c++) {
 			column_ids.emplace_back(c);
 		}
-		if (apply_index_remap) {
-			column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
-			scan_types.push_back(LogicalType::ROW_TYPE);
-		}
-
 		DataChunk scan_chunk;
-		scan_chunk.Initialize(Allocator::DefaultAllocator(), scan_types);
-
-		vector<column_t> append_column_ids;
-		for (idx_t c = 0; c < types.size(); c++) {
-			append_column_ids.emplace_back(c);
+		if (remapper) {
+			remapper->InitializeMergeScan(scan_chunk, column_ids);
+		} else {
+			scan_chunk.Initialize(Allocator::DefaultAllocator(), types);
 		}
-		DataChunk append_chunk;
-		append_chunk.InitializeEmpty(types);
 
 		idx_t current_append_idx = 0;
 
@@ -1483,11 +1574,10 @@ public:
 				}
 				scan_chunk.Flatten();
 				const auto chunk_count = scan_chunk.size();
-				if (apply_index_remap) {
-					BufferIndexRemapRows(*remap_buffer, remap_append_state, remap_append_chunk, scan_chunk,
-					                     row_start.GetIndex() + live_row_offset, types.size());
-				}
-				append_chunk.ReferenceColumns(scan_chunk, append_column_ids);
+				// Buffer moved rows and strip the scanned rowid column before appending to the new row groups.
+				auto &append_chunk =
+				    remapper ? remapper->ProcessScanChunk(scan_chunk, row_start.GetIndex() + live_row_offset)
+				             : scan_chunk;
 				idx_t remaining = append_chunk.size();
 				while (remaining > 0) {
 					auto &current_append_row_group = new_row_groups[current_append_idx]->GetNode();
@@ -1534,8 +1624,8 @@ public:
 			    "Mismatch in row group count %d vs verify count %d in RowGroupCollection::Checkpoint", merge_rows,
 			    total_append_count);
 		}
-		if (remap_buffer && remap_buffer->Count() > 0) {
-			ApplyIndexRemap(*remap_buffer);
+		if (remapper) {
+			remapper->Apply();
 		}
 
 		// Explicitly end the timer for the vacuum tasks here.
@@ -1556,87 +1646,6 @@ public:
 	}
 
 private:
-	void BufferIndexRemapRows(ColumnDataCollection &remap_buffer, ColumnDataAppendState &append_state,
-	                          DataChunk &remap_chunk, DataChunk &scan_chunk, idx_t new_rowid_start,
-	                          idx_t rowid_column_index) {
-		const auto count = scan_chunk.size();
-
-		UnifiedVectorFormat old_rowid_data;
-		scan_chunk.data[rowid_column_index].ToUnifiedFormat(old_rowid_data);
-		auto old_rowids = UnifiedVectorFormat::GetData<row_t>(old_rowid_data);
-
-		SelectionVector moved_sel(STANDARD_VECTOR_SIZE);
-		idx_t moved_count = 0;
-		for (idx_t i = 0; i < count; i++) {
-			auto source_idx = old_rowid_data.sel->get_index(i);
-			auto old_rowid = old_rowids[source_idx];
-			auto new_rowid = UnsafeNumericCast<row_t>(new_rowid_start + i);
-			if (old_rowid == new_rowid) {
-				continue;
-			}
-			moved_sel.set_index(moved_count++, i);
-		}
-		if (moved_count == 0) {
-			return;
-		}
-
-		Vector new_rowids(LogicalType::ROW_TYPE);
-		new_rowids.Sequence(UnsafeNumericCast<int64_t>(new_rowid_start), 1, count);
-
-		auto &remap_plan = vacuum_state.remap_plan;
-		remap_chunk.Reset();
-		TableIndexList::ReferenceIndexChunk(scan_chunk, remap_chunk, remap_plan.mapped_column_ids);
-		remap_chunk.data[remap_plan.OldRowIdColumn()].Reference(scan_chunk.data[rowid_column_index]);
-		remap_chunk.data[remap_plan.NewRowIdColumn()].Reference(new_rowids);
-		remap_chunk.Slice(moved_sel, moved_count);
-		remap_buffer.Append(append_state, remap_chunk);
-	}
-
-	void ApplyIndexRemap(ColumnDataCollection &remap_buffer) {
-		auto &remap_plan = vacuum_state.remap_plan;
-		const auto old_rowid_idx = remap_plan.OldRowIdColumn();
-		const auto new_rowid_idx = remap_plan.NewRowIdColumn();
-
-		DataChunk buffer_chunk;
-		remap_buffer.InitializeScanChunk(buffer_chunk);
-		DataChunk table_chunk;
-		table_chunk.InitializeEmpty(checkpoint_state.collection.GetTypes());
-
-		// Reference the buffered key columns into the table-shaped chunk. Non-indexed columns stay
-		// unreferenced: index expressions only read the index's own columns (see ApplyBufferedReplays).
-		auto reference_table_chunk = [&]() {
-			for (idx_t col_idx = 0; col_idx < remap_plan.mapped_column_ids.size(); col_idx++) {
-				const auto col_id = remap_plan.mapped_column_ids[col_idx].GetPrimaryIndex();
-				table_chunk.data[col_id].Reference(buffer_chunk.data[col_idx]);
-			}
-		};
-
-		for (auto &art_ref : remap_plan.indexes) {
-			auto &art = art_ref.get();
-			IndexLock index_lock;
-			art.InitializeLock(index_lock);
-
-			// Delete old rowids first to avoid same-key rowid collisions within the task.
-			ColumnDataScanState scan_state;
-			remap_buffer.InitializeScan(scan_state);
-			while (remap_buffer.Scan(scan_state, buffer_chunk)) {
-				reference_table_chunk();
-				art.Delete(index_lock, table_chunk, buffer_chunk.data[old_rowid_idx]);
-			}
-
-			// Remapping must not re-run uniqueness checks for already-validated rows.
-			remap_buffer.InitializeScan(scan_state);
-			while (remap_buffer.Scan(scan_state, buffer_chunk)) {
-				reference_table_chunk();
-				IndexAppendInfo append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
-				auto error = art.Append(index_lock, table_chunk, buffer_chunk.data[new_rowid_idx], append_info);
-				if (error.HasError()) {
-					error.Throw();
-				}
-			}
-		}
-	}
-
 	VacuumState &vacuum_state;
 	idx_t segment_idx;
 	idx_t merge_count;
@@ -1655,10 +1664,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 
 	// Index state decides whether vacuum may change surviving rowids.
 	auto &attached = checkpoint_state.writer.GetAttached();
-	state.index_strategy = GetVacuumIndexStrategy(attached, &state.remap_plan.indexes);
-	if (state.index_strategy == VacuumIndexStrategy::REMAP) {
-		state.remap_plan.Initialize(*info, types);
-	}
+	state.index_strategy = GetVacuumIndexStrategy(attached, &state.remap_indexes);
 
 	// can_change_row_ids only answers whether index state allows changing row_ids.
 	state.can_change_row_ids = state.index_strategy != VacuumIndexStrategy::KEEP_ROW_IDS;
@@ -1676,28 +1682,34 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	}
 	bool legacy_vacuum_with_stable_row_ids =
 	    !checkpoint_state.writer.CanPersistRowIdGaps() && !state.can_change_row_ids;
-	// Legacy storage cannot persist rowid gaps, so later live rows must be rewritten densely.
+	// RowIdsChanged condition: legacy storage cannot persist rowid gaps. If we are allowed to change rowids,
+	// we record a gap as seen; if we later see a row group with live rows, then we know rowids have to be shifted.
 	bool rowid_gap_seen = false;
 	vector<idx_t> committed_counts;
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
 		auto row_group_num_rows = row_group.GetCommittedRowCount();
 		if (legacy_vacuum_with_stable_row_ids) {
-			// Keep committed counts so the trailing-deleted suffix pass below can still run.
+			// In this legacy path, empty row groups in the middle must be kept because they would create a rowid gap
+			// that cannot be persisted or densely rewritten. Keep the committed counts so the pass below can
+			// still remove trailing deleted row groups.
 			committed_counts.emplace_back(row_group_num_rows);
 		}
 		if (row_group_num_rows == 0) {
 			if (!checkpoint_state.writer.CanPersistRowIdGaps()) {
-				// Older storage cannot represent middle rowid gaps without dense rewriting.
+				// Older storage versions cannot represent rowid gaps. Dropping a row group in the middle of the
+				// table therefore requires dense rowid rewriting.
 				if (!state.can_change_row_ids) {
-					// Stable rowids can still drop this if it belongs to the trailing deleted suffix.
+					// Indexes prevent rowid changes, so keep the row group for now. If this is part of a trailing
+					// deleted suffix, we can still drop it in the legacy_vacuum_with_stable_row_ids pass below.
 					state.row_group_counts.emplace_back();
 					continue;
 				}
 				// track this gap until we know whether it is followed by live rows.
 				rowid_gap_seen = true;
 			}
-			// Drop the empty row group; older storage reaches this only when rowids may be rewritten.
+			// Drop the empty row group. Newer storage versions persist the resulting rowid gap; older storage reaches
+			// this path only when rowids may be densely rewritten.
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(entry.GetIndex());
 			state.row_group_counts.push_back(row_group_num_rows);
@@ -1710,7 +1722,8 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 				state.row_group_counts.emplace_back();
 				continue;
 			}
-			// Fully live row groups can still be merged without changing rowids.
+			// Otherwise, the row group is fully live. We can still consider fully live row groups for merging as
+			// that does not change rowids.
 		}
 		if (rowid_gap_seen) {
 			// checkpointing will later re-number rowids densely.
@@ -1719,7 +1732,9 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		state.row_group_counts.push_back(row_group_num_rows);
 	}
 	if (legacy_vacuum_with_stable_row_ids) {
-		// A fully deleted suffix can be removed without shifting surviving rowids.
+		// With older storage and stable rowids, gap-forming drops were skipped above. Removing a suffix of fully
+		// deleted row groups is still safe because no surviving rowid is shifted and no persisted rowid gap remains
+		// before live data.
 		auto segment_count = state.row_group_counts.size();
 		for (idx_t i = segment_count; i > 0; i--) {
 			auto segment_idx = i - 1;
@@ -1778,7 +1793,8 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		merge_count = 0;
 		merge_rows = 0;
 		optional_idx expected_row_start;
-		// Apply this only if the candidate is selected below.
+		// Conditions 1 and 2 are evaluated for each candidate merge window. The flag is only applied if this
+		// candidate is selected below.
 		bool candidate_changes_row_ids = false;
 		for (next_idx = segment_idx; next_idx < checkpoint_state.SegmentCount(); next_idx++) {
 			if (!state.row_group_counts[next_idx].IsValid()) {
@@ -1810,14 +1826,16 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 				if (!state.can_change_row_ids) {
 					break;
 				}
-				// This candidate compacts across a rowid gap.
+				// Condition 1 candidate: this candidate vacuum task will compact across a rowid gap, which will shift
+				// rowids within the selected row groups.
 				candidate_changes_row_ids = true;
 			}
 			if (next_row_count != next_total_count) {
 				if (!state.can_change_row_ids) {
 					break;
 				}
-				// This candidate includes a partially deleted row group.
+				// Condition 2 candidate: if this merge is selected, it includes a partially deleted row group, which
+				// may mean shifting row-ids (over-approximation).
 				candidate_changes_row_ids = true;
 			}
 			expected_row_start = next_segment->GetRowStart() + next_total_count;
@@ -1847,7 +1865,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 			// perform the merge at this level
 			perform_merge = true;
 			if (candidate_changes_row_ids) {
-				// The selected merge window may move rowids.
+				// Apply Condition 1 or 2 for the selected merge window.
 				checkpoint_state.writer.SetRowIdsChanged();
 			}
 			break;

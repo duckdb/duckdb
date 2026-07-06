@@ -682,16 +682,8 @@ idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id
 }
 
 bool ART::HasLegacyGeometryKeys() const {
-	// The GEOMETRY key encoding changed in v1.5.0: only indexes that may hold pre-v1.5.0 keys need the check.
-	if (storage_version != StorageVersion::INVALID && storage_version >= StorageVersion::V1_5_0) {
-		return false;
-	}
-	for (auto &type : logical_types) {
-		if (type.id() == LogicalTypeId::GEOMETRY) {
-			return true;
-		}
-	}
-	return false;
+	// Equivalent to asking whether key generation applies the legacy GEOMETRY conversion for this index.
+	return KeyInputNeedConversion(logical_types, storage_version);
 }
 
 //===--------------------------------------------------------------------===//
