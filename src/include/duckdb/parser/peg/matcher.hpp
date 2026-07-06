@@ -20,6 +20,7 @@
 namespace duckdb {
 class PEGTransformerFactory;
 class ParseResultAllocator;
+class PEGParserProfiler;
 class Matcher;
 class MatcherAllocator;
 
@@ -122,14 +123,15 @@ struct MatcherSuggestion {
 
 struct MatchState {
 	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, bool preserve_identifier_case_p = true, idx_t starting_token_index = 0)
+	           idx_t &max_token_index, bool preserve_identifier_case_p = true, idx_t starting_token_index = 0,
+	           PEGParserProfiler *profiler_p = nullptr)
 	    : tokens(tokens), suggestions(suggestions), token_index(starting_token_index), allocator(allocator),
-	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p) {
+	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p), profiler(profiler_p) {
 	}
 	MatchState(MatchState &state)
 	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
 	      allocator(state.allocator), max_token_index(state.max_token_index),
-	      preserve_identifier_case(state.preserve_identifier_case) {
+	      preserve_identifier_case(state.preserve_identifier_case), profiler(state.profiler) {
 	}
 
 	vector<MatcherToken> &tokens;
@@ -139,6 +141,7 @@ struct MatchState {
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
 	bool preserve_identifier_case = true;
+	PEGParserProfiler *profiler;
 
 	void UpdateMaxTokenIndex() {
 		if (token_index > max_token_index) {
@@ -174,7 +177,8 @@ public:
 
 	//! Match
 	virtual MatchResultType Match(MatchState &state) const = 0;
-	virtual optional_ptr<ParseResult> MatchParseResult(MatchState &state) const = 0;
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const;
+	virtual optional_ptr<ParseResult> MatchParseResultInternal(MatchState &state) const = 0;
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
 	virtual string ToString() const = 0;
