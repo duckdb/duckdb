@@ -1543,39 +1543,10 @@ private:
 		remap_buffer.Append(append_state, remap_chunk);
 	}
 
-	struct RemapRowIdHandler {
-		RemapRowIdHandler(ART &art, ArenaAllocator &allocator, unsafe_vector<ARTKey> &old_row_id_keys,
-		                  unsafe_vector<ARTKey> &new_row_id_keys)
-		    : art(art), allocator(allocator), old_row_id_keys(old_row_id_keys), new_row_id_keys(new_row_id_keys) {
-		}
-
-		ARTVisitResult OnEmpty(idx_t) {
-			return ARTVisitResult::CONTINUE;
-		}
-
-		ARTVisitResult OnMissing(idx_t, ARTKey &) {
-			throw InternalException("Failed to remap ART index '%s': indexed key not found", art.name);
-		}
-
-		ARTVisitResult OnMatch(idx_t index, ARTKey &, Node &slot) {
-			art.RemapRowIdInLeaf(allocator, slot, old_row_id_keys[index], new_row_id_keys[index]);
-			return ARTVisitResult::CONTINUE;
-		}
-
-		ART &art;
-		ArenaAllocator &allocator;
-		unsafe_vector<ARTKey> &old_row_id_keys;
-		unsafe_vector<ARTKey> &new_row_id_keys;
-	};
-
-	void ApplyIndexRemapChunk(ART &art, DataChunk &buffer_chunk) {
-		auto &collection = checkpoint_state.collection;
-		auto &types = collection.GetTypes();
-		const auto old_rowid_idx = vacuum_state.remap_column_ids.size();
-		const auto new_rowid_idx = old_rowid_idx + 1;
-
-		DataChunk table_chunk;
-		table_chunk.InitializeEmpty(types);
+	//! Reference the buffered indexed key columns into a table-shaped chunk for this index.
+	//! Non-indexed columns reference a NULL constant, mirroring DataTable::RebuildIndexes.
+	void BuildRemapTableChunk(ART &art, DataChunk &buffer_chunk, DataChunk &table_chunk) {
+		auto &types = checkpoint_state.collection.GetTypes();
 		vector<bool> referenced_columns(types.size(), false);
 		for (auto column_id : art.GetColumnIds()) {
 			auto buffer_idx = vacuum_state.remap_column_buffer_indexes[column_id];
@@ -1591,39 +1562,43 @@ private:
 			}
 			table_chunk.data[column_id].Reference(Value(types[column_id]), count_t(buffer_chunk.size()));
 		}
-
-		IndexLock index_lock;
-		art.InitializeLock(index_lock);
-
-		DataChunk expr_chunk;
-		expr_chunk.Initialize(collection.GetAllocator(), art.logical_types);
-		art.ExecuteExpressions(table_chunk, expr_chunk);
-
-		ArenaAllocator allocator(BufferAllocator::Get(art.db));
-		const auto row_count = buffer_chunk.size();
-		unsafe_vector<ARTKey> keys(row_count);
-		unsafe_vector<ARTKey> old_row_id_keys(row_count);
-		unsafe_vector<ARTKey> new_row_id_keys(row_count);
-		art.GenerateKeyVectors(allocator, expr_chunk, buffer_chunk.data[old_rowid_idx], keys, old_row_id_keys);
-
-		DataChunk new_row_id_chunk;
-		new_row_id_chunk.Initialize(collection.GetAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE}, row_count);
-		new_row_id_chunk.data[0].Reference(buffer_chunk.data[new_rowid_idx]);
-		art.GenerateKeys<>(allocator, new_row_id_chunk, new_row_id_keys);
-
-		RemapRowIdHandler handler(art, allocator, old_row_id_keys, new_row_id_keys);
-		art.VisitEqualKeysLocked(index_lock, keys, row_count, handler);
+		table_chunk.SetCardinality(buffer_chunk.size());
 	}
 
 	void ApplyIndexRemap(ColumnDataCollection &remap_buffer) {
-		ColumnDataScanState scan_state;
-		remap_buffer.InitializeScan(scan_state);
+		const auto old_rowid_idx = vacuum_state.remap_column_ids.size();
+		const auto new_rowid_idx = old_rowid_idx + 1;
 
 		DataChunk buffer_chunk;
 		remap_buffer.InitializeScanChunk(buffer_chunk);
-		while (remap_buffer.Scan(scan_state, buffer_chunk)) {
-			for (auto &art_ref : vacuum_state.remap_indexes) {
-				ApplyIndexRemapChunk(art_ref.get(), buffer_chunk);
+		DataChunk table_chunk;
+		table_chunk.InitializeEmpty(checkpoint_state.collection.GetTypes());
+
+		for (auto &art_ref : vacuum_state.remap_indexes) {
+			auto &art = art_ref.get();
+			IndexLock index_lock;
+			art.InitializeLock(index_lock);
+
+			// Delete all (key, old rowid) pairs before inserting any (key, new rowid) pair: within a task,
+			// a moved row's new rowid can equal the old rowid of a not-yet-deleted row with the same key.
+			// Delete also verifies that every non-NULL key was present (missing old rowids are fatal).
+			ColumnDataScanState scan_state;
+			remap_buffer.InitializeScan(scan_state);
+			while (remap_buffer.Scan(scan_state, buffer_chunk)) {
+				BuildRemapTableChunk(art, buffer_chunk, table_chunk);
+				art.Delete(index_lock, table_chunk, buffer_chunk.data[old_rowid_idx]);
+			}
+
+			// INSERT_DUPLICATES: the rows already passed constraint checks when they were first inserted;
+			// remapping a rowid must not re-run uniqueness verification.
+			remap_buffer.InitializeScan(scan_state);
+			while (remap_buffer.Scan(scan_state, buffer_chunk)) {
+				BuildRemapTableChunk(art, buffer_chunk, table_chunk);
+				IndexAppendInfo append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
+				auto error = art.Append(index_lock, table_chunk, buffer_chunk.data[new_rowid_idx], append_info);
+				if (error.HasError()) {
+					error.Throw();
+				}
 			}
 		}
 	}

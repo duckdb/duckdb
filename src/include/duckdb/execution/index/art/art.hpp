@@ -10,7 +10,6 @@
 
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/common/array.hpp"
 
 namespace duckdb {
@@ -18,7 +17,6 @@ namespace duckdb {
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1 };
 enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2, NONE = 3 };
-enum class ARTVisitResult : uint8_t { CONTINUE = 0, STOP = 1 };
 
 class ConflictManager;
 class ARTKey;
@@ -122,33 +120,6 @@ public:
 	                 optional_ptr<SelectionVector> deleted_sel = nullptr,
 	                 optional_ptr<SelectionVector> non_deleted_sel = nullptr);
 
-	template <class HANDLER>
-	ARTVisitResult VisitEqualKeysLocked(IndexLock &state, unsafe_vector<ARTKey> &keys, idx_t count, HANDLER &&handler) {
-		AssertIndexLockHeld(state);
-		for (idx_t i = 0; i < count; i++) {
-			if (keys[i].Empty()) {
-				if (handler.OnEmpty(i) == ARTVisitResult::STOP) {
-					return ARTVisitResult::STOP;
-				}
-				continue;
-			}
-			auto slot = LookupEqualKey(keys[i]);
-			if (!slot) {
-				if (handler.OnMissing(i, keys[i]) == ARTVisitResult::STOP) {
-					return ARTVisitResult::STOP;
-				}
-				continue;
-			}
-			if (handler.OnMatch(i, keys[i], *slot) == ARTVisitResult::STOP) {
-				return ARTVisitResult::STOP;
-			}
-		}
-		return ARTVisitResult::CONTINUE;
-	}
-
-	//! Remap a row ID inside a matched value-key leaf slot. Cardinality-preserving mutations only.
-	void RemapRowIdInLeaf(ArenaAllocator &allocator, Node &slot, const ARTKey &old_row_id, const ARTKey &new_row_id);
-
 	//! Reset all ART storage.
 	void ResetStorage(IndexLock &index_lock) override;
 
@@ -218,9 +189,6 @@ private:
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
-
-	void AssertIndexLockHeld(IndexLock &state) const;
-	unsafe_optional_ptr<Node> LookupEqualKey(ARTKey &key);
 
 	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
 	void InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds);

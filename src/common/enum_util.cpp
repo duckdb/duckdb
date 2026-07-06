@@ -295,24 +295,6 @@ ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value) {
 	return static_cast<ARTScanResult>(StringUtil::StringToEnum(GetARTScanResultValues(), 2, "ARTScanResult", value));
 }
 
-const StringUtil::EnumStringLiteral *GetARTVisitResultValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ARTVisitResult::CONTINUE), "CONTINUE" },
-		{ static_cast<uint32_t>(ARTVisitResult::STOP), "STOP" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ARTVisitResult>(ARTVisitResult value) {
-	return StringUtil::EnumToString(GetARTVisitResultValues(), 2, "ARTVisitResult", static_cast<uint32_t>(value));
-}
-
-template<>
-ARTVisitResult EnumUtil::FromString<ARTVisitResult>(const char *value) {
-	return static_cast<ARTVisitResult>(StringUtil::StringToEnum(GetARTVisitResultValues(), 2, "ARTVisitResult", value));
-}
-
 const StringUtil::EnumStringLiteral *GetAccessModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(AccessMode::UNDEFINED), "UNDEFINED" },

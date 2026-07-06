@@ -62,48 +62,6 @@ public:
 		return nullptr;
 	}
 
-	//! LookupMutable returns the mutable slot matching the key, or nullptr if no such slot exists.
-	static unsafe_optional_ptr<Node> LookupMutable(ART &art, Node &node, const ARTKey &key, idx_t depth) {
-		reference<Node> ref(node);
-
-		while (ref.get().HasMetadata()) {
-			// Return the leaf slot.
-			if (ref.get().IsAnyLeaf() || ref.get().GetGateStatus() == GateStatus::GATE_SET) {
-				return unsafe_optional_ptr<Node>(ref.get());
-			}
-
-			// Traverse the prefix.
-			if (ref.get().GetType() == NType::PREFIX) {
-				Prefix prefix(art, ref.get(), true);
-				for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
-					if (prefix.data[i] != key[depth]) {
-						// The key and the prefix don't match.
-						return nullptr;
-					}
-					depth++;
-				}
-				ref = *prefix.ptr;
-				continue;
-			}
-
-			// Get the child node.
-			D_ASSERT(depth < key.len);
-			auto child = ref.get().GetChildMutable(art, key[depth]);
-
-			// No child at the key byte, return nullptr.
-			if (!child) {
-				return nullptr;
-			}
-
-			// Continue in the child.
-			ref = *child;
-			D_ASSERT(ref.get().HasMetadata());
-			depth++;
-		}
-
-		return nullptr;
-	}
-
 	//! LookupInLeaf returns true if the rowid is in the leaf:
 	//! 1) If the leaf is an inlined leaf, check if the rowid matches.
 	//! 2) If the leaf is a gate node, perform a search in the nested ART for the rowid.
