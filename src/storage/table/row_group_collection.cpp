@@ -1624,7 +1624,7 @@ private:
 			}
 			table_chunk.data[column_id].Reference(Value(types[column_id]), count_t(buffer_chunk.size()));
 		}
-		table_chunk.SetCardinality(buffer_chunk.size());
+		table_chunk.SetChildCardinality(buffer_chunk.size());
 	}
 
 	void ApplyIndexRemap(ColumnDataCollection &remap_buffer) {
