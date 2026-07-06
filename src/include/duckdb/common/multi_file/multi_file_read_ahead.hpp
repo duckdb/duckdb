@@ -100,10 +100,8 @@ private:
 	void PushError(ErrorData error);
 	//! Throw if any read-ahead thread or task pushed an error
 	void ThrowIfError();
-	//! Release a look-ahead slot
+	//! Release a read-ahead slot
 	void ReleaseSlot();
-	//! Be sure to drain any running work on early exit
-	void Drain() noexcept;
 
 	//! Number of jobs the scan keeps scheduled ahead of decoding
 	const idx_t read_ahead_depth;

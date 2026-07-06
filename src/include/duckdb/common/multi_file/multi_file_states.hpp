@@ -13,12 +13,12 @@
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/windows_undefs.hpp"
-#include "duckdb/common/multi_file/multi_file_read_ahead.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 struct MultiFileReaderInterface;
-class ClientContext;
+class MultiFileReadAhead;
+class ReadAheadJobCompletion;
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
@@ -137,11 +137,8 @@ struct MultiFileReaderData {
 };
 
 struct MultiFileGlobalState : public GlobalTableFunctionState {
-	explicit MultiFileGlobalState(MultiFileList &file_list_p) : file_list(file_list_p) {
-	}
-	explicit MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_list_p)
-	    : file_list(*owned_file_list_p), owned_file_list(std::move(owned_file_list_p)) {
-	}
+	explicit MultiFileGlobalState(MultiFileList &file_list_p);
+	explicit MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_list_p);
 	~MultiFileGlobalState();
 
 	//! The file list to scan

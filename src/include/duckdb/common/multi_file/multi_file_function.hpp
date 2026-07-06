@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/multi_file/multi_file_read_ahead.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/table_function.hpp"
