@@ -58,6 +58,7 @@ public:
 	idx_t RegisterConsumer();
 	bool DisableConsumer(idx_t consumer_idx);
 	bool TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx);
+	void ResetConsumerRegistrations();
 	void Reset();
 
 	SinkResultType Push(DataChunk &chunk, PipelineBroadcastExchangeLocalState &lstate,

@@ -236,6 +236,12 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	D_ASSERT(children.size() == 2);
 	op_state.reset();
 	sink_state.reset();
+	has_materialized_consumers = false;
+	materialized_consumer_count = 0;
+	if (exchange) {
+		// Prepared plans rebuild pipelines while keeping the physical CTE and consumer indexes.
+		exchange->ResetConsumerRegistrations();
+	}
 
 	auto &state = meta_pipeline.GetState();
 

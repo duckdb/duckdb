@@ -338,6 +338,37 @@ bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, id
 	return true;
 }
 
+void PipelineBroadcastExchange::ResetConsumerRegistrations() {
+	lock_guard<mutex> guard(lock);
+	chunks.clear();
+	shared_spool.reset();
+	direct_pipelines.clear();
+	blocked_readers.clear();
+	blocked_writers.clear();
+	base_position = 0;
+	next_position = 0;
+	shared_buffered_bytes = 0;
+	produced_rows.store(0, std::memory_order_relaxed);
+	direct_consumer_progress.store(false, std::memory_order_relaxed);
+	producer_finished = false;
+	cancelled = false;
+	active_consumers = 0;
+	for (auto &consumer : consumers) {
+		consumer.position = base_position;
+		consumer.rows_read = 0;
+		consumer.active = true;
+		consumer.disabled = false;
+		consumer.direct = false;
+		consumer.detached = false;
+		consumer.read_in_progress = false;
+		consumer.read_position = base_position;
+		consumer.detached_spool.reset();
+		consumer.shared_reader.reset();
+		consumer.detached_reader.reset();
+		active_consumers++;
+	}
+}
+
 void PipelineBroadcastExchange::Reset() {
 	vector<InterruptState> readers;
 	vector<InterruptState> writers;

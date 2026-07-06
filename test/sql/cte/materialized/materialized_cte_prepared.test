@@ -4,6 +4,21 @@
 
 require no_alternative_verify
 
+# Prepared plans reuse the physical CTE/exchange while rebuilding pipeline objects.
+statement ok
+PREPARE direct_fanout_cte AS
+WITH c AS MATERIALIZED (SELECT i FROM range(1000) t(i))
+SELECT count(*) FROM c;
+
+loop i 0 20
+
+query I
+EXECUTE direct_fanout_cte
+----
+1000
+
+endloop
+
 statement ok
 create table a(i integer);
 
