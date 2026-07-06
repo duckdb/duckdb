@@ -165,6 +165,7 @@
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
@@ -4298,6 +4299,24 @@ const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value) {
 template<>
 PhysicalType EnumUtil::FromString<PhysicalType>(const char *value) {
 	return static_cast<PhysicalType>(StringUtil::StringToEnum(GetPhysicalTypeValues(), 21, "PhysicalType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetPipelineInputModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PipelineInputMode::SCHEDULED_SOURCE), "SCHEDULED_SOURCE" },
+		{ static_cast<uint32_t>(PipelineInputMode::EXTERNAL_INPUT), "EXTERNAL_INPUT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PipelineInputMode>(PipelineInputMode value) {
+	return StringUtil::EnumToString(GetPipelineInputModeValues(), 2, "PipelineInputMode", static_cast<uint32_t>(value));
+}
+
+template<>
+PipelineInputMode EnumUtil::FromString<PipelineInputMode>(const char *value) {
+	return static_cast<PipelineInputMode>(StringUtil::StringToEnum(GetPipelineInputModeValues(), 2, "PipelineInputMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPragmaTypeValues() {

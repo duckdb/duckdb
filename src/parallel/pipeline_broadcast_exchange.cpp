@@ -851,8 +851,7 @@ bool PipelineBroadcastExchange::HasActiveSharedConsumersLocked() const {
 }
 
 bool PipelineBroadcastExchange::ShouldCreateSharedSpoolLocked() const {
-	return !shared_spool && direct_pipelines.empty() && consumers.size() > 1 &&
-	       shared_buffered_bytes >= high_watermark;
+	return !shared_spool && direct_pipelines.empty() && consumers.size() > 1 && shared_buffered_bytes >= high_watermark;
 }
 
 void PipelineBroadcastExchange::CreateSharedSpoolLocked() {
