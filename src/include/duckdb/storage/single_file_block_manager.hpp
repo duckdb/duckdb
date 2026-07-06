@@ -59,8 +59,7 @@ struct StorageManagerOptions {
 	//! Unique database identifier and optional encryption salt.
 	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
 	EncryptionOptions encryption_options;
-	//! Header bytes prefetched during file-type detection. When set, DatabaseHandle::Open reuses them to serve
-	//! the initial header reads from memory instead of re-reading. Empty unless opened via ATTACH.
+	//! Header prefetched during file-type detection; DatabaseHandle::Open reuses it. Empty unless opened via ATTACH.
 	PrefetchedFileData prefetched;
 };
 

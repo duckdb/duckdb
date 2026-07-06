@@ -87,8 +87,7 @@ struct AttachOptions {
 	unique_ptr<StoredDatabasePath> stored_database_path;
 	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
 	optional_idx vacuum_rebuild_indexes_threshold;
-	//! Header bytes prefetched during file-type detection, reused when opening the database file so the header
-	//! reads hit memory instead of re-reading (mainly relevant for remote files). Empty for non-DuckDB files.
+	//! Header prefetched during file-type detection, reused when opening the file. Empty for non-DuckDB files.
 	PrefetchedFileData prefetched;
 };
 

@@ -26,9 +26,8 @@ enum class DataFileType : uint8_t {
 
 class MagicBytes {
 public:
-	//! Detect the file type at `path` by reading its magic bytes. When `out_prefetch` is set and the file is a
-	//! DuckDB database, the opened handle and a prefetched header prefix are returned through it, so a later
-	//! storage open can reuse them instead of issuing a second open and re-reading the header.
+	//! Detect the file type at `path` from its magic bytes. For a DuckDB file, a prefetched header prefix is
+	//! returned through `out_prefetch` (when set) so a later storage open reuses it instead of re-reading.
 	static DataFileType CheckMagicBytes(QueryContext context, FileSystem &fs, const string &path,
 	                                    optional_ptr<PrefetchedFileData> out_prefetch = nullptr);
 };

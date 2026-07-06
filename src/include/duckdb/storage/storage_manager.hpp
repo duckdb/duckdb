@@ -186,8 +186,7 @@ protected:
 	atomic<idx_t> wal_entries_count;
 	//! Storage options passed in through configuration
 	StorageOptions storage_options;
-	//! Header bytes prefetched during file-type detection, consumed by LoadDatabase so the header reads hit
-	//! memory instead of re-reading. Empty unless this is a DuckDB file opened via ATTACH.
+	//! Header prefetched during file-type detection, consumed by LoadDatabase. Empty unless a DuckDB file via ATTACH.
 	PrefetchedFileData prefetched_file;
 
 public:

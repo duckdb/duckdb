@@ -22,9 +22,8 @@ struct DatabaseHandle {
 	explicit DatabaseHandle(unique_ptr<FileHandle> handle);
 	explicit DatabaseHandle(unique_ptr<MemoryMappedFile> mmap_handle);
 
-	//! Open a fresh handle for the database file. If `options.prefetched` carries a header prefix read earlier
-	//! during file-type detection, it is adopted to serve the initial header reads from memory instead of
-	//! re-reading them from the (possibly remote) file.
+	//! Open a fresh handle for the database file. A header prefix in `options.prefetched` (from file-type
+	//! detection) is adopted to serve the initial header reads from memory.
 	static unique_ptr<DatabaseHandle> Open(AttachedDatabase &db, const string &path,
 	                                       const StorageManagerOptions &options, DatabaseOpenMode open_mode);
 	bool OnDiskFile() const;
@@ -53,8 +52,7 @@ private:
 	unique_ptr<FileHandle> handle;
 	//! Memory-mapped view of the file in MAP mode. Mutually exclusive with `handle`.
 	unique_ptr<MemoryMappedFile> mmap_handle;
-	//! Bytes prefetched from offset 0 during file-type detection. Reads fully covered by it are served from
-	//! memory (only the initial header reads qualify); everything else goes to `handle`.
+	//! Bytes prefetched from offset 0; reads fully covered by it are served from memory, the rest go to `handle`.
 	shared_ptr<const string> prefetched_header;
 };
 

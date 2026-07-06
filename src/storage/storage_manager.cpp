@@ -524,8 +524,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			options.block_header_size = config.options.default_block_header_size;
 		}
 
-		// Carry the header prefetched during file-type detection into the block manager options, so the initial
-		// header reads are served from memory instead of re-reading them from the (possibly remote) file.
+		// Carry the prefetched header into the block manager options so the initial header reads hit memory.
 		options.prefetched = std::move(prefetched_file);
 
 		// Initialize the block manager while loading the database file.

@@ -10,8 +10,7 @@
 namespace duckdb {
 
 static constexpr idx_t MAGIC_BYTES_READ_SIZE = 16;
-//! MainHeader + 2 DatabaseHeaders (3 x FILE_HEADER_SIZE). Prefetched so a later storage open can serve the
-//! header reads from memory instead of issuing more requests.
+//! MainHeader + 2 DatabaseHeaders; prefetched so a later storage open serves the header reads from memory.
 static constexpr idx_t HEADER_PREFETCH_SIZE = 3 * Storage::FILE_HEADER_SIZE;
 
 static DataFileType ClassifyMagicBytes(const char *buffer) {
@@ -33,10 +32,8 @@ DataFileType MagicBytes::CheckMagicBytes(QueryContext context, FileSystem &fs, c
 		return DataFileType::DUCKDB_FILE;
 	}
 
-	// The handle is only used to read the header here and is closed on return: we deliberately do not keep it
-	// open, so the actual database handle is opened later (allowing a DuckDB file to eventually redirect to a
-	// different database). When a prefetch is requested we read the whole header region in one go instead of
-	// just the magic bytes, so the later open can serve the header reads from these bytes.
+	// The handle only reads the header and is closed on return; the database handle is opened later. On prefetch
+	// we read the whole header region at once so the later open can serve the header reads from these bytes.
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 	if (!handle) {
 		return DataFileType::FILE_DOES_NOT_EXIST;
@@ -53,8 +50,7 @@ DataFileType MagicBytes::CheckMagicBytes(QueryContext context, FileSystem &fs, c
 
 	auto file_type = ClassifyMagicBytes(buffer.get());
 
-	// Hand the prefetched header (bytes only, not the handle) to the caller for actual DuckDB files. Only the
-	// `to_read` valid bytes are kept, so a small file does not report zero-padded coverage to the reader.
+	// Hand the prefetched header bytes to the caller for DuckDB files. Only the `to_read` valid bytes are kept.
 	if (out_prefetch && file_type == DataFileType::DUCKDB_FILE) {
 		out_prefetch->header = make_shared_ptr<const string>(buffer.get(), to_read);
 	}
