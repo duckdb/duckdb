@@ -43,21 +43,16 @@ void TaskExecutor::FinishTask() {
 	++completed_tasks;
 }
 
-bool TaskExecutor::TryExecuteTask() {
-	shared_ptr<Task> task;
-	if (!scheduler.GetTaskFromProducer(*token, task)) {
-		return false;
-	}
-	const auto res = task->Execute(TaskExecutionMode::PROCESS_ALL);
-	std::ignore = res;
-	D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
-	return true;
-}
-
 void TaskExecutor::DrainTasks() {
 	// wait for all active tasks to finish, executing queued tasks on this thread where possible
+	shared_ptr<Task> task_from_producer;
 	while (completed_tasks != total_tasks) {
-		if (!TryExecuteTask()) {
+		if (scheduler.GetTaskFromProducer(*token, task_from_producer)) {
+			const auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
+			std::ignore = res;
+			D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
+			task_from_producer.reset();
+		} else {
 			std::this_thread::yield();
 		}
 	}

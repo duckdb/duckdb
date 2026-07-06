@@ -299,10 +299,9 @@ public:
 	                                   MultiFileGlobalState &global_state, MultiFileReaderData &reader_data,
 	                                   idx_t file_index) {
 		D_ASSERT(reader_data.file_state == MultiFileFileState::UNOPENED);
-		if (reader_data.union_data ||
-		    !MultiFileReader::CanSkipFileFromFilters(context, reader_data.file_to_be_opened, file_index,
-		                                             bind_data.file_options, bind_data.reader_bind,
-		                                             global_state.column_indexes, global_state.filters)) {
+		if (reader_data.union_data || !MultiFileReader::CanSkipFileFromFilters(
+		                                  context, reader_data.file_to_be_opened, file_index, bind_data.file_options,
+		                                  bind_data.reader_bind, global_state.column_indexes, global_state.filters)) {
 			return false;
 		}
 		reader_data.file_state = MultiFileFileState::SKIPPED;
@@ -311,9 +310,9 @@ public:
 
 	//! Open an unopened file, dropping the parallel lock while the open runs; the lock is held again on
 	//! return and on throw. Returns false when the initialized reader determined the file can be skipped.
-	static bool OpenFile(ClientContext &context, const MultiFileBindData &bind_data,
-	                     MultiFileGlobalState &global_state, MultiFileReaderData &current_reader_data,
-	                     idx_t current_file_index, unique_lock<mutex> &parallel_lock) {
+	static bool OpenFile(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &global_state,
+	                     MultiFileReaderData &current_reader_data, idx_t current_file_index,
+	                     unique_lock<mutex> &parallel_lock) {
 		D_ASSERT(parallel_lock.owns_lock());
 		D_ASSERT(current_reader_data.file_state == MultiFileFileState::UNOPENED);
 		current_reader_data.file_state = MultiFileFileState::OPENING;
@@ -328,10 +327,9 @@ public:
 				current_reader_data.reader = bind_data.multi_file_reader->CreateReader(
 				    context, *global_state.global_state, union_data, bind_data);
 			} else {
-				current_reader_data.reader =
-				    bind_data.multi_file_reader->CreateReader(context, *global_state.global_state,
-				                                              current_reader_data.file_to_be_opened,
-				                                              current_file_index, bind_data);
+				current_reader_data.reader = bind_data.multi_file_reader->CreateReader(
+				    context, *global_state.global_state, current_reader_data.file_to_be_opened, current_file_index,
+				    bind_data);
 			}
 			auto init_result = InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
 			                                    global_state.filters, context, current_file_index, global_state);
@@ -385,8 +383,7 @@ public:
 
 			auto &current_reader_data = *global_state.readers[current_file_index];
 			if (current_reader_data.file_state == MultiFileFileState::UNOPENED) {
-				if (TrySkipFileFromFilters(context, bind_data, global_state, current_reader_data,
-				                           current_file_index)) {
+				if (TrySkipFileFromFilters(context, bind_data, global_state, current_reader_data, current_file_index)) {
 					//! Intentionally do not increase 'i'
 					continue;
 				}
@@ -833,10 +830,9 @@ public:
 			}
 			if (job) {
 				lstate.job = std::move(*job);
-				// run queued I/O inline
+				// park until the job's scheduled I/O completes
 				if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR &&
-				    data_p.interrupt_state && !read_ahead.TryCompleteJobIO(lstate.job) &&
-				    lstate.job.io_completion->TryPark(*data_p.interrupt_state)) {
+				    data_p.interrupt_state && lstate.job.io_completion->TryPark(*data_p.interrupt_state)) {
 					lstate.job_state = MultiFileJobState::WAIT_IO;
 					data_p.async_result = AsyncResultType::BLOCKED;
 					return MultiFileAcquireResult::PARKED;
@@ -849,10 +845,6 @@ public:
 			// stop spinning if the query was interrupted
 			if (context.IsInterrupted()) {
 				throw InterruptException();
-			}
-			// execute a queued I/O task inline instead of idling
-			if (read_ahead.TryHelpIO()) {
-				continue;
 			}
 			TaskScheduler::YieldThread();
 		}

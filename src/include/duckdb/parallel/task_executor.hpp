@@ -42,8 +42,6 @@ public:
 	//! Cancel tasks that have not started yet and work on tasks until all tasks are finished. Does not throw.
 	void CancelAndDrain();
 
-	//! Pull one queued task off the scheduler and execute it - returns false when no task was queued
-	bool TryExecuteTask();
 	//! Get a task - returns true if a task was found
 	bool GetTask(shared_ptr<Task> &task);
 

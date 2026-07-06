@@ -76,13 +76,8 @@ public:
 	//! Push a finished job's scan state, so learned reader state carries over to jobs created later
 	void PushState(unique_ptr<LocalTableFunctionState> state);
 
-	//! Make our pipeline worker do IO work
-	bool TryCompleteJobIO(MultiFileScanJob &job);
 	//! Block until the claimed job's scheduled I/O has completed
 	void WaitForJob(MultiFileScanJob &job);
-
-	//! Run one queued I/O task inline - returns false when none was queued
-	bool TryHelpIO();
 
 private:
 	//! RAII reservation produce attempts
