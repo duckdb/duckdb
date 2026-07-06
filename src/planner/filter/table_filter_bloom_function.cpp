@@ -260,28 +260,33 @@ FilterPropagateResult BloomFilterScalarFun::FilterPrune(const FunctionStatistics
 	if (!data.filter || !data.filter->IsInitialized()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	auto column_stats = input.ChildStats(0);
+	if (!column_stats) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto &stats = *column_stats;
 
 	switch (data.key_type.InternalType()) {
 	case PhysicalType::UINT8:
-		return TemplatedBloomFilterPrune<uint8_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uint8_t>(*data.filter, stats);
 	case PhysicalType::UINT16:
-		return TemplatedBloomFilterPrune<uint16_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uint16_t>(*data.filter, stats);
 	case PhysicalType::UINT32:
-		return TemplatedBloomFilterPrune<uint32_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uint32_t>(*data.filter, stats);
 	case PhysicalType::UINT64:
-		return TemplatedBloomFilterPrune<uint64_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uint64_t>(*data.filter, stats);
 	case PhysicalType::UINT128:
-		return TemplatedBloomFilterPrune<uhugeint_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<uhugeint_t>(*data.filter, stats);
 	case PhysicalType::INT8:
-		return TemplatedBloomFilterPrune<int8_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<int8_t>(*data.filter, stats);
 	case PhysicalType::INT16:
-		return TemplatedBloomFilterPrune<int16_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<int16_t>(*data.filter, stats);
 	case PhysicalType::INT32:
-		return TemplatedBloomFilterPrune<int32_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<int32_t>(*data.filter, stats);
 	case PhysicalType::INT64:
-		return TemplatedBloomFilterPrune<int64_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<int64_t>(*data.filter, stats);
 	case PhysicalType::INT128:
-		return TemplatedBloomFilterPrune<hugeint_t>(*data.filter, input.stats);
+		return TemplatedBloomFilterPrune<hugeint_t>(*data.filter, stats);
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

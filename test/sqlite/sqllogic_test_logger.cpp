@@ -26,6 +26,13 @@ void SQLLogicTestLogger::AppendFailure(const string &log_message) {
 	FailureSummary::Log(log_message);
 }
 
+void SQLLogicTestLogger::EmitTestEvent(const string &json_payload) {
+	// The "[TEST_EVENT] " flare marks a line as a machine-readable event; the payload is a JSON
+	// object (begin / end). Callers gate on EmitTestEventsEnabled() and pass a serialized object.
+	// Build the whole line first so it reaches cerr as a single insertion — no interleaving.
+	std::cerr << "[TEST_EVENT] " + json_payload + "\n";
+}
+
 void SQLLogicTestLogger::LogFailure(const string &log_message) {
 	Log("", log_message);
 }

@@ -353,6 +353,7 @@ void ConnectInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<Identifier>(200, "name", name);
 	serializer.WritePropertyWithDefault<bool>(201, "name_is_string_literal", name_is_string_literal);
 	serializer.WritePropertyWithDefault<bool>(202, "target_is_local", target_is_local);
+	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(203, "options", options);
 }
 
 unique_ptr<ParseInfo> ConnectInfo::Deserialize(Deserializer &deserializer) {
@@ -360,6 +361,7 @@ unique_ptr<ParseInfo> ConnectInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<Identifier>(200, "name", result->name);
 	deserializer.ReadPropertyWithDefault<bool>(201, "name_is_string_literal", result->name_is_string_literal);
 	deserializer.ReadPropertyWithDefault<bool>(202, "target_is_local", result->target_is_local);
+	deserializer.ReadPropertyWithDefault<unordered_map<string, Value>>(203, "options", result->options);
 	return std::move(result);
 }
 

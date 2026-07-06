@@ -51,6 +51,7 @@ class ViewCatalogEntry;
 class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
+class LogicalGet;
 class LogicalVacuum;
 
 class ColumnList;
@@ -240,6 +241,10 @@ public:
 	                                                     AlterBindMode bind_mode = AlterBindMode::BIND_ON_ALTER);
 	static unique_ptr<BoundCreateTableInfo> BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
 	                                                                  SchemaCatalogEntry &schema);
+
+	//! The lone LOGICAL_GET reached through identity projections, or nullptr if `op` is not a bare
+	//! table-function passthrough.
+	static optional_ptr<LogicalGet> GetPassthroughTableFunctionGet(LogicalOperator &op);
 
 	static vector<unique_ptr<BoundConstraint>> BindConstraints(ClientContext &context,
 	                                                           const vector<unique_ptr<Constraint>> &constraints,

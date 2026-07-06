@@ -825,7 +825,11 @@ static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector 
 
 static FilterPropagateResult RowIdFilterPropagate(const FunctionStatisticsPruneInput &input) {
 	auto &allowed = input.bind_data->Cast<RowIdFilterBindData>().allowed_ids;
-	auto &stats = input.stats;
+	auto column_stats = input.ChildStats(0);
+	if (!column_stats) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto &stats = *column_stats;
 
 	if (!NumericStats::HasMinMax(stats)) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;

@@ -35,6 +35,12 @@ void RegisterSqllogictests();
 void RegisterSqllogictestStdin();
 bool SummarizeFailures();
 
+//! Test identity: the full test name sanitized to one filesystem/shell-safe path component (every char
+//! outside [A-Za-z0-9_-] -> '_', including '.'). The body suffix is kept, so siblings differing only by
+//! suffix (foo.test vs foo.test_slow) stay distinct (foo_test vs foo_test_slow). Shared by the TEST_ID
+//! env var and the temp-dir leaf so they agree.
+string TestNameToId(const string &name);
+
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
@@ -44,19 +50,19 @@ void TestChangeDirectory(string path);
 
 void SetDeleteTestPath(bool delete_path);
 bool DeleteTestPath();
-//! The HOME sandbox dir ("<run-root>-home"): a sibling of the run root, never inside any {TEST_DIR}.
-//! main points HOME/USERPROFILE here once per invocation (isolates ~/.duckdb without landing inside a
-//! test-whitelisted dir). Materialized by PrepareTempDir, reclaimed by DestroyTempDir.
-string GetTempDirHome();
-//! Test identity: the full test name sanitized to one filesystem/shell-safe path component (every char
-//! outside [A-Za-z0-9_-] -> '_', including '.'). The body suffix is kept, so siblings differing only by
-//! suffix (foo.test vs foo.test_slow) stay distinct (foo_test vs foo_test_slow). Shared by the TEST_ID
-//! env var and the temp-dir leaf so they agree.
-string TestNameToId(const string &name);
 void ClearTestDirectory();
 string TestGetCurrentDirectory();
 string TestDirectoryPath();
 string TestCreatePath(string suffix);
+
+//! The HOME sandbox dir ("<run-root>-home"): a sibling of the run root, never inside any {TEST_DIR}.
+//! main points HOME/USERPROFILE here once per invocation (isolates ~/.duckdb without landing inside a
+//! test-whitelisted dir). Materialized by PrepareTempDir, reclaimed by DestroyTempDir.
+string GetTempDirHome();
+
+void SetEmitTestEvents(bool emit);
+bool EmitTestEventsEnabled();
+
 unique_ptr<DBConfig> GetTestConfig();
 bool TestIsInternalError(unordered_set<string> &internal_error_messages, const string &error);
 

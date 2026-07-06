@@ -122,6 +122,8 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	runner.environment_variables["TEMP_DIR_ABSOLUTE"] = test_dir_absolute;
 	runner.environment_variables["CATALOG_DIR"] = temp_dir_for_test + "/" + runner.environment_variables["TEST_UUID"];
 
+	runner.EmitBegin(name);
+
 	ErrorData error;
 	try {
 		if (input) {
@@ -131,6 +133,12 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 		}
 	} catch (std::exception &ex) {
 		error = ErrorData(ex);
+	} catch (...) {
+		// Catch's own assertion-failure control exception (not std::exception): the test aborted
+		// mid-run. Catch carries no message; emit the locator stashed at the throw site (file:line —
+		// the full diff is in the captured output), then rethrow so Catch still records the verdict.
+		runner.EmitEnd(name, "error", runner.test_failure_locator);
+		throw;
 	}
 
 	if (!input && AUTO_SWITCH_TEST_DIR) {
@@ -151,8 +159,12 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 			}
 		} catch (std::exception &ex) {
 			string cleanup_failure = "Error while running clean-up routine:\n";
-			ErrorData error(ex);
-			cleanup_failure += error.Message();
+			ErrorData cleanup_error(ex);
+			cleanup_failure += cleanup_error.Message();
+			// FAIL throws, unwinding past the unified terminal-event emit below. Emit the end event
+			// here first so a cleanup failure still yields one — preserving the one-begin/one-end
+			// invariant that --emit-test-events consumers rely on.
+			runner.EmitEnd(name, "error", cleanup_failure);
 			FAIL(cleanup_failure);
 		}
 	}
@@ -162,6 +174,16 @@ static void RunSQLLogicTest(const string &name, optional_ptr<std::istream> input
 	// (main's DestroyTempDir then reclaims the whole run root only on overall success).
 	DestroyTestTempDir(!error.HasError());
 
+	// Single terminal event (--emit-test-events): status = skip-requirement (whole-test skip) /
+	// error (a std::exception escaped: LoadDatabase / cleanup / unexpected) / ok. Catch-thrown
+	// statement failures are handled by the catch(...) above.
+	if (runner.test_skipped_requirement) {
+		runner.EmitEnd(name, "skip-requirement", runner.test_skip_reason);
+	} else if (error.HasError()) {
+		runner.EmitEnd(name, "error", error.Message());
+	} else {
+		runner.EmitEnd(name, "ok", "");
+	}
 	if (error.HasError()) {
 		FAIL(error.Message());
 	}
