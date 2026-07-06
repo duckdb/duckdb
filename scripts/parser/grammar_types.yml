@@ -193,6 +193,7 @@ AlterInfo:
     - AlterSchemaStmt
     - AlterSequenceStmt
     - AlterSequenceOptions
+    - RenameAlterSequenceOptions
     - SetSequenceOption
 
 AlterTableInfo:
@@ -300,6 +301,7 @@ WindowExpression:
   rules:
     - OverClause
     - WindowFrame
+    - IdentifierWindowFrame
     - ParensIdentifier
     - WindowFrameDefinition
     - WindowFrameContentsParens
@@ -739,6 +741,7 @@ QualifiedName:
     - SchemaReservedIndex
     - CatalogReservedSchemaIndex
     - FunctionIdentifier
+    - FunctionNameAsQualifiedName
     - SchemaReservedFunctionName
     - CatalogReservedSchemaFunctionName
     - QualifiedTableFunction

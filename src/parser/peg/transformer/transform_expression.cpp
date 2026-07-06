@@ -379,13 +379,9 @@ bool PEGTransformerFactory::TransformAllKeyword(PEGTransformer &transformer) {
 	return false;
 }
 
-QualifiedName PEGTransformerFactory::TransformFunctionIdentifier(PEGTransformer &transformer,
-                                                                 ParseResult &choice_result) {
-	if (choice_result.type == ParseResultType::IDENTIFIER) {
-		QualifiedName result(choice_result.Cast<IdentifierParseResult>().identifier);
-		return result;
-	}
-	return transformer.Transform<QualifiedName>(choice_result);
+QualifiedName PEGTransformerFactory::TransformFunctionNameAsQualifiedName(PEGTransformer &transformer,
+                                                                          const Identifier &function_name) {
+	return QualifiedName(function_name);
 }
 
 QualifiedName PEGTransformerFactory::TransformSchemaReservedFunctionName(PEGTransformer &transformer,
@@ -2102,13 +2098,9 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeOverClauseTrampo
 	return make_uniq<TypedTransformResult<unique_ptr<WindowExpression>>>(std::move(result));
 }
 
-unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrame(PEGTransformer &transformer,
-                                                                         ParseResult &choice_result) {
-	if (choice_result.type == ParseResultType::IDENTIFIER) {
-		auto window_name = choice_result.Cast<IdentifierParseResult>().identifier;
-		return transformer.GetWindowClause(window_name);
-	}
-	return transformer.Transform<unique_ptr<WindowExpression>>(choice_result);
+unique_ptr<WindowExpression> PEGTransformerFactory::TransformIdentifierWindowFrame(PEGTransformer &transformer,
+                                                                                   const Identifier &identifier) {
+	return transformer.GetWindowClause(identifier);
 }
 
 unique_ptr<WindowExpression> PEGTransformerFactory::TransformParensIdentifier(PEGTransformer &transformer,

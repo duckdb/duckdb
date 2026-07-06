@@ -624,6 +624,11 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeAlterSequenceOptionsTrampoline(PEGTransformer &transformer,
 	                                                                               TransformStack &stack,
 	                                                                               TransformStackFrame &frame);
+	static void InitializeRenameAlterSequenceOptionsTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                           TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeRenameAlterSequenceOptionsTrampoline(PEGTransformer &transformer,
+	                                                                                     TransformStack &stack,
+	                                                                                     TransformStackFrame &frame);
 	static void InitializeSetSequenceOptionTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                  TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -2284,6 +2289,11 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeFunctionIdentifierTrampoline(PEGTransformer &transformer,
 	                                                                             TransformStack &stack,
 	                                                                             TransformStackFrame &frame);
+	static void InitializeFunctionNameAsQualifiedNameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                            TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeFunctionNameAsQualifiedNameTrampoline(PEGTransformer &transformer,
+	                                                                                      TransformStack &stack,
+	                                                                                      TransformStackFrame &frame);
 	static void InitializeCatalogReservedSchemaFunctionNameTrampoline(PEGTransformer &transformer,
 	                                                                  TransformStack &stack,
 	                                                                  TransformStackFrame &frame);
@@ -2594,6 +2604,11 @@ public:
 	                                            TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
 	FinalizeWindowFrameTrampoline(PEGTransformer &transformer, TransformStack &stack, TransformStackFrame &frame);
+	static void InitializeIdentifierWindowFrameTrampoline(PEGTransformer &transformer, TransformStack &stack,
+	                                                      TransformStackFrame &frame);
+	static unique_ptr<TransformResultValue> FinalizeIdentifierWindowFrameTrampoline(PEGTransformer &transformer,
+	                                                                                TransformStack &stack,
+	                                                                                TransformStackFrame &frame);
 	static void InitializeParensIdentifierTrampoline(PEGTransformer &transformer, TransformStack &stack,
 	                                                 TransformStackFrame &frame);
 	static unique_ptr<TransformResultValue>
@@ -4829,7 +4844,10 @@ public:
 	                                                    const Identifier &sequence_name);
 	static unique_ptr<TransformResultValue> TransformAlterSequenceOptionsInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
-	static unique_ptr<AlterInfo> TransformAlterSequenceOptions(PEGTransformer &transformer, ParseResult &choice_result);
+	static unique_ptr<TransformResultValue> TransformRenameAlterSequenceOptionsInternal(PEGTransformer &transformer,
+	                                                                                    ParseResult &parse_result);
+	static unique_ptr<AlterInfo> TransformRenameAlterSequenceOptions(PEGTransformer &transformer,
+	                                                                 unique_ptr<AlterTableInfo> rename_alter);
 	static unique_ptr<TransformResultValue> TransformSetSequenceOptionInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static unique_ptr<AlterInfo>
@@ -6193,7 +6211,10 @@ public:
 	                                                              vector<FunctionArgument> function_argument);
 	static unique_ptr<TransformResultValue> TransformFunctionIdentifierInternal(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
-	static QualifiedName TransformFunctionIdentifier(PEGTransformer &transformer, ParseResult &choice_result);
+	static unique_ptr<TransformResultValue> TransformFunctionNameAsQualifiedNameInternal(PEGTransformer &transformer,
+	                                                                                     ParseResult &parse_result);
+	static QualifiedName TransformFunctionNameAsQualifiedName(PEGTransformer &transformer,
+	                                                          const Identifier &function_name);
 	static unique_ptr<TransformResultValue>
 	TransformCatalogReservedSchemaFunctionNameInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName
@@ -6463,7 +6484,10 @@ public:
 	static WindowExcludeMode TransformExcludeNoOthers(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformWindowFrameInternal(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
-	static unique_ptr<WindowExpression> TransformWindowFrame(PEGTransformer &transformer, ParseResult &choice_result);
+	static unique_ptr<TransformResultValue> TransformIdentifierWindowFrameInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static unique_ptr<WindowExpression> TransformIdentifierWindowFrame(PEGTransformer &transformer,
+	                                                                   const Identifier &identifier);
 	static unique_ptr<TransformResultValue> TransformParensIdentifierInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<WindowExpression> TransformParensIdentifier(PEGTransformer &transformer,
