@@ -17,6 +17,7 @@
 #include "dbgen/dsstypes.h"
 
 #include <cassert>
+#include <atomic>
 #include <cmath>
 #include <mutex>
 
@@ -257,8 +258,8 @@ static void gen_tbl(ClientContext &context, int tnum, DSS_HUGE count, tpch_appen
 	code_t code;
 
 	for (DSS_HUGE i = offset + 1; count; count--, i++) {
-		if (count % 1000 == 0 && context.IsInterrupted()) {
-			return;
+		if (count % 1000 == 0) {
+			context.InterruptCheck();
 		}
 		row_start(tnum, dbgen_ctx);
 		switch (tnum) {
@@ -488,14 +489,53 @@ struct TPCHDBgenParameters {
 	vector<optional_ptr<TableCatalogEntry>> tables;
 };
 
+static constexpr int DBGEN_TABLES[] = {SUPP, CUST, ORDER_LINE, PART_PSUPP, NATION, REGION};
+static constexpr idx_t DBGEN_ROW_BATCH_SIZE = 100000;
+
+struct DBGenTableRange {
+	idx_t offset;
+	idx_t count;
+};
+
+static idx_t GetDBGenTableRowCount(const DBGenContext &dbgen_ctx, int table_index) {
+	if (table_index < NATION) {
+		return static_cast<idx_t>(dbgen_ctx.tdefs[table_index].base * dbgen_ctx.scale_factor);
+	}
+	return static_cast<idx_t>(dbgen_ctx.tdefs[table_index].base);
+}
+
+static DBGenTableRange GetDBGenTableRange(idx_t row_count, int children, int current_step) {
+	if (children <= 1 || current_step == -1) {
+		return DBGenTableRange {0, row_count};
+	}
+	auto child_count = static_cast<idx_t>(children);
+	auto step = static_cast<idx_t>(current_step);
+	auto part_size = (row_count + child_count - 1) / child_count;
+	auto part_offset = part_size * step;
+	if (part_offset >= row_count) {
+		return DBGenTableRange {part_offset, 0};
+	}
+	return DBGenTableRange {part_offset, MinValue<idx_t>(part_size, row_count - part_offset)};
+}
+
+static idx_t GetDBGenTotalWork(const DBGenContext &dbgen_ctx, int children, int start_step, int end_step) {
+	idx_t total = 0;
+	for (int step = start_step; step < end_step; step++) {
+		for (auto table_index : DBGEN_TABLES) {
+			auto row_count = GetDBGenTableRowCount(dbgen_ctx, table_index);
+			total += GetDBGenTableRange(row_count, children, step).count;
+		}
+	}
+	return total;
+}
+
 class TPCHDataAppender {
 public:
 	TPCHDataAppender(ClientContext &context, TPCHDBgenParameters &parameters, DBGenContext base_context,
-	                 idx_t flush_count)
-	    : context(context), parameters(parameters) {
+	                 idx_t flush_count, optional_ptr<atomic<idx_t>> generated_work_counter = nullptr)
+	    : context(context), parameters(parameters), generated_work_counter(generated_work_counter) {
 		dbgen_ctx = base_context;
 		append_info = duckdb::unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
-		memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
 		for (size_t i = PART; i <= REGION; i++) {
 			if (parameters.tables[i]) {
 				auto &tbl_catalog = *parameters.tables[i];
@@ -508,35 +548,37 @@ public:
 	}
 
 	void GenerateTableData(int table_index, idx_t row_count, idx_t offset) {
+		if (row_count == 0) {
+			return;
+		}
 		gen_tbl(context, table_index, static_cast<DSS_HUGE>(row_count), append_info.get(), &dbgen_ctx, offset);
+		generated_work += row_count;
+		if (generated_work_counter) {
+			generated_work_counter->fetch_add(row_count);
+		}
+	}
+
+	void SkipTable(int table_index, int children, idx_t offset) {
+		if (children > 1) {
+			skip(table_index, children, static_cast<DSS_HUGE>(offset), dbgen_ctx);
+		}
 	}
 
 	void AppendData(int children, int current_step) {
-		DSS_HUGE i;
-		DSS_HUGE rowcnt = 0;
-		for (i = PART; i <= REGION; i++) {
-			if (table & (1 << i)) {
-				if (i < NATION) {
-					rowcnt = dbgen_ctx.tdefs[i].base * dbgen_ctx.scale_factor;
-				} else {
-					rowcnt = dbgen_ctx.tdefs[i].base;
-				}
-				if (context.IsInterrupted()) {
-					return;
-				}
+		for (auto table_index : DBGEN_TABLES) {
+			if (table & (1 << table_index)) {
+				auto rowcnt = GetDBGenTableRowCount(dbgen_ctx, table_index);
+				context.InterruptCheck();
 				if (children > 1 && current_step != -1) {
-					size_t part_size = std::ceil((double)rowcnt / (double)children);
-					auto part_offset = part_size * current_step;
-					auto part_end = part_offset + part_size;
-					rowcnt = part_end > rowcnt ? rowcnt - part_offset : part_size;
-					skip(i, children, part_offset, dbgen_ctx);
-					if (rowcnt > 0) {
+					auto range = GetDBGenTableRange(rowcnt, children, current_step);
+					SkipTable(table_index, children, range.offset);
+					if (range.count > 0) {
 						// generate part of the table
-						GenerateTableData((int)i, rowcnt, part_offset);
+						GenerateTableData(table_index, range.count, range.offset);
 					}
 				} else {
 					// generate full table
-					GenerateTableData((int)i, rowcnt, 0);
+					GenerateTableData(table_index, rowcnt, 0);
 				}
 			}
 		}
@@ -552,9 +594,15 @@ public:
 		}
 	}
 
+	idx_t GeneratedWork() const {
+		return generated_work;
+	}
+
 private:
 	ClientContext &context;
 	TPCHDBgenParameters &parameters;
+	optional_ptr<atomic<idx_t>> generated_work_counter;
+	idx_t generated_work = 0;
 	unique_ptr<tpch_append_information[]> append_info;
 	DBGenContext dbgen_ctx;
 };
@@ -579,130 +627,309 @@ private:
 	int current_step;
 };
 
-void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, const Identifier &catalog_name,
-                                const Identifier &schema, string suffix, int children, int current_step) {
-	if (flt_scale == 0) {
-		return;
-	}
+DBGenGenerator::~DBGenGenerator() {
+}
 
-	// all tables
-	table = (1 << CUST) | (1 << SUPP) | (1 << NATION) | (1 << REGION) | (1 << PART_PSUPP) | (1 << ORDER_LINE);
-	force = 0;
-	insert_segments = 0;
-	delete_segments = 0;
-	insert_orders_segment = 0;
-	insert_lineitem_segment = 0;
-	delete_segment = 0;
-	verbose = 0;
-	set_seeds = 0;
-	updates = 0;
+class TPCHDBGenGenerator : public DBGenGenerator {
+public:
+	TPCHDBGenGenerator(ClientContext &context, double flt_scale, const Identifier &catalog_name,
+	                   const Identifier &schema, string suffix, int children, int current_step)
+	    : context(context), flt_scale(flt_scale), children(children), current_step(current_step) {
+		InitializeBaseContext();
 
-	d_path = NULL;
-
-	DBGenContext base_context;
-	tdef *tdefs = base_context.tdefs;
-	tdefs[PART].base = 200000;
-	tdefs[PSUPP].base = 200000;
-	tdefs[SUPP].base = 10000;
-	tdefs[CUST].base = 150000;
-	tdefs[ORDER].base = 150000 * ORDERS_PER_CUST;
-	tdefs[LINE].base = 150000 * ORDERS_PER_CUST;
-	tdefs[ORDER_LINE].base = 150000 * ORDERS_PER_CUST;
-	tdefs[PART_PSUPP].base = 200000;
-	tdefs[NATION].base = NATIONS_MAX;
-	tdefs[REGION].base = NATIONS_MAX;
-
-	if (flt_scale < MIN_SCALE) {
-		int i;
-		int int_scale;
-
-		base_context.scale_factor = 1;
-		int_scale = (int)(1000 * flt_scale);
-		for (i = PART; i < REGION; i++) {
-			tdefs[i].base = (DSS_HUGE)(int_scale * tdefs[i].base) / 1000;
-			if (tdefs[i].base < 1) {
-				tdefs[i].base = 1;
-			}
+		if (flt_scale == 0 || current_step >= children) {
+			Finish();
+			return;
 		}
-	} else {
-		base_context.scale_factor = (long)flt_scale;
-	}
 
-	if (current_step >= children) {
-		return;
-	}
+		auto &catalog = Catalog::GetCatalog(context, catalog_name);
+		parameters = make_uniq<TPCHDBgenParameters>(context, catalog, schema, suffix);
 
-	load_dists(10 * 1024 * 1024, &base_context); // 10MiB
-	/* have to do this after init */
-	tdefs[NATION].base = nations.count;
-	tdefs[REGION].base = regions.count;
+		load_dists(10 * 1024 * 1024, &base_context); // 10MiB
+		distributions_loaded = true;
+		/* have to do this after init */
+		base_context.tdefs[NATION].base = nations.count;
+		base_context.tdefs[REGION].base = regions.count;
 
-	auto &catalog = Catalog::GetCatalog(context, catalog_name);
-
-	TPCHDBgenParameters parameters(context, catalog, schema, suffix);
 #ifndef DUCKDB_NO_THREADS
-	bool explicit_partial_generation = children > 1 && current_step != -1;
-	auto thread_count = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	if (explicit_partial_generation || thread_count <= 1) {
+		auto thread_count = TaskScheduler::GetScheduler(context).NumberOfThreads();
+		if (!ExplicitPartialGeneration() && thread_count > 1) {
+			mode = DBGenMode::PARALLEL;
+			parallel_thread_count = thread_count;
+			parallel_child_count = GetDefaultChildCount();
+			total_work = GetDBGenTotalWork(base_context, NumericCast<int>(parallel_child_count), 0,
+			                               NumericCast<int>(parallel_child_count));
+			return;
+		}
 #endif
-		// if we are doing explicit partial generation the parallelism is managed outside of dbgen
-		// only generate the chunk we are interested in
-		TPCHDataAppender appender(context, parameters, base_context, BaseAppender::DEFAULT_FLUSH_COUNT);
-		appender.AppendData(children, current_step);
-		appender.Flush();
-#ifndef DUCKDB_NO_THREADS
-	} else {
-		// we split into 20 children per scale factor by default
-		static constexpr idx_t CHILDREN_PER_SCALE_FACTOR = 20;
-		idx_t child_count;
-		if (flt_scale < 1) {
-			child_count = 1;
-		} else {
-			child_count = MinValue<idx_t>(static_cast<idx_t>(CHILDREN_PER_SCALE_FACTOR * flt_scale), MAX_CHILDREN);
+
+		mode = DBGenMode::SEQUENTIAL;
+		sequential_children = ExplicitPartialGeneration() ? children : NumericCast<int>(GetDefaultChildCount());
+		sequential_start_step = ExplicitPartialGeneration() ? current_step : 0;
+		sequential_end_step = ExplicitPartialGeneration() ? current_step + 1 : sequential_children;
+		sequential_step = sequential_start_step;
+		total_work = GetDBGenTotalWork(base_context, sequential_children, sequential_start_step, sequential_end_step);
+	}
+
+	~TPCHDBGenGenerator() override {
+		if (distributions_loaded) {
+			cleanup_dists();
 		}
-		idx_t step = 0;
-		vector<TPCHDataAppender> finished_appenders;
-		while (step < child_count) {
-			// launch N threads
+	}
+
+	bool GenerateNext() override {
+		context.InterruptCheck();
+		if (finished) {
+			return true;
+		}
+		if (total_work == 0) {
+			Finish();
+			return true;
+		}
+		switch (mode) {
+		case DBGenMode::PARALLEL:
+			return GenerateParallel();
+		case DBGenMode::SEQUENTIAL:
+			return GenerateSequential();
+		default:
+			throw InternalException("Unexpected TPC-H dbgen mode");
+		}
+	}
+
+	double Progress() const override {
+		if (finished) {
+			return 100.0;
+		}
+		if (total_work == 0) {
+			return 0.0;
+		}
+		auto current_generated_work = MinValue<idx_t>(generated_work.load(), total_work);
+		auto current_flushed_work = MinValue<idx_t>(flushed_work.load(), total_work);
+		auto current_work = static_cast<double>(current_generated_work) + static_cast<double>(current_flushed_work);
+		auto current_progress = 100.0 * (current_work / (2.0 * static_cast<double>(total_work)));
+		return MinValue<double>(current_progress, 99.9);
+	}
+
+private:
+	enum class DBGenMode : uint8_t { SEQUENTIAL, PARALLEL };
+
+	void InitializeBaseContext() {
+		// all tables
+		table = (1 << CUST) | (1 << SUPP) | (1 << NATION) | (1 << REGION) | (1 << PART_PSUPP) | (1 << ORDER_LINE);
+		force = 0;
+		insert_segments = 0;
+		delete_segments = 0;
+		insert_orders_segment = 0;
+		insert_lineitem_segment = 0;
+		delete_segment = 0;
+		verbose = 0;
+		set_seeds = 0;
+		updates = 0;
+
+		d_path = NULL;
+
+		auto tdefs = base_context.tdefs;
+		tdefs[PART].base = 200000;
+		tdefs[PSUPP].base = 200000;
+		tdefs[SUPP].base = 10000;
+		tdefs[CUST].base = 150000;
+		tdefs[ORDER].base = 150000 * ORDERS_PER_CUST;
+		tdefs[LINE].base = 150000 * ORDERS_PER_CUST;
+		tdefs[ORDER_LINE].base = 150000 * ORDERS_PER_CUST;
+		tdefs[PART_PSUPP].base = 200000;
+		tdefs[NATION].base = NATIONS_MAX;
+		tdefs[REGION].base = NATIONS_MAX;
+
+		if (flt_scale < MIN_SCALE) {
+			auto int_scale = static_cast<int>(1000 * flt_scale);
+			base_context.scale_factor = 1;
+			for (int i = PART; i < REGION; i++) {
+				tdefs[i].base = (DSS_HUGE)(int_scale * tdefs[i].base) / 1000;
+				if (tdefs[i].base < 1) {
+					tdefs[i].base = 1;
+				}
+			}
+		} else {
+			base_context.scale_factor = static_cast<long>(flt_scale);
+		}
+	}
+
+	bool ExplicitPartialGeneration() const {
+		return children > 1 && current_step != -1;
+	}
+
+	idx_t GetDefaultChildCount() const {
+		if (flt_scale < 1) {
+			return 1;
+		}
+		static constexpr idx_t CHILDREN_PER_SCALE_FACTOR = 20;
+		return MinValue<idx_t>(static_cast<idx_t>(CHILDREN_PER_SCALE_FACTOR * flt_scale), MAX_CHILDREN);
+	}
+
+	bool FlushNextFinishedAppender() {
+		if (finished_appender_offset >= finished_appenders.size()) {
+			finished_appenders.clear();
+			finished_appender_offset = 0;
+			return false;
+		}
+		auto &appender = finished_appenders[finished_appender_offset++];
+		appender.Flush();
+		flushed_work.fetch_add(appender.GeneratedWork());
+		if (finished_appender_offset >= finished_appenders.size()) {
+			finished_appenders.clear();
+			finished_appender_offset = 0;
+		}
+		return true;
+	}
+
+	void FlushAllFinishedAppenders() {
+		while (FlushNextFinishedAppender()) {
+		}
+	}
+
+	bool GenerateParallel() {
+#ifdef DUCKDB_NO_THREADS
+		throw InternalException("Parallel TPC-H dbgen selected without threading support");
+#else
+		if (FlushNextFinishedAppender()) {
+			return false;
+		}
+		if (parallel_step < parallel_child_count) {
 			TaskExecutor executor(context);
 
 			vector<TPCHDataAppender> new_appenders;
-			idx_t launched_step = step;
-			// initialize the appenders for each thread
-			// note we prevent the threads themselves from flushing the appenders by specifying a very high flush count
-			// here
-			for (idx_t thr_idx = 0; thr_idx < thread_count && launched_step < child_count; thr_idx++, launched_step++) {
-				new_appenders.emplace_back(context, parameters, base_context, NumericLimits<int64_t>::Maximum());
+			auto launched_step = parallel_step;
+			for (idx_t thr_idx = 0; thr_idx < parallel_thread_count && launched_step < parallel_child_count;
+			     thr_idx++, launched_step++) {
+				new_appenders.emplace_back(context, *parameters, base_context, NumericLimits<int64_t>::Maximum(),
+				                           &generated_work);
 			}
-			// schedule tasks for all appenders
 			for (auto &appender : new_appenders) {
-				auto task = make_uniq<ParallelTPCHAppendTask>(executor, appender, child_count, step);
+				auto task = make_uniq<ParallelTPCHAppendTask>(executor, appender, NumericCast<int>(parallel_child_count),
+				                                              NumericCast<int>(parallel_step));
 				executor.ScheduleTask(std::move(task));
-				step++;
+				parallel_step++;
 			}
-			// complete all tasks
 			executor.WorkOnTasks();
 			if (executor.HasError()) {
 				executor.ThrowError();
 			}
-			// flush the previous batch of appenders while waiting (if any are there)
-			// now flush the appenders in-order
-			// NOTE: do NOT catch exceptions here - if Flush() fails, let the exception
-			// propagate so that all appender destructors run with UncaughtException() == true,
-			// preventing them from re-attempting a flush on already-inconsistent local storage.
-			for (auto &appender : finished_appenders) {
-				appender.Flush();
-			}
-			finished_appenders.clear();
 			finished_appenders = std::move(new_appenders);
+			return false;
 		}
-		// flush the final batch of appenders
-		for (auto &appender : finished_appenders) {
-			appender.Flush();
-		}
-	}
+		Finish();
+		return true;
 #endif
-	cleanup_dists();
+	}
+
+	void InitializeSequentialAppender() {
+		if (sequential_appender) {
+			return;
+		}
+		sequential_appender =
+		    make_uniq<TPCHDataAppender>(context, *parameters, base_context, BaseAppender::DEFAULT_FLUSH_COUNT,
+		                                &generated_work);
+		sequential_table = 0;
+		sequential_table_started = false;
+	}
+
+	bool GenerateSequential() {
+		while (sequential_step < sequential_end_step) {
+			InitializeSequentialAppender();
+			while (sequential_table < sizeof(DBGEN_TABLES) / sizeof(DBGEN_TABLES[0])) {
+				auto table_index = DBGEN_TABLES[sequential_table];
+				if (!sequential_table_started) {
+					auto row_count = GetDBGenTableRowCount(base_context, table_index);
+					auto range = GetDBGenTableRange(row_count, sequential_children, sequential_step);
+					sequential_table_offset = range.offset;
+					sequential_table_count = range.count;
+					sequential_table_generated = 0;
+					sequential_table_started = true;
+					sequential_appender->SkipTable(table_index, sequential_children, sequential_table_offset);
+				}
+				if (sequential_table_generated >= sequential_table_count) {
+					sequential_table++;
+					sequential_table_started = false;
+					continue;
+				}
+				auto remaining = sequential_table_count - sequential_table_generated;
+				auto generate_count = MinValue<idx_t>(remaining, DBGEN_ROW_BATCH_SIZE);
+				sequential_appender->GenerateTableData(table_index, generate_count,
+				                                       sequential_table_offset + sequential_table_generated);
+				sequential_table_generated += generate_count;
+				if (generated_work.load() >= total_work) {
+					continue;
+				}
+				return false;
+			}
+			flushed_work.fetch_add(sequential_appender->GeneratedWork());
+			sequential_appender->Flush();
+			sequential_appender.reset();
+			sequential_step++;
+		}
+		Finish();
+		return true;
+	}
+
+	void Finish() {
+		FlushAllFinishedAppenders();
+		if (sequential_appender) {
+			flushed_work.fetch_add(sequential_appender->GeneratedWork());
+			sequential_appender->Flush();
+			sequential_appender.reset();
+		}
+		if (distributions_loaded) {
+			cleanup_dists();
+			distributions_loaded = false;
+		}
+		generated_work = total_work;
+		flushed_work = total_work;
+		finished = true;
+	}
+
+private:
+	ClientContext &context;
+	double flt_scale;
+	int children;
+	int current_step;
+	DBGenContext base_context;
+	unique_ptr<TPCHDBgenParameters> parameters;
+	bool distributions_loaded = false;
+	bool finished = false;
+	DBGenMode mode = DBGenMode::SEQUENTIAL;
+	atomic<idx_t> generated_work {0};
+	atomic<idx_t> flushed_work {0};
+	idx_t total_work = 0;
+
+	idx_t parallel_thread_count = 1;
+	idx_t parallel_child_count = 1;
+	idx_t parallel_step = 0;
+	vector<TPCHDataAppender> finished_appenders;
+	idx_t finished_appender_offset = 0;
+
+	int sequential_children = 1;
+	int sequential_start_step = 0;
+	int sequential_end_step = 0;
+	int sequential_step = 0;
+	idx_t sequential_table = 0;
+	bool sequential_table_started = false;
+	idx_t sequential_table_offset = 0;
+	idx_t sequential_table_count = 0;
+	idx_t sequential_table_generated = 0;
+	unique_ptr<TPCHDataAppender> sequential_appender;
+};
+
+unique_ptr<DBGenGenerator> CreateDBGenGenerator(ClientContext &context, double sf, const Identifier &catalog,
+                                                const Identifier &schema, string suffix, int children, int step) {
+	return make_uniq<TPCHDBGenGenerator>(context, sf, catalog, schema, std::move(suffix), children, step);
+}
+
+void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, const Identifier &catalog_name,
+                                const Identifier &schema, string suffix, int children, int current_step) {
+	auto generator = CreateDBGenGenerator(context, flt_scale, catalog_name, schema, std::move(suffix), children,
+	                                      current_step);
+	while (!generator->GenerateNext()) {
+	}
 }
 
 string DBGenWrapper::GetQuery(int query) {

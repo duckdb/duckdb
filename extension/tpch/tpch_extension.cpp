@@ -14,7 +14,6 @@ struct DBGenFunctionData : public TableFunctionData {
 	DBGenFunctionData() {
 	}
 
-	bool finished = false;
 	double sf = 0;
 	Identifier catalog = INVALID_CATALOG;
 	Identifier schema = DEFAULT_SCHEMA;
@@ -23,6 +22,24 @@ struct DBGenFunctionData : public TableFunctionData {
 	uint32_t children = 1;
 	int step = -1;
 };
+
+struct DBGenGlobalState : public GlobalTableFunctionState {
+	bool schema_created = false;
+	bool finished = false;
+	unique_ptr<tpch::DBGenGenerator> generator;
+};
+
+class DBGenYieldTask : public AsyncTask {
+public:
+	void Execute() override {
+	}
+};
+
+static AsyncResult DBGenYield() {
+	vector<unique_ptr<AsyncTask>> tasks;
+	tasks.push_back(make_uniq<DBGenYieldTask>());
+	return AsyncResult(std::move(tasks));
+}
 
 static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionBindInput &input,
                                           vector<LogicalType> &return_types, vector<string> &names) {
@@ -70,16 +87,46 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 	return std::move(result);
 }
 
+unique_ptr<GlobalTableFunctionState> DbgenInit(ClientContext &context, TableFunctionInitInput &input) {
+	return make_uniq<DBGenGlobalState>();
+}
+
 static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = data_p.bind_data->CastNoConst<DBGenFunctionData>();
-	if (data.finished) {
+	auto &data = data_p.bind_data->Cast<DBGenFunctionData>();
+	auto &state = data_p.global_state->Cast<DBGenGlobalState>();
+	if (state.finished) {
+		data_p.async_result = AsyncResultType::FINISHED;
 		return;
 	}
-	tpch::DBGenWrapper::CreateTPCHSchema(context, data.catalog, data.schema, data.suffix);
-	tpch::DBGenWrapper::LoadTPCHData(context, data.sf, data.catalog, data.schema, data.suffix, data.children,
-	                                 data.step);
+	if (!state.schema_created) {
+		tpch::DBGenWrapper::CreateTPCHSchema(context, data.catalog, data.schema, data.suffix);
+		state.generator = tpch::CreateDBGenGenerator(context, data.sf, data.catalog, data.schema, data.suffix,
+		                                             data.children, data.step);
+		state.schema_created = true;
+	}
 
-	data.finished = true;
+	if (!state.generator || state.generator->GenerateNext()) {
+		state.finished = true;
+		data_p.async_result = AsyncResultType::FINISHED;
+		return;
+	}
+	if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
+		data_p.async_result = DBGenYield();
+	} else {
+		data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
+	}
+}
+
+static double DbgenProgress(ClientContext &context, const FunctionData *bind_data,
+                            const GlobalTableFunctionState *global_state) {
+	if (!global_state) {
+		return 0.0;
+	}
+	auto &state = global_state->Cast<DBGenGlobalState>();
+	if (state.generator) {
+		return state.generator->Progress();
+	}
+	return state.finished ? 100.0 : 0.0;
 }
 
 struct TPCHData : public GlobalTableFunctionState {
@@ -177,7 +224,7 @@ static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
-	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind);
+	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind, DbgenInit);
 	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
 	dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	dbgen_func.named_parameters["catalog"] = LogicalType::VARCHAR;
@@ -186,6 +233,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	dbgen_func.named_parameters["children"] = LogicalType::UINTEGER;
 	dbgen_func.named_parameters["step"] = LogicalType::UINTEGER;
 	dbgen_func.call_return_type = StatementReturnType::NOTHING;
+	dbgen_func.table_scan_progress = DbgenProgress;
 	loader.RegisterFunction(dbgen_func);
 
 	// create the TPCH pragma that allows us to run the query
