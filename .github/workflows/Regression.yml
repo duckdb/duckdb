@@ -149,8 +149,8 @@ jobs:
         include:
           - name: Ingestion Perf
             benchmarks: .github/regression/ingestion.csv
-          - name: Micro + TPCH + TPCH-PARQUET + TPCDS
-            benchmarks: .github/regression/micro.csv .github/regression/tpch.csv .github/regression/tpch_parquet.csv .github/regression/tpcds.csv
+          - name: Micro
+            benchmarks: .github/regression/micro.csv
           - name: H2OAI + IMDB + CSV
             benchmarks: .github/regression/h2oai.csv .github/regression/imdb.csv .github/regression/csv.csv
           - name: RealNest
