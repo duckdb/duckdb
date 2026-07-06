@@ -1,4 +1,4 @@
-# name: test/sql/storage/rowid_gaps/indexed_no_merge_across_gap.test
+# name: test/sql/storage/rowid_gaps/indexed_remap_merges_across_gap.test
 # description: indexed vacuum remaps rowids when merging fully-live row groups across a rowid gap
 # group: [rowid_gaps]
 

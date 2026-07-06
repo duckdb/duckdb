@@ -144,10 +144,6 @@ public:
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
-	//! Returns true if checkpoint vacuum can incrementally remap every index.
-	static bool IsVacuumRemapEligible(DataTableInfo &table_info, AttachedDatabase &attached,
-	                                  optional_ptr<vector<reference<ART>>> remap_indexes = nullptr);
-
 	//! Decides how vacuum handles this table's indexes.
 	VacuumIndexStrategy GetVacuumIndexStrategy(AttachedDatabase &attached,
 	                                           optional_ptr<vector<reference<ART>>> remap_indexes = nullptr) const;

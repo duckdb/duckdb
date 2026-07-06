@@ -803,7 +803,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 	info->BindIndexes(context, ART::TYPE_NAME);
 
-	// Rowids collected from the ART must be fetched against the matching row-group tree.
+	// Exclude rowid-moving vacuum from the ART probe until the index scan finishes: collected rowids must be
+	// fetched against the matching row-group tree. A sequential fallback releases the lock on return.
 	unique_ptr<StorageLockKey> vacuum_lock;
 	auto &attached = storage.GetAttached();
 	const bool indexed_vacuum_may_move_rowids = attached.GetVacuumRebuildIndexThreshold() > 0 ||

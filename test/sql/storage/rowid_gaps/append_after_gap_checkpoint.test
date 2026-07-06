@@ -58,7 +58,7 @@ SELECT rowid, i FROM rowid_gap_append_latest.t WHERE i = 999999;
 6144	999999
 
 statement ok
-SET max_vacuum_tasks = 100;
+SET max_vacuum_tasks = 99;
 
 statement ok
 DROP INDEX rowid_gap_append_latest.idx_i;
