@@ -221,6 +221,56 @@ jobs:
 
           exit $status
 
+  regression-bench-tpch:
+    name: Bench TPCH SF10
+    if: ${{ github.repository_owner == 'duckdb' }}
+    needs:
+      - linux-base
+    runs-on: namespace-profile-linux-x64
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.GIT_REF }}
+
+      - name: Install
+        run: |
+          python3 scripts/ci/retry.py -- make toolsci
+
+      - name: Download current release artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-release-build
+          path: build/current
+
+      - name: Extract current release artifact
+        run: |
+          rm -rf build/current/release
+          tar -xzf build/current/release-artifact.tar.gz -C build/current
+
+      - name: Download base artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-base-build
+          path: build/base
+
+      - name: Extract base artifact
+        run: |
+          rm -rf build/base/release
+          tar -xzf build/base/release-artifact.tar.gz -C build/base
+
+      - name: Run regression benchmark
+        run: |
+          python scripts/regression/test_runner.py \
+            --old build/base/release/benchmark/benchmark_runner \
+            --new build/current/release/benchmark/benchmark_runner \
+            --benchmarks .github/regression/tpch_sf10.csv \
+            --verbose \
+            --threads 2 \
+            --clear-benchmark-cache \
+            --disable-timeout \
+            --max-timeout 3600
+
   regression-bench-fivetran:
     name: Bench Fivetran
     if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
