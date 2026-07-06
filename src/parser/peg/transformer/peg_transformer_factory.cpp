@@ -204,7 +204,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterGenerated();
 	RegisterGeneratedTrampoline();
 	REGISTER_TRANSFORM(TransformStatement);
-	RegisterComment();
 	RegisterCommon();
 	RegisterCreateTable();
 	RegisterExpression();

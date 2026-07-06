@@ -4626,7 +4626,6 @@ public:
 	//===--------------------------------------------------------------------===//
 
 	// Registration methods
-	void RegisterComment();
 	void RegisterCommon();
 	void RegisterCreateTable();
 	void RegisterExpression();
