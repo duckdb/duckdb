@@ -2322,22 +2322,22 @@ ORDER BY function_name, function_type, database_name, schema_name, length(parame
 		return MetadataResult::FAIL;
 	}
 
-	vector<ManualOverload> overloads;
+	vector<ManualItem> items;
 	for (auto &row : *query_result) {
-		ManualOverload overload;
-		overload.function_name = row.GetValue<string>(0);
-		overload.function_type = row.GetValue<string>(1);
-		overload.schema_path = row.GetValue<string>(8) + "." + row.GetValue<string>(9);
-		overload.return_type = row.IsNull(2) ? string() : row.GetValue<string>(2);
-		overload.parameters = ManualStringList(row.GetBaseValue(3));
-		overload.parameter_types = ManualStringList(row.GetBaseValue(4));
-		overload.varargs = row.IsNull(5) ? string() : row.GetValue<string>(5);
-		overload.description = row.IsNull(6) ? string() : row.GetValue<string>(6);
-		overload.examples = ManualStringList(row.GetBaseValue(7));
-		overloads.push_back(std::move(overload));
+		ManualItem item;
+		item.function_name = row.GetValue<string>(0);
+		item.function_type = row.GetValue<string>(1);
+		item.schema_path = row.GetValue<string>(8) + "." + row.GetValue<string>(9);
+		item.return_type = row.IsNull(2) ? string() : row.GetValue<string>(2);
+		item.parameters = ManualStringList(row.GetBaseValue(3));
+		item.parameter_types = ManualStringList(row.GetBaseValue(4));
+		item.varargs = row.IsNull(5) ? string() : row.GetValue<string>(5);
+		item.description = row.IsNull(6) ? string() : row.GetValue<string>(6);
+		item.examples = ManualStringList(row.GetBaseValue(7));
+		items.push_back(std::move(item));
 	}
 
-	if (overloads.empty()) {
+	if (items.empty()) {
 		PrintF(PrintOutput::STDERR, "No function matches '%s'\n", args[1]);
 		// suggest similarly-named functions (typo tolerance) via Jaro-Winkler similarity
 		auto suggest_prepared = con.Prepare(R"(
@@ -2398,7 +2398,7 @@ LIMIT 5)");
 		HighlightSQL(highlighted);
 		return highlighted;
 	};
-	string page = RenderManualPage(overloads, content_width, style, highlighter);
+	string page = RenderManualPage(items, content_width, style, highlighter);
 
 	// page the output when it is long (respecting the user's .pager mode); no-op off an interactive console
 	idx_t line_count = duckdb::NumericCast<idx_t>(std::count(page.begin(), page.end(), '\n'));

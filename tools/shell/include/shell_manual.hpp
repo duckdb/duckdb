@@ -19,11 +19,11 @@ namespace duckdb_shell {
 //! (or unchanged when highlighting is disabled).
 using ManualHighlighter = std::function<string(const string &)>;
 
-//! A single overload of a function, as extracted from duckdb_functions().
-struct ManualOverload {
-	//! Function name; overloads are grouped into an entry per (name, schema, type).
+//! A single item of the manual page - one row extracted from duckdb_functions().
+struct ManualItem {
+	//! Function name; items are grouped into an entry per (name, schema, type).
 	string function_name;
-	//! Raw function type from duckdb_functions() ("scalar", "aggregate", "table", ...); overloads are
+	//! Raw function type from duckdb_functions() ("scalar", "aggregate", "table", ...); items are
 	//! grouped under a heading per type and numbered sequentially in that grouped order.
 	string function_type;
 	//! Qualified schema the entry lives in ("database.schema"), shown once above each signature group.
@@ -32,13 +32,13 @@ struct ManualOverload {
 	vector<string> parameters;
 	//! Parameter types (may be empty strings, e.g. for macros)
 	vector<string> parameter_types;
-	//! The vararg type when the overload is variadic, empty otherwise
+	//! The vararg type when the item is variadic, empty otherwise
 	string varargs;
 	//! Return type (may be empty, e.g. for table functions)
 	string return_type;
-	//! Overload description (may be empty)
+	//! Item description (may be empty)
 	string description;
-	//! Overload examples (may be empty)
+	//! Item examples (may be empty)
 	vector<string> examples;
 };
 
@@ -57,13 +57,12 @@ struct ManualStyle {
 	string type_on, type_off;
 };
 
-//! Render the manual page for `overloads`, wrapped to `content_width` columns. Overloads are split into
+//! Render the manual page for `items`, wrapped to `content_width` columns. Items are split into
 //! entries by (name, schema, type); each entry opens with a rule carrying its schema, name and type,
 //! followed by its signatures and deduplicated Descriptions/Examples sections. When more than one entry
 //! is shown, each rule embeds a "n / total" position counter. `style` colors the structural elements
 //! and `highlighter`, if set, syntax-highlights the examples. Returns the page text.
-string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_width,
-                        const ManualStyle &style = ManualStyle(),
+string RenderManualPage(const vector<ManualItem> &items, idx_t content_width, const ManualStyle &style = ManualStyle(),
                         const ManualHighlighter &highlighter = ManualHighlighter());
 
 } // namespace duckdb_shell
