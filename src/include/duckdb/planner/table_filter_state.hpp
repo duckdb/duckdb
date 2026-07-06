@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-class SelectionVector;
+struct SelectionVector;
 class Vector;
 
 struct ExpressionFilterExecutor {
