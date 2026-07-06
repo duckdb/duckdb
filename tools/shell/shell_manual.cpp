@@ -12,9 +12,10 @@ using duckdb::Utf8Proc;
 
 namespace {
 
-//===--------------------------------------------------------------------===//
+//----------------------------------------------------------------------------------------------------------------------
 // Render-width + word-wrap helpers (UTF8-aware, ported from text_tree_renderer)
-//===--------------------------------------------------------------------===//
+//----------------------------------------------------------------------------------------------------------------------
+
 //! Visible display width, skipping ANSI escape sequences (ESC [ ... m) so that syntax-highlighted
 //! text measures by its rendered width rather than its byte content.
 idx_t RenderLength(const string &str) {
@@ -113,20 +114,17 @@ vector<string> WordWrap(const string &text, idx_t budget) {
 	return lines;
 }
 
-//! Applies syntax highlighting to a plain-text fragment, returning it with embedded ANSI codes.
-//! Returns the input unchanged when highlighting is disabled.
-using Highlighter = std::function<string(const string &)>;
-
 // Each indentation level is two spaces; content sits at one level.
 constexpr idx_t INDENT = 2;
 
-//===--------------------------------------------------------------------===//
+//----------------------------------------------------------------------------------------------------------------------
 // Canvas
-//===--------------------------------------------------------------------===//
+//----------------------------------------------------------------------------------------------------------------------
+
 //! Accumulates the space-indented lines of the manual page (bodies word-wrapped to `width`).
 class Canvas {
 public:
-	Canvas(idx_t width, Highlighter highlight) : width(width), highlight(std::move(highlight)) {
+	Canvas(idx_t width, ManualHighlighter highlight) : width(width), highlight(std::move(highlight)) {
 	}
 
 	//! A blank line.
@@ -233,27 +231,31 @@ private:
 
 private:
 	idx_t width;
-	Highlighter highlight;
+	ManualHighlighter highlight;
 	vector<string> lines;
 };
 
-//===--------------------------------------------------------------------===//
-// Grouping / dedup
-//===--------------------------------------------------------------------===//
+//----------------------------------------------------------------------------------------------------------------------
+// Grouping / deduplication
+//----------------------------------------------------------------------------------------------------------------------
+
 //! An overload paired with the sequential number assigned to it (after grouping by function type).
 struct NumberedOverload {
 	idx_t number;
-	const ManualOverload *overload;
+	const ManualOverload &overload;
+
+	NumberedOverload(idx_t number, const ManualOverload &overload) : number(number), overload(overload) {
+	}
 };
 
 //! An ordered group of overloads that share identical content.
 struct ContentGroup {
 	//! signature numbers sharing this content, in ascending order
 	vector<idx_t> numbers;
-	//! the (single-string) key/content this group carries
-	string text;
-	//! the example list this group carries (for the Examples section)
-	vector<string> examples;
+	//! the grouping key the members share
+	string key;
+	//! the group's first member, carrying the shared content (description/examples)
+	const ManualOverload &content;
 };
 
 //! Format a group's reference list, e.g. "1. 2. 3.". Runs of more than 5 consecutive numbers collapse
@@ -286,30 +288,25 @@ string FormatRefs(const vector<idx_t> &numbers, const std::function<string(const
 }
 
 //! Bucket overloads into content groups, preserving first-appearance order. `key` returns the grouping
-//! key for an overload (empty to skip it); `fill` initializes a freshly-created group's content.
+//! key for an overload (empty to skip it); the group's first member carries the shared content.
 vector<ContentGroup> GroupBy(const vector<NumberedOverload> &overloads,
-                             const std::function<string(const ManualOverload &)> &key,
-                             const std::function<void(ContentGroup &, const ManualOverload &)> &fill) {
+                             const std::function<string(const ManualOverload &)> &key) {
 	vector<ContentGroup> groups;
 	for (auto &entry : overloads) {
-		string group_key = key(*entry.overload);
+		string group_key = key(entry.overload);
 		if (group_key.empty()) {
 			continue;
 		}
 		bool found = false;
 		for (auto &group : groups) {
-			if (group.text == group_key) {
+			if (group.key == group_key) {
 				group.numbers.push_back(entry.number);
 				found = true;
 				break;
 			}
 		}
 		if (!found) {
-			ContentGroup group;
-			group.numbers.push_back(entry.number);
-			group.text = group_key;
-			fill(group, *entry.overload);
-			groups.push_back(std::move(group));
+			groups.push_back({{entry.number}, std::move(group_key), entry.overload});
 		}
 	}
 	return groups;
@@ -317,20 +314,15 @@ vector<ContentGroup> GroupBy(const vector<NumberedOverload> &overloads,
 
 //! Group overloads by their (identical) description text.
 vector<ContentGroup> GroupByDescription(const vector<NumberedOverload> &overloads) {
-	return GroupBy(
-	    overloads, [](const ManualOverload &overload) { return overload.description; },
-	    [](ContentGroup &, const ManualOverload &) {});
+	return GroupBy(overloads, [](const ManualOverload &overload) { return overload.description; });
 }
 
 //! Group overloads by their (identical) example list, keyed on the joined examples.
 vector<ContentGroup> GroupByExamples(const vector<NumberedOverload> &overloads) {
-	return GroupBy(
-	    overloads,
-	    [](const ManualOverload &overload) {
-		    // join with a separator that cannot appear inside a single example to key the group
-		    return overload.examples.empty() ? string() : StringUtil::Join(overload.examples, "\n\x01\n");
-	    },
-	    [](ContentGroup &group, const ManualOverload &overload) { group.examples = overload.examples; });
+	return GroupBy(overloads, [](const ManualOverload &overload) {
+		// join with a separator that cannot appear inside a single example to key the group
+		return overload.examples.empty() ? string() : StringUtil::Join(overload.examples, "\n\x01\n");
+	});
 }
 
 //! Banner label for a raw function type, e.g. "scalar" -> "scalar function",
@@ -340,51 +332,53 @@ string EntryTypeLabel(const string &function_type) {
 	return label.empty() ? "function" : label + " function";
 }
 
-} // namespace
-
-string BuildSignature(const string &name, const vector<string> &parameters, const vector<string> &parameter_types,
-                      const string &varargs, const string &return_type, const string &name_color,
-                      const string &type_color, const string &color_off) {
+//! Build the printable signature string "name(a INTEGER, b VARCHAR, ...) -> RETURN", coloring
+//! parameter names and (parameter/vararg/return) types with the style's signature colors.
+string BuildSignature(const ManualOverload &overload, const ManualStyle &style) {
 	// color each whitespace-separated token independently so that word-wrapping a multi-word type
 	// (e.g. "TIMESTAMP WITH TIME ZONE") keeps every wrapped fragment self-contained
-	auto colorize = [&](const string &text, const string &color) -> string {
-		if (color.empty() || text.empty()) {
+	auto colorize = [](const string &text, const string &color_on, const string &color_off) -> string {
+		if (color_on.empty() || text.empty()) {
 			return text;
 		}
 		auto tokens = StringUtil::Split(text, ' ');
 		for (auto &token : tokens) {
-			token = color + token + color_off;
+			token = color_on + token + color_off;
 		}
 		return StringUtil::Join(tokens, " ");
 	};
 
-	string result = name + "(";
-	for (idx_t i = 0; i < parameter_types.size(); i++) {
+	string result = overload.function_name + "(";
+	for (idx_t i = 0; i < overload.parameter_types.size(); i++) {
 		if (i > 0) {
 			result += ", ";
 		}
-		string param_name = i < parameters.size() && !parameters[i].empty() ? parameters[i] : "col" + std::to_string(i);
-		result += colorize(param_name, name_color);
+		string param_name = i < overload.parameters.size() && !overload.parameters[i].empty()
+		                        ? overload.parameters[i]
+		                        : "col" + std::to_string(i);
+		result += colorize(param_name, style.param_on, style.param_off);
 		// macros have no declared parameter types, so only append a type when one is present
-		if (!parameter_types[i].empty()) {
-			result += " " + colorize(parameter_types[i], type_color);
+		if (!overload.parameter_types[i].empty()) {
+			result += " " + colorize(overload.parameter_types[i], style.type_on, style.type_off);
 		}
 	}
-	if (!varargs.empty()) {
-		if (!parameter_types.empty()) {
+	if (!overload.varargs.empty()) {
+		if (!overload.parameter_types.empty()) {
 			result += ", ";
 		}
-		result += colorize(varargs, type_color) + "...";
+		result += colorize(overload.varargs, style.type_on, style.type_off) + "...";
 	}
 	result += ")";
-	if (!return_type.empty()) {
-		result += " -> " + colorize(return_type, type_color);
+	if (!overload.return_type.empty()) {
+		result += " -> " + colorize(overload.return_type, style.type_on, style.type_off);
 	}
 	return result;
 }
 
-string RenderManualPage(const vector<ManualOverload> &overloads, const string &pattern, idx_t content_width,
-                        const ManualStyle &style, const ManualHighlighter &highlighter) {
+} // namespace
+
+string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_width, const ManualStyle &style,
+                        const ManualHighlighter &highlighter) {
 	if (content_width < 24) {
 		content_width = 24;
 	}
@@ -423,7 +417,7 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 		string function_name;
 		string schema_path;
 		string function_type;
-		vector<const ManualOverload *> overloads;
+		vector<duckdb::const_reference<ManualOverload>> overloads;
 	};
 	vector<Frame> frames;
 	for (auto &overload : overloads) {
@@ -439,7 +433,7 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 			frames.push_back({overload.function_name, overload.schema_path, overload.function_type, {}});
 			target = &frames.back();
 		}
-		target->overloads.push_back(&overload);
+		target->overloads.emplace_back(overload);
 	}
 
 	// each frame opens with a full-width "─" rule that, when several entries are shown, embeds a centered
@@ -477,8 +471,8 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 
 		// number this frame's overloads; group descriptions/examples so numbering can react to them
 		vector<NumberedOverload> numbered;
-		for (auto *overload : frame.overloads) {
-			numbered.push_back({numbered.size() + 1, overload});
+		for (const auto &overload : frame.overloads) {
+			numbered.emplace_back(numbered.size() + 1, overload);
 		}
 		auto description_groups = GroupByDescription(numbered);
 		auto example_groups = GroupByExamples(numbered);
@@ -499,10 +493,11 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 		canvas.Blank();
 		for (auto &entry : numbered) {
 			// the signature is already colored structurally by BuildSignature; do not re-highlight it
+			auto signature = BuildSignature(entry.overload, style);
 			if (show_numbers) {
-				canvas.Item(4, marker(entry.number), entry.overload->signature);
+				canvas.Item(4, marker(entry.number), signature);
 			} else {
-				canvas.Body(4, entry.overload->signature);
+				canvas.Body(4, signature);
 			}
 			canvas.Blank();
 		}
@@ -513,14 +508,15 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 			canvas.Line(1, heading("Description"));
 			canvas.Blank();
 			for (auto &group : description_groups) {
+				auto &description = group.content.description;
 				if (!description_refs) {
-					canvas.Body(4, group.text);
+					canvas.Body(4, description);
 				} else if (group.numbers.size() == 1) {
-					canvas.Item(4, marker(group.numbers[0]), group.text);
+					canvas.Item(4, marker(group.numbers[0]), description);
 				} else {
 					canvas.Body(2, FormatRefs(group.numbers, color_ref));
 					canvas.Blank();
-					canvas.Body(4, group.text);
+					canvas.Body(4, description);
 				}
 				canvas.Blank();
 			}
@@ -531,17 +527,18 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 			canvas.Line(1, heading("Examples"));
 			canvas.Blank();
 			for (auto &group : example_groups) {
+				auto &examples = group.content.examples;
 				bool inline_ref = example_refs && group.numbers.size() == 1;
 				if (example_refs && group.numbers.size() > 1) {
 					canvas.Body(2, FormatRefs(group.numbers, color_ref));
 					canvas.Blank();
 				}
 				bool first_line = true;
-				for (idx_t e = 0; e < group.examples.size(); e++) {
+				for (idx_t e = 0; e < examples.size(); e++) {
 					if (e > 0) {
 						canvas.Blank();
 					}
-					for (auto &physical : StringUtil::Split(group.examples[e], '\n')) {
+					for (auto &physical : StringUtil::Split(examples[e], '\n')) {
 						if (inline_ref && first_line) {
 							canvas.HighlightedItem(4, marker(group.numbers[0]), physical);
 						} else {

@@ -2315,38 +2315,23 @@ ORDER BY function_name, function_type, database_name, schema_name, length(parame
 		PrintDatabaseError(prepared->GetError());
 		return MetadataResult::FAIL;
 	}
-	duckdb::vector<duckdb::Value> bind_values;
-	bind_values.emplace_back(args[1]);
-	auto query_result = prepared->Execute(bind_values);
+	// note: pass a C string - the variadic Execute maps std::string to BLOB
+	auto query_result = prepared->Execute(args[1].c_str());
 	if (query_result->HasError()) {
 		PrintDatabaseError(query_result->GetError());
 		return MetadataResult::FAIL;
 	}
 
-	// coloring is only applied on an interactive console (matching the shell's SQL highlighter)
-	bool use_color = ShellHighlight::IsEnabled() && stdin_is_interactive && stdout_is_console;
-	// signature styling: parameter names in gray italic, parameter/return types bold
-	string name_color, type_color, color_off;
-	if (use_color) {
-		name_color = ShellHighlight::TerminalCode(PrintColor::GRAY, PrintIntensity::ITALIC);
-		type_color = ShellHighlight::TerminalCode(PrintColor::STANDARD, PrintIntensity::BOLD);
-		color_off = ShellHighlight::ResetTerminalCode();
-	}
-
 	vector<ManualOverload> overloads;
 	for (auto &row : *query_result) {
-		string function_name = row.GetValue<string>(0);
-		string return_type = row.IsNull(2) ? string() : row.GetValue<string>(2);
-		auto parameters = ManualStringList(row.GetBaseValue(3));
-		auto parameter_types = ManualStringList(row.GetBaseValue(4));
-		string varargs = row.IsNull(5) ? string() : row.GetValue<string>(5);
-
 		ManualOverload overload;
-		overload.function_name = function_name;
+		overload.function_name = row.GetValue<string>(0);
 		overload.function_type = row.GetValue<string>(1);
 		overload.schema_path = row.GetValue<string>(8) + "." + row.GetValue<string>(9);
-		overload.signature = BuildSignature(function_name, parameters, parameter_types, varargs, return_type,
-		                                    name_color, type_color, color_off);
+		overload.return_type = row.IsNull(2) ? string() : row.GetValue<string>(2);
+		overload.parameters = ManualStringList(row.GetBaseValue(3));
+		overload.parameter_types = ManualStringList(row.GetBaseValue(4));
+		overload.varargs = row.IsNull(5) ? string() : row.GetValue<string>(5);
 		overload.description = row.IsNull(6) ? string() : row.GetValue<string>(6);
 		overload.examples = ManualStringList(row.GetBaseValue(7));
 		overloads.push_back(std::move(overload));
@@ -2365,9 +2350,7 @@ WHERE score >= 0.7
 ORDER BY score DESC, name
 LIMIT 5)");
 		if (!suggest_prepared->HasError()) {
-			duckdb::vector<duckdb::Value> suggest_values;
-			suggest_values.emplace_back(args[1]);
-			auto suggest_result = suggest_prepared->Execute(suggest_values);
+			auto suggest_result = suggest_prepared->Execute(args[1].c_str());
 			if (!suggest_result->HasError()) {
 				vector<string> suggestions;
 				for (auto &row : *suggest_result) {
@@ -2388,10 +2371,12 @@ LIMIT 5)");
 	idx_t content_width = GetMaxRenderWidth();
 	content_width = duckdb::MaxValue<idx_t>(40, duckdb::MinValue<idx_t>(content_width, 98));
 
-	// style the structural elements: reference markers/rules like the EXPLAIN layout (gray), section
-	// headings and the banner name in bold white, and the header schema path / entry type in white
+	// coloring is only applied on an interactive console (matching the shell's SQL highlighter);
+	// structural elements: reference markers/rules like the EXPLAIN layout (gray), section headings
+	// and the banner name in bold white, the header schema path / entry type in white, and signature
+	// parameter names in gray italic with parameter/return types in bold
 	ManualStyle style;
-	if (use_color) {
+	if (ShellHighlight::IsEnabled() && stdin_is_interactive && stdout_is_console) {
 		auto &layout = ShellHighlight::GetHighlightElement(HighlightElementType::EXPLAIN_LAYOUT);
 		style.layout_on = ShellHighlight::TerminalCode(layout.color, layout.intensity);
 		if (!style.layout_on.empty()) {
@@ -2401,6 +2386,10 @@ LIMIT 5)");
 		style.heading_off = ShellHighlight::ResetTerminalCode();
 		style.path_on = ShellHighlight::TerminalCode(PrintColor::WHITE, PrintIntensity::STANDARD);
 		style.path_off = ShellHighlight::ResetTerminalCode();
+		style.param_on = ShellHighlight::TerminalCode(PrintColor::GRAY, PrintIntensity::ITALIC);
+		style.param_off = ShellHighlight::ResetTerminalCode();
+		style.type_on = ShellHighlight::TerminalCode(PrintColor::STANDARD, PrintIntensity::BOLD);
+		style.type_off = ShellHighlight::ResetTerminalCode();
 	}
 
 	// syntax-highlight the examples using the shell's SQL highlighter (no-op off-console)
@@ -2409,15 +2398,10 @@ LIMIT 5)");
 		HighlightSQL(highlighted);
 		return highlighted;
 	};
-	string page = RenderManualPage(overloads, args[1], content_width, style, highlighter);
+	string page = RenderManualPage(overloads, content_width, style, highlighter);
 
 	// page the output when it is long (respecting the user's .pager mode); no-op off an interactive console
-	idx_t line_count = 0;
-	for (auto c : page) {
-		if (c == '\n') {
-			line_count++;
-		}
-	}
+	idx_t line_count = duckdb::NumericCast<idx_t>(std::count(page.begin(), page.end(), '\n'));
 	auto pager_setup = ShouldUsePager(line_count) ? SetupPager() : nullptr;
 	Print(page);
 	return MetadataResult::SUCCESS;

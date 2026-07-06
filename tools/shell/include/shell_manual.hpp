@@ -19,7 +19,7 @@ namespace duckdb_shell {
 //! (or unchanged when highlighting is disabled).
 using ManualHighlighter = std::function<string(const string &)>;
 
-//! A single overload of a function, already formatted into a printable signature.
+//! A single overload of a function, as extracted from duckdb_functions().
 struct ManualOverload {
 	//! Function name; overloads are grouped into an entry per (name, schema, type).
 	string function_name;
@@ -28,23 +28,19 @@ struct ManualOverload {
 	string function_type;
 	//! Qualified schema the entry lives in ("database.schema"), shown once above each signature group.
 	string schema_path;
-	//! e.g. "list_value(any ANY, ...) -> LIST"
-	string signature;
+	//! Parameter names, positionally aligned with `parameter_types`; missing names fall back to "colN".
+	vector<string> parameters;
+	//! Parameter types (may be empty strings, e.g. for macros)
+	vector<string> parameter_types;
+	//! The vararg type when the overload is variadic, empty otherwise
+	string varargs;
+	//! Return type (may be empty, e.g. for table functions)
+	string return_type;
 	//! Overload description (may be empty)
 	string description;
 	//! Overload examples (may be empty)
 	vector<string> examples;
 };
-
-//! Build the printable signature string "name(a INTEGER, b VARCHAR, ...) -> RETURN".
-//! `parameters` and `parameter_types` are positionally aligned; missing names fall back to "colN".
-//! `varargs` is the vararg type when the overload is variadic, empty otherwise.
-//! When `name_color`/`type_color` are non-empty, parameter names and (parameter/return/vararg) types
-//! are wrapped in those terminal codes and `color_off`; each type token is colored independently so
-//! the signature can still be word-wrapped safely.
-string BuildSignature(const string &name, const vector<string> &parameters, const vector<string> &parameter_types,
-                      const string &varargs, const string &return_type, const string &name_color = string(),
-                      const string &type_color = string(), const string &color_off = string());
 
 //! Terminal styling for the manual page. Each `*_on` is the escape sequence that begins a style and
 //! `*_off` the reset; leaving a pair empty disables that coloring (e.g. off an interactive console).
@@ -55,15 +51,18 @@ struct ManualStyle {
 	string heading_on, heading_off;
 	//! the header schema path and entry-type label
 	string path_on, path_off;
+	//! parameter names within a signature
+	string param_on, param_off;
+	//! parameter/vararg/return types within a signature
+	string type_on, type_off;
 };
 
 //! Render the manual page for `overloads`, wrapped to `content_width` columns. Overloads are split into
 //! entries by (name, schema, type); each entry opens with a rule carrying its schema, name and type,
 //! followed by its signatures and deduplicated Descriptions/Examples sections. When more than one entry
 //! is shown, each rule embeds a "n / total" position counter. `style` colors the structural elements
-//! and `highlighter`, if set, syntax-highlights the examples. `pattern` is the searched-for text.
-//! Returns the page text.
-string RenderManualPage(const vector<ManualOverload> &overloads, const string &pattern, idx_t content_width,
+//! and `highlighter`, if set, syntax-highlights the examples. Returns the page text.
+string RenderManualPage(const vector<ManualOverload> &overloads, idx_t content_width,
                         const ManualStyle &style = ManualStyle(),
                         const ManualHighlighter &highlighter = ManualHighlighter());
 

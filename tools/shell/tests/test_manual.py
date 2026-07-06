@@ -61,7 +61,7 @@ def test_manual_case_insensitive(shell):
 
 
 def test_manual_multiple_function_types(shell):
-    # a name with both scalar and table overloads gets a heading per type, numbered continuously
+    # a name with both scalar and table overloads gets a separate entry per type
     test = (
         ShellTest(shell)
         .statement('.manual generate_series')
