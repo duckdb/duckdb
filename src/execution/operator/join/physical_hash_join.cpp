@@ -1369,7 +1369,8 @@ static unique_ptr<Expression> CreateRuntimeFilterInputExpression(ClientContext &
 	auto input_type = GetRuntimeFilterInputType(column, runtime_type);
 	unique_ptr<Expression> input = make_uniq<BoundReferenceExpression>(column.storage_type, idx_t(0));
 	if (column.storage_type != input_type) {
-		input = BoundCastExpression::AddCastToType(context, std::move(input), input_type);
+		// Lossless compressed casts are proven after filtering; runtime filters see raw scan values.
+		input = BoundCastExpression::AddCastToType(context, std::move(input), input_type, column.uses_lossless_cast);
 	}
 	return input;
 }
