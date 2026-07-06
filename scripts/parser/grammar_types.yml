@@ -24,7 +24,7 @@
 # the type entry takes precedence and their value IS extracted. Keep this list
 # for syntax-only rules and temporary manual exceptions; matcher-provided rules
 # belong in matcher_rule_overrides instead.
-# Note: some entries (e.g. SingleArrowPair, CommentValue,
+# Note: some entries (e.g. SingleArrowPair,
 # IntervalNumber, Program) also appear in type categories because
 # they are manually implemented and referenced as children by auto-generated
 # rules. The excluded status only suppresses Internal auto-generation.
@@ -193,6 +193,7 @@ AlterInfo:
     - AlterSchemaStmt
     - AlterSequenceStmt
     - AlterSequenceOptions
+    - RenameAlterSequenceOptions
     - SetSequenceOption
 
 AlterTableInfo:
@@ -289,6 +290,7 @@ Constraint:
   rules:
     - TopLevelConstraint
     - TopLevelConstraintList
+    - TopCheckConstraint
     - TopPrimaryKeyConstraint
     - TopUniqueConstraint
     - TopForeignKeyConstraint
@@ -299,6 +301,7 @@ WindowExpression:
   rules:
     - OverClause
     - WindowFrame
+    - IdentifierWindowFrame
     - ParensIdentifier
     - WindowFrameDefinition
     - WindowFrameContentsParens
@@ -738,6 +741,7 @@ QualifiedName:
     - SchemaReservedIndex
     - CatalogReservedSchemaIndex
     - FunctionIdentifier
+    - FunctionNameAsQualifiedName
     - SchemaReservedFunctionName
     - CatalogReservedSchemaFunctionName
     - QualifiedTableFunction
@@ -845,6 +849,8 @@ PivotColumn:
     - PivotColumnExpression
     - PivotValueList
     - PivotValueTarget
+    - PivotEnumTarget
+    - PivotListTarget
     - UnpivotValueList
 
 UnpivotNameValues:
@@ -1218,6 +1224,7 @@ Value:
   by_value: false
   rules:
     - CommentValue
+    - StringLiteralValue
     - NullLiteral
     - UnknownLiteral
     - TrueLiteral
@@ -1523,7 +1530,9 @@ overrides:
   ColIdType: "pair<Identifier, LogicalType>"
   ColIdTypeList: "child_list_t<LogicalType>"
   # create_index.gram
-  RelOption: "pair<Identifier, unique_ptr<ParsedExpression>>"
+  RelOption:
+    type: "pair<Identifier, unique_ptr<ParsedExpression>>"
+    by_value: true
   # create_table.gram
   ColumnDefinition:
     type: "ConstraintColumnDefinition"
@@ -1551,6 +1560,12 @@ overrides:
   OtherOperator:
     type: "ParsedOperator"
     by_value: true
+  AnyAllParsedOperator:
+    type: "ParsedOperator"
+    by_value: true
+  NamedOtherOperator:
+    type: "ParsedOperator"
+    by_value: true
   OtherOperatorTail:
     type: "OtherOperatorTail"
     by_value: true
@@ -1573,7 +1588,9 @@ overrides:
     type: "TrimArguments"
     by_value: true
   # select.gram
-  WithStatement: "pair<Identifier, unique_ptr<CommonTableExpressionInfo>>"
+  WithStatement:
+    type: "pair<Identifier, unique_ptr<CommonTableExpressionInfo>>"
+    by_value: true
   JoinType:
     type: "JoinType"
     default_initializer: "INNER"
@@ -1587,7 +1604,9 @@ overrides:
     type: "OrderByNullType"
     default_initializer: "ORDER_DEFAULT"
   # update.gram
-  UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
+  UpdateSetElement:
+    type: "pair<string, unique_ptr<ParsedExpression>>"
+    by_value: true
 
 # ---------------------------------------------------------------------------
 # matcher.cpp rule overrides
@@ -1600,6 +1619,8 @@ IdentifierType:
     - ColId
     - ColIdOrString
     - ColLabelOrString
+    - ColLabelIdentifier
+    - StringLiteralIdentifier
     - TypeFuncName
     - IdentifierColId
     - ReservedIdentifierOrStringLiteral
@@ -1672,6 +1693,9 @@ matcher_rule_overrides:
   ReservedFunctionName:
     matcher: reserved_identifier
     suggestion: SUGGEST_SCALAR_FUNCTION_NAME
+  ReservedKeyword:
+    allow_type_overlap: true
+    matcher: identifier_string
   TableFunctionName:
     matcher: identifier
     suggestion: SUGGEST_TABLE_FUNCTION_NAME
@@ -1708,17 +1732,18 @@ matcher_rule_overrides:
 excluded_rules:
   - PivotStatement
   - UnpivotStatement
-  - CommentValue
   - Program
+  - TopLevelStatement
   - Statement
+  - "%whitespace"
+  - List
+  - Parens
   - Database
   - AbortOrRollback
   - CommitOrEnd
   - StartOrBegin
   - Transaction
   - VariableAssign
-  - ColLabel
-  - ColLabelOrString
   - RowOrRows
   - FirstOrNext
   - Recursive
@@ -1750,6 +1775,5 @@ excluded_rules:
   - WindowDefinition
   - ExcludeOrExcept
   # expression.gram rules kept manual during incremental transformer generation migration
-  - Expression
   - OverClause
   - PrefixExpression

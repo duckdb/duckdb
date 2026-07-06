@@ -1013,29 +1013,21 @@ void JoinHashTable::AllocatePointerTable() {
 	            {"size", to_string(data_collection->SizeInBytes() + hash_map.GetSize())}});
 }
 
-void JoinHashTable::PrepareBuildBloomFilter(idx_t estimated_row_count) {
-	should_build_bloom_filter = true;
-	if (!bloom_filter.IsInitialized()) {
-		bloom_filter_init_count = MaxValue<idx_t>(estimated_row_count, idx_t(1));
-		bloom_filter.Initialize(context, bloom_filter_init_count);
-	}
-}
-
 void JoinHashTable::PrepareBloomFilterForFinalize() {
 	if (!should_build_bloom_filter) {
 		return;
 	}
 
 	// Finalize scans every build tuple and inserts its hash into the bloom filter.
-	// Resize here if the planner estimate was too low, then let finalize populate it.
+	// Make sure any existing filter has enough sectors for the actual build count.
 	const auto build_count = Count();
 	const auto actual_init_count = MaxValue<idx_t>(build_count, 1);
-	static constexpr double REBUILD_UNDERESTIMATE_THRESHOLD = 2.0;
-	const auto estimated_too_low = bloom_filter_init_count == 0 ||
-	                               static_cast<double>(build_count) >
-	                                   static_cast<double>(bloom_filter_init_count) * REBUILD_UNDERESTIMATE_THRESHOLD;
-	if (bloom_filter.IsInitialized() && !estimated_too_low) {
-		return;
+	if (bloom_filter.IsInitialized()) {
+		const auto current_sectors = BloomFilter::GetNumberOfSectors(bloom_filter_init_count);
+		const auto required_sectors = BloomFilter::GetNumberOfSectors(actual_init_count);
+		if (current_sectors >= required_sectors) {
+			return;
+		}
 	}
 
 	bloom_filter.Reset();
@@ -1655,6 +1647,18 @@ void JoinHashTable::GatherRHS(Vector &row_ptrs, const SelectionVector &ptr_sel, 
 	}
 }
 
+static bool SelectionIsFullIdentity(const SelectionVector &sel, idx_t count, idx_t source_count) {
+	if (count != source_count) {
+		return false;
+	}
+	for (idx_t i = 0; i < count; i++) {
+		if (sel.get_index_unsafe(i) != i) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void ScanStructure::UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count) {
 	// matches were found
 	// record the result
@@ -1708,9 +1712,15 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 				// fast path: no chains longer than one
 				if (!ht.chains_longer_than_one.load(std::memory_order_relaxed)) {
 					// extract only OUTPUT columns from probe_data
+					const auto full_identity =
+					    SelectionIsFullIdentity(chain_match_sel_vector, result_count, probe_data.size());
 					for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
 						idx_t probe_col_idx = ht.lhs_output_in_probe[i];
-						result.data[i].Slice(probe_data.data[probe_col_idx], chain_match_sel_vector, result_count);
+						if (full_identity) {
+							result.data[i].Reference(probe_data.data[probe_col_idx]);
+						} else {
+							result.data[i].Slice(probe_data.data[probe_col_idx], chain_match_sel_vector, result_count);
+						}
 					}
 					// on the RHS, we need to fetch the data from the hash table
 					ht.GatherRHS(pointers, chain_match_sel_vector, result_count, result, ht.lhs_output_in_probe.size());
@@ -1729,9 +1739,14 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 
 	if (base_count > 0) {
 		// extract only OUTPUT columns from probe_data using compaction buffer
+		const auto full_identity = SelectionIsFullIdentity(lhs_sel_vector, base_count, probe_data.size());
 		for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
 			idx_t probe_col_idx = ht.lhs_output_in_probe[i];
-			result.data[i].Slice(probe_data.data[probe_col_idx], lhs_sel_vector, base_count);
+			if (full_identity) {
+				result.data[i].Reference(probe_data.data[probe_col_idx]);
+			} else {
+				result.data[i].Slice(probe_data.data[probe_col_idx], lhs_sel_vector, base_count);
+			}
 		}
 		// 2) gather RHS vectors
 		ht.GatherRHS(rhs_pointers, *FlatVector::IncrementalSelectionVector(), base_count, result,

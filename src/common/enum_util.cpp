@@ -1747,6 +1747,24 @@ DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *
 	return static_cast<DefaultOrderByNullType>(StringUtil::StringToEnum(GetDefaultOrderByNullTypeValues(), 5, "DefaultOrderByNullType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetDeferredRuntimeFilterTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DeferredRuntimeFilterType::BLOOM_FILTER), "BLOOM_FILTER" },
+		{ static_cast<uint32_t>(DeferredRuntimeFilterType::PREFIX_RANGE), "PREFIX_RANGE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DeferredRuntimeFilterType>(DeferredRuntimeFilterType value) {
+	return StringUtil::EnumToString(GetDeferredRuntimeFilterTypeValues(), 2, "DeferredRuntimeFilterType", static_cast<uint32_t>(value));
+}
+
+template<>
+DeferredRuntimeFilterType EnumUtil::FromString<DeferredRuntimeFilterType>(const char *value) {
+	return static_cast<DeferredRuntimeFilterType>(StringUtil::StringToEnum(GetDeferredRuntimeFilterTypeValues(), 2, "DeferredRuntimeFilterType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetDependencyEntryTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(DependencyEntryType::SUBJECT), "SUBJECT" },

@@ -34,4 +34,5 @@ PEGTransformerFactory::TransformExecuteStatement(PEGTransformer &transformer, co
 	}
 	return std::move(result);
 }
+
 } // namespace duckdb

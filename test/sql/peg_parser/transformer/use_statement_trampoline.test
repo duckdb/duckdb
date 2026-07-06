@@ -10,10 +10,10 @@ ATTACH ':memory:' AS trampoline_use_catalog
 statement ok
 SET debug_transformer_trampoline_style=true
 
-statement error
+query I
 SELECT 1;
 ----
-Not implemented Error: No trampoline transformer for statement rule 'SelectStatement'
+1
 
 statement ok
 USE main
