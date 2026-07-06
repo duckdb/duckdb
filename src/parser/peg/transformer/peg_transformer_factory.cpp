@@ -96,11 +96,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 	auto packrat_cache_ptr = ParserPackratCache::Enabled() ? &packrat_cache : nullptr;
 	idx_t max_token_index = token_cursor;
 	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index, options.preserve_identifier_case,
-	                 token_cursor, nullptr, packrat_cache_ptr);
+	                 token_cursor, packrat_cache_ptr);
 	auto match_result = root_matcher.MatchParseResult(state);
-	if (packrat_cache_ptr && ParserPackratCache::PrintStats()) {
-		packrat_cache.Print();
-	}
 	if (match_result == nullptr) {
 		// syntax error — surface as a parser exception in the same shape as Transform()
 		string token_stream;

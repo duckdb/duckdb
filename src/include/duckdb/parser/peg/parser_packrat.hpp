@@ -36,29 +36,16 @@ struct ParserPackratEntry {
 	optional_ptr<ParseResult> result;
 };
 
-struct ParserPackratStats {
-	idx_t hits = 0;
-	idx_t misses = 0;
-	idx_t success_hits = 0;
-	idx_t failure_hits = 0;
-	idx_t stored_success = 0;
-	idx_t stored_failure = 0;
-};
-
 class ParserPackratCache {
 public:
 	ParserPackratCache();
 	~ParserPackratCache();
 
 	static bool Enabled();
-	static bool PrintStats();
-	void Reset();
 	optional_ptr<ParseResult> Match(const Matcher &matcher, MatchState &state);
-	void Print() const;
 
 private:
 	unordered_map<ParserPackratKey, ParserPackratEntry, ParserPackratKeyHash> entries;
-	ParserPackratStats stats;
 };
 
 } // namespace duckdb
