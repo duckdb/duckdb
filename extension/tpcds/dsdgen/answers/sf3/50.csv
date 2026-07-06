@@ -1,0 +1,18 @@
+s_store_name|s_company_id|s_street_number|s_street_name|s_street_type|s_suite_number|s_city|s_county|s_state|s_zip|30 days|31-60 days|61-90 days|91-120 days|>120 days
+able|1|228|Cherry |Avenue|Suite G|Fairview|Williamson County|TN|35709|70|47|55|61|99
+able|1|255|Sycamore |Dr.|Suite 410|Midway|Williamson County|TN|31904|71|50|61|60|100
+able|1|479|Park First|Lane|Suite 20|Midway|Williamson County|TN|31904|92|79|61|53|121
+anti|1|735|Walnut |Blvd|Suite 360|Fairview|Williamson County|TN|35709|69|57|65|62|144
+ation|1|811|Lee |Circle|Suite T|Midway|Williamson County|TN|31904|88|78|59|58|116
+bar|1|175|4th |Court|Suite C|Midway|Williamson County|TN|31904|84|73|49|66|118
+bar|1|200|Lake |RD|Suite 320|Midway|Williamson County|TN|31904|78|58|69|70|92
+cally|1|588|View Mill|Court|Suite 160|Midway|Williamson County|TN|31904|82|59|68|59|122
+cally|NULL|688|NULL|Avenue|Suite 50|NULL|NULL|TN|NULL|68|54|55|73|113
+eing|1|226|12th |Lane|Suite D|Fairview|Williamson County|TN|35709|89|50|68|56|123
+eing|1|317|Poplar 9th|Pkwy|Suite P|Midway|Williamson County|TN|31904|91|66|64|62|102
+ese|1|27|Lake |Ln|Suite 260|Midway|Williamson County|TN|31904|70|55|76|50|118
+ese|1|408|Washington 1st|Circle|Suite 390|Midway|Williamson County|TN|31904|82|42|56|66|113
+n st|1|240|Willow |RD|Suite 280|Fairview|Williamson County|TN|35709|79|58|80|50|113
+ought|1|75|2nd Oak|Pkwy|Suite C|Fairview|Williamson County|TN|35709|85|62|60|74|111
+ought|1|767|Spring |Wy|Suite 250|Midway|Williamson County|TN|31904|80|60|52|66|142
+pri|1|84|First |Cir.|Suite 180|Midway|Williamson County|TN|31904|86|48|50|50|105
