@@ -52,7 +52,7 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
          const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &info)
     : BoundIndex(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
-      allocators(allocators_ptr), owns_data(false), storage_version(StorageVersion::INVALID) {
+      allocators(allocators_ptr), owns_data(false) {
 	// FIXME: Use the new byte representation function to support nested types.
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
