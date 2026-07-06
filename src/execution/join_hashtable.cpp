@@ -1027,15 +1027,15 @@ void JoinHashTable::PrepareBloomFilterForFinalize() {
 	}
 
 	// Finalize scans every build tuple and inserts its hash into the bloom filter.
-	// Resize here if the planner estimate was too low, then let finalize populate it.
+	// Make sure any existing filter has enough sectors for the actual build count.
 	const auto build_count = Count();
 	const auto actual_init_count = MaxValue<idx_t>(build_count, 1);
-	static constexpr double REBUILD_UNDERESTIMATE_THRESHOLD = 2.0;
-	const auto estimated_too_low = bloom_filter_init_count == 0 ||
-	                               static_cast<double>(build_count) >
-	                                   static_cast<double>(bloom_filter_init_count) * REBUILD_UNDERESTIMATE_THRESHOLD;
-	if (bloom_filter.IsInitialized() && !estimated_too_low) {
-		return;
+	if (bloom_filter.IsInitialized()) {
+		const auto current_sectors = BloomFilter::GetNumberOfSectors(bloom_filter_init_count);
+		const auto required_sectors = BloomFilter::GetNumberOfSectors(actual_init_count);
+		if (current_sectors >= required_sectors) {
+			return;
+		}
 	}
 
 	bloom_filter.Reset();
