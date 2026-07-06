@@ -197,6 +197,7 @@ void append_int64(tpch_append_information &info, int64_t value) {
 }
 
 void append_string_reference(tpch_append_information &info, const char *value, idx_t length) {
+	// Only use for stable DBGEN strings; non-inlined string_t values keep a pointer until the chunk is appended.
 	auto &vector = append_next_column(info);
 	FlatVector::GetDataMutable<string_t>(vector)[info.active_row] =
 	    string_t(value, UnsafeNumericCast<uint32_t>(length));
@@ -214,6 +215,7 @@ void append_char(tpch_append_information &info, char value) {
 
 static date_t raw_tpch_date(DSS_HUGE value) {
 	static constexpr int32_t UNIX_EPOCH_OFFSET = 8035;
+	// DBGEN dates are raw day offsets from STARTDATE; DuckDB dates are days since the Unix epoch.
 	return date_t(NumericCast<int32_t>(value - STARTDATE + UNIX_EPOCH_OFFSET));
 }
 
@@ -292,6 +294,7 @@ static void AppendRandomAlphaNumeric(tpch_append_information &info, int average_
 static void AppendText(tpch_append_information &info, int average_length, seed_t *seed) {
 	const char *source;
 	auto length = dbg_text_source(int(average_length * V_STR_LOW), int(average_length * V_STR_HGH), seed, &source);
+	// Text pool memory is stable until cleanup_dists(), after all pending chunks have been appended.
 	append_string_reference(info, source, NumericCast<idx_t>(length));
 }
 
@@ -358,6 +361,7 @@ static void AppendSupplierComment(tpch_append_information &info, DBGenContext *c
 	const char *source;
 	auto length = dbg_text_source(int(S_CMNT_LEN * V_STR_LOW), int(S_CMNT_LEN * V_STR_HGH), &ctx->Seed[S_CMNT_SD],
 	                              &source);
+	// Supplier comments can be patched with BBB text, so they need writable vector-owned storage.
 	auto &result = append_empty_string(info, NumericCast<idx_t>(length));
 	auto target = result.GetDataWriteable();
 	memcpy(target, source, NumericCast<idx_t>(length));

@@ -433,6 +433,7 @@ int dbg_text_source(int min, int max, seed_t *seed, const char **source) {
 	DSS_HUGE hgLength = 0, hgOffset;
 	RANDOM(hgOffset, 0, txtBufferSize - max, seed);
 	RANDOM(hgLength, min, max, seed);
+	/* source points into szTextPool and remains valid until free_text_pool() */
 	*source = &szTextPool[hgOffset];
 	return (int)hgLength;
 }

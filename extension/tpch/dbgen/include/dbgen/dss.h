@@ -103,6 +103,7 @@
 typedef struct {
 	long weight;
 	char *text;
+	/* byte length cached when loading dists.dss */
 	int length;
 } set_member;
 

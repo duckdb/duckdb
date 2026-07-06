@@ -106,11 +106,13 @@ double TerminalProgressBarDisplay::EstimateRemainingSeconds(double percentage, d
 	if (percentage >= 100) {
 		return 0.0;
 	}
+	// The elapsed/progress estimate is stable even when progress updates are sparse.
 	auto cumulative_estimate = elapsed_seconds * ((100.0 - percentage) / percentage);
 	if (observed_progress_per_second <= 0) {
 		return cumulative_estimate;
 	}
 	auto observed_estimate = (100.0 - percentage) / observed_progress_per_second;
+	// Short-window rates can be noisy, so only let them correct the cumulative baseline within a bounded range.
 	auto minimum_estimate = cumulative_estimate * 0.5;
 	auto maximum_estimate = cumulative_estimate * 2.0;
 	return MaxValue<double>(minimum_estimate, MinValue<double>(maximum_estimate, observed_estimate));
@@ -158,6 +160,7 @@ double TerminalProgressBarDisplay::UpdateEstimatedRemainingSeconds(double percen
 	}
 	auto cumulative_estimate = EstimateRemainingSeconds(percentage, elapsed_seconds);
 	if (!has_eta_sample || percentage < last_eta_percentage || elapsed_seconds <= last_eta_update_time) {
+		// Progress may restart or move backwards when the display is reused for another operation.
 		has_eta_sample = true;
 		last_eta_percentage = percentage;
 		last_eta_sample_time = elapsed_seconds;
@@ -182,12 +185,14 @@ double TerminalProgressBarDisplay::UpdateEstimatedRemainingSeconds(double percen
 	}
 	auto candidate_remaining = EstimateRemainingSeconds(percentage, elapsed_seconds, smoothed_progress_per_second);
 	auto candidate_completion_time = elapsed_seconds + candidate_remaining;
+	// Smooth the completion time, not the remaining time, so the ETA naturally ticks down between samples.
 	if (candidate_completion_time < estimated_completion_time) {
 		static constexpr double ETA_DEADLINE_SMOOTHING_FACTOR = 0.3;
 		estimated_completion_time = ETA_DEADLINE_SMOOTHING_FACTOR * candidate_completion_time +
 		                            (1.0 - ETA_DEADLINE_SMOOTHING_FACTOR) * estimated_completion_time;
 	} else {
 		auto elapsed_delta = elapsed_seconds - last_eta_update_time;
+		// Avoid large upward ETA jumps; let a later estimate move out at most at wall-clock speed.
 		estimated_completion_time =
 		    MinValue<double>(candidate_completion_time, estimated_completion_time + elapsed_delta);
 	}
