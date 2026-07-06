@@ -1279,6 +1279,18 @@ struct GeometryMinimumShreddingSize {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct GroupCommitDelaySetting {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "group_commit_delay";
+	static constexpr const char *Description =
+	    "Maximum time in microseconds that a group commit leader waits for concurrently committing transactions to "
+	    "join its WAL fsync (-1 = automatic, scaled to the observed fsync duration, 0 = no wait).";
+	static constexpr const char *InputType = "BIGINT";
+	static constexpr const char *DefaultValue = "-1";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct HomeDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "home_directory";
@@ -2025,6 +2037,18 @@ struct WalAutocheckpointEntriesSetting {
 	static constexpr const char *DefaultValue = "0";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct WalBufferSizeSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "wal_buffer_size";
+	static constexpr const char *Description =
+	    "The size of the write-ahead log write buffer that batches WAL data before it is pushed to the OS (e.g. 64KB). "
+	    "Takes effect on the next WAL created (after a checkpoint or on reopen).";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct WarningsAsErrorsSetting {

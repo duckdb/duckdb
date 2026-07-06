@@ -5,6 +5,7 @@ add_library(
   append_mix.cpp
   bulkupdate.cpp
   cast.cpp
+  group_commit.cpp
   in.cpp
   storage.cpp
   string_serialize.cpp)

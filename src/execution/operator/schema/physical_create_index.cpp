@@ -7,6 +7,7 @@
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -172,8 +173,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		catalog.Alter(context, *alter_table_info);
 	}
 
-	// Add the index to the storage.
-	storage.AddIndex(std::move(bound_index));
+	storage.AttachIndexToLiveTable(std::move(bound_index));
 
 	return SinkFinalizeType::READY;
 }
