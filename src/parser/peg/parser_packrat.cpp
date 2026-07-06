@@ -2,8 +2,6 @@
 
 #include "duckdb/parser/peg/matcher.hpp"
 
-#include <cstdlib>
-
 namespace duckdb {
 
 size_t ParserPackratKeyHash::operator()(const ParserPackratKey &key) const {
@@ -13,11 +11,6 @@ size_t ParserPackratKeyHash::operator()(const ParserPackratKey &key) const {
 ParserPackratCache::ParserPackratCache() = default;
 
 ParserPackratCache::~ParserPackratCache() = default;
-
-bool ParserPackratCache::Enabled() {
-	auto env = std::getenv("DUCKDB_PARSER_PACKRAT");
-	return !env || env[0] == '\0' || env[0] != '0';
-}
 
 optional_ptr<ParseResult> ParserPackratCache::Match(const Matcher &matcher, MatchState &state) {
 	if (!matcher.IsPackratMemoized()) {

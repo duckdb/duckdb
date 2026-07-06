@@ -41,7 +41,6 @@ public:
 	ParserPackratCache();
 	~ParserPackratCache();
 
-	static bool Enabled();
 	optional_ptr<ParseResult> Match(const Matcher &matcher, MatchState &state);
 
 private:
