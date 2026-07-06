@@ -288,6 +288,7 @@ idx_t PipelineBroadcastExchange::RegisterConsumer() {
 }
 
 bool PipelineBroadcastExchange::DisableConsumer(idx_t consumer_idx) {
+	// Disabled consumers are served from materialized CTE storage instead of this exchange.
 	lock_guard<mutex> guard(lock);
 	D_ASSERT(consumer_idx < consumers.size());
 	auto &consumer = consumers[consumer_idx];

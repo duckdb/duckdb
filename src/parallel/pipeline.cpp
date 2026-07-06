@@ -265,6 +265,7 @@ static bool CanStopSourceEarlySink(const PhysicalOperator &op) {
 }
 
 bool Pipeline::CanStopSourceEarly() const {
+	// Used by CTE fanout selection to keep streaming only when the consumer may finish early.
 	if (sink && CanStopSourceEarlySink(*sink)) {
 		return true;
 	}

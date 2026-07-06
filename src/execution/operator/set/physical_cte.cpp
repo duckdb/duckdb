@@ -159,6 +159,7 @@ public:
 	ColumnDataAppendState append_state;
 	bool materialize;
 	bool use_exchange;
+	// Combine can be retried after a blocked exchange finish.
 	bool combined = false;
 	unique_ptr<PipelineBroadcastExchangeLocalState> exchange_state;
 
@@ -191,6 +192,7 @@ SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, Op
 		}
 	}
 	if (lstate.materialize) {
+		// In hybrid mode, append only after a successful exchange push; blocked pushes retry the same chunk.
 		lstate.Append(chunk);
 		return SinkResultType::NEED_MORE_INPUT;
 	}
@@ -261,6 +263,7 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	children[1].get().BuildPipelines(current, meta_pipeline);
 
 	if (exchange && !UseStreamingExchange()) {
+		// All exchange consumers were converted to materialized scans during pipeline construction.
 		auto cte_pipeline = child_meta_pipeline.GetBasePipeline();
 		current.AddDependency(cte_pipeline);
 	}
@@ -288,11 +291,14 @@ bool PhysicalCTE::ShouldUseBufferedConsumer(Pipeline &pipeline) const {
 	if (exchange->RegisteredConsumerCount() == 1) {
 		return true;
 	}
+	// Multi-consumer all-data fanout is cheaper through the materialized table. Keep buffered exchange only
+	// for consumers that can make streaming observable by stopping before source exhaustion.
 	return pipeline.CanStopSourceEarly();
 }
 
 void PhysicalCTE::RegisterMaterializedConsumer(idx_t consumer_idx) {
 	D_ASSERT(exchange);
+	// Materialized consumers must not keep the exchange producer active or force exchange buffering.
 	if (exchange->DisableConsumer(consumer_idx)) {
 		has_materialized_consumers = true;
 		materialized_consumer_count++;

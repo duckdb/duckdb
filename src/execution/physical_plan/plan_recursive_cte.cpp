@@ -120,6 +120,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 			if (cte == recursive_cte_tables.end()) {
 				throw InvalidInputException("Referenced materialized CTE does not exist.");
 			}
+			// Exchange consumers can still be converted to materialized scans during pipeline construction.
 			cast_chunk_scan.collection = cte->second.get();
 			auto consumer_idx = exchange->second->RegisterConsumer();
 			auto &source = Make<PhysicalCTEConsumerSource>(op.chunk_types, op.estimated_cardinality, op.cte_index,

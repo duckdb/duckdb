@@ -112,6 +112,8 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 			D_ASSERT(cte_sink->type == PhysicalOperatorType::CTE);
 			auto &cte = cte_sink->Cast<PhysicalCTE>();
 			auto &source = cte_source->Cast<PhysicalCTEConsumerSource>();
+			// Prefer direct fanout. Buffered exchange is only used when it can avoid full materialization or
+			// when the consumer can stop early; otherwise this scan reads the materialized working table.
 			if (cte.TryRegisterDirectConsumer(current, source.consumer_idx)) {
 				auto current_pipeline = current.shared_from_this();
 				current.SetExternalInput();
