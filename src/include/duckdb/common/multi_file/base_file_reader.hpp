@@ -108,6 +108,10 @@ public:
 	DUCKDB_API virtual double GetProgressInFile(ClientContext &context);
 	//! Get reader metadata, if available
 	DUCKDB_API virtual InsertionOrderPreservingMap<Value> GetMetadata() const;
+	//! Get the number of rows scanned by a specific thread (pre-filter, thread-safe).
+	virtual idx_t GetLocalRowsScanned(LocalTableFunctionState &lstate) const {
+		return 0;
+	}
 
 	virtual string GetReaderType() const = 0;
 

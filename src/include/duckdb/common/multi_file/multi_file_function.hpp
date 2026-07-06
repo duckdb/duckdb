@@ -720,7 +720,8 @@ public:
 
 		output.SetChildCardinality(scan_chunk.size());
 		if (scan_chunk.size() > 0) {
-			data.rows_scanned += scan_chunk.size();
+			auto local_scanned = data.job.reader->GetLocalRowsScanned(*data.job.reader_scan_state);
+			data.rows_scanned = local_scanned > 0 ? local_scanned : (data.rows_scanned + scan_chunk.size());
 			bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.job.reader, *data.job.reader_data,
 			                                           scan_chunk, output, data.executor,
 			                                           gstate.multi_file_reader_state);

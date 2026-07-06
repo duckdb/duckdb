@@ -2006,6 +2006,7 @@ AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanStat
 
 	result.SetChildCardinality(result.size());
 	rows_read += scan_count;
+	state.rows_scanned += scan_count;
 	state.offset_in_group += scan_count;
 	state.resuming_payload = false;
 	return SourceResultType::HAVE_MORE_OUTPUT;
