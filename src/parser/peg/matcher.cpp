@@ -37,7 +37,7 @@ struct PEGParserProfileStats {
 	idx_t max_consumed = 0;
 	idx_t total_consumed = 0;
 	uint64_t inclusive_ns = 0;
-
+	idx_t max_depth = 0;
 };
 
 struct PEGParserProfileKey {
@@ -86,7 +86,8 @@ public:
 		depth++;
 		entry.max_depth = MaxValue(entry.max_depth, depth);
 		auto start = Clock::now();
-		auto result = matcher.MatchParseResultInternal(state);
+		auto result =
+		    state.packrat_cache ? state.packrat_cache->Match(matcher, state) : matcher.MatchParseResultInternal(state);
 		auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count();
 		entry.inclusive_ns += NumericCast<uint64_t>(elapsed);
 		if (result) {
@@ -102,7 +103,8 @@ public:
 	}
 
 	void Print() {
-		auto elapsed_ms = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start_time).count() / 1000.0;
+		auto elapsed_ms =
+		    std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start_time).count() / 1000.0;
 		vector<PEGParserProfileStats *> ordered;
 		ordered.reserve(stats.size());
 		idx_t total_calls = 0;
@@ -112,34 +114,34 @@ public:
 			total_calls += entry.second.calls;
 			total_repeated_start_calls += entry.second.repeated_start_calls;
 		}
-		std::sort(ordered.begin(), ordered.end(), [](const PEGParserProfileStats *left,
-		                                             const PEGParserProfileStats *right) {
-			if (left->inclusive_ns != right->inclusive_ns) {
-				return left->inclusive_ns > right->inclusive_ns;
-			}
-			return left->calls > right->calls;
-		});
+		std::sort(ordered.begin(), ordered.end(),
+		          [](const PEGParserProfileStats *left, const PEGParserProfileStats *right) {
+			          if (left->inclusive_ns != right->inclusive_ns) {
+				          return left->inclusive_ns > right->inclusive_ns;
+			          }
+			          return left->calls > right->calls;
+		          });
 
-		auto total_repeat_rate = total_calls == 0 ? 0.0 : (100.0 * static_cast<double>(total_repeated_start_calls)) /
+		auto total_repeat_rate = total_calls == 0 ? 0.0
+		                                          : (100.0 * static_cast<double>(total_repeated_start_calls)) /
 		                                                static_cast<double>(total_calls);
 		std::fprintf(stderr, "\nPEG parser profile: %.3f ms, %llu tokens, %llu matcher-start pairs\n", elapsed_ms,
-		             static_cast<unsigned long long>(token_count),
-		             static_cast<unsigned long long>(seen_starts.size()));
+		             static_cast<unsigned long long>(token_count), static_cast<unsigned long long>(seen_starts.size()));
 		std::fprintf(stderr, "total calls: %llu, repeated matcher/token starts: %llu (%.2f%% memo opportunity)\n",
 		             static_cast<unsigned long long>(total_calls),
 		             static_cast<unsigned long long>(total_repeated_start_calls), total_repeat_rate);
-		std::fprintf(stderr,
-		             "%-36s %10s %10s %10s %10s %8s %10s %10s %10s %8s\n",
-		             "matcher", "calls", "success", "fail", "repeat", "hit%", "time_ms", "avg_us", "max_cons",
-		             "depth");
+		std::fprintf(stderr, "%-36s %10s %10s %10s %10s %8s %10s %10s %10s %8s\n", "matcher", "calls", "success",
+		             "fail", "repeat", "hit%", "time_ms", "avg_us", "max_cons", "depth");
 		auto limit = MinValue<idx_t>(NumericCast<idx_t>(ordered.size()), 80);
 		for (idx_t i = 0; i < limit; i++) {
 			auto &entry = *ordered[i];
-			auto hit_rate = entry.calls == 0 ? 0.0 : (100.0 * static_cast<double>(entry.repeated_start_calls)) /
+			auto hit_rate = entry.calls == 0 ? 0.0
+			                                 : (100.0 * static_cast<double>(entry.repeated_start_calls)) /
 			                                       static_cast<double>(entry.calls);
 			auto time_ms = static_cast<double>(entry.inclusive_ns) / 1000000.0;
-			auto avg_us = entry.calls == 0 ? 0.0 : static_cast<double>(entry.inclusive_ns) /
-			                                      (1000.0 * static_cast<double>(entry.calls));
+			auto avg_us = entry.calls == 0
+			                  ? 0.0
+			                  : static_cast<double>(entry.inclusive_ns) / (1000.0 * static_cast<double>(entry.calls));
 			std::fprintf(stderr, "%-36s %10llu %10llu %10llu %10llu %7.2f%% %10.3f %10.3f %10llu %8llu\n",
 			             entry.name.c_str(), static_cast<unsigned long long>(entry.calls),
 			             static_cast<unsigned long long>(entry.success), static_cast<unsigned long long>(entry.fail),
@@ -175,16 +177,20 @@ private:
 optional_ptr<ParseResult> Matcher::MatchParseResult(MatchState &state) const {
 	static thread_local PEGParserProfiler profiler;
 	bool root_profile = false;
-	if (!state.profiler && PEGParserProfiler::Enabled() && GetName() == "TopLevelStatement") {
+	if (!state.profiler && PEGParserProfiler::Enabled() && HasName() && GetName() == "TopLevelStatement") {
 		profiler.Reset(state.tokens.size());
 		state.profiler = &profiler;
 		root_profile = true;
 	}
-	if (!state.profiler) {
-		return MatchParseResultInternal(state);
-	}
 
-	auto result = state.profiler->Profile(*this, state);
+	optional_ptr<ParseResult> result;
+	if (state.profiler) {
+		result = state.profiler->Profile(*this, state);
+	} else if (state.packrat_cache) {
+		result = state.packrat_cache->Match(*this, state);
+	} else {
+		result = MatchParseResultInternal(state);
+	}
 	if (root_profile) {
 		state.profiler->Print();
 		state.profiler = nullptr;
@@ -1203,6 +1209,7 @@ private:
 
 Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
 	auto &result = *matcher;
+	result.packrat_id = optional_idx(matchers.size());
 	matchers.push_back(std::move(matcher));
 	return result;
 }
@@ -1238,6 +1245,7 @@ private:
 
 	void AddKeywordOverride(const char *name, int32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
+	void AddPackratMemoizedRule(const char *name);
 	void SuppressSuggestions(const char *name);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters);
@@ -1247,6 +1255,7 @@ private:
 	string_map_t<reference<Matcher>> matchers;
 	case_insensitive_map_t<reference<Matcher>> keyword_overrides;
 	string_set_t no_suggestion_rules;
+	string_set_t packrat_memoized_rules;
 };
 
 Matcher &MatcherFactory::Keyword(const string &keyword) const {
@@ -1539,6 +1548,9 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 		throw InternalException("PEG matcher create error - unclosed bracket found");
 	}
 	matcher.SetName(rule_name.GetString());
+	if (packrat_memoized_rules.count(rule_name.GetString())) {
+		matcher.SetPackratMemoized();
+	}
 	if (no_suggestion_rules.count(rule_name.GetString())) {
 		matcher.Cast<ListMatcher>().suppress_suggestions = true;
 	}
@@ -1551,7 +1563,14 @@ void MatcherFactory::AddKeywordOverride(const char *name, int32_t score, char ex
 }
 
 void MatcherFactory::AddRuleOverride(const char *name, Matcher &matcher) {
+	if (packrat_memoized_rules.count(name)) {
+		matcher.SetPackratMemoized();
+	}
 	matchers.insert(make_pair(name, reference<Matcher>(matcher)));
+}
+
+void MatcherFactory::AddPackratMemoizedRule(const char *name) {
+	packrat_memoized_rules.insert(name);
 }
 
 void MatcherFactory::SuppressSuggestions(const char *name) {
@@ -1567,6 +1586,36 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddKeywordOverride("TABLE", 1, ' ');
 	AddKeywordOverride(".", 0, '\0');
 	AddKeywordOverride("(", 0, '\0');
+	// packrat memoized rules
+	//===--------------------------------------------------------------------===//
+	// START GENERATED PACKRAT MEMOIZED RULES
+	//===--------------------------------------------------------------------===//
+	AddPackratMemoizedRule("Expression");
+	AddPackratMemoizedRule("LambdaArrowExpression");
+	AddPackratMemoizedRule("LogicalOrExpression");
+	AddPackratMemoizedRule("LogicalAndExpression");
+	AddPackratMemoizedRule("LogicalNotExpression");
+	AddPackratMemoizedRule("IsExpression");
+	AddPackratMemoizedRule("ComparisonExpression");
+	AddPackratMemoizedRule("BitwiseExpression");
+	AddPackratMemoizedRule("AdditiveExpression");
+	AddPackratMemoizedRule("MultiplicativeExpression");
+	AddPackratMemoizedRule("ExponentiationExpression");
+	AddPackratMemoizedRule("PrefixExpression");
+	AddPackratMemoizedRule("CollateExpression");
+	AddPackratMemoizedRule("AtTimeZoneExpression");
+	AddPackratMemoizedRule("SingleExpression");
+	AddPackratMemoizedRule("BaseExpression");
+	AddPackratMemoizedRule("ParensExpression");
+	AddPackratMemoizedRule("ParenthesisExpression");
+	AddPackratMemoizedRule("Identifier");
+	AddPackratMemoizedRule("ColId");
+	AddPackratMemoizedRule("ColumnReference");
+	AddPackratMemoizedRule("FunctionExpression");
+	//===--------------------------------------------------------------------===//
+	// END GENERATED PACKRAT MEMOIZED RULES
+	//===--------------------------------------------------------------------===//
+
 	// rule overrides
 	//===--------------------------------------------------------------------===//
 	// START GENERATED RULE OVERRIDES

@@ -382,6 +382,11 @@ public:
 	static vector<GroupingSet> GroupByExpressionUnfolding(GroupByExpressionInfo &group_by_expr,
 	                                                      GroupingExpressionMap &map, GroupByNode &result);
 	static unique_ptr<ResultModifier> VerifyLimitOffset(LimitPercentResult &limit, LimitPercentResult &offset);
+	//! Split a generic option list into bound (key, value) options and parsed (key, expression) options.
+	//! Shared by ATTACH and CONNECT; `statement_name` labels the NULL-option error message.
+	static void SplitGenericOptions(const vector<GenericCopyOption> &options_in,
+	                                case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_options,
+	                                unordered_map<string, Value> &options, const char *statement_name);
 	static unique_ptr<QueryNode> ToRecursiveCTE(unique_ptr<QueryNode> node, const Identifier &name,
 	                                            vector<Identifier> &aliases,
 	                                            vector<unique_ptr<ParsedExpression>> &key_targets);
@@ -688,11 +693,6 @@ public:
 	                                                                       ParseResult &parse_result);
 	static vector<GenericCopyOption> TransformAttachOptions(PEGTransformer &transformer,
 	                                                        const vector<GenericCopyOption> &generic_copy_option_list);
-	//! Split a generic option list into bound (key, value) options and parsed (key, expression) options.
-	//! Shared by ATTACH and CONNECT; `statement_name` labels the NULL-option error message.
-	static void SplitGenericOptions(const vector<GenericCopyOption> &options_in,
-	                                case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_options,
-	                                unordered_map<string, Value> &options, const char *statement_name);
 	static unique_ptr<TransformResultValue> TransformCallStatementInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformCallStatement(PEGTransformer &transformer,

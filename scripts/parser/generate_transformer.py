@@ -8,7 +8,12 @@ from typing import List
 
 sys.path.insert(0, str(Path(__file__).parent))
 from inline_grammar import parse_peg_grammar, PEGTokenType
-from grammar_types import load_grammar_types, load_grammar_types_yaml, load_matcher_rule_overrides
+from grammar_types import (
+    load_grammar_types,
+    load_grammar_types_yaml,
+    load_matcher_rule_overrides,
+    load_packrat_memoized_rules,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1178,6 +1183,8 @@ _START_BLOCK = _SEPARATOR + "\t// START GENERATED RULES\n" + _SEPARATOR
 _END_BLOCK = _SEPARATOR + "\t// END GENERATED RULES\n" + _SEPARATOR
 _MATCHER_START_BLOCK = _SEPARATOR + "\t// START GENERATED RULE OVERRIDES\n" + _SEPARATOR
 _MATCHER_END_BLOCK = _SEPARATOR + "\t// END GENERATED RULE OVERRIDES\n" + _SEPARATOR
+_PACKRAT_START_BLOCK = _SEPARATOR + "\t// START GENERATED PACKRAT MEMOIZED RULES\n" + _SEPARATOR
+_PACKRAT_END_BLOCK = _SEPARATOR + "\t// END GENERATED PACKRAT MEMOIZED RULES\n" + _SEPARATOR
 
 
 def _matcher_override_expr(rule_name, override):
@@ -1221,6 +1228,26 @@ def write_matcher_rule_overrides(matcher_overrides):
 
     block_end = end_idx + len(_MATCHER_END_BLOCK)
     generated_block = _MATCHER_START_BLOCK + "".join(lines) + _MATCHER_END_BLOCK
+    new_content = content[:start_idx] + generated_block + content[block_end:]
+    matcher_cpp_path.write_text(new_content)
+    print(f"Updated {matcher_cpp_path}")
+
+
+def write_packrat_memoized_rules(packrat_memoized_rules):
+    content = matcher_cpp_path.read_text()
+    start_idx = content.find(_PACKRAT_START_BLOCK)
+    if start_idx == -1:
+        raise RuntimeError(f"Could not find START GENERATED PACKRAT MEMOIZED RULES marker in {matcher_cpp_path}")
+    end_idx = content.find(_PACKRAT_END_BLOCK, start_idx + len(_PACKRAT_START_BLOCK))
+    if end_idx == -1:
+        raise RuntimeError(f"Could not find END GENERATED PACKRAT MEMOIZED RULES marker in {matcher_cpp_path}")
+
+    lines = []
+    for rule_name in packrat_memoized_rules:
+        lines.append(f'\tAddPackratMemoizedRule("{rule_name}");\n')
+
+    block_end = end_idx + len(_PACKRAT_END_BLOCK)
+    generated_block = _PACKRAT_START_BLOCK + "".join(lines) + _PACKRAT_END_BLOCK
     new_content = content[:start_idx] + generated_block + content[block_end:]
     matcher_cpp_path.write_text(new_content)
     print(f"Updated {matcher_cpp_path}")
@@ -1421,6 +1448,18 @@ def process_gram_file(gram_filename, rule_types, excluded_rules, provided_rule_n
     )
 
 
+def load_grammar_rule_names(gram_files):
+    rule_names = set()
+    for gram_filename in gram_files:
+        gram_path = statements_dir / gram_filename
+        try:
+            rules = parse_peg_grammar(gram_path.read_text())
+        except Exception as e:
+            raise Exception(f"{gram_filename}: {e}") from None
+        rule_names.update(rules.keys())
+    return rule_names
+
+
 def main():
     arg_parser = argparse.ArgumentParser(description="Generate Internal transformer wrappers from grammar rules.")
     arg_parser.add_argument("--write", action="store_true", help="Write generated files to disk.")
@@ -1428,7 +1467,9 @@ def main():
 
     gram_files_to_gen = sorted(path.name for path in statements_dir.glob('*.gram'))
     grammar_types_file = type_dir / 'grammar_types.yml'
+    grammar_rule_names = load_grammar_rule_names(gram_files_to_gen)
     matcher_overrides = load_matcher_rule_overrides(grammar_types_file)
+    packrat_memoized_rules = load_packrat_memoized_rules(grammar_types_file, grammar_rule_names)
     matcher_rule_names = set(matcher_overrides.keys())
     identifier_override_rules = load_identifier_override_rules(grammar_types_file)
     rule_types, excluded_rules = load_grammar_types(grammar_types_file)
@@ -1444,6 +1485,7 @@ def main():
         all_registrations = [reg for r in results for reg in r.registrations]
         write_cpp(all_implementations, all_registrations)
         write_matcher_rule_overrides(matcher_overrides)
+        write_packrat_memoized_rules(packrat_memoized_rules)
         print_manual_steps(results)
     else:
         for r in results:
