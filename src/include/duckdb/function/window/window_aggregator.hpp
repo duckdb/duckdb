@@ -57,7 +57,7 @@ public:
 
 				//	WindowExcludePart::LEFT
 				const auto frame_begin = begins[i];
-				const auto frame_end = ends[i];
+				const auto frame_end = MaxValue(ends[i], frame_begin);
 				auto begin = frame_begin;
 				auto end = (exclude_mode == WindowExcludeMode::CURRENT_ROW) ? cur_row : peer_begin[i];
 				end = MinValue(end, frame_end);
