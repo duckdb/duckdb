@@ -25,8 +25,8 @@ def test_manual_multiple_overloads(shell):
         .statement('.manual regexp_extract')
     )
     result = test.run()
-    result.check_stdout('(1)')
-    result.check_stdout('(2)')
+    result.check_stdout('1.  regexp_extract')
+    result.check_stdout('2.  regexp_extract')
 
 
 def test_manual_shared_content_no_numbers(shell):
@@ -36,19 +36,19 @@ def test_manual_shared_content_no_numbers(shell):
         .statement('.manual date_diff')
     )
     result = test.run()
-    result.check_not_exist('(1)')
+    result.check_not_exist('1. date_diff')
 
 
 def test_manual_dedup_description(shell):
-    # overloads sharing a description are grouped under one reference header
+    # overloads sharing a description are grouped under one reference list
     test = (
         ShellTest(shell)
         .statement('.manual regexp_extract')
     )
     result = test.run()
     # regexp_extract has two distinct descriptions grouped across overloads
-    result.check_stdout('(1), (2), (4)')
-    result.check_stdout('(3), (5)')
+    result.check_stdout('1. 2. 4.')
+    result.check_stdout('3. 5.')
 
 
 def test_manual_case_insensitive(shell):

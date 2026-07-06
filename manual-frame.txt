@@ -438,21 +438,31 @@ EXAMPLES
 
   SIGNATURE
 
-   1. strptime(text VARCHAR, format VARCHAR) -> TIMESTAMP
+    1.  strptime(text VARCHAR, format VARCHAR) -> TIMESTAMP
 
-      strptime(text VARCHAR, format VARCHAR) -> TIMESTAMP
+        strptime(text VARCHAR, format VARCHAR) -> TIMESTAMP
 
-   2. strptime(text VARCHAR, format-list VARCHAR[]) -> TIMESTAMP
+    10. strptime(text VARCHAR, format-list VARCHAR[]) -> TIMESTAMP
 
   DESCRIPTION
 
-   1. Converts the `string` text to timestamp according to the format string. Throws an error on
-      failure. To return `NULL` on failure, use try_strptime.
+    1.  Converts the `string` text to timestamp according to the format string. Throws an error on
+        failure. To return `NULL` on failure, use try_strptime.
 
-   2. Converts the `string` text to timestamp applying the format strings in the list until one
-      succeeds. Throws an error on failure. To return `NULL` on failure, use try_strptime.
+    10. Converts the `string` text to timestamp applying the format strings in the list until one
+        succeeds. Throws an error on failure. To return `NULL` on failure, use try_strptime.
 
-   2. 3. 4.
+    2. 3. 4.
 
-	  Converts the `string` text to timestamp applying the format strings in the list until one
-      succeeds. Throws an error on failure. To return `NULL` on failure, use try_strptime.
+	    Converts the `string` text to timestamp applying the format strings in the list until one
+        succeeds. Throws an error on failure. To return `NULL` on failure, use try_strptime.
+
+
+
+  system.main                                 strptime                             scalar function
+
+  SIGNATURE
+
+    10) strptime(text VARCHAR, format VARCHAR) -> TIMESTAMP
+
+    2.  strptime(text VARCHAR, format-list VARCHAR[]) -> TIMESTAMP

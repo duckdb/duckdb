@@ -139,12 +139,6 @@ public:
 		lines.push_back(string(level * INDENT, ' ') + text);
 	}
 
-	//! A right-aligned label, flush against the right margin (the "(1), (2)" reference groups).
-	void RightAligned(const string &label) {
-		idx_t label_width = RenderLength(label);
-		lines.push_back(width > label_width ? string(width - label_width, ' ') + label : label);
-	}
-
 	//! A line centered within the span [indent, width]; widths ignore ANSI codes.
 	void Centered(idx_t indent, const string &text) {
 		idx_t avail = width > indent ? width - indent : 0;
@@ -172,19 +166,6 @@ public:
 		return true;
 	}
 
-	//! A signature indented `level` levels, with `number` right-aligned against the margin on the last
-	//! line (or on its own line when there is no room). `text`/`number` may contain ANSI color codes.
-	void Numbered(idx_t level, const string &text, const string &number) {
-		Body(level, text);
-		idx_t number_width = RenderLength(number);
-		idx_t used = RenderLength(lines.back());
-		if (used + 1 + number_width <= width) {
-			lines.back() += string(width - used - number_width, ' ') + number;
-		} else {
-			RightAligned(number);
-		}
-	}
-
 	//! A word-wrapped body block, every line indented `level` levels.
 	void Body(idx_t level, const string &text) {
 		idx_t indent = level * INDENT;
@@ -198,10 +179,36 @@ public:
 		}
 	}
 
+	//! A word-wrapped block whose lines start at `indent` columns (used for a multi-reference list).
+	void Wrapped(idx_t indent, const string &text) {
+		idx_t budget = width > indent + 4 ? width - indent : 4;
+		for (auto &chunk : WordWrap(text, budget)) {
+			lines.push_back(string(indent, ' ') + chunk);
+		}
+	}
+
+	//! A word-wrapped entry whose `marker` sits in the indent gap on the first line, with the text
+	//! aligned at `level`; continuation lines are indented to `level`.
+	void Item(idx_t level, const string &marker, const string &text) {
+		idx_t indent = level * INDENT;
+		auto wrapped = WordWrap(text, Budget(indent));
+		if (wrapped.empty()) {
+			wrapped.emplace_back();
+		}
+		for (idx_t i = 0; i < wrapped.size(); i++) {
+			lines.push_back((i == 0 ? MarkerPrefix(level, marker) : string(indent, ' ')) + wrapped[i]);
+		}
+	}
+
 	//! A line of syntax-highlighted content indented `level` levels, emitted verbatim (no wrapping) so
 	//! it stays copy-pasteable.
 	void Highlighted(idx_t level, const string &text) {
 		lines.push_back(string(level * INDENT, ' ') + (highlight ? highlight(text) : text));
+	}
+
+	//! Highlighted content whose `marker` sits in the indent gap, with the text aligned at `level`.
+	void HighlightedItem(idx_t level, const string &marker, const string &text) {
+		lines.push_back(MarkerPrefix(level, marker) + (highlight ? highlight(text) : text));
 	}
 
 	//! Render the accumulated lines.
@@ -215,6 +222,18 @@ public:
 	}
 
 private:
+	//! The first-line prefix for a marked entry: `marker` placed in the indent gap so the following
+	//! text starts at `level` columns (short markers are padded, over-long markers push the text right).
+	string MarkerPrefix(idx_t level, const string &marker) const {
+		idx_t indent = level * INDENT;
+		idx_t marker_indent = level >= 2 ? (level - 2) * INDENT : 0;
+		string prefix = string(marker_indent, ' ') + marker;
+		while (RenderLength(prefix) < indent) {
+			prefix += ' ';
+		}
+		return prefix;
+	}
+
 	//! Word-wrap budget for content sitting at `indent` columns.
 	idx_t Budget(idx_t indent) const {
 		return width > indent + 4 ? width - indent : 4;
@@ -245,11 +264,10 @@ struct ContentGroup {
 	vector<string> examples;
 };
 
-//! Format a group's reference header, e.g. "(1), (2), (3)". Runs of more than 5 consecutive numbers
-//! are collapsed to a "(first-last)" range. Each piece is a space-separated, independently colored (via
-//! `colorize`) token so the header can be word-wrapped safely.
+//! Format a group's reference list, e.g. "1. 2. 3.". Runs of more than 5 consecutive numbers collapse
+//! to a "first-last." range. Each piece is a space-separated, independently colored (via `colorize`)
+//! token so the list can be word-wrapped safely.
 string FormatRefs(const vector<idx_t> &numbers, const std::function<string(const string &)> &colorize) {
-	// build the pieces, collapsing each maximal run of > 3 consecutive numbers into "(first-last)"
 	vector<string> pieces;
 	for (idx_t i = 0; i < numbers.size();) {
 		idx_t j = i;
@@ -257,10 +275,10 @@ string FormatRefs(const vector<idx_t> &numbers, const std::function<string(const
 			j++;
 		}
 		if (j - i + 1 > 5) {
-			pieces.push_back("(" + std::to_string(numbers[i]) + "-" + std::to_string(numbers[j]) + ")");
+			pieces.push_back(std::to_string(numbers[i]) + "-" + std::to_string(numbers[j]) + ".");
 		} else {
 			for (idx_t k = i; k <= j; k++) {
-				pieces.push_back("(" + std::to_string(numbers[k]) + ")");
+				pieces.push_back(std::to_string(numbers[k]) + ".");
 			}
 		}
 		i = j + 1;
@@ -270,8 +288,7 @@ string FormatRefs(const vector<idx_t> &numbers, const std::function<string(const
 		if (i > 0) {
 			result += " ";
 		}
-		string token = i + 1 < pieces.size() ? pieces[i] + "," : pieces[i];
-		result += colorize ? colorize(token) : token;
+		result += colorize ? colorize(pieces[i]) : pieces[i];
 	}
 	return result;
 }
@@ -392,6 +409,11 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 	auto color_ref = [&](const string &refs) {
 		return layout_on.empty() ? refs : layout_on + refs + layout_off;
 	};
+	// a signature/reference marker "n." (gray); it is placed in the marker column and the following
+	// content is padded to align, leaving room for multi-digit numbers
+	auto marker = [&](idx_t n) {
+		return color_ref(std::to_string(n) + ".");
+	};
 	// section headings are upper-cased and emphasized (white + bold)
 	auto heading = [&](const string &text) {
 		string upper = StringUtil::Upper(text);
@@ -469,7 +491,7 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 			canvas.Centered(rule_indent, header_name);
 			canvas.Centered(rule_indent, header_type);
 		}
-		//canvas.Line(0, frame_rule(f, false));
+		// canvas.Line(0, frame_rule(f, false));
 		canvas.Blank();
 
 		// number this frame's overloads; group descriptions/examples so numbering can react to them
@@ -488,49 +510,64 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 		// the "(n)" markers only earn their place when a description/example references specific overloads
 		bool show_numbers = numbered.size() > 1 && (description_refs || example_refs);
 
-		// Signatures; the "(n)" marker is right-aligned at the margin
+		// the "n." marker sits at level 2 (4 cols) and content aligns at level 4 (8 cols); a multi-
+		// reference group lists its numbers on their own line, aligned with the marker column
+		idx_t ref_indent = 2 * INDENT;
+
+		// Signatures; the "n." marker sits in the indent gap on the first line
 		canvas.Line(1, heading("Signature"));
 		canvas.Blank();
 		for (auto &entry : numbered) {
 			// the signature is already colored structurally by BuildSignature; do not re-highlight it
 			if (show_numbers) {
-				canvas.Numbered(3, entry.overload->signature, color_ref("(" + std::to_string(entry.number) + ")"));
+				canvas.Item(4, marker(entry.number), entry.overload->signature);
 			} else {
-				canvas.Body(3, entry.overload->signature);
+				canvas.Body(4, entry.overload->signature);
 			}
 			canvas.Blank();
 		}
 
-		// Descriptions: the reference group left-aligned above the body on the line(s) below
+		// Descriptions: a single-reference group carries its "n." marker inline; multiple references are
+		// listed on their own line above the body
 		if (!description_groups.empty()) {
 			canvas.Line(1, heading("Description"));
 			canvas.Blank();
 			for (auto &group : description_groups) {
-				if (description_refs) {
-					canvas.Body(2, FormatRefs(group.numbers, color_ref));
+				if (!description_refs) {
+					canvas.Body(4, group.text);
+				} else if (group.numbers.size() == 1) {
+					canvas.Item(4, marker(group.numbers[0]), group.text);
+				} else {
+					canvas.Wrapped(ref_indent, FormatRefs(group.numbers, color_ref));
 					canvas.Blank();
+					canvas.Body(4, group.text);
 				}
-				canvas.Body(3, group.text);
 				canvas.Blank();
 			}
 		}
 
-		// Examples: the reference group left-aligned above the (syntax-highlighted) SQL, verbatim and
-		// un-boxed so it can be copy-pasted directly from the terminal
+		// Examples: same referencing, over verbatim (syntax-highlighted) SQL that stays copy-pasteable
 		if (!example_groups.empty()) {
 			canvas.Line(1, heading("Examples"));
 			canvas.Blank();
 			for (auto &group : example_groups) {
-				if (example_refs) {
-					canvas.Body(2, FormatRefs(group.numbers, color_ref));
+				bool inline_ref = example_refs && group.numbers.size() == 1;
+				if (example_refs && group.numbers.size() > 1) {
+					canvas.Wrapped(ref_indent, FormatRefs(group.numbers, color_ref));
 					canvas.Blank();
 				}
+				bool first_line = true;
 				for (idx_t e = 0; e < group.examples.size(); e++) {
 					if (e > 0) {
 						canvas.Blank();
 					}
 					for (auto &physical : StringUtil::Split(group.examples[e], '\n')) {
-						canvas.Highlighted(3, physical);
+						if (inline_ref && first_line) {
+							canvas.HighlightedItem(4, marker(group.numbers[0]), physical);
+						} else {
+							canvas.Highlighted(4, physical);
+						}
+						first_line = false;
 					}
 				}
 				canvas.Blank();
