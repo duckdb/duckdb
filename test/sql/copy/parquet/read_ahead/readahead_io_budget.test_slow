@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/read_ahead/readahead_io_budget.test
+# name: test/sql/copy/parquet/read_ahead/readahead_io_budget.test_slow
 # description: In automatic mode the scheduled-ahead I/O is byte-budgeted, bounded by the memory limit and not by the job depth
 # group: [read_ahead]
 

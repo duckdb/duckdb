@@ -44,8 +44,6 @@ struct MultiFileReaderInterface {
 	                                FileExpandResult expand_result);
 	virtual unique_ptr<GlobalTableFunctionState>
 	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state) = 0;
-	//! Create the per-job reader scan state. Called on the per-thread path and (off the operator thread) by the
-	//! read-ahead producer, so it takes a ClientContext rather than an ExecutionContext.
 	virtual unique_ptr<LocalTableFunctionState> InitializeLocalState(ClientContext &, GlobalTableFunctionState &) = 0;
 
 	virtual bool SupportsReadAhead() const {
@@ -308,8 +306,6 @@ public:
 		return true;
 	}
 
-	//! Open an unopened file, dropping the parallel lock while the open runs; the lock is held again on
-	//! return and on throw. Returns false when the initialized reader determined the file can be skipped.
 	static bool OpenFile(ClientContext &context, const MultiFileBindData &bind_data, MultiFileGlobalState &global_state,
 	                     MultiFileReaderData &current_reader_data, idx_t current_file_index,
 	                     unique_lock<mutex> &parallel_lock) {
@@ -547,7 +543,7 @@ public:
 		auto result = make_uniq<MultiFileLocalState>(context.client);
 
 		if (gstate.read_ahead) {
-			// read-ahead path: jobs (each with their own scan state) are produced and pulled from the queue
+			// read-ahead jobs bring their own scan state, start empty and claim a job in the first Scan() call
 			return std::move(result);
 		}
 

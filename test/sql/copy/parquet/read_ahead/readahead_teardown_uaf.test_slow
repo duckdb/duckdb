@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/read_ahead/readahead_teardown_uaf.test
+# name: test/sql/copy/parquet/read_ahead/readahead_teardown_uaf.test_slow
 # description: Read-ahead use-after-free when LIMIT frees TaskExecutor mid async I/O
 # group: [read_ahead]
 

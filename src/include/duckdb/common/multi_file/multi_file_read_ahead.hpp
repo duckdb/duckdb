@@ -38,8 +38,7 @@ public:
 	}
 	//! Mark one I/O task as completed, waking the scan task when it was the last one
 	void FinishIOTask();
-	//! Register the calling scan task to be woken once all I/O tasks have completed.
-	//! Returns false when they already have, the caller should proceed instead of parking.
+	//! Try to park the calling scan task until the job's I/O completes, the last I/O task to finish wakes it.
 	bool TryPark(const InterruptState &interrupt_state);
 
 private:
@@ -56,17 +55,17 @@ public:
 
 public:
 	//! Create the read-ahead driver from the read_ahead_depth setting (-1 = auto from thread count).
-	//! Returns null when the resolved depth is 0, i.e., read-ahead is disabled.
 	static unique_ptr<MultiFileReadAhead> Create(ClientContext &context, idx_t max_threads);
 
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
-	//! Returns false when the scan has no more jobs.
 	using ProduceJobCallback = std::function<bool(MultiFileScanJob &job, vector<unique_ptr<AsyncTask>> &io_tasks)>;
+
 	//! Try to produce one job into the queue.
 	bool TryProduceJob(const ProduceJobCallback &claim_and_schedule);
 
 	//! Check if scan is done, i.e., no more jobs to do
 	bool IsDone() const;
+
 	//! Whether any thread holds a reserved slot it has not pushed a job for yet
 	bool HasActiveProducers() const;
 
@@ -111,8 +110,7 @@ private:
 	map<idx_t, unique_ptr<MultiFileScanJob>> pending_jobs;
 	//! The batch index the queue admits next
 	idx_t next_batch_index = 0;
-	//! Scan states of finished jobs, reused by producers for new jobs, we keep a pool to reuse the per-thread effect
-	//! Of non-read ahead
+	//! Scan states of finished jobs
 	vector<unique_ptr<LocalTableFunctionState>> state_pool;
 	//! Jobs scheduled ahead of decoding
 	atomic<idx_t> active_jobs {0};

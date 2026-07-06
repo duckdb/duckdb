@@ -102,7 +102,7 @@ bool MultiFileReadAhead::HasActiveProducers() const {
 	return active_producers.load() > 0;
 }
 
-//! Settles the reservation taken by TryReserveSlot
+// Settles the reservation taken by TryReserveSlot
 struct MultiFileReadAhead::ProducerReservation {
 	explicit ProducerReservation(MultiFileReadAhead &read_ahead) : read_ahead(read_ahead) {
 	}
@@ -118,7 +118,6 @@ struct MultiFileReadAhead::ProducerReservation {
 };
 
 bool MultiFileReadAhead::TryProduceJob(const ProduceJobCallback &claim_and_schedule) {
-	// surface errors pushed by other producers: every consumer passes through here while spinning
 	ThrowIfError();
 	if (IsDone() || !TryReserveSlot()) {
 		return false;
@@ -235,7 +234,7 @@ MultiFileGlobalState::MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_
 MultiFileGlobalState::~MultiFileGlobalState() = default;
 
 MultiFileLocalState::~MultiFileLocalState() {
-	// job reads might still be going,  wait for them before destroying ze job
+	// job reads might still be going, wait for them before destroying ze job
 	if (job_state == MultiFileJobState::WAIT_IO && job.io_completion) {
 		while (job.io_completion->PendingIOTasks() > 0) {
 			TaskScheduler::YieldThread();

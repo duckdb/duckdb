@@ -173,7 +173,6 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 
 	unique_ptr<GlobalTableFunctionState> global_state;
 
-	//! Drives read-ahead I/O for the scan (claims + schedules jobs ahead of decoding), null when read-ahead is off
 	unique_ptr<MultiFileReadAhead> read_ahead;
 
 	optional_ptr<const PhysicalOperator> op;

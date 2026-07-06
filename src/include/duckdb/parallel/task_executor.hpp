@@ -56,7 +56,6 @@ private:
 	unique_ptr<ProducerToken> token;
 	atomic<idx_t> completed_tasks;
 	atomic<idx_t> total_tasks;
-	//! Set by CancelAndDrain - tasks that have not started yet bail out instead of executing their work
 	atomic<bool> cancelled {false};
 	friend class BaseExecutorTask;
 	optional_ptr<ClientContext> context;
