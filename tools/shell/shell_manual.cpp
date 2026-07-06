@@ -406,7 +406,7 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 		return path_on.empty() ? text : path_on + text + path_off;
 	};
 
-	// header rules are inset one level
+	// header rules and content are inset one level
 	idx_t rule_indent = INDENT;
 	idx_t rule_width = content_width > rule_indent ? content_width - rule_indent : 0;
 
@@ -469,7 +469,7 @@ string RenderManualPage(const vector<ManualOverload> &overloads, const string &p
 			canvas.Centered(rule_indent, header_name);
 			canvas.Centered(rule_indent, header_type);
 		}
-		canvas.Line(0, frame_rule(f, false));
+		//canvas.Line(0, frame_rule(f, false));
 		canvas.Blank();
 
 		// number this frame's overloads; group descriptions/examples so numbering can react to them

@@ -350,10 +350,109 @@ EXAMPLES
       list_contains([1, 2, NULL], 1)
 
 
-  ──┤2/24├──────────────────────────────────────────────────────────────────────────────────────
-  system.main                             list_contains                          scalar function
-  ──────────────────────────────────────────────────────────────────────────────────────────────
+╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ system.main                               list_apply                           scalar function │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
   SIGNATURE
 
-		map_contains_entry(map, key, value)
+      list_apply(list ANY[], lambda(x) LAMBDA) -> ANY[]
+
+  DESCRIPTION
+
+      Returns a list that is the result of applying the `lambda` function to each element of the
+      input `list`. The return type is defined by the return type of the `lambda` function.
+
+  EXAMPLES
+
+      list_apply([1, 2, 3], lambda x : x + 1)
+
+╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ system.main                       list_approx_count_distinct                    macro function │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+  SIGNATURE
+
+      list_approx_count_distinct(l)
+
+╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ system.main                                list_avg                             macro function │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+  SIGNATURE
+
+      list_avg(l)
+
+
+
+
+
+
+
+
+
+
+
+                                found 70 entries matching 'list%'
+
+╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ system.main                                  list                           aggregate function │
+│                                                                                                │
+│   SIGNATURE                                                                                    │
+│                                                                                                │
+│       list(arg T) -> T[]                                                                       │
+│                                                                                                │
+│   DESCRIPTION                                                                                  │
+│                                                                                                │
+│       Returns a LIST containing all the values of a column.                                    │
+│                                                                                                │
+│   EXAMPLES                                                                                     │
+│                                                                                                │
+        list(A)
+│                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ system.main                               list_aggr                            scalar function │
+│                                                                                                │
+│   SIGNATURE                                                                                    │
+│                                                                                                │
+│       list_aggr(list ANY[], function_name VARCHAR, ANY...) -> ANY                              │
+│                                                                                                │
+│   DESCRIPTION                                                                                  │
+│                                                                                                │
+│       Executes the aggregate function `function_name` on the elements of `list`.               │
+│                                                                                                │
+│   EXAMPLES                                                                                     │
+│                                                                                                │
+        list_aggregate([1, 2, NULL], 'min')
+│                                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  system.main                                 strptime                             scalar function
+
+  SIGNATURE
+
+   1. strptime(text VARCHAR, format VARCHAR) -> TIMESTAMP
+
+      strptime(text VARCHAR, format VARCHAR) -> TIMESTAMP
+
+   2. strptime(text VARCHAR, format-list VARCHAR[]) -> TIMESTAMP
+
+  DESCRIPTION
+
+   1. Converts the `string` text to timestamp according to the format string. Throws an error on
+      failure. To return `NULL` on failure, use try_strptime.
+
+   2. Converts the `string` text to timestamp applying the format strings in the list until one
+      succeeds. Throws an error on failure. To return `NULL` on failure, use try_strptime.
+
+   2. 3. 4.
+
+	  Converts the `string` text to timestamp applying the format strings in the list until one
+      succeeds. Throws an error on failure. To return `NULL` on failure, use try_strptime.

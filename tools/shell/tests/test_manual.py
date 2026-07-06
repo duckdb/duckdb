@@ -104,8 +104,8 @@ def test_manual_like_pattern_multiple(shell):
     result.check_stdout('1 / ')
 
 
-def test_manual_single_entry_no_rule(shell):
-    # a single entry shows its header (name, schema, type) but no top rule
+def test_manual_single_entry_no_counter(shell):
+    # a single entry shows its header (name, schema, type) but no "n / total" position counter
     test = (
         ShellTest(shell)
         .statement('.manual list_contains')
@@ -113,7 +113,7 @@ def test_manual_single_entry_no_rule(shell):
     result = test.run()
     result.check_stdout('list_contains')
     result.check_stdout('scalar function')
-    result.check_not_exist('───')
+    result.check_not_exist(' / ')
 
 
 def test_manual_schema_path(shell):
