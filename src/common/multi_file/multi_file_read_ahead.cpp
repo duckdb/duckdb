@@ -52,22 +52,24 @@ bool ReadAheadJobCompletion::TryPark(const InterruptState &interrupt_state) {
 	return parked_scan.BlockTask(interrupt_state);
 }
 
-MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p, bool auto_depth_p)
-    : read_ahead_depth(read_ahead_depth_p), auto_depth(auto_depth_p),
-      io_byte_budget(auto_depth ? BufferManager::GetBufferManager(context).GetMaxMemory() / 4
-                                : NumericLimits<idx_t>::Maximum()) {
+MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p, idx_t io_byte_budget_p)
+    : read_ahead_depth(read_ahead_depth_p), io_byte_budget(io_byte_budget_p) {
 	D_ASSERT(read_ahead_depth_p > 0);
 	executor = make_uniq<TaskExecutor>(context, TaskSchedulerType::ASYNC);
 }
 
-unique_ptr<MultiFileReadAhead> MultiFileReadAhead::Create(ClientContext &context, idx_t max_threads) {
+unique_ptr<MultiFileReadAhead> MultiFileReadAhead::Create(ClientContext &context) {
 	const auto configured_depth = Settings::Get<ReadAheadDepthSetting>(context);
-	const bool auto_depth = configured_depth == -1;
-	const auto depth = auto_depth ? MaxValue<idx_t>(max_threads / 4, 4) : NumericCast<idx_t>(configured_depth);
-	if (depth == 0) {
+	if (configured_depth == 0) {
 		return nullptr;
 	}
-	return make_uniq<MultiFileReadAhead>(context, depth, auto_depth);
+	if (configured_depth == -1) {
+		// automatic mode, unlimited depth, the I/O byte budget is the sole gate
+		const auto io_byte_budget = BufferManager::GetBufferManager(context).GetMaxMemory() / 4;
+		return make_uniq<MultiFileReadAhead>(context, NumericLimits<idx_t>::Maximum(), io_byte_budget);
+	}
+	return make_uniq<MultiFileReadAhead>(context, NumericCast<idx_t>(configured_depth),
+	                                     NumericLimits<idx_t>::Maximum());
 }
 
 MultiFileReadAhead::~MultiFileReadAhead() {
@@ -86,11 +88,7 @@ bool MultiFileReadAhead::TryReserveSlot() {
 	if (pending_io_bytes.load() >= io_byte_budget) {
 		return false;
 	}
-	if (auto_depth) {
-		if (active_jobs.load() >= read_ahead_depth) {
-			return false;
-		}
-	} else if (active_jobs.fetch_add(1) >= read_ahead_depth) {
+	if (active_jobs.fetch_add(1) >= read_ahead_depth) {
 		--active_jobs;
 		return false;
 	}
@@ -107,7 +105,7 @@ struct MultiFileReadAhead::ProducerReservation {
 	explicit ProducerReservation(MultiFileReadAhead &read_ahead) : read_ahead(read_ahead) {
 	}
 	~ProducerReservation() {
-		if (!committed && !read_ahead.auto_depth) {
+		if (!committed) {
 			read_ahead.ReleaseSlot();
 		}
 		--read_ahead.active_producers;
@@ -152,10 +150,6 @@ void MultiFileReadAhead::PushJob(unique_ptr<MultiFileScanJob> job, vector<unique
 		job->io_bytes += task->GetIOSize();
 	}
 	pending_io_bytes += job->io_bytes;
-	if (auto_depth) {
-		// the job starts occupying a depth slot only now that it is queued ahead of decoding
-		++active_jobs;
-	}
 	// schedule the reads detached on the async pool right away
 	for (auto &task : io_tasks) {
 		executor->ScheduleTask(make_uniq<ReadAheadIOTask>(*executor, std::move(task), completion));

@@ -50,12 +50,13 @@ private:
 //! Drives read-ahead for the multi-file scan, it's purpose is to keep several scan jobs scheduled ahead of decoding
 class MultiFileReadAhead {
 public:
-	MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth, bool auto_depth);
+	MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth, idx_t io_byte_budget);
 	~MultiFileReadAhead();
 
 public:
-	//! Create the read-ahead driver from the read_ahead_depth setting (-1 = auto from thread count).
-	static unique_ptr<MultiFileReadAhead> Create(ClientContext &context, idx_t max_threads);
+	//! Create the read-ahead driver from the read_ahead_depth setting.
+	//! -1 = automatic: unlimited depth, gated by the I/O byte budget. Returns null when read-ahead is disabled.
+	static unique_ptr<MultiFileReadAhead> Create(ClientContext &context);
 
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
 	using ProduceJobCallback = std::function<bool(MultiFileScanJob &job, vector<unique_ptr<AsyncTask>> &io_tasks)>;
@@ -97,11 +98,9 @@ private:
 	//! Release a read-ahead slot
 	void ReleaseSlot();
 
-	//! Number of jobs the scan keeps scheduled ahead of decoding
+	//! Maximum number of jobs scheduled ahead of decoding, unlimited in the -1 auto mode
 	const idx_t read_ahead_depth;
-	//! Whether the depth came from the -1 auto mode, enables the byte budget and the producer slot exemption
-	const bool auto_depth;
-	//! Maximum bytes of I/O scheduled ahead of decoding, additional jobs wait until claims free up bytes.
+	//! Maximum bytes of I/O scheduled ahead of decoding, unlimited when an explicit depth is set
 	const idx_t io_byte_budget;
 
 	mutable mutex lock;

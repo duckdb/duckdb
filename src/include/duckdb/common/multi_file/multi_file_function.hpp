@@ -563,7 +563,7 @@ public:
 		    TaskScheduler::GetScheduler(context).NumberOfAsyncThreads() == 0) {
 			return;
 		}
-		gstate.read_ahead = MultiFileReadAhead::Create(context, gstate.max_threads);
+		gstate.read_ahead = MultiFileReadAhead::Create(context);
 	}
 
 	static unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
