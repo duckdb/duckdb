@@ -96,16 +96,24 @@ bool MultiFileReadAhead::TryReserveSlot() {
 	return true;
 }
 
-void MultiFileReadAhead::AbortProduce() {
-	if (!auto_depth) {
-		ReleaseSlot();
-	}
-	--active_producers;
-}
-
 bool MultiFileReadAhead::HasActiveProducers() const {
 	return active_producers.load() > 0;
 }
+
+//! Settles the reservation taken by TryReserveSlot
+struct MultiFileReadAhead::ProducerReservation {
+	explicit ProducerReservation(MultiFileReadAhead &read_ahead) : read_ahead(read_ahead) {
+	}
+	~ProducerReservation() {
+		if (!committed && !read_ahead.auto_depth) {
+			read_ahead.ReleaseSlot();
+		}
+		--read_ahead.active_producers;
+	}
+
+	MultiFileReadAhead &read_ahead;
+	bool committed = false;
+};
 
 bool MultiFileReadAhead::TryProduceJob(const ProduceJobCallback &claim_and_schedule) {
 	// surface errors pushed by other producers: every consumer passes through here while spinning
@@ -113,6 +121,7 @@ bool MultiFileReadAhead::TryProduceJob(const ProduceJobCallback &claim_and_sched
 	if (IsDone() || !TryReserveSlot()) {
 		return false;
 	}
+	ProducerReservation reservation(*this);
 	try {
 		auto job = make_uniq<MultiFileScanJob>();
 		// prefer a finished job's scan state, so learned reader state carries over across jobs
@@ -121,17 +130,15 @@ bool MultiFileReadAhead::TryProduceJob(const ProduceJobCallback &claim_and_sched
 		if (!claim_and_schedule(*job, io_tasks)) {
 			// there are no more jobs to produce, the scan is done
 			SetDone();
-			AbortProduce();
 			return false;
 		}
 		PushJob(std::move(job), std::move(io_tasks));
+		reservation.committed = true;
 	} catch (std::exception &ex) {
 		PushError(ErrorData(ex));
-		AbortProduce();
 		throw;
 	} catch (...) { // LCOV_EXCL_START
 		PushError(ErrorData("Unknown exception while producing a read-ahead job"));
-		AbortProduce();
 		throw;
 	} // LCOV_EXCL_STOP
 	return true;
@@ -162,7 +169,6 @@ void MultiFileReadAhead::PushJob(unique_ptr<MultiFileScanJob> job, vector<unique
 			next_batch_index++;
 		}
 	}
-	--active_producers;
 }
 
 unique_ptr<MultiFileScanJob> MultiFileReadAhead::ClaimJob() {

@@ -85,12 +85,13 @@ public:
 	bool TryHelpIO();
 
 private:
+	//! RAII reservation produce attempts
+	struct ProducerReservation;
+
 	//! Mark the scan as done, i.e., no more jobs to produce
 	void SetDone();
 	//! Reserve an in-flight job slot for producing a job
 	bool TryReserveSlot();
-	//! Give a reserved slot back without pushing a job
-	void AbortProduce();
 	//! Schedule the job's I/O and admit the job to the queue in batch-index order
 	void PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks);
 	//! Pop a recycled scan state, returns null when none is available
