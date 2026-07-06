@@ -107,6 +107,36 @@ bool MultiFileReadAhead::HasActiveProducers() const {
 	return active_producers.load() > 0;
 }
 
+bool MultiFileReadAhead::TryProduceJob(const ProduceJobCallback &claim_and_schedule) {
+	// surface errors pushed by other producers: every consumer passes through here while spinning
+	ThrowIfError();
+	if (IsDone() || !TryReserveSlot()) {
+		return false;
+	}
+	try {
+		auto job = make_uniq<MultiFileScanJob>();
+		// prefer a finished job's scan state, so learned reader state carries over across jobs
+		job->reader_scan_state = TryPopState();
+		vector<unique_ptr<AsyncTask>> io_tasks;
+		if (!claim_and_schedule(*job, io_tasks)) {
+			// there are no more jobs to produce, the scan is done
+			SetDone();
+			AbortProduce();
+			return false;
+		}
+		PushJob(std::move(job), std::move(io_tasks));
+	} catch (std::exception &ex) {
+		PushError(ErrorData(ex));
+		AbortProduce();
+		throw;
+	} catch (...) { // LCOV_EXCL_START
+		PushError(ErrorData("Unknown exception while producing a read-ahead job"));
+		AbortProduce();
+		throw;
+	} // LCOV_EXCL_STOP
+	return true;
+}
+
 void MultiFileReadAhead::PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks) {
 	auto completion = make_shared_ptr<ReadAheadJobCompletion>(io_tasks.size());
 	job->io_completion = completion;

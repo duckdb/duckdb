@@ -775,42 +775,21 @@ public:
 	//! Try to produce one job into the read-ahead queue.
 	static bool TryProduceJob(ClientContext &context, const MultiFileBindData &bind_data,
 	                          MultiFileGlobalState &gstate) {
-		auto &read_ahead = *gstate.read_ahead;
-		// surface errors pushed by other producers: every consumer passes through here while spinning
-		read_ahead.ThrowIfError();
-		if (read_ahead.IsDone() || !read_ahead.TryReserveSlot()) {
-			return false;
-		}
-		try {
-			auto job = make_uniq<MultiFileScanJob>();
-			// prefer a finished job's scan state, so learned reader state carries over across jobs
-			job->reader_scan_state = read_ahead.TryPopState();
-			if (!job->reader_scan_state) {
-				job->reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
+		return gstate.read_ahead->TryProduceJob([&](MultiFileScanJob &job, vector<unique_ptr<AsyncTask>> &io_tasks) {
+			// jobs recycle finished scan states, create a fresh one when none was available
+			if (!job.reader_scan_state) {
+				job.reader_scan_state = bind_data.interface->InitializeLocalState(context, *gstate.global_state);
 			}
-			if (!ClaimNextJob(context, bind_data, gstate, *job)) {
-				// If there are no more jobs we are done
-				read_ahead.SetDone();
-				read_ahead.AbortProduce();
+			if (!ClaimNextJob(context, bind_data, gstate, job)) {
 				return false;
 			}
-			auto scheduled = job->reader->ScheduleIO(context, *gstate.global_state, *job->reader_scan_state);
-			vector<unique_ptr<AsyncTask>> io_tasks;
+			auto scheduled = job.reader->ScheduleIO(context, *gstate.global_state, *job.reader_scan_state);
 			if (scheduled.GetResultType() == AsyncResultType::BLOCKED) {
 				// if we got blocked, we have tasks for the pool
 				io_tasks = scheduled.ExtractAsyncTasks();
 			}
-			read_ahead.PushJob(std::move(job), std::move(io_tasks));
-		} catch (std::exception &ex) {
-			read_ahead.PushError(ErrorData(ex));
-			read_ahead.AbortProduce();
-			throw;
-		} catch (...) { // LCOV_EXCL_START
-			read_ahead.PushError(ErrorData("Unknown exception while producing a read-ahead job"));
-			read_ahead.AbortProduce();
-			throw;
-		} // LCOV_EXCL_STOP
-		return true;
+			return true;
+		});
 	}
 
 	static MultiFileAcquireResult AcquireNextPerThread(ClientContext &context, TableFunctionInput &input,

@@ -17,6 +17,8 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 
+#include <functional>
+
 namespace duckdb {
 class ClientContext;
 class TaskExecutor;
@@ -57,41 +59,46 @@ public:
 	//! Returns 0 when read-ahead is disabled.
 	static idx_t ResolveDepth(ClientContext &context, idx_t max_threads);
 
-	//! Set/Check if scan is done, i.e., no more jobs to do
-	void SetDone();
-	bool IsDone() const;
+	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
+	//! Returns false when the scan has no more jobs.
+	using ProduceJobCallback = std::function<bool(MultiFileScanJob &job, vector<unique_ptr<AsyncTask>> &io_tasks)>;
+	//! Try to produce one job into the queue.
+	bool TryProduceJob(const ProduceJobCallback &claim_and_schedule);
 
-	//! Reserve an in-flight job slot for producing a job
-	bool TryReserveSlot();
-	//! Give a reserved slot back without pushing a job
-	void AbortProduce();
+	//! Check if scan is done, i.e., no more jobs to do
+	bool IsDone() const;
 	//! Whether any thread holds a reserved slot it has not pushed a job for yet
 	bool HasActiveProducers() const;
-
-	//! Schedule the job's I/O and admit the job to the queue in batch-index order
-	void PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks);
 
 	//! Pop the oldest queued job
 	unique_ptr<MultiFileScanJob> ClaimJob();
 
 	//! Push a finished job's scan state, so learned reader state carries over to jobs created later
 	void PushState(unique_ptr<LocalTableFunctionState> state);
-	//! Pop a recycled scan state, returns null when none is available
-	unique_ptr<LocalTableFunctionState> TryPopState();
 
 	//! Make our pipeline worker do IO work
 	bool TryCompleteJobIO(MultiFileScanJob &job);
 	//! Block until the claimed job's scheduled I/O has completed
 	void WaitForJob(MultiFileScanJob &job);
 
-	//! Push an error onto the async executor
-	void PushError(ErrorData error);
-	//! Throw if any read-ahead thread or task pushed an error
-	void ThrowIfError();
 	//! Run one queued I/O task inline - returns false when none was queued
 	bool TryHelpIO();
 
 private:
+	//! Mark the scan as done, i.e., no more jobs to produce
+	void SetDone();
+	//! Reserve an in-flight job slot for producing a job
+	bool TryReserveSlot();
+	//! Give a reserved slot back without pushing a job
+	void AbortProduce();
+	//! Schedule the job's I/O and admit the job to the queue in batch-index order
+	void PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks);
+	//! Pop a recycled scan state, returns null when none is available
+	unique_ptr<LocalTableFunctionState> TryPopState();
+	//! Push an error onto the async executor
+	void PushError(ErrorData error);
+	//! Throw if any read-ahead thread or task pushed an error
+	void ThrowIfError();
 	//! Release a look-ahead slot
 	void ReleaseSlot();
 	//! Be sure to drain any running work on early exit
