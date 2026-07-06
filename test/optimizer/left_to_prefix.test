@@ -3,25 +3,9 @@
 # group: [optimizer]
 
 statement ok
-CREATE TABLE strings(s VARCHAR);
+CREATE TABLE t AS SELECT printf('%08d', i) AS s, i::BIGINT AS x FROM range(10000000) tbl(i);
 
-# left(s, n) = c with len(c) == n becomes a prefix comparison
-query I nosort prefix_exact
-EXPLAIN SELECT count(*) FROM strings WHERE left(s, 3) = 'hel'
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM t WHERE left(s, 5) = '09999';
 ----
-
-query I nosort prefix_exact
-EXPLAIN SELECT count(*) FROM strings WHERE prefix(s, 'hel')
-----
-
-query I nosort prefix_exact
-EXPLAIN SELECT count(*) FROM strings WHERE 'hel' = left(s, 3)
-----
-
-query I nosort prefix_shorter
-EXPLAIN SELECT count(*) FROM strings WHERE left(s, 10) = 'hello'
-----
-
-query I nosort prefix_shorter
-EXPLAIN SELECT count(*) FROM strings WHERE s = 'hello'
-----
+analyzed_plan	<REGEX>:.*\(s >= '09999'\) AND \(s < '0999:'\).*Row Groups Scanned: 1 / 82.*
