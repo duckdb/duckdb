@@ -295,7 +295,8 @@ WindowCumeDistExecutor::WindowCumeDistExecutor(BoundWindowExpression &wexpr, Win
 
 static inline double CumeDist(const idx_t begin, const idx_t end, const idx_t peer_end) {
 	const auto denom = static_cast<double>(NumericCast<int64_t>(end - begin));
-	const auto num = static_cast<double>(peer_end - begin);
+	const auto num_begin = MaxValue(peer_end, begin);
+	const auto num = static_cast<double>(num_begin - begin);
 	return denom > 0 ? (num / denom) : 0;
 }
 
