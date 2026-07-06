@@ -1,0 +1,10 @@
+"""substring""(r_reason_desc, 1, 20)"|avg1|avg2|avg(wr_fee)
+Did not get it on ti|8.0|306.2|37.06
+No service location |76.0|464.36|8.62
+Not working any more|7.0|129.42|38.65
+reason 36|52.0|362.62|45.26
+reason 46|73.0|326.39|40.18
+reason 50|14.0|62.16|82.9
+reason 55|1.0|82.58|54.11
+reason 63|8.0|4.41|81.49
+reason 71|11.0|91.35|38.5

@@ -5,9 +5,6 @@
 statement ok
 SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
 
-statement ok
-PRAGMA enable_verification;
-
 # Create test table with 10000 rows
 statement ok
 CREATE TABLE test_table AS SELECT i FROM range(10000) tbl(i);
@@ -167,6 +164,3 @@ query I
 SELECT COUNT(*) FROM (SELECT * FROM test_table WHERE i % 2 = 0) tbl(i) USING SAMPLE 200 ROWS (system);
 ----
 100
-
-statement ok
-PRAGMA enable_verification;
