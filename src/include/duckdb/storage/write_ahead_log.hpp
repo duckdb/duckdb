@@ -16,6 +16,9 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/storage/block.hpp"
 
+#include <condition_variable>
+#include <mutex>
+
 namespace duckdb {
 
 struct AlterInfo;
@@ -120,6 +123,15 @@ public:
 	//! Used during RevertCommit.
 	void Truncate(idx_t size);
 	void Flush();
+	//! Append the WAL_FLUSH marker for this commit and push the buffered bytes into the page cache, WITHOUT issuing an
+	//! fsync. Must be called while the WAL lock (StorageManager::wal_lock) is held so the append stays totally ordered.
+	//! Returns the WAL byte offset that covers this commit's entries; the caller must subsequently call GroupSync with
+	//! this offset to make the bytes durable before acknowledging the commit.
+	idx_t FlushAppendNoSync();
+	//! Group commit: make every WAL byte up to (at least) my_offset durable. Called with the WAL lock NOT held, so
+	//! concurrent committers overlap their fsyncs or coalesce onto in-flight ones. A committer returns from this call
+	//! only once durable_offset >= my_offset, i.e. its WAL_FLUSH marker is on stable storage.
+	void GroupSync(idx_t my_offset);
 	//! Increment the WAL entry count, which is used for the auto-checkpoint threshold.
 	void IncrementWALEntriesCount();
 	void WriteCheckpoint(MetaBlockPointer meta_block);
@@ -131,6 +143,43 @@ protected:
 	string wal_path;
 	atomic<WALInitState> init_state;
 	optional_idx checkpoint_iteration;
+
+private:
+	//! Park until sync_epoch differs from current (slow path only; fast paths never touch the mutex).
+	void WaitSyncEpochChange(uint64_t current);
+	//! Bump sync_epoch and wake every parked committer (called after durable_offset advances or the WAL is poisoned).
+	void BumpSyncEpochNotify();
+	//! Maximum number of concurrent fsyncs worth issuing on this WAL's storage, set at initialization from the file
+	//! system's declared sync semantics (FileSystem::SyncParallelism): unbounded where a sync is a per-call round
+	//! trip that overlaps (network file systems), 1 where a sync commits a shared journal and concurrent syncs only
+	//! add cost (local file systems) -- there the single stream's late-snapped targets batch naturally.
+	idx_t sync_lane_cap = 1;
+
+	//! Number of fsyncs currently in flight (bounded by sync_lane_cap).
+	atomic<idx_t> active_syncs = 0;
+	//! Raise-only maximum target of any in-flight (or completed) fsync: a committer whose bytes are already covered
+	//! by an in-flight fsync parks instead of claiming a lane for a redundant fsync.
+	atomic<idx_t> syncing_target = 0;
+	//! Bumped by Truncate (under the WAL lock, after draining lanes): a sync lane whose fsync raced a truncate
+	//! discards its durable_offset raise, since its snapshotted target may lie beyond the truncation point.
+	atomic<uint64_t> truncate_gen = 0;
+	//! Parking word for committers waiting on durability: bumped on every durable_offset advance and on failure.
+	atomic<uint64_t> sync_epoch = 0;
+	//! Terminal poison flag: after a failed fsync the OS may have dropped the failed dirty pages as clean, so a
+	//! retried fsync could falsely report success for bytes that never reached disk -- durability can no longer be
+	//! promised for any pending offset.
+	atomic<bool> sync_failed = false;
+	//! Guards only the parking of sync waiters; committers that are covered by a completed fsync, and committers
+	//! issuing their own fsync, never take it.
+	std::mutex sync_wait_mutex;
+	std::condition_variable sync_wait_cv;
+	//! Highest WAL byte offset known durable. Raise-only; stored by an fsyncer strictly AFTER its Sync() returns,
+	//! acquire-loaded as the sole durable-before-ack predicate.
+	atomic<idx_t> durable_offset = 0;
+	//! Highest WAL byte offset pushed to the page cache (writer->Flush()). Release-stored under the WAL lock by
+	//! FlushAppendNoSync (so it is monotonic and needs no sync coordination), acquire-loaded by fsyncers as their
+	//! target, and clamped down by Truncate.
+	atomic<idx_t> flushed_offset = 0;
 };
 
 } // namespace duckdb

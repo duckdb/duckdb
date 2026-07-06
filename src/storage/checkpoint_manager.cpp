@@ -65,6 +65,7 @@ void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &option
 	checkpoint_context->transaction.SetReadOnly();
 	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
 	transaction.SetIsCheckpointTransaction();
+	transaction_manager.RefreshCheckpointSnapshot(transaction);
 	checkpoint_transaction = &transaction;
 	options.transaction_id = transaction.start_time;
 	transaction_manager.SetActiveCheckpoint(transaction.start_time);

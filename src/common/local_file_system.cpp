@@ -26,6 +26,12 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <unistd.h>
+#if defined(__linux__)
+#include <sys/vfs.h>
+#elif defined(__APPLE__)
+#include <sys/param.h>
+#include <sys/mount.h>
+#endif
 #else
 #include "duckdb/common/windows_util.hpp"
 
@@ -861,6 +867,50 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 	throw IOException("Could not fsync file \"%s\": %s", handle.GetPath(), strerror(errno));
 }
 
+FileSyncParallelism LocalFileSystem::SyncParallelism(FileHandle &handle) {
+#if defined(__linux__)
+	struct statfs fs_info;
+	if (fstatfs(handle.Cast<UnixFileHandle>().fd, &fs_info) != 0) {
+		return FileSyncParallelism::SERIAL;
+	}
+	switch (static_cast<uint64_t>(fs_info.f_type)) {
+	case 0x6969:     // NFS
+	case 0xFF534D42: // CIFS
+	case 0xFE534D42: // SMB2
+	case 0x517B:     // SMB
+	case 0x65735546: // FUSE (includes virtiofs and most userspace network file systems)
+	case 0x01021997: // 9P
+	case 0x73757245: // Coda
+	case 0x5346414F: // AFS
+	case 0x0BD00BD0: // Lustre
+	case 0x00C36400: // Ceph
+	case 0x013111A8: // iBRIX
+	case 0x61756673: // ACFS
+	case 0x0062656C: // BeeGFS
+	case 0xA501FCF5: // VxFS (clustered)
+		// a sync of these is a round trip to a server: concurrent syncs overlap and hide latency
+		return FileSyncParallelism::PARALLEL;
+	default:
+		// local (journaled) file systems: a sync commits the shared journal, concurrent syncs serialize
+		return FileSyncParallelism::SERIAL;
+	}
+#elif defined(__APPLE__)
+	struct statfs fs_info;
+	if (fstatfs(handle.Cast<UnixFileHandle>().fd, &fs_info) != 0) {
+		return FileSyncParallelism::SERIAL;
+	}
+	const char *fs_name = fs_info.f_fstypename;
+	if (strcmp(fs_name, "nfs") == 0 || strcmp(fs_name, "smbfs") == 0 || strcmp(fs_name, "afpfs") == 0 ||
+	    strcmp(fs_name, "webdav") == 0 || strncmp(fs_name, "fuse", 4) == 0 || strcmp(fs_name, "macfuse") == 0 ||
+	    strcmp(fs_name, "osxfuse") == 0) {
+		return FileSyncParallelism::PARALLEL;
+	}
+	return FileSyncParallelism::SERIAL;
+#else
+	return FileSyncParallelism::SERIAL;
+#endif
+}
+
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto normalized_source = ExpandPath(source, opener);
 	auto normalized_target = ExpandPath(target, opener);
@@ -1580,14 +1630,71 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 	}
 }
 
+FileSyncParallelism LocalFileSystem::SyncParallelism(FileHandle &handle) {
+	auto path = handle.GetPath();
+	if (path.size() >= 2 && path[0] == '\\' && path[1] == '\\') {
+		// UNC path: a network share, where a sync is a round trip
+		return FileSyncParallelism::PARALLEL;
+	}
+	if (path.size() >= 2 && path[1] == ':') {
+		wchar_t root[4] = {static_cast<wchar_t>(path[0]), L':', L'\\', L'\0'};
+		if (GetDriveTypeW(root) == DRIVE_REMOTE) {
+			return FileSyncParallelism::PARALLEL;
+		}
+	}
+	return FileSyncParallelism::SERIAL;
+}
+
+#ifndef FILE_RENAME_FLAG_REPLACE_IF_EXISTS
+#define FILE_RENAME_FLAG_REPLACE_IF_EXISTS 0x00000001
+#endif
+#ifndef FILE_RENAME_FLAG_POSIX_SEMANTICS
+#define FILE_RENAME_FLAG_POSIX_SEMANTICS 0x00000002
+#endif
+
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = NormalizePathAndConvertToUnicode(*this, source, opener);
 	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, opener);
 	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
 
-	if (!MoveFileExW(source_unicode.c_str(), target_unicode.c_str(), flags)) {
+	if (MoveFileExW(source_unicode.c_str(), target_unicode.c_str(), flags)) {
+		return;
+	}
+	DWORD move_error = GetLastError();
+	if (move_error != ERROR_ACCESS_DENIED) {
+		SetLastError(move_error);
 		throw IOException("Could not move file: %s", GetLastErrorAsString());
 	}
+	// MoveFileEx returns ACCESS_DENIED when the target (or source) still has an open handle -- FILE_SHARE_DELETE only
+	// marks it delete-pending and does not free its name until the last handle closes -- or when the target is
+	// read-only. Retry with a POSIX-semantics rename: it replaces an open target atomically and leaves existing
+	// handles valid on the orphaned file, exactly like Unix rename(2). Needs Windows 10 1607+/Server 2016+ on
+	// NTFS/ReFS and the open handles to share FILE_SHARE_DELETE (always set by this file system); where unsupported
+	// it fails and we surface the original error. Mirrors the fallback in Rust std (library/std/src/sys/fs/windows.rs).
+	HANDLE handle = CreateFileW(source_unicode.c_str(), DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+	                            NULL, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, NULL);
+	if (handle == INVALID_HANDLE_VALUE) {
+		SetLastError(move_error);
+		throw IOException("Could not move file: %s", GetLastErrorAsString());
+	}
+	// FILE_RENAME_INFO is variable-length: reserve FileName plus its trailing NUL past FileNameLength (which excludes
+	// the NUL), and back it with vector<FILE_RENAME_INFO> so the buffer carries the struct's alignment.
+	const size_t name_bytes = target_unicode.size() * sizeof(wchar_t);
+	const size_t info_bytes = offsetof(FILE_RENAME_INFO, FileName) + name_bytes + sizeof(wchar_t);
+	duckdb::vector<FILE_RENAME_INFO> storage((info_bytes + sizeof(FILE_RENAME_INFO) - 1) / sizeof(FILE_RENAME_INFO));
+	auto &rename_info = storage.front();
+	rename_info.Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+	rename_info.RootDirectory = NULL;
+	rename_info.FileNameLength = static_cast<DWORD>(name_bytes);
+	memcpy(rename_info.FileName, target_unicode.c_str(), name_bytes + sizeof(wchar_t));
+	bool renamed = SetFileInformationByHandle(handle, FileRenameInfoEx, &rename_info, static_cast<DWORD>(info_bytes));
+	const DWORD rename_error = renamed ? ERROR_SUCCESS : GetLastError();
+	CloseHandle(handle);
+	if (renamed) {
+		return;
+	}
+	SetLastError(rename_error == ERROR_DIR_NOT_EMPTY ? ERROR_DIR_NOT_EMPTY : move_error);
+	throw IOException("Could not move file: %s", GetLastErrorAsString());
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {

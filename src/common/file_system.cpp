@@ -609,6 +609,10 @@ void FileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
 }
 
+FileSyncParallelism FileSystem::SyncParallelism(FileHandle &handle) {
+	return FileSyncParallelism::SERIAL;
+}
+
 bool FileSystem::HasGlob(const string &str) {
 	for (idx_t i = 0; i < str.size(); i++) {
 		switch (str[i]) {

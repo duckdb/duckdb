@@ -58,13 +58,13 @@ struct UpdateInfo {
 	}
 
 	bool AppliesToTransaction(transaction_t start_time, transaction_t transaction_id) {
-		// these tuples were either committed AFTER this transaction started or are not committed yet, use
-		// tuples stored in this version
+		// these tuples were either committed at or after this transaction's snapshot or are not committed yet,
+		// use tuples stored in this version
 		if (version_number == TRANSACTION_ID_START - 1) {
 			// dummy transaction number for the root element - should always match
 			return true;
 		}
-		return version_number > start_time && version_number != transaction_id;
+		return version_number >= start_time && version_number != transaction_id;
 	}
 
 	//! Loop over the update chain and execute the specified callback on all UpdateInfo's that are relevant for that

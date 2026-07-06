@@ -673,7 +673,7 @@ static void CheckForConflicts(UndoBufferPointer next_ptr, TransactionData transa
 		if (info.version_number == transaction.transaction_id) {
 			// this UpdateInfo belongs to the current transaction, set it in the node
 			node_ref = std::move(pin);
-		} else if (info.version_number > transaction.start_time) {
+		} else if (info.version_number >= transaction.start_time) {
 			// potential conflict, check that tuple ids do not conflict
 			// as both ids and info->tuples are sorted, this is similar to a merge join
 			idx_t i = 0, j = 0;

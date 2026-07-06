@@ -11,6 +11,8 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/common/error_data.hpp"
+
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -66,6 +68,9 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 		} else {
 			storage_manager.SetWALSize(writer->GetFileSize());
 		}
+		sync_lane_cap = writer->handle->file_system.SyncParallelism(*writer->handle) == FileSyncParallelism::PARALLEL
+		                    ? NumericLimits<idx_t>::Maximum()
+		                    : 1;
 		init_state = WALInitState::INITIALIZED;
 	}
 	return *writer;
@@ -89,7 +94,28 @@ void WriteAheadLog::Truncate(idx_t size) {
 		return;
 	}
 	writer->Truncate(size);
-	storage_manager.SetWALSize(writer->GetFileSize());
+	idx_t truncated = writer->GetFileSize();
+	storage_manager.SetWALSize(truncated);
+	// Truncate runs under the WAL lock (the same lock that serializes the FlushAppendNoSync publish), so lower the
+	// published page-cache offset too -- otherwise a later fsync could snapshot a target beyond the file. The order
+	// below is load-bearing: after the flushed clamp, the generation bump makes the clamped offset visible to every
+	// fsync that starts afterwards (its acquire-load of the generation precedes its target snapshot); an fsync from
+	// before the bump discards its durable_offset raise on the generation mismatch; and the drain guarantees no raise
+	// can land after the final durable clamp.
+	if (truncated < flushed_offset.load(std::memory_order_acquire)) {
+		flushed_offset.store(truncated, std::memory_order_release);
+	}
+	truncate_gen.fetch_add(1, std::memory_order_acq_rel);
+	while (active_syncs.load(std::memory_order_acquire) > 0) {
+		uint64_t epoch = sync_epoch.load(std::memory_order_acquire);
+		if (active_syncs.load(std::memory_order_acquire) == 0) {
+			break;
+		}
+		WaitSyncEpochChange(epoch);
+	}
+	if (truncated < durable_offset.load(std::memory_order_acquire)) {
+		durable_offset.store(truncated, std::memory_order_release);
+	}
 }
 
 bool WriteAheadLog::Initialized() const {
@@ -588,6 +614,108 @@ void WriteAheadLog::Flush() {
 	// flushes all changes made to the WAL to disk
 	writer->Sync();
 	storage_manager.SetWALSize(writer->GetFileSize());
+}
+
+idx_t WriteAheadLog::FlushAppendNoSync() {
+	if (!writer) {
+		return 0;
+	}
+
+	// write an empty entry, marking the end of this commit in the WAL byte stream
+	WriteAheadLogSerializer serializer(*this, WALType::WAL_FLUSH);
+	serializer.End();
+
+	// push the buffered bytes into the OS page cache, but do NOT fsync yet -- the grouped fsync in GroupSync makes
+	// them durable. Appends are serialized under the WAL lock, so the returned offset covers exactly this commit's
+	// entries (and every earlier commit's), and the publish below is monotonic with a plain release store.
+	writer->Flush();
+	auto offset = writer->GetFileSize();
+	storage_manager.SetWALSize(offset);
+	flushed_offset.store(offset, std::memory_order_release);
+	return offset;
+}
+
+void WriteAheadLog::BumpSyncEpochNotify() {
+	{
+		// the epoch advances under the same mutex that guards the waiters' predicate check, so a waiter either sees
+		// the new epoch and does not park, or is parked and receives the notify; notifying after the unlock keeps
+		// woken waiters from immediately colliding with a held mutex
+		std::lock_guard<std::mutex> guard(sync_wait_mutex);
+		sync_epoch.fetch_add(1, std::memory_order_acq_rel);
+	}
+	sync_wait_cv.notify_all();
+}
+
+void WriteAheadLog::WaitSyncEpochChange(uint64_t current) {
+	std::unique_lock<std::mutex> guard(sync_wait_mutex);
+	sync_wait_cv.wait(guard, [&]() { return sync_epoch.load(std::memory_order_acquire) != current; });
+}
+
+void WriteAheadLog::GroupSync(idx_t my_offset) {
+	if (!writer || my_offset == 0) {
+		return;
+	}
+	for (;;) {
+		// the epoch must be read BEFORE the durable/failed checks: a bump between those checks and the park then
+		// makes the park return immediately instead of missing the update
+		uint64_t epoch = sync_epoch.load(std::memory_order_acquire);
+		if (durable_offset.load(std::memory_order_acquire) >= my_offset) {
+			return;
+		}
+		if (sync_failed.load(std::memory_order_acquire)) {
+			throw FatalException("Failed to sync WAL during commit: an earlier WAL sync failed, durability can no "
+			                     "longer be guaranteed");
+		}
+		// A committer fsyncs itself -- overlapping with any fsyncs already in flight, up to the file system's declared
+		// sync parallelism -- unless an in-flight fsync's target already covers its bytes, in which case
+		// it parks until durability advances. Overlapping fsyncs pipeline the device/network round trips (a commit
+		// arriving mid-fsync does not wait out someone else's round trip); committers beyond the cap park, and the
+		// next fsync's late-snapped target covers them (group commit, no delay).
+		idx_t lanes = active_syncs.load(std::memory_order_acquire);
+		if (lanes > 0 && syncing_target.load(std::memory_order_acquire) >= my_offset) {
+			// if the covering fsync completes between the two loads, its epoch bump makes this park return immediately
+			WaitSyncEpochChange(epoch);
+			continue;
+		}
+		if (lanes >= sync_lane_cap || !active_syncs.compare_exchange_strong(lanes, lanes + 1, std::memory_order_acq_rel,
+		                                                                    std::memory_order_acquire)) {
+			WaitSyncEpochChange(epoch);
+			continue;
+		}
+		// cover every byte flushed (under the WAL lock) up to now -- includes our own bytes
+		uint64_t gen = truncate_gen.load(std::memory_order_acquire);
+		idx_t target = flushed_offset.load(std::memory_order_acquire);
+		idx_t prev_syncing = syncing_target.load(std::memory_order_relaxed);
+		while (prev_syncing < target &&
+		       !syncing_target.compare_exchange_weak(prev_syncing, target, std::memory_order_release,
+		                                             std::memory_order_relaxed)) {
+		}
+		try {
+			writer->handle->Sync();
+		} catch (const std::exception &ex) {
+			// A failed fsync is unrecoverable: the OS may have dropped the failed dirty pages as clean, so a
+			// retried fsync could falsely report success for bytes that never reached disk. Poison the WAL so
+			// every pending and future committer fails, and escalate to a fatal error so the database is
+			// invalidated and recovers from the durable WAL prefix on reopen.
+			sync_failed.store(true, std::memory_order_release);
+			active_syncs.fetch_sub(1, std::memory_order_acq_rel);
+			BumpSyncEpochNotify();
+			ErrorData error(ex);
+			throw FatalException("Failed to sync WAL during commit. Cannot continue operation.\nError: %s",
+			                     error.Message());
+		}
+		// raise durable_offset to (at least) this fsync's target; concurrent fsyncs may race, take the max.
+		// If a truncate intervened, the snapshotted target may exceed the truncation point -- discard the raise
+		// and loop; our own marker (if still valid) is covered by a fresh fsync with a fresh target.
+		if (truncate_gen.load(std::memory_order_acquire) == gen) {
+			idx_t durable = durable_offset.load(std::memory_order_relaxed);
+			while (durable < target && !durable_offset.compare_exchange_weak(durable, target, std::memory_order_release,
+			                                                                 std::memory_order_relaxed)) {
+			}
+		}
+		active_syncs.fetch_sub(1, std::memory_order_acq_rel);
+		BumpSyncEpochNotify();
+	}
 }
 
 void WriteAheadLog::IncrementWALEntriesCount() {

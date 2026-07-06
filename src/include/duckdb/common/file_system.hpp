@@ -62,6 +62,9 @@ enum class FileType {
 	FILE_TYPE_INVALID,
 };
 
+//! See FileSystem::SyncParallelism
+enum class FileSyncParallelism : uint8_t { SERIAL, PARALLEL };
+
 struct FileMetadata {
 	int64_t file_size = -1;
 	timestamp_t last_modification_time = timestamp_t::ninfinity();
@@ -237,6 +240,12 @@ public:
 	DUCKDB_API virtual void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener = nullptr);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
+	//! What a sync of this file physically is, which determines whether concurrent syncs of one file are useful:
+	//! SERIAL means a sync commits a shared structure (a local file system's journal), so concurrent syncs serialize
+	//! and only add cost; PARALLEL means a sync is a per-call round trip (network file systems), so concurrent syncs
+	//! overlap and hide latency. Defaults to SERIAL, the conservative choice; file systems with round-trip sync
+	//! semantics should override.
+	DUCKDB_API virtual FileSyncParallelism SyncParallelism(FileHandle &handle);
 	//! Sets the working directory
 	DUCKDB_API static void SetWorkingDirectory(const string &path);
 	//! Gets the working directory

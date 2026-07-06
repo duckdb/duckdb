@@ -71,6 +71,7 @@ public:
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Sync a file handle to disk
 	void FileSync(FileHandle &handle) override;
+	FileSyncParallelism SyncParallelism(FileHandle &handle) override;
 
 	//! Checks if path is is an absolute path
 	bool IsPathAbsolute(const string &path) override;

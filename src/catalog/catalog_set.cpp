@@ -513,8 +513,13 @@ bool CatalogSet::CreatedByOtherActiveTransaction(CatalogTransaction transaction,
 }
 
 bool CatalogSet::CommittedAfterStarting(CatalogTransaction transaction, transaction_t timestamp) {
-	// The entry has been committed after this transaction started, this is not our source of truth.
-	return (timestamp < TRANSACTION_ID_START && timestamp > transaction.start_time);
+	// The entry has been committed at or after this transaction's snapshot, this is not our source of truth.
+	// At-or-after: a snapshot bounded at the durable horizon can be equal to a commit id, and that commit
+	// is invisible to the snapshot just like any later one. A fresh snapshot never equals a commit id; the
+	// one legitimate equality is the system transaction (start time 1) reading bootstrap entries committed
+	// at timestamp 1, which the transaction id check exempts as its own work.
+	return (timestamp < TRANSACTION_ID_START && timestamp >= transaction.start_time &&
+	        timestamp != transaction.transaction_id);
 }
 
 bool CatalogSet::HasConflict(CatalogTransaction transaction, transaction_t timestamp) {
