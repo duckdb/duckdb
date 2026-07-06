@@ -5,14 +5,23 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_explain.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/tree_renderer.hpp"
 
 namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto logical_plan_opt = op.children[0]->ToString(context, op.format);
+	// single-plan formats (e.g. FORMAT WEB) render only the final plan, so they produce a single artifact
+	auto renderer = TreeRenderer::CreateRenderer(context, op.format);
+	bool single_plan = renderer && renderer->RendersSinglePlan();
+	bool analyze = op.explain_type == ExplainType::EXPLAIN_ANALYZE;
+	// render the optimized logical plan before physical planning consumes it - but only when it will be shown
+	string logical_plan_opt;
+	if (!analyze && !single_plan) {
+		logical_plan_opt = op.children[0]->ToString(context, op.format);
+	}
 	auto &plan = CreatePlan(*op.children[0]);
-	if (op.explain_type == ExplainType::EXPLAIN_ANALYZE) {
+	if (analyze) {
 		auto &explain = Make<PhysicalExplainAnalyze>(op.types, op.format);
 		explain.children.push_back(plan);
 		return explain;
@@ -21,18 +30,23 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	// Format the plan and set the output of the EXPLAIN.
 	op.physical_plan = plan.ToString(context, op.format);
 	vector<string> keys, values;
-	switch (Settings::Get<ExplainOutputSetting>(context)) {
-	case ExplainOutputType::OPTIMIZED_ONLY:
-		keys = {"logical_opt"};
-		values = {logical_plan_opt};
-		break;
-	case ExplainOutputType::PHYSICAL_ONLY:
+	if (single_plan) {
 		keys = {"physical_plan"};
 		values = {op.physical_plan};
-		break;
-	default:
-		keys = {"logical_plan", "logical_opt", "physical_plan"};
-		values = {op.logical_plan_unopt, logical_plan_opt, op.physical_plan};
+	} else {
+		switch (Settings::Get<ExplainOutputSetting>(context)) {
+		case ExplainOutputType::OPTIMIZED_ONLY:
+			keys = {"logical_opt"};
+			values = {logical_plan_opt};
+			break;
+		case ExplainOutputType::PHYSICAL_ONLY:
+			keys = {"physical_plan"};
+			values = {op.physical_plan};
+			break;
+		default:
+			keys = {"logical_plan", "logical_opt", "physical_plan"};
+			values = {op.logical_plan_unopt, logical_plan_opt, op.physical_plan};
+		}
 	}
 
 	// Create a ColumnDataCollection from the output.

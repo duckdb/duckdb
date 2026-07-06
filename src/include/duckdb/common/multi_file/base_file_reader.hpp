@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
@@ -105,6 +106,8 @@ public:
 	DUCKDB_API virtual void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate);
 	//! Get progress within a given file
 	DUCKDB_API virtual double GetProgressInFile(ClientContext &context);
+	//! Get reader metadata, if available
+	DUCKDB_API virtual InsertionOrderPreservingMap<Value> GetMetadata() const;
 
 	virtual string GetReaderType() const = 0;
 

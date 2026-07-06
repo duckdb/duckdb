@@ -93,7 +93,7 @@ unique_ptr<FunctionLocalState> StructBoundCastData::InitStructCastLocalState(Cas
 	return std::move(result);
 }
 
-static bool StructToStructCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+bool StructBoundCastData::StructToStructCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<StructBoundCastData>();
 	auto &l_state = parameters.local_state->Cast<StructCastLocalState>();
 
@@ -131,15 +131,15 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 }
 
 static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	// renders a named STRUCT as "{'name': value, ...}" - unnamed structs (TUPLEs) are handled by TupleToVarcharCast
 	// first cast all child elements to varchar
 	auto &cast_data = parameters.cast_data->Cast<StructBoundCastData>();
 	Vector varchar_struct(cast_data.target, count);
 	FlatVector::SetSize(varchar_struct, count);
-	StructToStructCast(source, varchar_struct, count, parameters);
+	StructBoundCastData::StructToStructCast(source, varchar_struct, count, parameters);
 	auto &base_children = StructVector::GetEntries(source);
 
 	// now construct the actual varchar vector
-	bool is_unnamed = StructType::IsUnnamed(source.GetType());
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	auto &children = StructVector::GetEntries(varchar_struct);
 	auto source_validity = varchar_struct.Validity();
@@ -170,12 +170,10 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			auto string_length_func = add_escapes ? VectorCastHelpers::CalculateEscapedStringLength<false>
 			                                      : VectorCastHelpers::CalculateStringLength;
 			auto &child_data = child_iterators[c];
-			if (!is_unnamed) {
-				auto &name = child_types[c].first;
-				string_length += VectorCastHelpers::CalculateEscapedStringLength<true>(name.GetIdentifierName(),
-				                                                                       key_needs_quotes[c]);
-				string_length += NAME_SEP_LENGTH; // ": "
-			}
+			auto &name = child_types[c].first;
+			string_length +=
+			    VectorCastHelpers::CalculateEscapedStringLength<true>(name.GetIdentifierName(), key_needs_quotes[c]);
+			string_length += NAME_SEP_LENGTH; // ": "
 			auto child_entry = child_data[r];
 			if (child_entry.IsValid()) {
 				//! Skip the `\`, not a special character outside quotes
@@ -190,7 +188,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 
 		//! Serialize the struct to the string
 		idx_t offset = 0;
-		dataptr[offset++] = is_unnamed ? '(' : '{';
+		dataptr[offset++] = '{';
 		for (idx_t c = 0; c < children.size(); c++) {
 			if (c > 0) {
 				memcpy(dataptr + offset, ", ", SEP_LENGTH);
@@ -200,14 +198,12 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			auto write_string_func =
 			    add_escapes ? VectorCastHelpers::WriteEscapedString<false> : VectorCastHelpers::WriteString;
 
-			if (!is_unnamed) {
-				auto &name = child_types[c].first;
-				// "{<name>: <value>}"
-				offset += VectorCastHelpers::WriteEscapedString<true>(dataptr + offset, name.GetIdentifierName(),
-				                                                      key_needs_quotes[c]);
-				dataptr[offset++] = ':';
-				dataptr[offset++] = ' ';
-			}
+			auto &name = child_types[c].first;
+			// "{<name>: <value>}"
+			offset += VectorCastHelpers::WriteEscapedString<true>(dataptr + offset, name.GetIdentifierName(),
+			                                                      key_needs_quotes[c]);
+			dataptr[offset++] = ':';
+			dataptr[offset++] = ' ';
 			// value
 			auto &child_data = child_iterators[c];
 			auto child_entry = child_data[r];
@@ -219,7 +215,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				offset += NULL_LENGTH;
 			}
 		}
-		dataptr[offset++] = is_unnamed ? ')' : '}';
+		dataptr[offset++] = '}';
 		result_str.Finalize();
 	}
 	return true;
@@ -339,7 +335,9 @@ BoundCastInfo DefaultCasts::StructCastSwitch(BindCastInput &input, const Logical
                                              const LogicalType &target) {
 	switch (target.id()) {
 	case LogicalTypeId::STRUCT:
-		return BoundCastInfo(StructToStructCast, StructBoundCastData::BindStructToStructCast(input, source, target),
+	case LogicalTypeId::TUPLE:
+		return BoundCastInfo(StructBoundCastData::StructToStructCast,
+		                     StructBoundCastData::BindStructToStructCast(input, source, target),
 		                     StructBoundCastData::InitStructCastLocalState);
 	case LogicalTypeId::VARCHAR: {
 		// bind a cast in which we convert all child entries to VARCHAR entries

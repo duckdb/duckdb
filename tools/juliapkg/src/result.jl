@@ -509,7 +509,9 @@ function init_conversion_loop(logical_type::LogicalType)
         child_symbols::Vector{Symbol} = Vector()
         child_data::Vector{ListConversionData} = Vector()
         for i in 1:child_count
-            child_symbol = Symbol(child_name_fun(logical_type, i))
+            child_name = child_name_fun(logical_type, i)
+            # TUPLE (unnamed struct) children have empty names - synthesize positional names for the NamedTuple
+            child_symbol = isempty(child_name) ? Symbol("v", i) : Symbol(child_name)
             child_type = child_type_fun(logical_type, i)
             child_conv_data = create_child_conversion_data(child_type)
             push!(child_symbols, child_symbol)

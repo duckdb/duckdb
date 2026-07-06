@@ -144,6 +144,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Ide
 	}
 	recovery_mode = options.recovery_mode;
 	visibility = options.visibility;
+	ephemeral = options.ephemeral;
 	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
 
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
@@ -166,6 +167,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	}
 	recovery_mode = options.recovery_mode;
 	visibility = options.visibility;
+	ephemeral = options.ephemeral;
 	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
@@ -314,10 +316,12 @@ bool AttachedDatabase::IsInitialDatabase() const {
 }
 
 void AttachedDatabase::Invalidate(const string &reason) {
+	string recovery = HasStorageManager() && GetStorageManager().InMemory()
+	                      ? "It is an in-memory database, so its data cannot be recovered."
+	                      : "Detach and reattach it before using it again.";
 	ValidChecker::Invalidate(*this, StringUtil::Format("Database \"%s\" has been invalidated because checkpointing "
-	                                                   "failed. Detach and reattach it before using it again. "
-	                                                   "Original error: %s",
-	                                                   GetName().GetIdentifierName(), reason));
+	                                                   "failed. %s Original error: %s",
+	                                                   GetName().GetIdentifierName(), recovery, reason));
 }
 
 void AttachedDatabase::SetInitialDatabase() {

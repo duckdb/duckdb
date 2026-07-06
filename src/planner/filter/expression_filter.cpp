@@ -164,18 +164,10 @@ bool ExpressionFilter::EvaluateWithConstant(ExpressionExecutor &executor, const 
 }
 
 FilterPropagateResult ExpressionFilter::CheckStatistics(const BaseStatistics &stats) const {
-	if (stats.GetStatsType() == StatisticsType::GEOMETRY_STATS) {
-		// Delegate to GeometryStats for geometry types
-		return GeometryStats::CheckZonemap(stats, expr);
-	}
 	return CheckExpressionStatistics(*expr, stats);
 }
 
 FilterPropagateResult ExpressionFilter::CheckStatistics(ClientContext &context, const BaseStatistics &stats) const {
-	if (stats.GetStatsType() == StatisticsType::GEOMETRY_STATS) {
-		// Delegate to GeometryStats for geometry types
-		return GeometryStats::CheckZonemap(stats, expr);
-	}
 	return CheckExpressionStatistics(&context, *expr, stats);
 }
 
@@ -395,16 +387,16 @@ static FilterPropagateResult CheckFunctionStatistics(optional_ptr<ClientContext>
 	if (!func_expr.Function().HasFilterPruneCallback()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	// Derive the statistics of each argument. This lets a callback prune regardless of which argument is the column and
+	// which is the constant (e.g. `foo(col, const)` vs `foo(const, col`).
+	// Entries are null when an argument's stats can't be derived.
 	vector<unique_ptr<BaseStatistics>> owned_stats;
-	auto filter_stats = &stats;
-	if (!func_expr.GetChildren().empty()) {
-		auto child_stats = TryGetFilterStats(context_p, *func_expr.GetChildren()[0], stats, owned_stats);
-		if (!child_stats) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
-		filter_stats = child_stats.get();
+	vector<optional_ptr<const BaseStatistics>> child_stats;
+	child_stats.reserve(func_expr.GetChildren().size());
+	for (auto &child : func_expr.GetChildren()) {
+		child_stats.push_back(TryGetFilterStats(context_p, *child, stats, owned_stats));
 	}
-	FunctionStatisticsPruneInput input(func_expr.BindInfo().get(), *filter_stats);
+	FunctionStatisticsPruneInput input(func_expr, func_expr.BindInfo().get(), child_stats);
 	return func_expr.Function().GetFilterPruneCallback()(input);
 }
 

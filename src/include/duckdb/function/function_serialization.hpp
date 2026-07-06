@@ -133,6 +133,7 @@ public:
 			}
 			return TypeRequiresAssignment(ArrayType::GetChildType(type));
 		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::TUPLE:
 			if (!type.AuxInfo()) {
 				return true;
 			}

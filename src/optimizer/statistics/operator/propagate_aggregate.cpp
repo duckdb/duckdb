@@ -255,7 +255,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				}
 				auto &expr_filter =
 				    ExpressionFilter::GetExpressionFilter(filter.get(), "AggregateStats::CheckPartitionFilters");
-				auto col_filter_result = expr_filter.CheckStatistics(*column_stats);
+				auto col_filter_result = expr_filter.CheckStatistics(context, *column_stats);
 				if (col_filter_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 					// all data in this partition is filtered out, remove this partition entirely
 					filter_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;

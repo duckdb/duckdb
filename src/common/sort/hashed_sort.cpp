@@ -32,6 +32,7 @@ public:
 	atomic<idx_t> tasks_completed;
 	unique_ptr<GlobalSourceState> sort_source;
 	unique_ptr<ColumnDataCollection> direct_column_data;
+	vector<unique_ptr<ColumnDataCollection>> direct_column_fragments;
 };
 
 HashedSortGroup::HashedSortGroup(ClientContext &client, Sort &sort, idx_t group_idx)
@@ -503,13 +504,46 @@ static void BuildDirectColumnData(ClientContext &client, const vector<LogicalTyp
 
 	lock_guard<mutex> direct_guard(hash_group.scan_lock);
 	if (combined) {
-		if (!hash_group.direct_column_data) {
-			hash_group.direct_column_data = std::move(local_column_data);
-		} else {
-			hash_group.direct_column_data->Combine(*local_column_data);
-		}
+		hash_group.direct_column_fragments.emplace_back(std::move(local_column_data));
 		hash_group.count += combined;
 	}
+}
+
+static idx_t ExpectedChunkCount(idx_t count) {
+	return (count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+}
+
+static void PackDirectColumnData(HashedSortGroup &hash_group) {
+	lock_guard<mutex> direct_guard(hash_group.scan_lock);
+	if (hash_group.direct_column_data) {
+		return;
+	}
+
+	auto &fragments = hash_group.direct_column_fragments;
+	if (fragments.empty()) {
+		return;
+	}
+
+	auto result = std::move(fragments[0]);
+	ColumnDataAppendState append_state;
+	result->InitializeAppend(append_state);
+	DataChunk chunk;
+	result->InitializeScanChunk(chunk);
+
+	// Downstream source tasks address hash groups by packed chunk index.
+	for (idx_t fragment_idx = 1; fragment_idx < fragments.size(); fragment_idx++) {
+		auto &fragment = *fragments[fragment_idx];
+		ColumnDataScanState scan_state;
+		fragment.InitializeScan(scan_state);
+		while (fragment.Scan(scan_state, chunk)) {
+			result->Append(append_state, chunk);
+		}
+	}
+
+	D_ASSERT(result->Count() == hash_group.count);
+	D_ASSERT(result->ChunkCount() == ExpectedChunkCount(hash_group.count));
+	hash_group.direct_column_data = std::move(result);
+	fragments.clear();
 }
 
 void HashedSort::SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize) const {
@@ -717,6 +751,7 @@ static SourceResultType MaterializeHashGroupData(ExecutionContext &context, idx_
 	}
 
 	if (!build_runs && gsink.CanBypassSort(hash_bin)) {
+		PackDirectColumnData(hash_group);
 		return SourceResultType::FINISHED;
 	}
 

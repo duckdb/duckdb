@@ -1013,6 +1013,18 @@ PEGTransformerFactory::TransformOffsetLimitClause(PEGTransformer &transformer, L
 	return VerifyLimitOffset(limit_clause ? *limit_clause : empty_limit, offset_clause);
 }
 
+unique_ptr<ResultModifier> PEGTransformerFactory::TransformOffsetFetchClause(PEGTransformer &transformer,
+                                                                             LimitPercentResult offset_clause,
+                                                                             LimitPercentResult fetch_clause) {
+	return VerifyLimitOffset(fetch_clause, offset_clause);
+}
+
+unique_ptr<ResultModifier> PEGTransformerFactory::TransformFetchOnlyClause(PEGTransformer &transformer,
+                                                                           LimitPercentResult fetch_clause) {
+	LimitPercentResult empty_offset;
+	return VerifyLimitOffset(fetch_clause, empty_offset);
+}
+
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformTableStatement(PEGTransformer &transformer,
                                                                            unique_ptr<BaseTableRef> base_table_name) {
 	auto result = make_uniq<SelectStatement>();
@@ -1536,6 +1548,13 @@ LimitPercentResult PEGTransformerFactory::TransformLimitLiteralPercent(PEGTransf
 	LimitPercentResult result;
 	result.expression = std::move(number_literal);
 	result.is_percent = true;
+	return result;
+}
+
+LimitPercentResult PEGTransformerFactory::TransformFetchValue(PEGTransformer &transformer,
+                                                              unique_ptr<ParsedExpression> expression) {
+	LimitPercentResult result;
+	result.expression = std::move(expression);
 	return result;
 }
 

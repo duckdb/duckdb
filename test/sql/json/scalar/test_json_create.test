@@ -350,4 +350,20 @@ SELECT json_array(
 query I
 SELECT CAST((MAP([5, 3, 4], ['a', 'b', 'c']), 2) AS JSON);
 ----
-{"":{"5":"a","3":"b","4":"c"},"":2}
+[{"5":"a","3":"b","4":"c"},2]
+
+# a TUPLE serializes to a JSON array (like Python), and round-trips back to a TUPLE
+query I
+SELECT to_json(row(1, 'a', [2, 3]));
+----
+[1,"a",[2,3]]
+
+query I
+SELECT '[1,"a"]'::JSON::TUPLE(INTEGER, VARCHAR);
+----
+(1, a)
+
+query I
+SELECT row(1, 'a')::JSON::TUPLE(INTEGER, VARCHAR);
+----
+(1, a)

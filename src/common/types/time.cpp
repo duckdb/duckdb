@@ -158,7 +158,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		}
 		return false;
 	}
-	return result.micros <= Interval::MICROS_PER_DAY;
+	return result.value <= Interval::MICROS_PER_DAY;
 }
 
 bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result, bool &has_offset, bool strict,
@@ -181,7 +181,7 @@ bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &
 	}
 
 	//	Interval parsing accepts larger hour counts, but we must limit ourselves to <= 24:00:00
-	if (time_part.micros > Interval::MICROS_PER_DAY) {
+	if (time_part.value > Interval::MICROS_PER_DAY) {
 		return false;
 	}
 
@@ -268,8 +268,8 @@ string Time::ToUTCOffset(int hour_offset, int minute_offset) {
 
 	char buffer[1 + 2 + 1 + 2];
 	idx_t length = 0;
-	buffer[length++] = (time.micros < 0 ? '-' : '+');
-	time.micros = std::abs(time.micros);
+	buffer[length++] = (time.value < 0 ? '-' : '+');
+	time.value = std::abs(time.value);
 
 	int32_t time_units[4];
 	Time::Convert(time, time_units[0], time_units[1], time_units[2], time_units[3]);
@@ -320,7 +320,7 @@ bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t mic
 }
 
 void Time::Convert(dtime_t dtime, int32_t &hour, int32_t &min, int32_t &sec, int32_t &micros) {
-	int64_t time = dtime.micros;
+	int64_t time = dtime.value;
 	hour = int32_t(time / Interval::MICROS_PER_HOUR);
 	time -= int64_t(hour) * Interval::MICROS_PER_HOUR;
 	min = int32_t(time / Interval::MICROS_PER_MINUTE);

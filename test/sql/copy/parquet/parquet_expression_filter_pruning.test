@@ -9,13 +9,13 @@ require parquet
 
 # 10 row groups of 10240 rows (multiple of vector size -> deterministic boundaries)
 statement ok
-COPY (SELECT range AS a FROM range(102400)) TO '__TEST_DIR__/expr_prune_int.parquet' (ROW_GROUP_SIZE 10240)
+COPY (SELECT range AS a FROM range(102400)) TO '{TEST_DIR}/expr_prune_int.parquet' (ROW_GROUP_SIZE 10240)
 
 statement ok
-COPY (SELECT range::DOUBLE AS d FROM range(102400)) TO '__TEST_DIR__/expr_prune_double.parquet' (ROW_GROUP_SIZE 10240)
+COPY (SELECT range::DOUBLE AS d FROM range(102400)) TO '{TEST_DIR}/expr_prune_double.parquet' (ROW_GROUP_SIZE 10240)
 
 statement ok
-COPY (SELECT CASE WHEN range = 95000 THEN 'nan'::DOUBLE ELSE range::DOUBLE END AS d FROM range(102400)) TO '__TEST_DIR__/expr_prune_nan.parquet' (ROW_GROUP_SIZE 10240)
+COPY (SELECT CASE WHEN range = 95000 THEN 'nan'::DOUBLE ELSE range::DOUBLE END AS d FROM range(102400)) TO '{TEST_DIR}/expr_prune_nan.parquet' (ROW_GROUP_SIZE 10240)
 
 # constants are not divisible by the multiplier, so the optimizer keeps the expression filter
 # instead of folding it into a plain comparison
@@ -25,18 +25,18 @@ statement ok
 CALL enable_logging('PhysicalOperator')
 
 query I
-SELECT count(*) FROM '__TEST_DIR__/expr_prune_int.parquet' WHERE a * 4 + 4 > 327681
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_int.parquet' WHERE a * 4 + 4 > 327681
 ----
 20480
 
 statement ok
 CALL disable_logging()
 
+# count(*) is fully precomputed from row-group statistics (groups 8-9 always-true, 0-7 always-false),
+# so the Parquet scan is eliminated entirely and no row group log events are emitted
 query II
 SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
 ----
-ReadRowGroup	2
-SkipRowGroup	8
 
 statement ok
 CALL truncate_duckdb_logs()
@@ -46,7 +46,7 @@ statement ok
 CALL enable_logging('PhysicalOperator')
 
 query I
-SELECT count(*) FROM '__TEST_DIR__/expr_prune_int.parquet' WHERE a * 4 - 4 < 40961
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_int.parquet' WHERE a * 4 - 4 < 40961
 ----
 10242
 
@@ -64,7 +64,7 @@ CALL truncate_duckdb_logs()
 
 # false for the whole file -> optimizer folds to EMPTY_RESULT from file-level stats
 query II
-EXPLAIN SELECT count(*) FROM '__TEST_DIR__/expr_prune_int.parquet' WHERE a * 4 + 4 > 409601
+EXPLAIN SELECT count(*) FROM '{TEST_DIR}/expr_prune_int.parquet' WHERE a * 4 + 4 > 409601
 ----
 physical_plan	<REGEX>:.*EMPTY_RESULT.*
 
@@ -73,18 +73,18 @@ statement ok
 CALL enable_logging('PhysicalOperator')
 
 query I
-SELECT count(*) FROM '__TEST_DIR__/expr_prune_double.parquet' WHERE d + d < 20479.5e0
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_double.parquet' WHERE d + d < 20479.5e0
 ----
 10240
 
 statement ok
 CALL disable_logging()
 
+# count(*) is fully precomputed from row-group statistics (group 0 always-true, 1-9 always-false),
+# so the Parquet scan is eliminated entirely and no row group log events are emitted
 query II
 SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
 ----
-ReadRowGroup	1
-SkipRowGroup	9
 
 statement ok
 CALL truncate_duckdb_logs()
@@ -94,7 +94,7 @@ statement ok
 CALL enable_logging('PhysicalOperator')
 
 query I
-SELECT count(*) FROM '__TEST_DIR__/expr_prune_nan.parquet' WHERE d + d > 184318.5e0
+SELECT count(*) FROM '{TEST_DIR}/expr_prune_nan.parquet' WHERE d + d > 184318.5e0
 ----
 10240
 
@@ -116,7 +116,7 @@ statement ok
 CALL enable_logging('PhysicalOperator')
 
 query III
-SELECT count(*), min(d), max(d) FROM read_parquet('__TEST_DIR__/expr_prune_nan.parquet', can_have_nan=true) WHERE d + d > 184318.5e0
+SELECT count(*), min(d), max(d) FROM read_parquet('{TEST_DIR}/expr_prune_nan.parquet', can_have_nan=true) WHERE d + d > 184318.5e0
 ----
 10240	92160.0	nan
 
