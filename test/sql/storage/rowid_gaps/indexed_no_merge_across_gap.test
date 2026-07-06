@@ -2,8 +2,7 @@
 # description: indexed vacuum remaps rowids when merging fully-live row groups across a rowid gap
 # group: [rowid_gaps]
 
-# On latest storage, indexed ART rowids can be remapped after vacuum. A dropped
-# row group can therefore be skipped while merging the live groups around it.
+# Latest storage can remap indexed rowids across the dropped row group.
 
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_no_merge_across_gap.db' AS rowid_gap_no_merge (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 4096);

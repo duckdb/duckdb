@@ -46,17 +46,15 @@ class RowGroupIterationHelper;
 class TableScanState;
 class ART;
 
-//! How checkpoint vacuum handles the table's indexes when it compacts row groups and changes rowids.
-//! The options are mutually exclusive; REMAP takes precedence over REBUILD.
-//! Rowids may change under every strategy except KEEP_ROW_IDS.
+//! How checkpoint vacuum handles table indexes when rowids may change.
 enum class VacuumIndexStrategy : uint8_t {
-	//! Indexes are present but can be neither rebuilt nor remapped: vacuum must keep rowids stable.
+	//! Indexes require stable rowids.
 	KEEP_ROW_IDS,
-	//! There are no indexes: no index maintenance is needed and rowids may change freely.
+	//! No index maintenance is needed.
 	NO_INDEXES,
-	//! Rebuild all indexes from scratch after vacuum (legacy vacuum_rebuild_indexes path).
+	//! Rebuild all indexes after vacuum.
 	REBUILD,
-	//! Incrementally remap the affected rowids in each ART index during vacuum.
+	//! Incrementally remap affected ART rowids.
 	REMAP
 };
 
@@ -146,14 +144,11 @@ public:
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
-	//! Returns true if checkpoint vacuum can incrementally remap the table's index rowids: rowid gaps are
-	//! persistable and every index is a bound ART that supports remap. If remap_indexes is set, it is filled
-	//! with the remappable ARTs. Depends only on the index set and storage version, not on collection state.
+	//! Returns true if checkpoint vacuum can incrementally remap every index.
 	static bool IsVacuumRemapEligible(DataTableInfo &table_info, AttachedDatabase &attached,
 	                                  optional_ptr<vector<reference<ART>>> remap_indexes = nullptr);
 
-	//! Decides how vacuum handles this table's indexes: REMAP (preferred), else REBUILD, else NONE.
-	//! If the result is REMAP and remap_indexes is set, it is filled with the remappable ARTs.
+	//! Decides how vacuum handles this table's indexes.
 	VacuumIndexStrategy GetVacuumIndexStrategy(AttachedDatabase &attached,
 	                                           optional_ptr<vector<reference<ART>>> remap_indexes = nullptr) const;
 

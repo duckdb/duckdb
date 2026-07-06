@@ -2,8 +2,7 @@
 # description: Test a simple update on a PK with a LIST column.
 # group: [constraints]
 
-# Disable vacuum: this test asserts rowid movement after updates, and an automatic
-# checkpoint could otherwise remap the rowids (indexed tables now vacuum by default).
+# Keep rowid assertions stable under automatic checkpoints.
 statement ok
 SET max_vacuum_tasks = 0;
 

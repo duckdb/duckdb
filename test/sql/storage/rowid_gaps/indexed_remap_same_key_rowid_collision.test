@@ -2,11 +2,7 @@
 # description: vacuum remap handles new rowids colliding with processed old rowids inside one duplicate-key leaf
 # group: [rowid_gaps]
 
-# Nearly all rows share one indexed value, so the g index holds one nested rowid tree.
-# Scattered deletes make the remapped new rowids overlap the old rowid values of
-# later rows for the same key (old [2,5,8,...] -> new [0,1,2,...]), which is only
-# safe when the remap is applied in scan order. The first two row groups merge into
-# one; the third row group is full and keeps its rowids.
+# Remapped rowids overlap old rowids inside one duplicate-key leaf.
 
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_remap_collision.db' AS remap_collision (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
@@ -28,7 +24,7 @@ CREATE UNIQUE INDEX t_i_idx ON remap_collision.t(i);
 statement ok
 CREATE INDEX t_g_idx ON remap_collision.t(g);
 
-# Keep only every third row in the first two row groups.
+# Keep every third row in the first two row groups.
 statement ok
 DELETE FROM remap_collision.t WHERE i < 4096 AND i % 3 <> 2;
 

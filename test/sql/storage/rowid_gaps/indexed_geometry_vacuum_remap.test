@@ -2,9 +2,6 @@
 # description: vacuum remap works for a GEOMETRY-keyed ART created on current storage
 # group: [rowid_gaps]
 
-# A fresh GEOMETRY index records the database storage version (>= v1.5.0 encoding),
-# so it is not gated out of incremental remap.
-
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_remap_geom.db' AS remap_geom (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
 

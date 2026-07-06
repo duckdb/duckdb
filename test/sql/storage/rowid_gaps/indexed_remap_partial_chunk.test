@@ -2,9 +2,7 @@
 # description: vacuum remap buffers only the moved rows of a scan chunk that mixes moved and unmoved rows
 # group: [rowid_gaps]
 
-# Deleting a range from the middle of the first row group produces one scan chunk
-# whose leading rows keep their rowids while the remaining rows shift, so the
-# changed-pair buffering must select a strict subset of the chunk.
+# One scan chunk contains both moved and unmoved rows.
 
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_remap_partial.db' AS remap_partial (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
@@ -51,7 +49,7 @@ SELECT min(rowid), max(rowid), count(*) FROM remap_partial.t;
 ----
 0	2047	2048
 
-# Rows before the deleted range keep their rowids; everything after shifts by 100.
+# Rows after the deleted range shift by 100.
 query II
 SELECT rowid, i FROM remap_partial.t WHERE i IN (0, 99, 200, 2047, 2048, 2147) ORDER BY i;
 ----
@@ -67,7 +65,7 @@ EXPLAIN ANALYZE SELECT rowid, i FROM remap_partial.t WHERE i = 200;
 ----
 analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
-# Duplicate key with one unmoved row (99) and one moved row (2100 -> 2000).
+# Duplicate key with one unmoved and one moved row.
 query II
 SELECT rowid, i FROM remap_partial.t WHERE g = 7 ORDER BY i;
 ----

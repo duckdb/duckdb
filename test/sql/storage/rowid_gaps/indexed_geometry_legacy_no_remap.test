@@ -4,11 +4,7 @@
 
 require noforcestorage
 
-# GEOMETRY ART keys written before v1.5.0 use a different encoding, so regenerated keys may not
-# byte-match the stored keys. Such an index refuses incremental remap even after the database
-# itself is upgraded; recreating the index re-keys it with the current encoding.
-
-# Phase 1: mint a legacy geometry index by creating it on pre-v1.5.0 storage.
+# Create a legacy-encoded geometry index.
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_geom_legacy.db' AS geom_legacy (STORAGE_VERSION 'v1.4.0', ROW_GROUP_SIZE 2048);
 
@@ -41,8 +37,7 @@ CREATE INDEX t_geom_idx ON geom_legacy.t(geom);
 statement ok
 CHECKPOINT geom_legacy;
 
-# Phase 2: upgrade the database. The geometry index still carries the legacy key encoding,
-# so vacuum must not remap: the row groups cannot be merged.
+# The legacy geometry index blocks remap after upgrading the database.
 statement ok
 DETACH geom_legacy;
 
@@ -65,7 +60,7 @@ SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('geom_legacy.t');
 ----
 2
 
-# Rowids are unchanged: the merge was refused because of the legacy geometry index.
+# Rowids are unchanged.
 query II
 SELECT rowid, i FROM geom_legacy.t WHERE i IN (1023, 2548, 3047) ORDER BY i;
 ----
@@ -78,9 +73,7 @@ SELECT rowid, i FROM geom_legacy.t WHERE geom = 'POINT (2548 2548)'::GEOMETRY;
 ----
 2548	2548
 
-# Phase 3: recreate the geometry index on current storage. It is re-keyed with the current
-# encoding, so vacuum can now merge and remap. The old i-index is also legacy-versioned but has
-# no geometry column, so it never blocked remap and is remapped in place.
+# Recreate the geometry index with the current encoding.
 statement ok
 DROP INDEX geom_legacy.t_geom_idx;
 
@@ -117,7 +110,7 @@ SELECT rowid, i FROM geom_legacy.t WHERE i = 2548;
 ----
 1024	2548
 
-# The remapped indexes are what get serialized: reopen and check again.
+# Reopen and check the serialized remap.
 statement ok
 DETACH geom_legacy;
 

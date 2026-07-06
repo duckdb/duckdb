@@ -2,10 +2,7 @@
 # description: two vacuum tasks remap rowids of the same duplicated index key in disjoint windows
 # group: [rowid_gaps]
 
-# Eight row groups with uniform deletes vacuum as two merge windows (three target
-# row groups each). The duplicated key g=7 has rows in both windows, so both tasks
-# mutate the same index leaf under the per-index lock, and the rowid gap between
-# the windows must survive.
+# Duplicate key g=7 appears in two vacuum task windows.
 
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_remap_tasks.db' AS remap_tasks (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
@@ -43,7 +40,7 @@ SELECT min(rowid), max(rowid), count(*) FROM remap_tasks.t;
 ----
 0	14335	12288
 
-# The second window keeps its own row start: the gap between windows survives.
+# The gap between task windows survives.
 query I
 SELECT count(*) FROM remap_tasks.t WHERE rowid >= 6144 AND rowid < 8192;
 ----

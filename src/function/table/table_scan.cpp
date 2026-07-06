@@ -803,13 +803,9 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 	info->BindIndexes(context, ART::TYPE_NAME);
 
-	// Hold the vacuum lock when this database can run rowid-moving indexed vacuum: rowids collected from the
-	// ART must be fetched against the matching row-group tree.
+	// Rowids collected from the ART must be fetched against the matching row-group tree.
 	unique_ptr<StorageLockKey> vacuum_lock;
 	auto &attached = storage.GetAttached();
-
-	// This is a coarse over-approximation, since this state shouldn't change for the duration of the scan.
-	// FIXME: remove taking the vacuum lock entirely here (perhaps using shadow ARTs).
 	const bool indexed_vacuum_may_move_rowids = attached.GetVacuumRebuildIndexThreshold() > 0 ||
 	                                            StorageCompatibility::FromDatabase(attached).CanPersistRowIdGaps();
 	if (indexed_vacuum_may_move_rowids) {

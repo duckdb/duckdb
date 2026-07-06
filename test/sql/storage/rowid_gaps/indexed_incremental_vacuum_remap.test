@@ -83,7 +83,7 @@ SELECT rowid, n FROM rowid_gap_remap.t WHERE n = 2048;
 ----
 1048	2048
 
-# The remapped ART is what gets serialized: reopen and check the indexes again.
+# Reopen and check the serialized remap.
 statement ok
 DETACH rowid_gap_remap;
 

@@ -148,9 +148,7 @@ public:
 	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
 	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
 	                        unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys);
-	//! Returns true if this ART's rowids can be incrementally remapped by checkpoint vacuum.
-	//! Remap regenerates keys from column values and requires them to byte-match the stored keys. This only
-	//! fails for GEOMETRY keys written pre-v1.5.0 (or with an unknown storage version), whose encoding differs.
+	//! Returns true if vacuum remap can regenerate byte-identical keys.
 	bool CanVacuumRemap() const;
 
 	//! Verifies the nodes.

@@ -4,8 +4,7 @@
 
 require noforcestorage
 
-# Phase 1: old storage (< v2.0.0) cannot persist rowid gaps, so incremental remap is ineligible.
-# With the vacuum_rebuild_indexes threshold set, vacuum falls back to the legacy full index rebuild.
+# Old storage cannot persist rowid gaps, so the rebuild fallback is used.
 
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_rebuild_then_remap.db' AS rebuild_then_remap (STORAGE_VERSION 'v1.5.0', ROW_GROUP_SIZE 2048, vacuum_rebuild_indexes 100000);
@@ -33,15 +32,14 @@ SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('rebuild_then_remap
 ----
 2
 
-# Old storage densely renumbered the rowids after the dropped middle row group,
-# which requires the rebuild fallback: i=4096 moved from rowid 4096 to rowid 2048.
+# Old storage densely renumbered rowids.
 query T
 SELECT CASE rowid WHEN 2048 THEN 'dense-renumbered' WHEN 4096 THEN 'preserved' ELSE CAST(rowid AS VARCHAR) END
 FROM rebuild_then_remap.t WHERE i = 4096;
 ----
 dense-renumbered
 
-# The rebuilt index finds the row at its new rowid.
+# The rebuilt index finds the new rowid.
 query II
 EXPLAIN ANALYZE SELECT rowid, i FROM rebuild_then_remap.t WHERE i = 4096;
 ----
@@ -52,8 +50,7 @@ SELECT rowid, i FROM rebuild_then_remap.t WHERE i = 4096;
 ----
 2048	4096
 
-# Phase 2: upgrade the database to a storage version that persists rowid gaps and re-attach
-# without the rebuild threshold. Rebuild is now ineligible; incremental remap takes over.
+# Upgrade storage and reattach without the rebuild threshold.
 
 statement ok
 DETACH rebuild_then_remap;
@@ -61,7 +58,7 @@ DETACH rebuild_then_remap;
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_rebuild_then_remap.db' AS rebuild_then_remap (STORAGE_VERSION 'latest');
 
-# Leave both row groups partially live so vacuum merges them into one, shifting the second group's rowids.
+# Merge partially live row groups, shifting the second group's rowids.
 statement ok
 DELETE FROM rebuild_then_remap.t WHERE i >= 1024 AND i < 5120;
 
@@ -73,8 +70,7 @@ SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('rebuild_then_remap
 ----
 1
 
-# First group's live rows keep their rowids; the second group's live rows moved from
-# rowids 3072.. to 1024.. and must have been remapped in the ART.
+# First group's rows stay put; second group's rows are remapped.
 query II
 SELECT rowid, i FROM rebuild_then_remap.t WHERE i IN (0, 1023, 5120, 6143) ORDER BY i;
 ----
@@ -93,7 +89,7 @@ SELECT rowid, i FROM rebuild_then_remap.t WHERE i = 5120;
 ----
 1024	5120
 
-# The remapped ART is what gets serialized: reopen and check the index again.
+# Reopen and check the serialized remap.
 statement ok
 DETACH rebuild_then_remap;
 

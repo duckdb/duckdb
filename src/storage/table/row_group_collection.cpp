@@ -49,9 +49,7 @@ bool RowGroupCollection::IsVacuumRemapEligible(DataTableInfo &table_info, Attach
 	if (!StorageCompatibility::FromDatabase(attached).CanPersistRowIdGaps()) {
 		return false;
 	}
-	// Verify the type and Cast<ART> of each index under a single held lock: IndexEntries() keeps
-	// index_entries_lock for the whole iteration, so the check and the cast cannot straddle a lock gap where a
-	// concurrent CREATE INDEX of a non-ART type could slip a non-ART entry past the check into the cast.
+	// Keep the type check and ART cast under the index-list lock.
 	bool any_index = false;
 	for (auto &entry : table_info.GetIndexes().IndexEntries()) {
 		any_index = true;
@@ -73,7 +71,7 @@ bool RowGroupCollection::IsVacuumRemapEligible(DataTableInfo &table_info, Attach
 			remap_indexes->push_back(art);
 		}
 	}
-	// An empty index list is not remap-eligible (matches the old Empty() guard).
+	// Indexless tables use the NO_INDEXES strategy.
 	return any_index;
 }
 
@@ -1339,7 +1337,7 @@ private:
 //===--------------------------------------------------------------------===//
 // Vacuum
 //===--------------------------------------------------------------------===//
-//! Immutable plan for incremental index remapping, computed once per checkpoint and read by every VacuumTask.
+//! Immutable index remap plan, computed once per checkpoint and read by every VacuumTask.
 //! The remap buffer holds the sorted indexed key columns, followed by [old_rowid, new_rowid].
 struct IndexRemapPlan {
 	//! The ART indexes whose rowids are remapped.
@@ -1354,7 +1352,7 @@ struct IndexRemapPlan {
 	bool Empty() const {
 		return indexes.empty();
 	}
-	//! Buffer column index of the old rowid (immediately after the key columns).
+	//! Buffer column index of the old rowid.
 	idx_t OldRowIdColumn() const {
 		return column_ids.size();
 	}
@@ -1362,12 +1360,17 @@ struct IndexRemapPlan {
 	idx_t NewRowIdColumn() const {
 		return column_ids.size() + 1;
 	}
-	//! Compute the buffer layout from the table's indexed columns.
-	void Initialize(DataTableInfo &info, const vector<LogicalType> &types);
+	//! Compute the buffer layout from the selected ART indexes.
+	void Initialize(const vector<LogicalType> &types);
 };
 
-void IndexRemapPlan::Initialize(DataTableInfo &info, const vector<LogicalType> &types) {
-	auto required_columns = info.GetIndexes().GetRequiredColumns();
+void IndexRemapPlan::Initialize(const vector<LogicalType> &types) {
+	unordered_set<column_t> required_columns;
+	for (auto &art_ref : indexes) {
+		for (auto col_id : art_ref.get().GetColumnIds()) {
+			required_columns.insert(col_id);
+		}
+	}
 	column_ids.assign(required_columns.begin(), required_columns.end());
 	sort(column_ids.begin(), column_ids.end());
 
@@ -1647,9 +1650,7 @@ private:
 			IndexLock index_lock;
 			art.InitializeLock(index_lock);
 
-			// Delete all (key, old rowid) pairs before inserting any (key, new rowid) pair: within a task,
-			// a moved row's new rowid can equal the old rowid of a not-yet-deleted row with the same key.
-			// Delete also verifies that every non-NULL key was present (missing old rowids are fatal).
+			// Delete old rowids first to avoid same-key rowid collisions within the task.
 			ColumnDataScanState scan_state;
 			remap_buffer.InitializeScan(scan_state);
 			while (remap_buffer.Scan(scan_state, buffer_chunk)) {
@@ -1657,8 +1658,7 @@ private:
 				art.Delete(index_lock, table_chunk, buffer_chunk.data[old_rowid_idx]);
 			}
 
-			// INSERT_DUPLICATES: the rows already passed constraint checks when they were first inserted;
-			// remapping a rowid must not re-run uniqueness verification.
+			// Remapping must not re-run uniqueness checks for already-validated rows.
 			remap_buffer.InitializeScan(scan_state);
 			while (remap_buffer.Scan(scan_state, buffer_chunk)) {
 				BuildRemapTableChunk(art, buffer_chunk, table_chunk);
@@ -1687,14 +1687,11 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		return;
 	}
 
-	// Vacuuming has two independent rowid constraints:
-	// - indexes may force surviving rowids to remain stable
-	// - the target storage version can force rowids to be written without gaps
-	// Decide how vacuum handles the indexes; only KEEP_ROW_IDS forbids changing rowids.
+	// Index state decides whether vacuum may change surviving rowids.
 	auto &attached = checkpoint_state.writer.GetAttached();
 	state.index_strategy = GetVacuumIndexStrategy(attached, &state.remap_plan.indexes);
 	if (state.index_strategy == VacuumIndexStrategy::REMAP) {
-		state.remap_plan.Initialize(*info, types);
+		state.remap_plan.Initialize(types);
 	}
 
 	// can_change_row_ids only answers whether index state allows changing row_ids.
@@ -1713,34 +1710,28 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	}
 	bool legacy_vacuum_with_stable_row_ids =
 	    !checkpoint_state.writer.CanPersistRowIdGaps() && !state.can_change_row_ids;
-	// RowIdsChanged condition: legacy storage cannot persist rowid gaps. If we are allowed to change rowids,
-	// we record a gap as seen; if we later see a row group with live rows, then we know rowids have to be shifted.
+	// Legacy storage cannot persist rowid gaps, so later live rows must be rewritten densely.
 	bool rowid_gap_seen = false;
 	vector<idx_t> committed_counts;
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
 		auto row_group_num_rows = row_group.GetCommittedRowCount();
 		if (legacy_vacuum_with_stable_row_ids) {
-			// In this legacy path, empty row groups in the middle must be kept because they would create a rowid gap
-			// that cannot be persisted or densely rewritten. Keep the committed counts so the pass below can
-			// still remove trailing deleted row groups.
+			// Keep committed counts so the trailing-deleted suffix pass below can still run.
 			committed_counts.emplace_back(row_group_num_rows);
 		}
 		if (row_group_num_rows == 0) {
 			if (!checkpoint_state.writer.CanPersistRowIdGaps()) {
-				// Older storage versions cannot represent rowid gaps. Dropping a row group in the middle of the
-				// table therefore requires dense rowid rewriting.
+				// Older storage cannot represent middle rowid gaps without dense rewriting.
 				if (!state.can_change_row_ids) {
-					// Indexes prevent rowid changes, so keep the row group for now. If this is part of a trailing
-					// deleted suffix, we can still drop it in the legacy_vacuum_with_stable_row_ids pass below.
+					// Stable rowids can still drop this if it belongs to the trailing deleted suffix.
 					state.row_group_counts.emplace_back();
 					continue;
 				}
 				// track this gap until we know whether it is followed by live rows.
 				rowid_gap_seen = true;
 			}
-			// Drop the empty row group. Newer storage versions persist the resulting rowid gap; older storage reaches
-			// this path only when rowids may be densely rewritten.
+			// Drop the empty row group; older storage reaches this only when rowids may be rewritten.
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(entry.GetIndex());
 			state.row_group_counts.push_back(row_group_num_rows);
@@ -1753,8 +1744,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 				state.row_group_counts.emplace_back();
 				continue;
 			}
-			// Otherwise, the row group is fully live. We can still consider fully live row groups for merging as
-			// that does not change rowids.
+			// Fully live row groups can still be merged without changing rowids.
 		}
 		if (rowid_gap_seen) {
 			// checkpointing will later re-number rowids densely.
@@ -1763,9 +1753,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		state.row_group_counts.push_back(row_group_num_rows);
 	}
 	if (legacy_vacuum_with_stable_row_ids) {
-		// With older storage and stable rowids, gap-forming drops were skipped above. Removing a suffix of fully
-		// deleted row groups is still safe because no surviving rowid is shifted and no persisted rowid gap remains
-		// before live data.
+		// A fully deleted suffix can be removed without shifting surviving rowids.
 		auto segment_count = state.row_group_counts.size();
 		for (idx_t i = segment_count; i > 0; i--) {
 			auto segment_idx = i - 1;
@@ -1824,8 +1812,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		merge_count = 0;
 		merge_rows = 0;
 		optional_idx expected_row_start;
-		// Conditions 1 and 2 are evaluated for each candidate merge window. The flag is only applied if this
-		// candidate is selected below.
+		// Apply this only if the candidate is selected below.
 		bool candidate_changes_row_ids = false;
 		for (next_idx = segment_idx; next_idx < checkpoint_state.SegmentCount(); next_idx++) {
 			if (!state.row_group_counts[next_idx].IsValid()) {
@@ -1857,16 +1844,14 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 				if (!state.can_change_row_ids) {
 					break;
 				}
-				// Condition 1 candidate: this candidate vacuum task will compact across a rowid gap, which will shift
-				// rowids within the selected row groups.
+				// This candidate compacts across a rowid gap.
 				candidate_changes_row_ids = true;
 			}
 			if (next_row_count != next_total_count) {
 				if (!state.can_change_row_ids) {
 					break;
 				}
-				// Condition 2 candidate: if this merge is selected, it includes a partially deleted row group, which
-				// may mean shifting row-ids (over-approximation).
+				// This candidate includes a partially deleted row group.
 				candidate_changes_row_ids = true;
 			}
 			expected_row_start = next_segment->GetRowStart() + next_total_count;
@@ -1896,7 +1881,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 			// perform the merge at this level
 			perform_merge = true;
 			if (candidate_changes_row_ids) {
-				// Apply Condition 2 or 3 for the selected merge window.
+				// The selected merge window may move rowids.
 				checkpoint_state.writer.SetRowIdsChanged();
 			}
 			break;
