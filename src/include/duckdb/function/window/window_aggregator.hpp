@@ -33,7 +33,7 @@ public:
 			idx_t nframes = 0;
 			if (exclude_mode == WindowExcludeMode::NO_OTHER) {
 				auto begin = begins[i];
-				auto end = ends[i];
+				auto end = MaxValue(ends[i], begin);
 				frames[nframes++] = FrameBounds(begin, end);
 			} else {
 				//	The frame_exclusion option allows rows around the current row to be excluded from the frame,

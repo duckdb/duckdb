@@ -31,7 +31,17 @@ NULL	0
 
 endloop
 
-#
+#  Reversed frames are empty, so COUNT must be 0 (not negative)
+foreach agg count(*) count_star()
+
+query I
+SELECT {agg} OVER (ROWS BETWEEN 1 FOLLOWING AND 1 PRECEDING) AS actual
+FROM range(1);
+----
+0
+
+endloop
+
 # All zeroes
 #
 foreach agg approx_count_distinct count entropy
