@@ -1,5 +1,5 @@
 # name: test/sql/storage/rowid_gaps/indexed_incremental_vacuum_remap.test
-# description: indexed vacuum incrementally remaps ART rowids for moved rows
+# description: indexed vacuum incrementally remaps ART rowids for shifted rows
 # group: [rowid_gaps]
 
 statement ok

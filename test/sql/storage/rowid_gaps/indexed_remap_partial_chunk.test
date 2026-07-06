@@ -1,8 +1,8 @@
 # name: test/sql/storage/rowid_gaps/indexed_remap_partial_chunk.test
-# description: vacuum remap buffers only the moved rows of a scan chunk that mixes moved and unmoved rows
+# description: vacuum remap buffers only the shifted rows of a scan chunk that mixes shifted and unshifted rows
 # group: [rowid_gaps]
 
-# One scan chunk contains both moved and unmoved rows.
+# One scan chunk contains both shifted and unshifted rows.
 
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_remap_partial.db' AS remap_partial (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
@@ -65,7 +65,7 @@ EXPLAIN ANALYZE SELECT rowid, i FROM remap_partial.t WHERE i = 200;
 ----
 analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
-# Duplicate key with one unmoved and one moved row.
+# Duplicate key with one unshifted and one shifted row.
 query II
 SELECT rowid, i FROM remap_partial.t WHERE g = 7 ORDER BY i;
 ----

@@ -128,7 +128,7 @@ public:
 	bool started_last_phase;
 	//! Synchronize changes to the global index scan state.
 	mutex index_scan_lock;
-	//! Keep ART rowids and row-group trees paired while rowid-moving index vacuum can run.
+	//! Keep ART rowids and row-group trees paired while rowid-shifting index vacuum can run.
 	unique_ptr<StorageLockKey> vacuum_lock;
 
 public:
@@ -803,7 +803,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 	info->BindIndexes(context, ART::TYPE_NAME);
 
-	// Exclude rowid-moving vacuum from the ART probe until the index scan finishes: collected rowids must be
+	// Exclude rowid-shifting vacuum from the ART probe until the index scan finishes: collected rowids must be
 	// fetched against the matching row-group tree. Falling back to a table scan releases the lock on return.
 	unique_ptr<StorageLockKey> vacuum_lock;
 	auto &attached = storage.GetAttached();

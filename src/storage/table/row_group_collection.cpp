@@ -1372,9 +1372,9 @@ public:
 		scan_chunk.Initialize(Allocator::DefaultAllocator(), scan_types);
 	}
 
-	//! Buffer the chunk's moved rows and return the table columns to append (stripping the rowid column).
+	//! Buffer the chunk's shifted rows and return the table columns to append (stripping the rowid column).
 	DataChunk &ProcessScanChunk(DataChunk &scan_chunk, idx_t new_rowid_start) {
-		BufferMovedRows(scan_chunk, new_rowid_start);
+		BufferShiftedRows(scan_chunk, new_rowid_start);
 		append_chunk.ReferenceColumns(scan_chunk, table_column_ids);
 		return append_chunk;
 	}
@@ -1425,7 +1425,7 @@ public:
 	}
 
 private:
-	void BufferMovedRows(DataChunk &scan_chunk, idx_t new_rowid_start) {
+	void BufferShiftedRows(DataChunk &scan_chunk, idx_t new_rowid_start) {
 		const auto count = scan_chunk.size();
 		const auto rowid_column_index = table_types.size();
 
@@ -1433,8 +1433,8 @@ private:
 		scan_chunk.data[rowid_column_index].ToUnifiedFormat(old_rowid_data);
 		auto old_rowids = UnifiedVectorFormat::GetData<row_t>(old_rowid_data);
 
-		SelectionVector moved_sel(STANDARD_VECTOR_SIZE);
-		idx_t moved_count = 0;
+		SelectionVector shifted_sel(STANDARD_VECTOR_SIZE);
+		idx_t shifted_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = old_rowid_data.sel->get_index(i);
 			auto old_rowid = old_rowids[source_idx];
@@ -1442,9 +1442,9 @@ private:
 			if (old_rowid == new_rowid) {
 				continue;
 			}
-			moved_sel.set_index(moved_count++, i);
+			shifted_sel.set_index(shifted_count++, i);
 		}
-		if (moved_count == 0) {
+		if (shifted_count == 0) {
 			return;
 		}
 
@@ -1455,7 +1455,7 @@ private:
 		TableIndexList::ReferenceIndexChunk(scan_chunk, buffer_chunk, mapped_column_ids);
 		buffer_chunk.data[old_rowid_idx].Reference(scan_chunk.data[rowid_column_index]);
 		buffer_chunk.data[new_rowid_idx].Reference(new_rowids);
-		buffer_chunk.Slice(moved_sel, moved_count);
+		buffer_chunk.Slice(shifted_sel, shifted_count);
 		buffer->Append(buffer_append_state, buffer_chunk);
 	}
 
@@ -1470,7 +1470,7 @@ private:
 	idx_t new_rowid_idx;
 	unique_ptr<ColumnDataCollection> buffer;
 	ColumnDataAppendState buffer_append_state;
-	//! Buffer-layout chunk used to append moved rows.
+	//! Buffer-layout chunk used to append shifted rows.
 	DataChunk buffer_chunk;
 	//! The scan chunk's table columns (excludes the trailing rowid column).
 	vector<column_t> table_column_ids;
@@ -1574,7 +1574,7 @@ public:
 				}
 				scan_chunk.Flatten();
 				const auto chunk_count = scan_chunk.size();
-				// Buffer moved rows and strip the scanned rowid column before appending to the new row groups.
+				// Buffer shifted rows and strip the scanned rowid column before appending to the new row groups.
 				auto &append_chunk =
 				    remapper ? remapper->ProcessScanChunk(scan_chunk, row_start.GetIndex() + live_row_offset)
 				             : scan_chunk;
