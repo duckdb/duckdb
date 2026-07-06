@@ -681,16 +681,17 @@ idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id
 	return delete_count;
 }
 
-bool ART::CanVacuumRemap() const {
+bool ART::HasLegacyGeometryKeys() const {
+	// The GEOMETRY key encoding changed in v1.5.0: only indexes that may hold pre-v1.5.0 keys need the check.
 	if (storage_version != StorageVersion::INVALID && storage_version >= StorageVersion::V1_5_0) {
-		return true;
+		return false;
 	}
 	for (auto &type : logical_types) {
 		if (type.id() == LogicalTypeId::GEOMETRY) {
-			return false;
+			return true;
 		}
 	}
-	return true;
+	return false;
 }
 
 //===--------------------------------------------------------------------===//
