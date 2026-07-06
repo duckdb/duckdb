@@ -190,6 +190,11 @@ void append_int64(tpch_append_information &info, int64_t value) {
 	FlatVector::GetDataMutable<int64_t>(vector)[info.active_row] = value;
 }
 
+void append_string(tpch_append_information &info, const char *value, idx_t length) {
+	auto &vector = append_next_column(info);
+	FlatVector::GetDataMutable<string_t>(vector)[info.active_row] = StringVector::AddString(vector, value, length);
+}
+
 void append_string(tpch_append_information &info, const char *value) {
 	auto &vector = append_next_column(info);
 	FlatVector::GetDataMutable<string_t>(vector)[info.active_row] = StringVector::AddString(vector, value);
@@ -244,11 +249,11 @@ static void append_order(order_t *o, tpch_append_information *info) {
 	// o_orderpriority
 	append_string(append_info, o->opriority);
 	// o_clerk
-	append_string(append_info, o->clerk);
+	append_string(append_info, o->clerk, O_CLRK_LEN);
 	// o_shippriority
 	append_int32(append_info, o->spriority);
 	// o_comment
-	append_string(append_info, o->comment);
+	append_string(append_info, o->comment, o->clen);
 	append_end_row(append_info);
 }
 
@@ -289,7 +294,7 @@ static void append_line(order_t *o, tpch_append_information *info) {
 		// l_shipmode
 		append_string(append_info, o->l[i].shipmode);
 		// l_comment
-		append_string(append_info, o->l[i].comment);
+		append_string(append_info, o->l[i].comment, o->l[i].clen);
 		append_end_row(append_info);
 	}
 }
@@ -308,15 +313,15 @@ static void append_supp(supplier_t *supp, tpch_append_information *info) {
 	// s_name
 	append_string(append_info, supp->name);
 	// s_address
-	append_string(append_info, supp->address);
+	append_string(append_info, supp->address, supp->alen);
 	// s_nationkey
 	append_int32(append_info, supp->nation_code);
 	// s_phone
-	append_string(append_info, supp->phone);
+	append_string(append_info, supp->phone, PHONE_LEN);
 	// s_acctbal
 	append_decimal(append_info, supp->acctbal);
 	// s_comment
-	append_string(append_info, supp->comment);
+	append_string(append_info, supp->comment, supp->clen);
 	append_end_row(append_info);
 }
 
@@ -329,17 +334,17 @@ static void append_cust(customer_t *c, tpch_append_information *info) {
 	// c_name
 	append_string(append_info, c->name);
 	// c_address
-	append_string(append_info, c->address);
+	append_string(append_info, c->address, c->alen);
 	// c_nationkey
 	append_int32(append_info, c->nation_code);
 	// c_phone
-	append_string(append_info, c->phone);
+	append_string(append_info, c->phone, PHONE_LEN);
 	// c_acctbal
 	append_decimal(append_info, c->acctbal);
 	// c_mktsegment
 	append_string(append_info, c->mktsegment);
 	// c_comment
-	append_string(append_info, c->comment);
+	append_string(append_info, c->comment, c->clen);
 	append_end_row(append_info);
 }
 
@@ -350,13 +355,13 @@ static void append_part(part_t *part, tpch_append_information *info) {
 	// p_partkey
 	append_int64(append_info, part->partkey);
 	// p_name
-	append_string(append_info, part->name);
+	append_string(append_info, part->name, part->nlen);
 	// p_mfgr
-	append_string(append_info, part->mfgr);
+	append_string(append_info, part->mfgr, sizeof(P_MFG_TAG));
 	// p_brand
-	append_string(append_info, part->brand);
+	append_string(append_info, part->brand, sizeof(P_BRND_TAG) + 1);
 	// p_type
-	append_string(append_info, part->type);
+	append_string(append_info, part->type, part->tlen);
 	// p_size
 	append_int32(append_info, part->size);
 	// p_container
@@ -364,7 +369,7 @@ static void append_part(part_t *part, tpch_append_information *info) {
 	// p_retailprice
 	append_decimal(append_info, part->retailprice);
 	// p_comment
-	append_string(append_info, part->comment);
+	append_string(append_info, part->comment, part->clen);
 	append_end_row(append_info);
 }
 
@@ -381,7 +386,7 @@ static void append_psupp(part_t *part, tpch_append_information *info) {
 		// ps_supplycost
 		append_decimal(append_info, part->s[i].scost);
 		// ps_comment
-		append_string(append_info, part->s[i].comment);
+		append_string(append_info, part->s[i].comment, part->s[i].clen);
 		append_end_row(append_info);
 	}
 }
@@ -402,7 +407,7 @@ static void append_nation(code_t *c, tpch_append_information *info) {
 	// n_regionkey
 	append_int32(append_info, c->join);
 	// n_comment
-	append_string(append_info, c->comment);
+	append_string(append_info, c->comment, c->clen);
 	append_end_row(append_info);
 }
 
@@ -415,7 +420,7 @@ static void append_region(code_t *c, tpch_append_information *info) {
 	// r_name
 	append_string(append_info, c->text);
 	// r_comment
-	append_string(append_info, c->comment);
+	append_string(append_info, c->comment, c->clen);
 	append_end_row(append_info);
 }
 
