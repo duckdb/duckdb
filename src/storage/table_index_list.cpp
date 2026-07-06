@@ -121,9 +121,6 @@ unordered_set<string> TableIndexList::DistinctIndexTypes() const {
 
 bool TableIndexList::AllIndexesBoundOfType(const char *index_type) const {
 	lock_guard<mutex> lock(index_entries_lock);
-	if (index_entries.empty()) {
-		return false;
-	}
 	for (auto &entry : index_entries) {
 		auto &index = *entry->index;
 		if (!index.IsBound() || index.GetIndexType() != index_type) {

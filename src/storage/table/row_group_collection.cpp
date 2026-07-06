@@ -36,7 +36,9 @@ static bool CanRebuildExistingIndexesAfterVacuum(DataTableInfo &info, AttachedDa
 	if (vacuum_rebuild_threshold == 0 || total_rows > vacuum_rebuild_threshold) {
 		return false;
 	}
-	return info.GetIndexes().AllIndexesBoundOfType(ART::TYPE_NAME);
+	// Rebuild only applies when there are indexes to rebuild: indexless tables use the NONE strategy.
+	auto &indexes = info.GetIndexes();
+	return !indexes.Empty() && indexes.AllIndexesBoundOfType(ART::TYPE_NAME);
 }
 
 bool RowGroupCollection::IsVacuumRemapEligible(DataTableInfo &table_info, AttachedDatabase &attached,
@@ -84,7 +86,10 @@ RowGroupCollection::GetVacuumIndexStrategy(AttachedDatabase &attached,
 	if (CanRebuildExistingIndexesAfterVacuum(*info, attached, GetTotalRows())) {
 		return VacuumIndexStrategy::REBUILD;
 	}
-	return VacuumIndexStrategy::NONE;
+	if (info->GetIndexes().Empty()) {
+		return VacuumIndexStrategy::NO_INDEXES;
+	}
+	return VacuumIndexStrategy::KEEP_ROW_IDS;
 }
 
 //===--------------------------------------------------------------------===//
@@ -630,7 +635,7 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	if (!needs_new_row_group) {
 		auto last_row_group = state.row_groups->GetLastSegment(l);
 		D_ASSERT(last_row_group->GetRowEnd() == state.row_groups->GetBaseRowId() + next_row_id);
-		if (info->GetIndexes().Empty() || GetVacuumIndexStrategy(GetAttached()) != VacuumIndexStrategy::NONE) {
+		if (GetVacuumIndexStrategy(GetAttached()) != VacuumIndexStrategy::KEEP_ROW_IDS) {
 			// Honor SUGGEST_NEW if vacuum can compact the table later, either because there are no indexes or because
 			// the existing indexes can be rebuilt or remapped after vacuuming.
 			needs_new_row_group = row_group_append_mode == RowGroupAppendMode::SUGGEST_NEW;
@@ -1383,8 +1388,8 @@ void IndexRemapPlan::Initialize(DataTableInfo &info, const vector<LogicalType> &
 struct VacuumState {
 	bool can_vacuum_deletes = true;
 	bool can_change_row_ids = false;
-	//! How vacuum handles the table's indexes when it changes rowids (REMAP, REBUILD, or NONE).
-	VacuumIndexStrategy index_strategy = VacuumIndexStrategy::NONE;
+	//! How vacuum handles the table's indexes when it changes rowids.
+	VacuumIndexStrategy index_strategy = VacuumIndexStrategy::KEEP_ROW_IDS;
 	//! The remap plan, populated only when index_strategy == REMAP.
 	IndexRemapPlan remap_plan;
 	idx_t row_start = 0;
@@ -1685,11 +1690,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	// Vacuuming has two independent rowid constraints:
 	// - indexes may force surviving rowids to remain stable
 	// - the target storage version can force rowids to be written without gaps
-	// Indexes store rowids, so rowids can only be changed when there are no indexes, or when all indexes can be
-	// rebuilt after vacuuming.
-	bool has_indexes = !info->GetIndexes().Empty();
-
-	// Decide how vacuum handles the ART indexes: REMAP (incremental), REBUILD (legacy full ART rebuild), or NONE.
+	// Decide how vacuum handles the indexes; only KEEP_ROW_IDS forbids changing rowids.
 	auto &attached = checkpoint_state.writer.GetAttached();
 	state.index_strategy = GetVacuumIndexStrategy(attached, &state.remap_plan.indexes);
 	if (state.index_strategy == VacuumIndexStrategy::REMAP) {
@@ -1697,7 +1698,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	}
 
 	// can_change_row_ids only answers whether index state allows changing row_ids.
-	state.can_change_row_ids = !has_indexes || state.index_strategy != VacuumIndexStrategy::NONE;
+	state.can_change_row_ids = state.index_strategy != VacuumIndexStrategy::KEEP_ROW_IDS;
 
 	// obtain the set of committed row counts for each row group
 	auto num_row_groups = checkpoint_state.SegmentCount();

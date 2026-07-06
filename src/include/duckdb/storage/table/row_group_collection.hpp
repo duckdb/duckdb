@@ -48,9 +48,12 @@ class ART;
 
 //! How checkpoint vacuum handles the table's indexes when it compacts row groups and changes rowids.
 //! The options are mutually exclusive; REMAP takes precedence over REBUILD.
+//! Rowids may change under every strategy except KEEP_ROW_IDS.
 enum class VacuumIndexStrategy : uint8_t {
-	//! Indexes forbid changing rowids: vacuum must preserve them (or there are no indexes to worry about).
-	NONE,
+	//! Indexes are present but can be neither rebuilt nor remapped: vacuum must keep rowids stable.
+	KEEP_ROW_IDS,
+	//! There are no indexes: no index maintenance is needed and rowids may change freely.
+	NO_INDEXES,
 	//! Rebuild all indexes from scratch after vacuum (legacy vacuum_rebuild_indexes path).
 	REBUILD,
 	//! Incrementally remap the affected rowids in each ART index during vacuum.
