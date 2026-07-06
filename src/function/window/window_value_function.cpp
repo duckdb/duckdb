@@ -646,7 +646,7 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 			}
 
 			// (1) compute the ROW_NUMBER of the own row
-			frame = FrameBounds(frame_begin[i], frame_end[i]);
+			frame = FrameBounds(frame_begin[i], MaxValue(frame_end[i], frame_begin[i]));
 			const auto own_row = glstate.row_tree->Rank(frame.start, frame.end, row_idx) - 1;
 			// (2) adjust the row number by adding or subtracting an offset
 			auto val_idx = NumericCast<int64_t>(own_row);
