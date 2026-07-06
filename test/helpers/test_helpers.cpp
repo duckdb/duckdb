@@ -127,6 +127,16 @@ bool DeleteTestPath() {
 	return delete_test_path;
 }
 
+static bool emit_test_events = false;
+
+void SetEmitTestEvents(bool emit) {
+	emit_test_events = emit;
+}
+
+bool EmitTestEventsEnabled() {
+	return emit_test_events;
+}
+
 void ClearTestDirectory() {
 	if (!DeleteTestPath()) {
 		return;

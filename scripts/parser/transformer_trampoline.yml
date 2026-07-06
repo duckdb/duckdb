@@ -8,20 +8,69 @@ rules:
     mode: excluded
 
   TopLevelStatement:
-    mode: manual
-    init: InitializeTopLevelStatementTrampoline
-    finalize: FinalizeTopLevelStatementTrampoline
+    mode: excluded
 
   Statement:
-    mode: manual
-    init: InitializeStatementTrampoline
-    finalize: FinalizeStatementTrampoline
+    mode: excluded
 
   PivotStatement:
     mode: manual
     init: InitializePivotStatementTrampoline
     finalize: FinalizePivotStatementTrampoline
 
+  UnpivotStatement:
+    mode: manual
+    init: InitializeUnpivotStatementTrampoline
+    finalize: FinalizeUnpivotStatementTrampoline
+
+  Expression:
+    mode: forward
+
+  InsertByNameOrder:
+    mode: forward
+
+  InsertByPositionOrder:
+    mode: forward
+
+  UpdateMatchSetClause:
+    mode: forward
+
+  LiteralExpression:
+    mode: manual
+    init: InitializeLiteralExpressionTrampoline
+    finalize: FinalizeLiteralExpressionTrampoline
+
+  PrefixExpression:
+    mode: manual
+    init: InitializePrefixExpressionTrampoline
+    finalize: FinalizePrefixExpressionTrampoline
+
+  OverClause:
+    mode: manual
+    init: InitializeOverClauseTrampoline
+    finalize: FinalizeOverClauseTrampoline
+
+  SelectStatementInternal:
+    mode: manual
+    init: InitializeSelectStatementInternalTrampoline
+    finalize: FinalizeSelectStatementInternalTrampoline
+
   SimpleSelect:
-    mode: manual_finalize
+    mode: manual
+    init: InitializeSimpleSelectTrampoline
     finalize: FinalizeSimpleSelectTrampoline
+
+  TableRef:
+    mode: manual
+    init: InitializeTableRefTrampoline
+    finalize: FinalizeTableRefTrampoline
+
+  WithClause:
+    mode: manual
+    init: InitializeWithClauseTrampoline
+    finalize: FinalizeWithClauseTrampoline
+
+  WindowDefinition:
+    mode: manual
+    init: InitializeWindowDefinitionTrampoline
+    finalize: FinalizeWindowDefinitionTrampoline

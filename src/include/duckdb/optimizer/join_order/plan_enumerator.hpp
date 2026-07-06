@@ -28,8 +28,6 @@ class QueryGraphManager;
 
 class PlanEnumerator {
 public:
-	static constexpr idx_t THRESHOLD_TO_SWAP_TO_APPROXIMATE = 12;
-
 	explicit PlanEnumerator(QueryGraphManager &query_graph_manager, CostModel &cost_model,
 	                        const QueryGraphEdges &query_graph);
 

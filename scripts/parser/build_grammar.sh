@@ -25,4 +25,14 @@ python3 "$GEN_TRANSFORMER_FILE" --write
 
 echo "Successfully generated transformer wrappers"
 
+GEN_TRAMPOLINE_FILE="scripts/parser/generate_transformer_trampoline.py"
+if [[ ! -f "$GEN_TRAMPOLINE_FILE" ]]; then
+  echo "Error: $GEN_TRAMPOLINE_FILE not found"
+  exit 1
+fi
+
+python3 "$GEN_TRAMPOLINE_FILE" --write
+
+echo "Successfully generated trampoline transformer wrappers"
+
 make format-parser-grammar

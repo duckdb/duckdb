@@ -32,11 +32,11 @@ SELECT count(*) FROM '{TEST_DIR}/expr_prune_int.parquet' WHERE a * 4 + 4 > 32768
 statement ok
 CALL disable_logging()
 
+# count(*) is fully precomputed from row-group statistics (groups 8-9 always-true, 0-7 always-false),
+# so the Parquet scan is eliminated entirely and no row group log events are emitted
 query II
 SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
 ----
-ReadRowGroup	2
-SkipRowGroup	8
 
 statement ok
 CALL truncate_duckdb_logs()
@@ -80,11 +80,11 @@ SELECT count(*) FROM '{TEST_DIR}/expr_prune_double.parquet' WHERE d + d < 20479.
 statement ok
 CALL disable_logging()
 
+# count(*) is fully precomputed from row-group statistics (group 0 always-true, 1-9 always-false),
+# so the Parquet scan is eliminated entirely and no row group log events are emitted
 query II
 SELECT event, count(*) FROM duckdb_logs_parsed('PhysicalOperator') WHERE class='ParquetReader' GROUP BY event ORDER BY event
 ----
-ReadRowGroup	1
-SkipRowGroup	9
 
 statement ok
 CALL truncate_duckdb_logs()
