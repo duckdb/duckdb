@@ -21,7 +21,7 @@ struct CreateFeatureInfo : public CreateInfo {
 
 	//! Feature name
 	string feature_name;
-	//! Entity table name (the LEFT JOIN anchor); declared via the ENTITY clause
+	//! Entity table name (one snapshot row per entity); declared via the ENTITY clause
 	string entity_table;
 	//! Source table name (the event/relation table, derived from the feature query FROM)
 	string source_table;

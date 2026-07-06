@@ -103,9 +103,9 @@ static vector<string> GetFeatureEntityColumns(const SelectNode &select_node, con
 }
 
 //! The feature's entity columns in the source (event) table must form a FOREIGN KEY that references the
-//! declared entity table. This guarantees every entity value the feature aggregates over is anchored to a
-//! row in the entity table that REFRESH will LEFT JOIN against. Returns the entity-table key columns the
-//! foreign key references, aligned to entity_columns (used to build the snapshot join).
+//! declared entity table. This guarantees every entity value the feature aggregates over maps to a row in
+//! the entity table that REFRESH will LEFT JOIN against. Returns the entity-table key columns the foreign
+//! key references, aligned to entity_columns (used to build the snapshot join).
 static vector<string> ValidateFeatureEntityForeignKey(const TableCatalogEntry &source_entry, const string &source_table,
                                                       const string &entity_table,
                                                       const vector<string> &entity_columns) {

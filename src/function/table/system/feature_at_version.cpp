@@ -73,9 +73,9 @@ static unique_ptr<FunctionData> FeatureAtVersionBind(ClientContext &context, Tab
 		                       result->feature_name, result->feature_name);
 	}
 
-	// Read the requested version's rows out of the current denormalized store table, hiding the internal
+	// Read the requested version's rows out of the denormalized store table, hiding the internal
 	// bookkeeping columns. The version is only available while it is still within the retain window.
-	auto store_table = result->feature_name + "__v" + duckdb::to_string(feature_entry->current_version);
+	auto store_table = FeatureStoreTableName(result->feature_name);
 	result->generated_sql = "SELECT * EXCLUDE (" + string(FEATURE_VERSION_COLUMN) + ", " +
 	                        string(FEATURE_TIMESTAMP_COLUMN) + ") FROM " + SQLIdentifier::ToString(store_table) +
 	                        " WHERE " + string(FEATURE_VERSION_COLUMN) + " = " + duckdb::to_string(result->version);

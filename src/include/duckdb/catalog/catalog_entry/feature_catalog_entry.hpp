@@ -23,7 +23,7 @@ public:
 public:
 	FeatureCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateFeatureInfo &info);
 
-	//! The entity table name (the LEFT JOIN anchor); declared via the ENTITY clause
+	//! The entity table name (one snapshot row per entity); declared via the ENTITY clause
 	string entity_table;
 	//! The source table name (the event/relation table)
 	string source_table;

@@ -22,8 +22,14 @@ class SelectStatement;
 static constexpr const char *FEATURE_VERSION_COLUMN = "__feature_version";
 static constexpr const char *FEATURE_TIMESTAMP_COLUMN = "__feature_timestamp";
 
+//! The single denormalized store table backing a feature. Every refresh appends its snapshot here and
+//! evicts versions that have fallen outside the retain window; the table itself persists across refreshes.
+inline string FeatureStoreTableName(const string &feature_name) {
+	return feature_name + "__store";
+}
+
 struct FeatureSnapshotParameters {
-	//! The entity table (LEFT JOIN anchor).
+	//! The entity table the snapshot is built over (one output row per entity).
 	string entity_table;
 	//! The source/event table the feature query reads from.
 	string source_table;

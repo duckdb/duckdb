@@ -6,7 +6,7 @@ require noforcestorage
 
 require skip_reload
 
-# The entity table is the snapshot anchor; the event table must carry a foreign key into it.
+# The snapshot is built over the entity table; the event table must carry a foreign key into it.
 statement ok
 CREATE TABLE customers (customer VARCHAR PRIMARY KEY);
 
@@ -38,7 +38,7 @@ f	0
 
 # No store table has been created yet
 query I
-SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
+SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_%' ESCAPE '\';
 ----
 0
 
@@ -81,7 +81,7 @@ f	1
 
 # The store holds one snapshot row per entity (x, y)
 query I
-SELECT COUNT(*) FROM f__v1;
+SELECT COUNT(*) FROM f__store;
 ----
 2
 

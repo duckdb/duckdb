@@ -48,7 +48,7 @@ static unique_ptr<TableRef> CurrentFeatureBindReplace(ClientContext &context, Ta
 	auto store_table = make_uniq<BaseTableRef>();
 	store_table->catalog_name = feature_entry->ParentCatalog().GetName();
 	store_table->schema_name = feature_entry->ParentSchema().name;
-	store_table->table_name = feature_name + "__v" + duckdb::to_string(feature_entry->current_version);
+	store_table->table_name = FeatureStoreTableName(feature_name);
 
 	auto star = make_uniq<StarExpression>();
 	star->exclude_list.insert(QualifiedColumnName(FEATURE_VERSION_COLUMN));

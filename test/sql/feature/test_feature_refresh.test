@@ -65,12 +65,12 @@ carol	0.00	0
 # ============================================================
 # Second snapshot AT Jan 4: window [Dec 28, Jan 4)
 # alice = 100+200+300 (tx 3), bob = 50+75 (tx 2), carol = 0
-# The store carries version 1 forward, so it now holds 6 rows (2 versions x 3 entities).
+# REFRESH appends one snapshot row per entity (3); the store now holds 6 rows (2 versions x 3 entities).
 # ============================================================
 query I
 REFRESH FEATURE total_spend AT '2024-01-04 00:00:00';
 ----
-6
+3
 
 query I
 SELECT current_version FROM duckdb_features() WHERE feature_name = 'total_spend';
@@ -87,12 +87,12 @@ carol	0.00	0
 
 # The store table holds both versions, tagged with the refresh version
 query I
-SELECT COUNT(*) FROM total_spend__v2;
+SELECT COUNT(*) FROM total_spend__store;
 ----
 6
 
 query II rowsort
-SELECT __feature_version, COUNT(*) FROM total_spend__v2 GROUP BY __feature_version;
+SELECT __feature_version, COUNT(*) FROM total_spend__store GROUP BY __feature_version;
 ----
 1	3
 2	3
@@ -113,22 +113,22 @@ bob	125.00
 carol	0.00
 
 # ============================================================
-# Third snapshot AT Jan 6 -> version 3; RETAIN 2 evicts version 1
+# Third snapshot AT Jan 6 -> version 3; RETAIN 2 evicts version 1 in place
 # ============================================================
 query I
 REFRESH FEATURE total_spend AT '2024-01-06 00:00:00';
 ----
-6
+3
 
-# Only the latest store table survives; the previous one is dropped
+# There is exactly one persistent store table; retention lives in the rows, not in separate tables
 query I
-SELECT table_name FROM duckdb_tables WHERE table_name LIKE 'total\_spend\_\_v%' ESCAPE '\' ORDER BY table_name;
+SELECT table_name FROM duckdb_tables WHERE table_name LIKE 'total\_spend\_\_%' ESCAPE '\' ORDER BY table_name;
 ----
-total_spend__v3
+total_spend__store
 
-# The store now retains versions 2 and 3 only
+# The store now retains versions 2 and 3 only (version 1's rows were deleted in place)
 query II rowsort
-SELECT __feature_version, COUNT(*) FROM total_spend__v3 GROUP BY __feature_version;
+SELECT __feature_version, COUNT(*) FROM total_spend__store GROUP BY __feature_version;
 ----
 2	3
 3	3

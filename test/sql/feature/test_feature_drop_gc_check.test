@@ -1,5 +1,5 @@
 # name: test/sql/feature/test_feature_drop_gc_check.test
-# description: Verify only the latest store table survives, retention lives in the rows, DROP removes all
+# description: Verify the single persistent store, in-place version eviction, and DROP cleanup
 # group: [feature]
 
 require noforcestorage
@@ -27,7 +27,7 @@ INSERT INTO events VALUES
     ('y', 30, '2024-01-01 12:00:00');
 
 # ============================================================
-# RETAIN 2: the store carries at most two versions; only the latest store table exists
+# RETAIN 2: one persistent store table; old versions are deleted in place
 # ============================================================
 statement ok
 CREATE FEATURE f ENTITY customers TIMESTAMP event_time
@@ -38,45 +38,45 @@ CREATE FEATURE f ENTITY customers TIMESTAMP event_time
 statement ok
 REFRESH FEATURE f AT '2024-01-03 00:00:00';
 
-# After the first refresh: exactly one store table (v1), holding version 1 only (2 entity rows)
+# After the first refresh: exactly one store table (f__store), holding version 1 (2 entity rows)
 query I
-SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
+SELECT table_name FROM duckdb_tables WHERE table_name LIKE 'f\_\_%' ESCAPE '\';
+----
+f__store
+
+query I
+SELECT COUNT(*) FROM f__store;
+----
+2
+
+# Second refresh: still one store table, now holding versions 1 and 2
+statement ok
+REFRESH FEATURE f AT '2024-01-03 00:00:00';
+
+query I
+SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_%' ESCAPE '\';
 ----
 1
 
 query I
-SELECT COUNT(*) FROM f__v1;
+SELECT COUNT(DISTINCT __feature_version) FROM f__store;
 ----
 2
 
-# Second refresh: still exactly one store table (v2), now holding versions 1 and 2
+# Third refresh: RETAIN 2 evicts version 1 in place; the store holds versions 2 and 3, still 4 rows
 statement ok
 REFRESH FEATURE f AT '2024-01-03 00:00:00';
-
-query I
-SELECT table_name FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
-----
-f__v2
-
-query I
-SELECT COUNT(DISTINCT __feature_version) FROM f__v2;
-----
-2
-
-# Third refresh: RETAIN 2 evicts version 1; the store holds versions 2 and 3
-statement ok
-REFRESH FEATURE f AT '2024-01-03 00:00:00';
-
-query I
-SELECT table_name FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
-----
-f__v3
 
 query II rowsort
-SELECT __feature_version, COUNT(*) FROM f__v3 GROUP BY __feature_version;
+SELECT __feature_version, COUNT(*) FROM f__store GROUP BY __feature_version;
 ----
 2	2
 3	2
+
+query I
+SELECT COUNT(*) FROM f__store;
+----
+4
 
 # ============================================================
 # DROP FEATURE: the store table and the view are both removed
@@ -85,7 +85,7 @@ statement ok
 DROP FEATURE f;
 
 query I
-SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_v%' ESCAPE '\';
+SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'f\_\_%' ESCAPE '\';
 ----
 0
 

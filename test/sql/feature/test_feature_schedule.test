@@ -149,8 +149,8 @@ CREATE FEATURE bad_shorthand_decimal
 statement ok
 REFRESH FEATURE user_activity AT '2024-01-02 00:00:00';
 
-# Second refresh appends version 2 (2 rows) and carries version 1 forward (2 rows) = 4 rows.
+# Second refresh appends version 2 (one snapshot row per entity a, b) = 2 rows.
 query I
 REFRESH FEATURE user_activity AT '2024-01-02 00:00:00';
 ----
-4
+2

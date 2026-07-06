@@ -9,7 +9,7 @@ require skip_reload
 # ============================================================
 # Setup
 # ============================================================
-# The entity table is the LEFT JOIN anchor; the event table must carry a foreign key into it.
+# The snapshot is built over the entity table; the event table must carry a foreign key into it.
 statement ok
 CREATE TABLE cards (card_no VARCHAR PRIMARY KEY);
 

@@ -162,7 +162,7 @@ static void AttachServeJoin(unique_ptr<TableRef> &from_table, const FeatureCatal
                             const string &spine_entity_override, const string &as_of_override) {
 	// Serve from the denormalized store table via an ASOF join: every retained version is present, and the
 	// join resolves each spine row to the entity's latest snapshot at or before the spine's as-of time.
-	auto store_table = feat.name + "__v" + duckdb::to_string(feat.current_version);
+	auto store_table = FeatureStoreTableName(feat.name);
 	auto spine_ts = as_of_override.empty() ? feat.timestamp_column : as_of_override;
 	auto entity_mappings = ResolveEntityMappings(feat, feature_mappings, spine_entity_override);
 

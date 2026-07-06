@@ -47,7 +47,7 @@ statement ok
 REFRESH FEATURE versioned AT '2024-01-03 00:00:00';
 
 query I
-SELECT COUNT(*) FROM versioned__v1;
+SELECT COUNT(*) FROM versioned__store;
 ----
 3
 
@@ -58,7 +58,7 @@ x	30
 y	45
 z	5
 
-# Version 2 (same AT) -> store carries version 1 forward, now 6 rows across 2 versions
+# Version 2 (same AT) -> the store now holds 6 rows across 2 versions
 statement ok
 REFRESH FEATURE versioned AT '2024-01-03 00:00:00';
 
@@ -68,16 +68,16 @@ SELECT current_version FROM duckdb_features() WHERE feature_name = 'versioned';
 2
 
 query II rowsort
-SELECT __feature_version, COUNT(*) FROM versioned__v2 GROUP BY __feature_version;
+SELECT __feature_version, COUNT(*) FROM versioned__store GROUP BY __feature_version;
 ----
 1	3
 2	3
 
-# The previous store table is gone (only the latest survives)
+# There is a single persistent store table, not one table per version
 query I
-SELECT COUNT(*) FROM duckdb_tables WHERE table_name = 'versioned__v1';
+SELECT COUNT(*) FROM duckdb_tables WHERE table_name LIKE 'versioned\_\_%' ESCAPE '\';
 ----
-0
+1
 
 # ============================================================
 # New data + RETAIN 2 GC: version 3 keeps versions 2 and 3, evicts version 1
@@ -90,12 +90,12 @@ statement ok
 REFRESH FEATURE versioned AT '2024-01-04 00:00:00';
 
 query I
-SELECT COUNT(*) FROM versioned__v3;
+SELECT COUNT(*) FROM versioned__store;
 ----
 6
 
 query II rowsort
-SELECT __feature_version, COUNT(*) FROM versioned__v3 GROUP BY __feature_version;
+SELECT __feature_version, COUNT(*) FROM versioned__store GROUP BY __feature_version;
 ----
 2	3
 3	3
@@ -147,12 +147,12 @@ REFRESH FEATURE latest_only AT '2024-01-04 00:00:00';
 
 # The store holds only the current version's rows
 query I
-SELECT COUNT(*) FROM latest_only__v2;
+SELECT COUNT(*) FROM latest_only__store;
 ----
 3
 
 query I
-SELECT DISTINCT __feature_version FROM latest_only__v2;
+SELECT DISTINCT __feature_version FROM latest_only__store;
 ----
 2
 

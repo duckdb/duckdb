@@ -87,7 +87,7 @@ z	5
 
 # The store table (with three retained versions) survives
 query I
-SELECT COUNT(*) FROM persisted__v3;
+SELECT COUNT(*) FROM persisted__store;
 ----
 9
 
@@ -114,7 +114,7 @@ SELECT feature_name, current_version FROM duckdb_features() WHERE feature_name =
 persisted	4
 
 query I
-SELECT COUNT(*) FROM persisted__v4;
+SELECT COUNT(*) FROM persisted__store;
 ----
 9
 
