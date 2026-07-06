@@ -20,6 +20,7 @@
 #include <functional>
 
 namespace duckdb {
+class BufferManager;
 class ClientContext;
 class TaskExecutor;
 class AsyncTask;
@@ -98,6 +99,7 @@ private:
 	//! Release a read-ahead slot
 	void ReleaseSlot();
 
+	BufferManager &buffer_manager;
 	//! Maximum number of jobs scheduled ahead of decoding, unlimited in the -1 auto mode
 	const idx_t read_ahead_depth;
 	//! Maximum bytes of I/O scheduled ahead of decoding, unlimited when an explicit depth is set

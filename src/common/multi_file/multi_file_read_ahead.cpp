@@ -53,7 +53,8 @@ bool ReadAheadJobCompletion::TryPark(const InterruptState &interrupt_state) {
 }
 
 MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p, idx_t io_byte_budget_p)
-    : read_ahead_depth(read_ahead_depth_p), io_byte_budget(io_byte_budget_p) {
+    : buffer_manager(BufferManager::GetBufferManager(context)), read_ahead_depth(read_ahead_depth_p),
+      io_byte_budget(io_byte_budget_p) {
 	D_ASSERT(read_ahead_depth_p > 0);
 	executor = make_uniq<TaskExecutor>(context, TaskSchedulerType::ASYNC);
 }
@@ -88,7 +89,10 @@ bool MultiFileReadAhead::TryReserveSlot() {
 	if (pending_io_bytes.load() >= io_byte_budget) {
 		return false;
 	}
-	if (active_jobs.fetch_add(1) >= read_ahead_depth) {
+	// under memory pressure only one job may be scheduled ahead
+	const bool memory_pressure = buffer_manager.GetUsedMemory() >= buffer_manager.GetMaxMemory() / 2;
+	const idx_t depth = memory_pressure ? 1 : read_ahead_depth;
+	if (active_jobs.fetch_add(1) >= depth) {
 		--active_jobs;
 		return false;
 	}
@@ -144,11 +148,14 @@ bool MultiFileReadAhead::TryProduceJob(const ProduceJobCallback &claim_and_sched
 }
 
 void MultiFileReadAhead::PushJob(unique_ptr<MultiFileScanJob> job, vector<unique_ptr<AsyncTask>> io_tasks) {
+	// beyond its scheduled I/O a job carries scan-state overhead (row-group sized decode buffers)
+	static constexpr idx_t MINIMUM_JOB_IO_CHARGE = 16ULL * 1024 * 1024;
 	auto completion = make_shared_ptr<ReadAheadJobCompletion>(io_tasks.size());
 	job->io_completion = completion;
 	for (auto &task : io_tasks) {
 		job->io_bytes += task->GetIOSize();
 	}
+	job->io_bytes = MaxValue<idx_t>(job->io_bytes, MINIMUM_JOB_IO_CHARGE);
 	pending_io_bytes += job->io_bytes;
 	// schedule the reads detached on the async pool right away
 	for (auto &task : io_tasks) {

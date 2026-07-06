@@ -1851,6 +1851,8 @@ void ParquetReader::FinishRowGroup(ClientContext &context, ParquetReaderScanStat
 		LogRowGroupPrefetch(context, file.path, state.group_index, state);
 	}
 	state.prefetch_metrics.FinalizeRowGroupSelectivity();
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
+	trans.ClearPrefetch();
 }
 
 idx_t ParquetReader::EvaluateFilters(ParquetReaderScanState &state, DataChunk &result, idx_t scan_count,
