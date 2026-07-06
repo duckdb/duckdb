@@ -42,6 +42,15 @@ FROM range(1);
 
 endloop
 
+query II
+SELECT id, count(*) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	0
+2	0
+NULL	0
+
 # All zeroes
 #
 foreach agg approx_count_distinct count entropy
