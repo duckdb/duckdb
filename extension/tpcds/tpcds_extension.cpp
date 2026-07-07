@@ -28,6 +28,7 @@ struct DSDGenFunctionData : public TableFunctionData {
 struct DSDGenGlobalState : public GlobalTableFunctionState {
 	bool schema_created = false;
 	atomic<bool> finished {false};
+	// Progress polling can run while dsdgen is being resumed by the table function.
 	mutable mutex generator_lock;
 	unique_ptr<tpcds::DSDGenGenerator> generator;
 };

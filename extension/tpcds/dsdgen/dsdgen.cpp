@@ -439,6 +439,7 @@ struct FinishedDSDGenAppender {
 	}
 
 	DSDGenWorkItem work_item;
+	// Appenders own chunks and append state that must stay stable after worker tasks are scheduled.
 	unique_ptr<TPCDSDataAppender> appender;
 };
 
@@ -724,6 +725,7 @@ private:
 		}
 		std::sort(parallel_work_items.begin(), parallel_work_items.end(),
 		          [](const DSDGenWorkItem &left, const DSDGenWorkItem &right) {
+			          // Run larger work items first; storage publication is ordered separately.
 			          if (left.progress_units != right.progress_units) {
 				          return left.progress_units > right.progress_units;
 			          }
@@ -762,6 +764,7 @@ private:
 		for (idx_t appender_idx = 0; appender_idx < finished_appenders.size(); appender_idx++) {
 			auto &finished_appender = *finished_appenders[appender_idx];
 			auto table_id = finished_appender.work_item.table_id;
+			// Merge each table in generated row order, independent of task scheduling order.
 			if (finished_appender.work_item.step != parallel_next_flush_step[table_id]) {
 				continue;
 			}
