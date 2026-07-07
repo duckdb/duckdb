@@ -355,6 +355,185 @@ ORDER BY l.a NULLS LAST, r.b NULLS LAST;
 NULL	30
 NULL	40
 
+# The FULL OUTER rewrite must preserve payload columns and unmatched rows from
+# both sides across the optimized and unoptimized paths.
+query IIIII
+SELECT l.a, l.x, r.b, r.y, count(*)::INTEGER
+FROM pair_l l
+FULL OUTER JOIN pair_r r ON EXISTS (
+	SELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b
+)
+GROUP BY ALL
+ORDER BY ALL;
+----
+1	10	10	100	1
+1	10	20	200	1
+1	11	10	100	1
+1	11	20	200	1
+2	20	20	200	1
+3	30	NULL	NULL	1
+NULL	NULL	30	300	1
+NULL	NULL	40	400	1
+
+query IIIII
+SELECT l.a, l.x, r.b, r.y, count(*)::INTEGER
+FROM pair_l l
+FULL OUTER JOIN pair_r r ON r.b = (
+	SELECT max(s.b) FROM pair_s s WHERE s.a = l.a AND s.b <= r.b
+)
+GROUP BY ALL
+ORDER BY ALL;
+----
+1	10	10	100	1
+1	10	20	200	1
+1	11	10	100	1
+1	11	20	200	1
+2	20	20	200	1
+3	30	NULL	NULL	1
+NULL	NULL	30	300	1
+NULL	NULL	40	400	1
+
+query IIIII
+SELECT l.a, l.x, r.b, r.y, count(*)::INTEGER
+FROM pair_l l
+FULL OUTER JOIN pair_r r ON l.x > 10 AND r.b IN (
+	SELECT s.b FROM pair_s s WHERE s.a = l.a
+)
+GROUP BY ALL
+ORDER BY ALL;
+----
+1	10	NULL	NULL	1
+1	11	10	100	1
+1	11	20	200	1
+2	20	20	200	1
+3	30	NULL	NULL	1
+NULL	NULL	30	300	1
+NULL	NULL	40	400	1
+
+query IIIII
+SELECT l.a, l.x, r.b, r.y, count(*)::INTEGER
+FROM pair_l l
+FULL OUTER JOIN pair_r r ON r.b NOT IN (
+	SELECT s.b FROM pair_s s WHERE s.a = l.a
+)
+GROUP BY ALL
+ORDER BY ALL;
+----
+1	10	30	300	1
+1	10	40	400	1
+1	11	30	300	1
+1	11	40	400	1
+2	20	10	100	1
+2	20	30	300	1
+2	20	40	400	1
+3	30	NULL	NULL	1
+NULL	NULL	20	200	1
+
+statement ok
+CREATE TABLE pair_dup_l(a INTEGER, x INTEGER);
+
+statement ok
+CREATE TABLE pair_dup_r(b INTEGER, y INTEGER);
+
+statement ok
+CREATE TABLE pair_dup_s(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO pair_dup_l VALUES (1, 10), (1, 10), (1, 11);
+
+statement ok
+INSERT INTO pair_dup_r VALUES (10, 100), (10, 100), (20, 200), (30, 300);
+
+statement ok
+INSERT INTO pair_dup_s VALUES (1, 10), (1, 10), (1, 20);
+
+query IIIII
+SELECT l.a, l.x, r.b, r.y, count(*)::INTEGER
+FROM pair_dup_l l
+FULL OUTER JOIN pair_dup_r r ON EXISTS (
+	SELECT 1 FROM pair_dup_s s WHERE s.a = l.a AND s.b = r.b
+)
+GROUP BY ALL
+ORDER BY ALL;
+----
+1	10	10	100	4
+1	10	20	200	2
+1	11	10	100	2
+1	11	20	200	1
+NULL	NULL	30	300	1
+
+statement ok
+PRAGMA disable_optimizer;
+
+query IIIII
+SELECT l.a, l.x, r.b, r.y, count(*)::INTEGER
+FROM pair_dup_l l
+FULL OUTER JOIN pair_dup_r r ON EXISTS (
+	SELECT 1 FROM pair_dup_s s WHERE s.a = l.a AND s.b = r.b
+)
+GROUP BY ALL
+ORDER BY ALL;
+----
+1	10	10	100	4
+1	10	20	200	2
+1	11	10	100	2
+1	11	20	200	1
+NULL	NULL	30	300	1
+
+statement ok
+PRAGMA enable_optimizer;
+
+statement ok
+CREATE TABLE pair_l_order(a INTEGER, x INTEGER);
+
+statement ok
+CREATE TABLE pair_r_order(b INTEGER, y INTEGER);
+
+statement ok
+CREATE TABLE pair_s_order(x INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO pair_l_order VALUES (1, 10), (2, 20);
+
+statement ok
+INSERT INTO pair_r_order VALUES (10, 100), (20, 200), (30, 300);
+
+statement ok
+INSERT INTO pair_s_order VALUES (10, 10), (20, 20);
+
+query IIII
+SELECT l.a, l.x, r.b, r.y
+FROM pair_l_order l
+FULL OUTER JOIN pair_r_order r ON EXISTS (
+	SELECT 1 FROM pair_s_order s WHERE s.x = l.x AND s.b = r.b
+)
+ORDER BY ALL;
+----
+1	10	10	100
+2	20	20	200
+NULL	NULL	30	300
+
+statement ok
+CREATE TABLE pair_s_null(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO pair_s_null VALUES (1, 10), (1, 20), (1, NULL);
+
+query IIIII
+SELECT l.a, l.x, r.b, r.y, count(*)::INTEGER
+FROM pair_dup_l l
+FULL OUTER JOIN pair_dup_r r ON r.b NOT IN (
+	SELECT s.b FROM pair_s_null s WHERE s.a = l.a
+)
+GROUP BY ALL
+ORDER BY ALL;
+----
+1	10	NULL	NULL	2
+1	11	NULL	NULL	1
+NULL	NULL	10	100	2
+NULL	NULL	20	200	1
+NULL	NULL	30	300	1
+
 # Pair-dependent joins can also reference an outer query. The pair-dependent
 # predicate is still lowered to a left lateral join, and the outer reference is
 # handled by the enclosing dependent join.
@@ -381,6 +560,25 @@ ORDER BY outer_l.x, q.a, q.b NULLS LAST;
 11	1	20
 20	2	20
 30	3	NULL
+
+statement error
+SELECT outer_l.x, q.a, q.b
+FROM pair_l outer_l
+LEFT JOIN LATERAL (
+	SELECT l.a, r.b
+	FROM pair_l l
+	FULL OUTER JOIN pair_r r ON EXISTS (
+		SELECT 1
+		FROM pair_s s
+		WHERE s.a = l.a
+		  AND s.b = r.b
+		  AND s.a = outer_l.a
+	)
+	WHERE l.x = outer_l.x
+) q ON true
+ORDER BY outer_l.x, q.a, q.b NULLS LAST;
+----
+Not implemented Error: Correlated subquery in a non-inner join condition cannot reference both sides of the join
 
 query III
 SELECT outer_l.x, q.a, q.b
