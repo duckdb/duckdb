@@ -79,6 +79,23 @@ SELECT count(*) FROM e WHERE year(dt) <= 2020;
 ----
 2
 
+# Infinity-domain rewrites are only safe in root filter predicates: projections and nested boolean
+# contexts must preserve the NULL result of year(±infinity).
+query I
+SELECT year(dt) = 2020 FROM e ORDER BY dt NULLS LAST;
+----
+NULL
+false
+true
+false
+NULL
+NULL
+
+query I
+SELECT count(*) FROM e WHERE (year(dt) = 2020) IS FALSE;
+----
+2
+
 # empty preimage over a type without infinity folds to false-or-null (preserves NULL rows)
 statement ok
 CREATE TABLE ints(x INTEGER);

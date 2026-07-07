@@ -177,6 +177,10 @@ unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<r
 	if (!GetFiniteDomain(col_type, dom_lo, dom_hi, has_infinity)) {
 		return nullptr;
 	}
+	// Infinity sentinels can make date/time functions return NULL for non-NULL inputs.
+	if (has_infinity && (!is_root || op.type != LogicalOperatorType::LOGICAL_FILTER)) {
+		return nullptr;
+	}
 
 	// evaluate the constant and cast it to the function's return type for the corner comparisons
 	Value c;
