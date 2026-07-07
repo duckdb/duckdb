@@ -1,11 +1,11 @@
 #include "duckdb/common/multi_file/multi_file_read_ahead.hpp"
 
 #include "duckdb/common/multi_file/multi_file_states.hpp"
+#include "duckdb/common/serializer/async_memory_governor.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -52,10 +52,11 @@ bool ReadAheadJobCompletion::TryPark(const InterruptState &interrupt_state) {
 	return parked_scan.BlockTask(interrupt_state);
 }
 
-MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p, idx_t io_byte_budget_p)
-    : buffer_manager(BufferManager::GetBufferManager(context)), read_ahead_depth(read_ahead_depth_p),
-      io_byte_budget(io_byte_budget_p) {
+MultiFileReadAhead::MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth_p,
+                                       unique_ptr<ManagedAsyncMemoryGovernor> memory_governor_p)
+    : read_ahead_depth(read_ahead_depth_p), memory_governor(std::move(memory_governor_p)) {
 	D_ASSERT(read_ahead_depth_p > 0);
+	backlog_budget = memory_governor ? memory_governor->BackpressureBudget() : NumericLimits<idx_t>::Maximum();
 	executor = make_uniq<TaskExecutor>(context, TaskSchedulerType::ASYNC);
 }
 
@@ -65,12 +66,11 @@ unique_ptr<MultiFileReadAhead> MultiFileReadAhead::Create(ClientContext &context
 		return nullptr;
 	}
 	if (configured_depth == -1) {
-		// automatic mode, unlimited depth, the I/O byte budget is the sole gate
-		const auto io_byte_budget = BufferManager::GetBufferManager(context).GetMaxMemory() / 4;
-		return make_uniq<MultiFileReadAhead>(context, NumericLimits<idx_t>::Maximum(), io_byte_budget);
+		// automatic mode, unlimited depth, the backlog is bounded by a temp-memory reservation instead
+		return make_uniq<MultiFileReadAhead>(context, NumericLimits<idx_t>::Maximum(),
+		                                     make_uniq<ManagedAsyncMemoryGovernor>(context));
 	}
-	return make_uniq<MultiFileReadAhead>(context, NumericCast<idx_t>(configured_depth),
-	                                     NumericLimits<idx_t>::Maximum());
+	return make_uniq<MultiFileReadAhead>(context, NumericCast<idx_t>(configured_depth), nullptr);
 }
 
 MultiFileReadAhead::~MultiFileReadAhead() {
@@ -86,12 +86,8 @@ bool MultiFileReadAhead::IsDone() const {
 }
 
 bool MultiFileReadAhead::TryReserveSlot() {
-	if (pending_io_bytes.load() >= io_byte_budget) {
-		return false;
-	}
-	// under memory pressure only one job may be scheduled ahead
-	const bool memory_pressure = buffer_manager.GetUsedMemory() >= buffer_manager.GetMaxMemory() / 2;
-	const idx_t depth = memory_pressure ? 1 : read_ahead_depth;
+	const bool over_budget = pending_io_bytes.load() >= backlog_budget.load();
+	const idx_t depth = over_budget ? 1 : read_ahead_depth;
 	if (active_jobs.fetch_add(1) >= depth) {
 		--active_jobs;
 		return false;
@@ -163,6 +159,10 @@ void MultiFileReadAhead::PushJob(unique_ptr<MultiFileScanJob> job, vector<unique
 	}
 	{
 		lock_guard<mutex> guard(lock);
+		if (memory_governor) {
+			memory_governor->UpdateReservation(pending_io_bytes.load());
+			backlog_budget = memory_governor->BackpressureBudget();
+		}
 		// producers push concurrently, so admit jobs to the queue in batch-index order
 		pending_jobs.emplace(job->batch_index, std::move(job));
 		while (!pending_jobs.empty() && pending_jobs.begin()->first == next_batch_index) {

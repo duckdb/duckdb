@@ -20,8 +20,8 @@
 #include <functional>
 
 namespace duckdb {
-class BufferManager;
 class ClientContext;
+class ManagedAsyncMemoryGovernor;
 class TaskExecutor;
 class AsyncTask;
 struct MultiFileScanJob;
@@ -51,12 +51,13 @@ private:
 //! Drives read-ahead for the multi-file scan, it's purpose is to keep several scan jobs scheduled ahead of decoding
 class MultiFileReadAhead {
 public:
-	MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth, idx_t io_byte_budget);
+	MultiFileReadAhead(ClientContext &context, idx_t read_ahead_depth,
+	                   unique_ptr<ManagedAsyncMemoryGovernor> memory_governor);
 	~MultiFileReadAhead();
 
 public:
 	//! Create the read-ahead driver from the read_ahead_depth setting.
-	//! -1 = automatic: unlimited depth, gated by the I/O byte budget. Returns null when read-ahead is disabled.
+	//! -1 = automatic: unlimited depth, gated by a temp-memory reservation. Returns null when read-ahead is disabled.
 	static unique_ptr<MultiFileReadAhead> Create(ClientContext &context);
 
 	//! Claims the next job and schedules its I/O, filling io_tasks when the I/O was detached to the pool.
@@ -99,11 +100,12 @@ private:
 	//! Release a read-ahead slot
 	void ReleaseSlot();
 
-	BufferManager &buffer_manager;
 	//! Maximum number of jobs scheduled ahead of decoding, unlimited in the -1 auto mode
 	const idx_t read_ahead_depth;
-	//! Maximum bytes of I/O scheduled ahead of decoding, unlimited when an explicit depth is set
-	const idx_t io_byte_budget;
+	//! Async memory governor
+	unique_ptr<ManagedAsyncMemoryGovernor> memory_governor;
+	//! Backlog budget granted by the reservation, refreshed whenever a job is pushed
+	atomic<idx_t> backlog_budget {0};
 
 	mutable mutex lock;
 	deque<unique_ptr<MultiFileScanJob>> ready_queue;
