@@ -4,6 +4,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
 #include "dsdgen.hpp"
 #include "tpcds_extension.hpp"
 
@@ -13,7 +14,6 @@ struct DSDGenFunctionData : public TableFunctionData {
 	DSDGenFunctionData() {
 	}
 
-	bool finished = false;
 	double sf = 0;
 	Identifier catalog = INVALID_CATALOG;
 	Identifier schema = DEFAULT_SCHEMA;
@@ -21,6 +21,24 @@ struct DSDGenFunctionData : public TableFunctionData {
 	bool overwrite = false;
 	bool keys = false;
 };
+
+struct DSDGenGlobalState : public GlobalTableFunctionState {
+	bool schema_created = false;
+	bool finished = false;
+	unique_ptr<tpcds::DSDGenGenerator> generator;
+};
+
+class DSDGenYieldTask : public AsyncTask {
+public:
+	void Execute() override {
+	}
+};
+
+static AsyncResult DSDGenYield() {
+	vector<unique_ptr<AsyncTask>> tasks;
+	tasks.push_back(make_uniq<DSDGenYieldTask>());
+	return AsyncResult(std::move(tasks));
+}
 
 static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunctionBindInput &input,
                                            vector<LogicalType> &return_types, vector<string> &names) {
@@ -62,15 +80,51 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunction
 	return std::move(result);
 }
 
+unique_ptr<GlobalTableFunctionState> DsdgenInit(ClientContext &context, TableFunctionInitInput &input) {
+	return make_uniq<DSDGenGlobalState>();
+}
+
 static void DsdgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = data_p.bind_data->CastNoConst<DSDGenFunctionData>();
-	if (data.finished) {
+	auto &data = data_p.bind_data->Cast<DSDGenFunctionData>();
+	auto &state = data_p.global_state->Cast<DSDGenGlobalState>();
+	if (state.finished) {
+		data_p.async_result = AsyncResultType::FINISHED;
 		return;
 	}
-	tpcds::DSDGenWrapper::CreateTPCDSSchema(context, data.catalog, data.schema, data.suffix, data.keys, data.overwrite);
-	tpcds::DSDGenWrapper::DSDGen(data.sf, context, data.catalog, data.schema, data.suffix);
+	if (!state.schema_created) {
+		tpcds::DSDGenWrapper::CreateTPCDSSchema(context, data.catalog, data.schema, data.suffix, data.keys,
+		                                        data.overwrite);
+		state.generator = tpcds::CreateDSDGenGenerator(context, data.sf, data.catalog, data.schema, data.suffix);
+		state.schema_created = true;
+	}
 
-	data.finished = true;
+	if (!state.generator || state.generator->GenerateNext()) {
+		state.finished = true;
+		data_p.async_result = AsyncResultType::FINISHED;
+		return;
+	}
+	if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR && state.generator->CanYield()) {
+		data_p.async_result = DSDGenYield();
+	} else {
+		data_p.async_result = AsyncResultType::HAVE_MORE_OUTPUT;
+	}
+}
+
+static double DsdgenProgress(ClientContext &context, const FunctionData *bind_data,
+                             const GlobalTableFunctionState *global_state) {
+	if (!global_state) {
+		return 0.0;
+	}
+	auto &state = global_state->Cast<DSDGenGlobalState>();
+	if (state.generator) {
+		return state.generator->Progress();
+	}
+	return state.finished ? 100.0 : 0.0;
+}
+
+static unique_ptr<NodeStatistics> DsdgenCardinality(ClientContext &, const FunctionData *) {
+	// The result is a single status row, but the side-effecting scan does the real work.
+	return make_uniq<NodeStatistics>(1000);
 }
 
 struct TPCDSData : public GlobalTableFunctionState {
@@ -168,7 +222,7 @@ static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters 
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
-	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
+	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind, DsdgenInit);
 	dsdgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
 	dsdgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	dsdgen_func.named_parameters["keys"] = LogicalType::BOOLEAN;
@@ -176,6 +230,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
 	dsdgen_func.call_return_type = StatementReturnType::NOTHING;
+	dsdgen_func.table_scan_progress = DsdgenProgress;
+	dsdgen_func.cardinality = DsdgenCardinality;
 
 	loader.RegisterFunction(dsdgen_func);
 
