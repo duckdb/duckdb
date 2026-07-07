@@ -7,7 +7,6 @@
 namespace duckdb {
 
 NotComparisonSimplificationRule::NotComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
-	// match BOUND_OPERATOR with type OPERATOR_NOT
 	auto op = make_uniq<ExpressionMatcher>(ExpressionClass::BOUND_OPERATOR);
 	op->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::OPERATOR_NOT);
 	root = std::move(op);
@@ -22,7 +21,6 @@ unique_ptr<Expression> NotComparisonSimplificationRule::Apply(LogicalOperator &o
 
 	auto &child = not_expr.GetChildrenMutable()[0];
 
-	// check if the child is a comparison expression
 	if (!BoundComparisonExpression::IsComparison(*child)) {
 		return nullptr;
 	}
@@ -30,11 +28,9 @@ unique_ptr<Expression> NotComparisonSimplificationRule::Apply(LogicalOperator &o
 	auto &comparison = child->Cast<BoundFunctionExpression>();
 	auto negated_type = NegateComparisonExpression(comparison.GetExpressionType());
 
-	// set the negated comparison type (updates both expression type and bind data)
 	BoundComparisonExpression::SetType(comparison, negated_type);
 	changes_made = true;
 
-	// return the child comparison directly, removing the NOT wrapper
 	return std::move(child);
 }
 

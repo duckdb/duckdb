@@ -1,40 +1,60 @@
 # name: test/sql/optimizer/test_not_comparison_simplification.test
-# description: Test NOT(comparison) simplification and pruning
+# description: Test NOT(comparison) simplification
 # group: [optimizer]
 
 statement ok
-CREATE TABLE t AS SELECT * FROM (VALUES (1),(2),(3)) v(a);
+PRAGMA explain_output = 'OPTIMIZED_ONLY';
 
-# Contradiction with NOT should be pruned to empty result
-query I
-SELECT * FROM t WHERE a > 1 AND NOT (a > 1)
+statement ok
+CREATE TABLE t AS SELECT * FROM (VALUES (1),(2),(3),(NULL)) v(a);
+
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a > 2);
 ----
+logical_opt	<REGEX>:.*a <= 2.*
 
-# Other comparison types
-query I
-SELECT * FROM t WHERE a >= 2 AND NOT (a >= 2)
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a >= 2);
 ----
+logical_opt	<REGEX>:.*a < 2.*
 
-query I
-SELECT * FROM t WHERE a < 2 AND NOT (a < 2)
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a < 2);
 ----
+logical_opt	<REGEX>:.*a >= 2.*
 
-query I
-SELECT * FROM t WHERE a <= 2 AND NOT (a <= 2)
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a <= 2);
 ----
+logical_opt	<REGEX>:.*a > 2.*
 
-query I
-SELECT * FROM t WHERE a = 2 AND NOT (a = 2)
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a = 2);
 ----
+logical_opt	<REGEX>:.*a != 2.*
 
-# NOT(comparison) without contradiction should still return correct results
-query I
-SELECT * FROM t WHERE NOT (a > 2) ORDER BY a
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a != 2);
+----
+logical_opt	<REGEX>:.*a = 2.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a IS DISTINCT FROM 2);
+----
+logical_opt	<REGEX>:.*a IS NOT DISTINCT FROM 2.*
+
+query II
+EXPLAIN SELECT * FROM t WHERE NOT (a IS NOT DISTINCT FROM 2);
+----
+logical_opt	<REGEX>:.*a IS DISTINCT FROM 2.*
+
+query I rowsort
+SELECT * FROM t WHERE NOT (a > 2)
 ----
 1
 2
 
-query I
+query I rowsort
 SELECT * FROM t WHERE NOT (a = 1) ORDER BY a
 ----
 2

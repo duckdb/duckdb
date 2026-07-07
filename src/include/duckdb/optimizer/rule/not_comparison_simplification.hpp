@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-// Rewrites NOT(comparison) into the negated comparison: NOT(a > b) → a <= b
+// Rewrites NOT(comparison) into the negated comparison: NOT(a > b) -> a <= b
 class NotComparisonSimplificationRule : public Rule {
 public:
 	explicit NotComparisonSimplificationRule(ExpressionRewriter &rewriter);
