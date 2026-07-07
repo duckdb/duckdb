@@ -57,12 +57,12 @@
  * Side Effects:
  * TODO: None
  */
-static int used_space = 0; /* current length of the sentence being built */
+static thread_local int used_space = 0; /* current length of the sentence being built */
 #define SPACE_INCREMENT 100
 
 static char *mk_sentence(int stream) {
-	static char *verbiage = NULL;
-	static int allocated_space = 0;
+	static thread_local char *verbiage = NULL;
+	static thread_local int allocated_space = 0;
 	int word_len;
 	char *syntax, *cp, *word = NULL, temp[2];
 

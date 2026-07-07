@@ -49,8 +49,8 @@
 #define PARAM_MAX_LEN 80
 
 #ifndef TEST
-extern option_t options[];
-extern char *params[];
+extern thread_local option_t options[];
+extern thread_local char *params[];
 #else
 option_t options[] = {{"PROG", OPT_STR | OPT_HIDE, 0, NULL, NULL, "tester"},
                       {"PARAMS", OPT_STR, 1, "read parameters from file <s>", read_file, ""},
@@ -314,9 +314,14 @@ int init_params(void) {
 		return (0);
 
 	for (i = 0; options[i].name != NULL; i++) {
-		params[options[i].index] = (char *)malloc(PARAM_MAX_LEN * sizeof(char));
-		MALLOC_CHECK(params[options[i].index]);
-		strncpy(params[options[i].index], options[i].dflt, 80);
+		auto index = options[i].index;
+		if (!params[index]) {
+			params[index] = (char *)malloc(PARAM_MAX_LEN * sizeof(char));
+			MALLOC_CHECK(params[index]);
+		}
+		strncpy(params[index], options[i].dflt, PARAM_MAX_LEN - 1);
+		params[index][PARAM_MAX_LEN - 1] = '\0';
+		options[i].flags &= ~(OPT_SET | OPT_DFLT);
 		if (*options[i].dflt)
 			options[i].flags |= OPT_DFLT;
 	}

@@ -115,8 +115,8 @@ int di_compare(const void *op1, const void *op2) {
  * TODO: None
  */
 d_idx_t *find_dist(const char *name) {
-	static int entry_count;
-	static d_idx_t *idx = NULL;
+	static thread_local int entry_count;
+	static thread_local d_idx_t *idx = NULL;
 	d_idx_t key, *id = NULL;
 	int i;
 	FILE *ifp;
