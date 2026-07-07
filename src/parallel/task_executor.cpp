@@ -55,9 +55,7 @@ void TaskExecutor::WorkOnTasks() {
 			task_from_producer.reset();
 		} else {
 			unique_lock<mutex> lk(cv_mutex);
-			cv.wait(lk, [&] {
-				return completed_tasks.load() == total_tasks.load();
-			});
+			cv.wait(lk, [&] { return completed_tasks.load() == total_tasks.load(); });
 		}
 	}
 
