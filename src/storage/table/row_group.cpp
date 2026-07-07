@@ -658,6 +658,15 @@ void RowGroup::CommitDrop() {
 	drop_state.FinalizeCommit();
 }
 
+bool RowGroup::HasPendingUpdates(const vector<StorageIndex> &column_ids) {
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		if (GetColumn(column_ids[i]).GetUpdateStatistics()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void RowGroup::NextVector(CollectionScanState &state) {
 	// NextVector skips a full vector and assumes the column cursors sit at a vector boundary.
 	// It must never run mid-sub-batch (offset in (0, vector_max_count)) or it would skip another
@@ -817,7 +826,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 	auto &transaction = options.transaction;
 	auto &svs = state.sub_vector_state;
 	auto target_bytes = state.GetOptions().scan_target_size_bytes;
-	bool sub_batch_mode = SubVectorScanState::IsActive(target_bytes);
+	bool sub_batch_enabled = SubVectorScanState::IsActive(target_bytes);
 
 	while (true) {
 		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row_group_row) {
@@ -833,14 +842,16 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		// zonemap / visibility / prefetch) was already done when the vector started and must not run again,
 		// and we continue scanning from svs.offset instead of restarting the vector. Only sub-batch mode
 		// can leave a vector in progress, hence the assert.
-		D_ASSERT(!svs.InProgress() || sub_batch_mode);
+		D_ASSERT(!svs.InProgress() || sub_batch_enabled);
 		bool resuming = svs.InProgress();
 
 		idx_t count = max_count;
 		bool has_sample_selection = false;
 		idx_t sample_count = max_count;
 		SelectionVector sample_sel(STANDARD_VECTOR_SIZE);
-		bool sub_batching = resuming;
+		// a resumed vector was already found eligible for sub-batching when it started; a fresh vector is
+		// re-evaluated below once we know its deletion / sampling / update status
+		bool use_sub_batch = resuming;
 
 		if (!resuming) {
 		// check the sampling info if we have to sample this chunk
@@ -897,25 +908,18 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			buffer_manager.Prefetch(state.context, prefetch_state.blocks);
 		}
 
-		// sub-batch eligibility: clean case only (no deletions, no sampling, no updates)
-		bool eligible = sub_batch_mode && count == max_count && !has_sample_selection;
-		if (eligible) {
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				if (GetColumn(column_ids[i]).GetUpdateStatistics()) {
-					eligible = false;
-					break;
-				}
-			}
-		}
 		svs.BeginVector(max_count);
-		sub_batching = eligible;
+		// fresh vector: sub-batch only in the clean case — feature enabled, no deleted rows
+		// (count == max_count), no sampling, and no pending updates on any scanned column
+		use_sub_batch = sub_batch_enabled && count == max_count && !has_sample_selection &&
+		                !HasPendingUpdates(column_ids);
 		}
 
 		bool has_filters = filter_info.HasFilters();
 
 		// physical rows to scan this call: the full vector unless sub-batching (then a byte-budgeted batch)
 		idx_t scan_count;
-		if (sub_batching) {
+		if (use_sub_batch) {
 			if (!state.size_predictor.initialized) {
 				state.size_predictor.Initialize(column_ids, *this);
 			}
@@ -1041,7 +1045,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			continue;
 		}
 		result.SetChildCardinality(emit_count);
-		if (sub_batching) {
+		if (use_sub_batch) {
 			// per-row byte size is filter-independent, so the emitted result yields a correct estimate
 			state.size_predictor.Update(result);
 		}

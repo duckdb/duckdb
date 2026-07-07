@@ -158,6 +158,9 @@ public:
 
 	idx_t GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 
+	//! Whether any of the scanned columns has pending updates (disqualifies the vector from sub-batch splitting)
+	bool HasPendingUpdates(const vector<StorageIndex> &column_ids);
+
 	//! Bulk visibility check. For each offset in [0, count), writes the input index into `visible_sel` if that row is
 	//! visible to the transaction. Returns the number of visible rows.
 	idx_t Fetch(TransactionData transaction, const idx_t *offsets, idx_t count, SelectionVector &visible_sel);
