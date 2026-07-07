@@ -663,8 +663,8 @@ void RowGroup::NextVector(CollectionScanState &state) {
 	// It must never run mid-sub-batch (offset in (0, vector_max_count)) or it would skip another
 	// full vector on top of the rows already consumed, misaligning the scan.
 	D_ASSERT(!state.sub_vector_state.InProgress());
-	state.vector_index++;
 	state.sub_vector_state.Reset();
+	state.vector_index++;
 	const auto &column_ids = state.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		const auto &column = column_ids[i];
@@ -907,8 +907,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				}
 			}
 		}
-		svs.vector_max_count = max_count;
-		svs.offset = 0;
+		svs.BeginVector(max_count);
 		sub_batching = eligible;
 		}
 
@@ -1030,9 +1029,9 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			}
 		}
 
-		// unified cursor advancement: advance by the physical rows consumed this batch
-		svs.offset += scan_count;
-		if (svs.offset >= svs.vector_max_count) {
+		// unified cursor advancement: advance by the physical rows consumed this batch;
+		// once the whole vector is consumed, move on to the next one
+		if (svs.Advance(scan_count)) {
 			state.vector_index++;
 			svs.Reset();
 		}

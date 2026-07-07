@@ -278,6 +278,18 @@ struct SubVectorScanState {
 		vector_max_count = 0;
 	}
 
+	//! Start scanning a fresh vector: record its total row count and rewind the offset to the start
+	void BeginVector(idx_t max_count) {
+		offset = 0;
+		vector_max_count = max_count;
+	}
+
+	//! Advance past the batch just scanned; returns true once the whole vector has been consumed
+	bool Advance(idx_t scan_count) {
+		offset += scan_count;
+		return offset >= vector_max_count;
+	}
+
 	bool InProgress() const {
 		return offset > 0 && offset < vector_max_count;
 	}
