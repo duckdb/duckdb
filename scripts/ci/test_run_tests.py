@@ -1346,10 +1346,10 @@ Run with -? for options
 -------------------------------------------------------------------------------
 Test Progress Bar Fast
 -------------------------------------------------------------------------------
-{progress_bar_path}:91
+{progress_bar_path}:102
 ...............................................................................
 
-{progress_bar_path}:73: FAILED:
+{progress_bar_path}:84: FAILED:
   REQUIRE( cur_rows_read == total_cardinality )
 with expansion:
   20000 (0x4e20) == 100020002 (0x5f62f22)
@@ -1369,13 +1369,13 @@ assertions: 359 | 358 passed | 1 failed
             [
                 "error: FAIL Test Progress Bar Fast",
                 "",
-                '    70          if (std::getenv("FORCE_ASYNC_SINK_SOURCE") != nullptr) {',
-                "    71              return;",
-                "    72          }",
-                "  > 73          error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read == total_cardinality); });",
-                "    74      }",
-                "    75  }",
-                "    76  void Start() {",
+                '    81          if (std::getenv("FORCE_ASYNC_SINK_SOURCE") != nullptr) {',
+                "    82              return;",
+                "    83          }",
+                "  > 84          error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read == total_cardinality); });",
+                "    85      }",
+                "    86  }",
+                "    87  void Start() {",
                 "",
                 "FAILED: REQUIRE( cur_rows_read == total_cardinality )",
                 "  with expansion:",
@@ -1398,10 +1398,10 @@ Run with -? for options
 -------------------------------------------------------------------------------
 Test Progress Bar Fast
 -------------------------------------------------------------------------------
-{progress_bar_path}(91)
+{progress_bar_path}(102)
 ...............................................................................
 
-{progress_bar_path}(73): FAILED:
+{progress_bar_path}(84): FAILED:
   REQUIRE( cur_rows_read == total_cardinality )
 with expansion:
   20000 (0x4e20) == 100020002 (0x5f62f22)
@@ -1421,13 +1421,13 @@ assertions: 359 | 358 passed | 1 failed
             [
                 "error: FAIL Test Progress Bar Fast",
                 "",
-                '    70          if (std::getenv("FORCE_ASYNC_SINK_SOURCE") != nullptr) {',
-                "    71              return;",
-                "    72          }",
-                "  > 73          error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read == total_cardinality); });",
-                "    74      }",
-                "    75  }",
-                "    76  void Start() {",
+                '    81          if (std::getenv("FORCE_ASYNC_SINK_SOURCE") != nullptr) {',
+                "    82              return;",
+                "    83          }",
+                "  > 84          error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read == total_cardinality); });",
+                "    85      }",
+                "    86  }",
+                "    87  void Start() {",
                 "",
                 "FAILED: REQUIRE( cur_rows_read == total_cardinality )",
                 "  with expansion:",

@@ -103,6 +103,8 @@
 typedef struct {
 	long weight;
 	char *text;
+	/* byte length cached when loading dists.dss */
+	int length;
 } set_member;
 
 typedef struct {
@@ -153,6 +155,7 @@ int pick_str PROTO((distribution * s, seed_t *seed, char *target));
 void agg_str PROTO((distribution * set, long count, seed_t *seed, char *dest, DBGenContext *ctx));
 void read_dist PROTO((const char *path, const char *name, distribution *target));
 void embed_str PROTO((distribution * d, int min, int max, int stream, char *dest));
+void permute_dist PROTO((distribution * d, seed_t *seed, DBGenContext *ctx));
 #ifndef STDLIB_HAS_GETOPT
 int getopt PROTO((int arg_cnt, char **arg_vect, char *oprions));
 #endif /* STDLIB_HAS_GETOPT */
@@ -175,6 +178,7 @@ void init_text_pool PROTO((long bSize, DBGenContext *ctx));
 void free_text_pool PROTO(());
 
 void dbg_text PROTO((char *t, int min, int max, seed_t *seed));
+int dbg_text_source PROTO((int min, int max, seed_t *seed, const char **source));
 
 #ifdef DECLARER
 #define EXTERN
