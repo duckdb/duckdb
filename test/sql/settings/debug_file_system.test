@@ -2,8 +2,6 @@
 # description: Test DebugFileSystem latency injection settings
 # group: [settings]
 
-require debug_fs
-
 statement ok
 SET debug_fs_random_seed=42;
 

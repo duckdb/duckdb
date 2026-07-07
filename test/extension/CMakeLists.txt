@@ -1,5 +1,29 @@
 set(PARAMETERS "-warnings")
 
+set(DEBUG_FS_EXTENSION_FILES
+    debug_fs/debug_fs_extension.cpp debug_fs/debug_file_system.cpp
+    debug_fs/io_latency_model.cpp)
+set(DEBUG_FS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/debug_fs/include")
+
+build_loadable_extension_directory(
+  debug_fs
+  "CPP"
+  test/extension
+  "default-version"
+  ""
+  ${PARAMETERS}
+  ${DEBUG_FS_EXTENSION_FILES})
+target_include_directories(debug_fs_loadable_extension
+                           PRIVATE ${DEBUG_FS_INCLUDE_DIR})
+
+add_library(test_debug_fs_extension OBJECT ${DEBUG_FS_EXTENSION_FILES})
+target_include_directories(test_debug_fs_extension
+                           PRIVATE ${DEBUG_FS_INCLUDE_DIR})
+list(APPEND UNITTEST_OBJECT_FILES $<TARGET_OBJECTS:test_debug_fs_extension>)
+set(UNITTEST_OBJECT_FILES
+    ${UNITTEST_OBJECT_FILES}
+    PARENT_SCOPE)
+
 build_loadable_extension_directory(
   loadable_extension_demo
   "CPP"
