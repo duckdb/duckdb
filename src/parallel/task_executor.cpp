@@ -33,7 +33,9 @@ void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
 	try {
 		scheduler.ScheduleTask(*token, std::move(task), type);
 	} catch (...) {
+		const lock_guard<mutex> lock(token->producer_lock);
 		--total_tasks;
+		token->producer_cv.notify_one();
 		throw;
 	}
 }
