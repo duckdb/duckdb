@@ -16,6 +16,8 @@
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/enums/task_scheduler_type.hpp"
 
+#include <condition_variable>
+
 namespace duckdb {
 
 struct QueueProducerToken;
@@ -36,6 +38,8 @@ public:
 
 public:
 	mutex producer_lock;
+	std::condition_variable producer_cv;
+	atomic<idx_t> enqueue_counter {0};
 
 private:
 	array<unique_ptr<QueueProducerToken>, TASK_SCHEDULER_TYPE_COUNT> tokens;

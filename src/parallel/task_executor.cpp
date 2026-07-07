@@ -38,9 +38,12 @@ void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
 	}
 }
 void TaskExecutor::FinishTask() {
-	lock_guard<mutex> lk(cv_mutex);
-	++completed_tasks;
-	cv.notify_one();
+	{
+		const lock_guard<mutex> lk(token->producer_lock);
+		++completed_tasks;
+		finish_counter++;
+		token->producer_cv.notify_one();
+	}
 }
 
 void TaskExecutor::WorkOnTasks() {
@@ -48,14 +51,24 @@ void TaskExecutor::WorkOnTasks() {
 	shared_ptr<Task> task_from_producer;
 	// wait for all active tasks to finish
 	while (completed_tasks != total_tasks) {
+		idx_t observed_enqueue = 0;
+		idx_t observed_finish = 0;
+		{
+			lock_guard<mutex> lk(token->producer_lock);
+			observed_enqueue = token->enqueue_counter;
+			observed_finish = finish_counter;
+		}
 		if (scheduler.GetTaskFromProducer(*token, task_from_producer)) {
 			const auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
 			std::ignore = res;
 			D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
 			task_from_producer.reset();
 		} else {
-			unique_lock<mutex> lk(cv_mutex);
-			cv.wait(lk, [&] { return completed_tasks.load() == total_tasks.load(); });
+			unique_lock<mutex> lk(token->producer_lock);
+			token->producer_cv.wait(lk, [&] {
+				return completed_tasks == total_tasks || token->enqueue_counter != observed_enqueue ||
+				       finish_counter != observed_finish;
+			});
 		}
 	}
 
