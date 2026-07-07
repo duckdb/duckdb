@@ -222,7 +222,8 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	vector<unique_ptr<Expression>> agg_results;
 	bool need_to_scan = false;
 	vector<idx_t> scan_partition_indices;
-	// we can keep execute eager aggregate if all partitions could be either filtered entirely or remained entirely
+	// With a WHERE clause, classify each partition using manifest bounds on filtered columns:
+	// drop partitions proven empty, precompute on partitions proven fully included, scan the rest.
 	if (get.table_filters.HasFilters()) {
 		map<StorageIndex, reference<TableFilter>> filter_storage_index_map;
 		for (auto &entry : get.table_filters) {
@@ -282,6 +283,35 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			return;
 		}
 		partition_stats = std::move(precomputed_partition_stats);
+	}
+
+	// Without filters, split partitions by whether every MIN/MAX column has exact stats on that file.
+	// Files missing bounds for an aggregated column are scanned and merged via COALESCE below.
+	if (!min_max_bindings.empty() && !get.table_filters.HasFilters()) {
+		vector<PartitionStatistics> precomputed;
+		for (idx_t partition_idx = 0; partition_idx < partition_stats.size(); partition_idx++) {
+			auto &stats = partition_stats[partition_idx];
+			bool can_precompute = true;
+			for (idx_t agg_idx = 0; agg_idx < min_max_storage_indexes.size(); agg_idx++) {
+				Value dummy;
+				if (!TryGetValueFromStats(stats, min_max_storage_indexes[agg_idx], *comparators[agg_idx], dummy)) {
+					can_precompute = false;
+					break;
+				}
+			}
+			if (can_precompute) {
+				precomputed.push_back(stats);
+			} else {
+				need_to_scan = true;
+				scan_partition_indices.push_back(partition_idx);
+			}
+		}
+		if (need_to_scan) {
+			if (precomputed.empty()) {
+				return;
+			}
+			partition_stats = std::move(precomputed);
+		}
 	}
 
 	if (!min_max_bindings.empty()) {
@@ -353,6 +383,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			} else if (fun_name == "min" || fun_name == "max") {
 				// For min: COALESCE(least(pre_min, agg_min), pre_min)
 				// For max: COALESCE(greatest(pre_max, agg_max), pre_max)
+				// COALESCE handles scanned partitions where agg_* is NULL (e.g. all-null column in that file).
 				auto &pre_val_expr = agg_results[i];
 				Identifier merge_func((fun_name == "min") ? "least" : "greatest");
 				auto merged = optimizer.BindScalarFunction(merge_func, pre_val_expr->Copy(), std::move(agg_col_ref));
