@@ -65,6 +65,22 @@ struct PendingQueryParameters {
 	QueryParameters query_parameters;
 };
 
+//! A statement parameter: identifier ($1 -> "1"), binding index, and inferred type (UNKNOWN if not inferred).
+struct StatementParameter {
+	Identifier identifier;
+	idx_t index;
+	LogicalType type;
+};
+
+//! A bound statement's signature: result schema (names/types) and parameter schema, without a
+//! PreparedStatement. names/types are never empty; parameters are unordered (sort by index for positional use).
+struct StatementSignature {
+	vector<Identifier> names;
+	vector<LogicalType> types;
+	vector<StatementParameter> parameters;
+	StatementProperties properties;
+};
+
 //! Interrupt state for the client context
 enum class ClientInterruptState : uint8_t { NOT_INTERRUPTED, INTERRUPTED, INTERRUPTS_SUPPRESSED };
 
@@ -184,6 +200,9 @@ public:
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
 	//! Directly prepare a SQL statement
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
+	//! Bind a statement and return its signature, without building a PreparedStatement, optimizing, or
+	//! executing. Read-only: binding touches no in-flight query state, so a live result survives. Throws on error.
+	DUCKDB_API StatementSignature BindStatement(unique_ptr<SQLStatement> statement);
 
 	//! Create a pending query result from a prepared statement with the given name and set of parameters
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is

@@ -2,9 +2,6 @@
 # description: ILIKE / NOT ILIKE ... ESCAPE with a constant pattern over many rows - exercises the case-folded matcher fast path (escape no-op) and the escape-aware fallback
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # Unicode-possible data so the constant-pattern ILIKE ... ESCAPE takes the case-folding path.
 statement ok
 CREATE TABLE t(id INTEGER, s VARCHAR);

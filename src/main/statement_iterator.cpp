@@ -12,7 +12,6 @@ StatementIterator::StatementIterator(ParseIterator &&parse_iterator)
 StatementIterator::~StatementIterator() = default;
 
 StatementIterator::StatementIterator(StatementIterator &&) noexcept = default;
-StatementIterator &StatementIterator::operator=(StatementIterator &&) noexcept = default;
 
 bool StatementIterator::Peek() {
 	// More buffered engine statements from the current peel's expansion?
@@ -48,7 +47,7 @@ unique_ptr<SQLStatement> StatementIterator::GetStatementInternal(optional_ptr<Cl
 	buffer.push_back(std::move(stmt));
 	// Preprocess the peel into one-or-more engine-facing statements. This runs in Get (not Peek) so it
 	// sees the transaction state left by the previously executed statement.
-	context.get().PreprocessStatements(buffer, lock);
+	context.PreprocessStatements(buffer, lock);
 	if (buffer.empty()) {
 		// Preprocessing swallowed the peel — caller skips with `continue`; the next Get pulls on.
 		return nullptr;

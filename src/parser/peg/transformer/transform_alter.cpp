@@ -108,12 +108,10 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransform
 	return QualifiedName(std::move(schema_path), sequence_name);
 }
 
-unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceOptions(PEGTransformer &transformer,
-                                                                           ParseResult &choice_result) {
-	if (choice_result.name == "RenameAlter") {
-		return transformer.Transform<unique_ptr<AlterTableInfo>>(choice_result);
-	}
-	return transformer.Transform<unique_ptr<AlterInfo>>(choice_result);
+unique_ptr<AlterInfo>
+PEGTransformerFactory::TransformRenameAlterSequenceOptions(PEGTransformer &transformer,
+                                                           unique_ptr<AlterTableInfo> rename_alter) {
+	return std::move(rename_alter);
 }
 
 unique_ptr<AlterInfo>

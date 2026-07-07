@@ -1,0 +1,15 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [sf10]
+
+argument sf 10
+
+include benchmark/tpch/tpch_load.benchmark.in
+
+name Q${QUERY_NUMBER_PADDED}
+group tpch
+subgroup sf${sf}
+
+run extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql
+
+result extension/tpch/dbgen/answers/sf10/q${QUERY_NUMBER_PADDED}.csv
