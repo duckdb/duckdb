@@ -9,14 +9,6 @@
 
 namespace duckdb {
 
-static JoinSide GetJoinSideForChildren(const Expression &expr, unique_ptr<LogicalOperator> &left_child,
-                                       unique_ptr<LogicalOperator> &right_child) {
-	unordered_set<TableIndex> left_bindings, right_bindings;
-	LogicalJoin::GetTableReferences(*left_child, left_bindings);
-	LogicalJoin::GetTableReferences(*right_child, right_bindings);
-	return JoinSide::GetJoinSide(expr, left_bindings, right_bindings);
-}
-
 static void AddLateralCorrelation(CorrelatedColumns &correlated_columns, CorrelatedColumnInfo info) {
 	info.depth = 1;
 	for (auto &existing : correlated_columns) {
@@ -111,39 +103,6 @@ static bool HasCorrelationOutsideJoin(const Expression &expr, const unordered_se
 		}
 	});
 	return has_correlation_outside_join;
-}
-
-//! Plan subqueries in outer join predicates into the input side they depend on.
-//! For comparison keys, uncorrelated subqueries must stay on the same side as their containing key expression.
-void Binder::PlanNonInnerJoinSubqueries(unique_ptr<Expression> &expr_ptr, unique_ptr<LogicalOperator> &left_child,
-                                        unique_ptr<LogicalOperator> &right_child, JoinSide uncorrelated_side) {
-	if (!expr_ptr) {
-		return;
-	}
-
-	auto &expr = *expr_ptr;
-	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) {
-		PlanNonInnerJoinSubqueries(child, left_child, right_child, uncorrelated_side);
-	});
-
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_SUBQUERY) {
-		return;
-	}
-
-	auto side = GetJoinSideForChildren(expr, left_child, right_child);
-	auto &subquery = expr.Cast<BoundSubqueryExpression>();
-	if (side == JoinSide::NONE) {
-		side = uncorrelated_side;
-	}
-	if (side == JoinSide::LEFT) {
-		expr_ptr = PlanSubquery(subquery, left_child);
-	} else if (side == JoinSide::RIGHT) {
-		expr_ptr = PlanSubquery(subquery, right_child);
-	} else if (side == JoinSide::BOTH) {
-		throw NotImplementedException("Cannot perform non-inner join on pair-dependent subquery!");
-	} else {
-		throw InternalException("Unsupported join side for non-inner join subquery");
-	}
 }
 
 bool Binder::TryPlanPairDependentLeftJoin(BoundJoinRef &ref, unique_ptr<LogicalOperator> &left,

@@ -327,7 +327,7 @@ FULL OUTER JOIN pair_r r ON EXISTS (
 	SELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b
 );
 ----
-Cannot perform non-inner join on pair-dependent subquery
+Correlated subquery in a non-inner join condition cannot reference both sides of the join
 
 # Pair-dependent joins that also reference an outer query require nested
 # dependent-join state. Keep this as an explicit unsupported case rather than
@@ -348,4 +348,4 @@ LEFT JOIN LATERAL (
 	WHERE l.x = outer_l.x
 ) q ON true;
 ----
-Cannot perform non-inner join on pair-dependent subquery
+Correlated subquery in a non-inner join condition cannot reference both sides of the join
