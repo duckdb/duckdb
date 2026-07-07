@@ -431,7 +431,7 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 
 void Executor::CancelTasks() {
 	task.reset();
-	unordered_map<Task *, shared_ptr<Task>> to_destroy;
+	reference_map_t<Task, shared_ptr<Task>> to_destroy;
 	{
 		lock_guard<mutex> elock(executor_lock);
 		// mark the query as cancelled so tasks will early-out
@@ -506,10 +506,10 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 		if (cancelled) {
 			return;
 		}
-		auto entry = to_be_rescheduled_tasks.find(task_p.get());
+		auto entry = to_be_rescheduled_tasks.find(*task_p);
 		if (entry != to_be_rescheduled_tasks.end()) {
 			auto &scheduler = TaskScheduler::GetScheduler(context);
-			to_be_rescheduled_tasks.erase(task_p.get());
+			to_be_rescheduled_tasks.erase(*task_p);
 			scheduler.ScheduleTask(GetToken(), task_p);
 			SignalTaskRescheduled(l);
 			break;
@@ -546,12 +546,12 @@ void Executor::AddToBeRescheduled(shared_ptr<Task> &task_p) {
 	if (cancelled) {
 		return;
 	}
-	if (to_be_rescheduled_tasks.find(task_p.get()) != to_be_rescheduled_tasks.end()) {
+	if (to_be_rescheduled_tasks.find(*task_p) != to_be_rescheduled_tasks.end()) {
 		return;
 	}
-	// Save raw pointer before move — evaluation order of operator[] key and assignment value is unspecified pre-C++17
-	auto raw_ptr = task_p.get();
-	to_be_rescheduled_tasks[raw_ptr] = std::move(task_p);
+	// Save the reference before move — evaluation order of operator[] key and assignment value is unspecified pre-C++17
+	auto &task_ref = *task_p;
+	to_be_rescheduled_tasks[task_ref] = std::move(task_p);
 }
 
 bool Executor::ExecutionIsFinished() {
