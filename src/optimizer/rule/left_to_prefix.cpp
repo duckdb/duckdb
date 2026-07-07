@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/rule/left_to_prefix.hpp"
 
+#include "duckdb/common/limits.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
@@ -48,7 +49,7 @@ unique_ptr<Expression> LeftToPrefixRule::Apply(LogicalOperator &op, vector<refer
 
 	// Left counts from the end of the string for negative values: don't rewrite
 	auto num_characters = count_constant.GetValue().GetValue<int64_t>();
-	if (num_characters < 0) {
+	if (num_characters < 0 || num_characters > NumericLimits<uint32_t>::Maximum()) {
 		return nullptr;
 	}
 
