@@ -73,7 +73,7 @@ struct tpch_append_information {
 			return;
 		}
 		D_ASSERT(active_row == DConstants::INVALID_INDEX);
-		chunk.SetCardinality(row);
+		chunk.SetChildCardinality(row);
 		if (appender) {
 			appender->AppendDataChunk(chunk);
 		} else {
