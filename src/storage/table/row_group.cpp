@@ -843,73 +843,73 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		bool sub_batching = resuming;
 
 		if (!resuming) {
-			// check the sampling info if we have to sample this chunk
-			if (state.GetSamplingInfo().do_system_sample) {
-				auto &sampling_info = state.GetSamplingInfo();
-				if (!sampling_info.is_percentage) {
-					double rate = sampling_info.sample_rate;
-					if (rate <= 0) {
+		// check the sampling info if we have to sample this chunk
+		if (state.GetSamplingInfo().do_system_sample) {
+			auto &sampling_info = state.GetSamplingInfo();
+			if (!sampling_info.is_percentage) {
+				double rate = sampling_info.sample_rate;
+				if (rate <= 0) {
+					NextVector(state);
+					continue;
+				}
+				if (rate < 1) {
+					auto row_group_start = state.row_group->GetRowStart();
+					sample_count =
+						SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
+					if (sample_count == 0) {
 						NextVector(state);
 						continue;
 					}
-					if (rate < 1) {
-						auto row_group_start = state.row_group->GetRowStart();
-						sample_count =
-						    SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
-						if (sample_count == 0) {
-							NextVector(state);
-							continue;
-						}
-						has_sample_selection = true;
-					}
-				} else {
-					// Percentage-based system sampling: original behavior
-					if (state.random.NextRandom() > sampling_info.sample_rate) {
-						NextVector(state);
-						continue;
-					}
+					has_sample_selection = true;
+				}
+			} else {
+				// Percentage-based system sampling: original behavior
+				if (state.random.NextRandom() > sampling_info.sample_rate) {
+					NextVector(state);
+					continue;
 				}
 			}
+		}
 
-			//! first check the zonemap if we have to scan this partition
-			if (!CheckZonemapSegments(state)) {
-				continue;
+		//! first check the zonemap if we have to scan this partition
+		if (!CheckZonemapSegments(state)) {
+			continue;
+		}
+		auto &current_row_group = state.row_group->GetNode();
+
+		// second, scan the version chunk manager to figure out which tuples to load for this transaction
+		count = current_row_group.GetSelVector(options, state.vector_index, state.valid_sel, max_count);
+		if (count == 0) {
+			// nothing to scan for this vector, skip the entire vector
+			NextVector(state);
+			continue;
+		}
+		state.rows_scanned += count;
+
+		auto &block_manager = GetBlockManager();
+		if (block_manager.Prefetch()) {
+			PrefetchState prefetch_state;
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				const auto &column = column_ids[i];
+				GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
 			}
-			auto &current_row_group = state.row_group->GetNode();
+			auto &buffer_manager = block_manager.buffer_manager;
+			buffer_manager.Prefetch(state.context, prefetch_state.blocks);
+		}
 
-			// second, scan the version chunk manager to figure out which tuples to load for this transaction
-			count = current_row_group.GetSelVector(options, state.vector_index, state.valid_sel, max_count);
-			if (count == 0) {
-				// nothing to scan for this vector, skip the entire vector
-				NextVector(state);
-				continue;
-			}
-			state.rows_scanned += count;
-
-			auto &block_manager = GetBlockManager();
-			if (block_manager.Prefetch()) {
-				PrefetchState prefetch_state;
-				for (idx_t i = 0; i < column_ids.size(); i++) {
-					const auto &column = column_ids[i];
-					GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
+		// sub-batch eligibility: clean case only (no deletions, no sampling, no updates)
+		bool eligible = sub_batch_mode && count == max_count && !has_sample_selection;
+		if (eligible) {
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				if (GetColumn(column_ids[i]).GetUpdateStatistics()) {
+					eligible = false;
+					break;
 				}
-				auto &buffer_manager = block_manager.buffer_manager;
-				buffer_manager.Prefetch(state.context, prefetch_state.blocks);
 			}
-
-			// sub-batch eligibility: clean case only (no deletions, no sampling, no updates)
-			bool eligible = sub_batch_mode && count == max_count && !has_sample_selection;
-			if (eligible) {
-				for (idx_t i = 0; i < column_ids.size(); i++) {
-					if (GetColumn(column_ids[i]).GetUpdateStatistics()) {
-						eligible = false;
-						break;
-					}
-				}
-			}
-			svs.vector_max_count = max_count;
-			svs.offset = 0;
-			sub_batching = eligible;
+		}
+		svs.vector_max_count = max_count;
+		svs.offset = 0;
+		sub_batching = eligible;
 		}
 
 		bool has_filters = filter_info.HasFilters();
