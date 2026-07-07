@@ -1117,6 +1117,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"http_timeout", "httpfs"},
     {"httpfs_client_implementation", "httpfs"},
     {"httpfs_connection_caching", "httpfs"},
+    {"httpfs_enable_credential_refresh", "httpfs"},
     {"iceberg_logging_post_body_truncate_limit", "iceberg"},
     {"iceberg_test_force_token_expiry", "iceberg"},
     {"iceberg_use_metadata_log", "iceberg"},
