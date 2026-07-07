@@ -18,6 +18,7 @@ add_library_unity(
   like_optimizations.cpp
   list_comprehension_rewrite.cpp
   move_constants.cpp
+  not_comparison_simplification.cpp
   ordered_aggregate_optimizer.cpp
   predicate_factoring.cpp
   regex_optimizations.cpp
