@@ -18,6 +18,7 @@ add_library_unity(
   left_to_prefix.cpp
   like_optimizations.cpp
   list_comprehension_rewrite.cpp
+  monotone_preimage.cpp
   move_constants.cpp
   not_comparison_simplification.cpp
   ordered_aggregate_optimizer.cpp
