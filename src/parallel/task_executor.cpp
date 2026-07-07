@@ -2,8 +2,6 @@
 #include "duckdb/parallel/task_notifier.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
-#include <thread>
-
 namespace duckdb {
 
 TaskExecutor::TaskExecutor(TaskScheduler &scheduler, TaskSchedulerType type_p)
@@ -40,7 +38,9 @@ void TaskExecutor::ScheduleTask(unique_ptr<Task> task) {
 	}
 }
 void TaskExecutor::FinishTask() {
+	lock_guard<mutex> lk(cv_mutex);
 	++completed_tasks;
+	cv.notify_one();
 }
 
 void TaskExecutor::WorkOnTasks() {
@@ -54,7 +54,10 @@ void TaskExecutor::WorkOnTasks() {
 			D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
 			task_from_producer.reset();
 		} else {
-			std::this_thread::yield();
+			unique_lock<mutex> lk(cv_mutex);
+			cv.wait(lk, [&] {
+				return completed_tasks.load() == total_tasks.load();
+			});
 		}
 	}
 

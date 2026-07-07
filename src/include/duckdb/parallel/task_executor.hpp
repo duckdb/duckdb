@@ -10,10 +10,13 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/common/enums/task_scheduler_type.hpp"
+
+#include <condition_variable>
 
 namespace duckdb {
 class TaskScheduler;
@@ -50,6 +53,8 @@ private:
 	unique_ptr<ProducerToken> token;
 	atomic<idx_t> completed_tasks;
 	atomic<idx_t> total_tasks;
+	mutex cv_mutex;
+	std::condition_variable cv;
 	friend class BaseExecutorTask;
 	optional_ptr<ClientContext> context;
 };
