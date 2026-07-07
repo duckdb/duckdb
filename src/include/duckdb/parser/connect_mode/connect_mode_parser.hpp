@@ -30,8 +30,8 @@ class ParseResultAllocator;
 //!    `<name>`'s catalog via RemoteExecute, without changing binding state.
 //!  - FORBIDDEN: input that starts with CONNECT or DISCONNECT but doesn't match any well-formed
 //!    control variant. The caller surfaces a clear parse error rather than forwarding silently.
-//!  - RAW:       anything else. When CONNECTed, dispatched verbatim to the bound catalog via
-//!    RemoteExecute. When not CONNECTed, fed to the main SQL parser as usual.
+//!  - RAW:       anything else. When CONNECT-ed, dispatched verbatim to the bound catalog via
+//!    RemoteExecute. When not CONNECT-ed, fed to the main SQL parser as usual.
 struct ConnectModeChunk {
 	enum class Type : uint8_t { CONTROL, EXECUTE, FORBIDDEN, RAW };
 
