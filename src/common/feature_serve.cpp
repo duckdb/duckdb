@@ -170,7 +170,8 @@ static vector<string> FeatureValueColumns(ClientContext &context, const FeatureC
 	auto store_name = FeatureStoreTableName(feat.name);
 	optional_ptr<CatalogEntry> entry;
 	for (auto &schema : Catalog::GetAllSchemas(context)) {
-		entry = schema.get().GetEntry(schema.get().GetCatalogTransaction(context), CatalogType::TABLE_ENTRY, store_name);
+		entry =
+		    schema.get().GetEntry(schema.get().GetCatalogTransaction(context), CatalogType::TABLE_ENTRY, store_name);
 		if (entry) {
 			break;
 		}
@@ -200,7 +201,7 @@ static vector<string> FeatureValueColumns(ClientContext &context, const FeatureC
 static void AddFeatureProjections(vector<unique_ptr<ParsedExpression>> &select_list, ClientContext &context,
                                   const FeatureCatalogEntry &feat, const string &feature_alias,
                                   const string &spine_ts) {
-	if (!IsPositiveInterval(feat.watermark_interval)) {
+	if (!IsPositiveInterval(feat.ttl_interval)) {
 		select_list.push_back(FeatureStar(feature_alias, feat.entity_columns));
 		return;
 	}
@@ -208,7 +209,7 @@ static void AddFeatureProjections(vector<unique_ptr<ParsedExpression>> &select_l
 		// spine.<asof> - INTERVAL <ttl>
 		vector<unique_ptr<ParsedExpression>> minus_children;
 		minus_children.push_back(ColumnRef("spine", spine_ts));
-		minus_children.push_back(make_uniq<ConstantExpression>(Value::INTERVAL(feat.watermark_interval)));
+		minus_children.push_back(make_uniq<ConstantExpression>(Value::INTERVAL(feat.ttl_interval)));
 		auto stale_threshold =
 		    make_uniq<FunctionExpression>("-", std::move(minus_children), nullptr, nullptr, false, true);
 
@@ -273,8 +274,7 @@ unique_ptr<SelectStatement> BuildServeFeatureSelect(ClientContext &context, cons
 		auto select = make_uniq<SelectNode>();
 		select->select_list.push_back(make_uniq<StarExpression>("spine"));
 		select->from_table = BaseTable(spine_table, "spine");
-		AddFeatureProjections(select->select_list, context, feat, "f",
-		                      ServeSpineTimestamp(feat, spine_asof_column));
+		AddFeatureProjections(select->select_list, context, feat, "f", ServeSpineTimestamp(feat, spine_asof_column));
 		AttachServeJoin(select->from_table, feat, "f", request.entity_mappings, spine_entity_override,
 		                spine_asof_column);
 

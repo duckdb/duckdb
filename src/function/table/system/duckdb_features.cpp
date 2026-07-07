@@ -30,16 +30,10 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 	names.emplace_back("feature_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("source_table");
-	return_types.emplace_back(LogicalType::VARCHAR);
-
 	names.emplace_back("entity_columns");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("timestamp_column");
-	return_types.emplace_back(LogicalType::VARCHAR);
-
-	names.emplace_back("refresh_mode");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("retain_versions");
@@ -66,8 +60,7 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 	names.emplace_back("window_interval");
 	return_types.emplace_back(LogicalType::INTERVAL);
 
-	// The staleness bound (TTL): features matched more than this before the request time serve as NULL.
-	// Backed by the internal watermark_interval field.
+	// The staleness bound (TTL): a matched snapshot older than this before the request time serves as NULL.
 	names.emplace_back("ttl_interval");
 	return_types.emplace_back(LogicalType::INTERVAL);
 
@@ -89,17 +82,6 @@ static unique_ptr<GlobalTableFunctionState> DuckDBFeaturesInit(ClientContext &co
 	return std::move(result);
 }
 
-static string RefreshModeToString(FeatureRefreshMode mode) {
-	switch (mode) {
-	case FeatureRefreshMode::FULL:
-		return "FULL";
-	case FeatureRefreshMode::INCREMENTAL:
-		return "INCREMENTAL";
-	default:
-		return "UNKNOWN";
-	}
-}
-
 static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBFeaturesData>();
 	if (data.offset >= data.entries.size()) {
@@ -118,40 +100,36 @@ static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &d
 		output.data[1].Append(Value(feat.schema.name));
 		// feature_name
 		output.data[2].Append(Value(feat.name));
-		// source_table
-		output.data[3].Append(Value(feat.source_table));
 		// entity_columns
-		output.data[4].Append(Value(StringUtil::Join(feat.entity_columns, ",")));
+		output.data[3].Append(Value(StringUtil::Join(feat.entity_columns, ",")));
 		// timestamp_column
-		output.data[5].Append(Value(feat.timestamp_column));
-		// refresh_mode
-		output.data[6].Append(Value(RefreshModeToString(feat.refresh_mode)));
+		output.data[4].Append(Value(feat.timestamp_column));
 		// retain_versions
-		output.data[7].Append(Value::BIGINT(feat.retain_versions));
+		output.data[5].Append(Value::BIGINT(feat.retain_versions));
 		// current_version
-		output.data[8].Append(Value::BIGINT(feat.current_version));
+		output.data[6].Append(Value::BIGINT(feat.current_version));
 		// sql
-		output.data[9].Append(Value(feat.ToSQL()));
+		output.data[7].Append(Value(feat.ToSQL()));
 		// last_refresh_timestamp
-		output.data[10].Append(Value::TIMESTAMP(feat.last_refresh_timestamp));
+		output.data[8].Append(Value::TIMESTAMP(feat.last_refresh_timestamp));
 		// schedule_interval (NULL when no schedule is attached)
-		output.data[11].Append(feat.has_schedule ? Value::INTERVAL(feat.schedule_interval)
-		                                         : Value(LogicalType::INTERVAL));
+		output.data[9].Append(feat.has_schedule ? Value::INTERVAL(feat.schedule_interval)
+		                                        : Value(LogicalType::INTERVAL));
 		// schedule_enabled (false when no schedule is attached)
-		output.data[12].Append(Value::BOOLEAN(feat.has_schedule && feat.schedule_enabled));
+		output.data[10].Append(Value::BOOLEAN(feat.has_schedule && feat.schedule_enabled));
 		// next_refresh_at (NULL when the scheduler is not tracking this feature)
 		if (scheduler &&
 		    scheduler->GetNextRefreshAt(feat.catalog.GetName(), feat.schema.name, feat.name, next_refresh_at)) {
-			output.data[13].Append(Value::TIMESTAMP(next_refresh_at));
+			output.data[11].Append(Value::TIMESTAMP(next_refresh_at));
 		} else {
-			output.data[13].Append(Value(LogicalType::TIMESTAMP));
+			output.data[11].Append(Value(LogicalType::TIMESTAMP));
 		}
 		// window_interval
-		output.data[14].Append(Value::INTERVAL(feat.window_interval));
-		// watermark_interval
-		output.data[15].Append(Value::INTERVAL(feat.watermark_interval));
+		output.data[12].Append(Value::INTERVAL(feat.window_interval));
+		// ttl_interval
+		output.data[13].Append(Value::INTERVAL(feat.ttl_interval));
 		// entity_table
-		output.data[16].Append(Value(feat.entity_table));
+		output.data[14].Append(Value(feat.entity_table));
 
 		count++;
 	}

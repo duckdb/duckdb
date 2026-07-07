@@ -59,20 +59,6 @@
 
 namespace duckdb {
 
-//! Best-effort "source table" shown in feature metadata. A feature query may now be an arbitrary SELECT
-//! (joins, CTEs, subqueries), so there is no single authoritative source table. When the query reads from
-//! exactly one unqualified base table we surface that name for display; otherwise we return "".
-static string GetFeatureDisplaySourceTable(const SelectNode &select_node) {
-	if (!select_node.from_table || select_node.from_table->type != TableReferenceType::BASE_TABLE) {
-		return string();
-	}
-	auto &base_table = select_node.from_table->Cast<BaseTableRef>();
-	if (base_table.at_clause) {
-		return string();
-	}
-	return base_table.table_name;
-}
-
 //! The entity mapping is derived from the entity table's PRIMARY KEY (no source-table foreign key is
 //! required, since the feature query may join arbitrary relations). The feature query must project columns
 //! named after these key columns; REFRESH's snapshot LEFT JOINs the entity table onto the aggregate on
@@ -824,10 +810,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &schema = BindCreateSchema(*stmt.info);
 		auto &select_node = feature_info.query->node->Cast<SelectNode>();
 
-		// The feature query may be an arbitrary SELECT (joins, filters, CTEs, window functions); there is no
-		// single authoritative source table. Keep a best-effort name for metadata display only.
-		feature_info.source_table = GetFeatureDisplaySourceTable(select_node);
-
+		// The feature query may be an arbitrary SELECT (joins, filters, CTEs, window functions).
 		// The entity table must exist and expose a PRIMARY KEY. A keyed feature maps back to the entity via
 		// those key columns (projected under the same names), replacing the old source-table foreign key.
 		auto &entity_table_entry = Catalog::GetEntry<TableCatalogEntry>(context, feature_info.catalog,
@@ -858,7 +841,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		FeatureSnapshotParameters snapshot_parameters;
 		snapshot_parameters.entity_table = feature_info.entity_table;
-		snapshot_parameters.source_table = feature_info.source_table;
 		snapshot_parameters.entity_columns = feature_info.entity_columns;
 		snapshot_parameters.entity_key_columns = feature_info.entity_key_columns;
 		snapshot_parameters.timestamp_column = feature_info.timestamp_column;

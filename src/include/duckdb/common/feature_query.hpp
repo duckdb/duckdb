@@ -31,9 +31,7 @@ inline string FeatureStoreTableName(const string &feature_name) {
 struct FeatureSnapshotParameters {
 	//! The entity table the snapshot is built over (one output row per entity).
 	string entity_table;
-	//! The source/event table the feature query reads from.
-	string source_table;
-	//! Entity columns (event-side names); empty for global features.
+	//! Entity columns (entity table primary key names); empty for global features.
 	vector<string> entity_columns;
 	//! Entity table key columns referenced by the foreign key, aligned to entity_columns.
 	vector<string> entity_key_columns;

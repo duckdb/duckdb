@@ -378,7 +378,7 @@
       },
       {
         "id": 201,
-        "name": "source_table",
+        "name": "entity_table",
         "type": "string"
       },
       {
@@ -388,84 +388,74 @@
       },
       {
         "id": 203,
+        "name": "entity_key_columns",
+        "type": "vector<string>"
+      },
+      {
+        "id": 204,
         "name": "timestamp_column",
         "type": "string"
       },
       {
-        "id": 204,
-        "name": "refresh_mode",
-        "type": "FeatureRefreshMode"
+        "id": 205,
+        "name": "timestamp_table",
+        "type": "string"
       },
       {
-        "id": 205,
+        "id": 206,
         "name": "retain_versions",
         "type": "int64_t"
       },
       {
-        "id": 206,
+        "id": 207,
         "name": "query",
         "type": "SelectStatement*"
       },
       {
-        "id": 207,
+        "id": 208,
         "name": "result_names",
         "type": "vector<string>"
       },
       {
-        "id": 208,
+        "id": 209,
         "name": "result_types",
         "type": "vector<LogicalType>"
       },
       {
-        "id": 209,
+        "id": 210,
         "name": "current_version",
         "type": "int64_t",
         "default": "0"
       },
       {
-        "id": 210,
+        "id": 211,
         "name": "has_schedule",
         "type": "bool",
         "default": "false"
       },
       {
-        "id": 211,
+        "id": 212,
         "name": "schedule_interval",
         "type": "interval_t",
         "default": "interval_t()"
       },
       {
-        "id": 212,
+        "id": 213,
         "name": "schedule_enabled",
         "type": "bool",
         "default": "true"
       },
       {
-        "id": 213,
+        "id": 214,
         "name": "window_interval",
         "type": "interval_t",
         "default": "interval_t()"
       },
       {
-        "id": 214,
-        "name": "watermark_interval",
+        "id": 215,
+        "name": "ttl_interval",
         "type": "interval_t",
         "default": "interval_t()"
-      },
-      {
-        "id": 215,
-        "name": "entity_table",
-        "type": "string"
-      },
-      {
-        "id": 216,
-        "name": "entity_key_columns",
-        "type": "vector<string>"
-      },
-      {
-        "id": 217,
-        "name": "timestamp_table",
-        "type": "string"
       }
     ]
   }

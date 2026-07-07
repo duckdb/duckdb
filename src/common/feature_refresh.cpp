@@ -19,7 +19,6 @@ namespace duckdb {
 static FeatureSnapshotParameters SnapshotParameters(const FeatureCatalogEntry &feat, timestamp_t feature_ts) {
 	FeatureSnapshotParameters parameters;
 	parameters.entity_table = feat.entity_table;
-	parameters.source_table = feat.source_table;
 	parameters.entity_columns = feat.entity_columns;
 	parameters.entity_key_columns = feat.entity_key_columns;
 	parameters.timestamp_column = feat.timestamp_column;

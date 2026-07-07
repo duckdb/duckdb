@@ -14,8 +14,6 @@
 
 namespace duckdb {
 
-enum class FeatureRefreshMode : uint8_t { FULL = 0, INCREMENTAL = 1 };
-
 struct CreateFeatureInfo : public CreateInfo {
 	CreateFeatureInfo();
 
@@ -23,11 +21,9 @@ struct CreateFeatureInfo : public CreateInfo {
 	string feature_name;
 	//! Entity table name (one snapshot row per entity); declared via the ENTITY clause
 	string entity_table;
-	//! Source table name (the event/relation table, derived from the feature query FROM)
-	string source_table;
-	//! Entity columns (the GROUP BY keys, event-side names); empty for global features
+	//! Entity columns (the entity table's primary key names, projected by the query); empty for global features
 	vector<string> entity_columns;
-	//! Entity table key columns referenced by the foreign key, aligned to entity_columns
+	//! Entity table key columns, aligned to entity_columns
 	vector<string> entity_key_columns;
 	//! Timestamp column (temporal ordering)
 	string timestamp_column;
@@ -37,10 +33,8 @@ struct CreateFeatureInfo : public CreateInfo {
 	interval_t window_interval;
 	//! TTL / serving staleness bound (declared via the TTL clause). At SERVE time, if the entity's matched
 	//! snapshot is older than this relative to the request timestamp, its feature columns resolve to NULL.
-	//! A zero interval disables the bound. Kept as watermark_interval internally for storage compatibility.
-	interval_t watermark_interval;
-	//! Refresh mode
-	FeatureRefreshMode refresh_mode;
+	//! A zero interval disables the bound.
+	interval_t ttl_interval;
 	//! Number of versions to retain
 	int64_t retain_versions;
 	//! Current version number (incremented on each REFRESH); persisted so it survives restarts

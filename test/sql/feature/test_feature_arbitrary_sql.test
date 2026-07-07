@@ -1,7 +1,8 @@
 # name: test/sql/feature/test_feature_arbitrary_sql.test
 # description: Feature definitions may use arbitrary SQL (joins, filters, CTEs, window functions) and a
-#              qualified TIMESTAMP; the result maps back to the entity via the entity table's primary key.
 # group: [feature]
+
+#              qualified TIMESTAMP; the result maps back to the entity via the entity table's primary key.
 
 require noforcestorage
 
@@ -113,18 +114,12 @@ bob	50
 carol	NULL
 
 # ============================================================
-# Metadata: a multi-table query has no single source table, so source_table is empty; a single-table query
-# still surfaces its base table for display.
+# Metadata: the entity columns come from the entity table's primary key regardless of query shape.
 # ============================================================
 query II
-SELECT source_table, timestamp_column FROM duckdb_features() WHERE feature_name = 'weighted_spend';
+SELECT entity_columns, timestamp_column FROM duckdb_features() WHERE feature_name = 'weighted_spend';
 ----
-(empty)	ts
-
-query I
-SELECT source_table FROM duckdb_features() WHERE feature_name = 'big_spend';
-----
-txns
+user_id	ts
 
 # ============================================================
 # Cleanup

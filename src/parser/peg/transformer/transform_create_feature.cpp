@@ -138,13 +138,12 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 		auto &clause = window_opt.GetResult().Cast<ListParseResult>();
 		window_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "WINDOW");
 	}
-	// index 8: FeatureTTLClause? (default: zero interval = no staleness bound). Stored in the
-	// watermark_interval field, which now carries the TTL / serving staleness tolerance.
-	interval_t watermark_interval = ZERO_INTERVAL;
+	// index 8: FeatureTTLClause? (default: zero interval = no staleness bound / TTL disabled).
+	interval_t ttl_interval = ZERO_INTERVAL;
 	auto &ttl_opt = list_pr.Child<OptionalParseResult>(8);
 	if (ttl_opt.HasResult()) {
 		auto &clause = ttl_opt.GetResult().Cast<ListParseResult>();
-		watermark_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "TTL");
+		ttl_interval = ParseFeatureInterval(clause.Child<ListParseResult>(1), "TTL");
 	}
 	// index 9: FeatureScheduleClause? (default: no schedule)
 	bool has_schedule = false;
@@ -173,7 +172,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	info->timestamp_column = timestamp_column;
 	info->timestamp_table = timestamp_table;
 	info->window_interval = window_interval;
-	info->watermark_interval = watermark_interval;
+	info->ttl_interval = ttl_interval;
 	info->retain_versions = retain_versions;
 	info->has_schedule = has_schedule;
 	info->schedule_interval = schedule_interval;

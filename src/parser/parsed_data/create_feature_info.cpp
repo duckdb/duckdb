@@ -1,5 +1,4 @@
 #include "duckdb/parser/parsed_data/create_feature_info.hpp"
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/interval.hpp"
 
@@ -11,8 +10,8 @@ static bool IntervalEquals(const interval_t &left, const interval_t &right) {
 
 CreateFeatureInfo::CreateFeatureInfo()
     : CreateInfo(CatalogType::FEATURE_ENTRY, INVALID_SCHEMA), window_interval(interval_t {0, 1, 0}),
-      watermark_interval(interval_t {0, 0, 0}), refresh_mode(FeatureRefreshMode::FULL), retain_versions(1),
-      current_version(0), has_schedule(false), schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
+      ttl_interval(interval_t {0, 0, 0}), retain_versions(1), current_version(0), has_schedule(false),
+      schedule_interval(interval_t {0, 0, 0}), schedule_enabled(true) {
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
@@ -20,14 +19,12 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	CopyProperties(*result);
 	result->feature_name = feature_name;
 	result->entity_table = entity_table;
-	result->source_table = source_table;
 	result->entity_columns = entity_columns;
 	result->entity_key_columns = entity_key_columns;
 	result->timestamp_column = timestamp_column;
 	result->timestamp_table = timestamp_table;
 	result->window_interval = window_interval;
-	result->watermark_interval = watermark_interval;
-	result->refresh_mode = refresh_mode;
+	result->ttl_interval = ttl_interval;
 	result->retain_versions = retain_versions;
 	result->current_version = current_version;
 	result->has_schedule = has_schedule;
@@ -57,8 +54,8 @@ string CreateFeatureInfo::ToString() const {
 	}
 	result += timestamp_column;
 	result += " WINDOW INTERVAL '" + Interval::ToString(window_interval) + "'";
-	if (!IntervalEquals(watermark_interval, interval_t {0, 0, 0})) {
-		result += " TTL INTERVAL '" + Interval::ToString(watermark_interval) + "'";
+	if (!IntervalEquals(ttl_interval, interval_t {0, 0, 0})) {
+		result += " TTL INTERVAL '" + Interval::ToString(ttl_interval) + "'";
 	}
 	if (has_schedule) {
 		result += " EVERY INTERVAL '" + Interval::ToString(schedule_interval) + "'";

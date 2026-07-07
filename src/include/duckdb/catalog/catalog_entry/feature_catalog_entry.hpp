@@ -25,11 +25,9 @@ public:
 
 	//! The entity table name (one snapshot row per entity); declared via the ENTITY clause
 	string entity_table;
-	//! The source table name (the event/relation table)
-	string source_table;
-	//! The entity columns (event-side names); empty for global features
+	//! The entity columns (entity table primary key names); empty for global features
 	vector<string> entity_columns;
-	//! The entity table key columns referenced by the foreign key, aligned to entity_columns
+	//! The entity table key columns, aligned to entity_columns
 	vector<string> entity_key_columns;
 	//! The timestamp column
 	string timestamp_column;
@@ -38,10 +36,8 @@ public:
 	//! The lookback window interval
 	interval_t window_interval;
 	//! TTL / serving staleness bound: snapshots older than this (relative to the request time) serve as NULL.
-	//! A zero interval disables the bound. Named watermark_interval internally for storage compatibility.
-	interval_t watermark_interval;
-	//! The refresh mode (FULL/INCREMENTAL)
-	FeatureRefreshMode refresh_mode;
+	//! A zero interval disables the bound.
+	interval_t ttl_interval;
 	//! The number of versions to retain
 	int64_t retain_versions;
 	//! The feature query

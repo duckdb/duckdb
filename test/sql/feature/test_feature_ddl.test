@@ -92,16 +92,16 @@ statement ok
 CREATE FEATURE daily_txn ENTITY cards TIMESTAMP event_time  WINDOW 7 DAYS RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
 
 # Feature appears in duckdb_features()
-query IIIII
-SELECT feature_name, entity_table, source_table, entity_columns, window_interval FROM duckdb_features();
+query IIII
+SELECT feature_name, entity_table, entity_columns, window_interval FROM duckdb_features();
 ----
-daily_txn	cards	transactions	card_no	7 days
+daily_txn	cards	card_no	7 days
 
 # DESCRIBE FEATURE shows metadata. current_version is 0 until the first REFRESH materializes v1.
-query IIIIIIIIII
+query IIIIIIIII
 DESCRIBE FEATURE daily_txn;
 ----
-daily_txn	cards	transactions	card_no	event_time	1	0	7 days	00:00:00	CREATE FEATURE daily_txn ENTITY cards TIMESTAMP event_time WINDOW INTERVAL '7 days' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+daily_txn	cards	card_no	event_time	1	0	7 days	00:00:00	CREATE FEATURE daily_txn ENTITY cards TIMESTAMP event_time WINDOW INTERVAL '7 days' RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 # DESCRIBE non-existent feature returns empty
 query I
@@ -313,14 +313,14 @@ SELECT COUNT(*) FROM duckdb_features();
 ----
 2
 
-# Drop t1 CASCADE only removes feat_t1
+# Drop t1 CASCADE only removes feat_t1 (dependencies are collected from every table the query references)
 statement ok
 DROP TABLE t1 CASCADE;
 
-query II
-SELECT feature_name, source_table FROM duckdb_features();
+query I
+SELECT feature_name FROM duckdb_features();
 ----
-feat_t2	t2
+feat_t2
 
 # Drop t2 CASCADE removes feat_t2
 statement ok

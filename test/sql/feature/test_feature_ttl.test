@@ -1,7 +1,8 @@
 # name: test/sql/feature/test_feature_ttl.test
 # description: TTL is a serving staleness bound — if the ASOF-matched snapshot is older than the TTL relative
-#              to the request timestamp, the feature columns serve as NULL.
 # group: [feature]
+
+#              to the request timestamp, the feature columns serve as NULL.
 
 require noforcestorage
 

@@ -71,11 +71,11 @@ SELECT feature_name, current_version FROM duckdb_features() WHERE feature_name =
 persisted	3
 
 # Other metadata survives
-query IIIII
-SELECT entity_table, source_table, entity_columns, window_interval, retain_versions
+query IIII
+SELECT entity_table, entity_columns, window_interval, retain_versions
 FROM duckdb_features() WHERE feature_name = 'persisted';
 ----
-customers	events	customer	7 days	3
+customers	customer	7 days	3
 
 # The view still resolves to the current snapshot
 query II rowsort
